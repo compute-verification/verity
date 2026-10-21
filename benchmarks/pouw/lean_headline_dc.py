@@ -29,7 +29,12 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
   and a class the sheet rates on nothing is its issue slot alone (A2).
 
 Each family is read on its data sheet (DS-90, DS-100) and on its measured vector (DC-90-ri, DC-100-ri), both at A6's
-floors `q = q_T = ½`, `b_T = 0` (`SheetScalarRouteHalf` proves (I3) there from A6, on any machine). The menu's writer
+floors `q = q_T = ½`, `b_T = 0` (`SheetScalarRouteHalf` proves (I3) there from A6, on any machine). The H200's measured
+vector is also read under (I3) `ScalarRoute` at `q = q_T = ¾` (`Family.twin`, `Sm90MeasuredI3.lean`), an assumed
+premise (`accounting-ts-scalar-route`): a twin beside the proved ½ floor, not a replacement. The folded branch reads
+ln(8/7) ≥ 1/8 (`LN_P`) on the sheets and DC-100-ri, and ≥ 2/15 (`LN_P_M`, the series' first term, as sm_120's measured
+headline does) on DC-90-ri and its twin (`Family.ln_p_m`). A6's vector classes are CUDA's lane classes and both
+catch-alls (`CATCH_ALLS`), since an instruction no class names counts in its reading's catch-all. The menu's writer
 kinds are every MMA class the reading prices (on a measured vector, the forms it times: an untimed form is its measured
 issue slot alone and off the menu, where NoSum carries its words), and on DC-90-ri fewer still: its joint rows price every tensor form but honest's at the scalar
 coefficient, a lower bound on its issue cost, and no certificate prices them above it, so its menu is honest's form
@@ -106,6 +111,8 @@ class Family:
     eps_m: Fraction                      # the measured reading's
     honest_menu: bool = False            # the measured reading's writer kinds: honest's form and the uniform ones only
     bytes: str = "ALU"                   # the table level's byte class, priced 0 at b_T = 0 (neither census has a load)
+    ln_p_m: Fraction = LH.LN_P           # the measured readings' lower bound on ln(1/p) = ln(8/7)
+    twin: Fraction | None = None         # (I3)'s q = q_T for the measured reading's twin, at the sheet's target
 
     @property
     def data(self) -> Path:
@@ -134,9 +141,12 @@ class Family:
 # 1.0041·B_♭ or more, over the line's 0.9846·B_♭ (r20261021-075504-8a82). φ* is CP_XT's price: its STS32 and STG32, like
 # every store and ISETP, no run has timed beside an IGMMA, so they are the issue row alone (0.0036 at π*).
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
+# The measured reading and its twin read ln(8/7) ≥ 2/15 (`LN_P_M`), as sm_120's measured headline does. The twin is
+# the same reading under (I3) `ScalarRoute` at q = q_T = ¾ (`accounting-ts-scalar-route`, assumed), the lane's
+# decision on the 21 Oct ask: a twin beside the ½ floor A6 proves, not a replacement.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
-              Fraction(1, 100), Fraction(3, 100), honest_menu=True)
+              Fraction(1, 100), Fraction(3, 100), honest_menu=True, ln_p_m=LH.LN_P_M, twin=Fraction(3, 4))
 SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri", 1965,
                "the driver's reported maximum (the data sheet gives no clock)", {"UNI": 2}, Fraction(1, 100),
                Fraction(1, 100))
@@ -145,6 +155,10 @@ FAMILIES = (SM90, SM100)
 # with the joint-issue lines once a run times its instructions beside the tensor): NOROW is a class on the measured
 # vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
 CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-100-ri": "UNLISTED"}
+# A6 counts a vector word's instructions in the vector classes, and an instruction no class names (IMAD.WIDE, whose low
+# word does li's multiply: RT4-SHEET-14) counts in the reading's catch-all, so both catch-alls are vector classes, as
+# sm_120's 64-bit lane classes are (`VEC_64`). The vector classes are one list for a family's sheet and measured files.
+CATCH_ALLS = frozenset(CATCH_ALL.values())
 # A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200, r20261021-070616-d06c)
 # gives it the census's joint-issue lines, which every timed scalar class carries at one coefficient a row
 SCALAR_REF, JOINT_ISSUE = "FFMA", re.compile(r"JI\d+_\d+")
@@ -205,6 +219,8 @@ class _Exact:
     fold_mix: str                        # ♭'s fold in words (`_fold_mix`)
     words_mix: str                       # ♭'s word production in words (`_words_mix`)
     untimed: list[str]                   # the sheet's classes the vector has no line for, read at its issue slot alone
+    q: Fraction                          # the vector and table routes' floors q = q_T (b_T = 0)
+    ln_p: Fraction                       # the lower bound on ln(1/p) the folded branch reads
 
 
 @dataclass
@@ -214,6 +230,8 @@ class Reading:
     design: str
     sheet: bool
     menu: str                            # the writer kinds: every census MMA class ("all") or honest's form
+    q: str                               # q = q_T: A6's ½, or (I3)'s on a twin
+    ln_p: str                            # ln(8/7) ≥ this: 1/8, or 2/15 (the series' first term)
     certificate: dict[str, float]
     lam: dict[str, str]                  # π*: the certificate, exact
     flat_facet: str                      # the facet ♭'s bound sits on
@@ -336,10 +354,12 @@ def _sheet_check(fam: Family, pi: E.Machine, c: dict) -> dict[str, list]:
     return out
 
 
-def reading(fam: Family, vector: str, full: bool = False) -> Reading:
-    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits."""
+def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Reading:
+    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits,
+    and `q` is the floors `q = q_T` (A6's ½, or (I3)'s on the measured reading's twin)."""
     B_ = LH._eps_budget()
     sheet = vector == fam.sheet
+    ln_p = LH.LN_P if sheet else fam.ln_p_m
     pi = E.machine(vector, fam.data)
     d = E.design(fam.design, fam.data)
     h = E.honest(d.honest, fam.data)
@@ -421,7 +441,7 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
             abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0} - mixed):
         raise SystemExit(f"{fam.design} on {vector}: ♭ is not setup's floor program ({s.baseline.n}, T "
                          f"{s.baseline.T})")
-    e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
+    e = E.eps(d, pi, float(q), fam.data, operands="free", credit="floor")
     B0 = max(load(r, n0) for r in pi.rows)
     # The skip is lane work, so it sits on the lane facet ♭ loads most; where ♭'s facets tie with one no lane class
     # loads (DC-90-ri's AT90), the exact shares can leave that one above by 1e-10, and the skip lifts the lane facet over.
@@ -442,13 +462,14 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     folds = [{k: exact(v) / E.LANES for k, v in f.items()} for f in (d.fold, *d.fold_routes.values())]
     if d.uniform and E.UNI in pi.c:
         folds.append({E.UNI: min(exact(sum(f.values())) for f in (d.fold, *d.fold_routes.values()))})
+    vec = list(pi.cuda) + [k for k in classes if k in CATCH_ALLS and k not in pi.cuda]
     # Each route's demand on every facet, as `Accounting.TS.Model.demand` reads it: a writer kind 1/ω of its class, the
     # vector route (and the table route, at q_T = q, b_T = 0) q/32 of the cheapest vector class on that facet.
     routes = {k: {r: c[k].get(r, Fraction(0)) / om for r in pi.rows} for k, om in writers}
-    routes["vector"] = {r: Q / E.LANES * min(c[k].get(r, Fraction(0)) for k in pi.cuda) for r in pi.rows}
+    routes["vector"] = {r: q / E.LANES * min(c[k].get(r, Fraction(0)) for k in vec) for r in pi.rows}
     fold_d = [{r: load(r, f) for r in pi.rows} for f in folds]
     fill_d = [{r: load(r, nx) for r in pi.rows}] if nx else []
-    lam = certificate(_best(pi.rows, Nw, B, int(d.checks), routes, fold_d, fill_d))
+    lam = certificate(_best(pi.rows, Nw, B, int(d.checks), routes, fold_d, fill_d, ln_p))
     price = lambda dem: sum((x * dem[r] for r, x in lam.items()), Fraction(0))
     wk = min(routes, key=lambda k: price(routes[k]))
     w = price(routes[wk])
@@ -459,32 +480,34 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
     if float(1 - Y) < lp - 1e-6:
         raise SystemExit(f"{fam.design} on {vector}: 1 − Y {float(1 - Y):.6%} at {lam} is below ε_machine and ε_skip "
                          f"over ♭ ({lp:.6%}): the menu here misses a route the machine model prices")
-    folded = 1 - Y + Nw * w / B * 41 * LH.LN2 / (LH.LN_P * d.checks)
+    folded = 1 - Y + Nw * w / B * 41 * LH.LN2 / (ln_p * d.checks)
     unfolded = 1 - Y * (1 - Fraction(41, d.checks))
     bound = max(folded, unfolded)
-    target = fam.eps if sheet else fam.eps_m
+    target = fam.eps if sheet or q != Q else fam.eps_m
     fr = lambda x: f"{x.numerator}/{x.denominator}"
     nprice = sum((x * load(r, n) for r, x in lam.items()), Fraction(0))
-    return Reading(fam.ns, vector, fam.design, sheet, menu, {r: float(x) for r, x in lam.items()},
+    return Reading(fam.ns, vector, fam.design, sheet, menu, fr(q), fr(ln_p), {r: float(x) for r, x in lam.items()},
                    {r: fr(x) for r, x in lam.items()}, flat, wk, Nw, int(d.checks), float(eps_skip), skip, float(B),
                    float(1 - nprice / B), float(w), float(phi), float(chi), float(Nw * w / B), float(1 - Y), lp,
                    float(folded), float(unfolded), float(bound), float(target), e.core(), e.machine_eps, e.luck,
                    {"B": fr(B), "w": fr(w), "phi": fr(phi), "chi": fr(chi), "bound": fr(bound)},
-                   _Exact(classes, c, list(pi.rows), list(pi.cuda), lists, writers, folds, nwb, nf, nx, ns, skip, lam,
+                   _Exact(classes, c, list(pi.rows), vec, lists, writers, folds, nwb, nf, nx, ns, skip, lam,
                           flat, B, bound, Nw, int(d.checks), d.L, h.form, list(d.fold_routes), _fold_mix(d, z),
-                          _words_mix(d, wb), untimed))
+                          _words_mix(d, wb), untimed, q, ln_p))
 
 
-def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list) -> dict[str, float]:
+def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list,
+          ln_p: Fraction) -> dict[str, float]:
     """The certificate that minimises the Lean bound over this menu: min z over `λ ≥ 0`, `Σ λ = 1`, with
     `t_w ≤ λ·v_ρ` for every word route, `t_f ≤ λ·u_φ` for every fold route, `t_x ≤ λ·x_ψ` for the filler, and z at
-    least both branches, `1 − Y + c·N_w t_w/B` and `1 − Y·(1 − 41/S)`, `Y = (N_w t_w + N_w t_f + t_x)/B`."""
+    least both branches, `1 − Y + c·N_w t_w/B` and `1 − Y·(1 − 41/S)`, `Y = (N_w t_w + N_w t_f + t_x)/B`, with
+    `c = 41·ln 2/(ln_p·S)`."""
     from scipy.optimize import linprog
 
     R = len(rows)
     iw, i_f, ix, iz = R, R + 1, R + 2, R + 3
     nv = R + 4
-    cfold = float(Fraction(41) * LH.LN2 / (LH.LN_P * checks))
+    cfold = float(Fraction(41) * LH.LN2 / (ln_p * checks))
     b = float(B)
     A, ub = [], []
     for dem, i in [*((v, iw) for v in words.values()), *((v, i_f) for v in folds), *((v, ix) for v in fills)]:
@@ -608,7 +631,10 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every MMA class of the "
         f"census (ω its destination's 32-bit words a warp instruction, A6, sheet.toml's `omega`: an f64 element two)"
         + _uniform_words(fam)
-        + "; the vector classes CUDA's lane classes; the fold routes the design's fold"
+        + f"; the vector classes CUDA's lane classes and both readings' catch-alls "
+        f"({', '.join(k for k in x.vec if k in CATCH_ALLS)}: A6 counts a vector word's instructions in them, and an "
+        "instruction no class names, IMAD.WIDE among them, counts in the catch-all, RT4-SHEET-14)"
+        + "; the fold routes the design's fold"
         + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
            "bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7) on lanes, and alone on the uniform datapath at "
            "the least "
@@ -673,8 +699,8 @@ def d2s : DesignData where
   folds := [
 {fold_lines}]
   bytes := {ix(fam.bytes)}  -- {fam.bytes}
-  q := {_q(Q)}
-  qT := {_q(Q)}
+  q := {_q(x.q)}
+  qT := {_q(x.q)}
   Nw := {x.Nw}
 
 /-- ♭'s filler a unit{": ffill on lanes" if filler else ": none"}. -/
@@ -809,6 +835,59 @@ end Accounting.TS.Headline.{fam.ns}Measured
 '''
 
 
+def render_twin(fam: Family, t: Reading, r: Reading) -> str:
+    """The measured reading's twin under (I3) `ScalarRoute` at `q = q_T = fam.twin`: the measured file's machine, writer
+    kinds, routes and ♭, none of which reads `q`, at the twin's floors and its own π*."""
+    x, xm = t.data, r.data
+    if (x.classes, x.rows, x.vec, x.writers, x.folds, x.nw, x.nf, x.nx, x.ns, x.B) != (
+            xm.classes, xm.rows, xm.vec, xm.writers, xm.folds, xm.nw, xm.nf, xm.nx, xm.ns, xm.B):
+        raise SystemExit(f"{fam.measured} at q = {t.q}: its machine, menu or ♭ is not the measured file's, which the "
+                         "twin reads")
+    m, nk, nt, nfo = len(x.rows), len(x.classes), len(x.writers), len(x.folds)
+    lam = LH._wrap([f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items()],
+                   " " * (len(f"  cert {m} ["))).lstrip()
+    qd = f"{x.q.numerator}/{x.q.denominator}"
+    body = (f"d2s.modelFill {nk} {nt} {nfo} {fam.ns}Measured.machine {fam.ns}.flatFill" if x.nx
+            else f"d2s.model {nk} {nt} {nfo} {fam.ns}Measured.machine")
+    bullets = [
+        f"`d2s`, `model`: `{fam.ns}Measured.d2s` (its writer kinds, and `{fam.ns}.d2s`'s vector classes, fold routes "
+        f"and `N_w`) at (I3)'s floors `q = q_T = {qd}`, `b_T = 0`, on `{fam.ns}Measured.machine`. (I3) `ScalarRoute` "
+        "there is `accounting-ts-scalar-route`, assumed: A6 gives it only at `q, q_T ≤ ½` (`SheetScalarRouteHalf`). ♭ "
+        f"is `{fam.ns}Measured.flat`, since `setup`'s floor program doesn't read `q`.",
+        f"`lamStar`: π*, the certificate minimising the bound over this menu at `q = {qd}` "
+        f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
+    ]
+    return _header(fam, f"(I3) twin: {fam.measured} at q = {qd} and `{fam.design}`",
+                   f"Definitions.Accounting.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
+{_bullets(bullets)}
+-/
+
+namespace Accounting.TS.Headline.{fam.ns}MeasuredI3
+
+open Accounting.TS
+
+/-- `{fam.ns}Measured.d2s` at (I3)'s floors `q = q_T = {qd}`. -/
+def d2s : DesignData where
+  writers := {fam.ns}Measured.d2s.writers
+  vec := {fam.ns}Measured.d2s.vec
+  folds := {fam.ns}Measured.d2s.folds
+  bytes := {fam.ns}Measured.d2s.bytes
+  q := {_q(x.q)}
+  qT := {_q(x.q)}
+  Nw := {fam.ns}Measured.d2s.Nw
+
+/-- `{fam.design}`'s TS model on the measured machine at (I3)'s floors. -/
+noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=
+  {body}
+
+/-- π*: the certificate, its weights exact and summing to 1. -/
+noncomputable def lamStar : Fin {m} → ℝ :=
+  cert {m} [{lam}]
+
+end Accounting.TS.Headline.{fam.ns}MeasuredI3
+'''
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", help="write every reading here as JSON")
@@ -817,14 +896,19 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     out, record, files = [], [], {}
     for fam in FAMILIES:
-        for v, full in ((fam.sheet, False), (fam.measured, False), *(((fam.measured, True),) if fam.honest_menu else ())):
-            r = reading(fam, v, full)
+        for v, full, q in ((fam.sheet, False, Q), (fam.measured, False, Q),
+                           *(((fam.measured, True, Q),) if fam.honest_menu else ()),
+                           *(((fam.measured, False, fam.twin),) if fam.twin else ())):
+            r = reading(fam, v, full, q)
             (record if full else out).append(r)
-            if not full:
+            if not full and q != Q:
+                files[OUT / f"{fam.ns}MeasuredI3.lean"] = render_twin(fam, r, out[-2])
+            elif not full:
                 files[OUT / (fam.ns + ("" if r.sheet else "Measured") + ".lean")] = (
                     render_sheet(fam, r) if r.sheet else render_measured(fam, r, out[-2]))
             cert = " + ".join(f"{k} {x:.4f}" for k, x in r.certificate.items())
-            print(f"{r.design} on {v} ({r.menu} menu{', for the record' if full else ''}): π* {cert}, ♭ on "
+            print(f"{r.design} on {v} ({r.menu} menu{', for the record' if full else ''}, q = q_T = {r.q}, "
+                  f"ln(8/7) ≥ {r.ln_p}{', the (I3) twin' if q != Q else ''}): π* {cert}, ♭ on "
                   f"{r.flat_facet} at {r.B:.4f} a unit (ε_cert {r.eps_cert:.4%}), w* {r.wstar}, ε_skip "
                   f"{r.eps_skip:.4%} (skip as {r.skip_class}), κ {r.kappa:.6f}, χ* {r.chi:.4f}; 1 − Y "
                   f"{r.one_minus_Y:.4%} (the LP's {r.lp:.4%}); folded {r.folded:.4%}, unfolded {r.unfolded:.4%}: the "
