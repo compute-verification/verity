@@ -8866,6 +8866,62 @@
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
+  "RecDeploy.lamLin2_deployed_ge": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.lamLin2_deployed_ge (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (b : RecDeploy.Brings)",
+    "  (L : Claims.Recursion.VStarB.LayoutB)",
+    "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
+    "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
+    "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) (w : Claims.Msg → Real)",
+    "  (decI : List (Prod Nat (List FlockLevel3.GF128)) → List Claims.Flock.PlainTrace)",
+    "  (Cp : Claims.Recursion.Caps FlockDeploy.Coin) {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec}",
+    "  {sts : Array Flock.Stmt} (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hO :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        Exists fun i =>",
+    "          Exists fun spec' =>",
+    "            Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16))",
+    "  (hW : instLENat.le (Cp.width (RecDeploy.xIOf x)) (instHPow.hPow 2 64)) :",
+    "  Real.instLE.le 100",
+    "    (Claims.Recursion.lamLin2",
+    "      ((RecDeploy.recBoundAt rel b L).record (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).IVStar)",
+    "      (Claims.Recursion.Inner.ofFlock (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x)"
+   ],
+   "assumptions": [],
+   "type_hash": "546ccd629ce2e7bcfaa89bc1e67ffc82ee88b8a66514d06777ea133da444b27f"
+  },
+  "RecDeploy.lamLin2_deployed_ge_dep": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.lamLin2_deployed_ge_dep (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (b : RecDeploy.Brings)",
+    "  (L : Claims.Recursion.VStarB.LayoutB)",
+    "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
+    "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
+    "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) (w : Claims.Msg → Real)",
+    "  (decI : List (Prod Nat (List FlockLevel3.GF128)) → List Claims.Flock.PlainTrace) {x : Claims.Msg}",
+    "  {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hO :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        Exists fun i =>",
+    "          Exists fun spec' =>",
+    "            Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16)) :",
+    "  Real.instLE.le 100",
+    "    (Claims.Recursion.lamLin2",
+    "      ((RecDeploy.recBoundAt rel b L).record (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).IVStar)",
+    "      (Claims.Recursion.Inner.ofFlock (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)",
+    "      FlockDeploy.KS.CpDep x)"
+   ],
+   "assumptions": [],
+   "type_hash": "fc9040a10677f74473fe6409c43ae03eb1114fe68d0c5b36cfe0916881b6fdc7"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
@@ -9852,7 +9908,9 @@
    "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.908%, over 1% (no check reads ffill's chains, so no filler is credited, and its flat is setup's floor), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's words on the IGMMA but 0.047% on the design's dp4a baseline, its fold the generic CP_RED8 alone, B_flat 191.31 on JPA90_0, RT4-SHEET-12) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.90750%; the unfolded one gives 1.83633%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list."
+   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.908%, over 1% (no check reads ffill's chains, so no filler is credited, and its flat is setup's floor), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's words on the IGMMA but 0.047% on the design's dp4a baseline, its fold the generic CP_RED8 alone, B_flat 191.31 on JPA90_0, RT4-SHEET-12) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.90750%; the unfolded one gives 1.83633%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
+   "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records and caps, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13261,7 +13319,9 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
-    "Hash.SecurityProofs.Stated"
+    "Hash.SecurityProofs.Stated",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -13552,7 +13612,9 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_fails",
-    "Flock.SecurityProofs.RecursionClaimsStated"
+    "Flock.SecurityProofs.RecursionClaimsStated",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.RecursionLin": {
@@ -13611,7 +13673,9 @@
     "Claims.Witness.Recursion.KSBoundLin_fails",
     "Claims.Witness.Recursion.KSFlockLin_fails",
     "Claims.Witness.Recursion.KSLin2_fails",
-    "Claims.Witness.Recursion.KSLin_fails"
+    "Claims.Witness.Recursion.KSLin_fails",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Sampling": {
@@ -19273,7 +19337,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Canon": {
@@ -19475,7 +19541,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CircuitType": {
@@ -19582,7 +19650,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CoinTree": {
@@ -19646,7 +19716,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Comp": {
@@ -19726,7 +19798,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Derive": {
@@ -19776,7 +19850,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveAll": {
@@ -19901,7 +19977,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveCheck": {
@@ -19993,7 +20071,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Draw": {
@@ -20326,7 +20406,9 @@
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Firewall": {
@@ -21061,7 +21143,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Library": {
@@ -21119,7 +21203,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Ligerito": {
@@ -21356,7 +21442,9 @@
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Net": {
@@ -21457,7 +21545,9 @@
     "FlockVBridge.laid_recOpen",
     "FlockVBridge.laid_unit",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Opening": {
@@ -22143,7 +22233,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Qcall": {
@@ -23322,7 +23414,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Registered": {
@@ -23449,7 +23543,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Schedule": {
@@ -23619,7 +23715,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Steps": {
@@ -23794,7 +23892,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "FlockVBridge.keyProg_parse"
+    "FlockVBridge.keyProg_parse",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TemplateQuery": {
@@ -24027,7 +24127,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Verify": {
@@ -27212,7 +27314,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.chainAcc_level",
-    "FlockVBridge.chainAcc_sum"
+    "FlockVBridge.chainAcc_sum",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {
