@@ -30,6 +30,7 @@ from verity.ml.circuits.types import Array, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
+from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
@@ -80,8 +81,9 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
         for w, (a, wt) in enumerate(zip(inputs, ws)):
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
-            z = torch.from_numpy(rng.integers(-(1 << 20), 1 << 20, (SERVED, n), dtype=np.int32))
-            run.record(w, a, torch.rand(SERVED) + 0.5, wt, torch.ones(n, 1), z=z, y=torch.randn(SERVED, n).bfloat16())
+            s_a, s_w = torch.rand(SERVED) + 0.5, torch.ones(n, 1)
+            z = OPS.scaled_mm_zy(a, s_a, wt, s_w, rows)[1] if n % PH.TILE[1] == 0 else None
+            run.record(w, a, s_a, wt, s_w, z=z)
         steps_in.append(inputs)
     run.close()
     return run, ws, steps_in
@@ -248,12 +250,12 @@ def test_the_declared_program_is_the_served_windows_before_it_serves():
 
 
 def test_y_z_and_the_scale_stay_under_the_round_roots_alone():
-    """The registered rows are A's codes and B's: no y, z or scale. Each call's A (with its scale), y and z tables stay
-    committed, and each round's root is over them."""
+    """The registered rows are A's codes and B's: no y, z or scale. Each call's A table (with its scale) and z table (its
+    z/y records) stay committed, and each round's root is over them."""
     run, _ws, _inputs = _window(W1)
     assert all(r.words == k // 2 for r, k in zip(run.served.registered, (16, 16, 32, 32)))
     assert not any(t.value.endswith(("/z", "/receipt")) for t in SV.trees(run))
-    assert all(set(run.tables[c.index]) == {"a", "y", "z"} and None not in run.tables[c.index].values() for c in run.calls)
+    assert all(set(run.tables[c.index]) == {"a", "z"} and None not in run.tables[c.index].values() for c in run.calls)
     for r, log in enumerate(run.round_log):
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
 

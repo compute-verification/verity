@@ -30,8 +30,8 @@ an `act` value, a run input under the root of the round that admits it, committe
   first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
   before that round's coin (RT4-INT-22).
-* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales), its served
-  y and, when the run has it, its exact z are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales) and, when
+  its arm hands them over, its z table (one leaf a unit, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
@@ -86,7 +86,7 @@ EMPTY_SLOT = bytes(4)
 #: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
-#: call c's A, y and z tables' nonces are TABLES_NONCE + 3c + 0, 1, 2 (`pouw_h1.H1Run`)
+#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`pouw_h1.TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
@@ -187,7 +187,7 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
 
 
 def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
-    """Round r's root, over step r's calls (`step_digest`, their A, y and z tables among them), the root of the request
+    """Round r's root, over step r's calls (`step_digest`, their A and z tables among them), the root of the request
     table of the entries it admits, the root of its slot table and round r - 1's receipts (`receipts_digest`;
     `NO_RECEIPTS` in round 0)."""
     return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)

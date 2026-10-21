@@ -746,7 +746,9 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window
     has finished; without it the coins are this process's and the
     window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
-    only by default). The served values are the arm's, untouched."""
+    only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
+    committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
+    served values are the arm's, untouched."""
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -784,6 +786,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
+        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+            h.patch(layer.quant_method, "zy_rows", settings.rows)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 

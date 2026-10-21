@@ -32,21 +32,28 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   a tile's rows are 32 consecutive leaves. What a listener returns (its roots and receipt root, as hex) is recorded with
   the call (``bound``). `Call.inputs` is `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the
   table's, and root(B) is the weight's, which compute accounting commits. This module commits neither.
-* **z** is the call's exact s32 Y: the arm's own when its ``observe`` hands one over (a fused kernel's), else
-  `engine.int8_exact.int_mm` beside the served `scaled_mm` (computed only to retain it): each unit's z is Y's cells of its
-  tile, zero on empty slots and pad columns (`Call.z`). The run keeps the last ``retain`` calls' Y.
+* **z** is the call's z/y records (`records_of`): the int8 arm serves through ``verity_int8::scaled_mm_zy`` over the
+  call's T slots (the option sets its ``zy_rows``), which writes the served y and, from the same accumulator, one
+  `ZY_BYTES` record a 32 × 32 unit in the compiled Program's unit order: the unit's exact s32 z over the whole K (its
+  cells, `Call.z`), then its y = dq(z_u, s_a, s_w) in bf16, little-endian and row-major, an empty slot's bytes zero
+  (`engine.int8_exact.zy_records`, compute accounting's `Accounting.Served.ValueChecked`). An arm that hands over no
+  records has none committed; with ``retain`` its exact Y is `engine.int8_exact.int_mm` beside it, to check. The run keeps
+  the last ``retain`` calls' Y (the records' z on the served rows).
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
   (`traced`), and the call is credited only if the y it hands back to vLLM was written by the GEMM invocation that wrote
-  its z, the only GEMM of the call. Today's arm serves `scaled_mm`'s y with z a second ``_int_mm`` beside it, so every
-  call is refused (``credit: served-output-not-credited-kernel: ...``) and the window credits nothing; a call recorded
-  outside a traced ``apply`` is refused too (`UNTRACED`).
+  its z, the only GEMM of the call, and its z is its committed records, whose every unit's y is dq of its z at the
+  call's committed scales, whose served rows' y is the served y and whose empty slots' z is 0 (`records_reason`; else
+  ``credit: z-records: ...``). ``scaled_mm_zy``'s call is credited; an arm serving ``scaled_mm``'s y with z an
+  ``_int_mm`` beside it is refused (``credit: served-output-not-credited-kernel: ...``), and a call recorded outside a
+  traced ``apply`` is refused too (`UNTRACED`).
 * **Requests and rounds** (`pouw_h1_requests`, #2677's `Accounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
   window serving a row of a request with no entry credits nothing. A window admits only in round 0 unless its
   ``admission`` is ``per-round`` (`pouw_h1_requests.ADMISSIONS`).
-* **Round values.** Each call's A table (its slots' s8 rows and f32 scales), its served y and its exact z when the run has
-  one are hiding tables of the call (``tables`` in its manifest row), so round s's root commits them before round s's
+* **Round values.** Each call's A table (its slots' s8 rows and f32 scales) and its z table (one leaf a unit, its z/y
+  record, when the arm handed them over) are hiding tables of the call (``tables`` in its manifest row), so round s's
+  root commits them, z at its cut, before round s's
   coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
@@ -92,8 +99,13 @@ I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
-#: a call's hiding tables, each T leaves under the run's salt key (`H1Run`): A's slot rows and scales, y's rows, z's rows
-TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "y": "verity/pouw/h1/y-table/v1", "z": "verity/pouw/h1/z-table/v1"}
+#: a call's hiding tables under the run's salt key (`H1Run`): A's T slot rows and scales, and z's one leaf a unit, its z/y
+#: record (`records_of`)
+TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
+#: each table's j in its hm96 salt nonces, `pouw_h1_requests.TABLES_NONCE` + 3c + j (1 was the retired y table's)
+TABLE_NONCES = {"a": 0, "z": 2}
+#: a unit's z/y record: its s32 z, then its bf16 y (`engine.int8_exact.ZY_BYTES`)
+ZY_BYTES = 6 * TILE[0] * TILE[1]
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't draw
@@ -343,6 +355,51 @@ def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[byte
     return out + [bytes(width)] * (rows - m)
 
 
+def records_of(z: Any, units: int) -> np.ndarray | None:
+    """A call of `units` units' z/y records on the host, [units, `ZY_BYTES`] uint8, when `z` is them (``scaled_mm_zy``'s
+    zy), else None."""
+    if z is None or str(getattr(z, "dtype", "")).removeprefix("torch.") != "uint8" or tuple(z.shape) != (units, ZY_BYTES):
+        return None
+    return np.ascontiguousarray(numpy_of(z))
+
+
+def split_records(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """(z [rows, n] int32, y [rows, n] bf16 bits as int16) of a call's records, unit (b, c) record b·(n / 32) + c."""
+    ur, uc = TILE
+    half = 4 * ur * uc
+
+    def grid(v: np.ndarray) -> np.ndarray:
+        return v.reshape(rows // ur, n // uc, ur, uc).transpose(0, 2, 1, 3).reshape(rows, n)
+    return (grid(np.ascontiguousarray(records[:, :half]).view("<i4")),
+            grid(np.ascontiguousarray(records[:, half:]).view("<i2")))
+
+
+def records_reason(call: Call, records: np.ndarray, y: np.ndarray, s_a: np.ndarray, s_w: np.ndarray) -> str | None:
+    """Why `call`'s committed records are not its served product's (None if they are): every unit's y is dq of its z at
+    the call's committed scales, s_a [m] on the served slots, 0 on the empty ones, and s_w [n] (`DequantOf`,
+    `engine.int8_exact.dequantize`); the served y [m, n] bf16 bits are the records' on the served rows; an empty slot's z
+    is 0."""
+    import torch
+
+    from verity_vllm.engine import int8_exact as E
+    z, yr = split_records(records, call.rows, call.n)
+    sa = np.zeros(call.rows, np.float32)
+    sa[:call.m] = np.asarray(s_a, np.float32).reshape(-1)
+    dq = E.dequantize(torch.from_numpy(z), torch.from_numpy(sa),
+                      torch.from_numpy(np.ascontiguousarray(s_w, np.float32).reshape(-1))).view(torch.int16).numpy()
+
+    def unit(bad: np.ndarray, row0: int = 0) -> int:
+        i, j = (int(v) for v in np.argwhere(bad)[0])
+        return ((row0 + i) // TILE[0]) * (call.n // TILE[1]) + j // TILE[1]
+    if (bad := dq != yr).any():
+        return f"unit {unit(bad)}'s y is not dq of its z at the call's scales"
+    if (bad := yr[:call.m] != np.asarray(y, np.int16).reshape(call.m, call.n)).any():
+        return f"the served y is not unit {unit(bad)}'s records' y"
+    if (bad := z[call.m:] != 0).any():
+        return f"unit {unit(bad, call.m)}'s empty slot has a z that isn't 0"
+    return None
+
+
 class H1Run:
     """One install's H1 window on the int8_exact row, in the static form: its calls, rows and positions are a function of the
     public parameters alone, never of a step's tokens, batch or EOS. ``shapes`` are the linears' (n, k) in order, ``rows``
@@ -417,8 +474,8 @@ class H1Run:
                                         "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
-                                        "z": "the arm's own when its observe hands one over, else engine.int8_exact.int_mm "
-                                             "beside the served scaled_mm"}
+                                        "z": "the call's z/y records from verity_int8::scaled_mm_zy, the served y's own "
+                                             "kernel, when the arm's observe hands them over; else none committed"}
 
     def listen(self, fn: Listener) -> None:
         """Hand every later call to `fn` (`Listener`)."""
@@ -449,32 +506,32 @@ class H1Run:
         return self._salt
 
     def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        j = list(TABLE_TAGS).index(name)
-        return commit_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, hash=HM96,
-                           salt_key=self._key, nonce=RQ.TABLES_NONCE + 3 * call.index + j).commitment.root.hex()
+        return commit_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, hash=HM96, salt_key=self._key,
+                           nonce=RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]).commitment.root.hex()
 
-    def _commit_tables(self, call: Call, a: Any, s_a: Any, y: Any, z: Any) -> None:
-        """The call's A, y and z tables (`table_leaves`): y's only when it's handed over or the call is empty, z's only when
-        the run has the call's exact Y."""
+    def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None) -> None:
+        """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`records_of`; an empty call's
+        all zero), none for a served call whose arm handed over no records."""
         m, t = call.m, self.rows
         if a is not None and m:
             av, sv = _words(a, m, "i1"), _words(s_a, m, "<f4")
         else:
             av = sv = np.zeros((0, 1), "i1")
         out: dict[str, str | None] = {"a": self._table(call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-        out["y"] = None if (y is None and m) else self._table(
-            call, "y", table_leaves(t, 2 * call.n, m, _words(y, m, "<i2") if m else av))
-        out["z"] = None if (z is None and m) else self._table(
-            call, "z", table_leaves(t, 4 * call.n, m, _words(z, m, "<i4") if m else av))
+        if not m:
+            out["z"] = self._table(call, "z", [bytes(ZY_BYTES)] * call.units)
+        else:
+            out["z"] = None if records is None else self._table(call, "z", [r.tobytes() for r in records])
         self.tables[call.index] = out
 
-    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, y: Any = None, z: Any = None) -> Call:
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any,
+              records: np.ndarray | None = None) -> Call:
         n, k = self.shapes_[w]
         call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
         if self.commit:
-            self._commit_tables(call, a, s_a, y, z)
+            self._commit_tables(call, a, s_a, records)
             if self.served is not None:
                 self.served.record(call, a, weight)
         for fn in self.listeners:
@@ -602,10 +659,11 @@ class H1Run:
         return [f"step {u['round']}: {u['rows']} row{'' if u['rows'] == 1 else 's'} of a request with no entry"
                 for u in self.unadmitted] + self.unbound
 
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None, y: Any = None) -> Call | None:
-        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, its
-        exact s32 Y [m, n] if the arm's kernel wrote one (else `int_mm` computes it beside, only to retain it) and its
-        served y [m, n] bf16, each committed in the call's tables."""
+    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
+        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
+        the z its arm handed over: its z/y records (`records_of`), committed as its z table, which `judge` holds to the
+        served y; without records nothing is committed for z, and with ``retain`` `int_mm` computes its exact Y beside,
+        only to retain it."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
         if w == 0:
@@ -618,23 +676,33 @@ class H1Run:
         if not 0 <= self.step < self.steps or m > self.rows or (int(weight.shape[0]), k) != self.shapes_[w]:
             self.refused.append({"step": self.step, "linear": w, "m": m})
             return None
+        n = self.shapes_[w][0]
+        records = records_of(z, units(k, n, self.rows)) if n % TILE[1] == 0 else None
         if z is None and self.retain:
             from verity_vllm.engine.int8_exact import int_mm
             z = int_mm(a, weight)
-        call = self._call(self.step, w, a, s_a, weight, weight_scale, y, z)
+        call = self._call(self.step, w, a, s_a, weight, weight_scale, records)
         if self.retain:
-            self.retained.append((call.index, numpy_of(a), numpy_of(s_a), numpy_of(z)))
-        self._recorded = (call, z)
+            y = split_records(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
+            self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
+        self._recorded = (call, z, None if records is None else (records, numpy_of(s_a), numpy_of(weight_scale)))
         return call
 
     def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM."""
+        back to vLLM. A call the trace credits is refused (``credit: z-records: ...``) when its z isn't its committed
+        records or they aren't its served product's (`records_reason`)."""
         made, self._recorded = self._recorded, None
         if made is None:
             return None
-        call, z = made
-        v = self.verdicts[call.index] = CG.verdict(trace, y, z)
+        call, z, held = made
+        v = CG.verdict(trace, y, z)
+        if v["credit"]:
+            why = (f"its z is not its {call.units} z/y records of {ZY_BYTES} bytes" if held is None
+                   else records_reason(call, held[0], _words(y, call.m, "<i2"), held[1], held[2]))
+            if why is not None:
+                v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
+        self.verdicts[call.index] = v
         return v
 
     def close(self) -> None:
@@ -792,5 +860,5 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
            "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
-           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root"]
+           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "records_of", "records_reason", "slots",
+           "split_records", "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "ZY_BYTES"]
