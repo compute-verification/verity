@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import re
 import shlex
 import sys
 import threading
@@ -274,7 +275,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_and_accepted_by_
     else:
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
-        assert dropper["credit"]["complete"]["reason"].startswith("its window closed incomplete (released ")
+        assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
+                            r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
+                            r"incomplete\)", dropper["credit"]["complete"]["reason"])
         assert doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0} and doc["line"][t]["credited_sessions"] == []
         assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete and "
                                                    "accepted; session 0: not complete: period p-1 closed incomplete")

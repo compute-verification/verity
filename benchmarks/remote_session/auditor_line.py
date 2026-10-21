@@ -38,7 +38,8 @@ machine) has no ledger: its log is read under the key its run wrote (`session_of
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons. What every accepted paced session measured, credited or not, is `measured`.
 
-    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA] [--ledger HEAD ...] [--ingress B/S ...]
+    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA] [--ledger HEAD ...]
+        [--ingress B/S ...]
 """
 from __future__ import annotations
 
@@ -76,8 +77,8 @@ def descriptor(tree: str) -> bytes:
 
 def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> str:
     """`VERIFIER_TREE`'s git tree at `commit`, the verifier run's recorded commit, read in `repo`'s git."""
-    p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}:{VERIFIER_TREE}"],
-                       capture_output=True, text=True)
+    p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet",
+                        f"{commit}^{{commit}}:{VERIFIER_TREE}"], capture_output=True, text=True)
     if p.returncode or len(p.stdout.strip()) != 40:
         raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has the "
                          "verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
@@ -216,8 +217,11 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
                 "period": None if close is None else close.get("complete") is True}
     why = []
     if not complete["window"]:
-        why.append(f"its window closed incomplete (released {end.get('released')} of the coins it reserved)"
-                   if end else "its window has no end on the ledger")
+        reserved = (((windows.get(R) or {}).get("reserve") or {}).get("body") or {}).get("families") or []
+        got = end.get("released") or {}
+        short = [f"{got.get(label, 0)} of its {n} {label} coins" for label, n in reserved if got.get(label, 0) < n]
+        why.append("its window has no end on the ledger" if not end else "its window closed incomplete: the "
+                   f"challenger released {', '.join(short) or 'fewer coins than it reserved'}")
     if close is None:
         why.append(f"period {period} hasn't closed")
     elif not complete["period"]:
