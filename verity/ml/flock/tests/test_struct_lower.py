@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as GB
+from verity.ml.circuits.ops.boolean import scalar as SB
 from verity.ml.circuits.refs import array_of
 from verity.ml.circuits.types import Array
 from verity_flock import struct_lower as S
@@ -31,3 +32,23 @@ def test_calls_repeating_different_arguments_are_different_specializations():
     assert S.check(REPEATS)["mismatched_bits"] == 0
     _tm, lw, _top = S.lower(REPEATS)
     assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 2
+
+
+def _constants(B, _S, x):
+    return array_of([B.call(GB.BlackwellS8ImmaDot32, B.call(SB.const_word(32, v)), x, x) for v in (0, 1, 0x3F800000, 7)])
+
+
+CONSTANTS = CompositeDefinition("StructLowerConstants", 1, (), lambda _S: ((("x", GB.A32_8),), Array(4, GB.F32)),
+                                _constants, register=False)
+
+
+def test_calls_past_the_fold_cap_share_one_specialization_with_constants_as_inputs():
+    """The first call's constant accumulator is folded in; the other three bind its bits to the unit's constant and a
+    zero column."""
+    fold = {"fold_cap": 1, "fold_gates": 0}
+    assert S.check(CONSTANTS, **fold)["mismatched_bits"] == 0
+    tm, lw, _top = S.lower(CONSTANTS, **fold)
+    assert T.ordered(tm)["ok"]
+    assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 2
+    _tm, lw, _top = S.lower(CONSTANTS, fold_cap=4, fold_gates=0)
+    assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 4

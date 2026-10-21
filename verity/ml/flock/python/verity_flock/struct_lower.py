@@ -14,12 +14,18 @@ the callee's inputs and its own columns, committed by the callee past ``support`
 of a batched primitive node are calls too. So a Definition's template rows are its own gates, never its callees', and
 consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line.
 
+Folding constants in costs a specialization per distinct constant argument (a counter passed as a constant makes one per
+call), so a Definition of at least ``fold_gates`` gates folds only its first ``fold_cap`` patterns with constants; its
+later calls share one specialization, lowered on the Definition's standalone call, in which every argument leaf is an
+input (a caller names equal constant bits by one gate, so the gates an argument repeats would spell its value) and each
+constant bit is bound to the unit's constant or to the caller's own column 0, which the caller then leaves unwritten.
+
 What the unit loses against the unrolled lowering is counted, not hidden: the commits, and the gates of a callee's
 returns that no caller reads (a callee is lowered without its callers' liveness). :func:`unrolled_rows` gives the
 template's rows unrolled (``tmpl.unroll``) and :func:`evaluate` evaluates them, which :func:`check` holds to the unrolled
 lowering's evaluation on random inputs.
 
-    python -m verity_flock.struct_lower K [R C] [--support S] [--out UNIT.tmpl] [--flat | --check]
+    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--out UNIT.tmpl] [--flat | --check]
 
 the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
 through the calls, and the template's size) and writes the template; ``--flat`` counts the unrolled lowering instead, and
@@ -44,6 +50,10 @@ from . import tmpl as T
 from .fp import ceil_pow2
 
 SUPPORT = 8
+#: a Definition of at least FOLD_GATES gates gets FOLD_CAP specializations with its constant arguments folded in; its
+#: later calls share one in which each constant argument bit is an input
+FOLD_CAP, FOLD_GATES = 4, 1000
+ZERO, ONE_REF = -1, -2  # a caller "bit" an input is bound to: the caller's zero column, or the unit's constant
 
 
 @dataclass
@@ -72,29 +82,38 @@ class _Block:
     base: int = 0
 
 
-def _pattern(words: list[list[L]]) -> tuple[tuple, list[int]]:
-    """The argument bits' pattern and the caller bits its inputs stand for, numbered by first appearance."""
+def _pattern(words: list[list[L]], fold: bool = True) -> tuple[tuple, list[int]]:
+    """The argument bits' pattern and the caller bits its inputs stand for, numbered by first appearance; not ``fold``:
+    each constant bit an input of its own, bound to ``ZERO`` or ``ONE_REF``."""
     labels: dict[int, int] = {}
+    out: list[int] = []
     pat = []
     for w in words:
         for b in w:
             if b.is_const():
-                pat.append(("c", b.c))
+                if fold:
+                    pat.append(("c", b.c))
+                else:
+                    pat.append(((len(out),), 0))
+                    out.append(ONE_REF if b.c else ZERO)
                 continue
             ls = []
             for v in sorted(b.s):
                 i = labels.get(v)
                 if i is None:
-                    i = labels[v] = len(labels)
+                    i = labels[v] = len(out)
+                    out.append(v)
                 ls.append(i)
             pat.append((tuple(ls), b.c))
-    return tuple(pat), list(labels)
+    return tuple(pat), out
 
 
 class _Lowerer:
-    def __init__(self, circuit, support: int = SUPPORT):
+    def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES):
         self.circuit = circuit
         self.support = support
+        self.fold_cap, self.fold_gates = fold_cap, fold_gates
+        self.folded: dict[str, int] = {}
         self.specs: dict[tuple, Spec] = {}
         self.order: list[Spec] = []
         self.totals: dict[tuple, dict] = {}
@@ -107,7 +126,15 @@ class _Lowerer:
         words = [wires[a] for a in first]
         pat, label_vars = _pattern(words)
         key = (fc.fn.id, shape, pat)
-        sp = self.specs.get(key) or self._lower(fc, key, pat, len(label_vars))
+        sp = self.specs.get(key)
+        if sp is None and not fc.is_primitive and fc.fn.gates >= self.fold_gates and any(p[0] == "c" for p in pat):
+            if self.folded.get(fc.fn.id, 0) < self.fold_cap:
+                self.folded[fc.fn.id] = self.folded.get(fc.fn.id, 0) + 1
+            else:
+                pat, label_vars = _pattern([wires[a] for a in fc.args], fold=False)
+                key = (fc.fn.id, None, pat)
+                sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
+        sp = sp or self._lower(fc, key, pat, len(label_vars))
         blk = _Block(len(C.kind), key, label_vars)
         C.blocks.append(blk)
         col_var: dict[int, L] = {}
@@ -124,17 +151,32 @@ class _Lowerer:
                     out.append(L(frozenset(), t[1]))
                     continue
                 s: frozenset = frozenset()
+                c = t[1]
                 for kind, x in t[2]:
-                    if kind == "l":
+                    if kind == "l" and label_vars[x] < 0:
+                        c ^= label_vars[x] == ONE_REF
+                    elif kind == "l":
                         s = s ^ frozenset((label_vars[x],))
                     else:
                         if x not in col_var:
                             col_var[x] = C._new("call", (len(C.blocks) - 1, x))
                         s = s ^ col_var[x].s
-                out.append(L(s, t[1]))
+                out.append(L(s, c))
             wires.setdefault(r, out)
-        C.used.extend(L(frozenset((v,)), 0) for v in label_vars)
+        C.used.extend(L(frozenset((v,)), 0) for v in label_vars if v >= 0)
+        C.zero = getattr(C, "zero", False) or ZERO in label_vars
         return key
+
+    def _generic(self, fc: FunctionCall, key: tuple, pat: tuple, ins: int) -> Spec:
+        """``fc``'s Definition lowered on its standalone call, whose argument leaves are distinct gates: a caller binds
+        equal constant bits to one gate, so only there is each argument leaf an input of its own."""
+        _prog, root = IL.standalone(fc.fn)
+        assert len(set(root.args)) == len(root.args) == len(fc.args), f"{fc.id}: a standalone argument leaf repeats"
+        outer, self.circuit = self.circuit, root.circuit
+        try:
+            return self._lower(root, key, pat, ins)
+        finally:
+            self.circuit = outer
 
     def _lower(self, fc: FunctionCall, key: tuple, pat: tuple, ins: int) -> Spec:
         C = Circuit()
@@ -202,7 +244,7 @@ class _Lowerer:
         sp = Spec(key, ins)
         col: dict[int, int] = {}
         blocks = [b for b in C.blocks if self.specs[b.key].cols]
-        bi, n = 0, 0
+        bi, n = 0, int(getattr(C, "zero", False))
         for v in range(len(C.kind)):
             while bi < len(blocks) and blocks[bi].pos <= v:
                 blocks[bi].base = n
@@ -223,6 +265,8 @@ class _Lowerer:
         K = sp.cols + ins
 
         def ref(v: int) -> int:
+            if v < 0:
+                return 0 if v == ZERO else K
             return sp.cols + C.data[v] if C.kind[v] == "arg" else col[v]
 
         def refs(f: L) -> tuple:
@@ -292,12 +336,13 @@ def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) ->
     return calls
 
 
-def lower(target, support: int = SUPPORT, name: str = "unit") -> tuple[T.Tmpl, _Lowerer, Spec]:
+def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
+          fold_gates: int = FOLD_GATES) -> tuple[T.Tmpl, _Lowerer, Spec]:
     """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
     output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit, support)
+    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
@@ -329,6 +374,7 @@ def lower(target, support: int = SUPPORT, name: str = "unit") -> tuple[T.Tmpl, _
     for j, b in enumerate(outs):
         rows.append((out_at + j, tuple(sorted(map(ref, b.s))) + ((cols,) if b.c else ()), (cols,)))
     blk = C.blocks[0]
+    assert min(blk.labels, default=0) >= 0, "the root's call binds a constant"
     calls = [T.Call(sp.index, 1, base, sp.cols, _segs([ref(v) for v in blk.labels], [0] * len(blk.labels), cols))] if sp.cols else []
     groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, 1, len(outs))]
     defs = [T.Def(s.cols, s.ins, tuple(s.rows), tuple(s.calls)) for s in lw.order]
@@ -362,9 +408,9 @@ def evaluate(flat: T.Flat, inputs: list[int], nin: int) -> list[int]:
     return z
 
 
-def check(target, support: int = SUPPORT, seed: int = 0) -> dict:
+def check(target, support: int = SUPPORT, seed: int = 0, **fold) -> dict:
     """The templated unit unrolled and evaluated on 64 random inputs, against the unrolled lowering's outputs."""
-    t, _lw, _sp = lower(target, support)
+    t, _lw, _sp = lower(target, support, **fold)
     flat = T.unroll(t)
     _prog, root = IL.standalone(target)
     args = list(dict.fromkeys(root.args))
@@ -431,6 +477,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="struct_lower")
     ap.add_argument("shape", nargs="+", type=int)
     ap.add_argument("--support", type=int, default=SUPPORT)
+    ap.add_argument("--fold-cap", type=int, default=FOLD_CAP)
     ap.add_argument("--out")
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--check", action="store_true")
@@ -444,15 +491,15 @@ def main(argv: list[str]) -> int:
     if a.flat:
         out = flat(shape.unit())
     elif a.check:
-        out = {"check": check(shape.unit(), a.support)}
+        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap)}
     else:
-        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}")
+        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap)
         size = None
         if a.out:
             text = T.write(t)
             Path(a.out).write_text(text)
             size = len(text)
-        out = stats(t, lw, top, size) | {"support": a.support}
+        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap}
     out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
