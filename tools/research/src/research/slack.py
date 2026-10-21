@@ -150,6 +150,8 @@ SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
 RATE_RETRIES, RATE_WAIT_MAX_S = 3, 30                         # a 429: retry this often, waiting at most this long each time
+TRANSIENT_RETRIES, TRANSIENT_WAIT_S = 3, 2.0                  # a read cut short, reset, timed out or a 5xx: 2, 4, then 8 s
+READ_VERBS = ("get", "list", "history", "replies", "info", "members", "lookup", "test")
 ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
 ASK_CHANNEL = "ask-daniel"
 DANIEL = "daniel"                                                # whose asks are pages: `traffic`'s lane for the cards
@@ -596,6 +598,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
 
+def transient(e: BaseException) -> bool:
+    """A failure that a second identical request may not meet: a 5xx, a response cut short (IncompleteRead, a dropped
+    connection), a reset or a timeout. A refusal (4xx), a DNS failure or an unparseable answer is not."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500
+    if isinstance(e, http.client.HTTPException):
+        return True
+    if isinstance(e, urllib.error.URLError):
+        e = e.reason if isinstance(e.reason, BaseException) else e
+    return isinstance(e, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError, http.client.HTTPException))
+
+
+def idempotent(method: str) -> bool:
+    """A read (`conversations.replies`, `users.list`, `chat.getPermalink`), which a retry can't repeat. A write cut short or timed
+    out may already have been taken (a post would appear twice), so only reads are retried after a transient failure."""
+    return method.rsplit(".", 1)[-1].startswith(READ_VERBS)
+
+
 def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) -> dict:
     """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)
@@ -728,24 +748,31 @@ class Slack:
                   file=self.log or sys.stderr)
             return {"ok": True, "dry_run": True}
         args = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()}
-        for attempt in range(RATE_RETRIES + 1):
+        rate = flaky = 0
+        while True:
             try:
                 out = self._broker(method, args) if self.via == "broker" else self.transport(
                     self.base + method, urllib.parse.urlencode(args).encode(),
                     {**({"Authorization": f"Bearer {self.token}"} if self.token else {}),
                      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
                 break
-            except urllib.error.HTTPError as e:
-                if e.code == 429 and attempt < RATE_RETRIES:                 # a burst of doorbells: wait as asked, then again
+            except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code == 429 and rate < RATE_RETRIES:   # a burst of doorbells
+                    rate += 1
                     _sleep(min(float(e.headers.get("Retry-After") or 1), RATE_WAIT_MAX_S))
                     continue
-                if self.via == "broker":
-                    raise SlackError(broker_error(method, e)) from None
-                hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
-                raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
-            except (urllib.error.URLError, OSError, ValueError) as e:
+                if transient(e) and idempotent(method) and flaky < TRANSIENT_RETRIES:
+                    flaky += 1
+                    _sleep(TRANSIENT_WAIT_S * 2 ** (flaky - 1))
+                    continue
+                if isinstance(e, urllib.error.HTTPError):
+                    if self.via == "broker":
+                        raise SlackError(broker_error(method, e)) from None
+                    hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
+                    raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
                 where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
-                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
+                tries = f" (after {flaky + 1} tries)" if flaky else ""
+                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}{tries}") from None
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
@@ -2419,6 +2446,9 @@ def comment_by(c: dict) -> str | None:
     return (c.get("user") or {}).get("name")
 
 
+RECORD_UNREADABLE = "unreadable"                                     # the record of an ask's answer (Linear, Notion) couldn't be read
+
+
 def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]]) -> tuple[bool, str]:
     """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
     someone other than `asker` commented on it; and the state that says so.  Not taken when Linear can't say, so a doubtful
@@ -2436,7 +2466,7 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
             else:
                 cache[ident] = (False, "in Backlog, no comment but the asker's")
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
-            cache[ident] = (False, f"unreadable ({e})")
+            cache[ident] = (False, f"{RECORD_UNREADABLE} ({e})")
     return cache[ident]
 
 
@@ -2737,8 +2767,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and each ask with the record
     that says whether it was answered, over the last --hours: a handle's ask linked to a Linear issue by the issue
     (`issue_state`), Daniel's #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
-    reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state.  With --latency, how
-    fast each lane first answered its asks instead (`ask_latency`)."""
+    reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
+    be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
+    per ask (INF-150).  With --latency, how fast each lane first answered its asks instead (`ask_latency`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
@@ -2779,6 +2810,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
             answered, state = issue_state(link[1], x["by"], taken)
+            answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
@@ -2788,12 +2820,15 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     for c in daniel_cards(api, reg, since, now):
         st = pages.state(c["page"])
         asks.append(({"ts": c["ts"], "by": c["by"], "to": [DANIEL], "record": "notion", "ref": c["url"],
-                      "state": f"Status {st['status']}" if st["status"] else f"unreadable ({st['error']})"}, st["answered"]))
+                      "state": f"{RECORD_UNREADABLE} ({st['error']})" if st.get("error") else f"Status {st['status']}"},
+                     None if st.get("error") else st["answered"]))
     answered_by = [x for x, ok in asks if ok]
-    stale = [x for x, ok in asks if not ok and now - float(x["ts"]) > ns.stale_h * 3600]
+    old_enough = [(x, ok) for x, ok in asks if now - float(x["ts"]) > ns.stale_h * 3600]
+    stale = [x for x, ok in old_enough if ok is False]
+    unchecked = [x for x, ok in old_enough if ok is None]
     replayed = replay(api, reg, routes, ch, since) if ns.replay else None
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale,
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked,
                           **({"replay": replayed} if replayed is not None else {})}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
@@ -2810,6 +2845,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])}): "
               + {"linear": f"Linear {s['ref']} {s['state']}", "notion": f"Notion page {s['ref']} {s['state']}",
                  "slack": f"Slack, no record: {s['state']}"}[s["record"]])
+    if unchecked:
+        print(f"  UNCHECKED: {len(unchecked)} ask(s) whose record can't be read: {unchecked[0]['state']}")
     for x in replayed or []:
         what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
         print(f"  REPLAY {x['ts']} by @{x['by']}: {what}: {x['first']}")
@@ -3899,7 +3936,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--stale-h", type=float, default=2,
                    help="an ask its record doesn't show answered after this many hours is unanswered: its Linear issue still "
                         "in Backlog with no comment but the asker's, Daniel's page still Waiting on Daniel, or (no record) no "
-                        "👀, ✅, ❌ or reply")
+                        "👀, ✅, ❌ or reply; one whose record can't be read is unchecked")
     p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
     p.add_argument("--latency", action="store_true", help="instead: per lane (and @daniel), its asks, how many its record shows "
                                                          "answered (Linear, Notion, or Slack where there's no record), and the "

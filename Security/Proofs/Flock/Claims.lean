@@ -61,6 +61,7 @@ import Proofs.Flock.Claims.Recursion.KSLin2
 import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 import Proofs.Flock.Claims.Recursion.KSLin2Deployed
 import Proofs.Flock.Claims.Recursion.KSLin2Plain
+import Proofs.Flock.Claims.Recursion.LamDeployed
 import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Proofs.Flock.Claims.Recursion.CapLink
 import Proofs.Flock.Claims.Recursion.CapLinkRd
@@ -74,6 +75,11 @@ import Proofs.Flock.Claims.Recursion.RepBindProof
 import Proofs.Flock.Claims.Recursion.CallsBridge
 import Proofs.Flock.Claims.Recursion.LogWalk
 import Proofs.Flock.Claims.Recursion.DecodeLog
+import Proofs.Flock.Claims.Recursion.VerdictLog
+import Proofs.Flock.Claims.Recursion.CallsAgree
+import Proofs.Flock.Claims.Recursion.CallsOfProofs
+import Proofs.Flock.Claims.Recursion.LastBindsClosed
+import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
@@ -83,6 +89,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks
 import Proofs.Flock.Claims.Recursion.VStarBDeploy
+import Proofs.Flock.Claims.Recursion.KSLin2Staged
 import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Claims.Recursion.DeployChecked

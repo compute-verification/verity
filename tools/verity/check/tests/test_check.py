@@ -1349,9 +1349,9 @@ def _train_repo(tmp_path):
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
 
-    def train(*a):
+    def train(*a, **extra):
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env=env)
+                              cwd=tmp_path / "repo", env={**env, **extra})
 
     return git, train, argv
 
@@ -1415,6 +1415,25 @@ def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_
     p = train("HEAD", "vy-x")
     posted = (tmp_path / "posted").read_text()
     assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
+
+
+def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
+    """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
+    ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    assert train("HEAD", "vy-x").returncode == 0 and "--priority" in argv.read_text().split()
+    p = train("HEAD", "vy-x", "--agreement", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
+
+    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

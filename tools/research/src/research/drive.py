@@ -36,9 +36,21 @@ broken before them); a run the machine killed runs again once.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
+`--per-pr-shadow N` (drive.toml's `per_pr_shadow`, 0 is off) runs the per-PR landing (parallel landing's step 3) in shadow beside
+the trains, to measure it: it lands, ejects and posts nothing, and never touches `next`, `main` or the trains' records.  Each
+ready PR, oldest mark first, while fewer than N of its checks run, gets one check (`train.sh`, as an ordinary quiet job,
+`PER_PR_ENV`) of its landing commit L, `main` merged with its head, pushed as `per-pr/N` (train.sh checks what origin holds).
+A new head restarts only that PR's check.  L would land once its check passes by drive's rule (every step but the deferred
+ones, as a train lands; the whole check too is recorded), when `main` is still the one L was built on; on a moved `main`, the
+new L is planned by its parts' keys (`check.py --plan --packs-only --from` its checks, on the node its check ran on: `plan_launch`,
+detached, at most N at once) and would land when every part the rule needs has a cited pass (`merge.plan_refusal`), else
+it is checked again.  What it would land, and when, is logged and kept under `drive["per_pr"]` (`research queue stats --per-pr`
+reads it); a record ends once the trains land the PR's head, or it closes, leaves the queue or gets a new head.
+
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import functools
 import json
@@ -53,8 +65,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import (CHECK_TOOLING, IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, built_on,
-                    changed, hold, touched_suites)
+from .queue import (CHECK_TOOLING, IDENTITY, PR, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git,
+                    _message, _out, built_on, changed, hold, touched_suites)
+from .runs import SLOT_FILE
 
 #: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
 CI = "@ci"
@@ -109,6 +122,14 @@ PREWARM_MAX = 1
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
 #: what `git revert` writes of the commit it undoes
 REVERTS_RE = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
+#: the per-PR shadow's branch of a PR's landing commit, which train.sh needs on origin (`--per-pr-shadow`)
+PER_PR_BRANCH = "per-pr/"
+#: its records kept once they end
+PER_PR_DONE = 1000
+#: its landing commits' identity, so none equals a commit of `next`
+PER_PR_IDENTITY = {**IDENTITY, "GIT_COMMITTER_NAME": "research queue per-PR shadow"}
+#: its records' phases in which it still acts: a terminal one (would-land, failed, conflict) waits for a new head or the trains
+PER_PR_LIVE = ("queued", "checking", "planning")
 
 
 @dataclass
@@ -137,23 +158,33 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
 #: what train.sh's check.py passes on as `slot.py --rank`: a train's members above `main` (1 for the lowest), 0 for the post-landing
 #: run, so the train that lands next takes a node's next free check slot (CI-110)
 SLOT_RANK = "CHECK_SLOT_RANK"
+#: the per-PR shadow's checks' train.sh: an ordinary job, no `--priority` or rank, behind every priority check and in turn with
+#: lane checks, so it never takes a lane's or a train's slot; and quiet, posting nothing when a launch registers nothing (ci, 21 Oct)
+PER_PR_ENV = {SLOT_RANK: None, "TRAIN_ORDINARY": "1", "TRAIN_QUIET": "1"}
 
 
 @contextlib.contextmanager
-def slot_rank(rank: int | None):
-    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
-    was = os.environ.get(SLOT_RANK)
-    if rank is None:
-        os.environ.pop(SLOT_RANK, None)
-    else:
-        os.environ[SLOT_RANK] = str(rank)
+def launch_env(values: dict[str, str | None]):
+    """os.environ with ``values`` set (a None unset) for a launch's train.sh."""
+    was = {k: os.environ.get(k) for k in values}
+    for k, v in values.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
     try:
         yield
     finally:
-        if was is None:
-            os.environ.pop(SLOT_RANK, None)
-        else:
-            os.environ[SLOT_RANK] = was
+        for k, v in was.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def slot_rank(rank: int | None):
+    """os.environ with SLOT_RANK set to ``rank`` (unset when None) for a launch's train.sh."""
+    return launch_env({SLOT_RANK: None if rank is None else str(rank)})
 
 
 @contextlib.contextmanager
@@ -229,18 +260,32 @@ def failing(run_dir: Path) -> str | None:
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
     """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
     fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
-    out = {}
     also = [x for n in PROGRESS for x in ("--also", n)]
-    for rid in ids:
+
+    def one(rid: str) -> tuple[str, int | None, str | None, str | None]:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
             state = run.get("state") or "unknown"
-            out[rid] = (state, run.get("rc"), run.get("ended_utc"),
-                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
+            return (state, run.get("rc"), run.get("ended_utc"),
+                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
         except (ValueError, KeyError, IndexError):
-            out[rid] = ("unknown", None, None, None)
-    return out
+            return ("unknown", None, None, None)
+
+    return dict(zip(ids, _each(one, ids)))
+
+
+#: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (20 Oct: the control pod's
+#: first tick took 33 min reading about 40 runs one at a time)
+STATUS_JOBS = 8
+
+
+def _each(fn, items: list) -> list:
+    """``fn`` of each of ``items``, `STATUS_JOBS` at a time, in their order."""
+    if len(items) < 2:
+        return [fn(x) for x in items]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=STATUS_JOBS) as ex:
+        return list(ex.map(fn, items))
 
 
 def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
@@ -314,16 +359,16 @@ def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
     """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
-    dirs = []
-    for rid in ids:
+    def one(rid: str) -> Path | None:
         if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json", TOUCHED_REPORT])) is None:
-            continue
+            return None
         logs = [f"{where}/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log") for where in ("suites", TOUCHED_LOGS)]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
         if logs:
             _fetch(repo, rid, logs)
-        dirs.append(d)
-    return dirs
+        return d
+
+    return [d for d in _each(one, ids) if d is not None]
 
 
 def failed_steps(run_dir: Path) -> list[dict]:
@@ -457,14 +502,83 @@ def touches(files: set[str], paths: set[str]) -> set[str]:
     return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
 
 
+#: the plan's job (`plan_launch`): `check.py --plan` on each machine in turn, each plan to its own file, stopping at the first
+#: fully passed; its exit in `rc` last, once the worktree it ran in is gone
+PLAN_JOB = ('i=0; rc=2; for m in $PLAN_ON; do "$@" --on "$m" > "$PLAN_OUT/plan-$i.json" 2>> "$PLAN_OUT/plan.log"; rc=$?; '
+            'i=$((i + 1)); [ "$rc" -eq 0 ] && break; done; cd / && git -C "$PLAN_REPO" worktree remove --force "$PLAN_TREE" '
+            '>> "$PLAN_OUT/plan.log" 2>&1; echo "$rc" > "$PLAN_OUT/rc.tmp" && mv "$PLAN_OUT/rc.tmp" "$PLAN_OUT/rc"')
+
+
+def plan_launch(repo: Path, commit: str, base: str, runs: list[str], machines: list[str], out: Path,
+                auth: tuple[str, ...] = ()) -> dict:
+    """Plan ``commit`` by its parts' keys, detached, so no tick waits on it: in a worktree of ``base`` (`main`, whose check.py is
+    the gate's) under ``out``, `merge.PLAN COMMIT --json --packs-only --base BASE --from RUN...` (``runs``: the PR's own checks)
+    `--on` each of ``machines`` in turn (`PLAN_JOB`).  Returns the record `plan_state` reads."""
+    from .merge import PLAN
+
+    out.mkdir(parents=True, exist_ok=True)
+    tree = out / "tree"
+    _git(repo, "worktree", "add", "-q", "--detach", str(tree), base)
+    argv = [*PLAN, commit, "--json", "--packs-only", "--base", base, *(x for r in runs for x in ("--from", r))]
+    env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
+    env.update(auth_env(auth), GIT_TERMINAL_PROMPT="0", PLAN_ON=" ".join(machines), PLAN_OUT=str(out), PLAN_REPO=str(repo),
+               PLAN_TREE=str(tree))
+    p = subprocess.Popen(["sh", "-c", PLAN_JOB, "sh", *argv], cwd=tree, env=env, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return {"dir": str(out), "pid": p.pid, "machines": machines}
+
+
+def plan_state(plan: dict) -> tuple[str, list[dict], str]:
+    """(running | ended | lost, the plans it has written, its log's tail) of a `plan_launch`: lost when its process is gone
+    without writing its exit (a restart of the pod)."""
+    d = Path(plan["dir"])
+    docs = []
+    for f in sorted(d.glob("plan-*.json")):
+        with contextlib.suppress(OSError, ValueError):
+            if isinstance(doc := json.loads(f.read_text()), dict):
+                docs.append(doc)
+    try:
+        tail = (d / "plan.log").read_text(errors="replace").strip()[-400:]
+    except OSError:
+        tail = ""
+    if (d / "rc").is_file():
+        return "ended", docs, tail
+    try:
+        os.kill(int(plan["pid"]), 0)
+    except ProcessLookupError:
+        return "lost", docs, tail
+    except (PermissionError, ValueError, TypeError, KeyError):
+        pass
+    return "running", docs, tail
+
+
+def undeferred(doc: dict, defer: frozenset[str]) -> dict:
+    """A `check.py --plan` document with the parts of the ``defer`` steps taken out, as a train lands without them: a build step
+    (`implied`) keeps the parts that read what it builds that are left, and goes when none is."""
+    parts = [p for p in doc.get("parts") or [] if isinstance(p, dict) and p.get("step") not in defer]
+    names = {p.get("part") for p in parts}
+    out = []
+    for p in parts:
+        if p.get("state") == "implied" and isinstance(p.get("implied_by"), list):
+            if not (left := [n for n in p["implied_by"] if n in names]):
+                continue
+            p = {**p, "implied_by": left}
+        out.append(p)
+    return {**doc, "parts": out}
+
+
 class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset(),
-                 regenerate_locks: bool = False):
+                 regenerate_locks: bool = False, per_pr_shadow: int = 0):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: the per-PR landing in shadow (`per_pr`): at most this many of its checks, and of its plans, at once; 0 is off
+        self.per_pr_shadow = per_pr_shadow
+        self.plan_launch: Callable[..., dict] = functools.partial(plan_launch, auth=q.auth)
+        self.plan_state: Callable[[dict], tuple[str, list[dict], str]] = plan_state
         #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
         self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
@@ -1575,6 +1689,300 @@ class Driver:
             q.log(f"research queue drive: pre-warming #{rec['pr']} ({rec['head'][:12]}): {' '.join(ids)}")
         return active
 
+    # -- the per-PR landing, in shadow (`--per-pr-shadow N`; the module's last paragraph)
+
+    def _say(self, text: str) -> None:
+        self.q.log(f"research queue drive: per-PR shadow: {text}")
+
+    def per_pr(self, drive: dict) -> str | None:
+        """One tick of the per-PR shadow, under `drive["per_pr"]`; a failure of its own is logged, and the trains' tick goes on."""
+        if not self.per_pr_shadow:
+            return None
+        head = _out(self.repo, "rev-parse", "HEAD")
+        try:
+            return self._per_pr(drive.setdefault("per_pr", {}))
+        except Exception as e:  # noqa: BLE001  (a shadow never stops the trains)
+            self._say(f"failed this tick ({type(e).__name__}: {e})")
+            return None
+        finally:
+            _git(self.repo, "merge", "--abort", check=False)
+            _git(self.repo, "checkout", "-q", "-f", "--detach", head, check=False)
+
+    def _admitted(self) -> tuple[dict[int, PR], set[int]]:
+        """(the open PRs against `main` drive admits now, by number; those it admits or ejected at their heads, whose records the
+        shadow keeps: the trains' ejection is the trains' verdict, not the shadow's), each head fetched.  The pre-warm's hold
+        only orders `next`, and doesn't apply."""
+        q = self.q
+        if self._prs is None:
+            self._prs = {p.number: p for p in q.github.open_prs()}
+        prs = [p for p in self._prs.values() if p.base == "main"]
+        have = dict(line.split()[::-1] for line in _out(self.repo, "for-each-ref", "--format=%(objectname) %(refname)",
+                                                            "refs/queue/pr/").splitlines())
+        fresh = [p for p in prs if have.get(f"refs/queue/pr/{p.number}") == p.head]
+        if stale := [p for p in prs if p not in fresh]:
+            fresh += q.fetch_prs(stale)[0]
+        warming, q.warming = q.warming, None
+        try:
+            entries = q.entries(fresh, q.load_state())
+        finally:
+            q.warming = warming
+        ready = {n: e.pr for n, e in entries.items() if e.state == "ready"}
+        return ready, set(ready) | {n for n, e in entries.items() if e.state == "refused" and e.why.startswith("ejected at")}
+
+    def _per_pr(self, sh: dict) -> str:
+        recs, done = sh.setdefault("prs", {}), sh.setdefault("done", [])
+        self._per_pr_recs = recs
+        ready, kept = self._admitted()
+        main = _out(self.repo, "rev-parse", "origin/main")
+        for key, rec in list(recs.items()):
+            n = int(key)
+            why = ("landed" if self._ancestor(rec["head"], main) else "closed" if n not in self._prs
+                   else "new-head" if self._prs[n].head != rec["head"]
+                   else "dropped" if n not in kept and rec["phase"] in PER_PR_LIVE else None)
+            if why:
+                self._per_pr_end(recs, done, key, why, main)
+        for rec in list(recs.values()):
+            self._per_pr_follow(rec, main)
+        new = [p for n, p in ready.items() if str(n) not in recs and not self._ancestor(p.head, main)]
+        for p in new:
+            p_mark = self.q.marked_at(p.number, p.head) if self.q.marked_at else None
+            recs[str(p.number)] = {"pr": p.number, "head": p.head, "owner": p.owner or "", "marked": _utc(p_mark),
+                                   "phase": "queued", "new": True, "checks": [], "plans": []}
+        order = sorted((r for r in recs.values() if r["phase"] == "queued"),
+                       key=lambda r: (r["marked"] is None, r["marked"] or 0, r["pr"]))
+        for rec in order:
+            if self._per_pr_running() >= self.per_pr_shadow:
+                break
+            self._per_pr_check(rec, main)
+        for key in [k for k, r in recs.items() if r.pop("new", False) and r["phase"] == "queued" and not r["checks"]]:
+            del recs[key]                                   # not sampled this tick: no record until a slot takes it
+        phases = [r["phase"] for r in recs.values()]
+        return (f"per-PR shadow: {phases.count('checking')} checking, {phases.count('planning')} planning, "
+                f"{phases.count('would-land')} would land")
+
+    def _per_pr_running(self) -> int:
+        return sum(r["phase"] == "checking" or bool(r["checks"] and not r["checks"][-1].get("ended") and r["checks"][-1].get("ids"))
+                   for r in self._per_pr_recs.values())
+
+    def _per_pr_commit(self, rec: dict, main: str) -> tuple[str | None, str]:
+        """(L, ""): ``rec``'s PR's head merged onto ``main`` as drive's sync merges it onto `next` (`queue._message`), or (None,
+        why) when they conflict.  Its committer is the shadow's (`PER_PR_IDENTITY`): a commit equal to a train's would share
+        that train's attempts, and the trains' verdicts with them."""
+        pr = self._prs.get(rec["pr"]) or PR(rec["pr"], rec["head"], "", f"Lane {rec['owner']}")
+        _git(self.repo, "checkout", "-q", "-f", "--detach", main)
+        r = _git(self.repo, "merge", "--no-ff", "--no-edit", "-m", _message(pr), rec["head"], check=False, env=PER_PR_IDENTITY)
+        if r.returncode == 0:
+            return _out(self.repo, "rev-parse", "HEAD"), ""
+        files = _out(self.repo, "diff", "--name-only", "--diff-filter=U").split()
+        _git(self.repo, "merge", "--abort", check=False)
+        return None, (f"conflicts with `main` {main[:12]} in {', '.join(files[:5])}" if files
+                      else f"doesn't merge onto `main` {main[:12]}: {(r.stderr or r.stdout).strip()[-200:]}")
+
+    def _per_pr_check(self, rec: dict, main: str) -> None:
+        """Check ``rec``'s landing commit on the current ``main``: build it, push it as its `per-pr/N` branch, and launch
+        `train.sh` on it as an ordinary job that never posts (`PER_PR_ENV`)."""
+        n, now = rec["pr"], self.now()
+        commit, why = self._per_pr_commit(rec, main)
+        if commit is None:
+            rec.update(phase="conflict", conflict={"at": now, "main": main, "why": why})
+            self._say(f"#{n} ({rec['head'][:8]}) {why}: it would be told to its owner, and not checked")
+            return
+        agreement = needs_agreement(self.repo, main, commit)
+        if self.dry_run or self.q.shadow:
+            self._say(f"would check #{n} as {commit[:12]} on `main` {main[:12]}")
+            return
+        branch = f"{PER_PR_BRANCH}{n}"
+        p = self.q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"+{commit}:refs/heads/{branch}", ok=None)
+        if p.returncode:
+            self._say(f"pushing {branch} was refused ({(p.stderr or p.stdout).strip()[-200:]}); #{n} waits for the next tick")
+            return
+        with launch_env(PER_PR_ENV):
+            ids, tail = self.launch(self.repo, commit, self.on, agreement)
+        if not ids:
+            self._say(f"#{n}'s check of {commit[:12]} registered no run ({tail[-200:]}); it waits for the next tick")
+            return
+        rec.setdefault("sampled", now)
+        rec["checks"].append({"commit": commit, "main": main, "ids": ids, "at": now, "agreement": agreement})
+        rec.update(phase="checking", branch=branch)
+        self._say(f"checking #{n} ({rec['head'][:8]}) as {commit[:12]} = `main` {main[:12]} + its head: {' '.join(ids)}"
+                  + (" with agreement" if agreement else "") + f" [{self._per_pr_running()} of {self.per_pr_shadow}]")
+
+    def _per_pr_verdict(self, c: dict) -> Verdict:
+        """The whole check's verdict of ``c`` (`verdict`, with no step deferred: `--defer`'s rule is `_per_pr_follow`'s)."""
+        defer, self.defer = self.defer, frozenset()
+        try:
+            return self.verdict(c["commit"], c["main"], {"launched": {c["commit"]: c}})
+        finally:
+            self.defer = defer
+
+    def _per_pr_follow(self, rec: dict, main: str) -> None:
+        """Follow ``rec``'s last check to its end (past a would-land, which a deferred step may still fail) and its plan."""
+        if rec["checks"] and not (c := rec["checks"][-1]).get("ended"):
+            self._per_pr_follow_check(rec, c, main)
+        if rec["phase"] == "planning":
+            self._per_pr_follow_plan(rec, rec["plans"][-1], main)
+
+    def _per_pr_took(self, rec: dict, c: dict) -> None:
+        """When a check slot took ``c``'s run (its `slot.json`'s `took`; of twins, the one that ran), kept on ``c`` and, for its
+        first check, on ``rec``: the shadow's checks wait as ordinary jobs, a wait a per-PR drive's wouldn't have."""
+        for rid in [] if c.get("took") else c["ids"]:
+            got, took = self.fetch(rid, [SLOT_FILE]), None
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                took = json.loads((got[0] / SLOT_FILE).read_text()).get("took") if got else None
+            if took and (t := _utc(took)) is not None:
+                c["took"] = t
+                rec.setdefault("took", t)
+                return
+
+    def _per_pr_follow_check(self, rec: dict, c: dict, main: str) -> None:
+        self._per_pr_took(rec, c)
+        n, now, v = rec["pr"], self.now(), self._per_pr_verdict(c)
+        if v.state == "running":
+            if self.defer and not c.get("ready") and (rid := self._passed_but_deferred(c["ids"])):
+                c["ready"] = {"at": now, "run": rid}
+                self._per_pr_ready(rec, c, rid, main, f"{DEFERRED}, as a train lands")
+            return
+        c["ended"] = {"at": now, "state": v.state, "attempt": v.attempt, "why": v.why}
+        if v.state == "none":
+            if rec["phase"] == "checking":
+                rec["phase"] = "queued"
+            return
+        if v.state == "passed":
+            wl = rec.get("would_land") or {}
+            if wl.get("commit") == c["commit"]:
+                wl["full_at"] = now
+            if not c.get("ready"):
+                c["ready"] = {"at": now, "run": v.attempt}
+                self._per_pr_ready(rec, c, v.attempt, main, "every step passed")
+            return
+        live = [rid for rid, (st, *_) in self._states(c["ids"]).items() if st in ACTIVE and st != "unknown"]
+        if live and not (self.dry_run or self.q.shadow):
+            self.cancel(self.repo, live, f"drive: per-PR shadow: #{n}'s check of {c['commit'][:12]} has failed")
+        if (wl := rec.get("would_land") or {}).get("commit") == c["commit"] or rec["phase"] == "planning":
+            (wl if rec["phase"] == "would-land" else rec)["revert"] = v.why
+            self._say(f"#{n}'s check of {c['commit'][:12]} failed in a deferred step after it passed drive's rule ({v.why}): "
+                      "the post-landing run would revert its landing")
+            return
+        if rec["phase"] != "checking":
+            return
+        if not rec.get("resent") and any(killed(d, v.why) for d in self._evidence(v)):
+            rec.update(phase="queued", resent=True)
+            self._say(f"#{n}'s check {v.attempt} was killed ({v.why}): it is checked again, once")
+            return
+        rec.update(phase="failed", failed={"at": now, "attempt": v.attempt, "why": v.why})
+        self._say(f"#{n}'s check of {c['commit'][:12]} failed ({v.why}): it would be ejected and its owner told [not ejected]")
+
+    def _per_pr_ready(self, rec: dict, c: dict, rid: str, main: str, rule: str) -> None:
+        """``c`` passed by drive's rule: L would land on the `main` it was built on; on a moved one, its new L is planned."""
+        if rec["phase"] != "checking":
+            return
+        if main == c["main"]:
+            self._would_land(rec, c["commit"], main, f"check {rid}: {rule}")
+        else:
+            self._per_pr_replan(rec, main)
+
+    def _per_pr_replan(self, rec: dict, main: str) -> None:
+        commit, why = self._per_pr_commit(rec, main)
+        if commit is None:
+            rec.update(phase="conflict", conflict={"at": self.now(), "main": main, "why": why})
+            self._say(f"#{rec['pr']} passed, but `main` moved to {main[:12]} and its head {why}: it would be told to its owner")
+            return
+        rec["plans"].append({"commit": commit, "main": main, "queued": self.now()})
+        rec["phase"] = "planning"
+        self._per_pr_follow_plan(rec, rec["plans"][-1], main)
+
+    def _machine(self, rid: str) -> str | None:
+        """The machine run ``rid`` ran on (its status row's `remote`), whose keys its passes are under."""
+        got = self.fetch(rid, [])
+        return ((got[1].get("remote") or {}).get("machine") or None) if got else None
+
+    def _per_pr_follow_plan(self, rec: dict, p: dict, main: str) -> None:
+        n, now = rec["pr"], self.now()
+        if "dir" not in p:
+            if not rec["checks"][-1].get("ended"):
+                return                                      # its passes are cited from its pack, published when it ends
+            live = sum(1 for r in self._per_pr_recs.values() if r["phase"] == "planning" and r["plans"]
+                       and "dir" in r["plans"][-1] and not r["plans"][-1].get("ended"))
+            if live >= self.per_pr_shadow:
+                return
+            if self.dry_run or self.q.shadow:
+                self._say(f"would plan #{n}'s {p['commit'][:12]} on the moved `main` {main[:12]}")
+                return
+            runs = [x for c in rec["checks"] for x in [(c.get("ended") or {}).get("attempt") or (c.get("ready") or {}).get("run")]
+                    if x and " " not in x]
+            machines = [m for m in dict.fromkeys(self._machine(r) for r in runs[-1:]) if m] or self.on.split(",")
+            root = self.q.workdir.parent / f"{self.q.workdir.name}.per-pr"
+            p.update(self.plan_launch(self.repo, p["commit"], main, runs, machines, root / f"plan-{p['commit'][:12]}-{int(now)}"),
+                     at=now)
+            self._say(f"planning #{n}'s {p['commit'][:12]} on the moved `main` {main[:12]} by its keys, from "
+                      f"{' '.join(runs) or 'no check of its own'}, on {', '.join(machines)}")
+            return
+        state, docs, tail = self.plan_state(p)
+        if state == "running":
+            return
+        p["ended"] = now
+        shutil.rmtree(p["dir"], ignore_errors=True)
+        _git(self.repo, "worktree", "prune", check=False)
+        whys, judged = [], None
+        for doc in docs:
+            cited, why, full = self.judge_plan(doc, p["commit"], p["main"])
+            if why is None:
+                judged = (cited, full)
+                break
+            whys.append(why)
+        if judged is None:
+            p.update(result="refused" if docs else "error", why=" | ".join(whys) or f"{state}, no plan: {tail[-300:]}")
+            rec["phase"] = "queued"
+            self._say(f"#{n}'s {p['commit'][:12]} isn't passed by its keys ({p['why'][:300]}): it is checked again")
+            return
+        p.update(result="passed", cited=judged[0], full=judged[1])
+        if main != p["main"]:
+            self._say(f"#{n}'s {p['commit'][:12]} passed by its keys, but `main` moved again, to {main[:12]}: planned again")
+            self._per_pr_replan(rec, main)
+            return
+        self._would_land(rec, p["commit"], main, f"plan cites {', '.join(judged[0][:4])}" + ("" if judged[1] else
+                                                                                               f" ({DEFERRED})"))
+
+    def judge_plan(self, doc: dict, commit: str, base: str) -> tuple[list[str], str | None, bool]:
+        """(the attempts cited, why not, whether every part passed) of a plan of ``commit`` by drive's rule: every part but the
+        deferred steps' (`undeferred`) has a pass a recorded check's pack holds (`merge.plan_refusal`, the `--verdicts` gate's)."""
+        from .merge import declared_command, plan_refusal, required_steps
+
+        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}")
+        command = declared_command(self.repo, "check")
+        need = {s: ps for s, ps in required_steps(self.repo, base, commit, "check").items() if s not in self.defer}
+        cited, why = plan_refusal(doc, self.q.store, commit, tree, "check", command, need)
+        if why is None or not self.defer:
+            return cited, why, why is None
+        cited, why = plan_refusal(undeferred(doc, self.defer), self.q.store, commit, tree, "check", command, need)
+        return cited, why, False
+
+    def _would_land(self, rec: dict, commit: str, main: str, via: str) -> None:
+        now = self.now()
+        rec.update(phase="would-land", would_land={"at": now, "commit": commit, "main": main, "via": via})
+        since = [f"{(now - t) / 3600:.2f} h after its {what}" for what, t in (("ready mark", rec.get("marked")),
+                                                                               ("first check launched", rec.get("sampled"))) if t]
+        self._say(f"would land #{rec['pr']} ({rec['head'][:8]}) as {commit[:12]} on `main` {main[:12]} ({via}); "
+                  f"{', '.join(since) or 'no times'} [not pushed]")
+
+    def _per_pr_end(self, recs: dict, done: list, key: str, why: str, main: str) -> None:
+        """End ``key``'s record (``why``: landed by the trains, closed, a new head, out of the queue), cancelling its live runs
+        only, and keep it in ``done``."""
+        rec, now = recs.pop(key), self.now()
+        ids = [rid for c in rec["checks"] for rid in c.get("ids") or []]
+        live = [rid for rid, (st, *_) in self._states(ids).items() if st in ACTIVE and st != "unknown"] if ids else []
+        if live and not (self.dry_run or self.q.shadow):
+            self.cancel(self.repo, live, f"drive: per-PR shadow: #{rec['pr']} {why}")
+        if rec.get("branch") and why != "new-head" and not (self.dry_run or self.q.shadow):
+            self.q._remote(self.repo, "push", "-q", "--no-verify", "origin", f":refs/heads/{rec['branch']}", ok=None)
+        rec["ended"] = {"at": now, "why": why, "main": main}
+        done.append(rec)
+        del done[:-PER_PR_DONE]
+        wl = rec.get("would_land")
+        self._say(f"#{rec['pr']} ({rec['head'][:8]}) {why}" + (f" at `main` {main[:12]}" if why == "landed" else "")
+                  + (f"; it would have landed {(now - wl['at']) / 3600:.2f} h before" if wl and why == "landed" else "")
+                  + (f"; cancelled {' '.join(live)}" if live else ""))
+
     # -- the tick
 
     def tick(self, dry_run: bool = False) -> str:
@@ -1603,6 +2011,7 @@ class Driver:
             drive["branches_swept"] = self.now()
             q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)")
         if landed is None and (why := self.held(drive)):
+            self.per_pr(drive)
             if not dry_run:
                 q.save_state(state)
             q.log(f"research queue drive: {why}")
@@ -1702,6 +2111,8 @@ class Driver:
                   + (f", touched suites {' '.join(drive['launched'][m.commit].get('touched') or [])}" if "pytest" in self.defer else ""))
             what.append(f"launched {' '.join(ids)}")
             running += 1
+        if shadowed := self.per_pr(drive):
+            what.append(shadowed)
         if not dry_run:
             state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}   # what `failed` ejected since
             q.save_state(state)

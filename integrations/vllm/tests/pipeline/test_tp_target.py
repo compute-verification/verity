@@ -1,6 +1,7 @@
 """`tp-capture` and `tp-commit` build their engines for the workload's declared target as `build_engine` does: its environment knobs
 set before vLLM reads them, its engine arguments under the workload's and the CLI's, every rank's engine checked against it before
-anything runs (fail closed), and the record attests it (the capture's per-rank header, both drivers' versions.json).  CPU-only: each
+anything runs (fail closed), and the record attests it (the capture's per-rank header, both drivers' versions.json), with the execution
+the engine and each rank read back from their `vllm_config` (`effective_execution`), not the arguments asked.  CPU-only: each
 driver's `main` runs over a stand-in LLM of two ranks whose rpcs answer as the ranks' would, and the rank-side check
 (`pipeline.tp.target.rank_mismatches`) and the extension's `tp2_install` run over a stand-in worker."""
 from __future__ import annotations
@@ -139,6 +140,27 @@ def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_an
     assert llm.methods()[-1] == "rank_mismatches" and "tp2_install" not in llm.methods() and "tp2_commit_make" not in llm.methods()
 
 
+@pytest.mark.parametrize("extra, extension", [(("--no-observer",), "verity_vllm.engine.int8_ranks.Int8Ranks"),
+                                              ((), "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
+def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_path, stand_ins, monkeypatch, extra, extension):
+    """The driver registers the int8 parts and exports them (``VERITY_INT8_PARTS``); every engine it builds names an extension whose
+    import registers them in each rank, a Match control's included."""
+    import verity_vllm.engine as pkg
+    from verity_vllm.engine import int8_ranks as IR
+    seen: list[str] = []
+    for part, mod in (("linears", "int8_vllm"), ("attention", "int8_attention_vllm")):
+        stand_in = ModuleType(f"verity_vllm.engine.{mod}")
+        stand_in.register = lambda part=part: seen.append(part)
+        monkeypatch.setitem(sys.modules, stand_in.__name__, stand_in)
+        monkeypatch.setattr(pkg, mod, stand_in, raising=False)
+    monkeypatch.delenv(IR.ENV, raising=False)
+    llm = _LLM()
+    int8 = TargetProfile(compute_capability=(12, 0), num_sms=188, int8_exact="all")
+    _capture(tmp_path, llm, int8, stand_ins, *extra)
+    assert seen == ["linears", "attention"] and os.environ[IR.ENV] == "attention,linears"
+    assert llm.kw["worker_extension_cls"] == extension and llm.kw["quantization"] == "verity_int8"
+
+
 def _commit(tmp_path: Path, llm: _LLM, target, stand_ins) -> Path:
     from verity_vllm.pipeline.tp import commit as TPCM
     guarded = stand_ins(llm, target)
@@ -177,6 +199,37 @@ def test_tp_commit_fails_closed_on_a_switch_its_row_does_not_declare(tmp_path, s
     assert sm["pass"] is False and sm["served"]["problems"] == [f"rank {r}: VLLM_BATCH_INVARIANT=True where row file declares False" for r in (0, 1)]
 
 
+def _built_config(gpu_util: float) -> SimpleNamespace:
+    """A built engine's `vllm_config`, as `effective_execution_doc` reads it back, whose cache took ``gpu_util`` of the device."""
+    return SimpleNamespace(cache_config=SimpleNamespace(enable_prefix_caching=False, block_size=16, gpu_memory_utilization=gpu_util),
+                           scheduler_config=SimpleNamespace(enable_chunked_prefill=True, max_num_batched_tokens=2048, max_num_seqs=1,
+                                                            async_scheduling=False),
+                           model_config=SimpleNamespace(max_model_len=288, dtype="torch.bfloat16", enforce_eager=True),
+                           compilation_config=SimpleNamespace(mode="NONE", cudagraph_mode="NONE", custom_ops=[]),
+                           use_v2_model_runner=True, optimization_level=0)
+
+
+@pytest.mark.parametrize("driver", ["tp-capture", "tp-commit"])
+def test_the_record_carries_the_engines_read_back_gpu_memory_utilization_not_the_flag(tmp_path, stand_ins, monkeypatch, driver):
+    """The job asks 0.92 and the built engine's `vllm_config` holds 0.88: the capture's topology.json and the Commit's versions.json
+    record 0.88 as `effective_execution`, beside the 0.92 asked in `engine_kwargs`."""
+    monkeypatch.setitem(sys.modules, "vllm.envs", SimpleNamespace(VLLM_BATCH_INVARIANT=False))
+    llm = _LLM(stop="tp2_commit_make")
+    llm.llm_engine = SimpleNamespace(vllm_config=_built_config(0.88))
+    if driver == "tp-capture":
+        doc = json.loads((_capture(tmp_path, llm, H200, stand_ins, "--engine-arg", "gpu_memory_utilization=0.92") / "topology.json").read_text())
+    else:
+        from verity_vllm.pipeline.tp import commit as TPCM
+        stand_ins(llm, H200)
+        with pytest.raises(RuntimeError, match="stopped at tp2_commit_make"):
+            TPCM.main(cli.parse("tp-commit", ["--workload", str(tmp_path / "w.json"), "--out", str(tmp_path / "commit"), "--case", "C",
+                                              "--pairs", "1", "--warmup", "0", "--engine-arg", "gpu_memory_utilization=0.92"], environ={}))
+        doc = json.loads((tmp_path / "commit" / "versions.json").read_text())
+    assert doc["engine_kwargs"]["gpu_memory_utilization"] == 0.92
+    eff = doc["effective_execution"]
+    assert eff["gpu_memory_utilization"] == 0.88 and "config_error" not in eff and "compilation_error" not in eff, eff
+
+
 # -- the ranks' side -----------------------------------------------------------------------------------------------------------
 
 
@@ -211,6 +264,17 @@ def test_a_rank_checks_its_own_engine_against_the_declared_target(monkeypatch):
     (eng,) = seen
     assert eng.target is H200 and eng.model is model and eng.llm.llm_engine.vllm_config is w.vllm_config
     assert eng.llm.collective_rpc(lambda worker: worker) == [w]
+
+
+def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch):
+    """`tp2_probe` reads `effective_execution` from this rank's own `vllm_config`, so topology.json's and versions.json's `ranks`
+    show what each rank's engine took, not the driver's copy."""
+    monkeypatch.setitem(sys.modules, "vllm", ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", SimpleNamespace(VLLM_BATCH_INVARIANT=False))
+    _, w = _extension(monkeypatch, object())
+    w.vllm_config = _built_config(0.88)
+    eff = w.tp2_probe()["effective_execution"]
+    assert eff["gpu_memory_utilization"] == 0.88 and eff["execution_label"] == "eager" and "config_error" not in eff, eff
 
 
 @pytest.mark.parametrize("target", [H200, None], ids=["declared", "undeclared"])

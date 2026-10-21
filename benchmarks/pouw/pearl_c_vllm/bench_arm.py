@@ -84,7 +84,7 @@ class PearlCArm:
                   leaf_default: int, rows_default: int) -> tuple[int, int]:
         """One engine step's tiles and screened rows, with headroom, at least the device run's defaults."""
         cdiv = lambda a, b: -(-a // b)  # noqa: E731
-        cfg = target.engine._engine.llm.llm_engine.vllm_config.scheduler_config
+        cfg = target.engine.vllm.llm_engine.vllm_config.scheduler_config
         step_rows = int(getattr(cfg, "max_num_batched_tokens", 8192) or 8192)
         tiles = 2 * cdiv(step_rows, tile) * sum(cdiv(n, tile) for n in ns)
         rows = 2 * len(ns) * cdiv(step_rows, row_align) * row_align
@@ -122,7 +122,7 @@ class PearlCArm:
         spec = PassSpec(hashing=True, schedule=self.schedule, run_id=os.environ.get("RESEARCH_RUN_ID"))
         stack.activate(StackArm("pearlc", "bf16", run.entry, spec=spec))
 
-        eng = target.engine._engine.llm.llm_engine
+        eng = target.engine.vllm.llm_engine
 
         def make(original: Any) -> Any:
             def step(*a: Any, **kw: Any) -> Any:

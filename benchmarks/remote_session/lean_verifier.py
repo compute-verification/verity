@@ -5,7 +5,8 @@ check runs on the process's threads and its verdict comes on a line of its own, 
 
 And the JSON the two verifiers are compared in: each event as the Lean reads it (`Difftest.eventOf`), and what
 `audit.Session` returns for it as the Lean writes its result (`Difftest.resultJ`), as the difftest's
-`ra_cases.apply` writes it."""
+`ra_cases.apply` writes it; an accepted session's record as the Lean writes it (`summary_json`), and that record read
+back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
 import fcntl
@@ -20,7 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 import wire
 
@@ -107,15 +108,16 @@ def registration_json(r: audit.Registration) -> dict:
 
 
 def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Codec, receipt: str, rows: int | None,
-                     nonce: bytes) -> dict:
+                     nonce: bytes, bind: bool = False) -> dict:
     return {"op": "register", "node": node.hex(), "blocks": blocks, "payload_root": payload_root.hex(),
-            "codec": codec_json(c), "receipt": receipt, "rows": receipts.sketch_rows(receipt, rows),
+            "codec": codec_json(c), "receipt": receipt, "bind": bind, "rows": receipts.sketch_rows(receipt, rows),
             "layout": receipts.LAYOUT, "nonce": nonce.hex()}
 
 
 def params_json(p: audit.Params) -> dict:
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
-            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred}
+            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
+            "pace": None if p.pace is None else p.pace.to_json()}
 
 
 def _ints(xs: Any, what: str) -> list[list[int]]:
@@ -172,49 +174,61 @@ def drew_json(out) -> dict:
 
 
 def summary_json(rec: audit.Record) -> dict:
-    """An accepted session's record as the Lean writes it (`Difftest.summaryJ`, `ra_cases.summary`)."""
+    """An accepted session's record as the Lean writes it (`Difftest.summaryJ`, `ra_cases.summary`): all of it but the
+    coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
+    more than its draws."""
     return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+            "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
-            "windows": [{"deadline_ns": w.deadline_ns, "drawn": w.profile.drawn["receipt"], "lengths": list(w.lengths),
-                         "opened_ns": w.opened_ns, "post_seed": list(w.post_seed), "released_ns": w.released_ns,
-                         "steps": list(w.steps)} for w in rec.windows]}
+            "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
+                         "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
+                         "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
+                         "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        for w in rec.windows]}
 
 
-class Tape:
-    """The challenger's generator, drawing from `entropy` and keeping what it drew: a session's committed coins
-    (`coins`, each drawn before its salt) and its append coins (`appends`), as the Lean's session takes them."""
+def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float) -> audit.Record:
+    """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
+    registration its digest names, the coin commitment's root `coins`, and each window's openings law at `delta` over
+    the Lean's lengths and draws (`audit.window_profile`)."""
+    if j["registration"] != registration.digest.hex():
+        raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
+                         f"{registration.digest.hex()[:16]}…")
+    pace = j["pace"]
+    return audit.Record(
+        registration.digest, coins, j["blocks"], audit.BLOCK_BYTES,
+        tuple(audit.WindowRecord(t, tuple(w["lengths"]), w["released_ns"], w["deadline_ns"], w["opened_ns"],
+                                 audit.window_profile(w["lengths"], w["drawn"], delta), tuple(w["post_seed"]),
+                                 tuple(w["steps"]), tuple(None if h is None else bytes.fromhex(h) for h in w["heads"]),
+                                 tuple(w["stale"]), tuple(w["arrived_ns"])) for t, w in enumerate(j["windows"])),
+        registration.receipt, registration.bind, registration.codec, registration.layout, registration.rows,
+        j["appended"], j["released"], j["lifetime"], None if j["appends"] is None else bytes.fromhex(j["appends"]),
+        None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
 
-    def __init__(self, count: int, entropy: Callable[[int], bytes]) -> None:
-        self.count, self.entropy, self.drawn = 2 * count, entropy, []
 
-    def __call__(self, n: int) -> bytes:
-        out = self.entropy(n)
-        self.drawn.append(out)
-        return out
-
-    @property
-    def coins(self) -> list[bytes]:
-        return self.drawn[:self.count:2]
-
-    @property
-    def appends(self) -> list[bytes]:
-        return self.drawn[self.count:]
+def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
+    """The session's coins as the Lean's session takes them: its 2W committed coins (window t's challenge at t, its
+    openings coin at W + t), each one the challenger never released 32 zero bytes, which no event reads, and the append
+    coins in the order released."""
+    zero, w = bytes(coins.COIN_BYTES), c.windows
+    out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
+    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (w - len(out[1]))],
+            [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
 class Transcript:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
-    parameters, committed coins and `not_before_ns`, then each event in the order the verifiers took it (`event`, as
-    the Lean read it), a window's openings (`verify`, the wire's frames) where its verdict was set, and the append
-    coins drawn (`close`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
-    openings. Every committed coin is kept, never its salt: the case replays each under a zero salt, and nothing a
+    parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),
+    a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
+    (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
+    openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
     verifier answers reads the commitment."""
 
-    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, coins: list[bytes],
-                 not_before_ns: int) -> None:
+    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
         head = {"registration": registration_json(registration), "params": params_json(params),
-                "coins": [c.hex() for c in coins], "not_before_ns": not_before_ns}
+                "not_before_ns": not_before_ns}
         self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
         self.thread.start()
 
@@ -224,8 +238,8 @@ class Transcript:
     def verify(self, t: int, frames: list[bytes]) -> None:
         self.items.put(("verify", t, frames))
 
-    def close(self, append_coins: list[bytes]) -> dict:
-        self.items.put(("close", append_coins))
+    def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+        self.items.put(("close", released))
         self.thread.join()
         return self.result
 
@@ -246,7 +260,8 @@ class Transcript:
                     item = self.items.get()
                     if item[0] == "close":
                         closed = True
-                        put('],"append_coins":' + json.dumps([c.hex() for c in item[1]]) + "}")
+                        put('],"coins":' + json.dumps([c.hex() for c in item[1][0]]) + ',"append_coins":'
+                            + json.dumps([c.hex() for c in item[1][1]]) + "}")
                         break
                     put("," if events else "")
                     events += 1

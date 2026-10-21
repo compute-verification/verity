@@ -30,7 +30,7 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -78,6 +78,15 @@ def hold_bound(st: dict, program, query) -> None:
     (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
     (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
     st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+
+
+def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedRegistration:
+    """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
+    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned registration's
+    `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
+    sr = SV.register_served(program, query, served, log=log, ports=ports)
+    st["registered_file"] = sr.write(st["dir"] / "registered.json")
+    return sr
 
 
 def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
@@ -188,10 +197,17 @@ def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[d
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
+def firewall_env(st: dict) -> dict:
+    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+    `lean_verify` verifies under, and the statement's partition and program."""
+    args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
+    return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `registered.reads_file`) when the statement reads registered values; `zk`, a `--zk` session's."""
+    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
