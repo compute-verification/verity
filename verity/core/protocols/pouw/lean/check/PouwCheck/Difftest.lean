@@ -1,5 +1,6 @@
 import Difftest
 import PouwCheck.Check
+import PouwCheck.Credit
 import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
@@ -25,6 +26,11 @@ harness (`verity/core/difftest`):
 * `rounds` (`key` the window's pinned challenger key, `ledger` the auditor's signed ledger's lines, `window` the window's
   identity, `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
+* `credit` (`key`, `ledger`, `window`, `session` as `rounds` reads them, `salt` the window's Program salt as hex,
+  `calls` the manifest's rows, `served` the served trees' digest or null, `rounds` the round log, `draw` the window's
+  draw, each as `credit.credited` takes it): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
+* `outcome` (`drawn`, `proofs`, as `credit.outcome` takes them) and `a-link` (`rounds`, `entries`, as `credit.a_link`
+  takes them): null, or `{"refused": [code, why]}`.
 -/
 
 namespace PouwCheck.Difftest
@@ -94,7 +100,20 @@ def registeredOf (j : Json) : Except String Json := do
     | .ok _ => Json.null
     | .error r => .str r)])
 
+def creditOf (j : Json) : Except String Json := do
+  let f := get j
+  refusal (fun out => Json.mkObj [("credited", toJson out)])
+    (Credit.credited (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
+      (← f "served") (← f "rounds") (← f "draw"))
+
+def outcomeOf (j : Json) : Except String Json := do
+  refusal (fun _ => Json.null) (Credit.outcome (← get j "drawn") (← get j "proofs"))
+
+def aLinkOf (j : Json) : Except String Json := do
+  refusal (fun _ => Json.null) (Credit.aLink (← get j "rounds") (← get j "entries"))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("rounds", roundsOf)]
+  ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("rounds", roundsOf),
+  ("credit", creditOf), ("outcome", outcomeOf), ("a-link", aLinkOf)]
 
 end PouwCheck.Difftest
