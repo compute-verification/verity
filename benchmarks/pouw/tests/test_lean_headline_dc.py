@@ -65,16 +65,36 @@ def _price(x, lam: dict, n: dict) -> Fraction:
     return sum((w * x.c[k].get(r, Fraction(0)) * q for r, w in lam.items() for k, q in n.items()), Fraction(0))
 
 
+def _round_trip(fold: dict, k: int) -> dict:
+    """RT4-SHEET-13's fold on a checkpoint route: LI's LOP3s (½ a word a lane) as a memory round trip, one ATOM.E.XOR
+    (ATOME32) and k − 1 LD.E back (UNLISTED, where an instruction no class names counts)."""
+    li = Fraction(1, 2) / H.E.LANES
+    n = {**fold, "ALU": fold["ALU"] - li, "ATOME32": fold.get("ATOME32", Fraction(0)) + li,
+         "UNLISTED": fold.get("UNLISTED", Fraction(0)) + (k - 1) * li}
+    return {c: v for c, v in n.items() if v}
+
+
+#: how far under φ* RT4-SHEET-13's k = 2 round trip on the generic CP_RED8 prices at the (I3) twin's π* (HB-PROOF's M1)
+RT2_GAP = Fraction(9071108737120168, 27315597773978643933619643)
+
+
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
-    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*: on DC-90-ri the
-    counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which this test doesn't build,
-    price at 1.0245 φ* or more at ½'s π* since their classes carry the JI90 lines (r20261021-070616-d06c). At the (I3)
-    twin's π* the stores STS32, STS128, STG32 and STG128 price 0, so cp-xt's, cp-seg4's and cp-ats's stores are free
-    there and the conjecture is weaker than at ½'s π*, where every class prices above 0. ♭'s fold meets it, and so does
-    ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That fold
-    is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD on the
-    sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all five readings."""
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. ♭'s fold meets it at all five π*, and so
+    does ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That
+    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
+    on the sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all five readings.
+
+    FOLD-OPT at the (I3) twin's π* doesn't follow from FOLD-OPT at DC-90-ri's ½ π*. The twin's π* has no issue weight,
+    so the stores STS32, STS128, STG32 and STG128 price 0 (cp-xt's, cp-seg4's and cp-ats's stores are free), and its
+    JPA90_0 weight prices only ALU and the IGMMA, so an ALU costs 2.000000001 IMADs, ATOME32s or UNLISTEDs.
+    RT4-SHEET-13's counted, unbuilt round trip at k = 2 (an ATOM.E.XOR and one LD.E back) on the generic CP_RED8, one
+    of the two folds at φ*, then prices under φ* by exactly `RT2_GAP` (3.32e-10; HB-PROOF's M1): FOLD-OPT at the twin's
+    π* is false for a run that folds by it. The test pins that gap, so a π* that widens, narrows or closes it fails
+    here. That run's most-loaded row still holds the twin's conclusion (1.325·B_♭ on JI90_0), and k = 3 prices above
+    φ*. At ½'s π* every scalar class costs the same, the round trip prices at 1.5065 φ*, and RT4-SHEET-13's and -14's
+    round trips mixed with IMAD.WIDE at 1.0245 φ* or more, since their classes carry the JI90 lines
+    (r20261021-070616-d06c)."""
     for fam in H.FAMILIES:
         s = H.reading(fam, fam.sheet).data
         pipe = dict(zip(s.classes, s.sheet["pipe"]))
@@ -89,6 +109,20 @@ def test_folds_meet_fold_opt_at_pi_star():
             assert _price(x, rt3, alu) < nphi["rt3"], (fam.ns, x.q)
             free = {k for f in x.folds for k, n in f.items() if n and _price(x, x.lam, {k: Fraction(1)}) <= 0}
             assert free == (set() if x.q == H.Q else {"STS32", "STS128", "STG32", "STG128"}), (fam.ns, x.q, free)
+        for x in measured if fam.measured == "DC-90-ri" else ():
+            red8 = x.folds[1 + x.fold_names.index("cp-red8-generic")]
+            phi = min(_price(x, x.lam, f) for f in x.folds)
+            rt2, rt3 = (_price(x, x.lam, _round_trip(red8, k)) / phi for k in (2, 3))
+            if x.q == H.Q:
+                assert rt2 > Fraction(3, 2), (fam.ns, x.q, float(rt2))
+                continue
+            assert 1 - rt2 == RT2_GAP and rt3 > 1, (fam.ns, x.q, float(1 - rt2), float(rt3))
+            run = {c: x.Nw * v for c, v in _round_trip(red8, 2).items()}
+            for part in (x.nw, x.nx):
+                for c, v in part.items():
+                    run[c] = run.get(c, Fraction(0)) + v
+            top = max(sum((x.c[c].get(r, Fraction(0)) * v for c, v in run.items()), Fraction(0)) for r in x.rows)
+            assert top >= (1 - x.bound) * x.B, (fam.ns, x.q, float(top / x.B))
 
 
 ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
