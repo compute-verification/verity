@@ -513,7 +513,7 @@ theorem sm90Measured_meets :
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm90MeasuredI3Headline`'s hypotheses hold together at an honest play** on one-bit coins: as
-`sm90Measured_meets`, at (I3)'s floors `q = q_T = ¾`, which the run meets since it heads no vector or table word. -/
+`sm90Measured_meets`, at (I3)'s floors `q = q_T = 3/5`, which the run meets since it heads no vector or table word. -/
 theorem sm90MeasuredI3_meets :
     ∃ (Pl : Play Bool Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),

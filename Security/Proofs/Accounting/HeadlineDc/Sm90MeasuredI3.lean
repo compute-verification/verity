@@ -1,23 +1,23 @@
 import Proofs.Accounting.HeadlineDc.Sm90Measured
 
 /-!
-# The H200's headline on its measured vector under (I3) at ¾
+# The H200's headline on its measured vector under (I3) at 3/5
 
 `Sm90MeasuredI3Headline` is `Whole.dIdealFloor_whole` at DC-90-ri and `dither-2s-licpw-redux-p1-l32` at (I3)'s floors
-`q = q_T = ¾` (`Definitions.Accounting.HeadlineDc.Sm90MeasuredI3`), at the data's certificate
+`q = q_T = 3/5` (`Definitions.Accounting.HeadlineDc.Sm90MeasuredI3`), at the data's certificate
 `π* = Sm90MeasuredI3.lamStar` on three rows (JI90_0, JI90_1, JPA90_0; `sm90i_isCert`), `p = 7/8`, `p₀ = ½` and
 `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`. The machine, ♭ and `B_♭` are `Sm90MeasuredHeadline`'s (`sm90m_max`, `B90M`):
 
 * the data, by `decide`: `w90I` is the cheapest word route's price on π*'s three rows, so each writer kind's word costs
-  at least it (`sm90i_writers`), and so do the vector and table words at `¾`, priced at JI90_0's and JI90_1's ALU
+  at least it (`sm90i_writers`), and so do the vector and table words at `3/5`, priced at JI90_0's and JI90_1's ALU
   coefficients, each that row's least over the vector classes (`sm90i_vec`, `sm90i_wv`), and at nothing on JPA90_0,
   where some vector class has no line, so `w* ≥ w90I` (`sm90i_wStar`); each of the 56 fold routes costs at least the
   cheapest one's price on π*'s rows (`sm90i_fold`, `sm90i_phiStar`);
-* (I2)/(I4) `WordsWritten` and (I3) `ScalarRoute` at `¾` are the statement's hypotheses, passed through; (I5)
+* (I2)/(I4) `WordsWritten` and (I3) `ScalarRoute` at `3/5` are the statement's hypotheses, passed through; (I5)
   `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
 * the folded branch from those bounds and `ln(8/7) ≥ 2/15` (`folded_of_lower_at`, `Headline.epsJl_le`): below
-  `807/100000` by `decide` (`sm90i_folded_q`), and it binds;
-* the unfolded branch (`unfolded_of_lower`): below `807/100000` by `decide` (`sm90i_unfolded_q`);
+  `1086/100000` by `decide` (`sm90i_folded_q`), and it binds;
+* the unfolded branch (`unfolded_of_lower`): below `1086/100000` by `decide` (`sm90i_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
@@ -41,8 +41,9 @@ def wordPrice90I (i : ℕ) : ℚ :=
     lam90I 10 * (vfRow90 10 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 50) /
       ((Sm90Measured.d2s.writers.getD i (0, 0)).2 : ℚ))
 
-/-- The vector word at `¾` priced at π* on JI90_0 and JI90_1, each at its ALU coefficient (JPA90_0's term is `≥ 0`). -/
-def vecPrice90I : ℚ := lam90I 5 * (3 / 4 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 4 / 32 * vfRow90 6 0)
+/-- The vector word at `3/5` priced at π* on JI90_0 and JI90_1, each at its ALU coefficient (JPA90_0's term is
+`≥ 0`). -/
+def vecPrice90I : ℚ := lam90I 5 * (3 / 5 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 5 / 32 * vfRow90 6 0)
 
 /-- The cheapest word route's price at π*: the two writer kinds' and the vector word's. -/
 def w90I : ℚ := ((List.range 2).map wordPrice90I).foldr min vecPrice90I
@@ -71,7 +72,7 @@ theorem sm90i_vec : ∀ j ∈ Sm90MeasuredI3.d2s.vec, vfRow90 5 0 ≤ vfRow90 5 
     vfRow90 6 0 ≤ vfRow90 6 (j % 50) := by
   decide +kernel
 
-theorem sm90i_wv : w90I ≤ lam90I 5 * (3 / 4 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 4 / 32 * vfRow90 6 0) := by
+theorem sm90i_wv : w90I ≤ lam90I 5 * (3 / 5 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 5 / 32 * vfRow90 6 0) := by
   decide +kernel
 
 theorem sm90i_fold : ∀ i < 56, phi90I ≤
@@ -81,12 +82,12 @@ theorem sm90i_fold : ∀ i < 56, phi90I ≤
   decide +kernel
 
 theorem sm90i_folded_q :
-    (1 - 807 / 100000 : ℚ) * B90M ≤ 4096 * w90I * (1 - 41 * (6931471808 / 10000000000) / 6400) +
+    (1 - 1086 / 100000 : ℚ) * B90M ≤ 4096 * w90I * (1 - 41 * (6931471808 / 10000000000) / 6400) +
       4096 * phi90I := by
   decide +kernel
 
 theorem sm90i_unfolded_q :
-    (1 - 807 / 100000 : ℚ) * B90M ≤ (4096 * w90I + 4096 * phi90I) * (1 - 41 / 48000) := by
+    (1 - 1086 / 100000 : ℚ) * B90M ≤ (4096 * w90I + 4096 * phi90I) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm90i_hG : ∀ r k, Sm90MeasuredI3.model.G.a r k = (vfRow90 r k.val : ℝ) := fun _ _ => rfl
@@ -99,18 +100,18 @@ theorem sm90i_bnd : Sm90MeasuredI3.model.bnd Sm90Measured.flat = (B90M : ℝ) :=
   unfold Model.bnd
   rw [show Sm90Measured.flat.n = Sparse.counts flat90M from
     labelled_n 50 Sm90.flatWords Sm90Measured.flatFold Sm90.flatFill Sm90Measured.flatSkip]
-  exact bound_eq _ vfRow90 sm90i_hG flat90M 5 fun r => sm90m_max r.val r.isLt
+  exact bound_eq _ vfRow90 sm90i_hG flat90M 10 fun r => sm90m_max r.val r.isLt
 
 theorem sm90i_Nw : Sm90MeasuredI3.model.Nw = 4096 := by
   show ((4096 : ℕ) : ℝ) = 4096
   norm_num
 
-theorem sm90i_q : Sm90MeasuredI3.model.q = 3 / 4 := by
-  show ((3 / 4 : ℚ) : ℝ) = 3 / 4
+theorem sm90i_q : Sm90MeasuredI3.model.q = 3 / 5 := by
+  show ((3 / 5 : ℚ) : ℝ) = 3 / 5
   norm_num
 
-theorem sm90i_qT : Sm90MeasuredI3.model.qT = 3 / 4 := by
-  show ((3 / 4 : ℚ) : ℝ) = 3 / 4
+theorem sm90i_qT : Sm90MeasuredI3.model.qT = 3 / 5 := by
+  show ((3 / 5 : ℚ) : ℝ) = 3 / 5
   norm_num
 
 theorem sm90i_lam_nonneg (r : Fin 15) : (0 : ℝ) ≤ (lam90I r : ℝ) := Rat.cast_nonneg.mpr (coeff_nonneg _ _)
@@ -166,22 +167,22 @@ theorem sm90i_vecMin_nonneg (r : Fin 15) : 0 ≤ Sm90MeasuredI3.model.vecMin r :
   exact le_ciInf fun k => sm90i_a_nonneg r k.1
 
 /-- `w* ≥ w90I` at π*: every writer kind's word costs at least the cheapest word route's price on π*'s rows, and so
-do the vector and table words at `¾`. -/
+do the vector and table words at `3/5`. -/
 theorem sm90i_wStar : (w90I : ℝ) ≤ Sm90MeasuredI3.model.wStar Sm90MeasuredI3.lamStar := by
-  have hvec : (w90I : ℝ) ≤ (lam90I 5 : ℝ) * (3 / 4 / 32 * Sm90MeasuredI3.model.vecMin 5) +
-      (lam90I 6 : ℝ) * (3 / 4 / 32 * Sm90MeasuredI3.model.vecMin 6) +
-      (lam90I 10 : ℝ) * (3 / 4 / 32 * Sm90MeasuredI3.model.vecMin 10) := by
+  have hvec : (w90I : ℝ) ≤ (lam90I 5 : ℝ) * (3 / 5 / 32 * Sm90MeasuredI3.model.vecMin 5) +
+      (lam90I 6 : ℝ) * (3 / 5 / 32 * Sm90MeasuredI3.model.vecMin 6) +
+      (lam90I 10 : ℝ) * (3 / 5 / 32 * Sm90MeasuredI3.model.vecMin 10) := by
     have hq : ((w90I : ℚ) : ℝ) ≤
-        ((lam90I 5 * (3 / 4 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 4 / 32 * vfRow90 6 0) : ℚ) : ℝ) :=
+        ((lam90I 5 * (3 / 5 / 32 * vfRow90 5 0) + lam90I 6 * (3 / 5 / 32 * vfRow90 6 0) : ℚ) : ℝ) :=
       Rat.cast_le.mpr sm90i_wv
     push_cast at hq
     have e5 := mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left
-      (sm90i_vecMin 5 fun j hj => (sm90i_vec j hj).1) (by norm_num : (0 : ℝ) ≤ 3 / 4 / 32))
+      (sm90i_vecMin 5 fun j hj => (sm90i_vec j hj).1) (by norm_num : (0 : ℝ) ≤ 3 / 5 / 32))
       (sm90i_lam_nonneg 5)
     have e6 := mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left
-      (sm90i_vecMin 6 fun j hj => (sm90i_vec j hj).2) (by norm_num : (0 : ℝ) ≤ 3 / 4 / 32))
+      (sm90i_vecMin 6 fun j hj => (sm90i_vec j hj).2) (by norm_num : (0 : ℝ) ≤ 3 / 5 / 32))
       (sm90i_lam_nonneg 6)
-    have e10 : (0 : ℝ) ≤ (lam90I 10 : ℝ) * (3 / 4 / 32 * Sm90MeasuredI3.model.vecMin 10) :=
+    have e10 : (0 : ℝ) ≤ (lam90I 10 : ℝ) * (3 / 5 / 32 * Sm90MeasuredI3.model.vecMin 10) :=
       mul_nonneg (sm90i_lam_nonneg 10) (mul_nonneg (by norm_num) (sm90i_vecMin_nonneg 10))
     linarith
   refine wStar_ge_triple Sm90MeasuredI3.model Sm90Measured.flat Sm90MeasuredI3.lamStar sm90i_isCert sm90i_wf 5 6 10
@@ -236,9 +237,9 @@ theorem sm90i_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90MeasuredI3.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90MeasuredI3.model sm90i_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 807/100000`, with `ln(8/7) ≥ 2/15`. -/
+/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 1086/100000`, with `ln(8/7) ≥ 2/15`. -/
 theorem sm90i_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 807 / 100000 ≤ 1 - Sm90MeasuredI3.model.epsSkip Sm90Measured.flat Sm90MeasuredI3.lamStar -
+    1 - 1086 / 100000 ≤ 1 - Sm90MeasuredI3.model.epsSkip Sm90Measured.flat Sm90MeasuredI3.lamStar -
       Sm90MeasuredI3.model.epsCert Sm90Measured.flat Sm90MeasuredI3.lamStar -
       Sm90MeasuredI3.model.epsRoute Sm90Measured.flat Sm90MeasuredI3.lamStar -
       Sm90MeasuredI3.model.epsMand Sm90Measured.flat Sm90MeasuredI3.lamStar -
@@ -252,9 +253,9 @@ theorem sm90i_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm90i_Nw, sm90i_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 807/100000`. -/
+/-- The unfolded branch's floor at π* is at least `1 − 1086/100000`. -/
 theorem sm90i_unfolded :
-    1 - 807 / 100000 ≤ (Sm90MeasuredI3.model.Nw * Sm90MeasuredI3.model.wStar Sm90MeasuredI3.lamStar +
+    1 - 1086 / 100000 ≤ (Sm90MeasuredI3.model.Nw * Sm90MeasuredI3.model.wStar Sm90MeasuredI3.lamStar +
       (1 - Sm90MeasuredI3.model.muF) * Sm90MeasuredI3.model.Nw *
         Sm90MeasuredI3.model.phiStar Sm90MeasuredI3.lamStar) /
         Sm90MeasuredI3.model.bnd Sm90Measured.flat * (1 - 41 / 48000) := by
@@ -273,7 +274,7 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline Accounting.SecurityProofs.TS.HeadlineDc
 
-/-- The H200's headline on DC-90-ri under (I3) at ¾: `Whole.dIdealFloor_whole` at π* (`Sm90MeasuredI3.lamStar`, on
+/-- The H200's headline on DC-90-ri under (I3) at 3/5: `Whole.dIdealFloor_whole` at π* (`Sm90MeasuredI3.lamStar`, on
 JI90_0, JI90_1 and JPA90_0), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`,
 (I2)/(I4) `WordsWritten` and (I3) `ScalarRoute` the statement's own hypotheses, (I7) from the receipt split
 (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by

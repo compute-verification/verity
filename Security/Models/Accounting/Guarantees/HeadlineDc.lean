@@ -5,7 +5,7 @@ import Models.Accounting.Assumptions.Sheet
 # The data-centre families' headline guarantees (trusted)
 
 The H200's and B200's headlines in `Models.Accounting.Guarantees.Headline`'s form: one statement per device and
-reading, and a twin of the H200's measured one at (I3)'s `q = q_T = ¾`, the family's credited work at least `1 − ε` of
+reading, and a twin of the H200's measured one at (I3)'s `q = q_T = 3/5`, the family's credited work at least `1 − ε` of
 its credit, on one device's machine, one design's TS model on it
 and its floor program ♭, all exact data (`Definitions.Accounting.HeadlineDc`, written by
 `benchmarks/pouw/lean_headline_dc.py`). Each `ε` is the exporter's exact bound rounded up at `10^-5`. The hypotheses are
@@ -15,7 +15,7 @@ and its floor program ♭, all exact data (`Definitions.Accounting.HeadlineDc`, 
   for (I2)/(I4) `WordsWritten` and (I3) `ScalarRoute`: it gives the first directly and the second through
   `SheetScalarRouteHalf` (proved), on any machine. (I1) is `FacetCeilings` on the measured rows (DC-90-ri, DC-100-ri),
   whose card (`accounting-ts-facet-ceilings`) records sm_120's rows only; (I5) is `NoSum`. The H200's twin
-  (`Sm90MeasuredI3Headline`) is DC-90-ri at `q = q_T = ¾`, where A6 gives (I2)/(I4) but not (I3), so it takes
+  (`Sm90MeasuredI3Headline`) is DC-90-ri at `q = q_T = 3/5`, where A6 gives (I2)/(I4) but not (I3), so it takes
   `WordsWritten` and (I3) `ScalarRoute` (`accounting-ts-scalar-route`, assumed) as `Sm120MeasuredHeadline` does at
   `9/8`. It stands beside the proved ½ floor, not in its place.
 * **The certificate.** `lamStar` in each data file is the certificate an LP over the Lean menu picks to minimise the
@@ -30,15 +30,18 @@ IMAD on DS-100 (846.9 against 1026.0) and at 1/20 I + 19/20 UP on DC-100-ri, whe
 50.2, its memory classes having no line on either row). On the H200's three that fold breaks it at no certificate:
 the H200's menu holds each route with LI's multiplies as IMAD.WIDE (RT4-SHEET-14), and `N_w` times one of those
 prices at most that fold on every row. At `π*` the same fold costs far more: 2117 against 133.0 (DS-90), 22571
-against 1066.7 (DS-100), 2073 against 130.2 (DC-90-ri), 2385 against 130.6 (its twin) and 16936 against 1064.0
+against 1066.7 (DS-100), 2073 against 130.2 (DC-90-ri), 2384 against 130.6 (its twin) and 16936 against 1064.0
 (DC-100-ri); on DS-90's `π*` an IMAD costs 1 and its 32 ALU 32, on DS-100's ⅔ and 42⅔. At `π*` it is a conjecture
 (`shape.conjectures`), which `benchmarks/pouw/tests/test_lean_headline_dc.py` tests on ♭'s fold and that one, and in
-which every fold route prices each class it issues above 0. It is open at all five `π*`. On the H200 the menu holds
-every counted fold known to come near it, none built: RT4-SHEET-13's and -14's moves of LI on li and each route, and
-li-bulk at its measured cost with its counted BT1024 and trimmed W = ∞ members (RT4-SHEET-17, -22). So there FOLD-OPT
-is a premise only about folds off the menu, and a counted fold priced below what it would cost built only lowers the
-proved credit `(1 − ε)·B_♭`, which reads `w*` and `φ*` at `π*` and not `B_♭` (RT4-SHEET-27); ε can fall, since ♭
-folds by the cheapest menu mix and `B_♭` falls with it. FOLD-OPT at the twin's `π*` doesn't follow from FOLD-OPT at
+which every fold route prices each class it issues above 0. It is open at all five `π*`. On the H200 the fold menu is
+split in two. ♭ folds by the built routes alone (`Design.built_routes`): the design's fold, the 12 bit-exact loops and
+li-bulk at its measured cost (RT4-SHEET-17). The cheater's menu holds those and every counted fold known to come near
+them, none built (the design's `counted`): RT4-SHEET-13's and -14's moves of LI on li and each loop, and li-bulk's
+counted BT1024 and trimmed W = ∞ members (RT4-SHEET-22). So there FOLD-OPT is a premise only about folds off the
+cheater's menu, and a counted fold priced below what it would cost built only lowers the proved credit
+`(1 − ε)·B_♭`: it can lower `φ*` at `π*`, which raises ε, and it never enters ♭, so `B_♭` stays (RT4-SHEET-27). At both
+DC-90-ri statements' `π*` the counted folds move the bound by under `10⁻⁹`: the cheapest built route prices at `φ*`
+(at ½) or within `4.6·10⁻¹⁰` of it (at 3/5). FOLD-OPT at the twin's `π*` doesn't follow from FOLD-OPT at
 DC-90-ri's (HB-PROOF's M1): the two price the classes apart, and a class free at one `π*` would make FOLD-OPT there
 harder to meet, not easier. M1's tie,
 RT4-SHEET-13's two-slot round trip (one ATOM.E.XOR and one LD.E back, at `φ*·(1 − 3.32·10⁻¹⁰)` at the twin's earlier
@@ -52,7 +55,7 @@ until it states the rows link) and the Definitions' pinning (`ProofsPin`, which 
 `PouwSegCheck_v2` lacks it, PIN's checks of #2417 recompute every word they absorb), beside `RightFixed` (RT3-LOGIC-3).
 `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/`. Both measured readings are at A6's proved
 ½ floors, so RT3-LOGIC-2's caveat on sm_120's measured `9/8` floors has no counterpart in them; the H200's twin carries
-it at ¾.
+it at 3/5.
 
 **What ♭ credits: only work a check reads** (RT-LOGIC-12, decision 99). That is the fold the served unit's Definition
 recomputes, and a filler only at the theorem its check meets. `PouwWarpCheck`'s LI absorbs H1's call words with plain
@@ -76,22 +79,23 @@ Per device:
   joint rows price every tensor form but honest's IGMMA s8 m64n256k32 at the scalar coefficient (IGMMA_S8_N256 at 62.7
   on JI90_0, the bf16, binary and fp8 forms at about 1), a lower bound on their issue cost that no certificate prices
   above it, so the measured menu is honest's form and the uniform `UNI`, and `NoSum` carries every other form. Over
-  the census's full menu the same certificate search gives `31.4%`. ♭ and the cheater fold by the cheapest mix of
-  LI-CP-W redux and every bit-exact checkpoint loop the tree carries (the design's `[fold_routes]`): CP_SEG4 (four
+  the census's full menu the same certificate search gives `31.4%`. ♭ folds by the cheapest mix of the built routes
+  (`Design.built_routes`): LI-CP-W redux, li-bulk at its measured cost, and every bit-exact checkpoint loop the tree
+  carries (the design's `[fold_routes]` but its `counted`): CP_SEG4 (four
   segments' checkpoint words in one STG.128) and CP_SEG4U (one XOR a checkpoint on the uniform datapath; RT2-HOPPER-9,
   -11), and rt3_dc's CP_ATS, CP_ATS2 and CP_ATS8 (the checkpoint's XOR into shared memory by 1, 2 or 8 ATOMS), CP_RED,
   CP_RED2 and CP_RED8 (into L2 by 1, 2 or 8 REDG) and CP_XT (a transpose through shared memory), each bit-exact on
   the H200 and the B200 (r20261019-183610-89bd, r20261019-192247-8771; RT3-DC-1, -4), and CP_RED, CP_RED2 and CP_RED8
   through a generic address (`red.relaxed.gpu.xor.b32`, which ptxas emits as ATOM.E on sm_90a and sm_100a;
   RT4-SHEET-7), bit-exact on the H200 and the B200 too (r20261020-031119-3113, r20261020-031119-013a: every global
-  and generic red, red2 and red8 loop at 0 mismatches). After them the H200's menu holds every counted fold known to
-  come near them, none built, so the bound prices them: on li and each of those loops RT4-SHEET-13's and -14's moves
-  of LI (its XORs as a memory round trip of three issue slots, an ATOM.E.XOR and two LD.E back; its multiplies as
-  IMAD.WIDE; or both: a longer round trip and ptxas's IMAD.WIDE with its extra ALU price at least these class by
-  class), and li-bulk (li's XOR through the stores, a bulk XOR with the key slab and a load back; RT4-SHEET-17, -21)
-  at its measured 3.27 SMSP-cycles a word (r20261021-161119-62ac, bit-exact on the H200 and L2-bound) with its
-  counted BT1024 and trimmed W = ∞ members (RT4-SHEET-22), LDG.128 and the bulk XOR in `UNLISTED`. On DS-90 ♭ folds
-  by CP_RED2 alone; on DC-90-ri by the generic CP_RED2 and li-bulk's trimmed W = ∞ member (0.9805 and 0.0195 of the
+  and generic red, red2 and red8 loop at 0 mismatches); li-bulk is li's XOR through the stores, a bulk XOR with the
+  key slab and a load back (RT4-SHEET-17, -21), at its measured 3.27 SMSP-cycles a word (r20261021-161119-62ac,
+  bit-exact on the H200 and L2-bound), LDG.128 and the bulk XOR in `UNLISTED`. The cheater folds by those and every
+  counted fold known to come near them, none built, so the bound prices them and ♭ never folds by one: on li and each
+  of those loops RT4-SHEET-13's and -14's moves of LI (its XORs as a memory round trip of three issue slots, an
+  ATOM.E.XOR and two LD.E back; its multiplies as IMAD.WIDE; or both: a longer round trip and ptxas's IMAD.WIDE with
+  its extra ALU price at least these class by class), and li-bulk's BT1024 and trimmed W = ∞ members (RT4-SHEET-22).
+  On DS-90 ♭ folds by CP_RED2 alone; on DC-90-ri by the generic CP_RED2 and CP_RED8 (0.6632 and 0.3368 of the
   words). Honest's kernel keeps REDUX, so γ is unchanged. Each memory, control and warp-reduce instruction those
   loops issue (ATOMS32, LDS128, STS128, STS32, STG128, STG32, REDUX, REDG32, ATOME32, ISETP) is its own census class
   at one issue slot and nothing on a pipe row. On DC-90-ri each also carries the JI90 lines every timed scalar class
@@ -106,16 +110,17 @@ Per device:
   carries SHFL's joint issue lines there; RT4-SHEET-9's unlisted instructions count in it. On DC-90-ri it carries the
   JI90 lines too: IMAD.WIDE and LD.E, which count in it, were timed beside the IGMMA (d06c; RT4-SHEET-14). Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes every word on the IGMMA, and `Sm90Measured.flat` is that
-  floor, its fold's shares exact (`B_♭` 194.75 a unit, binding on `JI90_0`; the machine model's reading is 1.067% at
-  `q = ½`). It is over 1%;
-  crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). The gap is A6's scalar floor: at `q = ½` the
-  lane route writes words at the IGMMA's rate on JI90_0 (65.28 against 65.27 a cycle), so `π*` stays on JI90_0,
-  ♭'s facet, with a little on JI90_1 and issue, where ♭ has 0.17% slack and its fold is 1.0034 `φ*`. At ¾ `π*` puts
-  0.15 on JPA90_0, ♭'s slack is 0.16% and its fold is `φ*`: the twin reads 0.807% (the machine model reads 0.738% at
-  its `q* = 1.22`). ε_skip prices the P·V peel at sm_90a's own
-  instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
-  0.858% on DS-90, 0.594% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the
-  sheet quotes its TOPS at 1830 MHz (RT4-SHEET-8).
+  floor, its fold's shares exact (`B_♭` 195.30 a unit, binding on `JPA90_0`; the machine model's reading is 1.349% at
+  `q = ½`). It is over 1%, and so is its twin; crediting ffill would need a check that reads its chains (RT-HB-HEAD-1).
+  Folding by built routes alone costs both readings 0.28 points: li-bulk's trimmed W = ∞ member, a counted fold, had
+  carried 0.0195 of ♭'s words and held `B_♭` at 194.75 on JI90_0 (1.133% and 0.807%). The rest of the gap is A6's
+  scalar floor: at `q = ½` the lane route writes words at the IGMMA's rate on JI90_0 (65.28 against 65.27 a cycle), so
+  `π*` stays on JI90_0, with a little on JI90_1 and issue, off ♭'s facet: ♭ has 0.47% slack there and its fold is
+  1.0076 `φ*`. At 3/5 `π*` puts 0.15 on JPA90_0, ♭'s slack is 0.33% and its fold is 1.0042 `φ*`: the twin reads
+  1.086%, over 1% (the machine model reads 1.022% at its `q* = 1.22`, over 1% too). ε_skip prices the P·V peel at
+  sm_90a's own instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied,
+  not ncu): 0.858% on DS-90, 0.593% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default
+  clocks; the sheet quotes its TOPS at 1830 MHz (RT4-SHEET-8).
 * The B200 (sm_100) runs `dither-2s-licpw-redux-ldtm0-l32` (Dither-2S, LI-CP-W redux, no filler): its fold is the
   one `PouwWarpCheck` recomputes (`PouwLiAbsorb_v2`, no extra keyed round), and its ♭ credits none of honest's 8
   `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's
@@ -136,23 +141,23 @@ the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium ar
 **The window these numbers are for.** Each statement is typed at `SmX.checks = 48,000` rounds, every round live and
 fully checked (no service draw, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
 words (`r = 1`). It says nothing about a window of any other shape, and no served window has this one. The same bound
-at `S` rounds in place of 48,000 needs at least 28,693 (H200 sheet), 13,485 (B200 sheet) and 21,918 (B200 measured)
-equal live rounds for `ε < 1%`, 20,401 the H200's twin at ¾ and 644,648 the H200's measured reading (`1 − Y` alone
-is 0.989%). Each is above 100% at 18 rounds. Unequal rounds pay their max-over-mean share (RT-INT-2's
-`r`, an estimate, not a statement): at `r = 2.87` and 48,000 rounds the B200's measured reading would be 1.06%, and
+at `S` rounds in place of 48,000 needs at least 28,693 (H200 sheet), 13,485 (B200 sheet), 21,918 (B200 measured) and
+120,064 (the H200's twin, whose `1 − Y` alone is 0.943%) equal live rounds for `ε < 1%`; no number of rounds takes the
+H200's measured reading under 1%, since its `1 − Y` alone is 1.269%. Each is above 100% at 18 rounds. Unequal rounds
+pay their max-over-mean share (RT-INT-2's `r`, an estimate, not a statement): at `r = 2.87` and 48,000 rounds the B200's measured reading would be 1.06%, and
 the H200's sheet reading 1.10%.
 
 **The premises the sheet numbers lean on hardest.** A2 (`SheetDispatch`) includes A2u, that a uniform-datapath
 instruction takes an issue slot, which no vendor document states. It is measured on both devices: the H200 beside a
 saturated wgmma, the B200 beside four `tcgen05.mma` in flight. Without it, the uniform route takes the sheet readings
 to about 94% (H200, RT-HOPPER-3) and 100% (B200). FOLD-OPT at `π*` (`FoldOptFoldedAt`) has no slack as a premise: it
-says no run's fold costs less than `N_w φ*` at `π*`, and `φ*` is the cheapest menu route's price there, a fold the
-tree runs bit-exact (on the H200's twin a counted one, li-bulk's trimmed W = ∞ member), so a fold cheaper than it by
-any amount falsifies it and the statement says nothing. The
+says no run's fold costs less than `N_w φ*` at `π*`, and `φ*` is the price there of the cheapest route on the
+cheater's menu, a fold the tree runs bit-exact (on the H200's twin a counted one, li-bulk's trimmed W = ∞ member, which
+no run has built), so a fold cheaper than it by any amount falsifies it and the statement says nothing. The
 readings' slack against 1% is small (RT3-DC-7): with ♭ held at its fold, a cheater whose every fold route is cheaper
 by 0.058% takes the H200's sheet reading to 1% (CP_RED2 at 1.0385 instructions a word against its 1.0391), 0.219%
-does the B200's, 0.102% the B200's measured reading and 0.29% the H200's twin; the H200's measured reading, over 1%
-already, reaches its 3% target at 2.79% (RT2-HOPPER-10: the 5.9% and 53% once quoted here scaled ♭'s fold with the
+does the B200's and 0.102% the B200's measured reading; the H200's measured reading and its twin, over 1% already,
+reach their 3% target at 2.38% and 2.86% (RT2-HOPPER-10: the 5.9% and 53% once quoted here scaled ♭'s fold with the
 cheater's). DS-90's
 `π*`, DS_issue alone, prices every instruction at one issue slot, so there FOLD-OPT is an instruction count with no
 pipe premise. DS-100's, DS_issue ⅔ + DS_alu ⅓, prices the pipes apart, a LOP3 at 4/3 and an IMAD or FFMA at ⅔, so
@@ -172,11 +177,12 @@ The statements:
   `2^-40`, every accepted window of 48,000 equal live rounds runs at least `1 − 0.944%` of its credit (the unfolded
   branch binds, at 0.9430159%; the folded gives 0.8618368%).
 * `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue 0.003598 + JI90_0 0.966699 + JI90_1 0.029703):
-  at least `1 − 1.133%` (the folded branch binds, at 1.1321967% with `ln(8/7) ≥ 2/15`; the unfolded gives 1.0739364%),
+  at least `1 − 1.412%` (the folded branch binds, at 1.4110908% with `ln(8/7) ≥ 2/15`; the unfolded gives 1.3529949%),
   over 1%.
-* `Sm90MeasuredI3Headline`: its twin under (I3) `ScalarRoute` at `q = q_T = ¾` (assumed), at π* = JI90_0 0.819832 +
-  JI90_1 0.033778 + JPA90_0 0.146390: at least `1 − 0.807%` (the folded branch binds, at 0.8060063%; the unfolded gives
-  0.7474688%), under 1%. Cite it with its premise: DC-90-ri 0.807% under (I3) at ¾; 1.133% at the proved ½ floor.
+* `Sm90MeasuredI3Headline`: its twin under (I3) `ScalarRoute` at `q = q_T = 3/5` (assumed), at π* = JI90_0 0.819832 +
+  JI90_1 0.033778 + JPA90_0 0.146390: at least `1 − 1.086%` (the folded branch binds, at 1.0858206%; the unfolded gives
+  1.0274482%), over 1% too. Cite it with its premise: DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor;
+  credit against the built ♭, the cheater priced at every known fold, counted ones included.
 * `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue ⅔ + DS_alu ⅓): at least
   `1 − 0.783%` (the unfolded branch binds, at 0.7828807%; the folded gives 0.6983541%).
 * `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.900%` (the unfolded branch binds, at
@@ -233,29 +239,30 @@ def Sm90SheetHeadline : Prop :=
 /-- **The H200's headline on its measured vector**, under full checking with live coins. On DC-90-ri's machine
 (`Sm90Measured.machine`), `dither-2s-licpw-redux-p1-l32`'s TS model on it (`Sm90Measured.model`: honest's IGMMA s8
 m64n256k32 and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 4096`) and its floor program
-(`Sm90Measured.flat`: `setup`'s floor, every word on the IGMMA, and its fold by the generic CP_RED2 and li-bulk's
-trimmed W = ∞ member), over
+(`Sm90Measured.flat`: `setup`'s floor, every word on the IGMMA, and its fold by the generic CP_RED2 and CP_RED8, both
+built), over
 `Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play
 `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits,
 (I1) `FacetCeilings` holds on DC-90-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run, FOLD-OPT per word
 folded at `π*` (`Sm90Measured.lamStar`: issue 0.003598 + JI90_0 0.966699 + JI90_1 0.029703, rounded)
 prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold as in
 `Sm90SheetHeadline` (`BindingForkAt` at `δ_fork`, `ProofSoundAt`, `ProofsPin`), then outside an event of probability at
-most `2^-40` every accepted window's time is at least `1 − 1133/100000` (`1 − 1.133%`, over 1%: no check reads ffill's
-chains) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactly
-`5344777230953848437983135742647515066586163/472071456164543300792275000000000000000000000` (1.1321967%), reading
-`ln(8/7) ≥ 2/15` as `Sm120MeasuredHeadline` does; the unfolded gives 1.0739364%. The menu holds every counted fold
-known to come near the bit-exact loops, none built: RT4-SHEET-13's and -14's moves of LI on li and each loop (its XORs
-as an ATOM.E.XOR and two LD.E back, its multiplies as IMAD.WIDE, whose low word does li's multiply, or both), whose
-classes carry the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f:
+most `2^-40` every accepted window's time is at least `1 − 1412/100000` (`1 − 1.412%`, over 1%: no check reads ffill's
+chains, and ♭ folds by built routes alone) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactly
+`2495272303972424451357093036809987368800019/176832869229494800775000000000000000000000000` (1.4110908%), reading
+`ln(8/7) ≥ 2/15` as `Sm120MeasuredHeadline` does; the unfolded gives 1.3529949%. The cheater's menu holds every counted
+fold known to come near the bit-exact loops, none built, and ♭'s holds none of them: RT4-SHEET-13's and -14's moves
+of LI on li and each loop (its XORs as an ATOM.E.XOR and two LD.E back, its multiplies as IMAD.WIDE, whose low word
+does li's multiply, or both), whose classes carry the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f:
 ATOME32, and `UNLISTED`, where IMAD.WIDE and LD.E count, each 0.9788 at `π*`, as an IMAD and a LOP3 are), and li-bulk
-at its measured cost with its counted BT1024 and trimmed W = ∞ members (RT4-SHEET-17, -22). So FOLD-OPT at `π*` is
-a premise only about folds off the menu; HB-PROOF's M1 tie, the two-slot round trip, is off it, since li's XOR has
-three inputs a half step and one ATOM.E.XOR and one LD.E carry two (at this `π*` it prices at 1.50 `φ*`). FOLD-OPT
+at its measured cost, built, with its counted BT1024 and trimmed W = ∞ members (RT4-SHEET-17, -22). So FOLD-OPT at
+`π*` is a premise only about folds off the cheater's menu; HB-PROOF's M1 tie, the two-slot round trip, is off it,
+since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two (at this `π*` it prices at 1.50
+`φ*`). FOLD-OPT
 at `π*` is open: `φ*` is CP_RED's and CP_RED2's price (their generic and IMAD.WIDE members tie), and every class a
 fold route issues prices above 0 there, the stores and ISETP at the JI90 lines r20261021-161119-62ac measured.
-FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 2.79% cheaper. Its twin at
-(I3)'s `q = q_T = ¾` is `Sm90MeasuredI3Headline`.
+FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 2.38% cheaper. Its twin at
+(I3)'s `q = q_T = 3/5` is `Sm90MeasuredI3Headline`.
 `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Three
 kinds would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
 H200's probes gives about 1.64% in the machine model at #2699's earlier design; DMMA, which at the scalar
@@ -275,11 +282,11 @@ def Sm90MeasuredHeadline : Prop :=
     pf.Of Pl → BindingForkAt pf δfork → ProofSoundAt pf δzk → ProofsPin pf →
     RightFixed Pl pf Sm90Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
-      (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 1133 / 100000) ≤ (1 / 2) ^ 40
+      (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 1412 / 100000) ≤ (1 / 2) ^ 40
 
-/-- **The H200's headline on its measured vector under (I3) at ¾**, the twin of `Sm90MeasuredHeadline`, under full
+/-- **The H200's headline on its measured vector under (I3) at 3/5**, the twin of `Sm90MeasuredHeadline`, under full
 checking with live coins. On DC-90-ri's machine (`Sm90Measured.machine`), the same TS model at (I3)'s floors
-(`Sm90MeasuredI3.model`: `Sm90Measured.model`'s writer kinds, vector classes and fold routes, `q = q_T = ¾`,
+(`Sm90MeasuredI3.model`: `Sm90Measured.model`'s writer kinds, vector classes and fold routes, `q = q_T = 3/5`,
 `b_T = 0`, `N_w = 4096`) and the same floor program (`Sm90Measured.flat`), over `Sm90.checks = 48,000` rounds on any
 finite coins `Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over
 the window, if the labelling splits, (I1) `FacetCeilings` holds on DC-90-ri's rows, (I2)/(I4) `WordsWritten`, (I3)
@@ -287,26 +294,28 @@ the window, if the labelling splits, (I1) `FacetCeilings` holds on DC-90-ri's ro
 0.819832 + JI90_1 0.033778 + JPA90_0 0.146390, rounded) prices every run's fold at the words it folds (its unfolded
 share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline` (`BindingForkAt` at `δ_fork`,
 `ProofSoundAt`, `ProofsPin`), then outside an event of probability at most `2^-40` every accepted window's time is at
-least `1 − 807/100000` (`1 − 0.807%`, under 1%) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactly
-`11147243836321853078285642630374115654824742983559/1383021844232060451539868164062500000000000000000000`
-(0.8060063%), reading `ln(8/7) ≥ 2/15`; the unfolded gives 0.7474688%.
+least `1 − 1086/100000` (`1 − 1.086%`, over 1%) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactly
+`5625257050663081207487178157051972415029440436967/518065046570785549145507812500000000000000000000000`
+(1.0858206%), reading `ln(8/7) ≥ 2/15`; the unfolded gives 1.0274482%.
 
-So the 0.807% rests on (I3) at ¾ (`accounting-ts-scalar-route`), an assumed premise, where `Sm90MeasuredHeadline`'s
-1.133% rests on A6 alone. Nothing proved gives ¾ here: A6 gives ½, since it lets a 64-bit head (IMAD.WIDE, DFMA) write
-two words a lane, and `ClassPSlots`, which counts at least one slot a word, takes each output writer's slot to write
-nothing else, the case those heads break. ¾ is the least round floor at which the bound is at its least: under 1% from
-`q > 0.5126`, and the same 0.807% at every `q` from about 0.5884 up (sm_120's measured headline reads `9/8`, the
-machine model `1.22`). At ¾ the lane route no longer writes words at the IGMMA's rate on JI90_0, so `π*` puts 0.15 on
-JPA90_0 and ♭'s fold is `φ*` to `5·10⁻¹⁰`, the price of li-bulk's trimmed W = ∞ member, a counted fold, not built;
-`w*` is `UNI`'s word, under honest's IGMMA's by `6.6·10⁻⁹` of it (RT4-SHEET-20). `B_♭`, ♭ and the menu are
+So the 1.086% rests on (I3) at 3/5 (`accounting-ts-scalar-route`), an assumed premise, where `Sm90MeasuredHeadline`'s
+1.412% rests on A6 alone, and both are over 1%. Nothing proved gives 3/5 here: A6 gives ½, since it lets a 64-bit head
+(IMAD.WIDE, DFMA) write two words a lane, and `ClassPSlots`, which counts at least one slot a word, takes each output
+writer's slot to write nothing else, the case those heads break. 3/5 is the least floor of denominator at most 5 at
+which the bound is at its least: the same 1.086% at every `q` from about 0.5884 up, and under 1% at no `q` (sm_120's
+measured headline reads `9/8`, the machine model `1.22`). At 3/5 the lane route no longer writes words at the IGMMA's
+rate on JI90_0, so `π*` puts 0.15 on JPA90_0; `φ*` there is the price of li-bulk's trimmed W = ∞ member, a counted
+fold, not built, with the built CP_RED2 `4.6·10⁻¹⁰` of it above, and ♭'s fold, by built routes alone, is 1.0042 `φ*`;
+`w*` is `UNI`'s word, under honest's IGMMA's by `6.6·10⁻⁹` of it (RT4-SHEET-20). `B_♭`, ♭ and the cheater's menu are
 `Sm90MeasuredHeadline`'s. FOLD-OPT at this `π*` is open and
 doesn't follow from FOLD-OPT at DC-90-ri's (HB-PROOF's M1): its JPA90_0 weight prices ALU and the IGMMA alone, so it
 prices the classes apart from DC-90-ri's `π*`. Every class a fold route issues prices above 0 here (a free class
 would make FOLD-OPT harder to meet, not easier). M1's tie, RT4-SHEET-13's two-slot round trip on CP_RED8 at
 `φ*·(1 − 3.32·10⁻¹⁰)` at this statement's earlier `π*`, is off the menu, since li's XOR has three inputs a half step
 and one ATOM.E.XOR and one LD.E carry two; at this `π*` it prices at 1.28 `φ*`, and the three-slot one, on the menu,
-at 1.69 `φ*`. FOLD-OPT's premise has no slack; the reading's against 1% is 0.29%. Cite it with its premise: DC-90-ri
-0.807% under (I3) at ¾; 1.133% at the proved ½ floor. -/
+at 1.69 `φ*`. FOLD-OPT's premise has no slack; the reading, over 1% already, reaches its 3% target with every fold
+route 2.86% cheaper. Cite it with its premise: DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; credit
+against the built ♭, the cheater priced at every known fold, counted ones included. -/
 def Sm90MeasuredI3Headline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
@@ -320,7 +329,7 @@ def Sm90MeasuredI3Headline : Prop :=
     pf.Of Pl → BindingForkAt pf δfork → ProofSoundAt pf δzk → ProofsPin pf →
     RightFixed Pl pf Sm90MeasuredI3.model.Nw →
     prob (fun x => Pl.accepts x ∧
-      (Pl.run x).run.time / Sm90MeasuredI3.model.credit Sm90Measured.flat < 1 - 807 / 100000) ≤ (1 / 2) ^ 40
+      (Pl.run x).run.time / Sm90MeasuredI3.model.credit Sm90Measured.flat < 1 - 1086 / 100000) ≤ (1 / 2) ^ 40
 
 /-- **The B200's headline at the data sheet**, under full checking with live coins. On DS-100's machine
 (`Sm100.sheet`), `dither-2s-licpw-redux-ldtm0-l32`'s TS model (`Sm100.model`: every census MMA class a writer
