@@ -1243,7 +1243,7 @@ impl Drop for LeanSession {
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
 /// only the release, to the stream. With no release set it passes every call through: unfirewalled reps. A firewalled rep's
-/// inner proof, the firewall's own, leaves through the Lean frame too (`flock-circuit`'s `zk_finish`).
+/// inner proof, the session's Lean finish's, leaves through the Lean frame too (`flock-circuit`'s `zk_finish_fw`).
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
