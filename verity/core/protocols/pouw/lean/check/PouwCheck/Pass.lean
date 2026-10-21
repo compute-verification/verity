@@ -40,6 +40,7 @@ def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
 def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
 def RECORD_TAG : ByteArray := "verity/pouw-record/v1".toUTF8
+def WINDOW_OPEN_TAG : ByteArray := "verity/pouw-window-open/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
 def STREAM_BYTES : Nat := 64
 def PROVER_BYTES : Nat := 64
@@ -205,6 +206,18 @@ def pouwSalt (reveal : ByteArray) (p : Nat) (stream prover : ByteArray) : ByteAr
 SHA-512(`RECORD_TAG` ‖ weights' root ‖ stream ‖ prover), every part 64 bytes. -/
 def pouwRecord (weights stream prover : ByteArray) : ByteArray :=
   Flock.Sha512.hash (RECORD_TAG ++ weights ++ stream ++ prover)
+
+/-- `salt.SESSION`: a challenger session's id as the auditor's gate assigns it, 1 to 64 of `[A-Za-z0-9._:-]`, the first
+alphanumeric. -/
+def sessionId? (s : String) : Bool :=
+  let ok := fun (c : Char) => c.isAlphanum || c == '.' || c == '_' || c == ':' || c == '-'
+  1 ≤ s.length && s.length ≤ 64 && s.all ok && s.front.isAlphanum
+
+/-- `salt.window_open_root`: a live window's open root, what its session opens on and its salt coin opens after,
+SHA-512(`WINDOW_OPEN_TAG` ‖ weights' root ‖ round-0 request table's root ‖ SHA-512(the session's ASCII id)), every part
+64 bytes. -/
+def windowOpenRoot (weights requests : ByteArray) (session : String) : ByteArray :=
+  Flock.Sha512.hash (WINDOW_OPEN_TAG ++ weights ++ requests ++ Flock.Sha512.hash session.toUTF8)
 
 /-- `_certified_salt`: a certified window's pass under the window's `stream` and `prover`: `committed`, what the
 certifier recorded before it drew the window's salt, is `pouwRecord` of the pass's weights' root, the stream and the

@@ -122,14 +122,17 @@ def resplit(d: U.Descriptor, B: int, RB: int) -> U.Descriptor:
     return U.Descriptor(r=d.r, segs=tuple(segs))
 
 
-def prepare(setup: U.Setup, RB: int | None = None) -> Prepared:
+def prepare(setup: U.Setup, RB: int | None = None, ports: Sequence[str] | None = None) -> Prepared:
     """v5's units and layout for a setup, built once for each row size: each unit's outbox in rows of RB (B unless
     given), and the descriptors in the format whose depths are those trees' (on rows of RB < B, `resplit`'s, in the
-    narrowest format that holds them), registered under the layout's binding and seed."""
+    narrowest format that holds them), registered under the layout's binding and seed. On rows of RB < B, `ports`
+    (every port unless given) are the ports laid out, the others' positions `NONE`: a direction's own layout, on its
+    own row size, where another direction's frames don't fit RB."""
     L = setup.layout
     B = L.fmt.B
     RB = B if RB is None else RB
-    got = setup.__dict__.get(("_v5", RB))
+    mine = tuple(L.ports if ports is None or RB == B else (p for p in L.ports if p in ports))
+    got = setup.__dict__.get(("_v5", RB, mine))
     if got is None:
         if not 1 <= RB <= B:
             raise ValueError(f"rows are 1 ... B = {B} bytes, not {RB}")
@@ -140,12 +143,12 @@ def prepare(setup: U.Setup, RB: int | None = None) -> Prepared:
         if RB == B:
             fmt, descs = L.fmt._replace(DEPTHS=units.depths), L.descriptors
         else:
-            descs = {p: [resplit(d, B, RB) for d in ds] for p, ds in L.descriptors.items()}
+            descs = {p: [resplit(d, B, RB) for d in ds] for p, ds in L.descriptors.items() if p in mine}
             fmt = U.fit([d for ds in descs.values() for d in ds], RB, units.depths, L.fmt.DL)
         rows = [U.encode(fmt, descs[p][j] if j < len(descs.get(p, [])) else U.NONE) for p in L.ports
                 for j in range(L.cap)]
         tree = U.register(rows, fmt.LW, L.tree.reg.binding, setup.seed + b"/layout")
-        got = setup.__dict__[("_v5", RB)] = Prepared(units, U.Layout(fmt, L.ports, L.cap, descs, tree))
+        got = setup.__dict__[("_v5", RB, mine)] = Prepared(units, U.Layout(fmt, L.ports, L.cap, descs, tree))
     return got
 
 
@@ -510,13 +513,14 @@ def unit(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, tpl: t
 
 # --- instances and the reference --------------------------------------------------------------------------------------
 
-def instance(setup: U.Setup, w: U.Window, R: int | None = None, tpl: tuple = (), RB: int | None = None) -> U.Instance:
-    """The window's v5 instance from its v3 one, against the setup's v5 units and layout on rows of RB (`prepare`; B
-    unless given, and then a template's), with the port's G and runs on those rows."""
+def instance(setup: U.Setup, w: U.Window, R: int | None = None, tpl: tuple = (), RB: int | None = None,
+             ports: Sequence[str] | None = None) -> U.Instance:
+    """The window's v5 instance from its v3 one, against the setup's v5 units and layout on rows of RB (`prepare`, of
+    `ports`; B unless given, and then a template's), with the port's G and runs on those rows."""
     v3 = w.instance
     if v3 is None:
         raise ValueError(f"{w.port}[{w.window}] runs no unit: {w.why}")
-    prep = prepare(setup, RB)
+    prep = prepare(setup, RB, ports)
     narrow = prep.layout.fmt.B != setup.layout.fmt.B
     layout = prep.layout if narrow else setup.layout
     return convert(v3, prep, V4.runs_of(layout, w.port) if R is None else R, tpl,

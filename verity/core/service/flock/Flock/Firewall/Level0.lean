@@ -46,7 +46,7 @@ structure Level0 where
 def Level0.salt (l : Level0) (q : Nat) : ByteArray :=
   if q < 2 ^ l.lv.d then l.salts.extract (192 * q) (192 * (q + 1)) else .empty
 
-/-- The table as `flock-firewall link` reads one (`Link.In`). -/
+/-- The table as `Link.parse` reads one (`Link.In`). -/
 def Level0.toIn (l : Level0) : Link.In where
   m := l.m
   g := l.g
