@@ -35,6 +35,8 @@
   each linear's B rows registered once for all its calls; its template-instance partition derives its units, and
   `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K window in one
   read.
+* `admit`: a window's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
+  the window.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

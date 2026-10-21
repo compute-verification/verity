@@ -211,6 +211,28 @@ def test_a_session_cut_before_its_finish_is_its_stop(exe, tmp_path):
     assert record(tmp_path / "lean") == record(tmp_path / "py")
 
 
+def test_the_loop_admits_as_the_end_to_end_record(exe, tmp_path):
+    """The end-to-end run's three sessions that ended at their admission (`fixtures/release-e2e.jsonl`, frozen from Rust's
+    release side): r0000 at L0 again after its release, a stop at L1, never opened, and a refusal; r0000 at L1, refused;
+    r0003, never finished, refused. Each starts on the run's record before it and leaves the run's next lines, byte for byte.
+    The run's releases and its missed time need a prover's proofs (`test_firewall_release_agreement` runs them through the
+    loop's stages)."""
+    lines = R.e2e_record()
+    for s, p, start, end in [("r0000", "L0", 11, 14), ("r0000", "L1", 14, 16), ("r0003", "L0", 16, 18)]:
+        state = tmp_path / f"{s}-{p}"
+        state.mkdir()
+        (state / "record.jsonl").write_text("".join(lines[:start]))
+        auditor = Auditor()
+        lp = Loop(exe, state, s, p, auditor, tmp_path)
+        c = lp.connect()
+        assert refusal(call(c, REGISTER)).startswith("FIREWALL-REFUSED: ")
+        c.close()
+        slot_left(state)
+        lp.close()
+        assert auditor.got == []
+        assert record(state).decode() == "".join(lines[:end]), (s, p)
+
+
 def test_the_slot_orders_two_sessions(exe, tmp_path):
     """A second session asks while the first holds the slot: it records `wait` and waits, and once the first is cut (its
     stop) it takes the slot and is refused, since the recursive session has stopped. Python reads the record."""

@@ -413,13 +413,13 @@ theorem resPartAny_of_resPart {c : Flock.Circuit} {S : Flock.RecOpen.GfS} {ns : 
 
 /-- **The circuit's unit is one of V*'s, its copies' outputs at what their inputs read being `K`**: a level under
 either name (`LevelOuts`), a table of residuals (`ResOuts`), the RecSparse unit (`SparseReadOuts`), or RecCap
-(`rec-cap/n<N>`), of whose outputs nothing is stated (`K` true). -/
+(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level), of whose outputs nothing is stated (`K` true). -/
 def UnitOuts (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   (∃ LANES H : ℕ, (Flock.RecOpen.params c.unit.name = some (LANES, H) ∨
     Flock.RecOpen.stackedParams c.unit.name = some (LANES, H)) ∧ K = fun v => LevelOuts v LANES H) ∨
   (∃ (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), ResPartAny c S ns nv ∧ K = ResOuts S ns nv) ∨
   (∃ sh : Flock.RecSparse.Shape, Flock.RecSparse.params c.unit.name = some sh ∧ K = SparseReadOuts sh) ∨
-  ∃ N : ℕ, c.unit.name = VStar.capName N ∧ K = fun _ => True
+  ∃ l N : ℕ, c.unit.name = VStar.capName l N ∧ K = fun _ => True
 
 /-- **The output tie from `Flock.check`**: at the deployed parser, wherever the outer relation holds at an untyped
 statement without public input words, every copy of a V* unit holds its outputs at the values its input columns read
@@ -432,7 +432,7 @@ theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     {K : (ℕ → Bool) → Prop} (hK : UnitOuts p.sts[t].c K) {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog))
     (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) : K (copyOf p t htl w o g u) := by
   obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
-  rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩ | ⟨N, -, rfl⟩
+  rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩ | ⟨l, N, -, rfl⟩
   · exact ⟨climbAt_of_check h hx ht hpi htl hp ho hg hu Flock.MerkleScheme.hm96Sha512 (fun _ _ => rfl)
       (openIns_reads _ LANES H), levelCalls_of_check h hx ht hpi htl hp ho hg hu⟩
   · rcases hpart with ⟨m, k, cl, j, sh, holo, hp, hsh, hh, hpart⟩ | ⟨m, cl, j, sh, hp, hsh, hpart⟩
@@ -645,7 +645,7 @@ def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop)
     | .opening m cl j .. => ∃ (sh : Flock.Shape) (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
         RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧ K = ResOuts S ns nv
     | .sparse sh _ => K = SparseReadOuts sh
-    | .cap _ => K = fun _ => True
+    | .cap .. => K = fun _ => True
 
 /-- **A table named as V\*'s statement `sv` that the parser and the part check accepted is a table of `sv`**: the
 unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
@@ -665,8 +665,8 @@ theorem stmtUnit_of_check {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSoun
       m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, rfl⟩
   | sparse sh hRound =>
     exact ⟨_, Or.inr (Or.inr (Or.inl ⟨sh, sparseParams_of_check P.recSparse hn, rfl⟩)), rfl⟩
-  | cap N =>
-    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨N, hn, rfl⟩)), rfl⟩
+  | cap l N =>
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, hn, rfl⟩)), rfl⟩
   | opening m cl j S ports nv =>
     have hq := openingParams_of_check P.recOpening hn
     obtain ⟨sh, hsh⟩ := openingShape_of_check P.recOpening hq

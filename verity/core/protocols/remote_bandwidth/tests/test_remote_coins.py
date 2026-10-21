@@ -2,10 +2,12 @@
 socket pair: a session whose coins that service released is accepted, and what it signed holds them
 (`Session.released_reason`). Under the auditor's ledger (`Session.trusted_reason`) a session's coins are those of the one
 challenger session the ledger opens for the session's own window R inside its period, so coins from a second challenger
-session over the same registration are refused, as is a ledger that opens a second session for R; and a coin opened
-before its window's root is refused."""
+session over the same registration are refused, as is a ledger that opens a second session for R; a coin opened
+before its window's root is refused; and a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin
+before it, the challenger's log as if each had gone alone."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import itertools
 import json
@@ -195,6 +197,49 @@ def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_p
     s.coins.openings(0, s.windows[0].roots[0])
     assert service.close() is None
     assert s.released_reason(*service.signed()) == "window 0's openings coin was opened before its window's root"
+
+
+def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(store, tmp_path, sign):
+    """`Coins.ahead`: window 0's openings coin and σ_1 after its root go in one `open_many`, the openings coin first,
+    and σ_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each family
+    and the challenger's release log byte for byte as asking them one after the other. σ_1 asked for after another
+    root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is sent."""
+    root = hashlib.sha512(b"window 0's root").digest()
+
+    def ask(directory, ahead: bool):
+        service = Service(directory, sign, "s-0", 0, params().windows, b"service")
+        asked, many = [], service.client.open_many
+        service.client.open_many = lambda requests: asked.append([r[:2] for r in requests]) or many(requests)
+        c = service.coins(store, 0, params().windows)
+        c.challenge(0, c.window)
+        with c.ahead(coins.CHALLENGE, 1, root) if ahead else contextlib.nullcontext():
+            got = [c.openings(0, root)]
+        before = (directory / R.RELEASES).read_bytes()
+        got.append(c.challenge(1, root))
+        assert service.close() is None
+        log = (directory / R.RELEASES).read_bytes()
+        return asked, got, {label: (c.afters(label), c.opened(label)) for label in coins.LABELS}, before == log, log
+
+    one = ask(tmp_path / "one", False)
+    many = ask(tmp_path / "many", True)
+    assert one[0] == [[("challenge", 0)], [("openings", 0)], [("challenge", 1)]]
+    assert many[0] == [[("challenge", 0)], [("openings", 0), ("challenge", 1)]]
+    assert many[1:3] == one[1:3] and many[4] == one[4]
+    assert (one[3], many[3]) == (False, True)
+
+    service = Service(tmp_path / "other", sign, "s-1", 0, params().windows, b"service")
+    c = service.coins(store, 0, params().windows)
+    c.challenge(0, c.window)
+    with c.ahead(coins.CHALLENGE, 1, root):
+        c.openings(0, root)
+    with pytest.raises(C.CoinError, match="challenge coin 1 was asked for ahead after another root"):
+        c.challenge(1, c.window)
+    sent = (service.directory / R.RELEASES).read_bytes()
+    with c.ahead(coins.CHALLENGE, 3, root), pytest.raises(C.CoinError, match="the challenge coin asked for ahead is "
+                                                                             "3, not the next, 2"):
+        c.openings(1, root)
+    assert (service.directory / R.RELEASES).read_bytes() == sent and c.afters(coins.OPENINGS) == (root,)
+    assert service.close() is None
 
 
 def test_a_challenge_opened_before_the_sessions_window_root_is_refused(store, tmp_path, sign):

@@ -368,6 +368,20 @@ def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_
         assert "probe failed (exit 255)" in rep["error"] and rep.get("unreachable", False) is unreachable
 
 
+def test_an_admin_only_node_is_read_only_when_named(world, capsys):
+    """The auditor host's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
+    manifest = world["manifest"]
+    manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
+                                                                       "[nodes.n]\n", 1))
+    denied = lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", b"vy-admin@h: Permission denied (publickey).\n")
+    deploy.main(["drift", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"])
+    assert set(json.loads(capsys.readouterr().out)) == {"n"}
+    assert deploy.main(["drift", "--on", "a", "--json", "--no-fetch"], run=denied, manifest=manifest, repo=world["repo"]) == 1
+    assert "Permission denied" in json.loads(capsys.readouterr().out)["a"]["error"]
+    with pytest.raises(ValueError, match="`admin` is true or false"):
+        deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
+
+
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
     """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
     repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"

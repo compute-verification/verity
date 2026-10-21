@@ -37,17 +37,26 @@ before it drew that salt (`salt.committed`).  `recorded_reason` is that last rul
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
-(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): it reads the challenger's
-coins only through the session the auditor's signed ledger opens and ends for the window, under the window's pinned
-key (`challenger.trusted_session_of`), never a commitment the prover hands in; under the commitment that session signed,
-round r's coin opened once, after the r-th round root, and the round roots are the ones its signed log shows it received.
+and a replay of a recorded draw `COIN_EARLY` too.  `work_units` is the same rule under the law ``work:k``: each work
+stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` draws a served H1 window with it).
+`salt` is the rule on a live window's salt coin, read through the
+same session as `rounds`: S is the session the auditor's signed ledger reserves for the window and R the root its open
+entry opened S on, which the verifier recomputes from the window's record and S (`salt.window_open_root`); the
+session's signed log shows R alone as what its salt coin followed, and under the commitment it signed the salt coin
+opened once, after R.
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
+opens and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the
+prover hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and
+the round roots are the ones its signed log shows it received.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
+import itertools
 import json
 import math
 import re
@@ -1233,7 +1242,85 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
-# ---- a live window's round coins ---------------------------------------------------------------------------------------
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's draw under the work law (Lean `Flock.Draw.workK`): ⌈k·work·size/total⌉, at least `floor`, at most
+    `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
+
+
+def work_units(coin: bytes, stream: str, registration: str, receipt: dict, strata: list[dict]) -> list[int] | None:
+    """`draw`'s rule under the law ``work:k`` (Lean `workUnits`): the units the draw coin `coin` draws over the work strata
+    `strata` (each ``{template, units, work, floor, k}``, its units ``[lo, hi)`` ranges in order), ascending. Stratum s is
+    ``Draw.subset`` of its k_s over its n_s units on the stream ``("draw", template)`` of the key the coin derives under
+    the stream's digest `stream`, the registration `registration` and its `receipt` (`draw_key_context`), its local index
+    j its j-th unit (`Flock.Draw.stratified`); None when a stream runs out."""
+    key, out = derive(coin, DRAW_DOMAIN, draw_key_context(stream, registration, receipt)), []
+    for s in strata:
+        n = sum(hi - lo for lo, hi in s["units"])
+        got = stream_subset(s["k"], n, key.stream(("draw", s["template"]), 2 * s["k"] * width(n) + 64))
+        if got is None:
+            return None
+        starts = list(itertools.accumulate((hi - lo for lo, hi in s["units"]), initial=0))
+        for j in got:
+            r = bisect.bisect_right(starts, j) - 1
+            out.append(s["units"][r][0] + j - starts[r])
+    return sorted(out)
+
+
+# ---- a live window's salt and round coins -----------------------------------------------------------------------------
+
+NO_RESERVE = ("the auditor's ledger opens the window's session without reserving it: a window's open root binds the "
+              "session a signed reserve entry names")
+SALT_FORM = "the window's weights' root and its round-0 request table's root are not SHA-512 digests"
+OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_root of its weights' root, its round-0 "
+                "request table's root and the session")
+NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
+
+
+def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, requests_root: Any, opening: Any,
+         verify: Ch.Verify) -> tuple[str, str] | None:
+    """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
+    it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
+    the auditor's signed v2 ledger `ledger` opens and ends closed for `window` (``{root}``) under the pinned challenger
+    key `key`, from that session's files `session` (`challenger.audited_session` and `session_named`, its signatures
+    checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
+    refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the window's weights'
+    root `weights_root` and its round-0 request table's root `requests_root` (hex, from the window's record) and S; the
+    session's signed log shows R, alone, as the root its salt coin followed; and under the commitment the session
+    signed, a live epoch's, `opening` is the epoch's ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`).
+    Else the refusal (``coin`` or ``salt``, and why).  A session opened for one window's weights and requests salts no
+    other window, and a window salted in one session passes under no other."""
+    try:
+        k = Ch.ChallengerKey.from_json(key)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's challenger key is malformed: {e}"
+    try:
+        a = Ch.audited_session(ledger, window, k, verify)
+        c, received = Ch.session_named(a, k, session, verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
+    why = Wd.live_epoch_reason(c)
+    if why is not None:
+        return "coin", why
+    named = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == a.session}
+    if "reserve" not in named:
+        return "salt", NO_RESERVE
+    s, r = named["reserve"]["session"], bytes.fromhex(Ch.root_of(named["open"]))
+    hexes = [bytes.fromhex(x) if _str(x) and _DIGEST.fullmatch(x) else None for x in (weights_root, requests_root)]
+    if None in hexes:
+        return "salt", SALT_FORM
+    w, t = hexes
+    if PS.window_open_root(w, t, s) != r:
+        return "salt", OTHER_WINDOW
+    if received.get(Wd.SALT, ()) != (r,):
+        return "salt", NOT_RECEIVED
+    try:
+        o = Ch.LiveOpening.from_json(opening)
+    except Ch.CoinError as e:
+        return "coin", f"the salt's {e}"
+    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
+    return None if why is None else ("coin", f"the salt's {why}")
+
 
 def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
            ) -> tuple[str, str] | None:
@@ -1316,4 +1403,4 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
            "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
            "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
-           "rounds", "unit_draw", "verify_path", "window_domain"]
+           "rounds", "salt", "unit_draw", "verify_path", "window_domain", "work_k", "work_units"]

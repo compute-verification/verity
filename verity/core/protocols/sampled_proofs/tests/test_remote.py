@@ -2,10 +2,12 @@
 coin opens, answers each root with that family's next coin and logs the release before the coin leaves; it refuses
 every malformed or out-of-order frame and ends the session there, and however the session ends it signs its release log
 (the close record).  The client (`RemoteChallenger`) is `LiveRecord`'s challenger as it is, and refuses a coin that
-doesn't open.  The verifier, reading the challenger's directory and the auditor's signed ledger, trusts only the one
-session the ledger opens for the window under the pinned key, ended closed, its commitment and the roots its signed log
-shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or presents an unsigned log, an
-unclosed session, a second session, a ledger signed under its own key or one older than the session's end is refused."""
+doesn't open; it asks for several coins in one round trip (`open_many`), the release log the same as one at a time, and
+a batch with any bad answer raises whole.  The verifier, reading the challenger's directory and the auditor's signed
+ledger, trusts only the one session the ledger opens for the window under the pinned key, ended closed, its commitment
+and the roots its signed log shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or
+presents an unsigned log, an unclosed session, a second session, a ledger signed under its own key or one older than the
+session's end is refused."""
 
 from __future__ import annotations
 
@@ -446,6 +448,123 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
     liar.join()
     with pytest.raises(C.CoinError, match="session ended"):
         client.open("positions", 1, root(1))
+
+
+BATCH = [("positions", 0, root(0)), ("replay", 0, root(0)), ("positions", 1, root(1))]
+
+
+def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
+    """`ask(client)` against a challenger served on one end of a socketpair (`serve`, on a clock that counts), the
+    client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
+    directory.mkdir()
+    session = R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), pinned_key(), HOST, signer,
+                             directory, "s-1")
+    a, b = socket.socketpair()
+    ended: list[str | None] = []
+    t = threading.Thread(target=lambda: ended.append(R.serve(a, session, itertools.count().__next__)))
+    t.start()
+    client = R.RemoteChallenger(b)
+    try:
+        got = ask(client)
+    finally:
+        if client._ended is None:
+            client.close()
+        t.join()
+        a.close()
+    return (directory / R.RELEASES).read_bytes(), got, ended[0]
+
+
+def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_does(tmp_path, signer):
+    """One round trip for three coins (two of them after one root, as a paced window's openings coin and the challenge
+    after it are): the same openings, the release log byte for byte, and the in-process challenger's `open_many` the
+    same coins again."""
+    one, sequential, why = _served(tmp_path / "one", signer, lambda c: [c.open(*r) for r in BATCH])
+    many, batched, why_many = _served(tmp_path / "many", signer, lambda c: c.open_many(BATCH))
+    assert (why, why_many) == (None, None)
+    assert batched == sequential and many == one
+    events = [json.loads(line)["event"] for line in many.decode().splitlines()]
+    assert events == ["commitment"] + ["root", "release"] * 3
+    assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def _scripted(n: int, answer):
+    """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
+    then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
+    wrote them back to back before reading a reply."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        with a:
+            reply(a)
+            a.sendall(frame({"type": "commitment", "commitment": ch.commitment.to_json()}))
+            heads = [reply(a) for _ in range(n)]
+            a.sendall(b"".join(answer([ch.open(h["label"], h["index"], bytes.fromhex(h["after"])) for h in heads])))
+            try:
+                while a.recv(1 << 16):
+                    pass
+            except ConnectionResetError:
+                pass  # the client hung up on a reply it refused, with the batch's later replies unread
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _opening(o: C.LiveOpening) -> bytes:
+    return frame({"type": "opening", "opening": o.to_json()})
+
+
+@pytest.mark.parametrize("bad, why", [(_other_coin, "replay coin 0: coin does not open"),
+                                      (_other_root, "replay coin 0: coin was not opened after")])
+def test_a_batch_one_of_whose_coins_fails_live_reason_raises_whole_and_ends_the_session(bad, why):
+    """No partial credit: the coins either side of the bad one are good, and none is returned."""
+    client, t = _scripted(3, lambda ops: [_opening(ops[0]), bad(ops[1]), _opening(ops[2])])
+    with pytest.raises(C.CoinError, match=why):
+        client.open_many(BATCH)
+    t.join()
+    for again in (lambda: client.open("positions", 2, root(2)), lambda: client.open_many(BATCH)):
+        with pytest.raises(C.CoinError, match=r"session ended \(.*replay coin 0.*\): a retry never redraws"):
+            again()
+
+
+def test_a_batch_answered_out_of_order_is_refused():
+    client, t = _scripted(2, lambda ops: [_opening(ops[1]), _opening(ops[0])])
+    with pytest.raises(C.CoinError, match="positions coin 0: coin is the epoch's replay coin 0, not its positions coin"):
+        client.open_many(BATCH[:2])
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open(*BATCH[0])
+
+
+def test_a_batch_the_challenger_refuses_midway_raises_and_releases_only_the_coins_before_it(tmp_path, signer):
+    """`serve` releases the batch's coins before the refused one, logs them and signs the session's close with the
+    refusal; the client returns none of them, the one after is never opened, and every later coin is refused."""
+    batch = [BATCH[0], ("positions", 5, root(1)), BATCH[1]]
+    held: list[R.RemoteChallenger] = []
+
+    def ask(client):
+        held.append(client)
+        with pytest.raises(C.CoinError, match="refused: the next positions coin is 1, not 5"):
+            client.open_many(batch)
+        with pytest.raises(C.CoinError, match="session ended"):
+            client.open(*BATCH[2])
+
+    log, _, why = _served(tmp_path / "s", signer, ask)
+    assert why == "the next positions coin is 1, not 5"
+    assert [json.loads(line).get("label") for line in log.decode().splitlines()] == [None, "positions", "positions"]
+    close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
+    assert (close["ended"], close["lines"]) == (why, 3)
+
+
+def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, signer):
+    def ask(client):
+        with pytest.raises(ValueError, match=f"at most {R.MAX_BATCH} coins"):
+            client.open_many([BATCH[0]] * (R.MAX_BATCH + 1))
+        return client.open_many(BATCH[:1])
+
+    _, got, why = _served(tmp_path / "s", signer, ask)
+    assert why is None and [(o.label, o.index) for o in got] == [("positions", 0)]
 
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):
@@ -1084,6 +1203,72 @@ def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_p
         C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), descriptor, lms_verify)
     with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
         C.credited_session(lines, {"root": "22" * 64}, pinned_key(), descriptor, lms_verify)
+
+
+MAIN_PIN, OLD_PIN, LATER_PIN, BRANCH_PIN = "c0" * 20, "c1" * 20, "c2" * 20, "dd" * 20
+PINS = [C.pin_line(OLD_PIN, "e0" * 20, "2026-10-20T08:00:00Z"), C.pin_line(MAIN_PIN, "e1" * 20, "2026-10-21T13:00:00Z")]
+
+
+def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
+    """A served window, on a host of its own key's state, whose open names the tree its host ran (`pinned`) and seals
+    the host's pins log as `seal` says (``pins=``; `PINS`, both lines, unless set; DROP: an open from a gate that seals
+    none)."""
+    tmp_path.mkdir()
+    signer = at(*range(16))
+    ledger = Ledger(tmp_path / "windows.jsonl", signer)
+    opened = ledger.open
+    ledger.open = lambda session, window=WINDOW: opened(session, window, pinned=pinned,
+                                                        pins=seal.get("pins", C.pins_seal(PINS)))
+    ledger.reserve(RESERVED_SESSION)
+    host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
+    honest(host)
+    return host
+
+
+def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(tmp_path):
+    """RT4-INT-40: the open names the commit its host ran and seals the host's pins log as it stood, and
+    `pinned_session` takes the session only when one of the sealed lines pins that commit. An honest session at a main
+    commit is read under any later extension of the log; a commit pinned off main, or only after the open, is refused
+    naming the fix; so are a missing, malformed, cut or edited pins log and an open that seals none."""
+    lines = R.ledger_lines(_pinned_host(tmp_path / "honest", MAIN_PIN).ledger.path)
+    later = PINS + [C.pin_line(LATER_PIN, LATER_PIN, "2026-10-21T14:00:00Z")]
+    for log in (PINS, later):
+        assert C.pinned_session(lines, WINDOW, pinned_key(), log, lms_verify) == C.audited_session(
+            lines, WINDOW, pinned_key(), lms_verify)
+
+    def refused(lines, pins, why):
+        with pytest.raises(C.CoinError, match=re.escape(why)):
+            C.pinned_session(lines, WINDOW, pinned_key(), pins, lms_verify)
+
+    for pin in (BRANCH_PIN, LATER_PIN):
+        off = R.ledger_lines(_pinned_host(tmp_path / pin, pin).ledger.path)
+        refused(off, later, f"session {RESERVED_SESSION} ran commit {pin}, which the host's pins log doesn't record "
+                            "as a commit of main's history: repin the challenger host to a commit origin/main "
+                            "contains (vy-challenger-pin) and rerun the window there")
+    refused(lines, None, C.NO_PINS)
+    refused(lines, "\n".join(PINS), f"the host's pins log is malformed: {C.PINS_FORM}")
+    for bad in (PINS[1].replace("c0", "C0"), PINS[1].replace(":", ": "), PINS[1][:-1] + ',"x":1}',
+                C.ledger_text({"commit": MAIN_PIN, "main": "e1" * 20, "pinned_utc": "2026-02-30T13:00:00Z"}), 5):
+        refused(lines, [PINS[0], bad], f"the host's pins log line 1 is malformed: {C.PINS_FORM}")
+    refused(lines, PINS[:1], f"the host's pins log has 1 lines, fewer than the 2 the open of session "
+                             f"{RESERVED_SESSION} sealed: take infra's newest published pins log")
+    edited = [PINS[0], C.pin_line(MAIN_PIN, "e2" * 20, "2026-10-21T13:00:00Z")]
+    for log in (edited, PINS[::-1]):
+        refused(lines, log, f"the host's pins log is not the one the open of session {RESERVED_SESSION} sealed: its "
+                            "first 2 lines were edited or rewritten")
+    seals = (DROP, None, {"lines": 0, "sha512": C.log_digest([])}, {"lines": True, "sha512": C.log_digest(PINS[:1])},
+             {**C.pins_seal(PINS), "at": 1}, {"lines": 2, "sha512": C.log_digest(PINS).upper()})
+    for i, seal in enumerate(seals):
+        unsealed = R.ledger_lines(_pinned_host(tmp_path / f"seal-{i}", MAIN_PIN, pins=seal).ledger.path)
+        refused(unsealed, PINS, f"the auditor's ledger's open of session {RESERVED_SESSION} seals no pins log "
+                                "(pins: {lines, sha512}): open the window on a host whose gate seals its pins log in "
+                                "each open")
+    with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
+        C.pinned_session(lines, {"root": "22" * 64}, pinned_key(), PINS, lms_verify)
+    for bad in (("C0" * 20, MAIN_PIN, "2026-10-21T13:00:00Z"), (MAIN_PIN, "e1" * 19, "2026-10-21T13:00:00Z"),
+                (MAIN_PIN, MAIN_PIN, "2026-10-21 13:00:00Z")):
+        with pytest.raises(ValueError, match=re.escape(C.PINS_FORM)):
+            C.pin_line(*bad)
 
 
 def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):

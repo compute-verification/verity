@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "PouwQueueAdmit_v3": {
+   "and": 1296
+  }
+ },
+ "pieces": {
+  "PouwQueueAdmit_v2": {
+   "and": 1296
+  }
+ }
+}
