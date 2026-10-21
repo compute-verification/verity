@@ -10,7 +10,10 @@ as JSON lines (PRF-133).
   whose copies read one another (a binding into the run's own columns, directly or through an input of the Definition
   that some instance binds to its own columns: chained, as a K loop's accumulator is) can't
   interleave and keep each row reading earlier columns, so it falls back to ``contiguous`` (its copies side by side at
-  L, the carry fold's case) or ``pow2``.
+  L, the carry fold's case) or ``pow2``. Aligning a region's start to 2^m times its Definition's own alignment cleans
+  the copy bits, but the high bits are then the Definition's columns plus an offset that needn't be aligned, so its
+  fold is redone per call (``call_paths``: the calls and own references of the call tree with each run counted once);
+  ``strict`` aligns to 2^m times the Definition's size rounded up to a power of two, so each Definition folds once.
 
 Every layout keeps the unit's input rows at their columns and each output group's width, at a start aligned to its
 words, as `tmpl.align` does. Per layout: the unit's rows and its slot's log (`circuit._slot_log`; compose refuses a
@@ -43,8 +46,10 @@ def _slot_log(useful: int) -> int:
     return max(7, (useful - 1).bit_length())
 
 
-def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarray, dict]:
-    """The map from the unit's columns to the layout's, and the layout's statistics."""
+def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = False) -> tuple[np.ndarray, dict]:
+    """The map from the unit's columns to the layout's, and the layout's statistics. ``strict``: each interleaved region
+    and each single copy starts at a multiple of its Definition's size rounded up to a power of two (times 2^m), so the
+    region's high bits are the Definition's own columns plus an aligned offset and its fold is computed once."""
     defs = t.defs
     ins_g, outs_g = T._groups(t.groups)
     in_end = (ins_g[-1][0] + ins_g[-1][1]) * WORD if ins_g else 0
@@ -97,12 +102,14 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
             elif mode == "today":
                 kind, S, nb = "contig", size[e], pos
             elif c.count == 1:
-                kind, S, nb = "contig", size[e], T._up(pos, align[e])
-                al = max(al, align[e])
+                a = T._pow2(size[e]) if strict else align[e]
+                kind, S, nb = "contig", size[e], T._up(pos, a)
+                al = max(al, a)
             elif mode == "interleaved" and not _chained(c, Le, D, alias[d]):
                 M = 1 << _log(c.count)
-                kind, S, nb = "lanes", M, T._up(pos, M * align[e])
-                al = max(al, M * align[e])
+                a = M * (T._pow2(size[e]) if strict else align[e])
+                kind, S, nb = "lanes", M, T._up(pos, a)
+                al = max(al, a)
                 st["lanes_runs"] += 1
                 st["rows_lanes"] += c.count * urows[e]
             else:
@@ -135,9 +142,15 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
         maps[d], size[d], align[d], rnd[d] = m, pos, al, rd
         gap[d] = pos - L - rd
     n = size[t.root]
-    out = {"mode": mode, "fallback": fallback if mode == "interleaved" else None, "useful": n,
+    own = [sum(len(a) + len(b) for _, a, b in D.rows) for D in defs]
+    walk_n, walk_r = [0] * len(defs), [0] * len(defs)
+    for d, D in enumerate(defs):
+        walk_n[d] = sum(1 + walk_n[c.e] for c in D.calls)
+        walk_r[d] = own[d] + sum(walk_r[c.e] for c in D.calls)
+    out = {"mode": mode, "fallback": fallback if mode == "interleaved" else None, "strict": strict, "useful": n,
            "slot_log": _slot_log(n), "slack": round(1 - n / (1 << _slot_log(n)), 4), "rows_unrolled": urows[t.root],
-           "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st}
+           "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st,
+           "template_refs": sum(own), "call_paths": {"calls": walk_n[t.root], "refs": walk_r[t.root]}}
     if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
@@ -294,9 +307,10 @@ def main(argv: list[str]) -> int:
     print("PARSED " + json.dumps({"seconds": round(time.time() - t0, 1), "defs": len(t.defs)}), flush=True)
     flat = T.read_flat(a.flat)[0] if a.flat else None
     ok = True
-    for mode, fb in (("today", None), ("pow2", None), ("interleaved", "contiguous"), ("interleaved", "pow2")):
+    for mode, fb, strict in (("today", None, False), ("pow2", None, False), ("interleaved", "contiguous", False),
+                             ("interleaved", "pow2", False), ("interleaved", "contiguous", True)):
         t1 = time.time()
-        phi, r = layout(t, mode, fb or "contiguous")
+        phi, r = layout(t, mode, fb or "contiguous", strict)
         if mode == "today":
             r["identity"] = bool((phi == np.arange(len(phi))).all())
             ok &= r["identity"]
