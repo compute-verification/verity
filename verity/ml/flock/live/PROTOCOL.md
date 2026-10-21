@@ -702,7 +702,8 @@ statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewa
 Through the Lean session loop (§10.4) level 0's hiding is the loop's, not the host's: for each firewalled table the prover
 sends the loop its packed witness (`firewall::lean_level0`), and the loop draws the four extra lanes, every lane's padding
 and the level-0 salts from the OS, commits level 0 on them and keeps the table's `Flock.Firewall.Level0` (its `m`, level
-0's schedule and `t_pad`, the witness, the draws, the codeword's rows and the root). The prover takes the draws in place of
+0's schedule and `t_pad`, the witness, the draws, the codeword's rows, the Merkle layers from the leaves to the cap, and
+the root, each `Link`'s function of the witness and draws: `Level0.ofDraws_ok`). The prover takes the draws in place of
 its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so `commit_zk` and the device commit the codeword the
 loop did; the loop's root is the root of record (`t.lean_link` 0), and `commit_zk`'s must be it.
 

@@ -7,9 +7,12 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
 `Finish`'s level-0 openings (`Firewall.Finish`, ZKFIN's).
 
 * `Level0`: the table's `m`, level 0 of its `--zk` schedule and its `t_pad`, the packed witness `g`, the hiding the loop
-  drew (the four extra lanes, every lane's padding, a salt per tree position), the padded codeword's rows and the root.
+  drew (the four extra lanes, every lane's padding, a salt per tree position), the padded codeword's rows, the Merkle
+  tree's layers from the leaves to the cap, and the root.
 * `ofDraws`: a table's `Level0` from its witness and the draws' bytes, in `Link.parse`'s layout after the witness: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
+* `ofDraws_ok`: what `ofDraws` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
+  of its own inputs (`toIn`), its root `Link.root toIn`, so a statement over `toIn` needs none of the stored fields.
 * `Registry`, `commit`: the loop's tables, and a session's `Commit` held to them: each root it carries must be a
   `Level0`'s the loop drew at the table's own `m`, which the session then owns.
 
