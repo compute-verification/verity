@@ -36,9 +36,11 @@ against 1066.7 (DS-100), 2073 against 130.2 (DC-90-ri), 2385 against 130.6 (its 
 which every fold route prices each class it issues above 0. It is open at all five `π*`. On the H200 the menu holds
 every counted fold known to come near it, none built: RT4-SHEET-13's and -14's moves of LI on li and each route, and
 li-bulk at its measured cost with its counted BT1024 and trimmed W = ∞ members (RT4-SHEET-17, -22). So there FOLD-OPT
-is a premise only about folds off the menu, and a counted fold priced below what it would cost built only raises the
-bound. FOLD-OPT at the twin's `π*` doesn't follow from FOLD-OPT at DC-90-ri's (HB-PROOF's M1): the two price the
-classes apart, and a class free at one `π*` would make FOLD-OPT there harder to meet, not easier. M1's tie,
+is a premise only about folds off the menu, and a counted fold priced below what it would cost built only lowers the
+proved credit `(1 − ε)·B_♭`, which reads `w*` and `φ*` at `π*` and not `B_♭` (RT4-SHEET-27); ε can fall, since ♭
+folds by the cheapest menu mix and `B_♭` falls with it. FOLD-OPT at the twin's `π*` doesn't follow from FOLD-OPT at
+DC-90-ri's (HB-PROOF's M1): the two price the classes apart, and a class free at one `π*` would make FOLD-OPT there
+harder to meet, not easier. M1's tie,
 RT4-SHEET-13's two-slot round trip (one ATOM.E.XOR and one LD.E back, at `φ*·(1 − 3.32·10⁻¹⁰)` at the twin's earlier
 `π*`), is left off the menu: li's XOR has three inputs a half step, `y ⊕ w ⊕ k`, and those two instructions carry
 two, so it is a count, not a fold; with the third input it is the three-slot round trip, which is on the menu.
@@ -294,7 +296,8 @@ nothing else, the case those heads break. ¾ is the least round floor at which t
 `q > 0.5126`, and the same 0.807% at every `q` from about 0.5884 up (sm_120's measured headline reads `9/8`, the
 machine model `1.22`). At ¾ the lane route no longer writes words at the IGMMA's rate on JI90_0, so `π*` puts 0.15 on
 JPA90_0 and ♭'s fold is `φ*` to `5·10⁻¹⁰`, the price of li-bulk's trimmed W = ∞ member, a counted fold, not built;
-`w*` is still honest's IGMMA. `B_♭`, ♭ and the menu are `Sm90MeasuredHeadline`'s. FOLD-OPT at this `π*` is open and
+`w*` is `UNI`'s word, under honest's IGMMA's by `6.6·10⁻⁹` of it (RT4-SHEET-20). `B_♭`, ♭ and the menu are
+`Sm90MeasuredHeadline`'s. FOLD-OPT at this `π*` is open and
 doesn't follow from FOLD-OPT at DC-90-ri's (HB-PROOF's M1): its JPA90_0 weight prices ALU and the IGMMA alone, so it
 prices the classes apart from DC-90-ri's `π*`. Every class a fold route issues prices above 0 here (a free class
 would make FOLD-OPT harder to meet, not easier). M1's tie, RT4-SHEET-13's two-slot round trip on CP_RED8 at
