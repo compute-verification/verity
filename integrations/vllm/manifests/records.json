@@ -71,14 +71,14 @@
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": null,
+   "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
    "tier": "heavy",
    "pinned_from": {
-    "build": "art:a8efd2cf3ef141c19d2aa26367c4ff7a81dcd1fa824adfcd981d82ce9b121b8f",
-    "run": "r20261019-230514-985c",
-    "tree": "cursor/glm-v2-21f3@dd3502b6f7335c0304e9421a1cd49437ae0fc97b"
+    "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
+    "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
+    "tree": "cursor/glm-v2-21f3@f8fd97166277c4de1094dfbf7a11b5a1186449b7"
    },
-   "manifest_digest": null,
+   "manifest_digest": "9cc899187e87230548b6c00a7b5390e78187dd23a56d29ebaad848a1b2a2a77a",
    "programs": {
     "0": {
      "step": "00d09c910e3ed568727791dbf7e81936aec27df1a2da1b92a6e04ac8d89f2192fd56ed9483841f9e692ff94bc5e02f7f9365422985464eef20eef32b7591ea58",
