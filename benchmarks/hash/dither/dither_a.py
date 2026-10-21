@@ -103,6 +103,7 @@ ZY_KIND = "zy-unit-table"
 # a call's y alone, one hiding leaf a unit (its UR x UC bf16, 0 past m): the served y's table and the units' (the -zy
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
+ZY1_ENV = "DITHER_ZY1"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -363,6 +364,11 @@ class Side:
                                         lab=("y/", f"/{w}")) for w in range(win.L)])
             self.ybad = torch.zeros(win.L, dtype=torch.bool, device=dev)
             self.y_refused: list[dict] = []
+            # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
+            # sets go through one h1c_build in the z tables' place, each table into its own set's buffers
+            self.zy1 = os.environ.get(ZY1_ENV) == "1"
+            if self.zy1:
+                win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
@@ -444,10 +450,12 @@ class Side:
 
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
-        and the units' y tables; `ybad` the calls whose two roots differ (a refused window, RT4-INT-11)."""
+        and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
+        refused window, RT4-INT-11)."""
         win = self.win
-        win.c.build(self.ysset, win.stepv[0:1])
-        win.c.build(self.yuset, win.stepv[0:1])
+        if not self.zy1:
+            win.c.build(self.ysset, win.stepv[0:1])
+            win.c.build(self.yuset, win.stepv[0:1])
         o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
         self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
 

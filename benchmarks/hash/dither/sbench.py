@@ -65,7 +65,8 @@ Arms:
                  receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA), dither-a-hbc
                  -hbr's call from a second receipts-only build (HB_H1U_KC: sbench.sh's HB_KC_FLAGS, a candidate timed beside
                  -hbr in one run and held to its every gate), with its own libh1c.so where DITHER_H1C_KC names one
-                 (sbench.sh's HB_KC_H1C_FLAGS).  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 (sbench.sh's HB_KC_H1C_FLAGS) and its own DITHER_ZY1 where DITHER_ZY1_KC is set (1: -zy's z and y
+                 tables in one h1c_build, `dither_a.ZY1_ENV`).  Each with -zy commits CA's z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
                  builds every call's table between steps),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
@@ -340,6 +341,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         h1c = os.environ["DITHER_H1C"]
         if arm.startswith("dither-a-hbc"):
             h1c = os.environ.get("DITHER_H1C_KC", h1c)
+            if DA.ZY1_ENV + "_KC" in os.environ:
+                os.environ[DA.ZY1_ENV] = os.environ[DA.ZY1_ENV + "_KC"]
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
