@@ -99,7 +99,8 @@ device's commit and the firewall's recheck take the same), each rep's pads in th
 with the table's witness. Under the outer firewall (§10.4) the Lean server reads all of them and the prover only carries
 them: each rep's `flock-firewall frame` draws the rep's `h`, `mu`, `pad_h`, `pad_mu`, `τ`'s salt and the pads tree's salts
 (`Flock.Firewall.Frame.Draws`, in the layout below with the same two products), and `flock-firewall tap` serves every other
-read (the mask slot's words, level 0's hiding, every other tree's salts, the coin tree's nonce: `zk_hooks::set_os_source`).
+read (the mask slot's words, level 0's hiding, every other tree's salts: `zk_hooks::set_os_source`). The coin tree's nonce
+is `flock-firewall hello`'s, drawn with the `Hello` it carries (§10.4).
 The addresses matter only under a test harness's injected seed (feature `seed-injection`), where
 `ProverRng` is ChaCha20 keyed by that seed and `f128s` reads `16n` bytes from byte offset `32·index` of stream `stream`, so
 the harness's proofs repeat. With `base = rep << 32`:
@@ -689,11 +690,13 @@ Before the session's `Commit` the firewall recomputes the level-0 commitment its
 host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
 recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
 without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
-drew. When the device's root differs, the recheck's root leaves in the `Commit` and the session stops at its `Finish`
-(`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps the tree, so
-the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `FIREWALL` lines
-(`t.firewall_recheck` wall seconds, `cpu.firewall_recheck` the process's CPU seconds over it), beside the device's
-`t.encoding_commitment`.
+drew. The root of record is the Lean verifier's: `flock-firewall link` (`Flock.Firewall.Link`) commits the same level 0
+from the same witness words, extra lanes, paddings and salts, beside `commit_zk`, and a table whose two roots differ is
+refused before anything of it leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's root differs, the recheck's
+root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps
+`commit_zk`'s tree, so the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per
+statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's CPU seconds of
+`commit_zk`, `t.lean_link` the Lean link's wall seconds, `rust_root_agrees`), beside the device's `t.encoding_commitment`.
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
@@ -755,7 +758,18 @@ is the shadow's: nothing of the device's returned proof leaves.
 Every round that leaves is computed in Lean, from randomness Lean draws, and the coins' refusals are Lean's. Each rep runs
 one `flock-firewall frame` process (`Flock.Firewall.Frame` in the Lean verifier, `firewall::LeanFrame`; `FC_FIREWALL_LEAN`
 names the binary, by default the Lean verifier's build in the checkout, and the firewall refuses to start a rep without
-it), and the prover one `flock-firewall tap` for its other draws (§2), started before its first draw. The frame's protocol:
+it), and the prover one `flock-firewall tap` for its other draws (§2), started before its first draw.
+
+The session's `Hello` is Lean's too: one `flock-firewall hello` process (`Flock.Firewall.Hello`, `firewall::LeanHello`)
+per session's table count, on the statement's files (`--statement`, `--circuit`, `--public`, `--tables`,
+`--session-tables`), answers each `draw LEN` and the auditor's draw (or `null`) with `ok N` and the `Hello` it sends:
+the session's `SessionConfig` as canonical JSON with a 32-byte coin nonce the command draws from the OS, the Lean
+`CoinLayer.helloJson`. A setup it refuses is answered `refused WHY`, and the session stops before it sends anything.
+`draw LEN NONCE` (the simulator's rewinds, `plan.coin_nonce`) fixes the nonce. `FC_FIREWALL_STATEMENT` names the Lean
+statement (by default the build's, `+seed-injection` under that feature), and `FC_FIREWALL_HELLO_ARGS` adds arguments
+(`--partition F --program F` for a statement whose setup reads them).
+
+The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,
   `n`, `blocks`), nothing else. The frame draws the rep's randomness from the OS (`Draws`) and answers `ok LEN` and the
   draws (`h`, `mu`, `pad_h`, `pad_mu` as 16-byte words, `τ`'s salt, the pads tree's salts) followed by the root it

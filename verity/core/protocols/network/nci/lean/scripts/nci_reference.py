@@ -15,6 +15,13 @@ A primitive is taken as the descriptor declares it, as C-Flock's decoder takes i
 
 `check_desc` refuses as `NciCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
 (`expand`), so the two checks are held to one reference.
+
+    check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
+
+`check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
+prover's registration log, the accepted digests, the run's own record and the program function's parameters), with
+`NciCheck.Baseline`'s codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance
+expanded by `expand_baseline`.
 """
 from __future__ import annotations
 
@@ -144,6 +151,27 @@ def root_nodes(program: str) -> tuple[list[bool], list[bool], list[tuple[int, in
             [(offs[k], offs[k + 1]) for k in range(len(nodes))])
 
 
+#: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
+FUEL = 2 ** 62
+
+
+def walk_bound(program) -> int:
+    """`NciCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
+    member's, once per Definition and multiplied through batches and scans) and the depth `H` they nest to."""
+    from verity.ml.circuits.parts import n_members
+    memo: dict[int, tuple[int, int]] = {}
+
+    def of(fn) -> tuple[int, int]:
+        if not hasattr(fn, "body"):
+            return 0, 0
+        if id(fn) not in memo:
+            subs = [(n_members(n), *of(n.fn)) for n in fn.body.nodes]
+            memo[id(fn)] = (1 + sum(m * a for m, a, _ in subs), 1 + max((h for _, _, h in subs), default=0))
+        return memo[id(fn)]
+    acts, depth = of(program.root)
+    return (acts + 1) * (depth + 2)
+
+
 def expand(inst) -> dict:
     """An instance of `NciCheck.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
     and each gate the owner of its root node. The instance is well-formed as `NciCheck.Desc` reads it."""
@@ -169,6 +197,8 @@ def evaluate_desc(inst) -> dict:
     from verity.ml.circuits.partition_object import order_violation
     if order_violation(program) is not None:
         raise Malformed("not-topological")
+    if walk_bound(program) > FUEL // 2:
+        raise Malformed("program")
     inp, reg, spans = root_nodes(inst["program"])
     K = len(inp)
     seen: set[int] = set()
@@ -204,3 +234,182 @@ def check_desc(inst) -> dict:
         return evaluate_desc(inst)
     except Malformed as e:
         return {"error": e.code}
+
+
+# θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
+
+REGISTRATION_V1 = "verity/registration/v1"
+REGISTRATION_V2 = "verity/registration/v2"
+TRUSTED_KEYS = {"log", "accepted", "run", "params"}
+FORMS = {"registered": {"kind", "registration", "value", "root"}, "output": {"kind", "record", "port", "root"}}
+
+
+def record_digest(rec: dict) -> str:
+    """`registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its canonical JSON."""
+    import hashlib
+    tag = REGISTRATION_V2 if rec.get("format") == REGISTRATION_V2 else REGISTRATION_V1
+    return hashlib.sha512(tag.encode() + b"\0" + codec.canonical_json(rec)).hexdigest()
+
+
+def lower(t) -> list[tuple[int, int]]:
+    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
+    from verity.ml.circuits.types import Array, Record, Tuple
+    ws = t.width_set()
+    if len(ws) == 1:
+        return [(next(iter(ws)), t.leaves)]
+    if isinstance(t, Array):
+        return lower(t.elem) * t.n
+    if isinstance(t, Tuple):
+        return [x for f in t.fields for x in lower(f)]
+    if isinstance(t, Record):
+        return [x for _, f in t.fields for x in lower(f)]
+    return []
+
+
+def owners(program, params) -> list[int | None] | None:
+    """Per root node, the index of the parameter whose input nodes it is one of, when the parameters lower onto the root
+    body's input nodes exactly; None otherwise."""
+    nodes = program.root.body.nodes
+    flat = [(i, wn) for i, (_, t) in enumerate(params) for wn in lower(t)]
+    own: list[int | None] = [None] * len(nodes)
+    at = 0
+    for k, n in enumerate(nodes):
+        if not is_input(n.fn):
+            continue
+        members = n.n if n.form in ("batch", "scan") else 1
+        if at >= len(flat) or flat[at][1] != (n.fn.ret.w, members):
+            return None
+        own[k] = flat[at][0]
+        at += 1
+    return own if at == len(flat) else None
+
+
+def trusted_of(tr) -> dict:
+    """The trusted input: the log with each record's digest (R6's chain), the accepted digests, the run's position, the
+    program function's parameters; `trusted` otherwise."""
+    if not (isinstance(tr, dict) and set(tr) == TRUSTED_KEYS and isinstance(tr["log"], list)):
+        raise Malformed("trusted")
+    digests: list[str] = []
+    for rec in tr["log"]:
+        if not isinstance(rec, dict) or rec.get("previous") != (digests[-1] if digests else None):
+            raise Malformed("trusted")
+        try:
+            digests.append(record_digest(rec))
+        except (ValueError, TypeError) as e:
+            raise Malformed("trusted") from e
+    acc, run, ps = tr["accepted"], tr["run"], tr["params"]
+    if not (isinstance(acc, list) and all(isinstance(a, str) for a in acc) and isinstance(run, str) and run in digests
+            and isinstance(ps, list)):
+        raise Malformed("trusted")
+    params = []
+    for p in ps:
+        if not (isinstance(p, list) and len(p) == 2 and isinstance(p[0], str)):
+            raise Malformed("trusted")
+        try:
+            params.append((p[0], type_from_json(p[1])))
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            raise Malformed("trusted") from e
+    if len({n for n, _ in params}) != len(params):
+        raise Malformed("trusted")
+    return {"log": tr["log"], "digests": digests, "accepted": acc, "run": digests.index(run), "params": params}
+
+
+def last_with(rec: dict, field: str, key: str, value: str):
+    es = rec.get(field)
+    hits = [e for e in es if isinstance(e, dict) and e.get(key) == value] if isinstance(es, list) else []
+    return hits[-1] if hits else None
+
+
+def dims(e: dict):
+    r, w, b = e.get("leaves"), e.get("words"), e.get("word_bits", 16)
+    return (r, w, b) if all(map(_nat, (r, w, b))) else None
+
+
+def provenance(inst, tr, node) -> None:
+    """θ's provenance on an instance the policy check gave a verdict: θ entry t lies in root node node(offsets, θ[t])."""
+    prov = inst.get("provenance")
+    if not (isinstance(prov, list) and len(prov) == len(inst["theta"])):
+        raise Malformed("theta-provenance")
+    for p in prov:
+        if not (isinstance(p, dict) and isinstance(p.get("kind"), str) and p["kind"] in FORMS and set(p) == FORMS[p["kind"]]
+                and all(isinstance(v, str) for v in p.values())):
+            raise Malformed("theta-provenance")
+    T = trusted_of(tr)
+    desc = json.loads(inst["program"])
+    program = codec.decode_program(desc, declared(desc))
+    offs = program.root.body.offsets
+    nodes = program.root.body.nodes
+    own = owners(program, T["params"]) or [None] * len(nodes)
+    counts = [0] * len(T["params"])
+    for k, i in enumerate(own):
+        if i is not None:
+            counts[i] += offs[k + 1] - offs[k]
+    digest = codec.program_digest(desc)
+    run = T["log"][T["run"]]
+    for t, p in zip(inst["theta"], prov, strict=True):
+        k = node(offs, t)
+        output = p["kind"] == "output"
+        D = p["record" if output else "registration"]
+        if D not in T["digests"]:
+            raise Malformed("theta-record-unknown")
+        d = T["digests"].index(D)
+        if d >= T["run"]:
+            raise Malformed("theta-not-earlier")
+        if output and D not in T["accepted"]:
+            raise Malformed("theta-uncertified")
+        src = T["log"][d]
+        e = last_with(src, "roots", "port", p["port"]) if output else last_with(src, "registered", "value", p["value"])
+        if e is None or e.get("root") != p["root"]:
+            raise Malformed("theta-root")
+        if run.get("program") != digest or own[k] is None:
+            raise Malformed("theta-unbound")
+        i = own[k]
+        mine = last_with(run, "registered", "value", T["params"][i][0])
+        if mine is None or mine.get("root") != p["root"]:
+            raise Malformed("theta-unbound")
+        bits = 16 * -(-nodes[k].fn.ret.w // 16)
+        if output:
+            l, m = e.get("leaves"), dims(mine)
+            fits = _nat(l) and m is not None and l == m[0] and m[0] * m[1] == counts[i] and m[2] == bits
+        else:
+            m = dims(e)
+            fits = m is not None and m[0] * m[1] == counts[i] and m[2] == bits
+        if not fits:
+            raise Malformed("theta-width")
+
+
+def _node_of(offs: list[int], g: int) -> int:
+    """The root node holding gate g (`NciCheck.Desc.nodeOf`)."""
+    import bisect
+    return bisect.bisect_right(offs, g) - 1
+
+
+def check_baseline(inst, tr) -> dict:
+    """`NciCheck.Baseline.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
+    out = check_desc(inst)
+    if "error" in out:
+        return out
+    try:
+        provenance(inst, tr, lambda _offs, k: k)
+    except Malformed as e:
+        return {"error": e.code}
+    return out
+
+
+def check_baseline_unrolled(inst, tr) -> dict:
+    """`NciCheck.Baseline.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
+    out = check(inst)
+    if "error" in out:
+        return out
+    try:
+        provenance(inst, tr, _node_of)
+    except Malformed as e:
+        return {"error": e.code}
+    return out
+
+
+def expand_baseline(inst) -> dict:
+    """`expand`, with θ's provenance repeated for every gate of its node."""
+    _, _, spans = root_nodes(inst["program"])
+    prov = [p for k, p in zip(inst["theta"], inst["provenance"], strict=True) for _ in range(*spans[k])]
+    return expand(inst) | {"provenance": prov}

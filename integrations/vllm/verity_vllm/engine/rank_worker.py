@@ -206,8 +206,11 @@ class TP2CaptureWorkerExtension:
     # ------------------------------------------------------------------ topology
 
     def tp2_probe(self) -> dict[str, Any]:
-        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes."""
-        out = _tp_facts(self)
+        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes, and the execution
+        this rank's engine runs, read back from its own `vllm_config` (`effective_execution`)."""
+        from verity_vllm.engine import vllm_adapter as va
+
+        out, model = _tp_facts(self), None
         try:
             model = self.model_runner.get_model()
             shapes = {}
@@ -225,6 +228,7 @@ class TP2CaptureWorkerExtension:
                 out["logits_processor"] = {k: getattr(lp, k, None) for k in ("use_all_gather", "org_vocab_size", "vocab_size")}
         except Exception as e:  # noqa: BLE001
             out["model_error"] = repr(e)
+        out["effective_execution"] = va.effective_execution_doc(_LLMShim(self), model)
         return _jsonable(out)
 
     # ------------------------------------------------------------------ observer
@@ -815,7 +819,12 @@ class TP2CaptureWorkerExtension:
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):
-            sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            from verity_vllm.pipeline.tp.rank_replay import host_slot
+
+            with host_slot(st["replay"], int(st["rank"])) as slot:
+                sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            if slot:
+                sampled_replay["host_slot"] = slot
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],

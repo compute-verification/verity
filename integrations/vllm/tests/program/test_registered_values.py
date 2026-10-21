@@ -126,5 +126,32 @@ def test_target_profile_registered_values_is_declared_true_or_absent():
     assert TargetProfile(registered_values=True).to_json()["registered_values"] is True
     with pytest.raises(ValueError, match="None"):
         TargetProfile(registered_values=False)
-    with pytest.raises(ValueError, match="Boolean"):
-        TargetProfile(registered_values=True, ir="boolean")
+    both = TargetProfile(registered_values=True, ir="boolean").to_json()
+    assert both["registered_values"] is True and both["ir"] == "boolean"
+
+
+def test_derive_registered_values_on_bits_reads_the_values_through_boolean_definitions():
+    """The tiny registered-values serve on bits: every Call has a Boolean version (the norms with eps an input, `Attention_v14`),
+    the lift is σ of the word function, and the `values` parameter is the fields' bits."""
+    import torch
+
+    from verity.ml.circuits import boolean as BL
+    from verity_vllm.program import boolean as BB
+    from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.derive import derive_report
+
+    C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
+    with torch.device("meta"):
+        m = ex.GreedyServe(C, 1)
+    inputs = (torch.empty(3, dtype=torch.int32, device="meta"),)
+    reg = derive_report(m, inputs, mode="profile", profile="b1-eager", config=C, name="Serve", registered_values=True)
+    assert reg.ok, reg.unsupported
+    assert BB.dry_run(reg.program)["gaps"] == []
+    bits = BB.lift(reg.program.fn)
+    assert BB.sigma_check(reg.program.fn, bits)["ok"]
+    called = {n.fn.base_id for n in bits.body.nodes}
+    assert {"RMSNormTriton_v4", "RMSNormFusedCuda_v5", "Attention_v14"} <= called
+    assert all(BL.is_boolean(n.fn) for n in bits.body.nodes if n.fn.base_id in {"RMSNormTriton_v4", "RMSNormFusedCuda_v5",
+                                                                                 "Attention_v14"})
+    (_, values), = [p for p in bits.signature()[0] if p[0] == "values"]
+    assert values == BL.bit_type(dict(reg.program.fn.signature()[0])["values"])

@@ -8,7 +8,9 @@ import Proofs.Flock.Claims.ZK.Split
 `MaskedKS` and `MaskedZK` are `def G : Prop`s in the form of `Flock.Guarantees.EndToEnd`: two claims of
 `Definitions.Claims`, `Claims.Flock.KS` and `Claims.Flock.ZK`, at the deployed masked record of the deployed relation
 (`Flock.Readable.relation`), with SHA-512 as the oracle (`FlockDeploy.sha512`). Their proofs are
-`Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS` and `Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK`.
+`Flock.SecurityProofs.MaskedKS : Flock.Guarantees.MaskedKS` and
+`Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK`. `MaskedZK` holds `Claims.Flock.ZK`'s text in the lock in
+place of `Flock.Guarantees.ClaimsStated`.
 
 C-Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
 proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Models.lean`, which the `security` package
@@ -30,7 +32,8 @@ open Classical in
 /-- **Masked zero knowledge (G2).** `Claims.Flock.ZK` at SHA-512 at the deployed masked record
 (`Claims.ZKMal.zkDeployed`: the deployed coin layer `coin-tree/hm96-sha512/v2`, the deployed relation, and the deployed
 plan's tables: the prover of levels ≥ 1 `PE`, the round plan of `czExe`, `encExe` stopped where a refusal is seen
-(`encStop`) and `finExe`, and the executable's tape plan `UE`), at every rep rounds' coin counts `nr` and every repetition count `0 < t`.
+(`encStop`) and `finExe`, and the executable's tape plan `UE`), at every rep rounds' coin counts `nr` and every
+repetition count `0 < t`.
 Against every malicious verifier, the record's simulator's view is within `ε_zk(x) + γ·Pr[fork]` of the real one, where
 for a statement `x` in scope (`Claims.Flock.Scope` of the masked record)
 $$\varepsilon_{zk}(x) = 8\,n_L(x)\,\delta_1 + 8\,t\,n_L(x)\,\delta_1 + 2 \cdot 3^{-t},$$

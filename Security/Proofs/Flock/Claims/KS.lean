@@ -18,6 +18,15 @@ import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
 import Proofs.Flock.Claims.KS.Mixture
 import Proofs.Flock.Claims.KS.SessionSC
+import Proofs.Flock.Claims.KS.SessionRaw
+import Proofs.Flock.Claims.KS.OffAlign
+import Proofs.Flock.Claims.KS.PlainOff
+import Proofs.Flock.Claims.KS.OffSim
+import Proofs.Flock.Claims.KS.PlainOffLive
+import Proofs.Flock.Claims.KS.PlainOffRd
+import Proofs.Flock.Claims.KS.CapChunk
+import Proofs.Flock.Claims.KS.PlainCapPrefix
+import Proofs.Flock.Claims.KS.PlainQueried
 import Proofs.Flock.Claims.KS.PlainBound
 import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.KS.PlainKS
@@ -68,6 +77,7 @@ import Proofs.Flock.Claims.KS.PlainClashLater
 import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
 import Proofs.Flock.Claims.KS.PlainForkClash
+import Proofs.Flock.Claims.KS.PlainCapsDep
 import Proofs.Flock.Claims.KS.ForkAlign
 import Proofs.Flock.Claims.KS.SlotDist
 import Proofs.Flock.Claims.KS.RepDist
@@ -79,6 +89,9 @@ import Proofs.Flock.Claims.KS.SimLead
 import Proofs.Flock.Claims.KS.PlainLead
 import Proofs.Flock.Claims.KS.PlainLive
 import Proofs.Flock.Claims.KS.PlainLeafKS
+import Proofs.Flock.Claims.KS.PlainRawL
+import Proofs.Flock.Claims.KS.PlainRdRun
+import Proofs.Flock.Claims.KS.PlainKSLin
 import Proofs.Flock.Claims.KS.ZkPlanJ
 import Proofs.Flock.Claims.KS.ZkPlanHJ
 import Proofs.Flock.Claims.KS.ZkDrawJ
@@ -140,6 +153,7 @@ import Proofs.Flock.Claims.KS.SlotDistOn
 import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.KS.ZkUntrim
 import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.KS.ZkOuter
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -627,4 +641,8 @@ on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy
 lane no trace one agreement short of its radius has there, which Johnson's bound leaves room for in GF(2^128), so the
 table still does not extract (`ZkExtend`: `Claims.GS.exists_avoid`, `FlockDeploy.KS.zk_fill_step`,
 `FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds with no premise too
-(`FlockDeploy.KS.zk_KS_untrim`). -/
+(`FlockDeploy.KS.zk_KS_untrim`). The chain reads the verifier only through its setup (`FlockDeploy.KS.ZkSetup`), and
+its setup-dependent part is restated over one (`FlockDeploy.KS.Gen`), `deployZk`'s at `FlockDeploy.KS.S₀`. At the
+recursion's outer setup (`FlockDeploy.KS.SO`: the recursive setup, and the verdict's last refusals after the checks)
+the chain's instance is the outer verifier's record (`ZkOuter`: `FlockDeploy.KS.deployZk_SO`), so masked KS holds
+there with no premise (`FlockDeploy.KS.zk_KS_outer`). -/

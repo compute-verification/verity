@@ -61,8 +61,12 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
-  serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
+  challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
+  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
+  any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
+  before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
+  Python's generator.  A window's registration names its
   pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
@@ -88,7 +92,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
-  beside the certifier's key and run id), so a record the prover signs under its own key is refused (``coin-key``).
+  beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
+  and refuses any key whose SHA-512 isn't `CHALLENGER_KEY_SHA512`), so a record the prover signs under its own key is
+  refused (``coin-key``).
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  A
   certified window's units are opened under the salt its pass was checked against (`Challenger.check`,
@@ -122,6 +128,7 @@ from verity.ml.randomness import Key, derive
 from verity.core.protocols.certifier.active import RUN_ID_BYTES
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.circuit import pc8
@@ -152,7 +159,9 @@ BUDGET = 1
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
 #: the window's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
-#: clock from the epoch's salt coin's release, unless ``params --registration-deadline`` gives another: an hour
+#: clock from the epoch's salt coin's release: the challenger's ``salt`` request, which opens that coin (drawn when the
+#: challenger process started, from the Lean verifier's coins or ``--state``) after the weights' root.  Unless
+#: ``params --registration-deadline`` gives another: an hour
 REGISTRATION_DEADLINE = 3600.0
 NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
                "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
@@ -250,10 +259,10 @@ def law_of(params: dict, ell: int) -> dict:
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
-    (seconds on the challenger's clock from the epoch's salt coin's release, `Pouw.AcceptsBy`'s td), and parameters
-    without one raise `ValueError` (`NO_DEADLINE`) unless `predates_deadline`, a recorded window's replay, or they are a
-    certified window's (`certified`), which the certifier's reveal deadline bounds.  Its proof deadline is
-    ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
+    (seconds on the challenger's clock from the epoch's salt coin's release, the ``salt`` request that opens it,
+    `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters without one raise `ValueError` (`NO_DEADLINE`)
+    unless `predates_deadline`, a recorded window's replay, or they are a certified window's (`certified`), which the
+    certifier's reveal deadline bounds.  Its proof deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
     if params.get("registration_deadline") is None and not (predates_deadline or certified(params)):
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
@@ -288,6 +297,39 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
+#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
+#: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
+CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
+CHALLENGER_KEY_SCHEMA = "challenger-key/v1"
+CHALLENGER_KEY_FORM = (f"the challenger key's pin is a {CHALLENGER_KEY_SCHEMA} record {{H, W, pubkey, pubkey_sha512, "
+                       "schema, ...}}: the key's parameters, its public key in lowercase hex and that public key's SHA-512")
+NOT_PINNED = (f"the challenger key record's public key is not the one pinned ({CHALLENGER_KEY_PIN}, SHA-512 "
+              f"{CHALLENGER_KEY_SHA512[:8]}…)")
+
+
+def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
+    """The verifier's challenger key, read from infra's published pin (`CHALLENGER_KEY_PIN`, fetched from the store
+    unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
+    SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
+    if record is None:
+        from research.store.local import LocalStore  # noqa: PLC0415  only the verifier's own reading fetches
+        record = LocalStore().fetch(CHALLENGER_KEY_PIN)
+    try:
+        doc = json.loads(Path(record).read_bytes())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{CHALLENGER_KEY_FORM}: {e}") from None
+    pub = doc.get("pubkey") if isinstance(doc, dict) else None
+    if not (isinstance(doc, dict) and doc.get("schema") == CHALLENGER_KEY_SCHEMA and isinstance(pub, str)
+            and len(pub) % 2 == 0 and all(c in "0123456789abcdef" for c in pub)):
+        raise ValueError(CHALLENGER_KEY_FORM)
+    public = bytes.fromhex(pub)
+    if not (hashlib.sha512(public).hexdigest() == CHALLENGER_KEY_SHA512 == doc.get("pubkey_sha512")):
+        raise ValueError(NOT_PINNED)
+    try:
+        return Ch.ChallengerKey(doc.get("W"), doc.get("H"), public)
+    except Ch.CoinError as e:
+        raise ValueError(f"{CHALLENGER_KEY_FORM}: {e}") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,9 +338,10 @@ class Deployment:
     the only ones whose answers the challenger takes (its client, `certifier.active.RemoteCertifier`, must be for them,
     and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the window's
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
-    signs over coins it holds is read."""
+    signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give all three; nothing writes it yet, so the caller does.
+    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # the caller does.
     certifier_key: Any
     run_id: bytes
     challenger_key: Ch.ChallengerKey
@@ -309,6 +352,11 @@ class Deployment:
                 and type(self.run_id) is bytes and len(self.run_id) == RUN_ID_BYTES
                 and isinstance(self.challenger_key, Ch.ChallengerKey)):
             raise ValueError(DEPLOYMENT_FORM)
+
+    @classmethod
+    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path | None = None) -> Deployment:
+        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record` or the store)."""
+        return cls(certifier_key, run_id, pinned_challenger_key(record))
 
 
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
@@ -1366,7 +1414,8 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, their commitment published to LOG/coins.json before any request; then
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (a window that ends before its outcome keeps them there); it ends at end of input or
@@ -1380,7 +1429,7 @@ def cmd_challenger(a) -> int:
         from e2e import state_entropy
         coins = Coins(a.epoch, state_entropy(a.state))
     else:
-        coins = Coins(a.epoch)
+        coins = Coins(a.epoch, PV.coins)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
                     record=OR.Record(lean=False if a.python_record else None))
@@ -1459,7 +1508,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     that coin's (``resalted``)."""
     o = opening
     if case == "foreign":
-        o = Coins(coins.epoch).open("salt", opening.after)
+        o = Coins(coins.epoch, PV.coins).open("salt", opening.after)
     elif case == "early":
         o = CoinOpening(o.epoch, o.label, bytes(len(o.after)), o.coin, o.salt, o.path)
     elif case == "mislabelled":
@@ -1560,7 +1609,10 @@ def main(argv=None) -> int:
     p.add_argument("--max-tokens", type=int, default=MAX_TOKENS,
                    help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
     p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
-                   help="seconds on the challenger's clock from the salt coin's release (default: REGISTRATION_DEADLINE)")
+                   help="td: seconds on the challenger's clock from the salt coin's release, when the challenger's `salt` "
+                        "request opens it after the weights' root; the coin itself was drawn when the challenger process "
+                        "started, from the Lean verifier's coins (pouw.verifier.coins) or --state (default: "
+                        "REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)
@@ -1582,7 +1634,9 @@ def main(argv=None) -> int:
                                   "(default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
     p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins drew "
-                                   "from (serve.sh's $WORK/coin-state/<run id>); default: fresh from os.urandom")
+                                   "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
+                                   "before serving); default: fresh from the Lean verifier of record when this process "
+                                   "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):

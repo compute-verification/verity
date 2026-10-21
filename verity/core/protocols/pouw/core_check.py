@@ -37,9 +37,14 @@ before it drew that salt (`salt.committed`).  `recorded_reason` is that last rul
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
-(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
-coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
+and a replay of a recorded draw `COIN_EARLY` too.  `salt` is the rule on a live window's salt coin: under the
+challenger's live coin commitment, it opened once, after the window's open root, which the verifier recomputes from the
+window's record and its session (`salt.window_open_root`), and the root the auditor's gate opened that session on.
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger opens
+and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the prover
+hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and the round
+roots are the ones its signed log shows it received.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -79,9 +84,11 @@ VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: one-stage's served domain (`registration.served_domain`), the window root's
 SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
-#: a tile proof's first two rows, in its header's key order: its A row and its B row, each side's fp8-p row schema
+#: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
+#: the ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s ``in_rows``)
+PC8_PORTS = ("a0", "b0")
 SALT_BYTES = 192
 BC_BYTES = 128
 ROW_V2 = "hm96-sha512/row/v2"
@@ -679,6 +686,12 @@ def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
     return None
 
 
+def _ports(lay: Salted | None) -> list[str]:
+    """The side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. C-Flock reads
+    port k's b ‖ c at the body's k-th place, in the order of the circuit's ports, not of the header's keys."""
+    return list(PC8_PORTS) if lay is None else [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)]
+
+
 def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
     """A salted unit's n rows of one side, ``[{"index", "path"}, …]``, or None."""
     if not (isinstance(o, list) and len(o) == n and all(isinstance(x, dict) for x in o)):
@@ -693,8 +706,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     not (`served_commit.check`).  `units` is the draw's (None for a unit opened undrawn, the filler's); `op` the prover's
     opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
     its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
-    first two rows, in its header's key order (serde's, as C-Flock reads it), are its A row and its B row, and its body
-    starts with their b ‖ c.
+    A row and B row are its circuit's first two ports, ``a0`` and ``b0`` (`PC8_PORTS`), whose schemas the header names,
+    and its body starts with their b ‖ c.  The header's keys, in its key order (serde's), list the opened side rows
+    first and in port order (`_ports`): a header that orders them otherwise is refused, never read in its own order.
 
     `salt` is a certified window's salt (`certified_salt`), and a certified window opens only a salted template's units
     (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
@@ -760,17 +774,20 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
+    ports = _ports(lay)
     if lay is None:
-        if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
+        if not isinstance(s, dict) or [s.get(x) for x in ports] != [schema for _, schema in OPENED]:
             return "the proof's first rows are not an A row and a B row of the registered schemas"
         if len(body) < 2 * BC_BYTES:
             return "the proof's body holds no A row and B row"
     else:
-        names = [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)] + ["pub"]
+        names = ports + ["pub"]
         if not isinstance(s, dict) or any(s.get(x) != ROW_V2 for x in names):
             return f"the proof's rows {', '.join(names)} are not {ROW_V2} rows"
         if len(body) < (lay.r + lay.c + 1) * BC_BYTES:
             return "the proof's body holds no A rows, B rows and public row"
+    if sorted(s)[:len(ports)] != ports:
+        return f"the proof's header does not list its rows {', '.join(ports)} first, in its circuit's port order"
     k = 0
     for side, schema in OPENED:
         sdom = Wd.side_domain(dom.domain_id, side)
@@ -1219,17 +1236,66 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
-# ---- a live window's round coins ---------------------------------------------------------------------------------------
+# ---- a live window's salt and round coins -----------------------------------------------------------------------------
 
-def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
-    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
-    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
-    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
-    and why)."""
+SALT_FORM = ("the session's open root, the window's weights' root and its round-0 request table's root are not SHA-512 "
+             "digests, or the session is not a gate's session id")
+OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_root of its weights' root, its round-0 "
+                "request table's root and the session")
+NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
+
+
+def salt(coins: Any, session: Any, root: Any, weights_root: Any, requests_root: Any, received: Any, opening: Any
+         ) -> tuple[str, str] | None:
+    """None when `opening` is a live window's salt coin, opened after the window's own open root: under `coins`, the
+    challenger's live coin commitment (its JSON, `challenger.LiveCommitment`, a live epoch's), `root`, the root the
+    auditor's signed open entry opened session `session` on (hex; `session` the id its signed reserve entry names), is
+    `salt.window_open_root` of the window's weights' root `weights_root` and its round-0 request table's root
+    `requests_root` (hex, from the window's record) and that session; `received`, the roots the session's signed log shows
+    its salt coin followed (hex), is that root alone; and `opening` is the epoch's ``pouw/salt`` coin 0 opened after it
+    (`challenger.live_reason`). Else the refusal (``coin`` or ``salt``, and why). A session opened for one window's
+    weights and requests salts no other window, and a window salted in one session passes under no other."""
     try:
         c = Ch.LiveCommitment.from_json(coins)
     except Ch.CoinError as e:
         return "coin", f"the verifier's coins are malformed: {e}"
+    why = Wd.live_epoch_reason(c)
+    if why is not None:
+        return "coin", why
+    hexes = [bytes.fromhex(x) if _str(x) and _DIGEST.fullmatch(x) else None for x in (root, weights_root, requests_root)]
+    if None in hexes or not (_str(session) and PS.SESSION.fullmatch(session)):
+        return "salt", SALT_FORM
+    r, w, t = hexes
+    if PS.window_open_root(w, t, session) != r:
+        return "salt", OTHER_WINDOW
+    if received != [root]:
+        return "salt", NOT_RECEIVED
+    try:
+        o = Ch.LiveOpening.from_json(opening)
+    except Ch.CoinError as e:
+        return "coin", f"the salt's {e}"
+    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
+    return None if why is None else ("coin", f"the salt's {why}")
+
+
+def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
+           ) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins, read through the challenger's own session and never a
+    commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
+    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
+    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
+    `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
+    the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
+    and why)."""
+    try:
+        k = Ch.ChallengerKey.from_json(key)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's challenger key is malformed: {e}"
+    try:
+        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
         return "rounds", "the round roots are not a list of SHA-512 digests"
     if not isinstance(openings, list):
@@ -1240,8 +1306,13 @@ def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
             os_.append(Ch.LiveOpening.from_json(o))
         except Ch.CoinError as e:
             return "coin", f"round coin {i}: {e}"
-    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
-    return None if why is None else ("coin", why)
+    rs = tuple(bytes.fromhex(r) for r in roots)
+    why = Wd.rounds_reason(c, list(rs), os_)
+    if why is not None:
+        return "coin", why
+    if received.get(Wd.ROUND, ()) != rs:
+        return "rounds", "the round roots are not the roots the challenger's log shows it received, in order"
+    return None
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -1288,4 +1359,4 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
            "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
            "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
-           "rounds", "unit_draw", "verify_path", "window_domain"]
+           "rounds", "salt", "unit_draw", "verify_path", "window_domain"]

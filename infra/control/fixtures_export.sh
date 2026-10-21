@@ -20,5 +20,19 @@ while :; do
       python3.12 -m research data export --store /data/infra/fixtures-export-store --repo "$REPO" --jobs 16
   ) >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
+  # Then the registry of origin/next (drive's stack of admitted PRs), with main's code: a fixture an admitted PR registers is
+  # public before its train fetches it, not only once it lands. Up to one pass (5 min) after a PR joins next.
+  (
+    W=/data/infra/fixtures-export-next
+    git -C "$REPO" fetch -q origin next || exit 1
+    git -C "$REPO" worktree remove --force "$W" 2>/dev/null; rm -rf "$W"
+    git -C "$REPO" worktree add -q --detach "$W" FETCH_HEAD || exit 1
+    echo "next $(git -C "$W" rev-parse --short HEAD)"
+    set -a; . /root/.config/verity/r2.env; set +a
+    cd "$REPO/tools/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET="$(grep -o 'RESEARCH_EXPORT_BUCKET=[^ ]*' "$0" | head -1 | cut -d= -f2)" \
+      timeout 3000 python3.12 -m research data export --store /data/infra/fixtures-export-store --repo "$W" --jobs 16
+    rc=$?; git -C "$REPO" worktree remove --force "$W"; exit $rc
+  ) >> "$LOG" 2>&1
+  echo "$(date -u +%FT%TZ) next pass rc=$?" >> "$LOG"
   sleep 300
 done

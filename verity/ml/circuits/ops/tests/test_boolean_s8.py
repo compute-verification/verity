@@ -1,5 +1,5 @@
 """`verity.ml.circuits.ops.boolean.s8`: the Boolean s8 IMMA steps (`ops.boolean.gemm`'s s8 step and this module's u8 x s8 one),
-`S8Dot_v2`, the limb steps and `LimbSplit_v2` agree with their word Definitions (`word_of`) on sampled words and on the clamp,
+`S8Dot_v2`, `S8Matmul_v2`, the limb steps and `LimbSplit_v2` agree with their word Definitions (`word_of`) on sampled words and on the clamp,
 carry and wrap edges, and this module's steps carry exactly their builders' live ANDs, pinned."""
 from __future__ import annotations
 
@@ -99,6 +99,19 @@ def test_the_family_on_bits_agrees_with_its_word_definition(target) -> None:
             inputs.append(rng.integers(-lim, lim + 1, (n, t.n)).astype(np.int64).astype(np.uint8))
     _agree(target, inputs)
     assert TR.word_of(target).id == target.id.replace("S8Dot_v2", "S8Dot_v1").replace("ImmaDot32_v2", "ImmaDot32_v1")
+
+
+def test_the_matmul_on_bits_agrees_with_its_word_definition() -> None:
+    """`S8Matmul_v2` at N = 3 on the plain arm: uniform codes, and rows of ±127 against columns of ±127 (the largest sums)."""
+    target = bind(BS8.S8Matmul, N=3, **S8.SMOKE_PLAIN | BOOLEAN)
+    assert TR.word_of(target).id == target.id.replace("S8Matmul_v2", "S8Matmul_v1").replace("ImmaDot32_v2", "ImmaDot32_v1")
+    rng = np.random.default_rng(43)
+    n, k = 1_000, target.bindings["K"]
+    a = rng.integers(-127, 128, (n, k)).astype(np.int64).astype(np.uint8)
+    b = rng.integers(-127, 128, (n, 3, k)).astype(np.int64).astype(np.uint8)
+    a[:100], b[:100] = 0x7F, 0x7F
+    a[100:200], b[100:200] = 0x81, 0x7F
+    _agree(target, [a, b])
 
 
 def test_a_word_step_is_refused_on_bits_and_a_boolean_one_on_words() -> None:

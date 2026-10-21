@@ -142,7 +142,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     o = out / f"k{pt['K']}-c{c}-k{k}" / f"{arm}-{mode}{rep}"
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
-    env = {"FC_HOST_WITNESS": "1", "FC_FIREWALL": "1" if arm == "fw" else "0"}
+    env = {"FC_HOST_WITNESS": "1", "FC_FIREWALL": "1" if arm == "fw" else "0",
+           **(a0.firewall_env({"partition_file": sd / "partition.json", "program_file": sd / "program.json"}) if arm == "fw" else {})}
     serve_log = open(o / "serve.log", "w")
     serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", str(d / f"pub-{c}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"),

@@ -2,24 +2,44 @@
 prover and the verifier of `run.py` share.
 
 * **The unit** is `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C, PAIRS=the full grid}`, the
-  Definition the compile pass binds for an s8 grid tile (`h1tile._Unit`). Its statement (`stager`): input rows ``a0..a{R-1}``
+  Definition the compile pass binds for an s8 grid tile (`h1tile._Unit`), and the statement's Definition is the window's
+  template at K (`Shape.definition`, `h1window.template`: one call of the unit, its A and B rows ``a_k<K>`` and
+  ``b_k<K>``). Its statement (`stager`): input rows ``a0..a{R-1}`` (``a_k<K>[i]``, `ports`)
   and ``b0..b{C-1}``, one ``hm96-sha512/row/v2`` bit row per A row and B row (8 K bits, the int8 codes' bytes), the public
-  row ``pub`` (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and its seed group's
-  roots), and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words),
-  each one ``row/v2`` row of exactly its words.
+  row ``pub`` (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and the window's roots),
+  and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words), each one
+  ``row/v2`` row of exactly its words.
 * **The public row** stands for public input ports, which the Lean verifier refuses as a form its soundness proof does
   not cover (`ProvedScope.statementRules`). Its hm96 salt is public (`pub_salt`), so the verifier computes the row's
   ``b || c`` from its own salt, position and roots, and its public file binds the proof to them; its content is public, so
   the public salt hides nothing that needed hiding.
 * **The window's commitments** are those rows' ``b || c`` (hm96-sha512 under the committer's salts) as frame-v3-sha512
-  leaves (`rowleaf.row_leaf`) of one tree per side and call (A rows, B rows) and one per output (z, receipt) over the
-  window's tiles. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
-  META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its
-  rows and salts are the committed ones.
+  leaves (`rowleaf.row_leaf`) of four trees: ``a``, the window's A rows (the activations every call reads) in a slot of
+  `slot` rows, the token rows padded with zero rows; ``b``, every call's B rows (the model's), call after call; and ``z``
+  and ``receipt`` over the window's tiles. ``a`` and ``b`` are the registered values ``a/<K>`` and ``b/<K>`` of the
+  window's Program (`register`: `registered.Registered.commit` under the Program's digest, ``row/v2`` rows of K/2 16-bit
+  leaves), so the Lean verifier opens every A and B row a statement reads against their roots; ``z`` and ``receipt``
+  are the window's own trees (`domain`), opened outside the proof. The roots are the window's ``(root(a), root(b))``,
+  every unit's ``roots`` input. `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the
+  statement's META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves
+  exactly when its rows and salts are the committed ones.
+* **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit
+  (the smoke's `TILE`, 4 × 8), each call its own linear at K, every call reading the one A block (the slot), its
+  parameters ``a/<K>`` and ``b/<K>`` the trees ``a`` and ``b``; unit u is the tile `window.py` numbers u, and its outputs
+  row u of ``z`` and ``receipt``. Its `Q_template_instances` partition derives the units, and the statement binds it
+  (`Shape.stager`'s ``bind``), so the Lean verifier derives each instance's unit from its own copy of the program
+  (``--program``, ``--partition``) and the indices the public file states, and `unit_reads` is the row of each tree each
+  of the unit's ports reads. The slot is the window's size class and the calls' B rows the model's, so the layout is
+  protocol structure and the real token count stays the prover's. Each circuit port reads one tree in every unit, as a
+  registered port reads one value.
 * **The verifier's public file** (`verifier_pub`) is built from the opened leaves and the verifier's own public row alone:
-  the statement's header (its circuit pin, each port's frame-v3 root over those ``b || c``) and the ``b || c``. Lean
-  ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows are the window's and whose
-  salt, position and roots are the verifier's.
+  a shared-row file (`circuit.write`'s), its header the statement's (its circuit pin, its units' global indices, each
+  port's frame-v3 root over its table's ``b || c``) with each A and B port's table the registered rows its units read
+  (``registered``: their positions, the verifier's own, and the opened paths), then the ``b || c`` and each unit's refs.
+  Lean ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows are the window's and
+  whose salt, position and roots are the verifier's; with ``--registered`` (`registered_reads`, the verifier's own reads
+  from its Program) it also opens each A and B row against the registered root at the position the verifier's Program
+  reads.
 """
 from __future__ import annotations
 
@@ -36,7 +56,9 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -46,6 +68,16 @@ PUB_BITS = 512 + 64 + 1024
 SALT_TAG = b"verity/pouw/h1-prove/salt/v0\0"
 PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
+
+
+def tile() -> str:
+    """The unit's Definition: ``H1_TILE`` v1 (`h1tile.PouwH1Tile`, z the exact A Bᵀ) or v3 (`h1tile.PouwH1Tile3`, the one
+    stream: z = O' - sum_d 128^d D_d of the folded words, with its wrap correction and dither peel; A Bᵀ too)."""
+    import os
+    t = os.environ.get("H1_TILE", "v1")
+    if t not in ("v1", "v3"):
+        raise ValueError(f"H1_TILE={t!r}: v1 or v3")
+    return t
 
 
 def unit_salt(coin: bytes) -> bytes:
@@ -58,13 +90,136 @@ def pub_salt(window: str, position: int) -> bytes:
     return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
 
 
+#: the smoke's R × C tile (the served path's is 32 × 32, `pouw_h1.TILE`)
+TILE = (4, 8)
+
+
+def slot(rows: int, tile: tuple[int, int] = TILE) -> int:
+    return HW.slot(rows, tile)
+
+
+def window_shape(com: dict) -> tuple[tuple[tuple[str, int], ...], int]:
+    """A window commitment's public shape: its calls' names and B rows, and its A slot."""
+    return tuple((c["name"], int(c["n"])) for c in com["calls"]), int(com["slot"])
+
+
+def window_roots(com: dict) -> tuple[bytes, bytes]:
+    """A window commitment's roots (root(a), root(b)), every unit's ``roots`` input."""
+    return bytes.fromhex(com["root_a"]), bytes.fromhex(com["root_b"])
+
+
+#: the statement's output rows, by `h1window.unit_reads`' keys
+OUT_PORTS = {"z": "o0", "receipt": "o1"}
+
+
+def ports(template) -> dict[str, str]:
+    """The statement's port of each row a unit of ``template`` (the window's at its K, `h1window.template`) reads, by
+    `h1window.unit_reads`' and `registered.reads`' keys (its parameters' ``a_k<K>[i]`` and ``b_k<K>[j]``): A row i's
+    ``a<i>``, B row j's ``b<j>``."""
+    (a, at), (b, bt) = template.signature()[0][:2]
+    return {**{f"{a}[{i}]": f"a{i}" for i in range(at.n)}, **{f"{b}[{j}]": f"b{j}" for j in range(bt.n)}}
+
+
+def window_ports(program) -> dict[str, str]:
+    """`ports` of the window ``program``'s template: the statement is one K's circuit, so a window of two K's is refused."""
+    tiles = program.fn.bindings["TILES"]
+    if len(tiles) != 1:
+        raise ValueError(f"h1_prove's statement is one K's circuit; the window has K = {[k for k, _t in tiles]}")
+    return ports(tiles[0][1])
+
+
+def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
+    """`h1window.unit_reads` by the statement's ports (`window_ports`, `OUT_PORTS`; ``salt``, ``position`` and ``roots``
+    the public row's), each read's parameter by the tree that commits it (``a/<K>`` the tree ``a``, ``b/<K>`` the tree
+    ``b``)."""
+    port = {**window_ports(program), **OUT_PORTS}
+    return {port.get(key, key): (param.split("/")[0], row) for key, (param, row) in HW.unit_reads(program, tp, u).items()}
+
+
+# -- the registered trees a and b -------------------------------------------------------------------------------------------
+
+
+def value(tree: str, k: int) -> str:
+    """The window Program's parameter that tree ``a`` or ``b`` registers: ``a/<K>``, ``b/<K>``."""
+    return f"{tree}/{int(k)}"
+
+
+def register(program: str, name: str, codes: np.ndarray, salts) -> G.Registered:
+    """A window's rows of the registered value ``name`` (int8 code rows, each as its bit row's K/2 words, `row_words`),
+    committed under the window Program's digest ``program`` in the tile's ports' format (``row/v2``, 16-bit leaves) with
+    one of ``salts`` a row."""
+    return G.Registered.commit(program, name, row_words(codes).tolist(), [bytes(s) for s in salts], G.WORD_BITS, V2)
+
+
+def registered_domain(program: str, name: str, k: int, leaves: int) -> CommitmentDomain:
+    return G.domain(program, name, int(k) // 2, int(leaves))
+
+
+def registered_levels(program: str, name: str, k: int, bcs: list[bytes]):
+    """The registered tree of ``name``'s rows ``b || c`` (`register`'s, from its ``bcs`` alone)."""
+    dom = registered_domain(program, name, k, len(bcs))
+    return tree_levels(dom, [G.leaf(dom, i, bc, V2) for i, bc in enumerate(bcs)])
+
+
+def verify_registered(program: str, name: str, k: int, leaves: int, root: bytes, index: int, bc: bytes,
+                      sibs: list[str]) -> bool:
+    """``bc`` is row ``index`` of the registered value ``name`` under ``root``: the check flock-verify ``--registered``
+    makes of each table row (`registered.verify_read`)."""
+    return G.verify_read(registered_domain(program, name, k, leaves), root, index, bc, bytes.fromhex("".join(sibs)), V2)
+
+
+def registered_reads(program, query, roots: dict[str, str]) -> dict:
+    """The verifier's ``--registered`` file of a window (flock-verify ``verify --zk --registered``): for each A and B port
+    (`window_ports`), the registered value it reads (``roots``: ``{a/<K>: root, b/<K>: root}``, the window's), the value's
+    rows, width and domain, and the row each unit of the verifier's own Program reads (`registered.reads_file` over
+    ``program`` and ``query``, the window's). The one place h1_prove derives it: `served.register_served` takes its place
+    once it reads ``row/v2`` trees."""
+    return G.reads_file(program, query, {v: int(v.split("/")[1]) // 2 for v in roots}, roots, ports=window_ports(program),
+                        schemas={v: V2 for v in roots})
+
+
+def table(positions) -> tuple[list[int], list[int], list[int]]:
+    """A registered port's shared-row table over its instances' positions (`registered.table`): the table's positions,
+    each instance's ref into it, and the first instance that reads each table row."""
+    tpos, refs = G.table([int(p) for p in positions])
+    first: dict[int, int] = {}
+    for i, r in enumerate(refs):
+        first.setdefault(r, i)
+    return tpos, refs, [first[t] for t in range(len(tpos))]
+
+
+def statement_tables(z: dict, in_ports: list[str], out_ports: list[str], k: int) -> dict:
+    """The prover's shared-row statement of `window.py open`'s rows ``z`` (its rows.npz): each registered port's table
+    (``r_<port>``, the rows' positions) the distinct positions its instances read in first-read order (`table`), under
+    their registered salts and opened paths (``p_<port>``), and every other input port's one row per instance; as
+    `UnitStager.stage` takes them: ``tables``, ``refs``, ``salts`` (every port's, one per table row) and ``registered``."""
+    n = len(z["units"])
+    tables, refs, salts, registered = {}, {}, {}, {}
+    for p in in_ports:
+        w, s = np.asarray(z[f"w_{p}"], np.uint16), [bytes(x) for x in z[f"s_{p}"]]
+        if f"r_{p}" not in z:
+            tables[p], refs[p], salts[p] = w, list(range(n)), s
+            continue
+        tpos, refs[p], first = table(z[f"r_{p}"])
+        paths = [str(x) for x in z[f"p_{p}"]]
+        for i, t in enumerate(refs[p]):
+            j = first[t]
+            if (s[i], paths[i]) != (s[j], paths[j]) or not np.array_equal(w[i], w[j]):
+                raise ValueError(f"port {p}: instances {j} and {i} read position {tpos[t]} as two rows")
+        tables[p], salts[p] = w[first], [s[j] for j in first]
+        registered[p] = {"value": value(p[0], k), "positions": tpos, "paths": [paths[j] for j in first]}
+    for p in out_ports:
+        salts[p] = [bytes(x) for x in z[f"s_{p}"]]
+    return {"tables": tables, "refs": refs, "salts": salts, "registered": registered}
+
+
 @dataclass(frozen=True)
 class Shape:
     """One H1 tile unit's shape: R A rows and C B rows at contraction K."""
 
     k: int
-    r: int = 4
-    c: int = 8
+    r: int = TILE[0]
+    c: int = TILE[1]
 
     @cached_property
     def layout(self):
@@ -89,20 +244,31 @@ class Shape:
         return ([FC._port(n, self.k // 2, 8 * self.k) for n in self.in_rows] + [FC._port("pub", PUB_BITS // 16, PUB_BITS)]
                 + [FC._port("o0", self.z_words, 16 * self.z_words), FC._port("o1", self.receipt_words, 16 * self.receipt_words)])
 
-    def definition(self):
-        from verity.ml.circuits.defs import bind
-        from verity.ml.circuits.ops.boolean import gemm as BG
+    def unit(self):
+        """The tile unit (`h1window.tile_unit`, v1 or v3 by `tile`)."""
         from verity.core.protocols.pouw.circuit import h1tile as H
-        exact = bind(BG.GemmAccumulatorS8, K=self.k, **BG.GEMM_SM120_S8)
-        return bind(H.PouwH1Tile, EXACT=exact, R=self.r, C=self.c,
-                    PAIRS=tuple((i, j) for i in range(self.r) for j in range(self.c)))
+        return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
 
-    def stager(self, name: str, circuit=None):
-        """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``."""
+    def definition(self):
+        """The statement's Definition: the window's template at K (`h1window.template`, one call of `unit`), the one its
+        partition lists."""
+        return HW.template(self.k, self.unit())
+
+    def window(self, calls, m: int):
+        """The window's public Program (`h1window.program` over this unit: its ``calls`` ``(name, B rows)``, each its own
+        linear at K, all reading the one A block of slot ``m``) and its `Q_template_instances` query."""
+        program = HW.program([(name, self.k, n) for name, n in calls], [(name, 0) for name, _n in calls], m,
+                             (self.r, self.c), unit=lambda _k: self.unit())
+        return program, HW.query(program)
+
+    def stager(self, name: str, circuit=None, bind: dict | None = None):
+        """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to
+        ``bind`` (``{"partition", "program"}``: the window's partition and Program, `Shape.window`)."""
         from verity_flock import class_statement as CS
-        in_rows = ([(f"a{i}", V2, 8 * self.k, [f"a[{i}]"]) for i in range(self.r)]
-                   + [(f"b{j}", V2, 8 * self.k, [f"b[{j}]"]) for j in range(self.c)] + [("pub", V2, PUB_BITS, list(PUBLIC))])
-        return CS.UnitStager(self.definition(), name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit)
+        template = self.definition()
+        reads = {port: key for key, port in ports(template).items()}
+        in_rows = [(p, V2, 8 * self.k, [reads[p]]) for p in self.in_rows] + [("pub", V2, PUB_BITS, list(PUBLIC))]
+        return CS.UnitStager(template, name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------
@@ -170,14 +336,15 @@ def leaves_one(dom: CommitmentDomain, index: int, bc: bytes) -> bytes:
 # -- the verifier's public file ---------------------------------------------------------------------------------------------
 
 def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> dict:
-    """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row)."""
+    """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row) of ``n`` instances,
+    each port's tree over its table's rows."""
     from verity_flock import circuit as FC
     from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
     from verity.ml.commitments.frame_v3 import Port as FPort
     bind, doms = {}, {}
     for p in ports:
         bind[p.name] = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name, "lo": 0, "hi": int(n), "port": p.name, "schema": p.schema})
-        doms[p.name] = CommitmentDomain(bind[p.name], FC.OWNER, RangeIndexedDomain(0, n), hash="sha512")
+        doms[p.name] = CommitmentDomain(bind[p.name], FC.OWNER, RangeIndexedDomain(0, len(bcs[p.name])), hash="sha512")
     fv = FrameV3({p.name: FPort(doms[p.name], BitRowLeaf(p.bits) if p.seg else p.leaf()) for p in ports})
     roots = {p.name: fv.root(p.name, [row_leaf(doms[p.name], i, HM96.tree_leaf(HM96.default_key, bc), p.schema)
                                       for i, bc in enumerate(bcs[p.name])]).hex() for p in ports}
@@ -194,59 +361,84 @@ def circuit_meta(circuit: Path) -> dict:
 
 
 def forge_statement(honest: Path, out: Path, pub: bytes, instance: int, port: str, words: np.ndarray, circuit: Path) -> dict:
-    """A consistent statement with a wrong witness: ``honest``'s prover file (`circuit.write`'s, one row per instance, of
-    ``circuit``) with instance ``instance``'s row of output ``port`` replaced by ``words``, and ``pub`` (the verifier's own
-    file of a window that committed those words under the same salt) as its header and ``b || c``. Every committed row is
-    then the opened window's, so binding holds, and the replaced row is not what the circuit computes on the instance's
-    inputs. Writes ``out``/inst.bin and pub.bin (``pub`` itself)."""
+    """A consistent statement with a wrong witness: ``honest``'s prover file (`circuit.write`'s shared-row file of
+    ``circuit``) with instance ``instance``'s row of output ``port`` (its table's row ``instance``) replaced by ``words``,
+    and ``pub`` (the verifier's own file of a window that committed those words under the same salt) as its header,
+    ``b || c`` and refs. Every committed row is then the opened window's, so binding holds, and the replaced row is not
+    what the circuit computes on the instance's inputs. Writes ``out``/inst.bin and pub.bin (``pub`` itself)."""
     from verity_flock import circuit as FC
     data = (honest / "inst.bin").read_bytes()
     nl = data.index(b"\n") + 1
     head = json.loads(data[:nl])
-    ports = FC._meta_ports(circuit_meta(circuit))
-    n, np_, W = head["instances"], len(ports), sum(p.words for p in ports)
-    rows = bytearray(data[nl:nl + 2 * n * W])
-    salts = data[nl + 2 * n * W:nl + 2 * n * W + SALT_BYTES * n * np_]
-    if "shared_rows" in head or len(data) != nl + 2 * n * W + (SALT_BYTES + 128) * n * np_:
-        raise ValueError(f"{honest}/inst.bin: not one row per instance without public words")
+    meta = circuit_meta(circuit)
+    ports = FC._meta_ports(meta)
     k = [p.name for p in ports].index(port)
-    at = 2 * (instance * W + sum(p.words for p in ports[:k]))
+    if "shared_rows" not in head or k < meta["input_ports"]:
+        raise ValueError(f"{honest}/inst.bin: an output row of a shared-row file is replaced, not {port} of this one")
+    n, counts = head["instances"], [int(head["shared_rows"][p.name]) for p in ports]
+    W = sum(c * p.words for c, p in zip(counts, ports))
+    rows = bytearray(data[nl:nl + 2 * W])
+    salts = data[nl + 2 * W:nl + 2 * W + SALT_BYTES * sum(counts)]
+    if len(data) != nl + 2 * W + (SALT_BYTES + 128) * sum(counts) + 4 * n * len(ports):
+        raise ValueError(f"{honest}/inst.bin: not a shared-row file of its ports' tables without public words")
+    at = 2 * (sum(c * p.words for c, p in zip(counts[:k], ports[:k])) + instance * ports[k].words)
+    row = sum(counts[:k]) + instance
     words = np.asarray(words, "<u2").reshape(-1)
     if len(words) != ports[k].words:
         raise ValueError(f"{port}: {len(words)} words, not {ports[k].words}")
     rows[at:at + 2 * len(words)] = words.tobytes()
     pnl = pub.index(b"\n") + 1
-    phead, bcs = json.loads(pub[:pnl]), pub[pnl:]
-    if len(bcs) != 128 * n * np_ or {x: phead[x] for x in phead if x != "frame_v3"} != dict(
+    phead, body = json.loads(pub[:pnl]), pub[pnl:]
+    if len(body) != 128 * sum(counts) + 4 * n * len(ports) or {x: phead[x] for x in phead if x != "frame_v3"} != dict(
             {x: head[x] for x in head if x != "frame_v3"}, rows=False):
         raise ValueError("the verifier's file is not this statement's but for its frame roots")
-    salt = salts[SALT_BYTES * (instance * np_ + k):SALT_BYTES * (instance * np_ + k + 1)]
-    bc = bcs[128 * (instance * np_ + k):128 * (instance * np_ + k + 1)]
+    salt, bc = salts[SALT_BYTES * row:SALT_BYTES * (row + 1)], body[128 * row:128 * (row + 1)]
     if commit_strings(ports[k], words[None, :], [salt])[0] != bc:
         raise ValueError(f"{port}: the verifier's b || c of instance {instance} is not these words under the prover's salt")
     out.mkdir(parents=True, exist_ok=True)
-    (out / "inst.bin").write_bytes(json.dumps(dict(phead, rows=True), sort_keys=True).encode() + b"\n" + bytes(rows) + salts + bcs)
+    (out / "inst.bin").write_bytes(json.dumps(dict(phead, rows=True), sort_keys=True).encode() + b"\n" + bytes(rows) + salts + body)
     (out / "pub.bin").write_bytes(pub)
     return {"instance": instance, "port": port, "row_words_changed": int(np.count_nonzero(
         np.frombuffer(data[nl + at:nl + at + 2 * len(words)], "<u2") != words))}
 
 
-def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[dict[str, bytes]]) -> bytes:
-    """The verifier's own public file for n units (`circuit.write`'s ``pub_path``): ``circuit_head`` the statement's
-    circuit-side fields (its META, pin and class, which the verifier reads off the circuit file it holds), and each unit's
-    rows' ``b || c`` (port name -> 128 bytes): the window's opened leaves, and its own public row's."""
+def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[dict[str, bytes]], indices: list[int],
+                 reads: list[dict[str, tuple[str, int, str]]]) -> bytes:
+    """The verifier's own public file for n units (`circuit.write`'s ``pub_path`` of a shared-row statement):
+    ``circuit_head`` the statement's circuit-side fields (its META, pin and class, which the verifier reads off the
+    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the drawn units),
+    each unit's rows' ``b || c`` (port name -> 128 bytes: the window's opened leaves, and its own public row's), and each
+    unit's registered reads (``reads``: port -> (value, position, path), the position the verifier's Program reads and the
+    opened path, hex). A registered port's table is its units' distinct positions in first-read order (`table`), the
+    header's ``registered`` their positions and paths; every other port's is one row per unit."""
     from verity_flock import circuit as FC
     meta, pin, cls = circuit_head["meta"], circuit_head["pin"], circuit_head["class"]
     if meta.get("public_inputs"):
         raise ValueError("the unit's statement has public input ports, which the Lean verifier refuses")
     ports = FC._meta_ports(meta)
     n = len(bcs)
-    fv = _frame(ports, set_name, n, {p.name: [u[p.name] for u in bcs] for p in ports})
-    G = meta["vus_per_block"]
-    indices = list(range(n))
-    units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
-             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [cls] * n}
+    indices = [int(u) for u in indices]
+    if len(indices) != n or indices != sorted(set(indices)) or len(reads) != n:
+        raise ValueError(f"{n} units need {n} ascending global indices and reads, not {indices}")
+    tabs, refs, registered = {}, {}, {}
+    for p in ports:
+        if p.name not in reads[0]:
+            tabs[p.name], refs[p.name] = [u[p.name] for u in bcs], list(range(n))
+            continue
+        tpos, refs[p.name], first = table([r[p.name][1] for r in reads])
+        for i, t in enumerate(refs[p.name]):
+            j = first[t]
+            if (bcs[i][p.name], reads[i][p.name]) != (bcs[j][p.name], reads[j][p.name]):
+                raise ValueError(f"port {p.name}: units {j} and {i} read position {tpos[t]} as two rows")
+        tabs[p.name] = [bcs[j][p.name] for j in first]
+        registered[p.name] = {"value": reads[first[0]][p.name][0], "positions": tpos,
+                              "paths": [reads[j][p.name][2] for j in first]}
+    fv = _frame(ports, set_name, n, tabs)
+    vb = meta["vus_per_block"]
+    units = {"vus_per_block": vb, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
+             "blocks": [indices[b:b + vb] for b in range(0, n, vb)], "classes": [cls] * n}
     head = {"format": FC.INST_FORMAT, "statement": meta.get("statement", FC.STATEMENT), "scheme": FC.SCHEME, "set": set_name,
             "subcircuit": subcircuit, "range": [0, n], "instances": n, "circuit_sha512": pin, "units": units, "frame_v3": fv,
-            "rows": False}
-    return json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(u[p.name] for u in bcs for p in ports)
+            "rows": False, "registered": registered, "shared_rows": {p.name: len(tabs[p.name]) for p in ports}}
+    return (json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(bc for p in ports for bc in tabs[p.name])
+            + np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes())

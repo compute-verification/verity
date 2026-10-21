@@ -67,6 +67,8 @@ import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
 import Flock.Firewall.Coins
 import Flock.Firewall.Frame
+import Flock.Firewall.Link
+import Flock.Firewall.Hello
 import Flock.Witness
 import Flock.With.Returns
 import Flock.With.ReturnsWalk

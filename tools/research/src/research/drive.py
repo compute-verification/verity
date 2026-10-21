@@ -39,6 +39,7 @@ broken before them); a run the machine killed runs again once.
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import functools
 import json
@@ -229,18 +230,32 @@ def failing(run_dir: Path) -> str | None:
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
     """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
     fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
-    out = {}
     also = [x for n in PROGRESS for x in ("--also", n)]
-    for rid in ids:
+
+    def one(rid: str) -> tuple[str, int | None, str | None, str | None]:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
             state = run.get("state") or "unknown"
-            out[rid] = (state, run.get("rc"), run.get("ended_utc"),
-                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
+            return (state, run.get("rc"), run.get("ended_utc"),
+                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
         except (ValueError, KeyError, IndexError):
-            out[rid] = ("unknown", None, None, None)
-    return out
+            return ("unknown", None, None, None)
+
+    return dict(zip(ids, _each(one, ids)))
+
+
+#: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (20 Oct: the control pod's
+#: first tick took 33 min reading about 40 runs one at a time)
+STATUS_JOBS = 8
+
+
+def _each(fn, items: list) -> list:
+    """``fn`` of each of ``items``, `STATUS_JOBS` at a time, in their order."""
+    if len(items) < 2:
+        return [fn(x) for x in items]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=STATUS_JOBS) as ex:
+        return list(ex.map(fn, items))
 
 
 def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
@@ -306,26 +321,24 @@ def touched_report(run_dir: Path) -> list[dict] | None:
 
 
 def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
-    also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
-    try:
-        return Path(json.loads(r.stdout)["runs"][0]["dir"])
-    except (ValueError, KeyError, IndexError, TypeError):
-        return None
+    from .merge import fetch_run
+
+    got = fetch_run(rid, names, repo)
+    return got[0] if got else None
 
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
     """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
-    dirs = []
-    for rid in ids:
+    def one(rid: str) -> Path | None:
         if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json", TOUCHED_REPORT])) is None:
-            continue
+            return None
         logs = [f"{where}/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log") for where in ("suites", TOUCHED_LOGS)]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
         if logs:
             _fetch(repo, rid, logs)
-        dirs.append(d)
-    return dirs
+        return d
+
+    return [d for d in _each(one, ids) if d is not None]
 
 
 def failed_steps(run_dir: Path) -> list[dict]:
@@ -968,28 +981,78 @@ class Driver:
                 shutil.rmtree(scratch, ignore_errors=True)
         return None
 
-    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path]]:
-        """(the check that regenerated them, {package: its regenerated lock fetched under ``scratch``}) of a passed train, when
-        drive commits regenerated locks; ("", {}) otherwise."""
+    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path], str | None]:
+        """(the check that regenerated them, {package: its regenerated lock, fetched under ``scratch`` or from its node}, why the
+        train is held instead) of a passed train, when drive commits regenerated locks; ("", {}, None) when its check regenerated
+        none.  Read from the check's files in the store, else, for a check still running (`--defer`), from its run dir on its
+        node (`merge.live_records`).  Held, never landed without them (CI-122), when its Lean report names records neither
+        holds, or can't be read at all unless its lean-audit step was skipped (`_lean_audit_ran`)."""
         if not self.regenerate_locks:
-            return "", {}
-        from .merge import regenerated_records
+            return "", {}, None
+        from .merge import AUDIT, live_records, regenerated_records
 
         for rid in v.attempt.split():
             try:
                 recs = regenerated_records(self.q.store, rid, scratch / rid)
-            except Exception as e:  # noqa: BLE001  (the train still lands; its locks stay as its PRs left them)
-                self.q.log(f"research queue drive: {rid}'s regenerated locks couldn't be read ({type(e).__name__}: {e})")
-                continue
+                if recs is None:
+                    recs = live_records(rid, self.fetch)
+            except Exception as e:  # noqa: BLE001  (a guard never fails open: `merge.Unreadable`, or the store failing)
+                return rid, {}, f"its regenerated lock records can't be read: {type(e).__name__}: {e}"
+            if recs is None and self._lean_audit_ran(rid):
+                return rid, {}, (f"its {AUDIT}, which says whether its Lean check regenerated lock records, can't be read "
+                                 "from the store or from its run dir on its node")
             if recs:
-                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}
-        return "", {}
+                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}, None
+        return "", {}, None
+
+    def _unvouched(self, v: Verdict, rid: str) -> str | None:
+        """Why the merge gate refuses the lock commit at HEAD (`merge.regenerated_parent`, reading the records itself: from the
+        store, else, for a landing with `--defer`, from ``rid``'s run dir on its node), or None when it vouches for it."""
+        from .merge import declared_command, produced, regenerated_parent
+
+        deferred = rid if v.why.startswith(DEFERRED) else None
+        if regenerated_parent(self.repo, "HEAD", self.q.store, tool="check", kinds=produced(self.repo, "check"),
+                              command=declared_command(self.repo, "check"), deferred=deferred, fetch=self.fetch):
+            return None
+        return (f"the merge gate refuses its lock commit: its records aren't byte for byte the ones {rid} regenerated "
+                f"(`merge.regenerated_parent`{', on the live run' if deferred else ''})")
+
+    def fetch(self, rid: str, names: list[str]) -> tuple[Path, dict] | None:
+        """Run ``rid``'s local dir and status row with ``names`` fetched from its node (`merge.fetch_run`)."""
+        from .merge import fetch_run
+
+        return fetch_run(rid, names, self.repo)
+
+    def _lean_audit_ran(self, rid: str) -> bool:
+        """Whether run ``rid``'s lean-audit step may have regenerated records: true unless its result in the store, else its
+        steps.jsonl (`evidence`), says the step was skipped or never ran; a run neither can be read of may have."""
+        from .merge import step_status
+
+        try:
+            stored = bool(((self.q.store.get_attempt(rid) or {}).get("outputs") or {}).get("result"))
+        except Exception:  # noqa: BLE001  (unknown: it may have)
+            return True
+        if stored:
+            return step_status(self.q.store, rid, "lean-audit") not in ("skipped", "absent")
+        for d in self.evidence(self.repo, [rid]):
+            with contextlib.suppress(OSError):
+                for line in (d / PROGRESS[0]).read_text().splitlines():
+                    with contextlib.suppress(ValueError):
+                        if (rec := json.loads(line)).get("step") == "lean-audit":
+                            return rec.get("status") != "skipped"
+        return True
 
     def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
               moved: list[str], scratch: Path) -> Member | None:
         """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`)."""
         q = self.q
-        rid, locks = self._locks(v, scratch)
+        rid, locks, held = self._locks(v, scratch)
+        if held:
+            self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {held}. Find why; "
+                                                     "drive lands it once they can be read (the store has them when the check "
+                                                     "ends)", *(self._owner(x) for x in members))
+            q.log(f"research queue drive: {prs} held: {rid} {held}")
+            return None
         if locks and moved:
             q.log(f"research queue drive: {prs} passed ({v.attempt}) by regenerating {', '.join(sorted(locks))}'s locks on "
                   f"{base[:12]}, but `main` moved to {main[:12]}: the next sync rebuilds `{q.branch}` for a new check")
@@ -1020,6 +1083,10 @@ class Driver:
             _git(self.repo, "commit", "-q", "-m", f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of "
                                                   f"{m.commit[:12]}, passed by regenerating them)\nRegenerated: {', '.join(files)}\n",
                  env=IDENTITY)
+            if why := self._unvouched(v, rid):
+                _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")
+                self.refuse(drive, f"lock-gate:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
+                return None
         p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", "main:refs/heads/main", ok=None)
         if p.returncode:
             _git(self.repo, "reset", "-q", "--hard", "refs/remotes/origin/main")

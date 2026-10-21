@@ -22,10 +22,16 @@ One connection serves one registration and then `--sessions` sessions over it, e
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by the same check on a thread of the verifier's, so a window's checks run while
-   the next window's passes arrive; once every window is accepted the record (`Session.record`), its γ terms
-   (`audit.ledger`) and the node's HBM it shows held (`memory`: the credited share and the residual, at ε, held at
+   the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
+   (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
+   diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
    (`node_line`).
+
+With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
+each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
+`--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -34,19 +40,28 @@ process that ended early stays live, refusing the node, until `--close NODE` clo
 the one in flight unended.
 
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
-`--verdict lean` or `both` (the default, `VERDICT`): it holds the registry and every session, and each registration,
-session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). `audit.Session`
-keeps the driver's books (its coins, its plans, the record the ledger reads), and an event, a window's verdict or a
-record on which the two differ refuses the session at that window as `disagreement`. Under `both` `audit.Session`
-checks every window's openings too, beside the Lean, and a window's two verdicts are set on the two sessions at once;
-under `lean` it checks none and takes the Lean's verdict. Under `python` there is no Lean process and `audit.Session`
-decides. `--close` closes a registration in both registries alike.
+`--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
+session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). An accepted
+session's record is the Lean's (`Pair.record`), and its ledger reads that record. `audit.Session` keeps the driver's
+books (its coins, its plans, when the next boundary leaves) and is the reference: an event, a window's verdict or a
+record field on which the two differ refuses the session at that window as `disagreement`. Under `lean` it checks no
+openings and takes the Lean's window verdicts; under `both` it checks every window's openings too, beside the Lean,
+and a window's two verdicts are set on the two sessions at once. Under `python` there is no Lean process and
+`audit.Session` decides. `--close` closes a registration in both registries alike.
+
+`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
+event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
+was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
+verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
+keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
+0.6 GB of JSON.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json] [--verdict both|lean|python] [--lean-exe PATH]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict both|lean|python]
+                       [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
+                       [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
+    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
@@ -67,13 +82,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, timing  # noqa: E402
 
 import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
 
-VERDICT = "both"
+VERDICT = "lean"
 """Who decides the verdicts (module docstring): `lean`, `both` or `python`."""
 VERDICTS = ("lean", "both", "python")
 CHECK_BATCH = 1024
@@ -485,9 +500,10 @@ class Pair:
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
     Everything else is read from `s`."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape) -> None:
-        self.v, self.s, self.k, self.lean = v, s, k, v.lean
-        self.node, self.disagreement = s.registration.node.hex(), None
+    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
+        self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
+        self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
+        self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
                               "coins": [c.hex() for c in tape.coins], "append_coins": [],
@@ -518,9 +534,13 @@ class Pair:
         rejection (None as the second value)."""
         if self.disagreement is not None:
             raise audit.SessionError("the session ended: the verifiers disagree")
-        ev = event() if self.lean is not None else None
+        ev = event() if self.lean is not None or self.case is not None else None
         held = self.v._stamp
         now = self.v._stamp = self.v._now()
+        if clocked and ev is not None:
+            ev["now"] = now
+        if self.case is not None:
+            self.case.event(ev)
         try:
             try:
                 out = python()
@@ -533,8 +553,6 @@ class Pair:
             self.v._stamp = held
         if self.lean is None:
             return out, True
-        if clocked:
-            ev["now"] = now
         c = coin(out) if coin is not None else None
         lean = self._lean({"op": "event", "node": self.node, "session": self.k, "event": ev,
                            "coin": None if c is None else c.hex()})
@@ -583,6 +601,16 @@ class Pair:
         except lv.LeanError as e:
             self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {e}")
 
+    def keep(self, t: int, body: bytes) -> None:
+        """One frame of window t's openings, kept for the transcript until the window's verdict is set."""
+        if self.case is not None:
+            self.frames.setdefault(t, []).append(body)
+
+    def transcribe(self, t: int) -> None:
+        """Window t's openings into the transcript, as a `verify` event where its verdict was set."""
+        if self.case is not None:
+            self.case.verify(t, self.frames.pop(t, []))
+
     def verify(self, t: int, check: int) -> bool:
         """Window t's frames checked on the Lean's threads as check `check`: False where it refuses to."""
         got = self._lean({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check})
@@ -619,12 +647,13 @@ class Pair:
 
     def end(self, failure: dict | None) -> None:
         """The session ended with the driver's `failure` where neither verifier gives it one (a message it couldn't
-        read): set on both. And an accepted session's record held to the Lean's: one that differs is `disagreement`."""
+        read): set on both. And an accepted session's record, the Lean's (`record`), held to the books': one that
+        differs in any field is `disagreement`."""
         if self.lean is None:
             if failure is not None and self.s.outcome is None:
                 self._fail_books(failure)
             return
-        got = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
         if failure is not None:
             if self.s.outcome is None:
                 self._fail_books(failure)
@@ -636,6 +665,14 @@ class Pair:
         if got != mine and self.disagreement is None:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
+    def record(self) -> audit.Record:
+        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it), or under
+        `python` the books'."""
+        if self.lean is None:
+            return self.s.record()
+        return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
+                            self.s.params.delta)
+
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
         self.s._fail(t if type(t) is int and 0 <= t < len(self.s.windows) else len(self.s.windows),
@@ -646,12 +683,17 @@ class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
-                 ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None) -> None:
+                 ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
+                 transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
+                 disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
+        self.transcript = transcript
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
         self.ingress_bytes_per_s = ingress_bytes_per_s
+        self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
+        self.disk_burst_bytes, self.link_burst_bytes = disk_burst_bytes, link_burst_bytes
         self.verdict, self.checks = verdict, checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -733,8 +775,9 @@ class Verifier:
 
     def register(self) -> tuple[audit.Registration, dict]:
         """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError), or
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError). Both registries draw it
+        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError),
+        deferring residency under a lifetime of one window (`audit.Params`'s ValueError), or asking for receipts that
+        bind PoUW's tile outputs (`bind`, which the Lean covers none of: ValueError). Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         hello, _, _ = self.expect("hello")
@@ -746,16 +789,17 @@ class Verifier:
             raise
         node, blocks, root = bytes.fromhex(hello["node"]), hello["blocks"], bytes.fromhex(hello["payload_root"])
         c, receipt, rows = wire.codec_named(hello["codec"]), hello["receipt"], hello.get("rows")
+        bind = hello.get("bind", False)
         nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, rows=rows,
-                                                       nonce=nonce)
+            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, bind=bind,
+                                                       rows=rows, nonce=nonce)
             mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
         except (audit.RegistryError, ValueError) as e:
             mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
         if self.lean is not None:
             try:
-                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce))
+                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind))
             except (lv.LeanError, ValueError):
                 got = {"error": True}
             if got != mine:
@@ -797,20 +841,25 @@ class Verifier:
                                jitter_ns=self.jitter_ns)
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None, pace: dict | None = None) -> dict:
-        """One session.  With `pace` (`pace_of`), its windows are groups of `pace["k"]` passes: a group's boundary
-        leaves once it has k − 1 roots (the pass in flight is its last), or for k = 1 once the group before has its
-        root (the first group's at once), so the honest prover never waits on a coin; and at the latest at max(its
-        coin + (k − 1)·A, the group before's deadline), so its roots are due within about k allowances of its coin."""
+        """One session.  With `pace` (`pace_of`), the protocol paces it (`audit.Pace(k, T)`, T its stretch, over which
+        γ is declared): its windows are groups of `pace["k"]` passes, and each boundary leaves at
+        `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
+        the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
+        the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
+        allowances of its coin."""
         reg, K = self.registration, None if pace is None else pace["k"]
         W = self.W if pace is None else pace["groups"] * (pace["windows"] + 1)
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred)
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
+                              pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         tape = lv.Tape(params.coins, os.urandom)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       entropy=tape)
-        session = Pair(self, books, k, tape)
+        case = None if self.transcript is None else lv.Transcript(
+            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, tape.coins, not_before_ns)
+        session = Pair(self, books, k, tape, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
                         "commitment": session.commitment.to_json(), "pace": K})
         self.expect("armed")
@@ -865,6 +914,7 @@ class Verifier:
                                "checked_ns": max(latency, py["checked_ns"]) if py else latency,
                                "python_checked_ns": py["checked_ns"] if py else None,
                                "lean_ns": res.get("ns"), "lean_checked_ns": latency}
+            session.transcribe(t)
             if not verdicts[t]["accepted"]:
                 failure = {"t": t, "failure": verdicts[t]["failure"], "at": verdicts[t]["at"]}
 
@@ -902,27 +952,14 @@ class Verifier:
             sent += 1
             self.conn.send({"type": "coin", "coin": wire.coin_json(coin)} if coin else {"type": "close"})
 
-        def due(t: int) -> bool:
-            ws = session.windows
-            return len(ws[t].roots) >= K - 1 and (K > 1 or t == 0 or len(ws[t - 1].roots) >= 1)
-
         try:
             self.conn.send({"type": "coin", "coin": wire.coin_json(session.start())})
             self.clock.busy()
         except audit.SessionError:
             failure = failed(0)
         while failure is None and len(verdicts) < W:
-            if K is not None and sent < W and due(sent):
-                if self.clock.now() > session.windows[sent].released_ns:
-                    bound()
-                    continue
-                until = session.windows[sent].released_ns + 1
-            elif sent < W and K is not None:
-                before = session.deadline(sent - 1) if sent else None
-                until = max(session.windows[sent].released_ns + (K - 1) * allowance_ns, before or 0,
-                            session.windows[sent].released_ns + 1)
-            elif sent < W:
-                until = session.windows[sent].released_ns + self.T
+            if sent < W:
+                until = session.next_boundary_ns()
             elif drawn < W:
                 until = session.deadline(W - 1) + 1
             else:
@@ -975,6 +1012,7 @@ class Verifier:
                 if not (type(t) is int and 0 <= t < len(session.windows)) or session.windows[t].draws is None:
                     failure = {"t": t, "failure": "malformed", "at": None}
                     break
+                session.keep(t, body)
                 if self.lean is not None:
                     session.openings(t, body)
                     frames[t] = frames.get(t, 0) + 1
@@ -1054,6 +1092,7 @@ class Verifier:
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verdict": self.verdict, "disagreement": session.disagreement,
+               "transcript": None if case is None else case.close(tape.appends),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "lean_check_ns": {t: v.get("lean_ns") for t, v in sorted(verdicts.items())},
@@ -1073,7 +1112,8 @@ class Verifier:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
             out["end_ns"] = record.end_ns
-            out["ledger"] = self.ledgers(record, arrivals, [w.plans for w in session.windows])
+            out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
+                                         [w.plans for w in session.windows])
             if pace is not None:
                 rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
                 try:
@@ -1119,28 +1159,36 @@ class Verifier:
         return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
-        """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
-        GPU's HBM and the host's DRAM), with the node's S_chip and squaring ceiling, whatever share of the node the
-        store is on.  Both R are the verifier's, which the prover's calibration can only raise: a prover reporting a
-        slower read would shrink every term but the timing (MEM-24).  R cancels in the certified bytes,
-        `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node establishes, whose γ
-        is the node's only once its store spans the node.  Each reading carries its timing term's parts
+        """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
+        measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
+        every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
+        `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
+        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing
+        (MEM-24).  Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
+        establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
-        had two roots.  With the session's plans, `memory` is the node's HBM it shows held (`memory`), KV credited
-        on no verdict yet.  Each window's bound on wrong receipts is computed once for both readings, exactly, in the
-        check workers when there are some (`checks.Checks.bounds`)."""
+        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
+        session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
+        there are some (`checks.Checks.bounds`)."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        measured = max(timing.READ_BYTES_PER_S, reported)
-        spec = max(timing.SPEC_BYTES_PER_S, measured)
-        rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+        stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
+                                    link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
+                                    link_burst_bytes=self.link_burst_bytes)
+        spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
+        rebuild = stated.rebuild(record.codec)
         node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
                 "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
                 "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
                 "host_chip_bytes": timing.HOST_CHIP_BYTES}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
-                          "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
+                          "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
+                          "rebuild_burst_bytes": stated.rebuild_burst_bytes,
+                          "disk_burst_bytes": stated.disk_burst_bytes, "link_burst_bytes": stated.link_burst_bytes,
+                          "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
                           "reads_bytes": record.receipts * record.block_bytes,
@@ -1159,17 +1207,22 @@ class Verifier:
         profiles = [w.profile for w in record.windows]
         bounds = self.checks.bounds(profiles) if self.checks else [p.bound() for p in profiles]
         by = {id(p): x for p, x in zip(profiles, bounds)}
+        readings: dict[str, ledger.Gamma] = {}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild,
-                                  wrong=lambda p: by[id(p)])
-                whole = r * record.span_ns / 1e9
-                out[name] = {"capacity_bytes_per_s": r, **lg.to_json(), "certified_bytes": (1 - lg.gamma) * whole,
-                             "certified_bytes_horizon": (1 - lg.gamma_horizon) * whole}
-                if parts:
-                    out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+                g = readings[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
+                continue
+            whole = r * record.span_ns / 1e9
+            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "certified_bytes": (1 - g.gamma) * whole,
+                         "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
+            if parts:
+                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
+                                           ledger.memory(record, stated)).to_json()
+                           if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
+                                                                       if n not in readings)})
         # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.
         compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
         out["sketch_failure"] = {"compressions": compressions,
@@ -1225,17 +1278,31 @@ def main() -> int:
     ap.add_argument("--host-bytes", type=int, default=0,
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
+    ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
+                    help="the node's disks' read ceiling, charged in the memory line (`ledger.Node`)")
+    ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
+                    help="the node's boundary links' read ceiling, charged in the link-charged memory line")
+    ap.add_argument("--disk-burst-bytes", type=float,
+                    help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
+    ap.add_argument("--link-burst-bytes", type=float,
+                    help="one link window, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
     ap.add_argument("--verdict", default=VERDICT, choices=VERDICTS,
-                    help="who decides: the Lean verifier (lean), the Lean with audit.Session checking beside it and "
-                         "a mismatch refused as `disagreement` (both), or audit.Session alone (python)")
+                    help="who decides: the Lean verifier, the verifier of record, with audit.Session as the reference "
+                         "keeping the books (lean, the default), the same with audit.Session checking every window's "
+                         "openings beside it (both; under either a mismatch is refused as `disagreement`), or "
+                         "audit.Session alone (python)")
     ap.add_argument("--lean-exe", type=Path,
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
+    ap.add_argument("--transcript", type=Path, metavar="DIR",
+                    help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
+                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
-                         "--window-ms and --samples): groups of K passes under a live coin each")
+                         "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), and "
+                         "γ per fixed T_MS")
     ap.add_argument("--pace-pass-ms", type=float, default=17.0,
                     help="the pass the paced sessions' groups a stretch are counted at (0: the calibration's median "
                          "pass interval)")
@@ -1290,7 +1357,9 @@ def main() -> int:
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
-                 verdict=a.verdict, lean_exe=a.lean_exe)
+                 verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
+                 link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
+                 link_burst_bytes=a.link_burst_bytes)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1331,6 +1400,7 @@ def main() -> int:
             not_before = r.get("end_ns", v.clock.now())
             lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
             mem = r.get("ledger", {}).get("memory", {})
+            lines = r.get("ledger", {}).get("declared", {}).get("memory", {})
             if (pl := r.get("ledger", {}).get("paced")) is not None:
                 line = f"refused: {pl['refused']}" if "refused" in pl else \
                     f"snapshot {pl['snapshot']['share']:.4%} time {pl['time']['share']:.4%}"
@@ -1343,7 +1413,8 @@ def main() -> int:
                   f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
                   f"average share={mem.get('average', {}).get('share')} "
                   f"node={json.dumps(mem['node']['share']) if 'node' in mem else None} "
-                  f"node average={json.dumps(mem['node']['average']['share']) if 'node' in mem else None}",
+                  f"node average={json.dumps(mem['node']['average']['share']) if 'node' in mem else None} "
+                  f"declared={json.dumps({f: x.get('epsilon', x.get('refused')) for f, x in lines.items()})}",
                   flush=True)
             record()
     finally:

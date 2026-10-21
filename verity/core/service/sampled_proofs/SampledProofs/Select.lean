@@ -57,17 +57,19 @@ def parseRate (text : String) : Option (Nat × Nat × Nat) :=
     else none
   | none => none
 
-/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage law, a rate law (`parseRate`) or one in
-`parseLaw`'s syntax (`Law`), and a two-stage rule's replay law with every proof unit of a drawn RU checked (`TwoStage` at
-`check` `"all"`, each RU one instance of the check's unit). -/
+/-- The selection rules a `Stream` runs: every unit (`All`) and a one-stage law, a rate law (`parseRate`) or one in
+`parseLaw`'s syntax (`Law`). -/
 inductive Rule where
   | all
   | law (text : String)
-  | twoStage (replay : String)
 
-/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}` or
-`{rule: two-stage, replay, check: all}`, its law text a rate law or one `parseLaw` reads, as `service.Law` refuses any
-other when it is made. A stream refuses a two-stage rule's count and a sequential rule. -/
+/-- The refusal of a two-stage selection rule (`service.RETIRED_TWO_STAGE`). -/
+def retiredTwoStage : String :=
+  "two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is all or a law"
+
+/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}` or `{rule: law, law}`, its law text a rate law or one
+`parseLaw` reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule, and a two-stage
+rule with `retiredTwoStage`: two-stage sampling is retired (ASK-25). -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
@@ -76,18 +78,14 @@ def Rule.ofJson (j : Json) : V Rule := do
       if let .str t := getD j "law" then
         if (parseRate t).isNone then let _ ← parseLaw t
         return .law t
-  | .str "two-stage" =>
-    if keys? j == some #["check", "replay", "rule"] && jeq (getD j "check") "all" then
-      if let .str t := getD j "replay" then
-        if (parseRate t).isNone then let _ ← parseLaw t
-        return .twoStage t
+  | .str "two-stage" => throw retiredTwoStage
   | _ => pure ()
-  throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, replay, check: all}"
+  throw "a selection rule the stream runs is {rule: all} or {rule: law, law}"
 
 /-- `service.selection_law`, after `Rule.over`: the law a rule names over `n` units, before `Draw.derive` expands it. -/
 def Rule.lawOver : Rule → Nat → V Json
   | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
-  | .law t, _ | .twoStage t, _ => parseLaw t
+  | .law t, _ => parseLaw t
 
 /-- A law text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`; any
 other text is itself. -/
@@ -104,7 +102,6 @@ the Properties lock records. -/
 def Rule.over : Rule → Nat → Option Rule
   | .all, _ => some .all
   | .law t, n => (textOver t n).map .law
-  | .twoStage t, n => (textOver t n).map .twoStage
 
 /-- The challenger's closure map as `[[unit, [units]], ...]`, integers, each unit named once. -/
 def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
