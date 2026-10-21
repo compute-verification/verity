@@ -825,6 +825,9 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         rs = s if r_round is None else r_round["s"]
         rleaf = CM.step_root(CM.domain({"window": W, "step": rs, "linears": L}, L, "receipt-step"), r_dev)
         step_cpu["receipt-step"] = rleaf if r_round is None else g["leaves"][kinds.index("receipt-step")]
+        if "lane-step" in kinds:
+            # dither_so -lr: an earlier step's lane-table roots, read as recorded; the capture's own under r_round
+            step_cpu["lane-step"] = g["leaves"][kinds.index("lane-step")]
         rr_bad = []
         for w in sorted({0, 2, L - 1}):
             o_, units, nw = win.plan.offs[w]
@@ -844,6 +847,12 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         ri, lv = kinds.index("receipt-step"), list(r_round["leaves"])
         doc["round"]["receipt_step"] = rleaf == lv[ri]
         lv[ri] = rleaf
+        if "lane-step" in kinds and "lanes" in g:
+            li = kinds.index("lane-step")
+            l_dev = [unwords(g["lanes"]["l_roots"][8 * w:8 * w + 8]) for w in range(L)]
+            lleaf = CM.step_root(CM.domain({"window": W, "step": r_round["s"], "linears": L}, L, "lane-step"), l_dev)
+            doc["round"]["lane_step"] = lleaf == lv[li]
+            lv[li] = lleaf
         doc["round"]["receipt_root"] = CM.step_root(CM.domain(
             {"window": W, "step": r_round["s"], "leaves": DO.round_leaves(kinds)}, len(kinds), "round"), lv) == r_round["root"]
         doc["receipt_round"] = r_round["s"]

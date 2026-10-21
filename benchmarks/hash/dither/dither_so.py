@@ -85,6 +85,7 @@ $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's
 from __future__ import annotations
 
 import contextlib
+import ctypes as C
 import dataclasses
 import hashlib
 import os
@@ -102,6 +103,7 @@ import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
 from dither_fused import CM, CO, H1R, Call, unwords, words
+from h1c import Dom, Tab
 from hb_side import auto_j
 
 LIB_ENV = DA.LIB_ENV
@@ -491,11 +493,21 @@ class SoWindow(DO.Window):
         else:
             self.ev_w[0].record()
             main.wait_event(sd.udone[p])
+            if sd.lanes is not None and sd.lanes.own:
+                main.wait_event(sd.lanes.done[p])
             self.ev_w[1].record()
             if self.cap_of.get(j) == "fault_rr":
                 lv.view(torch.uint8).fill_(DF.POISON)
             else:
                 lv.copy_(sd.rroots[p])
+        if sd.lanes is not None:
+            # the lane-step leaf: step j's lane-table roots, beside its receipts' (-lr)
+            o = pre["mid"].level_off[kinds.index("lane-step")]
+            llv = pre["mid"].level[o:o + 8 * self.L]
+            if p is None:
+                llv.zero_()
+            else:
+                llv.copy_(sd.lanes.lroots[p])
         if ads is not None:
             main.wait_event(ev[7])
         self.c.build(pre["mid"], self.stepv[0:1])
@@ -677,6 +689,179 @@ def rounds_of() -> int:
     return int(os.environ.get(ROUNDS_ENV) or DF.ROUNDS)
 
 
+LR_KIND, LR_LANE = "lane-receipts", 5
+P32 = int.from_bytes(bytes([DF.POISON]) * 4, "little", signed=True)
+#: -lr's forms: every unit a leaf (dead units' records zero), or the live row blocks' units alone (r = ceil(m / 32) public)
+LR_FORMS = {"lr": "every unit", "lro": "every unit; the tables on a stream of their own", "lrl": "live row blocks"}
+
+
+class Lanes:
+    """-lr (option B): each step's lane records (`kh_one_units_lr`: a unit's 32 lanes' fold-chain words, lane l's
+    kh_words(K) at l kh_words(K) of the unit's record) beside its receipts, and a lane table a call (one hiding leaf a
+    unit, its row the unit's record), whose roots are the round's lane-step leaf beside the receipt-step leaf, round
+    j + D - 1.  -lr: every unit of the call a leaf, dead units' records zero (a buffer's rows past the step's live row
+    blocks zeroed when they shrink); -lrl: the step's live row blocks alone.  -lro: -lr with the tables built on a stream
+    of their own beside the next step's units, the records in two buffers (a buffer's units wait for its last build)."""
+
+    def __init__(self, win: SoWindow, sd: SoSide, form: str):
+        dev, L, t = win.dev, win.L, win.t
+        self.win, self.form, self.own, self.live_only = win, form, form == "lro", form == "lrl"
+        self.nbuf, self.rb = 2 if self.own else 1, t // 32
+        self.cpr = [n // 32 for n, _ in win.nk]
+        self.words = [int(sd.h.kh_words(k)) for _, k in win.nk]
+        self.units = [win.plan.offs[w][1] for w in range(L)]
+        self.off, at = [], 0
+        for w in range(L):
+            self.off.append(at)
+            at += self.units[w] * 32 * self.words[w]
+        self.buf = [torch.zeros(at, dtype=torch.int32, device=dev) for _ in range(self.nbuf)]
+        self.hi = [0] * self.nbuf
+        rs = range(1, self.rb + 1) if self.live_only else (self.rb,)
+        self.sets = [{r: win.c.set([self._tab(q, w, r) for w in range(L)]) for r in rs} for q in range(self.nbuf)]
+        self.lroots = [torch.zeros(8 * L, dtype=torch.int64, device=dev) for _ in range(win.depth)]
+        self.lat = torch.tensor([self.off[w] + LR_LANE * self.words[w] for w in range(L)], dtype=torch.int64, device=dev)
+        self.stream = torch.cuda.Stream(device=dev) if self.own else None
+        self.written = torch.cuda.Event()
+        self.read = [torch.cuda.Event() for _ in range(self.nbuf)]
+        self.done = [torch.cuda.Event() for _ in range(win.depth)]
+        self.steps = 0
+
+    def _tab(self, q: int, w: int, r: int) -> Tab:
+        win, W, cnt = self.win, self.words[w], r * self.cpr[w]
+        fields = {"window": win.window, "step": 0, "linear": w, "module": win.names[w], "units": cnt, "words": W,
+                  "lanes": 32, "schema": CM.SCHEMA}
+        return Tab(Dom(LR_KIND, fields, cnt, {"step": (1, 0)}), cnt, data=self.buf[q][self.off[w]:].view(torch.uint8),
+                   stride=128 * W, body=128 * W, length=128 * W, lab=("l/", f"/{w}"))
+
+    def rec(self, q: int, w: int) -> torch.Tensor:
+        return self.buf[q][self.off[w]:self.off[w] + self.units[w] * 32 * self.words[w]].view(self.units[w], 32,
+                                                                                               self.words[w])
+
+    def ptr(self, q: int, w: int) -> int:
+        return self.buf[q].data_ptr() + 4 * self.off[w]
+
+    def before_units(self, j: int, m: int, g: dict | None) -> int:
+        """On the units stream before step j's units: its buffer free of its last build (-lro), poisoned for a
+        capture, and under -lr its rows past the live row blocks zero."""
+        q, r = j % self.nbuf, -(-min(m, self.win.t) // 32)
+        if self.own:
+            torch.cuda.current_stream().wait_event(self.read[q])
+        if g is not None:
+            self.buf[q].view(torch.uint8).fill_(DF.POISON)
+            self.hi[q] = self.rb
+        if not self.live_only and r < self.hi[q]:
+            for w in range(self.win.L):
+                self.rec(q, w)[r * self.cpr[w]:self.hi[q] * self.cpr[w]].zero_()
+        self.hi[q] = r
+        return q
+
+    def after_units(self, j: int, p: int, m: int, S: torch.Tensor, at_bit: int, g: dict | None) -> None:
+        """On the units stream after step j's commit and fault: the fault's lane word (F_FAULT: lane LR_LANE's word 0
+        of every call's unit 0, at the receipt fault's bit, so the lanes' XOR stays the receipt), then the step's lane
+        tables (-lro: on their own stream) into `lroots[p]` (`done[p]`); a capture's checks of the records into g."""
+        win, st, L = self.win, torch.cuda.current_stream(), self.win.L
+        q, r = j % self.nbuf, -(-min(m, win.t) // 32)
+        DA.dithera_fault[(1,)](self.buf[q], S, self.lat, L, at_bit, BLOCK=triton.next_power_of_2(L))
+        tabs = self.sets[q][r if self.live_only else self.rb]
+        sd = DA.SIDE[0]
+        if self.own:
+            self.written.record(st)
+            ls = self.stream
+            ls.wait_event(self.written)
+            with torch.cuda.stream(ls):
+                win.c.build(tabs, sd.ring_stepv[p][0:1])
+                self.lroots[p].copy_(tabs.roots)
+                self.read[q].record(ls)
+                self.done[p].record(ls)
+            if g is not None:
+                st.wait_event(self.done[p])
+        else:
+            win.c.build(tabs, sd.ring_stepv[p][0:1])
+            self.lroots[p].copy_(tabs.roots)
+            self.done[p].record(st)
+        self.steps += 1
+        if g is not None:
+            self.capture(g, q, r, p)
+
+    def capture(self, g: dict, q: int, r: int, p: int) -> None:
+        win, L = self.win, self.win.L
+        xb, pl, dz = [], [], []
+        for w in range(L):
+            rec, lu = self.rec(q, w), r * self.cpr[w]
+            x = rec[:lu]
+            while x.shape[1] > 1:
+                x = x[:, 0::2] ^ x[:, 1::2]
+            o_, units, nw = win.plan.offs[w]
+            got = win.plan.out[o_:o_ + units * nw].view(torch.int32).view(units, nw)
+            xb.append((x[:, 0] != got[:lu]).sum())
+            pl.append((rec[:lu] == P32).sum())
+            dz.append((rec[lu:] != (P32 if self.live_only else 0)).sum())
+        keep = {}
+        for w in sorted({0, 2, 3, L - 1}):
+            h = torch.empty(self.rec(q, w).shape, dtype=torch.int32, pin_memory=True)
+            h.copy_(self.rec(q, w), non_blocking=True)
+            keep[w] = h
+        g["lanes"] = {"r": r, "xor_bad": torch.stack(xb), "poison_left": torch.stack(pl), "dead_off": torch.stack(dz),
+                      "rec": keep, "l_roots": self.lroots[p].clone()}
+
+    def info(self) -> dict:
+        b = sum(self.units[w] * 128 * self.words[w] for w in range(self.win.L))
+        live = sum(self.cpr[w] * 128 * self.words[w] for w in range(self.win.L))
+        return {"form": self.form, "what": LR_FORMS[self.form], "buffers": self.nbuf, "record_bytes_all_units": b,
+                "record_bytes_a_live_row_block": live, "steps": self.steps}
+
+
+def lanes_check(win: SoWindow, g: dict, which: str, salt: bytes) -> dict:
+    """-lr's checks of capture g (the module docstring): its records' XOR over lanes against the receipts, no live
+    word left 0xA5 and every dead unit's record zero (-lrl: untouched), sampled units' records against receipts.py's
+    chain split by lane on the CPU, three calls' lane-table roots rehashed by commit.py, and under "fault" the flipped
+    lane word moving its unit's leaf and its call's root.  `binding_ok`: everything but the CPU chain, which a fault of
+    the salt moves."""
+    import receipts as RC
+    lc, L, s, key = g["lanes"], win.L, g["s"], win.key
+    sd: SoSide = DA.SIDE[0]
+    lx = sd.lanes
+    r = lc["r"]
+    doc = {"form": lx.form, "r": r, "xor_vs_receipts_bad": [w for w, v in enumerate(lc["xor_bad"].tolist()) if v],
+           "live_poison_left": [w for w, v in enumerate(lc["poison_left"].tolist()) if v],
+           "dead_off": [w for w, v in enumerate(lc["dead_off"].tolist()) if v]}
+    l_dev = [unwords(lc["l_roots"][8 * w:8 * w + 8]) for w in range(L)]
+    roots_bad, cpu_bad, fault_cells = [], [], {}
+    rng = np.random.default_rng(s)
+    for w, rec in lc["rec"].items():
+        n, k = win.nk[w]
+        W, cnt = lx.words[w], (r if lx.live_only else lx.rb) * lx.cpr[w]
+        recn = rec.numpy()
+        if w in (0, 2, L - 1):
+            d = CM.domain({"window": win.window, "step": s, "linear": w, "module": win.names[w], "units": cnt,
+                           "words": W, "lanes": 32, "schema": CM.SCHEMA}, cnt, LR_KIND)
+            rows = recn[:cnt].view(np.uint8).reshape(cnt, 128 * W)
+            root = CM.levels(d, [CM.leaf(d, key, f"l/{s}/{w}", i, bytes(rows[i]))[0] for i in range(cnt)])[-1][0]
+            if root != l_dev[w]:
+                roots_bad.append(w)
+            if which == "fault" and w == 0:
+                honest = rows[0].copy().view(np.uint32)
+                honest[LR_LANE * W] ^= 1 << sd.shift
+                lf = CM.leaf(d, key, f"l/{s}/{w}", 0, honest.view(np.uint8).tobytes())[0]
+                doc["fault_leaf_moved"] = lf != CM.leaf(d, key, f"l/{s}/{w}", 0, bytes(rows[0]))[0]
+        us = sorted({0, int(rng.integers(lx.cpr[w]))})
+        ref = RC.call_receipts(RC.Call(g["a"][w], win.wt[w]), salt, s * win.u_step + win.offs[w], g["a_roots"][w],
+                               g["b_roots"][w], only=us, lanes=True)
+        got = recn[us].view(np.uint32)
+        x = got ^ ref
+        if x.any():
+            cpu_bad.append(w)
+            fault_cells[w] = [[int(a) for a in c] + [int(x[tuple(c)])] for c in np.argwhere(x)[:4]]
+    doc.update(lane_roots_bad=roots_bad, lanes_vs_cpu_bad=cpu_bad, cpu_units_checked=sorted(lc["rec"]))
+    doc["binding_ok"] = not (doc["xor_vs_receipts_bad"] or doc["live_poison_left"] or doc["dead_off"] or roots_bad)
+    doc["ok"] = doc["binding_ok"] and not cpu_bad
+    if which == "fault":
+        want = {w: [[0, LR_LANE, 0, 1 << sd.shift]] for w in lc["rec"]}
+        doc["fault_cells"] = fault_cells
+        doc["fault_conforming"] = doc["binding_ok"] and fault_cells == want and bool(doc.get("fault_leaf_moved"))
+    return doc
+
+
 class SoSide(DA.Side):
     """dither-a's serving-stream GEMM state with the forward in the statement's order (no seeds, no units) and the
     units of a step dispatched after its coin (`dispatch`) on a ring of the window's depth (`stash`)."""
@@ -725,6 +910,13 @@ class SoSide(DA.Side):
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
+        self.lanes = None
+        if CONF.get("lr"):
+            if not hasattr(self.h, "kh_one_units_lr"):
+                raise RuntimeError(f"-{CONF['lr']}: {h1u} has no kh_one_units_lr (h1u.cu's option B lane records)")
+            for f in (self.h.kh_one_lr, self.h.kh_one_units_lr):
+                f.argtypes = list(self.h.kh_one.argtypes[:-1]) + [C.c_void_p] * 3
+            self.lanes = Lanes(win, self, CONF["lr"])
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         win = self.win
@@ -798,6 +990,8 @@ class SoSide(DA.Side):
             if g is not None:
                 for x in (self.stage, win.plan.out, win.plan.seeds, win.rset.level):
                     x.view(torch.uint8).fill_(DF.POISON)
+            lx = self.lanes
+            q = lx.before_units(j, m, g) if lx is not None else None
             tab = self.tables[p]
             rc = win.r.lib.h1r_launch(tab.table.data_ptr(), L, tab.max_units, tab.ks, self.ring_salt[p].data_ptr(),
                                       self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0,
@@ -813,10 +1007,15 @@ class SoSide(DA.Side):
                     rc = rc or self.h.kh_one_noise(*args, ns.cuda_stream)
                     self.n_done[i].record(ns)
                     st.wait_event(self.n_done[i])
-                    rc = rc or self.h.kh_one_units(*args, st.cuda_stream)
+                    if lx is None:
+                        rc = rc or self.h.kh_one_units(*args, st.cuda_stream)
+                    else:
+                        rc = rc or self.h.kh_one_units_lr(*args, self.ring_S[p].data_ptr(), lx.ptr(q, w), st.cuda_stream)
                     self.u_done[i].record(st)
-                else:
+                elif lx is None:
                     rc = rc or self.h.kh_one(*args, st.cuda_stream)
+                else:
+                    rc = rc or self.h.kh_one_lr(*args, self.ring_S[p].data_ptr(), lx.ptr(q, w), st.cuda_stream)
             if rc:
                 raise RuntimeError(f"dither-a-so step {j}'s units: a launch returned {rc}")
             n = self.stage.numel()
@@ -825,6 +1024,8 @@ class SoSide(DA.Side):
                                    BLOCK=triton.next_power_of_2(L))
             win.c.build(win.rset, self.ring_stepv[p][0:1])
             self.rroots[p].copy_(win.rset.roots)
+            if lx is not None:
+                lx.after_units(j, p, m, self.ring_S[p], 1 << self.shift, g)
             if g is not None:
                 g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
             self.udone[p].record(st)
@@ -834,7 +1035,8 @@ class SoSide(DA.Side):
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
-                "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
+                "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R},
+                "lanes": None if self.lanes is None else self.lanes.info()}
 
 
 def _remap(c, st, data: list | None = None, out: list | None = None):
@@ -1160,18 +1362,23 @@ def side() -> SoSide:
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
-          ov: int = 0, serve_prio: bool = False, window_end: bool = False) -> None:
+          ov: int = 0, serve_prio: bool = False, window_end: bool = False, lr: str = "") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
     calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
     priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire).
-    `window_end`: -we, each window ends (`SoWindow.end`)."""
+    `window_end`: -we, each window ends (`SoWindow.end`).  `lr`: one of LR_FORMS (`Lanes`), the round's lane-step
+    leaf after its receipt-step leaf."""
     global CAPTURES
-    if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0:
+    if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0 or (lr and (lr not in LR_FORMS or ov or window_end)):
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
-                         f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
+                         f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov}), lane records one "
+                         f"of {tuple(LR_FORMS)} without -ov or -we (not {lr!r})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
+    if lr:
+        DO.ROUND_EXTRA = tuple(DO.ROUND_EXTRA) + ("lane-step",)
+    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end,
+                lr=lr)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end
     if ov:
@@ -1193,6 +1400,27 @@ def stats(win: SoWindow):
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
 def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3) -> dict:
+    """`_check`, and under -lr its lane records (`lanes_check`): the gate's must pass, each fault's be what it faults
+    (fault: the flipped lane word alone; fault_rearly: binding, the chain off; the others: as the gate's)."""
+    doc = _check(win, lib_h1o, which, n_cpu_units)
+    g = win.caps.get(which, {})
+    if not doc.get("complete", True) or "lanes" not in g:
+        return doc
+    o, ix = g["opening"], g["ix"]
+    lc = doc["lanes"] = lanes_check(win, g, which, win.HT.live_salt(g["coins"].commitment, o.coin, ix, g["root"]))
+    if which == "gate":
+        doc["ok"] = doc["ok"] and lc["ok"]
+    elif which == "control":
+        pass
+    elif "conforming" in doc:
+        good = (lc["fault_conforming"] if which == "fault" else
+                lc["binding_ok"] and len(lc["lanes_vs_cpu_bad"]) == len(lc["cpu_units_checked"]) if which == "fault_rearly"
+                else lc["ok"])
+        doc["conforming"] = doc["conforming"] and good
+    return doc
+
+
+def _check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3) -> dict:
     """`which`'s capture: dither_a's checks on round s and, for its receipts, round s + D - 1, every receipt under coin
     s's salt from the challenger's opening, and the order (the module docstring); under -ov also that round s, built
     beside forward s + 1 from the ring, covers what forward s committed ("ov")."""
@@ -1282,6 +1510,12 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     v["order"] = ORDER
     v["order_ok"] = bool(gate.get("order", {}).get("ok"))
     v["ok"] = v["ok"] and v["order_ok"]
+    if "lanes" in gate:
+        # -lr: the gate's lane records pass, and the no-write control leaves them unwritten (refused on them too)
+        v["lanes_ok"] = bool(gate["lanes"].get("ok"))
+        v["control_refused_on_lanes"] = bool(control.get("lanes") and control["lanes"].get("live_poison_left")
+                                             and not control["lanes"].get("ok"))
+        v["ok"] = v["ok"] and v["lanes_ok"] and v["control_refused_on_lanes"]
     if "ov" in gate:
         # -ov: round s built once forward s + 1 had started covers what forward s committed, and fault_ring (in `more`)
         # refused

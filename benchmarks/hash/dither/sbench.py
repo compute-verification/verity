@@ -379,7 +379,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         import dither_so as SO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
-        unit, ao, pt, depth, ov, serve_prio, we = DITHER_SO[arm]
+        unit, ao, pt, depth, ov, serve_prio, we, lr = DITHER_SO[arm]
         a = engine_args(gpu_mem)
         # hbc: hbr's call from HB_H1U_KC's build, with DITHER_H1C_KC's libh1c.so where set (as dither-a-hbc)
         h1c = os.environ.get("DITHER_H1C_KC", os.environ["DITHER_H1C"]) if unit == "hbc" else os.environ["DITHER_H1C"]
@@ -387,7 +387,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             os.environ["DITHER_ZY1"] = os.environ["DITHER_ZY1_KC"]
         SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit="hbr" if unit == "hbc" else unit,
                  h1u=os.environ[{"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]], ao=ao, pt=pt,
-                 depth=depth, ov=ov, serve_prio=serve_prio, window_end=we)
+                 depth=depth, ov=ov, serve_prio=serve_prio, window_end=we, lr=lr)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -403,12 +403,14 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
 # -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
-# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`)
-DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we)
+# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`);
+# -lr, -lro, -lrl: option B's lane records and their tables (`dither_so.Lanes`), without -ov or -we
+DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}{lx}": (unit, ao, pt, d, r, sp, we, lr)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
              for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
-             for e, we in (("", False), ("-we", True))}
+             for e, we in (("", False), ("-we", True))
+             for lx, lr in (("", ""), ("-lr", "lr"), ("-lro", "lro"), ("-lrl", "lrl")) if not (lr and (r or we))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
