@@ -33,8 +33,10 @@ static schedule's check (`engine.static_schedule.check`) of every request. Compi
 challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one session a window, so the fill
-workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
-...]`` is the verifier's side on no GPU, ``--ledger`` given once per head infra published. With ``--window WINDOW_JSON``
+workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --main FILE --ledger HEAD
+[--ledger HEAD ...]`` is the verifier's side on no GPU, ``--ledger`` given once per head infra published and ``--main``
+the verifier's own ``git rev-list --first-parent origin/main``, which every ledger entry's host tree must be one of. With
+``--window WINDOW_JSON``
 (``{root}``, the window's open root) DIR is the challenger run's own ``out/``: the window's coins against the session
 the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for the window
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
@@ -471,11 +473,12 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     return doc
 
 
-def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
+def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str], main_file: str,
                      window_file: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
-    every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
+    every head infra published of the auditor's signed ledger, `main_file` the verifier's own copy of main's first-parent
+    history (`remote.main_lines`). With `window_file` (the window's ``{root}``) `directory` is
     the challenger run's ``out/`` (``research fetch RUN --all``), as the session the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.load`, core's check), the window held to the session it opened for its Commit's root
@@ -487,17 +490,18 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
-                           "pinned_public_sha512": public_sha512, "ledger": ledger, "window_file": window_file,
-                           "coin_source": rec["commitment"].get("coin_source")}
+                           "pinned_public_sha512": public_sha512, "ledger": ledger, "main_file": main_file,
+                           "window_file": window_file, "coin_source": rec["commitment"].get("coin_source")}
     try:
         key = PHC.pinned_key(d / remote.KEY, public_sha512)
         doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
+        main = remote.main_lines(main_file)
         if window_file is not None:
             doc["window"] = json.loads(Path(window_file).read_text())
-            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key)
+            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key, main)
         else:
             sid = (rec["commitment"].get("session") or {}).get("session")
-            newest = PHC.Ledger.load(ledger, key)
+            newest = PHC.Ledger.load(ledger, key, main)
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
@@ -543,6 +547,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ledger", metavar="HEAD", action="append",
                     help="with --check-challenger: a published head of the auditor's signed ledger (infra's windows.jsonl), "
                          "once a head infra labelled")
+    ap.add_argument("--main", metavar="FILE",
+                    help="with --check-challenger: the verifier's own copy of main's first-parent history, a commit a "
+                         "line (git rev-list --first-parent origin/main in the auditor's checkout)")
     ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {root}, its window-open root; "
                                                             "CHALLENGER_DIR then the challenger run's out/, else the "
                                                             "session's tree")
@@ -559,9 +566,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.compile_from:
         return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
     if a.check_challenger:
-        if not (a.key_sha512 and a.ledger):
-            ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window)["ok"] else 1
+        if not (a.key_sha512 and a.ledger and a.main):
+            ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config), --ledger (once a head) and "
+                     "--main FILE (git rev-list --first-parent origin/main in the auditor's own checkout)")
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.main, a.window)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

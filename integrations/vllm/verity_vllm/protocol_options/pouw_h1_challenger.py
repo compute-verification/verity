@@ -20,6 +20,12 @@ verifier's check that a served window's coins are that challenger's.
   before the session's end or opens a second session for the window, is refused. The window's draw coin must have been
   opened once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a
   draw opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
+* **The host's tree** (RT4-INT-40): every ledger entry a window's session reads (its reserve, open and end, and its
+  period's open and close) names the commit the auditor host ran (``pinned``), and the verifier holds each to its own
+  copy of main's first-parent history (``main``, a list of commits: ``git rev-list --first-parent origin/main`` in the
+  auditor's checkout, never the prover's or the host's word), as core's check does (`challenger.audited_session`). A
+  session whose host ran a pushed commit main doesn't hold, or was repinned mid-session, or a verifier with no copy of
+  main, credits nothing.
 * **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
@@ -136,14 +142,14 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
-def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[str], window: Mapping[str, Any],
-                   files: Mapping[str, Any], trusted: LiveCommitment, received: Mapping[str, Sequence[bytes]],
-                   session: str, verify: Any) -> str | None:
+def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, main: Any, lines: list[str],
+                   window: Mapping[str, Any], files: Mapping[str, Any], trusted: LiveCommitment,
+                   received: Mapping[str, Sequence[bytes]], session: str, verify: Any) -> str | None:
     """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, the one the auditor's
-    ledger `lines` (core's check of it under `key`) opened for `window` (``{root}``), whose files are `files`, whose
-    signed coin commitment is `trusted` and whose signed log shows it received `received`: its salt coin opened after the
-    window's own open root (`core_check.salt`, S from the ledger's reserve and R from its open) and its round log held to
-    `core_check.rounds`; None when they are."""
+    ledger `lines` (core's check of it under `key`, at a commit of `main`) opened for `window` (``{root}``), whose files
+    are `files`, whose signed coin commitment is `trusted` and whose signed log shows it received `received`: its salt
+    coin opened after the window's own open root (`core_check.salt`, S from the ledger's reserve and R from its open) and
+    its round log held to `core_check.rounds`; None when they are."""
     for name in ("round_coins", "coins"):
         try:
             c = LiveCommitment.from_json(commits.get(name))
@@ -156,8 +162,8 @@ def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[s
     named = given.get("session") if isinstance(given, Mapping) else None
     if named != session:
         return f"the window records session {named!r}, not {session}, the one the auditor's ledger opened on its root"
-    refused = CC.salt(key.to_json(), lines, window, files, commits.get("weights_root"), commits.get("requests_root"),
-                      commits.get("salt_opening"), verify)
+    refused = CC.salt(key.to_json(), main, lines, window, files, commits.get("weights_root"),
+                      commits.get("requests_root"), commits.get("salt_opening"), verify)
     if refused is not None:
         return f"the window's salt: {refused[1]}"
     log = list(commits.get("rounds") or ())
@@ -167,30 +173,33 @@ def _window_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[s
         return "the round log is not rounds 0, 1, ... in order"
     if (log[0].get("requests") if log else None) != commits.get("requests_root"):
         return "round 0's request table is not the one the window's open root is over (its requests_root)"
-    refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log], [x.get("coin") for x in log],
-                        verify)
+    refused = CC.rounds(key.to_json(), main, lines, window, files, [x.get("root") for x in log],
+                        [x.get("coin") for x in log], verify)
     if refused is not None:
         return f"the window's rounds: {refused[1]}"
     return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))
 
 
 def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path],
-                          window: Mapping[str, Any], key: ChallengerKey, verify: Any = lms_verify) -> str | None:
+                          window: Mapping[str, Any], key: ChallengerKey, main: Any,
+                          verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
     ``requests_root``, ``session``, ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own
     challenger's, read from `directory`, the session the auditor's signed ledger opens and ends for `window` (``{root}``,
     the window's open root), under `key`, the challenger key the deployment pins, the ledger the longest of the heads
-    infra published at `heads` (each a ``windows.jsonl``), any two extending one another; None when they are. Fails
-    closed: a missing, malformed or unsigned record, log, hello log or ledger, a ledger signed under another key, forked
-    or older than the session's end, or a window it opens no one session for, trusts nothing (`remote.trusted_session`)."""
+    infra published at `heads` (each a ``windows.jsonl``), any two extending one another, its entries written by the
+    host at a commit of `main` (the verifier's own copy of main's first-parent history, `remote.main_lines`); None when
+    they are. Fails closed: a missing, malformed or unsigned record, log, hello log or ledger, a ledger signed under
+    another key, forked or older than the session's end, a window it opens no one session for, or a host tree main
+    doesn't hold (or no copy of main), trusts nothing (`remote.trusted_session`)."""
     try:
-        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
+        trusted, received = remote.trusted_session(directory, heads, window, key, main, verify)
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         files = remote.session_files(directory)
-        sid = audited_session(lines, window, key, verify).session
+        sid = audited_session(lines, window, key, main, verify).session
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
-    return _window_reason(commits, key, lines, window, files, trusted, received, sid, verify)
+    return _window_reason(commits, key, main, lines, window, files, trusted, received, sid, verify)
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
@@ -220,20 +229,22 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
 
 @dataclass(frozen=True)
 class Ledger:
-    """The auditor's ledger as core's check of record reads it under the verifier's challenger `key`: `lines`, the
-    longest of every head infra published, each checked and any two extending one another (`challenger.ledger_head`),
-    and that check's tables (`challenger.verify_ledger`, `challenger.verify_periods`): each window root to its one
-    session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't ended) entries, and each
-    period's name to its ``lane``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids,
-    in order), its ``cap`` and its ``circuit``."""
+    """The auditor's ledger as core's check of record reads it under the verifier's challenger `key` and its own copy of
+    main's first-parent history `main` (a list of commits, None when it holds none, which credits no session): `lines`,
+    the longest of every head infra published, each checked and any two extending one another
+    (`challenger.ledger_head`), and that check's tables (`challenger.verify_ledger`, `challenger.verify_periods`): each
+    window root to its one session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't
+    ended) entries, and each period's name to its ``lane``, ``open`` and ``close`` (None while it is open) entries, its
+    ``windows`` (session ids, in order), its ``cap`` and its ``circuit``."""
 
     key: ChallengerKey
+    main: Any
     lines: tuple[str, ...]
     windows: Mapping[str, Mapping[str, Any]]
     periods: Mapping[str, Mapping[str, Any]]
 
     @classmethod
-    def of(cls, heads: Sequence[Sequence[str]], key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
+    def of(cls, heads: Sequence[Sequence[str]], key: ChallengerKey, main: Any, verify: Any = lms_verify) -> Ledger:
         """The ledger of `heads` (every published head, each its lines), refused (`CoinError`) as core refuses it."""
         lines = ledger_head([list(h) for h in heads], key, verify)
         raw, I = [line.encode() for line in lines], key.public[:16]
@@ -244,12 +255,12 @@ class Ledger:
             except ValueError:
                 return False
 
-        return cls(key, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies))
+        return cls(key, main, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies))
 
     @classmethod
-    def load(cls, heads: Sequence[str | Path], key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
+    def load(cls, heads: Sequence[str | Path], key: ChallengerKey, main: Any, verify: Any = lms_verify) -> Ledger:
         """`of` the heads at `heads` (each a ``windows.jsonl``)."""
-        return cls.of([remote.ledger_lines(p) for p in heads], key, verify)
+        return cls.of([remote.ledger_lines(p) for p in heads], key, main, verify)
 
     def window(self, root: str) -> Mapping[str, Any] | None:
         return self.windows.get(root)
@@ -264,11 +275,11 @@ def evidence(ledger: Ledger, root: str, fetch: Fetch, verify: Any = lms_verify
              ) -> tuple[dict[str, Any], LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """The files of the session `ledger` opens for window root `root`, from its ``out/`` as `fetch` gives it
     (`remote.session_files`), the coin commitment its challenger signed and the roots its signed release log shows it
-    received, as core reads a session (`challenger.audited_session`, `challenger.session_named`); `CoinError` naming
-    why."""
+    received, as core reads a session (`challenger.audited_session`, `challenger.session_named`, at a commit of
+    `ledger.main`); `CoinError` naming why."""
     window = {"root": root}
-    # TODO(#3015): `Ch.credited_session(lines, window, key, descriptor, verify)` here once it is on main.
-    audited = audited_session(list(ledger.lines), window, ledger.key, verify)
+    # TODO(#3015): `Ch.credited_session(lines, window, key, main, descriptor, verify)` here once it is on main.
+    audited = audited_session(list(ledger.lines), window, ledger.key, ledger.main, verify)
     tree = fetch(audited.session)
     if tree is None:
         raise CoinError(f"session {audited.session} has no tree on the auditor's side (the gate's fetch)")
@@ -335,7 +346,8 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
         files, trusted, received = evidence(ledger, root, fetch, verify)
     except CoinError as e:
         return f"session {sid} is not trusted: {e}"
-    return _window_reason(commits, ledger.key, list(ledger.lines), {"root": root}, files, trusted, received, sid, verify)
+    return _window_reason(commits, ledger.key, ledger.main, list(ledger.lines), {"root": root}, files, trusted, received,
+                          sid, verify)
 
 
 def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:

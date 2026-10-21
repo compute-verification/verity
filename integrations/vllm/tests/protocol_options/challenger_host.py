@@ -3,7 +3,8 @@ opened under an id with its record signed with an LMS key (`remote.open_session`
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
-leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
+leaf, its commitment and how many hellos it refused; every entry names the host's pinned tree `PIN`, a commit of the
+verifier's copy of main, `MAIN`. The verifier reads `directory` under `key`, as the ledger opens and ends it.
 `Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. #2643's `tests/check/challenger_host.py`,
 over any challenger."""
 from __future__ import annotations
@@ -26,6 +27,10 @@ from verity.ml.crypto import lms
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
+#: the auditor host's pinned tree, which every ledger entry names, and the verifier's own copy of main's first-parent
+#: history, which holds it
+PIN = "0" * 40
+MAIN = ["e1" * 20, PIN]
 
 
 def entropy(seed: int):
@@ -85,7 +90,7 @@ class Gate:
         expires = (datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=minutes)).strftime(
             "%Y-%m-%dT%H:%M:%SZ")
         body = {"by": by, **({"for": for_} if for_ else {}), "peer": "vy-nebius-1", "scheme": scheme, "epoch": epoch,
-                "families": [list(f) for f in families], "minutes": minutes, "pinned": "0" * 40, "key_sha512": self.pin,
+                "families": [list(f) for f in families], "minutes": minutes, "pinned": PIN, "key_sha512": self.pin,
                 "host": f"{HOST}.{session}", "started_utc": started, "expires_utc": expires, **override}
         e = self.append("reserve", session, body)
         self._reserves[session] = e
@@ -95,7 +100,7 @@ class Gate:
     def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
                     circuit: str | None = None, **override) -> dict:
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
-                **({"circuit": circuit} if circuit is not None else {}), "pinned": "0" * 40, "key_sha512": self.pin,
+                **({"circuit": circuit} if circuit is not None else {}), "pinned": PIN, "key_sha512": self.pin,
                 "opened_utc": "2026-10-20T11:00:00Z", **override}
         self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
         return self.append("period-open", None, body)
@@ -107,8 +112,8 @@ class Gate:
         windows = [{"root": self._opens[s]["window"]["root"] if s in self._opens else None, "session": s,
                     "complete": self._complete.get(s, False)} for s in p["windows"]]
         body = {"period": name, "lane": p["lane"], "by": "vllm", "windows": windows,
-                "complete": bool(windows) and all(w["complete"] for w in windows), "closed_utc": "2026-10-20T12:00:00Z",
-                **override}
+                "complete": bool(windows) and all(w["complete"] for w in windows), "pinned": PIN,
+                "closed_utc": "2026-10-20T12:00:00Z", **override}
         if self._current.get(p["lane"]) == name:
             del self._current[p["lane"]]
         return self.append("period-close", None, body)
@@ -141,11 +146,11 @@ class Gate:
         if reserved is not None:
             rb = reserved["body"]
             body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in LC.RESERVED if k in rb},
-                    "opened_by": by, "pinned": "0" * 40, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
+                    "opened_by": by, "pinned": PIN, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
                     "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
                     "started_utc": rb["started_utc"]}
         else:
-            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": "0" * 40,
+            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": PIN,
                     "host": f"{HOST}.{session}", "key_sha512": key_sha512 or self.pin,
                     "peer": "vy-nebius-1", "port": 7811, "scheme": scheme, "epoch": epoch,
                     "families": [list(f) for f in families], "minutes": 10, "started_utc": "2026-10-20T11:08:46Z",
@@ -177,15 +182,15 @@ class Gate:
                 "ended": "closed by the client" if closed else "serve.py exited 1", "released": released,
                 "complete": released is not None and all(released.get(k) == n for k, n in families),
                 "record_leaf": LC.leaf_of(doc["signature"]), "commitment": record.commitment.root.hex(),
-                "refused_hellos": len(hellos.read_text().splitlines()) if hellos.is_file() else 0,
+                "refused_hellos": len(hellos.read_text().splitlines()) if hellos.is_file() else 0, "pinned": PIN,
                 "ended_utc": "2026-10-20T11:08:53Z", **override}
         if type(body["record_leaf"]) is int:
             self._leaf = max(self._leaf, body["record_leaf"] + 1)
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self) -> PHC.Ledger:
-        return PHC.Ledger.of([self.lines], self.key)
+    def ledger(self, main=MAIN) -> PHC.Ledger:
+        return PHC.Ledger.of([self.lines], self.key, main)
 
 
 class Ledger:
@@ -210,12 +215,13 @@ class Ledger:
     def reserve(self, session: str, leaf: int | None = None) -> None:
         self._reserves[session] = len(self.lines)
         self.append("reserve", session, {"by": "vllm", "minutes": 10, "started_utc": "2026-10-20T11:08:00Z",
-                                         "expires_utc": "2026-10-20T11:18:00Z", "key_sha512": self.key_sha512}, leaf)
+                                         "expires_utc": "2026-10-20T11:18:00Z", "pinned": PIN,
+                                         "key_sha512": self.key_sha512}, leaf)
 
     def open(self, session: str, window: dict, leaf: int | None = None) -> None:
         reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
-        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
+        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": PIN,
                                       "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
@@ -223,7 +229,7 @@ class Ledger:
         record = json.loads((directory / R.RECORD).read_text())
         self.append("end", session, {"closed": closed, "files": files, "rc": 0 if closed else 1, "complete": closed,
                                      "record_leaf": int(record["signature"][:8], 16),
-                                     "commitment": record["commitment"]["root"],
+                                     "commitment": record["commitment"]["root"], "pinned": PIN,
                                      "refused_hellos": len((directory / R.HELLOS).read_text().splitlines())})
 
 
