@@ -1218,8 +1218,8 @@ theorem witTieRing : Tie witLayout8 .zTree witRing witRingCls where
   readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
-/-- Step `0`'s receipt is cut at coin `1`, its round's, and committed at coin `5`, under round `5`'s root: past its
-cut, so only `LayerCommitted`'s second case covers it. -/
+/-- Step `0`'s receipt reads coin `0`, so it is cut at coin `1`, the next round's, and committed at coin `5`, under
+round `5`'s root: past its cut, so only `LayerCommitted`'s second case covers it. -/
 theorem witRing_late : witRing.Writes 3 ∧ witRing.cutOf 3 = 1 ∧ witRing.commitRound 3 = 5 :=
   ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
 
@@ -1281,8 +1281,8 @@ theorem witCross_notTie : ¬ Tie witLayout2s .beside witCross witCrossCls := fun
   absurd (T.readers 2 (by decide +kernel) (by decide +kernel) 5 (by decide +kernel)
     (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
 
-/-- **Nor does it meet `LayerCommitted`**: its cut is coin `1`, its round's, before its commit coin `2`, and a gate of
-another unit reads it. -/
+/-- **Nor does it meet `LayerCommitted`**: its cut is coin `1`, the next round's, before its commit coin `2`, and a
+gate of another unit reads it. -/
 theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
   rcases h 2 ⟨by decide +kernel, by decide +kernel⟩ with h1 | ⟨-, -, h2⟩
   · exact absurd h1 (by decide +kernel)
