@@ -383,6 +383,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         a = engine_args(gpu_mem)
         # hbc: hbr's call from HB_H1U_KC's build, with DITHER_H1C_KC's libh1c.so where set (as dither-a-hbc)
         h1c = os.environ.get("DITHER_H1C_KC", os.environ["DITHER_H1C"]) if unit == "hbc" else os.environ["DITHER_H1C"]
+        if unit == "hbc" and "DITHER_ZY1_KC" in os.environ:
+            os.environ["DITHER_ZY1"] = os.environ["DITHER_ZY1_KC"]
         SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit="hbr" if unit == "hbc" else unit,
                  h1u=os.environ[{"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]], ao=ao, pt=pt,
                  depth=depth, ov=ov, serve_prio=serve_prio, window_end=we)
