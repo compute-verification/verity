@@ -62,7 +62,8 @@ def CheckedRel (s : RowsSession) (o : s.Out) (ok : String) (v : ℕ → ℕ → 
 `--zk --registered` accepts its session, opens the committed rows at the registered reads (`openedReg`), and its
 relation is the unit's Definition with its check word `ok` registered (`CheckedRel`). -/
 noncomputable def checkedLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
-    (out : ∀ x w i, (sess x w i).Out) (ok : String) (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
+    (out : ∀ x w i, (sess x w i).Out) (ok : String)
+    (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) :
     ProofLayer Ω S nπ (ℕ → ℕ → Option Bool) where
   accepted x w i := LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
   opened x w i := openedReg (sess x w i)
