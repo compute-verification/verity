@@ -254,8 +254,8 @@ the blocks on `na-leaf0` and 10.3 ms from those behind the spine. The run before
 A long prompt, honest, was run in the same run (`lab_run run --prompt 40 --steps 2`, `out/long-prompt`). It has
 1,132,127 gates and 21 messages, in 825 events and 12 requests, under δ = 137 buckets and 34 windows. All four checks
 accept it: the certifier audit and N3 accept every block, v5 accepts all 68 of each block's windows, and the answers
-equal the reference. N3's check took 40 minutes, almost all of it in `n3.open_values`, which rebuilds a tree's levels
-for each opening. A 64-token prompt can't be built, because the model's cos/sin table has 64 rows.
+equal the reference. N3's check took 40 minutes. A profile of a 2-token prompt's check put 77 of its 80 s in
+`n3.open_values`'s openings. A 64-token prompt can't be built, because the model's cos/sin table has 64 rows.
 
 ## The whole night
 
