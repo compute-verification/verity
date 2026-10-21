@@ -7,7 +7,8 @@ the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). T
 held to, are `_release`'s.
 
 The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests' streams
-(`release::tests::drive`), `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at
+(`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, so the record
+stays the firewall's own), `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at
 seed 0, and `release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
 
 from __future__ import annotations
@@ -156,6 +157,7 @@ def test_the_lean_runs_rusts_index_cases(lean):
         tally[f"{step['op'][0]}:{'reject' if 'reject' in step else _result({'result': step['result']})}"] += 1
     print(dict(sorted(tally.items())))
     assert tally["outside"] == 387, tally
+    assert sum(v for k, v in tally.items() if k != "outside" and not k.endswith(":reject")) == 2830, tally
     assert sum(v for k, v in tally.items() if k.endswith(":reject")) >= 500, tally
     assert {k.split(":")[0] for k in tally} - {"outside"} == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
     for k in ("open:ok", "admit:ok", "admit:refused"):
