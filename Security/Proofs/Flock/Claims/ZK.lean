@@ -109,6 +109,7 @@ import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
+import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -538,6 +539,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FinishZc`: the masked zerocheck's and lincheck's proofs. Answered by `asksCut` with room for their asks, the cut's
   zerocheck and lincheck return the masked values `mk` at the layout's indices as their proofs
   (**`Claims.ZKServer.zerocheckCut_proof`**, **`Claims.ZKServer.lincheckCut_proof`**).
+* `FinishTau`: those two met at the firewall's own run. Where the firewall's rep under `asksCut` passes, its coins are
+  the tape's (`RankAt.cut_coins`, through the ring switch and the opening by `RankAt.ringSwitchCut_grows` and
+  `RankAt.ligeritoPZk_grows`), and at the model's coins and switched vectors its first five constraints are `rowsOf`'s
+  (**`Composed.tauFw`**).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
