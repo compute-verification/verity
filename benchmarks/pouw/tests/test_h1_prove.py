@@ -1,13 +1,15 @@
 """h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `run.py`, `h1unit.py`, `stage.py`), without the
 unit's circuit: the window's public Program and template-instance partition derive exactly the tiles it commits and the
-rows each reads, its registered values a/<K>, b/<K> and zy (every tile's z/y record, `scaled_mm_zy`'s) are read where the
-window's own reads say, a window's drawn units open to those rows of its registered roots and to nothing else (a tampered
-window's, another window's, a tampered A row), each in-proof negative's window changes the one value it names and makes
+rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
+the weights' b/<K>) are read where the window's own reads say, one call's units a statement, a window's drawn units open
+to those rows of its registered roots and to nothing else (a tampered window's, another window's, a tampered A row), each
+in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
 row lays out the unit's salt, position and roots as its parameters read them, and the verifier's shared-row file over the
 opened ``b || c`` and paths is C-Flock's own over the rows."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -115,13 +117,15 @@ def win():
 @pytest.mark.slow
 def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_path, win):
     """The window's public Program (`h1unit.Shape.window`) under its template-instance query has one unit per tile
-    `window.py` commits, serves and opens, numbered as it numbers them, each an instance of the tile unit: unit u reads A
-    rows R ti .. R ti + R - 1 of the slot, its call's B rows C tj .. C tj + C - 1 of ``b``, row u of ``zy``, the salt,
-    position u and the window's roots, and its outputs are row u of the receipt and of ok. The slot pads the token rows
-    with zero rows of scale 0, and the public commitment holds no token count. Its rows (with their scales) and records
-    are the Program's registered values a/<K>, b/<K> and zy, each record `scaled_mm_zy`'s (`h1zy.records`); a
-    registration of z alone is refused; and the verifier's ``--registered`` file (`registered.reads_file`, from the
-    Program alone) reads, at every unit and port, the row `h1window.unit_reads` does."""
+    `window.py` commits, serves and opens, numbered as it numbers them, each an instance of the tile unit: unit u, tile t
+    of call c, reads A rows R ti .. R ti + R - 1 of call c's A table, its call's B rows C tj .. C tj + C - 1 of b/<K>, row
+    t of call c's z table, the salt, position u and the window's roots, and its outputs are row u of the receipt and of
+    ok. The slot pads the token rows with zero rows of scale 0, and the public commitment holds no token count. Each
+    call's A table is the slot's rows (with their scales) under its own salts and its z table its tiles' records, each
+    `scaled_mm_zy`'s (`h1zy.records`), the tables the verifier's Program names; a registration of z alone, or of one
+    window-wide zy, is refused; the units' roots are the A tables' digest and b/<K>'s root; and the verifier's
+    ``--registered`` file of a call (`h1window.table_reads_file`, from the Program alone) reads, at every unit of the call
+    and port, the row `h1unit.unit_reads` does, and none at any other call's unit."""
     layer(tmp_path / "w.npz", 8, rows=6, calls=(("k_proj", 16), ("q_proj", 20)))
     com = commit(tmp_path, tmp_path / "w.npz", "w", win.obj["program"])
     assert (com["slot"], com["b_rows"], [(c["name"], c["n"]) for c in com["calls"]]) == (8, 32, [("k_proj", 16), ("q_proj", 16)])
@@ -129,22 +133,35 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert not {"rows", "tokens"} & set(com)
     priv = np.load(tmp_path / "w" / "rows.npz")
     assert priv["a"].shape == (8, K) and not priv["a"][6:].any() and not priv["scale_a"][6:].any()
+    T = com["tiles"]
+    tables = {f"b/{K}": 32, f"a/{K}@0": 8, "zy@0": T // 2, f"a/{K}@1": 8, "zy@1": T // 2}
+    assert U.tables(com) == U.program_tables(win.program, K) == tables
+    assert [e["value"] for e in com["registered"]] == list(tables)
     assert RN.check_registration(win, com) == []
     assert RN.check_registration(win, dict(com, program_sha512="0" * 128)) != []
-    assert RN.check_registration(win, dict(com, root_b=com["root_a"])) != []
-    assert RN.check_registration(win, dict(com, root_zy=com["root_a"])) != []
+    assert RN.check_registration(win, dict(com, registered=com["registered"][:-1])) != []
     port = {p.name: p for p in U.Shape(K).ports()}
     assert [bytes(x) for x in priv["bcb"]] == U.commit_strings(port["b0"], U.row_words(priv["b"], priv["scale_b"]),
                                                                [bytes(s) for s in priv["sb"]])
     assert [bytes(x) for x in priv["bczy"]] == U.commit_strings(port["zy"], priv["zyw"], [bytes(s) for s in priv["szy"]])
-    zonly = G.Registered.commit(com["program_sha512"], "zy", priv["zyw"][:, :2 * RC].tolist(), [bytes(s) for s in priv["szy"]],
-                                G.WORD_BITS, U.V2)
-    why = RN.check_registration(win, dict(com, root_zy=zonly.root.hex(),
-                                          registered=[zonly.entry() if e["value"] == "zy" else e for e in com["registered"]]))
+    assert priv["sa"].shape == (2, 8, U.SALT_BYTES) and not (priv["sa"][0] == priv["sa"][1]).all(axis=1).any()
+    for c in range(2):
+        assert [bytes(x) for x in priv["bca"][c]] == U.commit_strings(port["a0"], U.row_words(priv["a"], priv["scale_a"]),
+                                                                      [bytes(s) for s in priv["sa"][c]])
+    zonly = G.Registered.commit(com["program_sha512"], "zy@0", priv["zyw"][:T // 2, :2 * RC].tolist(),
+                                [bytes(s) for s in priv["szy"][:T // 2]], G.WORD_BITS, U.V2)
+    why = RN.check_registration(win, dict(com, registered=[zonly.entry() if e["value"] == "zy@0" else e
+                                                           for e in com["registered"]]))
     assert len(why) == 1 and why[0].startswith("its registered entries")
     assert RN.check_registration(win, RN.z_only(com)) != []
+    wide = G.Registered.commit(com["program_sha512"], "zy", priv["zyw"].tolist(), [bytes(s) for s in priv["szy"]],
+                               G.WORD_BITS, U.V2)
+    assert RN.check_registration(win, dict(com, registered=[*(e for e in com["registered"] if e["value"][:3] != "zy@"),
+                                                            wide.entry()])) != []
+    reg = U.registered_of(com)
+    a_roots = b"".join(bytes.fromhex(reg[f"a/{K}@{c}"][1]) for c in range(2))
+    assert U.window_roots(com) == (hashlib.sha512(U.A_TABLES_TAG + a_roots).digest(), bytes.fromhex(reg[f"b/{K}"][1]))
 
-    T = com["tiles"]
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
     assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
     assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], u, 1) for u in range(T)]
@@ -153,10 +170,13 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
                                            **{f"b_k{K}[{j}]": f"b{j}" for j in range(C)}, "zy": "zy"}
     for u in range(T):
         c, ti, tj = W.tile_of(com, u)
+        t0 = com["calls"][c]["tile0"]
         b0 = com["calls"][c]["b0"] + C * tj
+        assert U.HW.call_of(win.program, u) == (c, u - t0)
         assert U.unit_reads(win.program, win.tp, u) == {
-            **{f"a{i}": ("a", R * ti + i) for i in range(R)}, **{f"b{j}": ("b", b0 + j) for j in range(C)}, "zy": ("zy", u),
-            "salt": ("salt", 0), "position": ("position", u), "roots": ("roots", 0), "o0": ("receipt", u), "o1": ("ok", u)}
+            **{f"a{i}": (f"a/{K}@{c}", R * ti + i) for i in range(R)}, **{f"b{j}": (f"b/{K}", b0 + j) for j in range(C)},
+            "zy": (f"zy@{c}", u - t0), "salt": ("salt", 0), "position": ("position", u), "roots": ("roots", 0),
+            "o0": ("receipt", u), "o1": ("ok", u)}
         rows, cols = slice(R * ti, R * ti + R), slice(b0, b0 + C)
         a, b, sa, sw = priv["a"][rows], priv["b"][cols], priv["scale_a"][rows], priv["scale_b"][cols]
         assert np.array_equal(priv["zyw"][u], U.record_words(*U.records(a, b, sa, sw)))
@@ -164,17 +184,18 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
             enc = lambda m: [[int(x) & 0xFF for x in r] for r in m]  # noqa: E731
             assert U.split_record(priv["zyw"][u], RC) == Z.records(enc(a), enc(b), f32(sa), f32(sw))
 
-    reads = U.registered_reads(win.program, win.query, {U.value(t, K): com[f"root_{t}"] for t in U.REGISTERED})
-    assert sorted(reads["ports"]) == sorted(U.Shape(K).in_rows)
-    leaves = {"a": 8, "b": 32, "zy": T}
-    for p, e in reads["ports"].items():
-        tree = U.tree_of(p)
-        v = U.value(tree, K)
-        assert {x: e[x] for x in e if x != "reads"} == {
-            "value": v, "root": com[f"root_{tree}"], "leaves": leaves[tree], "words": U.value_words(v), "word_bits": 16,
-            "domain": U.registered_domain(win.obj["program"], v, leaves[tree]).domain_id.hex(), "row_schema": U.V2}
-        assert e["reads"] == [U.unit_reads(win.program, win.tp, u)[p][1] for u in range(T)]
-    assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
+    roots = {v: r for v, (_n, r) in reg.items()}
+    for c, (first, n) in enumerate(U.HW.call_units(win.program)):
+        reads = U.registered_reads(win.program, win.tp, c, roots, win.obj["program"])
+        assert sorted(reads["ports"]) == sorted(U.Shape(K).in_rows)
+        for p, e in reads["ports"].items():
+            v = U.unit_reads(win.program, win.tp, first)[p][0]
+            assert {x: e[x] for x in e if x != "reads"} == {
+                "value": v, "root": roots[v], "leaves": tables[v], "words": U.value_words(v), "word_bits": 16,
+                "domain": U.registered_domain(win.obj["program"], v, tables[v]).domain_id.hex(), "row_schema": U.V2}
+            assert e["reads"] == [U.unit_reads(win.program, win.tp, u)[p][1] if first <= u < first + n else None
+                                  for u in range(T)]
+        assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -189,19 +210,21 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 @pytest.mark.slow
 def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     """A drawn unit's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
-    another window's), its ok row is the one word 1 under its public salt, and a prover's rows with a tampered A row
-    (`window.py open --tamper-a`, at every unit that reads it) open no registered root through the path they keep."""
+    another window's), its ok row is the one word 1 under its public salt, a prover's rows with a tampered A row
+    (`window.py open --tamper-a`, at every unit that reads it) open no registered root through the path they keep, and
+    units of two calls, which read two calls' tables, are no one statement."""
     salt = U.unit_salt(U.stand_in_reveal(b"\x01" * 32), 1)
     com, served = committed(tmp_path, "w1", 1, salt, win)
     assert com["tiles"] == 2 * (8 // R) * (16 // C)
     assert served["salt"] == PS.pouw_salt(U.stand_in_reveal(b"\x01" * 32), 1, U.STREAM, U.PROVER).hex()
-    units = [0, 5, 7]
+    units = [4, 5, 7]
     for u, op in zip(units, opened(tmp_path, "w1", salt, units, "honest")):
         assert RN.check_opening(win, com, served, op, u) == []
     rows = np.load(tmp_path / "honest" / "rows.npz")
     assert rows["w_pub"].shape == (3, 100) and rows["s_pub"].shape == (3, U.SALT_BYTES)
     assert rows["w_a0"].shape == (3, K // 2 + 2) and rows["w_zy"].shape == (3, 3 * RC)
-    assert rows["r_a0"].tolist() == [0, 0, 4] and rows["r_b0"].tolist() == [0, 24, 24] and rows["r_zy"].tolist() == units
+    assert rows["r_a0"].tolist() == [0, 0, 4] and rows["r_b0"].tolist() == [16, 24, 24] and rows["r_zy"].tolist() == [0, 1, 3]
+    assert (rows["v_a0"].tolist(), rows["v_b0"].tolist(), rows["v_zy"].tolist()) == ([f"a/{K}@1"] * 3, [f"b/{K}"] * 3, ["zy@1"] * 3)
     assert all(np.array_equal(w, U.OK) for w in rows["w_o1"])
     assert [bytes(s) for s in rows["s_o1"]] == [U.ok_salt("w1", u) for u in units]
     assert [reference(rows, i)[1] for i in range(3)] == [1, 1, 1]
@@ -213,24 +236,32 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     assert [int(np.count_nonzero(x != y)) for x, y in zip(bad["w_a0"], rows["w_a0"])] == [1, 1, 0]
     assert bytes(bad["s_a0"][0]) == bytes(bad["s_a0"][1]) != bytes(rows["s_a0"][0])
     assert np.array_equal(bad["w_a1"], rows["w_a1"]) and np.array_equal(bad["p_a0"], rows["p_a0"])
-    assert U.statement_tables(dict(bad), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"], K)["registered"]["a0"]["positions"] == [0, 4]
+    st = U.statement_tables(dict(bad), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    assert st["registered"]["a0"]["positions"] == [0, 4] and st["registered"]["a0"]["value"] == f"a/{K}@1"
+    reg = U.registered_of(com)
     for z, opens in ((rows, True), (bad, False)):
         bc = U.commit_strings(a0, z["w_a0"][:1], [bytes(z["s_a0"][0])])[0]
-        assert U.verify_registered(win.obj["program"], f"a/{K}", 8, bytes.fromhex(com["root_a"]), 0, bc, [str(z["p_a0"][0])]) is opens
+        assert U.verify_registered(win.obj["program"], f"a/{K}@1", 8, bytes.fromhex(reg[f"a/{K}@1"][1]), 0, bc,
+                                   [str(z["p_a0"][0])]) is opens
+    opened(tmp_path, "w1", salt, [0, 5], "two-calls")
+    with pytest.raises(ValueError, match="one call's units a statement"):
+        U.statement_tables(dict(np.load(tmp_path / "two-calls" / "rows.npz")), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
 
-    for flag, port, tree in (("--zy-word", "zy", "zy"), ("--receipt", "o0", "receipt")):
+    for flag, port, value in (("--zy-word", "zy", "zy@1"), ("--receipt", "o0", "receipt")):
         served_t, com_t = tampered(tmp_path, "w1", flag, "5")
         assert RN.check_registration(win, com_t) == []
-        assert served_t["tampered"]["records" if tree == "zy" else "receipts"] == [5]
-        assert (com_t["root_zy"] != com["root_zy"]) is (tree == "zy")
+        assert served_t["tampered"]["records" if port == "zy" else "receipts"] == [5]
+        assert served_t["tampered"]["tables"] == ([value] if port == "zy" else [])
+        reg_t = U.registered_of(com_t)
+        assert [v for v in reg if reg_t[v] != reg[v]] == ([value] if port == "zy" else [])
         ops = opened(tmp_path, f"w1-{flag.replace('-', '')}5", salt, units, f"open{flag}")
         assert all(RN.check_opening(win, com_t, served_t, op, u) == [] for u, op in zip(units, ops))
-        why = f"{port}: its path does not reach the registered {tree} root"
+        why = f"{port}: its path does not reach the registered {value} root"
         assert [RN.check_opening(win, com, served, op, u) for u, op in zip(units, ops)] == [[why]] * len(units)
 
     salt2 = U.unit_salt(U.stand_in_reveal(b"\x02" * 32), 2)
     com2, served2 = committed(tmp_path, "w2", 2, salt2, win)
-    assert RN.check_registration(win, com2) == [] and com2["root_a"] != com["root_a"]
+    assert RN.check_registration(win, com2) == [] and U.window_roots(com2)[0] != U.window_roots(com)[0]
     op2 = opened(tmp_path, "w2", salt2, [5], "other")[0]
     assert RN.check_opening(win, com2, served2, op2, 5) == []
     assert len(RN.check_opening(win, com, served, op2, 5)) == R + C + 1 + 1
@@ -241,12 +272,13 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
     """Each in-proof negative's tampered window (`window.py tamper`, `run.IN_PROOF`) opens to its own registration and
     not the honest one, and changes exactly the value it names: the receipt word 0 plus one, a record's y of cell 0 plus
     one, its z of cell 0 plus one with y that z's dequant, two units' records exchanged, the record of the same tile in the
-    other call, a record of z alone, a D_1 word one too large. The unit's word reference (`h1zy.reference`) on its opened
+    other call, a record of z alone, a D_1 word one too large, a changed record re-registering its call's z table alone.
+    The unit's word reference (`h1zy.reference`) on its opened
     rows computes ok = 0 exactly at the units whose record moved, and the stager's check (`stage.check_against_reference`)
     refuses the window's committed outputs there and accepts the reference's."""
     salt = U.unit_salt(U.stand_in_reveal(b"\x03" * 32), 1)
     com, served = committed(tmp_path, "w1", 1, salt, win)
-    units = [1, 5]
+    units = [4, 5]
     opened(tmp_path, "w1", salt, units, "honest")
     honest = dict(np.load(tmp_path / "honest" / "rows.npz"))
     zyw = np.load(tmp_path / "w1" / "rows.npz")["zyw"]
@@ -257,11 +289,12 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
     value = lambda w: int(w[0]) | int(w[1]) << 16  # noqa: E731
     c, ti, tj = W.tile_of(com, 5)
     other_call = W.unit_of(com, 1 - c, ti, tj)
-    cases = {("--receipt-word", "5"): [], ("--y-cell", "5"): [5], ("--z-cell", "5"): [5], ("--swap", "5", "1"): [1, 5],
+    cases = {("--receipt-word", "5"): [], ("--y-cell", "5"): [5], ("--z-cell", "5"): [5], ("--swap", "5", "4"): [4, 5],
              ("--call", "5"): [5], ("--z-only", "5"): [5], ("--d-word", "5"): []}
     for flag, moved in cases.items():
         served_t, com_t = tampered(tmp_path, "w1", *flag)
         assert served_t["tampered"]["records"] == moved and RN.check_registration(win, com_t) == []
+        assert served_t["tampered"]["tables"] == (["zy@1"] if moved else [])
         assert served_t["tampered"]["receipts"] == ([5] if flag[0] in ("--receipt-word", "--d-word") else [])
         priv = f"w1-{''.join(flag).replace('-', '')}"
         ops = opened(tmp_path, priv, salt, units, f"open{''.join(flag)}")
@@ -350,18 +383,20 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     codes = {"a": rng.integers(-128, 128, (8, K)).astype(np.int8), "b": rng.integers(-128, 128, (16, K)).astype(np.int8)}
     words = {t: U.row_words(c, scales(rng, len(c))) for t, c in codes.items()}
     words["zy"] = rng.integers(0, 1 << 16, (T, 3 * RC)).astype(np.uint16)
-    reg = {t: U.register(prog, U.value(t, K), w, [rng.bytes(U.SALT_BYTES) for _ in w]) for t, w in words.items()}
+    values = {"a": f"a/{K}@0", "b": f"b/{K}", "zy": "zy@0"}
+    reg = {t: U.register(prog, values[t], w, [rng.bytes(U.SALT_BYTES) for _ in w]) for t, w in words.items()}
     assert list(reg["a"].bcs) == U.commit_strings(ports[0], words["a"], list(reg["a"].salts))
     assert list(reg["zy"].bcs) == U.commit_strings(ports[names.index("zy")], words["zy"], list(reg["zy"].salts))
-    com = {"unit": {"k": K}, "slot": 8, "b_rows": 16, "tiles": T, **{f"root_{t}": r.root.hex() for t, r in reg.items()}}
+    com = {"unit": {"k": K}, "registered": [r.entry() for r in reg.values()]}
     verifier = SimpleNamespace(obj={"program": prog})
     first = {"a": [0, 4, 0], "b": [0, 0, 8], "zy": indices}
     salts_of = lambda s: np.frombuffer(b"".join(s), np.uint8).reshape(len(s), U.SALT_BYTES)  # noqa: E731
+    tree_of = lambda p: "zy" if p == "zy" else p[0]  # noqa: E731
     z = {"units": np.array(indices)}
     for p in reg_ports:
-        t = U.tree_of(p)
+        t = tree_of(p)
         pos = first[t] if t == "zy" else [f + int(p[1:]) for f in first[t]]
-        z.update({f"w_{p}": words[t][pos], f"s_{p}": salts_of([reg[t].salts[q] for q in pos]),
+        z.update({f"w_{p}": words[t][pos], f"s_{p}": salts_of([reg[t].salts[q] for q in pos]), f"v_{p}": np.array([values[t]] * n),
                   f"r_{p}": np.array(pos), f"p_{p}": np.array([reg[t].path(q).hex() for q in pos])})
     for p in ["pub", *outs]:
         port = ports[names.index(p)]
@@ -369,7 +404,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
         z[f"s_{p}"] = salts_of([rng.bytes(U.SALT_BYTES) for _ in range(n)])
 
     def staged(z: dict, d: Path) -> bytes:
-        st = U.statement_tables(z, ins, outs, K)
+        st = U.statement_tables(z, ins, outs)
         d.mkdir()
         FC.write(text, SimpleNamespace(name="s", subcircuit=SimpleNamespace(id="sub")), 0, n, d / "inst.bin", d / "pub.bin",
                  None, indices, share_rows=True, outs={p: z[f"w_{p}"] for p in outs}, tables=st["tables"], refs=st["refs"],
@@ -379,7 +414,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     def bcs_reads(z: dict) -> tuple[list, list]:
         bcs = [{p: U.commit_strings(ports[names.index(p)], z[f"w_{p}"][i:i + 1], [bytes(z[f"s_{p}"][i])])[0] for p in names}
                for i in range(n)]
-        return bcs, [{p: (U.value(U.tree_of(p), K), int(z[f"r_{p}"][i]), str(z[f"p_{p}"][i])) for p in reg_ports}
+        return bcs, [{p: (str(z[f"v_{p}"][i]), int(z[f"r_{p}"][i]), str(z[f"p_{p}"][i])) for p in reg_ports}
                      for i in range(n)]
 
     pub = staged(z, tmp_path / "honest")
@@ -389,10 +424,15 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     assert h["shared_rows"] == {**{p: 2 for p in reg_ports[:-1]}, "zy": 3, "pub": 3, "o0": 3, "o1": 3}
     assert (h["registered"]["a0"]["positions"], h["registered"]["b3"]["positions"], h["registered"]["zy"]["positions"],
             h["units"]["indices"]) == ([0, 4], [3, 11], indices, indices)
-    assert h["registered"]["zy"]["value"] == "zy"
+    assert (h["registered"]["zy"]["value"], h["registered"]["a0"]["value"]) == ("zy@0", f"a/{K}@0")
     assert all(RN.registered_opens(pub, ports, p, r, verifier, com) for p in reg_ports for r in range(h["shared_rows"][p]))
     with pytest.raises(ValueError, match="ascending"):
         U.verifier_pub(head, "s", "sub", bcs, [9, 3, 12], reads)
+    other = [dict(r, a0=(f"a/{K}@1", *r["a0"][1:])) if i == 2 else r for i, r in enumerate(reads)]
+    with pytest.raises(ValueError, match="one call's units a statement"):
+        U.verifier_pub(head, "s", "sub", bcs, indices, other)
+    with pytest.raises(ValueError, match="one call's units a statement"):
+        U.statement_tables(dict(z, v_a0=np.array([f"a/{K}@0", f"a/{K}@0", f"a/{K}@1"])), ins, outs)
 
     bad, row = dict(z), z["w_a0"][:1].copy()
     row[0, 0] ^= 1
@@ -404,7 +444,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     half = dict(bad, w_a0=bad["w_a0"].copy(), s_a0=bad["s_a0"].copy())
     half["w_a0"][2], half["s_a0"][2] = z["w_a0"][2], z["s_a0"][2]
     with pytest.raises(ValueError, match="instances 0 and 2 read position 0 as two rows"):
-        U.statement_tables(half, ins, outs, K)
+        U.statement_tables(half, ins, outs)
     with pytest.raises(ValueError, match="units 0 and 2 read position 0 as two rows"):
         U.verifier_pub(head, "s", "sub", *bcs_reads(half)[:1], indices, bcs_reads(half)[1])
 
@@ -473,7 +513,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_
     assert served["z_is_served_product"] == {"cells": 4 * RC, "equal": 4 * RC}
     assert served["xa"]["tile_rows_with_xa"] == served["xa"]["tile_rows"] == 16
     bad, com_t = tampered(tmp_path, "w", "--xa-flip", "1")
-    assert bad["receipt_root"] == served["receipt_root"] and com_t["root_zy"] != com["root_zy"]
+    assert bad["receipt_root"] == served["receipt_root"] and U.registered_of(com_t)["zy@0"] != U.registered_of(com)["zy@0"]
     assert bad["tampered"]["records"] == [1] and bad["tampered"]["receipts"] == []
     flip = bad["tampered"]["xa_flip"]
     assert flip["xa_set_in_unit"] > 0 and flip["receipt_is_honest"] and flip["record_words_changed"] > 0

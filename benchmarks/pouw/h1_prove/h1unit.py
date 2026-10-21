@@ -21,33 +21,34 @@ prover and the verifier of `run.py` share.
   dequant makes the unit compute 0, whose row is not that ``b || c`` (binding fails), and a prover that commits 1 anyway
   commits a wrong witness.
 * **The window's commitments** are those rows' ``b || c`` (hm96-sha512 under the committer's salts) as frame-v3-sha512
-  leaves (`rowleaf.row_leaf`) of four trees: ``a``, the window's A rows (the activations every call reads, each with its
-  s_a) in a slot of `slot` rows, the token rows padded with zero rows of scale 0; ``b``, every call's B rows (the model's,
-  each with its s_w), call after call; ``zy``, every tile's record, row u unit u's; and ``receipt`` over the window's
-  tiles. ``a``, ``b`` and ``zy`` are the registered values ``a/<K>``, ``b/<K>`` and ``zy`` of the window's Program
-  (`register`: `registered.Registered.commit` under the Program's digest, ``row/v2`` rows of 16-bit leaves, `value_words`
-  a row), so the Lean verifier opens every row a statement reads against their roots; ``receipt`` is the window's own tree
-  (`domain`), opened outside the proof. The roots ``(root(a), root(b))`` are every unit's ``roots`` input.
-  `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's META declares
-  (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its rows and salts
-  are the committed ones.
+  leaves (`rowleaf.row_leaf`) of the trees a served round commits before its coin (`h1window.table`), the weights', and
+  the receipts': each call c's A table ``a/<K>@<c>``, the slot's `slot` rows (the activations every call reads, each
+  with its s_a, the token rows padded with zero rows of scale 0) under the call's own salts, and its z table ``zy@<c>``,
+  one record a tile of the call in its tile order; ``b/<K>``, every call's B rows (the model's, each with its s_w), call
+  after call; and ``receipt`` over the window's tiles. The tables and ``b/<K>`` are registered values (`tables`,
+  `register`: `registered.Registered.commit` under the window Program's digest, ``row/v2`` rows of 16-bit leaves,
+  `value_words` a row), so the Lean verifier opens every row a statement reads against their roots; ``receipt`` is the
+  window's own tree (`domain`), opened outside the proof. Every unit's ``roots`` input is (the A tables' digest, root(b))
+  (`window_roots`). `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
+  META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its
+  rows and salts are the committed ones.
 * **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit
-  (the smoke's `TILE`, 4 × 8), each call its own linear at K, every call reading the one A block (the slot), its
-  parameters ``a/<K>``, ``b/<K>`` and ``zy`` the trees ``a``, ``b`` and ``zy``; unit u is the tile `window.py` numbers u,
-  it reads row u of ``zy``, and its outputs are row u of ``receipt`` and ``ok``. Its `Q_template_instances` partition
-  derives the units, and the statement binds it (`Shape.stager`'s ``bind``), so the Lean verifier derives each instance's
-  unit from its own copy of the program (``--program``, ``--partition``) and the indices the public file states, and
-  `unit_reads` is the row of each tree each of the unit's ports reads. The slot is the window's size class and the calls'
-  B rows the model's, so the layout is protocol structure and the real token count stays the prover's. Each circuit port
-  reads one tree in every unit, as a registered port reads one value.
+  (the smoke's `TILE`, 4 × 8), each call its own linear at K, every call reading the one A block (the slot); unit u is
+  the tile `window.py` numbers u, tile t of its call c, and its outputs are row u of ``receipt`` and ``ok``. Its
+  `Q_template_instances` partition derives the units, and the statement binds it (`Shape.stager`'s ``bind``), so the
+  Lean verifier derives each instance's unit from its own copy of the program (``--program``, ``--partition``) and the
+  indices the public file states. `unit_reads` is the row each of the unit's ports reads (`h1window.table_reads`): its A
+  rows at call c's A table, its record at row t of call c's z table, its B rows at ``b/<K>``. The slot is the window's
+  size class and the calls' B rows the model's, so the layout is protocol structure and the real token count stays the
+  prover's. A registered port reads one value, so a statement holds one call's units.
 * **The verifier's public file** (`verifier_pub`) is built from the opened leaves and the verifier's own public and ok
   rows alone: a shared-row file (`circuit.write`'s), its header the statement's (its circuit pin, its units' global
   indices, each port's frame-v3 root over its table's ``b || c``) with each registered port's table the registered rows its
   units read (``registered``: their positions, the verifier's own, and the opened paths), then the ``b || c`` and each
   unit's refs. Lean ``verify --zk`` holds a session to that file, so it accepts only a proof whose committed rows are the
   window's, whose salt, position and roots are the verifier's and whose ok is 1; with ``--registered``
-  (`registered_reads`, the verifier's own reads from its Program) it also opens each A row, B row and record against its
-  registered root at the position the verifier's Program reads.
+  (`registered_reads`, the verifier's own reads of one call's units from its Program) it also opens each A row, B row
+  and record against its registered root at the position the verifier's Program reads.
 """
 from __future__ import annotations
 
@@ -83,6 +84,7 @@ PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
 PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
+A_TABLES_TAG = b"verity/pouw/h1-prove/a-tables/v0\0"
 #: the ok row the verifier accepts: the unit's one output bit, 1, in its one word
 OK = np.ones(1, np.uint16)
 
@@ -135,15 +137,43 @@ def window_shape(com: dict) -> tuple[tuple[tuple[str, int], ...], int]:
     return tuple((c["name"], int(c["n"])) for c in com["calls"]), int(com["slot"])
 
 
+def tables(com: dict) -> dict[str, int]:
+    """A window commitment's registered values and their rows, in registration order: the weights' ``b/<K>`` (every
+    call's B rows), then each call c's A table ``a/<K>@<c>`` (the slot's rows) and z table ``zy@<c>`` (one record a tile
+    of the call)."""
+    k = com["unit"]["k"]
+    out = {f"b/{k}": int(com["b_rows"])}
+    for c, call in enumerate(com["calls"]):
+        out[f"a/{k}@{c}"], out[f"zy@{c}"] = int(com["slot"]), int(call["tiles"])
+    return out
+
+
+def program_tables(program, k: int) -> dict[str, int]:
+    """`tables` as the verifier's own window Program gives them: its B rows, and each call's A table (`h1window.table`,
+    its slot of M rows) and z table (its tiles)."""
+    S, sig = program.fn.S(), dict(program.fn.signature()[0])
+    out = {f"b/{k}": sig[f"b/{k}"].n}
+    for c, (_u0, n) in enumerate(HW.call_units(program)):
+        out[HW.table(program, "a", c)], out[HW.table(program, "zy", c)] = S.M, n
+    return out
+
+
+def registered_of(com: dict) -> dict[str, tuple[int, str]]:
+    """A commitment's registered values as its entries name them, each its rows and root (`run.check_registration` holds
+    the entries to the verifier's own Program)."""
+    return {e["value"]: (int(e["leaves"]), e["root"]) for e in com["registered"]}
+
+
 def window_roots(com: dict) -> tuple[bytes, bytes]:
-    """A window commitment's roots (root(a), root(b)), every unit's ``roots`` input."""
-    return bytes.fromhex(com["root_a"]), bytes.fromhex(com["root_b"])
+    """A window commitment's roots, every unit's ``roots`` input: SHA-512 of its calls' A table roots in call order (under
+    `A_TABLES_TAG`), and root(b/<K>). The z tables are in neither, so a changed record moves no receipt."""
+    k, reg = com["unit"]["k"], registered_of(com)
+    a = hashlib.sha512(A_TABLES_TAG + b"".join(bytes.fromhex(reg[f"a/{k}@{c}"][1]) for c in range(len(com["calls"]))))
+    return a.digest(), bytes.fromhex(reg[f"b/{k}"][1])
 
 
 #: the statement's output rows, by `h1window.unit_reads`' keys
 OUT_PORTS = {"receipt": "o0", "ok": "o1"}
-#: the window's registered trees, each the Program parameter `value` names
-REGISTERED = ("a", "b", "zy")
 
 
 def ports(template) -> dict[str, str]:
@@ -163,30 +193,20 @@ def window_ports(program) -> dict[str, str]:
 
 
 def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
-    """`h1window.unit_reads` by the statement's ports (`window_ports`, `OUT_PORTS`; ``salt``, ``position`` and ``roots``
-    the public row's), each read's parameter by the tree that commits it (``a/<K>`` the tree ``a``, ``b/<K>`` the tree
-    ``b``, ``zy`` the tree ``zy``)."""
+    """`h1window.table_reads` by the statement's ports (`window_ports`, `OUT_PORTS`; ``salt``, ``position`` and ``roots``
+    the public row's): each registered port's value (its call c's ``a/<K>@<c>`` or ``zy@<c>``, the weights' ``b/<K>``)
+    and its row there, and the window's parameter or output each other port reads."""
     port = {**window_ports(program), **OUT_PORTS}
-    return {port.get(key, key): (param.split("/")[0], row) for key, (param, row) in HW.unit_reads(program, tp, u).items()}
+    return {port.get(key, key): (param, row) for key, (param, row) in HW.table_reads(program, tp, u).items()}
 
 
-# -- the registered trees a, b and zy ---------------------------------------------------------------------------------------
-
-
-def value(tree: str, k: int) -> str:
-    """The window Program's parameter that tree ``a``, ``b`` or ``zy`` registers: ``a/<K>``, ``b/<K>``, ``zy``."""
-    return "zy" if tree == "zy" else f"{tree}/{int(k)}"
-
-
-def tree_of(port: str) -> str:
-    """The registered tree a statement port reads: ``a<i>`` tree ``a``, ``b<j>`` tree ``b``, ``zy`` tree ``zy``."""
-    return "zy" if port == "zy" else port[0]
+# -- the registered values: each call's tables and the weights' b/<K> -------------------------------------------------------
 
 
 def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
-    """A registered value's row width in 16-bit leaves: ``a/<K>`` and ``b/<K>`` K/2 + 2 (`h1zy.ROW`), ``zy`` 3 R C
-    (`h1zy.RECORD`)."""
-    return 3 * tile[0] * tile[1] if name == "zy" else int(name.split("/")[1]) // 2 + 2
+    """A registered value's row width in 16-bit leaves: an A table ``a/<K>@<c>`` and ``b/<K>`` K/2 + 2 (`h1zy.ROW`), a z
+    table ``zy@<c>`` 3 R C (`h1zy.RECORD`)."""
+    return 3 * tile[0] * tile[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
 
 
 def register(program: str, name: str, words: np.ndarray, salts) -> G.Registered:
@@ -212,14 +232,13 @@ def verify_registered(program: str, name: str, leaves: int, root: bytes, index: 
     return G.verify_read(registered_domain(program, name, leaves), root, index, bc, bytes.fromhex("".join(sibs)), V2)
 
 
-def registered_reads(program, query, roots: dict[str, str]) -> dict:
-    """The verifier's ``--registered`` file of a window (flock-verify ``verify --zk --registered``): for each registered
-    port (`window_ports`), the registered value it reads (``roots``: ``{a/<K>: root, b/<K>: root, zy: root}``, the
-    window's), the value's rows, width and domain, and the row each unit of the verifier's own Program reads
-    (`registered.reads_file` over ``program`` and ``query``, the window's). The one place h1_prove derives it:
-    `served.register_served` takes its place once it reads ``row/v2`` trees."""
-    return G.reads_file(program, query, {v: value_words(v) for v in roots}, roots, ports=window_ports(program),
-                        schemas={v: V2 for v in roots})
+def registered_reads(program, tp, call: int, roots: dict[str, str], prog: str | None = None) -> dict:
+    """The verifier's ``--registered`` file of a statement over call ``call``'s units (flock-verify ``verify --zk
+    --registered``, `h1window.table_reads_file`): for each registered port (`window_ports`), the value it reads (the
+    call's A table or z table, or the weights' b/<K>), its root (``roots`` ``{value: root}``, the window's registration),
+    rows, width and domain, and the row each unit of the call reads in the verifier's own Program (``program``, ``tp``
+    its template partition; ``prog`` its digest), None at every other unit. The one place h1_prove derives it."""
+    return HW.table_reads_file(program, tp, call, roots, ports=window_ports(program), prog=prog)
 
 
 def table(positions) -> tuple[list[int], list[int], list[int]]:
@@ -232,11 +251,22 @@ def table(positions) -> tuple[list[int], list[int], list[int]]:
     return tpos, refs, [first[t] for t in range(len(tpos))]
 
 
-def statement_tables(z: dict, in_ports: list[str], out_ports: list[str], k: int) -> dict:
+def one_value(port: str, values) -> str:
+    """The one registered value a statement's port reads at all its instances: a port reads one value, so a statement
+    holds one call's units."""
+    got = sorted({str(v) for v in values})
+    if len(got) != 1:
+        raise ValueError(f"port {port}: its instances read {got}, and a port reads one registered value: one call's units a "
+                         f"statement")
+    return got[0]
+
+
+def statement_tables(z: dict, in_ports: list[str], out_ports: list[str]) -> dict:
     """The prover's shared-row statement of `window.py open`'s rows ``z`` (its rows.npz): each registered port's table
-    (``r_<port>``, the rows' positions) the distinct positions its instances read in first-read order (`table`), under
-    their registered salts and opened paths (``p_<port>``), and every other input port's one row per instance; as
-    `UnitStager.stage` takes them: ``tables``, ``refs``, ``salts`` (every port's, one per table row) and ``registered``."""
+    (``r_<port>``, the rows' positions in the value ``v_<port>`` names, one value a port, `one_value`) the distinct
+    positions its instances read in first-read order (`table`), under their registered salts and opened paths
+    (``p_<port>``), and every other input port's one row per instance; as `UnitStager.stage` takes them: ``tables``,
+    ``refs``, ``salts`` (every port's, one per table row) and ``registered``."""
     n = len(z["units"])
     tables, refs, salts, registered = {}, {}, {}, {}
     for p in in_ports:
@@ -244,6 +274,7 @@ def statement_tables(z: dict, in_ports: list[str], out_ports: list[str], k: int)
         if f"r_{p}" not in z:
             tables[p], refs[p], salts[p] = w, list(range(n)), s
             continue
+        value = one_value(p, z[f"v_{p}"])
         tpos, refs[p], first = table(z[f"r_{p}"])
         paths = [str(x) for x in z[f"p_{p}"]]
         for i, t in enumerate(refs[p]):
@@ -251,7 +282,7 @@ def statement_tables(z: dict, in_ports: list[str], out_ports: list[str], k: int)
             if (s[i], paths[i]) != (s[j], paths[j]) or not np.array_equal(w[i], w[j]):
                 raise ValueError(f"port {p}: instances {j} and {i} read position {tpos[t]} as two rows")
         tables[p], salts[p] = w[first], [s[j] for j in first]
-        registered[p] = {"value": value(tree_of(p), k), "positions": tpos, "paths": [paths[j] for j in first]}
+        registered[p] = {"value": value, "positions": tpos, "paths": [paths[j] for j in first]}
     for p in out_ports:
         salts[p] = [bytes(x) for x in z[f"s_{p}"]]
     return {"tables": tables, "refs": refs, "salts": salts, "registered": registered}
@@ -495,8 +526,9 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
     circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the drawn units),
     each unit's rows' ``b || c`` (port name -> 128 bytes: the window's opened leaves, and its own public and ok rows'), and
     each unit's registered reads (``reads``: port -> (value, position, path), the position the verifier's Program reads
-    and the opened path, hex). A registered port's table is its units' distinct positions in first-read order (`table`),
-    the header's ``registered`` their positions and paths; every other port's is one row per unit."""
+    and the opened path, hex; one value a port, `one_value`). A registered port's table is its units' distinct positions
+    in first-read order (`table`), the header's ``registered`` their positions and paths; every other port's is one row
+    per unit."""
     from verity_flock import circuit as FC
     meta, pin, cls = circuit_head["meta"], circuit_head["pin"], circuit_head["class"]
     if meta.get("public_inputs"):
@@ -511,6 +543,7 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
         if p.name not in reads[0]:
             tabs[p.name], refs[p.name] = [u[p.name] for u in bcs], list(range(n))
             continue
+        one_value(p.name, [r[p.name][0] for r in reads])
         tpos, refs[p.name], first = table([r[p.name][1] for r in reads])
         for i, t in enumerate(refs[p.name]):
             j = first[t]

@@ -7,8 +7,9 @@ the Lean verifier derives each instance's unit from its own copy of them. `run.p
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
 rows, the drawn units' instances in order, and their indices in the Program), and this stages it with C-Flock's
 `UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A port's, B
-port's and the record's table the registered rows its instances read, with their positions and paths, so the statement's
-committed rows are the registered values' and the window's leaves. DIR gets inst.bin, pub.bin (the prover's), outs.npz
+port's and the record's table the registered rows its instances read, with their value, positions and paths (one call's
+units a statement: its A table, z table and b/<K>), so the statement's committed rows are the registered values' and the
+window's leaves. DIR gets inst.bin, pub.bin (the prover's), outs.npz
 (the staged output rows, ``o0`` and ``o1`` per instance) and stage.json, the last one written, which says at which
 instances each staged output row is not the one the rows commit (``outputs_differ``: an honest window's none, a changed
 record's its ok). WORK/requests/END stops it.
@@ -114,7 +115,7 @@ def main() -> None:
         try:
             if [int(u) for u in r["indices"]] != [int(u) for u in z["units"]]:
                 raise ValueError(f"the request's indices {r['indices']} are not its rows' units {z['units'].tolist()}")
-            st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports], k)
+            st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports])
             got = stager.stage(rows, out, os.urandom(32), salts=st["salts"], indices=r["indices"], set_name=r["set"],
                                tables=st["tables"], refs=st["refs"], registered=st["registered"])
         except Exception as e:  # noqa: BLE001 - a refused round is reported in its stage.json, and the next one staged
