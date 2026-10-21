@@ -92,6 +92,20 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_RONLY
 #define H1K_RONLY 0
 #endif
+// H1K_PD = D: h1k's producers load their A and B words D rounds ahead, a ring of D register sets (h1k<4> runs one CTA an
+// SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise blocks, loaded at its first round, are stored
+// at its second round's end rather than its first's, so a round hides their load. H1K_L2PF = S: the producer whose
+// segment is S segments before a 128-byte line's first prefetches that line of the unit's 32 B rows into L2 (A's rows,
+// every unit's of the row block, stay in L2)
+#ifndef H1K_PD
+#define H1K_PD 1
+#endif
+#ifndef H1K_NXD
+#define H1K_NXD 0
+#endif
+#ifndef H1K_L2PF
+#define H1K_L2PF 0
+#endif
 // H1U_CARVE = 1: kh_one's units kernels ask for the maximum shared-memory carveout, once a process each, before their
 // first launch (the driver's default on an RTX PRO 6000 holds one 42 KB h1u CTA an SM, where registers allow two)
 #ifndef H1U_CARVE
@@ -100,6 +114,8 @@ constexpr int WARPS = H1U_WARPS;
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
 static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
+static_assert(H1K_PD >= 1 && H1K_PD <= 4, "h1k's ring: 1 to 4 rounds ahead");
+static_assert(H1K_L2PF % 4 == 0, "h1k's L2 prefetch distance is whole 128-byte lines of segments");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
 
@@ -905,26 +921,33 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
-  uint2 pa[4], pb[4];
-  if (wp) load_seg(pp, pa, pb);
+  // round r's segment in ring slot r % H1K_PD
+  uint2 pa[H1K_PD][4], pb[H1K_PD][4];
+  if (wp) {
+#pragma unroll
+    for (int d = 0; d < H1K_PD; ++d)
+      if (KP * d + pp < ks) load_seg(KP * d + pp, pa[d], pb[d]);
+  }
   const u32 R = ks / KP;
-#pragma unroll 1
-  for (u32 r = 0; r <= R; ++r) {
+  uint4 nv[KNI];
+  const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4]) {
     if (wp) {
       if (r < R) {
         const u32 sg = KP * r + pp, blk = sg >> 4, j = sg & 15;
-        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (its buffer's last reader, chunk
-        // blk - 1, finished before this round's barrier)
+        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (H1K_NXD: its second round's; its
+        // buffer's last reader, chunk blk - 1, finished before this round's barrier, and its next is chunk blk + 1)
         const bool nx = ((KP * r) & 15) == 0 && blk + 1 < chunks;
-        uint4 nv[KNI];
+        const bool sx = H1K_NXD ? r >= 1 && ((KP * (r - 1)) & 15) == 0 && blk + 1 < chunks : nx;
         if (nx) load_noise(blk + 1, nv);
         uint2 ca[4], cw[4];
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
-          ca[i] = pa[i];
-          cw[i] = pb[i];
+          ca[i] = ra[i];
+          cw[i] = rb4[i];
         }
-        if (sg + KP < ks) load_seg(sg + KP, pa, pb);
+        if (sg + KP * H1K_PD < ks) load_seg(sg + KP * H1K_PD, ra, rb4);
+        if (H1K_L2PF && ((sg + H1K_L2PF) & 3) == 0 && sg + H1K_L2PF < ks)
+          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + H1K_L2PF));
         const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][0][0][0]);
         const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][1][0][0]);
         u32 af[2][4], bf[4][2];
@@ -1004,7 +1027,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         }
 #pragma unroll
         for (int t = 0; t < 8; ++t) S.dt[r & 1][pp][t][lane] = make_int4(dT[t][0], dT[t][1], dT[t][2], dT[t][3]);
-        if (nx) store_noise((blk + 1) & 1, nv);
+        if (sx) store_noise((blk + 1) & 1, nv);
       }
     } else if (r) {
       const u32 r1 = r - 1;
@@ -1030,6 +1053,12 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       }
     }
     __syncthreads();
+  };
+#pragma unroll 1
+  for (u32 r0 = 0; r0 <= R; r0 += H1K_PD) {
+#pragma unroll
+    for (int d = 0; d < H1K_PD; ++d)
+      if (r0 + d <= R) run_round(r0 + d, pa[d], pb[d]);
   }
   // the producers' Y, Cw and Pz to warp 0 as sums
   if (wp) {
