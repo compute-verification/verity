@@ -51,6 +51,11 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
 ~~~
 
+`tmpl_layouts.sh K...` sizes layouts of the same mined template (`tmpl_layouts.py`): today's, each run of copies in a
+power-of-two slot (`tmpl.align`), and interleaved copies (the copy index in a run's low bits, chained runs falling back
+to contiguous or power-of-two copies), each with its rows, slot and bindings, and checks each layout's order on the
+flat unit. `$OUT` gets layouts-K.jsonl.
+
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
