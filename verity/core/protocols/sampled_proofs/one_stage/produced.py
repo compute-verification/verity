@@ -24,8 +24,9 @@ the produced tree's salts, and only the units' check bits leave.
   is its output row, which the statement opens at row ``r`` (an output row's registered port, §16.13); a consuming unit's
   parameter, or element ``name[i]`` of an array parameter, whose leaves are exactly row ``r``'s output leaves reads row
   ``r``. A read of part of a row, or of leaves of two rows, is refused (`ValueError`): a read at a position the verifier
-  doesn't derive is no public read. Swapping two rows of the tree moves no read, so it fails both the producer's and the
-  consumer's opening.
+  doesn't derive is no public read. Swapping two rows of the tree moves no read, so each producer's output no longer
+  opens at its row; a consumer that reads every row (H1's combine, an XOR) still opens them all, so the producers'
+  openings are what refuse a swap.
 * **The opened roots** (`opened`): the roots the verifiers of record report opening the sessions' reads of the produced
   values against (`audit.session_registered`, unfiltered) must each be the record's: ``P-opened`` otherwise, a produced
   value not opened included.
