@@ -209,3 +209,23 @@ def test_the_leaf_program_is_its_seeds_lanes_and_combine_and_its_reads_are_the_c
     assert r["seeds"] == {"value": L.PRODUCED_SEEDS, "rows": [None] + [0] * 32 + [None]}
     assert all(r[f"p[{ln}]"] == {"value": L.PRODUCED, "rows": [None] * 33 + [ln]} for ln in range(32))
     assert len(r) == 3 + 32
+
+
+@pytest.mark.slow
+def test_the_leaf_declares_every_sink_it_returns():
+    """The one-lane 4 × 8 leaf called from a harness, as circuit-check evaluates a Definition: a Definition a Program
+    calls must declare each sink it returns, the lanes' partials and the combine's ok; a Program's root need not, so the
+    leaf's own Program passes without it. Slow: the call checks its ports over the lane (about 30 s)."""
+    from verity.ml.circuits import ports
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.program import Program
+
+    exact = bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)
+    tile = bind(H.PouwH1Tile, EXACT=exact, R=4, C=8, PAIRS=tuple((i, j) for i in range(4) for j in range(8)))
+    fn = bind(L.PouwH1Leaf, TILE=tile)
+    width = L.lane(tile, 0).signature()[1].leaves
+    assert [(lo, hi) for lo, hi, o, _w in ports.port_types(fn).ret if o.sink] == [(0, width - 1), (width, width + 1)]
+    params, ret = fn.signature()
+    shell = ports.harness(CompositeDefinition("CoreH1LeafHarness", 1, (), lambda S: (tuple(params), ret),
+                                              lambda B, S, *a: B.call(fn, *a), register=False, ports=ports.forward(fn)))
+    ports.check(Program(shell).root)

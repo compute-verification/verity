@@ -297,9 +297,10 @@ def _leaf_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, receipt: Coll, salt: 
 def _leaf_ports(S: Any) -> Any:
     width = lane(S.TILE, 0).signature()[1]
     pw = width.fields[0][1].leaves
-    sinks = tuple((ln * width.leaves, ln * width.leaves + pw, _ports.Out(sink=True)) for ln in range(layout(S.TILE).lanes))
+    n = layout(S.TILE).lanes
+    sinks = tuple((ln * width.leaves, ln * width.leaves + pw, _ports.Out(sink=True)) for ln in range(n))
     return _ports.Ports(params={"salt": _ports.In(kind="coin"), "position": _ports.In(kind="position")},
-                        ret=_ports.Leaves(sinks))
+                        ret=_ports.Leaves(sinks + ((n * width.leaves, n * width.leaves + 1, _ports.Out(sink=True)),)))
 
 
 PouwH1Leaf = CompositeDefinition(
