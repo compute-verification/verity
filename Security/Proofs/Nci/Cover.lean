@@ -6,6 +6,7 @@ import Proofs.Nci.Cover.Width
 import Proofs.Nci.Cover.Witness
 import Proofs.Nci.Cover.FanOut
 import Proofs.Nci.Cover.FanOutWitness
+import Proofs.Nci.Cover.PartialSum
 
 /-!
 # Proofs of the cover theorem
@@ -14,5 +15,6 @@ import Proofs.Nci.Cover.FanOutWitness
 block pays for the products it finishes (`Charge`), the area bound (`Area`), its additive and width variants
 (`Additive`, `Width`), and the non-vacuity witness (`Witness`). The fan-in/fan-out bounds
 (`Models.Nci.Guarantees.CoverFanOut`) have their plan (`FanOutPlan`), its pieces (`FanOutWalk`, `FanOutRootCost`), the
-bounds (`FanOut`) and their witness (`FanOutWitness`).
+bounds (`FanOut`) and their witness (`FanOutWitness`). The partial-sum bounds
+(`Models.Nci.Guarantees.CoverPartialSum`) are `PartialSum`.
 -/
