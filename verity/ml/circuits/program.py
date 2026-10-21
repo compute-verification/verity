@@ -160,7 +160,7 @@ def _lower_root(fn: SpecializedDefinition, bindings: tuple[str, ...] | None = No
     bindings = bindings or (RUN,) * len(params)
     input_colls = [_lower_input(B, t, name, when) for (name, t), when in zip(params, bindings)]
     theta_nodes = frozenset(k for (name, _t), c in zip(params, input_colls) if name in theta for _s, k, _a, _b in ref_runs(c.refs))
-    out = fn.defn.body(B, fn.S(), *input_colls)
+    out = B.call(fn, *input_colls) if ports.called_root(fn) else fn.defn.body(B, fn.S(), *input_colls)
     body = B.finish(out)
     root_def = CompositeDefinition(f"Root[{fn.id}]", 1, (), lambda S: ((), ret), lambda *_: None, register=False)
     root = SpecializedDefinition(root_def, {}, ())

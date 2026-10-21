@@ -212,6 +212,19 @@ def test_the_leaf_program_is_its_seeds_lanes_and_combine_and_its_reads_are_the_c
 
 
 @pytest.mark.slow
+def test_the_seeds_unit_is_a_program_root():
+    """Each unit's statement binds the one-Definition Program of its template (META ``program_digests``). The seeds unit's
+    template is the seed `PouwUnitSeeds_v2`, whose Program calls it (`ports.called_root`): inlined, its gates would read the
+    coin outside a seed. Slow: the port check walks the seed's four compressions (about 25 s)."""
+    from verity.ml.circuits import ports
+    from verity.ml.circuits.program import Program
+
+    seeds = L.templates(_tile())[0]
+    assert seeds.id == L.PRODUCED_SEEDS and ports.called_root(seeds)
+    assert [n.fn.id for n in Program(seeds).root.body.nodes][-1] == L.PRODUCED_SEEDS
+
+
+@pytest.mark.slow
 def test_the_leaf_declares_every_sink_it_returns():
     """The one-lane 4 × 8 leaf called from a harness, as circuit-check evaluates a Definition: a Definition a Program
     calls must declare each sink it returns, the lanes' partials and the combine's ok; a Program's root need not, so the
