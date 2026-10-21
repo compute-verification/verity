@@ -444,7 +444,7 @@ windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 an
 windows, and every count at one window's and a day's depths, are composed only. `workload/tests/test_n3_cost.py` holds
 `composed` to the trace at the demo's format.
 
-The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) check the following:
+The tests (`workload/tests/test_n3_unit.py`, 46 quick and 6 slow, about 100 s) check the following:
 
 - `N3Frame` against `assemble` on every descriptor of the demo's, the simulator's and the lab's windows, honest and
   tampered, and on random descriptors; `N3Seg` against `segment`;
@@ -458,6 +458,8 @@ The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) c
 - every link-window of the simulator committed under its ports' profiles, with N2's head checks and N3's bit on each
   port-window: frames edited in content alone pass N2 everywhere and N3 refuses exactly N3 in the clear's ports, and
   an extra frame is refused by N2 too;
+- N3Window_v5 with the canonical framing's requests' template (`sim_v5`) on every simulator window: every frame is
+  `active.data_frames`', so it accepts every honest window and refuses exactly the tampered ones v3 refuses;
 - the whole circuit against the reference on the demo (thirteen instances) and on a salted lab window (three), and
   `N3RowRead` on rows past a unit's depth and of another unit.
 
@@ -471,7 +473,8 @@ The evaluations, `python -m workload.n3_unit sim` and `lab`:
   `link_windows_ok` and `n2_not_ok`): the honest run is 12 of 12 ok. `flip-bit` and `fill` pass N2 on every
   link-window, so N3 alone refuses them. `extra-frame` is off the profile at b1's uplink in window 0 and b2's in
   window 1, which N2 refuses too; b1's uplink in window 1 has the profile's count with its frames shifted, which N3
-  alone refuses.
+  alone refuses. N3Window_v5 with the template (`summary`'s `n3_v5`) accepts all 24 port-windows of the honest run
+  (14 of them empty, by public data) and refuses exactly the ones above in each tampered run.
 - Run `r20261018-084303-dae6`'s records, reference only (the circuit at 4,096-byte frames is too large for an agent
   VM). The honest run is 15 of 15 ok. `flip-bit` is not-ok at b1's responses and b2's requests in window 0. `late` is
   not-ok at the four windows that carry values b0 and b1 never committed, and refuses b2's responses on their status.
