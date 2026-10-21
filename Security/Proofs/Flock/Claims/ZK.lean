@@ -101,6 +101,7 @@ import Proofs.Flock.Claims.ZK.FinishPiop
 import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.FinishRep
+import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
@@ -493,6 +494,11 @@ import Proofs.Flock.Claims.ZK.HelloLean
   (**`Flock.Firewall.Finish.repFw_eq`**, at pads with `h_ab = h_a·h_b` and `w = x·y`, in a monad where a throw ends the
   run, as `flock-firewall finish`'s does, `throw_bind_sv`). Where no constraint fails on the pads the batched
   constraint holds whatever the constraints' lengths (`batched_of_noFail`, by `evalL_combo_linAt`).
+* `FinishBridge`: the firewall's rounds as the session's. Its rep counts rounds from zero in `StateT Nat V`; the session
+  logs every send in `FlockComplete.PS`. The state map `Flock.Firewall.Finish.bridge base` relates a rep at round `k` to
+  a log of `base + k` sends, and every prover the rep calls is walked once, generic in its `Sim`, so a `repFw` run that
+  returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
+  same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
