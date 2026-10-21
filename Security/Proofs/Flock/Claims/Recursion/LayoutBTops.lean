@@ -22,7 +22,8 @@ Everything else is `layoutBCap`'s. `heldB_layoutBTops` proves `HeldB` there from
 `RowsCover` and `FinPieces`: a tops round's pieces exist and each is a part's (`topsPieces_held`), since the list's
 later caps are as many as the schedule's tops (`topsListed_size`) and come before level 0's RecCap, the list's last
 (`FlockC3.Reps.list_ok`). So `TopsHeld` is gone. `ksLin2_deployed_tops` is `ksLin2_deployed_plain_closed` at
-`layoutBTops`, with `HeldB` replaced by those four facts.
+`layoutBTops`, with `HeldB` replaced by those four facts. `RowsCover` holds at every shape (`rowsCover`,
+`RowsCover.lean`, from the verifier's `RecVStar.checkRoundsListed` and `portsNamed`), and `ksLin2_deployed_rows` drops it.
 
 `HeldB` is structural: it asks that every round is fixed, held or assembled from pieces of the parts. That the pieces
 read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksB`,

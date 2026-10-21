@@ -97,6 +97,7 @@ import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Recursion.LayoutBCap
 import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy

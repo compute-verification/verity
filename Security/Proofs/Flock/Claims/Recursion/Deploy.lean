@@ -153,9 +153,27 @@ def innerOk (inner : Claims.Msg) : Except String Unit :=
     if s.read.draw.isNone then throw RecSetup.noInnerDraw
   | none => .error "rec: Flock's verifier does not set the inner statement up"
 
+/-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
+def partCircuit (p : PartX) : Option Circuit := do
+  let ins ← p.base.ins.toOption
+  (ProvedScope.circuitOf ins.read.tags p.base.circuit p.base.tables).toOption
+
+/-- **Each part's circuit names its statement's message-round ports**: wherever part `s`'s V* statement registers a
+port under a `rec-c<k>` (`RecVStar.ownPorts`, `RecVStar.cIndex`), the part's circuit, as the setup parses it
+(`partCircuit`), has a port of that name. Each session refuses a part without: `checkOwn` holds the reads file's
+message-round ports to the statement's, and `checkPubRows` finds each port registering a `rec-c<k>` among the
+circuit's rows. -/
+def portsNamed (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
+  (List.range vs.size).all fun s =>
+    let need := (RecVStar.ownPorts vs[s]!).filter fun q => (RecVStar.cIndex q.2.1).isSome
+    match parts[s]?.bind partCircuit with
+    | some c => need.all fun q => c.ports.any (·.name == q.1)
+    | none => need.isEmpty
+
 /-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
 and pass Flock's own setup and statement check with a draw (`innerOk`), the verifier's own inner shape reads
-(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape. -/
+(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape, whose circuit names the
+statement's message-round ports (`portsNamed`). -/
 def readX (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
@@ -166,7 +184,7 @@ def readX (x : Claims.Msg) : Option XR := do
     innerOk w.inner
     pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
-  if w.parts.length ≠ vs.size then none
+  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false then none
   pure ⟨w, ri, partition, shape, dims⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
