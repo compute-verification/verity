@@ -288,21 +288,45 @@ def _work(layout: dict) -> int:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
-    `DELTA`, `window.k_prime` inverted at each window's inputs: `window.sampling` at that ε draws no more than K, and at
-    the next grid point down more than K. At K = `plan.RECORD_K` it is at most 0.1%."""
+    `DELTA`, `window.k_prime` inverted at each window's inputs (its credited calls' work, its units, the most work a
+    unit does): K′ at that ε is at most K, and at the next grid point down more than K, and a window whose draw
+    establishes no ε <= 1 reports none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
     grid = Fraction(1, 1 << Wd.EPS_BITS)
-    for w, eps in zip(d["windows"], got["eps"], strict=True):
-        eps, work = Fraction(eps), Wd.Work(0, _work(w["layout"]), _work(w["layout"]))
-        assert eps == Wd.eps_at(big_k, Cr.DELTA, work.credited, work.n, 1)
-        assert Wd.sampling(eps, Cr.DELTA, work, 1)["law"]["k"] <= big_k
-        assert eps == grid or Wd.sampling(eps - grid, Cr.DELTA, work, 1)["law"]["k"] > big_k
-    at_record = Cr.established([{"template": "k64", "units": [[0, 1 << 20]], "work": 64, "floor": 1}], plan.RECORD_K)
+    for w, calls, eps in zip(d["windows"], got["windows"], got["eps"], strict=True):
+        lay = w["layout"]
+        (r, c), ks = lay["tile"], {name: (k, n) for name, k, n in lay["linears"]}
+        units = [((lay["m"] // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in lay["calls"]]
+        assert sum(s * u for s, u in units) == _work(lay)
+        credited = sum(units[i][0] * units[i][1] for i in calls)
+        n, w_max = sum(s for s, _u in units), max(u for _s, u in units)
+        if not credited or Wd.k_prime(Fraction(1), Cr.DELTA, credited, n, w_max) > big_k:
+            assert eps is None
+            continue
+        eps = Fraction(eps)
+        assert eps == Wd.eps_at(big_k, Cr.DELTA, credited, n, w_max)
+        assert Wd.k_prime(eps, Cr.DELTA, credited, n, w_max) <= big_k
+        assert eps == grid or Wd.k_prime(eps - grid, Cr.DELTA, credited, n, w_max) > big_k
+    at_record = Cr.established({"calls": [["w", 0]], "linears": [["w", 64, 1 << 20]], "m": 1, "tile": [1, 1]}, [0],
+                               plan.RECORD_K)
     assert at_record <= Fraction(1, 1000)
     assert plan.record_k(at_record, Cr.DELTA) <= plan.RECORD_K < plan.record_k(at_record - grid, Cr.DELTA)
+
+
+def test_the_reported_eps_is_of_the_credited_work():
+    """ε is a share of the credited work, not of the window's: with 8 of 9 equal calls credited (u = 8/9) the K′ of
+    ε = 0.1% at `DELTA` is 31,178, and its ε is at most 0.1%, where taking credited = n would report 8/9 of that, too
+    optimistic by 9/8. A window credited nothing establishes no ε."""
+    lay = {"calls": [["w", 0]] * 9, "linears": [["w", 4096, 1 << 20]], "m": 16, "tile": [16, 16]}
+    size, work = Cr.call_work(lay)[0]
+    k = Wd.k_prime(Fraction(1, 1000), Cr.DELTA, 8 * size * work, 9 * size, work)
+    eps = Cr.established(lay, list(range(8)), k)
+    assert k == 31_178 and Fraction(9999, 10_000_000) < eps <= Fraction(1, 1000)
+    assert Fraction(9, 8) * Wd.eps_at(k, Cr.DELTA, 9 * size, 9 * size, 1) == pytest.approx(eps, rel=1e-5)
+    assert Cr.established(lay, [], k) is None
 
 
 @pytest.mark.parametrize("seed", SEEDS)

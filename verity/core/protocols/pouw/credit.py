@@ -21,7 +21,8 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
   draw would not be K's. PoUW carries no ε target: `period_credit` reports the ε each window's draw of K established at
-  `DELTA`, `window.eps_at` (`window.k_prime` inverted) at the window's inputs.
+  `DELTA`, `window.eps_at` (`window.k_prime` inverted) at the window's inputs: its credited calls' work, its units and
+  the most work a unit does.
 * **No partial credit** (`outcome`): the window is accepted only when every unit the draw coin draws has exactly one
   proof outcome and it is an accept. A drawn unit whose proof failed or is missing refuses the whole window, not only
   its call. A unit with two outcomes is refused, since a retry never reproves, and so is an outcome for a unit the draw
@@ -312,16 +313,26 @@ def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
     return None
 
 
-def established(ss: list[dict], k: int) -> Fraction:
-    """The ε a draw of K = `k` under the work law over `ss` establishes at `DELTA`: a wrong set holding a share ε of
-    the window's work W = Σ w_s·n_s goes undrawn with probability at most δ. Stratum s draws k_s >= K·W_s/W of its
-    n_s units (or all of them) without replacement, on its own stream, so it misses its b_s wrong units with
-    probability at most (1 − x_s)^(K·W_s/W),
-    x_s = b_s/n_s; their product is at most (1 − Σ (W_s/W)·x_s)^K = (1 − ε)^K by concavity of the logarithm, the miss
-    of subset:K over W tiles of equal work. So ε is `window.eps_at` at K, δ and those inputs (credited = n = W,
-    w_max = 1)."""
-    total = sum(s["work"] * sum(hi - lo for lo, hi in s["units"]) for s in ss)
-    return Wd.eps_at(k, DELTA, total, total, 1)
+def call_work(layout: dict) -> list[tuple[int, int]]:
+    """Each call's units and the work of each of them, ``(size, work)`` in call order, of a layout `strata` accepted."""
+    (r, c), m = layout["tile"], layout["m"]
+    ks = {name: (k, n) for name, k, n in layout["linears"]}
+    return [((m // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in layout["calls"]]
+
+
+def established(layout: dict, credited_calls: list[int], k: int) -> Fraction | None:
+    """The ε a draw of K = `k` under the work law over the window `layout` (one `strata` accepted) establishes at
+    `DELTA` for its credited calls `credited_calls`: a wrong set holding a share ε of the credited work C goes undrawn
+    with probability at most δ; None when it establishes no ε <= 1 (C = 0, or K too small for C's share). `window.eps_at`
+    at the window's inputs as `window.k_prime` takes them: credited = C, the sum of the credited calls' units' work, n
+    the window's units and w_max the most work a unit does. The miss bound it rests on, that the work law's draw of K
+    misses a set of work εC with probability at most (1 − εC/(n·w_max))^K, is not proved in Lean yet."""
+    cw, picked = call_work(layout), set(credited_calls)
+    credited = sum(size * work for i, (size, work) in enumerate(cw) if i in picked)
+    try:
+        return Wd.eps_at(k, DELTA, credited, sum(size for size, _w in cw), max(w for _s, w in cw))
+    except ValueError:
+        return None
 
 
 def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
@@ -478,7 +489,8 @@ def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Ver
                   ) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
     window's credited calls in the close's order, the K the period's open committed (`committed_k`), the δ the ε is
-    reported at (`DELTA`), and each window's ε, what its draw of K established (`established`). The period's windows
+    reported at (`DELTA`), and each window's ε, what its draw of K established over its credited work (`established`;
+    null when it establishes no ε <= 1). The period's windows
     are exactly its close's (`period`), its open committed K (``budget``), each window proves the circuit the period's
     open committed (``circuit``: its ``descriptor``, the bytes in hex of the circuit its proofs were verified against,
     hashes to it, `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, served,
@@ -510,7 +522,8 @@ def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Ver
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")
         out.append(got)
-        eps.append(str(established(strata(w["layout"])[0], big_k)))
+        e = established(w["layout"], got, big_k)
+        eps.append(None if e is None else str(e))
     return {"windows": out, "k": big_k, "delta": str(DELTA), "eps": eps}, None
 
 
@@ -649,6 +662,6 @@ def a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
 
 
 __all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
-           "PERIOD_KEYS", "ROUND_TAG", "VERDICTS", "WINDOW_KEYS", "a_link", "calls_root", "committed_k", "cover",
+           "PERIOD_KEYS", "ROUND_TAG", "VERDICTS", "WINDOW_KEYS", "a_link", "call_work", "calls_root", "committed_k", "cover",
            "credited", "draw_root", "drawn", "established", "is_a", "law", "merkle_depth", "outcome", "period",
            "period_credit", "round_root", "strata", "tree_root", "window"]

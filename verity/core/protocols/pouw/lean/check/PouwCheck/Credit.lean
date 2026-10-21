@@ -21,7 +21,7 @@ it, string for string:
 * `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
   open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
-  at `DELTA` (`PouwWindow.epsAt`), which `periodCredit` reports.
+  over the window's credited work at `DELTA` (`PouwWindow.epsAt` at the window's inputs), which `periodCredit` reports.
 * `outcome` is `credit.outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept, else the
   whole window is refused (no partial credit). `window` is `credit.window`: `credited`, then `outcome` under the served
   window's arguments (the stream its root, the registration its draw root, the receipt `{"receipts": …}`).
@@ -262,11 +262,39 @@ def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Str
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
-/-- `credit.established`: the ε a draw of K = `k` under the work law over `ss` establishes at `DELTA`,
-`PouwWindow.epsAt` at K, δ and credited = n = W (the strata's work), `w_max` = 1. -/
-def established (ss : Array Flock.Draw.WorkStratum) (k : Nat) : R Rat := do
-  let total := Flock.Draw.totalWork ss
-  (PouwWindow.epsAt k DELTA total total 1).mapError fun e => ("budget", e)
+/-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
+`strata` accepted. -/
+def callWork (layout : Json) : List (Nat × Nat) :=
+  let num := fun j => (nat? j).getD 0
+  let (r, c) := match get layout "tile" with
+    | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
+    | _ => (1, 1)
+  let m := num (get layout "m")
+  let lins : List (String × Nat × Nat) := match get layout "linears" with
+    | .arr a => a.toList.filterMap fun x => match x with
+      | .arr b => match b.toList with
+        | [.str s, k, n] => some (s, num k, num n)
+        | _ => none
+      | _ => none
+    | _ => []
+  match get layout "calls" with
+  | .arr a => a.toList.filterMap fun x => match x with
+    | .arr b => match b.toList with
+      | [.str lin, _] => (lins.find? (·.1 == lin)).map fun (_, k, n) => ((m / r) * (n / c), r * c * k)
+      | _ => none
+    | _ => none
+  | _ => []
+
+/-- `credit.established`: the ε a draw of K = `k` under the work law over the window `layout` establishes at `DELTA`
+for its credited calls `got`, `PouwWindow.epsAt` at the window's inputs as `kPrime` takes them: credited the credited
+calls' units' work, n the window's units, `w_max` the most work a unit does; none when it establishes no ε ≤ 1. -/
+def established (layout : Json) (got : List Nat) (k : Nat) : Option Rat :=
+  let cw := callWork layout
+  let credited := ((List.range cw.length).zip cw).foldl
+    (fun a (i, s, w) => if got.contains i then a + s * w else a) 0
+  let n := cw.foldl (fun a (s, _) => a + s) 0
+  let wMax := cw.foldl (fun a (_, w) => max a w) 0
+  (PouwWindow.epsAt k DELTA credited n wMax).toOption
 
 /-- `credit._drawn`: the units the draw coin `coin` draws over `ss` (`workUnits`), else the refusal. -/
 def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array Flock.Draw.WorkStratum) (k : Json) :
@@ -403,11 +431,11 @@ structure PeriodCredit where
   windows : List (List Nat)
   k : Nat
   delta : Rat
-  eps : List Rat
+  eps : List (Option Rat)
 
 def PeriodCredit.toJson (c : PeriodCredit) : Json :=
   Json.mkObj [("windows", Lean.toJson c.windows), ("k", c.k), ("delta", toString c.delta),
-    ("eps", Json.arr (c.eps.map fun e => Json.str (toString e)).toArray)]
+    ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
 
 /-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
 committed K (`committedK`), each window proves the circuit the period's open committed (`circuit`: its descriptor
@@ -425,7 +453,7 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
   let bigK ← committedK ledger nm
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
-  let mut eps : List Rat := []
+  let mut eps : List (Option Rat) := []
   for (w, i) in ws.zipIdx do
     let f := get w
     let some d := (match f "descriptor" with
@@ -437,7 +465,7 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
       (f "layout") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
         ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
     out := out ++ [got]
-    eps := eps ++ [← established (← strata (f "layout")) bigK]
+    eps := eps ++ [established (f "layout") got bigK]
   pure ⟨out, bigK, DELTA, eps⟩
 
 /-- An A value's segments by name, each `(level, index, root)` in row order. -/

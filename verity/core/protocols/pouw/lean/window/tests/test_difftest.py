@@ -905,6 +905,31 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
         D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
 
 
+#: SERVE-REG's 8B window (Llama-3.1-8B int8, r20261021-082038-028f): 1,548,288 units, 16 of its 18 steps filled, so
+#: u = 8/9 of them credited (1,376,256). At ε = 1/1000 and δ = 2^-40, its grid level (`bucket` of the credited tiles:
+#: 1,310,720 of n = 1,441,792, u = 10/11) has K′ = 30,485, and its units themselves K′ = 31,178. Each row: name, the
+#: credited tiles, n, K′, and the ε `eps_at` gives at K′, then at credited = n (the 9/8- or 11/10-optimistic inputs).
+SERVE_REG = [("grid", 1_310_720, 1_441_792, 30_485, "4294913/4294967296", "1952233/2147483648"),
+             ("units", 1_376_256, 1_548_288, 31_178, "2147467/2147483648", "477215/536870912")]
+
+
+@pytest.mark.parametrize("name,credited,n,k,eps,at_n", SERVE_REG, ids=[s[0] for s in SERVE_REG])
+def test_eps_at_serve_reg(name: str, credited: int, n: int, k: int, eps: str, at_n: str, server) -> None:
+    """Lean and Python give SERVE-REG's 8B window its K′ at ε = 0.1% and δ = 2^-40, and invert it to an ε at most 0.1%,
+    one grid point below which K′ exceeds K: at the window's inputs (credited·tile_work, n, tile_work), never at
+    credited = n, which reports ε too small by n/credited."""
+    tw, delta, grid = 4096, [1, 1 << 40], Fraction(1, 1 << Wd.EPS_BITS)
+    assert json.loads(D.replay(PORTS["k_prime"][0], {"eps": [1, 1000], "delta": delta, "credited": credited * tw,
+                                                     "n": n, "w_max": tw}, server)[1]) == k
+    got = json.loads(D.replay(PORTS["eps_at"][0], {"k": k, "delta": delta, "credited": credited * tw, "n": n,
+                                                   "w_max": tw}, server)[1])
+    assert got == eps and Fraction(eps) <= Fraction(1, 1000)
+    assert Wd.k_prime(Fraction(eps) - grid, Fraction(*delta), credited * tw, n, tw) > k
+    old = json.loads(D.replay(PORTS["eps_at"][0], {"k": k, "delta": delta, "credited": n, "n": n, "w_max": 1},
+                              server)[1])
+    assert old == at_n and Fraction(at_n) * n / credited == pytest.approx(Fraction(eps), rel=1e-5)
+
+
 @pytest.mark.parametrize("fn", sorted(PORTS))
 def test_the_python_is_the_lean(fn: str, server) -> None:
     port, examples = PORTS[fn]
