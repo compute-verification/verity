@@ -15,8 +15,9 @@ After its last tick a block closes its connections, waits until every connection
 (`values.commit`).
 
 **Connections.** One per (source unit, destination unit), opened with φ's `HELLO` frame, then the frames of the messages in
-send order. `Inbox` reassembles each stream up to its `LAST` frame. Frames no message of φ takes (a covert stream, a frame
-after a stream's end) stay in the inbox and go into the record at the end.
+send order. No frame names its message (`framing`), so `Inbox` cuts each connection's frames into its messages by φ: the
+next message on the connection takes the next `framing.frame_count` frames. Frames no message of φ takes (one without the
+canonical header, a frame after the connection's last message) stay in the inbox and go into the record at the end.
 
 **Records.** A block records, on each of its certified boundary link directions, the frames that crossed it: what it sent on
 egress, in send order, and what it took on ingress, in the order it took them, then what was left over. Each frame is tagged
@@ -27,8 +28,9 @@ comes from each certifier's clock.
 **Transports.** `MemoryNet` runs every unit in one event loop and hands frames over directly; `serve_tcp` runs one unit as an
 asyncio TCP server and client, one process per unit (`python -m workload.block`).
 
-**Tampering** (`Tamper`), to show what the check refuses: `extra-frame` sends one more stream after the first message,
-`flip-bit` flips the first bit of the first message's payload, `fill` writes into the zero fill of the first frame.
+**Tampering** (`Tamper`), to show what the check refuses: `extra-frame` sends one more canonical frame, of covert bytes,
+after the first message, `flip-bit` flips the first bit of the first message's payload, `fill` writes into the last byte
+of the first frame (its zero fill, for a message shorter than a frame).
 """
 from __future__ import annotations
 
@@ -40,7 +42,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame
+from verity.core.protocols.certifier.active import HEADER
 
 from . import framing as F
 from . import model as M
@@ -49,7 +51,7 @@ from . import values as V
 from .hardware import OUTSIDE, Hardware, mock
 
 TAMPERS = ("extra-frame", "flip-bit", "fill")
-COVERT_STREAM = 0xFFFF_FFF0
+COVERT = b"covert"
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,7 @@ class Context:
 
 
 class Inbox:
-    """The frames arriving on every connection into one unit, reassembled into streams."""
+    """The frames arriving on every connection into one unit, cut into φ's messages."""
 
     def __init__(self, ctx: Context, unit: str, senders: set[str]) -> None:
         self.ctx, self.unit = ctx, unit
@@ -110,6 +112,7 @@ class Inbox:
         if not self.waiting:
             self.closed.set()
         self.hellos: dict[str, bytes] = {}
+        self.pending = {src: ctx.phi.connection(src, unit) for src in senders}
         self.partial: dict[int, list[tuple[str, bytes]]] = defaultdict(list)
         self.complete: dict[int, list[tuple[str, bytes]]] = {}
         self.ready: dict[int, asyncio.Event] = defaultdict(asyncio.Event)
@@ -119,14 +122,19 @@ class Inbox:
         return Sink(self)
 
     def add(self, src: str, frame: bytes) -> None:
-        kind, stream, _ = decode_frame(frame)
-        if kind not in (DATA, LAST) or stream == F.HELLO_STREAM or stream in self.complete:
+        """The frame is the next of the connection's current message, unless it has no canonical header or the
+        connection has no message left."""
+        B = self.ctx.phi.frame_bytes
+        pending = self.pending.get(src, [])
+        if len(frame) != B or frame[:HEADER.size] != F.head(B) or not pending:
             self.stray.append((src, frame))
             return
-        self.partial[stream].append((src, frame))
-        if kind == LAST:
-            self.complete[stream] = self.partial.pop(stream)
-            self.ready[stream].set()
+        m = pending[0]
+        self.partial[m.stream].append((src, frame))
+        if len(self.partial[m.stream]) == F.frame_count(m, B):
+            pending.pop(0)
+            self.complete[m.stream] = self.partial.pop(m.stream)
+            self.ready[m.stream].set()
 
     def eof(self, src: str | None) -> None:
         self.waiting.discard(src)
@@ -220,7 +228,7 @@ class Block:
             elif t.mode == "fill":
                 frames[0] = frames[0][:-1] + b"\x01"
             else:
-                extra = [encode_frame(LAST, COVERT_STREAM, b"covert", B)]
+                extra = F.cut(COVERT, B)
         out = list(frames) + extra
         hello = None
         if m.dst not in self.writers:
@@ -240,7 +248,7 @@ class Block:
             self.taken.add(m.src)
             hello = self.inbox.hellos[m.src]
         self._record(m, [f for _, f in got], hello)
-        payload = b"".join(decode_frame(f)[2] for src, f in got)
+        payload = b"".join(f[HEADER.size:] for _, f in got)[:m.nbytes]
         self.transcript.update(F.decode(m, payload))
 
     async def run(self) -> dict:

@@ -166,3 +166,33 @@ def test_a_statement_the_setup_refuses(junk):
     """Refused, and the session goes on to its next request."""
     answers, rc = _hello(junk, _request("null") + b"draw\n")
     assert rc == 1 and answers[0].startswith("refused setup: ") and answers[1] == "err a request `draw`", answers
+
+
+#: a stratified draw of one of two units, one template's
+STRATIFIED = json.dumps({"law": "stratified", "population": 2, "k": 1, "strata": [{"template": "t", "units": [[0, 2]], "k": 1}],
+                         "units": [0]})
+
+
+@pytest.mark.parametrize("law, why", [([], "U2: a stratified draw needs the verifier's own K, program and partition"),
+                                      (["--stratified", "2"], "U2: the draw's K is 1, not the verifier's 2")])
+def test_a_stratified_draw_at_the_verifiers_own_k(junk, tmp_path, law, why):
+    """A stratified draw sets up only at the verifier's own K, program and partition (`Stmt.setupTables`, U2), so
+    `--stratified` reaches the setup: without it the draw is refused for want of it, and at another K for its K."""
+    (tmp_path / "partition.json").write_text("{}")
+    (tmp_path / "program").write_bytes(b"x")
+    args = [*junk, "--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program"), *law]
+    answers, rc = _hello(args, _request(STRATIFIED))
+    assert rc == 0 and len(answers) == 1 and answers[0].startswith(f"refused setup: {why}"), answers
+
+
+@pytest.mark.parametrize("law, why", [(["--stratified", "x"], "--stratified K: K is a natural number"),
+                                      (["--work", "x", "--work-table", "table.json"], "--work K: K is a natural number"),
+                                      (["--work", "2"], "--work needs --work-table"),
+                                      (["--work-table", "table.json"], "--work-table needs --work"),
+                                      (["--closure", "junk"], "not JSON")])
+def test_a_draw_law_input_it_cannot_read(junk, tmp_path, law, why):
+    (tmp_path / "table.json").write_text('{"t": 1}')
+    (tmp_path / "junk").write_text("{")
+    law = [str(tmp_path / x) if x in ("table.json", "junk") else x for x in law]
+    p = subprocess.run([str(BIN), "hello", *junk, *law], input=b"", capture_output=True)
+    assert p.returncode == 2 and p.stderr.decode().startswith("hello: ") and why in p.stderr.decode(), p.stderr

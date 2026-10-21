@@ -38,6 +38,7 @@ from typing import Any
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -530,8 +531,8 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
-        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`); tp-commit's root combination takes vllm-v1's 32-byte roots only,
-        so another scheme is for drivers that read each rank's root as it is (`benchmarks/served_commit/tp_decode.py`)."""
+        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
+        whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -783,9 +784,13 @@ class TP2CaptureWorkerExtension:
     def tp2_commit_install(self) -> dict[str, Any]:
         st = self._tp2_commit
         st["com"].reset()
+        if st.get("match_capture_dir") and "schedule_replay" not in st:   # once: the match oracle's capture's MoE align schedule, replayed
+            from verity_vllm.acquire.sources.moe_align_source import arm_replay
+
+            st["schedule_replay"] = arm_replay(getattr(st["com"], "sources", ()), st["match_capture_dir"], st["rank"])
         st["com"].install()
         st["rc"] = None
-        return {"rank": st["rank"], "installed": True}
+        return {"rank": st["rank"], "installed": True, "schedule_replay": st.get("schedule_replay")}
 
     def tp2_commit_finalize(self, checks: bool = True, defer: dict[str, Any] | None = None) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), leaf counts, coverage declaration; a warm-up (`pipeline.tp.warmup`)
@@ -816,6 +821,10 @@ class TP2CaptureWorkerExtension:
                 match_oracle = {"rank": st["rank"], "verdict": "FAIL", "error": repr(e)[:300]}
         elif match_dir:
             match_oracle = {"rank": st["rank"], "verdict": "FAIL", "why": "no tp partial source on this rank (partials not bound)"}
+        if match_oracle is not None:
+            from verity_vllm.acquire.sources.moe_align_source import replay_stats
+
+            match_oracle["schedule_replay"] = replay_stats(getattr(com, "sources", ())) or st.get("schedule_replay")
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):
@@ -1158,7 +1167,7 @@ class TP2CaptureWorkerExtension:
         t_ver = _t.perf_counter() - t1
         return _jsonable({"rank": st["rank"], "n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver,
                           "claimed_root": rcv.run_root.hex(), "claimed_root_is_own": rcv is rc,
-                          "bytes_mean": statistics.fmean(len(o.value) + 32 * sum(1 for p in o.path if p is not None) for o in ops) if ops else None})
+                          "bytes_mean": statistics.fmean(len(o.value) + len(o.salt) + sum(len(p) for p in o.path if p is not None) for o in ops) if ops else None})
 
     # ------------------------------------------------------------------ [R15 TP-04 C2] value correspondence, per rank
 

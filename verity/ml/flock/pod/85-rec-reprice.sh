@@ -24,9 +24,9 @@
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
 #                JOBS at once; the job fails if one does not stage
-#   STEP=vcap    (CPU) RecCap alone over the inner's last proxied session (rec_vstage.stage_cap: level 0's tops under the
-#                firewall's salts, no running sums) into data/$TAG/v/cap, beside the statements vstage staged, whose sessions
-#                stay valid (then oprove LEVELS=cap)
+#   STEP=vcap    (CPU) RecCap alone at every level over the inner's last proxied session (rec_vstage.stage_cap: each
+#                level's tops under the firewall's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
+#                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
 #   STEP=oprove  (GPU leases) each staged statement proved with --zk on loopback, WARM + RUNS sessions per MODES (dev host
 #                firewall; a forgery's: one, by a prover that sends its proofs though the witness fails,
 #                FC_ZK_SELF_CHECK=skip), and upstream's replay --zk of the last (REPLAY=0: STEP=oreplay's); CONTROLS=DIR: the
@@ -205,6 +205,15 @@ loopback() {
   kill $SP; wait $SP 2>/dev/null
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
   return $rc
+}
+
+# hello_at DIR: a firewalled prover's Lean Hello sets each session up at the statement STEP=lean verifies (live PROTOCOL.md
+# §10.4), verity/flock-circuit with DIR's partition and program; read only under FC_FIREWALL=1
+hello_at() {
+  export FC_FIREWALL_STATEMENT=verity/flock-circuit
+  FC_FIREWALL_HELLO_ARGS=; local k
+  for k in partition program; do [ -f $1/$k.json ] && FC_FIREWALL_HELLO_ARGS+="--$k $1/$k.json "; done
+  export FC_FIREWALL_HELLO_ARGS
 }
 
 # proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
@@ -607,9 +616,10 @@ vcap)
 import json, sys; from pathlib import Path; from verity_flock import rec_vstage as S
 print(json.dumps(S.stage_cap(Path(sys.argv[1]), Path(sys.argv[2]))))' $INNER $DD/v/cap > $O/vstage/cap.json 2> $O/vstage/cap.err \
     || { tail -20 $O/vstage/cap.err; exit 1; }
-  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r["unit_agrees"] and all(r["unit_agrees"]) else "RecCap: the unit disagrees with its reference")' \
+  python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if r and all(c["unit_agrees"] and all(c["unit_agrees"]) for c in r.values()) else "RecCap: a level'"'"'s unit disagrees with its reference")' \
     $O/vstage/cap.json || exit 1
   cp $DD/v/cap/registered.json $O/vstage/cap-registered.json
+  for d in $DD/v/cap/L*/; do [ -d "$d" ] && cp $d/registered.json $O/vstage/cap-$(basename $d)-registered.json; done
   ;;
 oprove)
   V=$DD/v; [ -n "$(find $V -name inst.bin -print -quit 2>/dev/null)" ] || { echo "run STEP=vstage (or vcap) first"; exit 1; }
@@ -625,6 +635,7 @@ oprove)
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    hello_at $V/$C
     for mode in $MODES; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
@@ -646,7 +657,7 @@ oprove)
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
-    C=$V/$CONTROLS
+    C=$V/$CONTROLS; hello_at $C
     for w in root witness label opening algebra algebra-proof shape; do
       PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done
@@ -677,7 +688,8 @@ lean)
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, R's levels' tops, and level 0's cap rec-top-L0 as L0 and cap read it; without the algebra, the level's acc as acc0)
+  # out, R's levels' tops, and each level's tops rec-top-L<l> as L<l> and its cap read them; without the algebra, the
+  # level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -692,7 +704,8 @@ o, v, vs = map(Path, sys.argv[1:])
 names = [s[0] for s in line["statements"]]
 try:
     shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
-                            [d for d in (v / "L0", v / "cap") if (d / "registered.json").is_file()])["ports"]
+                            [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
+                             if (d / "registered.json").is_file()])["ports"]
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):

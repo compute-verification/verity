@@ -29,8 +29,8 @@ session has four steps:
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
-cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict and the egress the
-network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
+cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
+verdict and the egress the network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
 (`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in `verity/core/devices/memory_challenger/lean/`, reading the
 records' `to_json`), and `verdict` here is the reference that port is difftested against.  `retained_bits` and
 `challenges_for` are the guarantee's bound, which says how much of the prior content can survive an accepted wipe.
@@ -132,7 +132,7 @@ class WipeParams:
 
     @property
     def covered(self) -> bool:
-        """Whether the guarantee covers this reveal: the sequential one, one index a batch."""
+        """Whether the guarantee covers this reveal: the sequential one, one index a batch.  `verdict` refuses any other."""
         return self.batch == 1
 
     @property
@@ -380,7 +380,8 @@ class Verdict:
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published when it opened.  It fails closed: an unknown
-    scheme, an untrusted key or a bad signature rejects whatever the batches say."""
+    scheme, an untrusted key or a bad signature rejects whatever the batches say, and a commitment whose batch size the
+    guarantee doesn't cover (`WipeParams.covered`) rejects the session however it ran."""
     reasons: list[str] = []
     verify = schemes.get(signed.scheme)
     if verify is None:
@@ -397,6 +398,8 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     p = commitment.params
+    if not p.covered:
+        reasons.append(f"batch size {p.batch} is uncovered: the guarantee covers the sequential reveal, batch size 1")
     if signed.ended != COMPLETE or len(signed.batches) != p.batches:
         reasons.append(f"the session ended {signed.ended} after {len(signed.batches)} of {p.batches} batches")
     for b, r in enumerate(signed.batches):

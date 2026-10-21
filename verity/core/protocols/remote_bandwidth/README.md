@@ -60,7 +60,9 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`).
-- `coins.py`: the challenger's committed live coins.
+- `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
+  process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
+  opens for the session's window inside the audit's period (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,

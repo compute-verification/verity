@@ -60,14 +60,14 @@ def test_h200_margin_driver_is_the_lane_issue_joint() -> None:
 
 def test_margin_reads_the_named_vector() -> None:
     """`vector` selects Π: DC-90-ri (UNI on JI90_0 at its cost beside the async wgmma) prices the H200 redux design
-    above DC-90, and the 2% margin opens on both. On DC-90 it opens since ATOME32 holds the issue row alone, with no
-    joint issue line (RT4-SHEET-12): JI90_0 moved 2% takes core from 0.659% to 1.377%, where before the move only
-    shifted the cheater to JI90_1 (ε_luck)."""
+    above DC-90, and the 2% margin opens there (0.719% to 0.806%). On DC-90 it barely moves (0.644% to 0.650%): the
+    generic CP_RED loops' ATOME32 carries the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c,
+    r20261021-074303-da7f), where on the issue row alone (RT4-SHEET-12) JI90_0 moved 2% took core to 1.377%."""
     data = device("sm_90")
     cur = RT.margin_audit("dither-2s-licpw-redux-l32", data)
     ri = RT.margin_audit("dither-2s-licpw-redux-l32", data, vector="DC-90-ri")
     assert cur.device == "DC-90" and ri.device == "DC-90-ri"
-    assert cur.driver == "JI90_0" and (cur.base, cur.worst) == pytest.approx((0.00659, 0.01377), abs=5e-5)
+    assert cur.driver == "JI90_0" and (cur.base, cur.worst) == pytest.approx((0.00644, 0.00650), abs=5e-5)
     assert ri.base > cur.base + 1e-4 and ri.worst > ri.base + 5e-4
 
 

@@ -588,7 +588,8 @@ def _certified_window(words, run: str, reveal: bytes, sid: bytes, prover: bytes,
     params = {k: v for k, v in _params(run, raw).items() if k != "registration_deadline"}
     params["context"] = PS.context(f"served-zk/{run}", p, hashlib.sha512(raw).hexdigest())
     root_w, _ = SC.commit_weights(params, _weights())
-    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man))
+    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man),
+                                            length=SC.served_length(SERVED))
     return params, raw, _register(params, public), advice, priv
 
 

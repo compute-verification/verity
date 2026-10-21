@@ -12,7 +12,7 @@ import hashlib
 import pytest
 
 from test_appends import N, Entropy, Run, pages, salts, store
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 
@@ -53,7 +53,7 @@ def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> No
     a pass sent under the old seed fails its receipts' paths, and the honest pass over the page is accepted."""
     r = Run(store(), windows=1)
     assert r.run() is None
-    root0, coin = r.passes[0, 0].root, r.challenges[0].coin
+    root0, coin = r.passes[0, 0].root, coins.coin(r.challenges[0])
     unbound = receipts.seed(coin, 1, root0)
     a = r.store.append([carrier(r.store, unbound)], salts(b"page salts", 1))
     assert r.commit(a.root, a.count) == N
@@ -86,7 +86,7 @@ def test_a_page_appended_before_the_root_it_chains_from_relays_nothing_either() 
     root."""
     r = Run(store(), windows=1)
     pass0 = r.prover.run(r.challenges[0], 0, r.previous)
-    unbound = receipts.seed(r.challenges[0].coin, 1, pass0.root)
+    unbound = receipts.seed(coins.coin(r.challenges[0]), 1, pass0.root)
     a = r.store.append([carrier(r.store, unbound)], salts(b"page salts", 1))
     assert r.commit(a.root, a.count) == N
     assert r.s.receive(0, 0, pass0.root, step=0) is None
@@ -144,5 +144,5 @@ def test_the_chain_over_a_session_s_appends_and_a_session_without_appends_keeps_
 
     r = Run(store(), windows=1)
     assert r.run() is None and r.run() is None
-    assert r.passes[0, 0].seed == receipts.seed(r.challenges[0].coin, 0, r.store.registration.digest)
-    assert r.passes[0, 1].seed == receipts.seed(r.challenges[0].coin, 1, r.passes[0, 0].root)
+    assert r.passes[0, 0].seed == receipts.seed(coins.coin(r.challenges[0]), 0, r.store.registration.digest)
+    assert r.passes[0, 1].seed == receipts.seed(coins.coin(r.challenges[0]), 1, r.passes[0, 0].root)

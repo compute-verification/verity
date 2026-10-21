@@ -11,9 +11,11 @@ import pstats
 
 import pytest
 
+from verity.ml.circuits import ports as PT
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.types import Array, Record, Value
 
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -21,6 +23,11 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 V16 = Value(16)
 XOR16 = PrimitiveDefinition("H1WindowTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
+#: a receipt fold: the coin is its key, its return a sink
+FOLD16 = PrimitiveDefinition("H1WindowTestFold16", 1, (("key", V16), ("x", V16)), V16, lambda key, x: key ^ x, register=False,
+                             ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+#: the stand-in tile's ports, as the H1 tile's: the salt its coin, its position, and its receipt a sink
+TILE_PORTS = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}, ret={"receipt": Out(sink=True)})
 R, C = 4, 8
 TILE = (R, C)
 
@@ -28,15 +35,17 @@ TILE = (R, C)
 def _tile_sig(S):
     row = Array(S.K // 16, V16)
     return ((("a", Array(S.R, row)), ("b", Array(S.C, row)), ("salt", Array(4, V16)), ("position", V16),
-             ("roots", Array(2, Array(4, V16)))), Array(S.K // 32, V16))
+             ("roots", Array(2, Array(4, V16)))), Record(("z", Array(S.K // 32, V16)), ("receipt", V16)))
 
 
 def _tile_body(B, S, a, b, salt, position, roots):
-    x = B.call(XOR16, B.call(XOR16, a[0][0], b[0][0]), B.call(XOR16, salt[0], B.call(XOR16, position, roots[0][0])))
-    return coll_concat(Array(S.K // 32, V16), [B.call(XOR16, x, a[1][i]) for i in range(S.K // 32)])
+    x = B.call(XOR16, B.call(XOR16, a[0][0], b[0][0]), B.call(XOR16, position, roots[0][0]))
+    z = coll_concat(Array(S.K // 32, V16), [B.call(XOR16, x, a[1][i]) for i in range(S.K // 32)])
+    return coll_concat(_tile_sig(S)[1], [z, B.call(FOLD16, salt[0], x)])
 
 
-TestTile = CompositeDefinition("H1WindowTestTile", 0, ("K", "R", "C"), _tile_sig, _tile_body, register=False)
+TestTile = CompositeDefinition("H1WindowTestTile", 0, ("K", "R", "C"), _tile_sig, _tile_body, register=False,
+                               ports=TILE_PORTS)
 
 
 def unit(k: int, tile: tuple[int, int] = TILE):
@@ -89,7 +98,7 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [name for name, _t in prog.fn.signature()[0]] == list(HW.roles((64, 32)))
     assert (sig["a/32"].n, sig["b/32"].n, sig["a/64"].n, sig["b/64"].n, sig["position"].n) == (2 * m, 24, 2 * m, 8, len(want))
     assert [t.n for t in prog.fn.signature()[1].fields] == [4, 2, 2] * 2
-    assert [t.elem.n for t in prog.fn.signature()[1].fields] == [1, 1, 2] * 2
+    assert [t.elem.fields[0][1].n for t in prog.fn.signature()[1].fields] == [1, 1, 2] * 2
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
     steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
@@ -185,11 +194,30 @@ def test_the_parameters_take_the_names_a_served_path_gives_them():
     prog = HW.program(LINEARS, CALLS, 8, TILE, prefix="h1/w/", unit=unit)
     tp = P.evaluate(prog, HW.query(prog))
     assert [n for n, _t in prog.fn.signature()[0]] == ["h1/w/" + r for r in HW.roles((32, 64))]
-    assert list(prog.fn.defn.ports(prog.fn.S()).params) == ["h1/w/salt"], "the salt is the units' coin"
+    assert {n: p.kind for n, p in prog.fn.defn.ports(prog.fn.S()).params.items()} == {
+        "h1/w/salt": "coin", "h1/w/position": "position"}, "the salt is the units' coin, and position their positions"
     got = HW.unit_reads(prog, tp, 5)
     assert got["a_k32[1]"] == ("h1/w/a/32", 4 + 1) and got["b_k32[0]"] == ("h1/w/b/32", 16)
     assert got["receipt"] == ("h1/w/receipt", 5)
     assert P.program_digest(prog) != P.program_digest(HW.program(LINEARS, CALLS, 8, TILE, unit=unit))
+
+
+def test_every_units_receipt_is_a_sink_so_the_window_is_no_seed():
+    """With the salt its coin port and the positions its position port, a window whose return held no sink would be a
+    seed, whose body no port rule follows (`ports._coin_role`), and the tiles' coin flow would go unchecked: each unit's
+    receipt, exactly its leaves, is a sink of the window's result, and a unit that returns none is refused."""
+    prog = HW.program(LINEARS, CALLS, 8, TILE, unit=unit)
+    want, at = [], 0
+    for t in prog.fn.signature()[1].fields:
+        for _ in range(t.n):
+            want.append((at + t.elem.fields[0][1].leaves, at + t.elem.leaves))
+            at += t.elem.leaves
+    assert [(lo, hi) for lo, hi, o, _w in PT.port_types(prog.fn).ret if o.sink] == want and len(want) == 16
+    assert PT._coin_role(prog.fn) is None
+    bare = CompositeDefinition("H1WindowTestBareTile", 0, ("K", "R", "C"), _tile_sig, _tile_body, register=False,
+                               ports=Ports(params={"salt": In(kind="coin")}))
+    with pytest.raises(ValueError, match="returns no sink"):
+        HW.program(LINEARS, CALLS, 8, TILE, unit=lambda k: bind(bare, K=k, R=R, C=C))
 
 
 def test_the_slot_is_a_power_of_two_of_at_least_the_tiles_rows():
