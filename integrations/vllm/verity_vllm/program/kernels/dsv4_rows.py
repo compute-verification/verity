@@ -1,10 +1,12 @@
 """The replay row kernels of DeepSeek-V4-Pro's served rows that no other module evaluates, one per Definition family, each the numpy
 twin its Definition is held to: `mhc_twin` (the six mHC families), `dsv4_compressor_twin` (the head-512 compressed rows),
 `flashmla_twin` / `flashmla_prefill_twin` (the sparse FP8 decode, the prefill and its workspace gather), `dsv4_qnorm_insert_twin`
-(the query norm and KV insert), and the hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the
+(the query norm and KV insert), `dsv4_moe_twin` (the two routers and the clamped SwiGLU), `dsa_norm_rows.block_rmsnorm_rows` (the
+q / kv norm over a masked block), and the hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the
 twins' leading token axis is 1, and each Tuple's fields are ports "0", "1", ... in the Definition's return order.  The twins are
 checked word for word against their Definitions (tests/program/test_mhc.py, the kernel self-check), and on the H200 by the
-captures `EVALUATOR_PROVENANCE` names.  A FlashMLA row whose DOT is not the Hopper k16 step the twins model is declined by name.
+captures `EVALUATOR_PROVENANCE` names, which also names the gaps.  A FlashMLA row whose DOT is not the Hopper k16 step the twins
+model is declined by name.
 The row kernels register from `rows` (kernel "rows").
 """
 from __future__ import annotations
@@ -53,6 +55,18 @@ EVALUATORS = {
     "Dsv4QNormRopeKvInsert_v1": "verity_vllm.program.kernels.dsv4_qnorm_insert_twin.insert (Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,"
                                 "EPS}: Dsv4QNormRope_v1 per live head, the padded heads +0, Dsv4KvRopeQuant_v1 of the kv row) -> q_out "
                                 "NHP x (DN + DR) bf16, the NoPE e4m3 bytes, the scale bytes and pad, the RoPE bf16",
+    "TritonBlockRMSNorm_v1": "verity_vllm.program.kernels.dsa_norm_rows.block_rmsnorm_rows (TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: per "
+                             "thread of 32 WARPS an FMA chain over its dsa_norm.layout registers of the BLOCK, the elements from N +0, "
+                             "each warp's xor-butterfly, the warp sums' halving tree, r = RsqrtApprox(eps + DivFullScaleA(sum, N) * "
+                             "DivFullRcp(N)), y = F2fpBf16((r * x) * w)) -> N bf16",
+    "MoeRouterSqrtSoftplus_v1": "verity_vllm.program.kernels.dsv4_moe_twin.router_twin (MoeRouterSqrtSoftplus_v1{E,SCALE}: "
+                                "Dsv4SqrtSoftplus_v1 per expert, current = score + bias (a NaN -1e30), six slots of the first maximum "
+                                "of current, the lane-0 sum, w * div.full(SCALE, sum > 0 ? sum : 1)) -> six f32 weights, six i32 ids",
+    "MoeRouterHash_v1": "verity_vllm.program.kernels.dsv4_moe_twin.hash_twin (MoeRouterHash_v1{E,SCALE}: Dsv4HashWeight_v1 of "
+                        "logits[ids[k]] (an id outside [0, E) reads logits[0], MoeRouterPick_v1's select chain), the lane-0 sum, "
+                        "w * SCALE / (sum > 0 ? sum : 1), FMUL then div.rn) -> six f32 weights",
+    "SiluMulClamp_v1": "verity_vllm.program.kernels.dsv4_moe_twin.clamp_twin (SiluMulClamp_v1{I,LIMIT}: SiluMulClampBf16_v1 per "
+                       "column, bf16(fminf(gate, LIMIT)) and bf16(fmaxf(fminf(up, LIMIT), -LIMIT)), then SiluMulBf16_v2) -> I bf16",
 }
 
 _MHC_PROVENANCE = {
@@ -114,13 +128,52 @@ _INSERT_PROVENANCE = {
                    "way round)",
 }
 
-#: family -> what pinned its twin to the H200 (a family absent here has no hardware-specific semantics)
+_MOE_PROVENANCE = {
+    "property": "dsv4_moe_capture (verity-vllm/dsv4-moe-capture/v1), tests/properties/dsv4_moe_capture_gpu.py",
+    "run": "r20261013-205619-5c39",
+    "run_record": "art:f3edad8b2c91931e15028a0ba468b894452223415e86a3f16583d6430dc0cf50",
+    "art": None,
+    "gap": "the capture ran with VLLM_BATCH_INVARIANT=1, where vLLM's default is 0, so the served row's publish job names "
+           "dsv4_moe_capture a gap and cites no art of it; there is none at the defaults yet",
+    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, the harness at a9be5ce66",
+    "captured_utc": "2026-10-13",
+    "cases": "8,192 _dsv4_topk_kernel rows and 8,192 dsv4HashTopkSoftplusSqrt rows at E=384, SCALE=2.5 drawn to the routers' edges; "
+             "act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024); each "
+             "launch run twice, bit-exact against the twins, and the Programs evaluated on every row (--check)",
+    "tests": ["tests/properties/test_dsv4_moe_capture.py (the twins and their element functions against registry.dsv4_moe's Programs)",
+              "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
+              "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
+    "definitions": "verity_vllm/program/registry/dsv4_moe.py (the reference; the twins are checked against it, never the other way "
+                   "round)",
+}
+
+_BLOCK_NORM_PROVENANCE = {
+    "property": None,
+    "run": None,
+    "art": None,
+    "gap": "no hardware capture of vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel yet (registry.dsa_norm: model-untested): the "
+           "reduction tree is read from the cc 9.0 PTX Triton 3.7.1 compiles for it, not pinned on the device",
+    "model": "tests/program/test_dsa_norm.py::test_block_definition_matches_the_ptx_model (the Definition against a model of that "
+             "PTX at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
+    "related": "glm53_fused_rmsnorm_capture (art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74): the same "
+               "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
+               "_fused_norm_rope_kernel",
+    "tests": ["tests/program/test_dsa_norm.py (the Definition against the PTX model)",
+              "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
+              "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
+    "definitions": "verity_vllm/program/registry/dsa_norm.py (the reference; the twin is checked against it, never the other way round)",
+}
+
+#: family -> what pinned its twin to the H200, or the gap where nothing has yet (a family absent here has no hardware-specific
+#: semantics)
 PROVENANCE = {
     **{f: _MHC_PROVENANCE for f in ("MhcPost_v1", "MhcFusedPostPre_v1", "MhcPostPreTf32_v1", "MhcPreBroadcast_v1",
                                      "MhcResidualBroadcast_v1", "HcHead_v1")},
     "Dsv4MlaCompressC4_v1": _COMPRESSOR_PROVENANCE, "Dsv4MlaCompressC128_v1": _COMPRESSOR_PROVENANCE,
     **{f: _FLASHMLA_PROVENANCE for f in ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1")},
     "Dsv4QNormRopeKvInsert_v1": _INSERT_PROVENANCE,
+    **{f: _MOE_PROVENANCE for f in ("MoeRouterSqrtSoftplus_v1", "MoeRouterHash_v1", "SiluMulClamp_v1")},
+    "TritonBlockRMSNorm_v1": _BLOCK_NORM_PROVENANCE,
 }
 
 
@@ -315,6 +368,42 @@ def dsv4_qnorm_rope_kv_insert(statics: dict[str, Any], ops: Sequence[np.ndarray]
                   np.asarray(rope).astype(np.uint16))
 
 
+def triton_block_rmsnorm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}(x, w)` -> N bf16 words."""
+    from verity_vllm.program.kernels.dsa_norm_rows import block_rmsnorm_rows
+    S = f64_statics(statics)
+    N = int(S["N"])
+    r = block_rmsnorm_rows(_bf16(ops[0], 1, N), _bf16(ops[1], N), float(S["EPS"]), int(S["BLOCK"]), int(S["WARPS"]))
+    return _ports(r["out"].astype(np.uint16))
+
+
+def moe_router_sqrt_softplus(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`MoeRouterSqrtSoftplus_v1{E,SCALE}(logits, bias)` -> ports 0 (the six f32 weights) and 1 (the six i32 ids)."""
+    from verity_vllm.program.kernels import dsv4_moe_twin as T
+    S = f64_statics(statics)
+    E = int(S["E"])
+    w, ids = T.router_twin(_f32(ops[0], 1, E), _f32(ops[1], E), float(S["SCALE"]))
+    return _ports(w.astype(np.uint32), (ids.astype(np.int64) & 0xFFFFFFFF).astype(np.uint32))
+
+
+def moe_router_hash(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`MoeRouterHash_v1{E,SCALE}(logits, ids)` -> the six f32 weights.  An id outside [0, E) reads logits[0], as
+    `MoeRouterPick_v1`'s select chain does."""
+    from verity_vllm.program.kernels import dsv4_moe_twin as T
+    S = f64_statics(statics)
+    E = int(S["E"])
+    ids = _i32(ops[1], T.TOPK).view(np.int32).astype(np.int64)
+    ids = np.where((ids >= 0) & (ids < E), ids, 0).reshape(1, T.TOPK)
+    return _ports(T.hash_twin(_f32(ops[0], 1, E), ids, float(S["SCALE"])).astype(np.uint32))
+
+
+def silu_mul_clamp(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`SiluMulClamp_v1{I,LIMIT}(gu)` -> I bf16 words."""
+    from verity_vllm.program.kernels import dsv4_moe_twin as T
+    S = f64_statics(statics)
+    return _ports(T.clamp_twin(_bf16(ops[0], 1, 2 * int(S["I"])), float(S["LIMIT"])).astype(np.uint16))
+
+
 #: family -> (row kernel, the ports it returns in the Definition's return order)
 ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = {
     "MhcPost_v1": (mhc_post, ("0",)),
@@ -330,6 +419,10 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "FlashMlaPrefill_v1": (flashmla_prefill, ("0",)),
     "FlashMlaGatherRow_v1": (flashmla_gather_row, ("0",)),
     "Dsv4QNormRopeKvInsert_v1": (dsv4_qnorm_rope_kv_insert, ("0", "1", "2", "3")),
+    "TritonBlockRMSNorm_v1": (triton_block_rmsnorm, ("0",)),
+    "MoeRouterSqrtSoftplus_v1": (moe_router_sqrt_softplus, ("0", "1")),
+    "MoeRouterHash_v1": (moe_router_hash, ("0",)),
+    "SiluMulClamp_v1": (silu_mul_clamp, ("0",)),
 }
 
 
@@ -360,20 +453,58 @@ def _sample_insert() -> Callable[..., list[np.ndarray]]:
     return QI._sample_insert
 
 
+#: f32 words where the routers branch: +-0, a subnormal, the least normal, 20 and its neighbours (the score's select), the ex2
+#: halving at |x| log2 e = 126, the largest finite, +-inf and a NaN
+_ROUTER_EDGES = np.array([0, 0x80000000, 1, 0x00800000, 0x419FFFFF, 0x41A00000, 0x41A00001, 0x42AEAC50, 0xC2AEAC50, 0x7F7FFFFF,
+                          0x7F800000, 0xFF800000, 0x7FC00000], dtype=np.uint32)
+
+
+def _f32_words(rng: np.random.Generator, shape: tuple[int, ...], scale: float, edges: float) -> np.ndarray:
+    w = (rng.standard_normal(shape) * scale).astype(np.float32).view(np.uint32)
+    return np.where(rng.random(shape) < edges, rng.choice(_ROUTER_EDGES, shape), w).astype(np.uint32)
+
+
+def _sample_router(rng: np.random.Generator, n: int, params: Sequence[Any], *, E: int, SCALE: float) -> list[np.ndarray]:
+    """Logits at a few edges; biases normal, or (one row in four) from three values, so currents tie."""
+    ties = np.asarray(rng.choice([0.0, 0.25, -0.5], (n, E)), dtype=np.float32).view(np.uint32)
+    b = np.where(rng.random((n, 1)) < 0.25, ties, _f32_words(rng, (n, E), 1.0, 0.03))
+    return [_f32_words(rng, (n, E), 3.0, 0.1), b.astype(np.uint32)]
+
+
+def _sample_hash(rng: np.random.Generator, n: int, params: Sequence[Any], *, E: int, SCALE: float) -> list[np.ndarray]:
+    """Logits at a few edges and six ids in [0, E) (repeats too) but for one in ten outside it."""
+    ids = np.where(rng.random((n, 6)) < 0.1, rng.choice(np.array([-1, E, E + 1, -(1 << 31)]), (n, 6)), rng.integers(0, E, (n, 6)))
+    return [_f32_words(rng, (n, E), 4.0, 0.1), ids.astype(np.int64).astype(np.uint32)]
+
+
+def _sample_clamp(rng: np.random.Generator, n: int, params: Sequence[Any], *, I: int, LIMIT: float) -> list[np.ndarray]:  # noqa: E741
+    """bf16 gate / up words around +-LIMIT (and an ulp either side), +-0, a subnormal and beyond -88, where silu's expf overflows."""
+    from verity_vllm.program.registry.dsv4_moe import limit_bits
+    lim = limit_bits(LIMIT) >> 16
+    edges = np.array([lim, lim | 0x8000, lim + 1, lim - 1, (lim + 1) | 0x8000, (lim - 1) | 0x8000, 0, 0x8000, 1, 0xC2C8], np.uint16)
+    gu = ((rng.standard_normal((n, 2 * I)) * 2 * LIMIT).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    return [np.where(rng.random(gu.shape) < 0.2, rng.choice(edges, gu.shape), gu).astype(np.uint16)]
+
+
 SAMPLES: dict[str, Callable[[], Callable[..., list[np.ndarray]]]] = {
     "Dsv4MlaCompressC4_v1": lambda: _sample_compress("Dsv4MlaCompressC4_v1"),
     "Dsv4MlaCompressC128_v1": lambda: _sample_compress("Dsv4MlaCompressC128_v1"),
     **{f"GatherI32x{v}_v1": (lambda _v=v: _sample_gather(_v)) for v in GATHER_VOCABS},
     **{f: (lambda _f=f: _sample_flashmla(_f)) for f in ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1")},
     "Dsv4QNormRopeKvInsert_v1": _sample_insert,
+    "MoeRouterSqrtSoftplus_v1": lambda: _sample_router,
+    "MoeRouterHash_v1": lambda: _sample_hash,
+    "SiluMulClamp_v1": lambda: _sample_clamp,
 }
 
 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds (the served statics are too wide for the reference)."""
     from verity.ml.circuits.defs import bind
+    from verity_vllm.program.registry import dsa_norm as DN
     from verity_vllm.program.registry import dsv4_compressor as C
     from verity_vllm.program.registry import dsv4_decode_indices as DI
+    from verity_vllm.program.registry import dsv4_moe as MO
     from verity_vllm.program.registry import dsv4_qnorm_insert as QI
     from verity_vllm.program.registry import flashmla as FM
     from verity_vllm.program.registry import flashmla_prefill as FP
@@ -400,6 +531,11 @@ def check_targets(family: str) -> list:
         "HcHead_v1": [bind(M.HcHead, HC=2, H=16, TH=th, EPS=eps, HC_EPS=eps) for th in (1, 2)],
         "Dsv4MlaCompressC4_v1": [bind(C.Dsv4MlaCompressC4, ROWS=rows, D=32, QB=16, EPS=eps) for rows in (8, 4)],
         "Dsv4MlaCompressC128_v1": [bind(C.Dsv4MlaCompressC128, W=2, R=4, D=32, QB=16, EPS=eps)],
+        "TritonBlockRMSNorm_v1": [bind(DN.TritonBlockRMSNorm, N=n, BLOCK=b, WARPS=w, EPS=eps)
+                                  for n, b, w in ((48, 64, 1), (136, 256, 2), (264, 512, 1), (512, 2048, 8))],
+        "MoeRouterSqrtSoftplus_v1": [bind(MO.MoeRouterSqrtSoftplus, E=e, SCALE=2.5) for e in (6, 16)],
+        "MoeRouterHash_v1": [bind(MO.MoeRouterHash, E=e, SCALE=2.5) for e in (8, 16)],
+        "SiluMulClamp_v1": [bind(MO.SiluMulClamp, I=i, LIMIT=lim) for i, lim in ((8, 10.0), (9, 10.0), (4, 0.5))],
     }[family]
 
 
