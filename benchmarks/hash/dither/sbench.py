@@ -725,7 +725,11 @@ def main() -> int:
                                                 or not TOKENS_GATED.get(arm, True)))]
         failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
         if failed:
-            print(json.dumps({"gate_failed": failed, "timed": a.time_passed}), flush=True)
+            timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
+            hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
+                            "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
+                            f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
+            print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
             for arm in failed if a.time_passed else arms:
                 conns[arm].send({"op": "stop"})
             if not a.time_passed:
