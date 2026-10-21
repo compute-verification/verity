@@ -16,7 +16,8 @@ it, string for string:
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
   `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
-  for the window (`trustedSessionOf`). So a credit bit changed after the draw coin is refused.
+  for the window, its host at a commit of the verifier's copy of main (`trustedSessionOf`). So a credit bit changed
+  after the draw coin is refused.
 * `outcome` is `credit.outcome`: every drawn unit has exactly one proof outcome and it is an accept, else the whole
   window is refused (no partial credit).
 * `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
@@ -111,9 +112,9 @@ def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) 
   | some s => Flock.Sha512.hash (h ++ s)
 
 /-- `credit.credited`: the credited calls' indices, else the refusal. -/
-def credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
+def credited (key main ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let (c, received) ← (trustedSessionOf ledger window k session).mapError fun e =>
+  let (c, received) ← (trustedSessionOf ledger window k main session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
   let some s := digest? salt | throw ("manifest", SALT_FORM)
   let .arr rows := calls | throw ("manifest", CALLS_FORM)

@@ -32,6 +32,16 @@ CREDIT_EXPECT = {
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
 }
+#: each pin mutation's refusal (RT4-INT-40): its reason holds the fix
+PIN_FIX = {
+    "pin-not-main": "which is not a commit of main's first-parent history: repin the host to a main commit",
+    "repinned": "the host was repinned mid-session; repin the host to a main commit between sessions",
+    "no-pin": "names no pinned tree: repin the host to a main commit",
+    "pin-form": "names a pinned tree that is not a commit (40 lowercase hex): repin the host to a main commit",
+    "no-main": "not trusted: the verifier holds no copy of main's history",
+    "main-form": "not trusted: the verifier's copy of main's history is malformed: ",
+}
+CREDIT_EXPECT.update({name: ("coin", "the challenger's session is not trusted: ") for name in PIN_FIX})
 OUTCOME_EXPECT = {
     "missing": ("missing", "drawn unit "), "failed": ("failed", "drawn unit "), "twice": ("outcome", "unit "),
     "undrawn": ("outcome", "unit "), "drawn-form": ("outcome", Cr.DRAWN_FORM), "proofs-form": ("outcome", Cr.PROOFS_FORM),
@@ -107,6 +117,15 @@ def test_credit_mutation(name):
     for seed in SEEDS:
         _, (got, refused) = _credited(name, seed)
         assert got is None and refused[0] == code and refused[1].startswith(start), (seed, refused)
+
+
+@pytest.mark.parametrize("name", sorted(PIN_FIX))
+def test_a_window_whose_host_ran_a_commit_outside_mains_first_parent_history_is_not_credited(name):
+    """RT4-INT-40: the draw coin counts only through a session every ledger entry of which the host wrote at one commit
+    of the verifier's copy of main's first-parent history."""
+    for seed in SEEDS:
+        _, (got, refused) = _credited(name, seed)
+        assert got is None and refused[0] == "coin" and PIN_FIX[name] in refused[1], (seed, refused)
 
 
 @pytest.mark.parametrize("name", sorted(OUTCOME_EXPECT))

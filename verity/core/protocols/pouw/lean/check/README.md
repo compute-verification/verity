@@ -74,7 +74,8 @@ first 32 bytes of `tagged`).
 `credited`: each manifest row (the window's calls in order, `index` 0, 1, …) carries its call's verdict as `credit`, a
 credited row its z table's root (`tables.z`), and the draw root over the rows (`calls_root`), the last round's receipts
 and every round's root and coin must be the one root the challenger's log shows its draw coin followed, read through the
-session the auditor's ledger opens for the window; so a bit changed after the draw coin is refused, and the credited calls
+session the auditor's ledger opens for the window, every entry of it written by the host at one commit of the
+verifier's copy of main's first-parent history (`main`); so a bit changed after the draw coin is refused, and the credited calls
 are the rows whose bit is true. `outcome`: the window is accepted only when every drawn unit has exactly one proof
 outcome and it is an accept; a failed or missing one refuses the whole window. `aLink`: each round's root (the one the
 challenger received before that round's coin) is `credit.round_root` of the serving process's own round root and that
@@ -97,9 +98,9 @@ per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_roun
 round roots and coins, read through the challenger's session (its record and close signed under the window's pinned key,
 its release log, and the auditor's signed ledger opening and ending it for the window), and one mutation per refusal (an
 in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
-end, a second session for the window, roots the challenger's log doesn't show,
-a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
-layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+end, a second session for the window, a host pinned outside main's first-parent history or repinned mid-session, roots
+the challenger's log doesn't show, a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded
+epoch's commitment or another layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `credit`, `outcome` and `a-link` go against `credit.credited`, `credit.outcome` and `credit.a_link` over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the draw coin, a drawn unit failed or missing, an A tree the
 round roots didn't commit, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`

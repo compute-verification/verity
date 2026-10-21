@@ -6,7 +6,7 @@ import PouwCheck.Difftest
 
 Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads both tables):
 
-* `credit` (`key`, `ledger`, `window`, `session` as `rounds` reads them, `salt` the window's Program salt as hex, `calls`
+* `credit` (`key`, `main`, `ledger`, `window`, `session` as `rounds` reads them, `salt` the window's Program salt as hex, `calls`
   the manifest's rows, `served` the served trees' digest or null, `rounds` the round log, `draw` the window's draw, each
   as `credit.credited` takes it): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `outcome` (`drawn`, `proofs`, as `credit.outcome` takes them) and `a-link` (`rounds`, `entries`, as `credit.a_link`
@@ -20,7 +20,7 @@ open Lean (Json ToJson toJson)
 def creditOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
-    (Credit.credited (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
+    (Credit.credited (← f "key") (← f "main") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
       (← f "served") (← f "rounds") (← f "draw"))
 
 def outcomeOf (j : Json) : Except String Json := do

@@ -6,7 +6,8 @@ round log (each recorded round root and its coin), and the draw: `credit.draw_ro
 challenger, then its draw coin opened after it; the auditor's ledger opens and ends the session for the window. Then one
 mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit flipped after the draw coin with the draw root recomputed
 (``changed``, RT4-INT-32's withdrawn verdict), a row changed likewise, a missing or malformed bit, a credited row with no
-z root, the draw root left stale, no draw coin, a coin of another family, and the forms.
+z root, the draw root left stale, no draw coin, a coin of another family, a host pinned outside the verifier's copy of
+main or repinned mid-session (`pouw_rounds_cases.PIN_NAMES`), and the forms.
 
 An `outcome` case is a draw's units and one proof outcome each, all accepts; its mutations drop one (``missing``),
 reject one (``failed``), repeat one, add an undrawn unit, and break the forms.
@@ -72,7 +73,7 @@ def honest_credit(rng: random.Random, name: str = "honest") -> tuple[dict, rc.Se
         d["draw"]["coin"] = ch.open(Wd.DRAW, 0, draw_after(s.rounds)).to_json()
     else:
         d["draw"]["coin"] = s.draw[0].to_json()
-    return {"key": s.key(), "window": rc._window(rng), "session": s.files(), **d}, s
+    return {"key": s.key(), "main": list(rc.MAIN), "window": rc._window(rng), "session": s.files(), **d}, s
 
 
 def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
@@ -84,6 +85,8 @@ def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
 
 
 def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> None:
+    if rc._pinned(d, name, rng, lambda **kw: rc.ledger_lines(rc.ledger_events(rng, d["window"], s, **kw), rc._key(0))):
+        return
     calls, j = d["calls"], rng.randrange(len(d["calls"]))
     match name:
         case "changed":
@@ -144,8 +147,8 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
 
 CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "bit-form", "no-z", "index", "row-form",
                 "calls-form", "salt-form", "served-form", "rounds-form", "draw-form", "no-draw", "draw-coin", "key-form",
-                "forged-ledger"]
-CREDIT_KEYS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw")
+                "forged-ledger", *rc.PIN_NAMES]
+CREDIT_KEYS = ("key", "main", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:

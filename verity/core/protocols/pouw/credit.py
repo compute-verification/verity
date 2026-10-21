@@ -115,13 +115,14 @@ def no_z(i: int) -> str:
             f"(`tables.z`), or its credit bit is false")
 
 
-def credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-             verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+def credited(key: Any, main: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any,
+             draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The credited calls (their indices) of a window whose manifest `calls` (its rows, `served` the served trees'
     digest or None, under the window's Program salt `salt`) fixed every call's credit bit before the draw coin, and None;
     or None and the refusal (``coin``, ``manifest``, ``credit``, ``rounds`` or ``draw``, and why). The draw coin is read
     through the session the auditor's signed ledger `ledger` opens for `window` under the pinned challenger key `key`,
-    from that session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log
+    its host at a commit of `main` (the verifier's copy of main's first-parent history), from that session's files
+    `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log
     must show `draw_root` over the manifest, ``draw``'s ``receipts`` and the round log `rounds` (each round's ``root``
     and ``coin``) as the one root the draw coin followed, ``draw``'s ``root`` must be it, and ``draw``'s ``coin`` must be
     the challenger's draw coin 0 opened after it."""
@@ -130,7 +131,7 @@ def credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls:
     except Ch.CoinError as e:
         return None, ("coin", f"the verifier's challenger key is malformed: {e}")
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, main, session, verify)
     except Ch.CoinError as e:
         return None, ("coin", f"the challenger's session is not trusted: {e}")
     s = _digest(salt)
