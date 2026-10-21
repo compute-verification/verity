@@ -85,9 +85,30 @@ grown disk ("GPU batch" step 1), runs at de4c6e3620 with `AOT_TRACE` the trace's
 | GP-01 composes | 2 at once, 57 GB each: 111 to 116 GB, the Builds' peak | 2 at once (the default 400 GB budget, `compose_bytes` 145 GiB): 153 GB each in its trace r20261020-060948-f9c7, so 306 GB; B8's 116 GB scaled by batch is 464 GB |
 | manifest, 8 processes | 48 GB, 59 min (r20261020-132536-b2d0) | B8's scaled by batch: 192 GB |
 
-While it holds its 470 GB, vy-glm53-cpu-2 has about 330 GB left: B1's Match CPU phase fits there at `--mem-gb 300` (three
-of its 60 GB GM-01 legs at once), and B32's Build, best effort, yields to any G1 row that needs the room (`RESUME=1` keeps its
-derives and composes).
+While it holds its 470 GB, vy-glm53-cpu-2 has about 285 GB left (its 773 GB limit less 18.5 GB in use outside reservations):
+B1's Match CPU phase fits there at `--mem-gb 280` (three of its 60 GB GM-01 legs at once beside two 40 GB folds), and B32's
+Build, best effort, yields to any G1 row that needs the room (`RESUME=1` keeps its derives and composes).
+
+## Window A
+
+On vy-glm53-eu from 23:31Z 20 Oct (GO 23:30Z), each row's Match GPU legs (`gpu_batch.sh a vy-glm53-eu ROW`). Each engine read
+`gpu_memory_utilization` back as 0.92, the driver and all 8 ranks (the control: its driver), and vLLM's own sizing line on every
+rank of both legs reads "Desired GPU memory utilization is (0.92, 128.62 GiB)": 89.39 GiB weights and non-torch memory, 0.52 GiB
+peak activation and a 38.71 GiB KV cache; nvidia-smi read 133,911 MiB a GPU during B1's capture. The read-back check exits 1
+on a rank off by 0.02 or a missing rank.
+
+| row | `match_gpu.sh` run | tree | legs | `match/` | `match.sha256` |
+|---|---|---|---|---|---|
+| B1 greedy | r20261020-233119-e40c (`vllm.match` r20261020-233150-30e7, art:4cf0a6018fe689dd8622cac371ecd114475f612f43f542e21b23530181b5dd54) | c8695f2187 | PASS, 805 s (the first load from a cold page cache took 416 s) | 104 GiB | 1,098,214 files |
+| B8 greedy | r20261020-235054-0dfc (`vllm.match` r20261020-235116-20b7, art:8c26cb7f88573090904af9763fba5703eae0d1443141bc4e1a37119b5d4c3fd9) | de6ca12b5f | PASS, 677 s | 312 GiB | 1,193,569 files |
+| B8 stochastic | r20261020-235116-5968, waiting for 360 GiB free | de6ca12b5f | | | |
+
+eu's `/workspace` (3.0 TB) had 477 GiB free at the start: the GLM-5.3 checkpoint (704 GiB) and @circuits' v1 rows (1.44 TiB:
+`fs/glm53-m1`'s B8 rows 970 GiB, `cp/circuits/glm-aot` 183, `cp/circuits-prefix-tp` 177, `fs/glm53-failfast` 112) hold the rest.
+So a finished row's legs move to its CPU node (`copy_rowdir.sh`, about 117 MB/s through the VM) and eu's copy is removed
+(`research retention rm`, owner @circuits) before the next capture fits; B32's (about 1100 GiB) and DeepSeek-V4-Pro's
+checkpoint (865 GB) need room beyond that, and so does window B (a B8 row's dir after the CPU phase, about 580 GiB, and its
+Commit's bundles, 244 GiB in v1's B8 greedy).
 
 ## GPU batch
 
