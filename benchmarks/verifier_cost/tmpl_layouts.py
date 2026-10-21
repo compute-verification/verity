@@ -124,6 +124,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                     al = max(al, align[e])
                 kind = "contig"
                 if mode == "interleaved":
+                    kind = "chained"
                     st["chained_runs"] += 1
                     st["rows_chained"] += c.count * urows[e]
             j = np.arange(c.count, dtype=np.int64)[:, None]
@@ -155,6 +156,8 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
         out["aliased_inputs"] = {"defs": sum(1 for a in alias if a), "inputs": sum(len(a) for a in alias)}
+        if fallback == "contiguous":
+            out["chained_split"] = _split(t, kinds, urows, size, alias, n)
     return maps[t.root], out
 
 
@@ -197,6 +200,93 @@ def _aliases(t: T.Tmpl) -> list[dict[int, set[int]]]:
 def _chained(c: T.Call, Le: int, D: T.Def, al: dict[int, set[int]]) -> bool:
     lo, hi = c.base, c.base + c.count * Le
     return any(((col >= lo) & (col < hi)).any() for _, (_, _, col) in _reads(c, D, al))
+
+
+def _odd(x: int) -> int:
+    return x >> ((x & -x).bit_length() - 1) if x else 0
+
+
+def _cone(defs, e: int, bad_in: frozenset, urows, cache) -> tuple[int, np.ndarray]:
+    """Definition ``e``'s rows (unrolled, per copy) that read the inputs ``bad_in`` transitively, and its columns among
+    them; a call any of whose copies reads them is followed into its callee (the union over its copies)."""
+    key = (e, bad_in)
+    if key in cache:
+        return cache[key]
+    E = defs[e]
+    L = E.cols
+    bad = np.zeros(L + E.ins + 1, bool)
+    bad[[L + q for q in bad_in]] = True
+    items = sorted([(col, 0, a, b) for col, a, b in E.rows] + [(c.base, 1, c, None) for c in E.calls],
+                   key=lambda x: x[0])
+    n = 0
+    for col, k, a, b in items:
+        if k == 0:
+            if bad[list(a)].any() or bad[list(b)].any():
+                bad[col] = True
+                n += 1
+            continue
+        c, Le = a, defs[a.e].cols
+        j = np.arange(c.count, dtype=np.int64)[:, None]
+        inner, q0 = set(), 0
+        for ln, at, sp in c.segs:
+            if ln:
+                hit = bad[at + j * sp + np.arange(ln, dtype=np.int64)[None, :]].any(axis=0)
+                inner |= set((q0 + np.nonzero(hit)[0]).tolist())
+            q0 += ln
+        if inner:
+            ci, mask = _cone(defs, c.e, frozenset(inner), urows, cache)
+            n += c.count * ci
+            cols = c.base + j * Le + np.nonzero(mask)[0][None, :]
+            bad[cols.ravel()] = True
+    cache[key] = (n, bad[:L])
+    return cache[key]
+
+
+def _split(t: T.Tmpl, kinds, urows, size, alias, useful: int) -> dict:
+    """An estimate (unrolled rows, no column map) of splitting each outermost chained run into its carried cone (the
+    rows that read another copy, transitively) and the rest: the rest interleaved over 2^m lanes, the cone contiguous
+    (the carry fold, at a stride of the cone's size) or in power-of-two slots. Also the strides' odd parts, which the
+    carry fold's DP over the copy bits pays per run."""
+    defs = t.defs
+    free = [0] * len(defs)  # instances of each Definition outside every chained run
+    free[t.root] = 1
+    for d in range(len(defs) - 1, -1, -1):
+        for c, kind, _ in kinds[d]:
+            if kind != "chained":
+                free[c.e] += free[d] * c.count
+    cache: dict = {}
+    out = dict.fromkeys(("runs", "cone_rows", "rest_rows", "rest_rounding", "cone_pow2_pad"), 0)
+    q_full, q_cone = [], []
+    for d, D in enumerate(defs):
+        for c, kind, _ in kinds[d]:
+            if kind != "chained":
+                continue
+            q_full.append(_odd(size[c.e]))
+            if not free[d]:
+                continue
+            Le = defs[c.e].cols
+            lo, hi = c.base, c.base + c.count * Le
+            bad = set()
+            for q0, (jj, qq, col) in _reads(c, D, alias[d]):
+                inside = (col >= lo) & (col < hi)
+                bad |= set((q0 + qq[inside]).tolist())
+            cone, _ = _cone(defs, c.e, frozenset(bad), urows, cache)
+            rest = urows[c.e] - cone
+            M = 1 << _log(c.count)
+            q_cone.append(_odd(cone))
+            out["runs"] += free[d]
+            out["cone_rows"] += free[d] * c.count * cone
+            out["rest_rows"] += free[d] * c.count * rest
+            out["rest_rounding"] += free[d] * (M - c.count) * rest
+            out["cone_pow2_pad"] += free[d] * c.count * (T._pow2(cone) - cone) if cone else 0
+    est = useful + out["rest_rounding"]
+    out |= {"useful_cone_contiguous": est, "slot_log_cone_contiguous": _slot_log(est),
+            "useful_cone_pow2": est + out["cone_pow2_pad"], "slot_log_cone_pow2": _slot_log(est + out["cone_pow2_pad"]),
+            "stride_odd_part": {"runs": len(q_full), "sum": sum(q_full), "max": max(q_full, default=0),
+                                "median": sorted(q_full)[len(q_full) // 2] if q_full else 0},
+            "cone_odd_part": {"sum": sum(q_cone), "max": max(q_cone, default=0),
+                              "median": sorted(q_cone)[len(q_cone) // 2] if q_cone else 0}}
+    return out
 
 
 def _classify(v: np.ndarray, L: int, m: np.ndarray, M: int) -> dict:
