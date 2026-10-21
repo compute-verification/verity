@@ -264,26 +264,23 @@ def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Str
 
 /-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
 `strata` accepted. -/
-def callWork (layout : Json) : List (Nat × Nat) :=
+def callWork (layout : Json) : List (Nat × Nat) := Id.run do
   let num := fun j => (nat? j).getD 0
-  let (r, c) := match get layout "tile" with
+  let (r, c) := (match get layout "tile" with
     | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
-    | _ => (1, 1)
+    | _ => (1, 1))
   let m := num (get layout "m")
-  let lins : List (String × Nat × Nat) := match get layout "linears" with
-    | .arr a => a.toList.filterMap fun x => match x with
-      | .arr b => match b.toList with
-        | [.str s, k, n] => some (s, num k, num n)
-        | _ => none
-      | _ => none
-    | _ => []
-  match get layout "calls" with
-  | .arr a => a.toList.filterMap fun x => match x with
-    | .arr b => match b.toList with
-      | [.str lin, _] => (lins.find? (·.1 == lin)).map fun (_, k, n) => ((m / r) * (n / c), r * c * k)
-      | _ => none
-    | _ => none
-  | _ => []
+  let rows := fun (j : Json) => (match j with
+    | .arr a => a.toList.filterMap fun (x : Json) => (match x with
+      | .arr b => some b.toList
+      | _ => none)
+    | _ => ([] : List (List Json)))
+  let lins : List (String × Nat × Nat) := (rows (get layout "linears")).filterMap fun (x : List Json) => (match x with
+    | [.str s, k, n] => some (s, num k, num n)
+    | _ => none)
+  pure <| (rows (get layout "calls")).filterMap fun (x : List Json) => (match x with
+    | [.str lin, _] => (lins.find? (·.1 == lin)).map fun (_, k, n) => ((m / r) * (n / c), r * c * k)
+    | _ => none)
 
 /-- `credit.established`: the ε a draw of K = `k` under the work law over the window `layout` establishes at `DELTA`
 for its credited calls `got`, `PouwWindow.epsAt` at the window's inputs as `kPrime` takes them: credited the credited
