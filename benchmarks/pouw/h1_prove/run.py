@@ -289,6 +289,13 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
+def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
+    """The `k` units of `population` a window's draw coin selects, after its registration (hex) was recorded: Lean
+    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the window's name and its registration."""
+    key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
+    return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
+
+
 def cmd_prepare(a) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
@@ -317,8 +324,7 @@ def cmd_prepare(a) -> int:
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    key = derive(do.coin, DRAW_DOMAIN, {"window": w1, "registration": reg.hex()})
-    units = sorted(lean_draw(a.lean, T, a.draw, key.stream("draw", 2 * a.draw * CC.width(T) + 64)))
+    units = draw_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
     u0 = units[0]
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
     record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
