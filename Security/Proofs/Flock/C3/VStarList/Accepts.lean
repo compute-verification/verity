@@ -112,6 +112,7 @@ theorem checkInner_ok (hsp : ish.sparse.isSome = true)
   obtain ⟨_, spec, st, hf, hst, hr⟩ := checkAtC3_spec h1 hsp
   cases hf
   simp only [hsp, ↓reduceIte] at h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   exact ⟨spec, st, hst, hr, h⟩
 
 theorem checks_ok

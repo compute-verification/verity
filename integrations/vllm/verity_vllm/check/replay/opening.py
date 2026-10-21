@@ -144,10 +144,11 @@ def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.n
             x = t.detach()
             # [R16 fp8] the words in the parameter's OWN width: bf16 -> u16; the block-scaled FP8 linear's e4m3 `weight` ([N, K], the
             # checkpoint's stored bytes; the cutlass kernel reads it through a `.T` view, the storage is not re-laid) -> u8; its f32
-            # `weight_scale_inv` ([N/G, K/G]) -> u32.  The replay checks the width against the Program's declared leaf (weight_bits).
+            # `weight_scale_inv` ([N/G, K/G]) -> u32; an int32 table (DeepSeek-V4's hash-routed `ffn.gate.tid2eid`) -> u32.  The replay
+            # checks the width against the Program's declared leaf (weight_bits).
             if x.dtype == torch.bfloat16:
                 cache[name] = x.contiguous().view(torch.int16).cpu().numpy().view(np.uint16).reshape(-1)
-            elif x.dtype == torch.float32:
+            elif x.dtype in (torch.float32, torch.int32):
                 cache[name] = x.contiguous().view(torch.int32).cpu().numpy().view(np.uint32).reshape(-1)
             elif str(x.dtype) in ("torch.float8_e4m3fn", "torch.float8_e4m3fnuz", "torch.uint8", "torch.int8"):
                 cache[name] = x.contiguous().view(torch.int8).cpu().numpy().view(np.uint8).reshape(-1)
