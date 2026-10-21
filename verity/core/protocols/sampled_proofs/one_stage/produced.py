@@ -28,7 +28,8 @@ hiding salts, and only their check bits leave.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from verity.ml.commitments.merkle import CommitmentDomain
 

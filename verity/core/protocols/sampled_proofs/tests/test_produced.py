@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import audit, produced as PR, registered as G
+from verity.core.protocols.sampled_proofs.one_stage import audit
+from verity.core.protocols.sampled_proofs.one_stage import produced as PR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 PD = "12" * 64
 REG = "ab" * 64
@@ -69,7 +71,7 @@ def test_the_record_is_held_to_the_registration_the_draw_and_the_verifiers_entri
 
 def test_the_opened_roots_are_the_records():
     rec, tree = _rec()
-    v = lambda root: {"lean": {"of_record": True, "accepted": True,  # noqa: E731
+    v = lambda root: {"lean": {"of_record": True, "accepted": True,
                                "registered": {"partials": {"value": "partials", "root": root},
                                               "p0": {"value": "partials", "root": root}}}}
     assert PR.opened(rec, audit.session_registered(v(tree.root.hex()))) == ()
