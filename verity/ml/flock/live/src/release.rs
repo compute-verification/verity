@@ -1954,4 +1954,140 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(base);
     }
+
+    /// One op of the shared vectors on `rec`, its result as they write it, or why the record can't be read.
+    fn golden_op(rec: &Record, op: &Value) -> Result<Value, String> {
+        let op = op.as_array().unwrap();
+        let s = |k: usize| op[k].as_str().unwrap_or_default();
+        let e = |e: io::Error| e.to_string();
+        Ok(match s(0) {
+            "open" => {
+                let ps: Vec<&str> = op[2].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+                match rec.open(s(1), &ps, op[3].as_u64(), (!op[4].is_null()).then_some(&op[4])) {
+                    Ok(Ok(sid)) => json!(sid),
+                    Ok(Err(why)) => json!({"refused": why}),
+                    Err(x) if x.kind() == io::ErrorKind::InvalidInput => json!({"error": x.to_string()}),
+                    Err(x) => return Err(e(x)),
+                }
+            }
+            "finish" => {
+                rec.finish(s(1)).map_err(e)?;
+                Value::Null
+            }
+            "stop" => json!(rec.stop(s(1), s(2), s(3)).map_err(e)?),
+            "release" => {
+                rec.release(s(1), s(2)).map_err(e)?;
+                Value::Null
+            }
+            "admit" => match rec.admit(s(1), s(2)).map_err(e)? {
+                Ok(a) => json!({"release_ms": a.release_ms}),
+                Err(why) => json!({"refused": why}),
+            },
+            "failures" => json!(rec.failures(s(1)).map_err(e)?),
+            "slot" => {
+                drop(rec.slot(s(1), s(2), || {}).map_err(e)?);
+                Value::Null
+            }
+            other => panic!("unknown op {other}"),
+        })
+    }
+
+    /// The index cases frozen for the Lean (`FIREWALL_GOLDEN_OUT=FILE cargo test … -- --ignored golden_index_cases`):
+    /// `drive`'s fixed streams of ops, with the record damaged and repaired, its index broken and events appended between
+    /// them, each op as the shared vectors write it and answered through the index. One JSON line a step, after a line
+    /// `{"case", "long"}` for each stream: `{"op", "result" | "reject", "after"}`, with `"record"`, the record before the
+    /// op, where it is not the one the step before left, and `after` the SHA-256 of the record the op leaves.
+    #[test]
+    #[ignore]
+    fn golden_index_cases() {
+        use sha2::Digest;
+        let path = std::env::var("FIREWALL_GOLDEN_OUT").expect("FIREWALL_GOLDEN_OUT");
+        let mut out = std::fs::File::create(&path).unwrap();
+        let base = std::env::temp_dir().join(format!("flock-release-golden-{}", std::process::id()));
+        for (seed, long) in [(20261016u64, false), (7, false), (11, true)] {
+            let state = base.join(seed.to_string());
+            let _ = std::fs::remove_dir_all(&state);
+            let rec = Record::new(&state).unwrap();
+            let read = || String::from_utf8(std::fs::read(state.join("record.jsonl")).unwrap_or_default()).expect("a UTF-8 record");
+            let (mut draw, mut mark, mut last) = (Draw(seed), None, String::new());
+            let mut sids = vec!["r9999".to_string()];
+            let long_sid = "r".repeat(KEY_MAX + 1);
+            writeln!(out, "{}", json!({"case": format!("seed {seed}"), "long": long})).unwrap();
+            let mut step = |op: Value, last: &mut String| -> Result<Value, String> {
+                let before = read();
+                let got = golden_op(&rec, &op);
+                let after = read();
+                let mut line = json!({"op": op, "after": hex(&sha2::Sha256::digest(after.as_bytes()))});
+                if before != *last {
+                    line["record"] = json!(before);
+                }
+                match &got {
+                    Ok(v) => line["result"] = v.clone(),
+                    Err(why) => line["reject"] = json!(why.replace(&state.display().to_string(), "STATE")),
+                }
+                writeln!(out, "{line}").unwrap();
+                *last = after;
+                got
+            };
+            for _ in 0..1500 {
+                let next = format!("r{:04}", sids.len() - 1);
+                let mut recent: Vec<&str> = sids.iter().rev().take(4).map(String::as_str).collect();
+                recent.extend(["r9999", next.as_str()]);
+                if long {
+                    recent.push(&long_sid);
+                }
+                let sid = draw.pick(&recent).to_string();
+                let part = draw.pick(&["L0", "L1", "alg", "L9"]);
+                let stream = draw.pick(&["s", "t"]);
+                let r = draw.below(100);
+                if r < 4 {
+                    let kind = draw.pick(&["blank", "torn", "unterminated", "foreign", "replace", "swap", "rewrite", "cut", "edit",
+                                           "halve", "index-gone", "index-head", "index-entries"]);
+                    damage(&state, kind, &mut mark, &sid);
+                    continue;
+                } else if r < 7 {
+                    damage(&state, "repair", &mut mark, &sid);
+                    continue;
+                }
+                let op = draw.pick(&["open", "open", "finish", "admit", "admit", "admit", "release", "release", "stop",
+                                     "failures", "slot", "slot", "events", "appended"]);
+                let choices: [&[&str]; 3] = [&PARTS, &["L0"], &["L0", "L1"]];
+                let parts = choices[draw.below(3)];
+                let budget = if draw.below(20) == 0 { Some(9) } else if stream == "s" { Some(4) } else { None };
+                let x = draw.below(10);
+                match op {
+                    "open" => {
+                        if let Ok(Value::String(s)) = step(json!(["open", stream, parts, budget, null]), &mut last) {
+                            sids.push(s);
+                        }
+                    }
+                    "finish" => { let _ = step(json!(["finish", sid]), &mut last); }
+                    "admit" | "release" => { let _ = step(json!([op, sid, part]), &mut last); }
+                    "stop" => { let _ = step(json!(["stop", sid, part, "cut"]), &mut last); }
+                    "failures" => { let _ = step(json!(["failures", stream]), &mut last); }
+                    "events" => {}
+                    "slot" => {
+                        if step(json!(["slot", sid, part]), &mut last).is_ok() && x >= 3 {
+                            if let Ok(a) = step(json!(["admit", sid, part]), &mut last) {
+                                if a.get("refused").is_none() {
+                                    let _ = if x < 8 { step(json!(["release", sid, part]), &mut last) } else {
+                                        step(json!(["stop", sid, part, "the challenger's verdict rejects it"]), &mut last)
+                                    };
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        let kind = draw.pick(&["open", "finish", "stop", "release", "refused", "wait", "slot"]);
+                        let mut ev = json!({"event": kind, "session": sid, "part": part});
+                        if kind == "open" {
+                            ev = json!({"event": "open", "session": sid, "stream": stream, "parts": parts, "budget": budget});
+                        }
+                        appended(&rec, ev);
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
 }
