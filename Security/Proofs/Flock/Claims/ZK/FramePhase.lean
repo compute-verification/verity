@@ -40,15 +40,16 @@ theorem roundFree_open (c : Cfg) (s : Masker) (pre : List Frame) (k : UInt8) (n 
     (hd : s.done = true) (hlig : c.lig = true) (hl0 : s.doneL0 = false) (hi : s.inner = none)
     (hm : ∀ f ∈ pre ++ [Frame.label _root_.Flock.Zk.LABEL_OPEN.toUTF8], midFrame f) (hpre : ∀ f ∈ pre, plainFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) :
-    ∃ out fr, roundFree c s
+    ∃ out, roundFree c s
         (ByteArray.mk (encs (pre ++ [Frame.label _root_.Flock.Zk.LABEL_OPEN.toUTF8]) ++ (Frame.sq k n).enc).toArray)
           n =
-        .ok (out, { s with on := true, l0 := true, owed := some n }, fr) ∧
+        .ok (out, { s with on := true, l0 := true, owed := some n }, #[]) ∧
       out.data.toList = encs (maskFrames (fun _ v => v) 0 pre ++ [Frame.label _root_.Flock.Zk.LABEL_OPEN.toUTF8]) ++
         (Frame.sq k n).enc := by
   obtain ⟨r₁, hr₁, h1₁, h2₁⟩ := foldlM_stepAt_off c pre s ByteArray.empty #[] 0 0 hon hpre
+  have hfr := foldlM_stepAt_off_fr c pre s ByteArray.empty #[] 0 r₁ hon hpre hr₁
   obtain ⟨m, o₁, fr₁, q₁⟩ := r₁
-  simp only at h1₁ h2₁
+  simp only at h1₁ h2₁ hfr
   subst h1₁
   have h3 : [Frame.label _root_.Flock.Zk.LABEL_OPEN.toUTF8].foldlM (stepAt c) (m, o₁, fr₁, q₁) =
       .ok ({ m with on := true, l0 := true }, o₁ ++ labelFrame _root_.Flock.Zk.LABEL_OPEN.toUTF8, fr₁,
@@ -61,7 +62,8 @@ theorem roundFree_open (c : Cfg) (s : Masker) (pre : List Frame) (k : UInt8) (n 
     rw [List.foldlM_append, hr₁]
     exact h3
   rw [roundFree_encs c m _ k n (by rw [hi]; simp) hm hk h0 hn, hf]
-  refine ⟨o₁ ++ labelFrame _root_.Flock.Zk.LABEL_OPEN.toUTF8 ++ header 4 k n, fr₁, ?_, ?_⟩
+  subst hfr
+  refine ⟨o₁ ++ labelFrame _root_.Flock.Zk.LABEL_OPEN.toUTF8 ++ header 4 k n, ?_, ?_⟩
   · simp only [bind, Except.bind, hi]
     rfl
   · rw [data_append', data_append', h2₁, sq_enc, labelFrame_data]
@@ -78,10 +80,10 @@ closes, at a Ligerito rep, the frame releases the binding and `z`'s squeeze of `
 theorem roundFree_openBind (c : Cfg) (s : Masker) (T : F128) (cap : ByteArray) (n : ℕ) (hon : s.on = false)
     (hd : s.done = true) (hlig : c.lig = true) (hl0 : s.doneL0 = false) (hi : s.inner = none)
     (hcap : cap.size < 2 ^ 64) (hn0 : n ≠ 0) (hn : n < 2 ^ 64) :
-    ∃ out fr, roundFree c s (ByteArray.mk (encs (openBind T cap) ++ (Frame.sq 2 n).enc).toArray) n =
-        .ok (out, { s with on := true, l0 := true, owed := some n }, fr) ∧
+    ∃ out, roundFree c s (ByteArray.mk (encs (openBind T cap) ++ (Frame.sq 2 n).enc).toArray) n =
+        .ok (out, { s with on := true, l0 := true, owed := some n }, #[]) ∧
       out.data.toList = encs (openBind T cap) ++ (Frame.sq 2 n).enc := by
-  obtain ⟨out, fr, hr, ho⟩ := roundFree_open c s
+  obtain ⟨out, hr, ho⟩ := roundFree_open c s
     [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] 2 n hon hd hlig hl0 hi
     (by
       intro f hf
@@ -101,7 +103,7 @@ theorem roundFree_openBind (c : Cfg) (s : Masker) (T : F128) (cap : ByteArray) (
     (.inl rfl) (fun h => hn0 h.1) hn
   rw [show openBind T cap = [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] ++
       [.label _root_.Flock.Zk.LABEL_OPEN.toUTF8] from rfl]
-  refine ⟨out, fr, hr, ?_⟩
+  refine ⟨out, hr, ?_⟩
   rw [ho]
   simp only [maskFrames]
 
@@ -160,7 +162,7 @@ theorem release_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (
     (hcap : cap.size < 2 ^ 64) (hn0 : L.coins x h.length ≠ 0) (hn : L.coins x h.length < 2 ^ 64) :
     L.release x ρ h st (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc) =
       0 :: (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc) := by
-  obtain ⟨out, fr, hr, ho⟩ := roundFree_openBind (L.cfg x ρ h) { m with stopped := st } T cap _ hon hd hlig hl0 hi
+  obtain ⟨out, hr, ho⟩ := roundFree_openBind (L.cfg x ρ h) { m with stopped := st } T cap _ hon hd hlig hl0 hi
     hcap hn0 hn
   rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
 
