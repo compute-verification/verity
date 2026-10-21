@@ -785,7 +785,7 @@ class Lanes:
 
     def capture(self, g: dict, q: int, r: int, p: int) -> None:
         win, L = self.win, self.win.L
-        xb, pl, dz = [], [], []
+        xb, pl, pa, dz = [], [], [], []
         for w in range(L):
             rec, lu = self.rec(q, w), r * self.cpr[w]
             x = rec[:lu]
@@ -793,16 +793,21 @@ class Lanes:
                 x = x[:, 0::2] ^ x[:, 1::2]
             o_, units, nw = win.plan.offs[w]
             got = win.plan.out[o_:o_ + units * nw].view(torch.int32).view(units, nw)
-            xb.append((x[:, 0] != got[:lu]).sum())
-            pl.append((rec[:lu] == P32).sum())
+            off = x[:, 0] != got[:lu]
+            xb.append(off.sum())
+            # a step's ~4e8 live words hold a fold-chain word equal to 0xA5A5A5A5 about one capture in ten; one left
+            # unwritten moves its (unit, word) column's XOR off the receipt (all but 2^-32), so it counts only there
+            hit = rec[:lu] == P32
+            pl.append((hit & off[:, None, :]).sum())
+            pa.append(hit.sum())
             dz.append((rec[lu:] != (P32 if self.live_only else 0)).sum())
         keep = {}
         for w in sorted({0, 2, 3, L - 1}):
             h = torch.empty(self.rec(q, w).shape, dtype=torch.int32, pin_memory=True)
             h.copy_(self.rec(q, w), non_blocking=True)
             keep[w] = h
-        g["lanes"] = {"r": r, "xor_bad": torch.stack(xb), "poison_left": torch.stack(pl), "dead_off": torch.stack(dz),
-                      "rec": keep, "l_roots": self.lroots[p].clone()}
+        g["lanes"] = {"r": r, "xor_bad": torch.stack(xb), "poison_left": torch.stack(pl), "a5_words": torch.stack(pa),
+                      "dead_off": torch.stack(dz), "rec": keep, "l_roots": self.lroots[p].clone()}
 
     def info(self) -> dict:
         b = sum(self.units[w] * 128 * self.words[w] for w in range(self.win.L))
@@ -813,7 +818,8 @@ class Lanes:
 
 def lanes_check(win: SoWindow, g: dict, which: str, salt: bytes) -> dict:
     """-lr's checks of capture g (the module docstring): its records' XOR over lanes against the receipts, no live
-    word left 0xA5 and every dead unit's record zero (-lrl: untouched), sampled units' records against receipts.py's
+    word left 0xA5 (a 0xA5A5A5A5 word in a column whose XOR is the receipt is the chain's own, counted in
+    `live_a5_words`) and every dead unit's record zero (-lrl: untouched), sampled units' records against receipts.py's
     chain split by lane on the CPU, three calls' lane-table roots rehashed by commit.py, and under "fault" the flipped
     lane word moving its unit's leaf and its call's root.  `binding_ok`: everything but the CPU chain, which a fault of
     the salt moves."""
@@ -824,6 +830,8 @@ def lanes_check(win: SoWindow, g: dict, which: str, salt: bytes) -> dict:
     r = lc["r"]
     doc = {"form": lx.form, "r": r, "xor_vs_receipts_bad": [w for w, v in enumerate(lc["xor_bad"].tolist()) if v],
            "live_poison_left": [w for w, v in enumerate(lc["poison_left"].tolist()) if v],
+           "live_a5_words": {w: int(a - b) for w, (a, b) in enumerate(zip(lc["a5_words"].tolist(),
+                                                                          lc["poison_left"].tolist())) if a - b},
            "dead_off": [w for w, v in enumerate(lc["dead_off"].tolist()) if v]}
     l_dev = [unwords(lc["l_roots"][8 * w:8 * w + 8]) for w in range(L)]
     roots_bad, cpu_bad, fault_cells = [], [], {}
