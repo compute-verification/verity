@@ -23,11 +23,12 @@ A `window` case is a `credited` case with its layout, one call per manifest row,
 draw coin draws under the served window's arguments; its mutations add a call the manifest lacks, prove units the prover
 chose under its own stream, fail or drop a drawn unit, and pass a `credited` refusal through.
 
-A `period` case is one to three such windows in one period of the auditor's ledger (`period-open`, each window's session
-opened and ended, then the `period-close` listing them), presented in its close's order, a window of no period beside it
-in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a window incomplete, drop, reorder or add a window,
-present the window of no period among the period's, name a period never opened or no period, forge the ledger, refuse
-one window, and break the forms.
+A `period` case is one to three such windows in one period of the auditor's ledger (`period-open` committing the SHA-512
+of a circuit's descriptor, each window's session opened and ended, then the `period-close` listing them), presented in
+its close's order, each with that descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42)
+leave the period unclosed or a window incomplete, drop, reorder or add a window, present the window of no period among
+the period's, name a period never opened or no period, forge the ledger, refuse one window, give one window another
+circuit's descriptor (``other-circuit``) or open the period committing no circuit, and break the forms.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -42,6 +43,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import json
 import random
 
 import pouw_rounds_cases as rc
@@ -375,23 +377,31 @@ def window_args(d: dict) -> tuple:
     return (*(d[k] for k in WINDOW_ARGS), rc.lms_verify)
 
 
-def _evidence(d: dict) -> dict:
-    return {k: d[k] for k in Cr.WINDOW_KEYS}
+def _descriptor(rng: random.Random) -> bytes:
+    """A circuit's descriptor as the verifier holds it: canonical JSON without annotations."""
+    return json.dumps({"definition": f"h1window-{rng.randrange(1 << 30)}", "inputs": rng.randint(1, 64)},
+                      sort_keys=True, separators=(",", ":")).encode()
+
+
+def _evidence(d: dict, descriptor: bytes) -> dict:
+    return {**{k: d[k] for k in Cr.WINDOW_KEYS}, "descriptor": descriptor.hex()}
 
 
 def period_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `period` case: one to three honest windows in one period of the auditor's ledger, presented in its close's
-    order, and a window of no period opened after the close; then mutation `name`."""
+    """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
+    whose SHA-512 the period's open committed, presented in its close's order, and a window of no period opened after
+    the close; then mutation `name`."""
     n = rng.randint(2 if name == "order" else 1, 3)
     pname = rng.choice(rc.PERIODS)
     wins = [honest_window(rng, sid=f"s-{i + 1}", leaf=4 * i + 2) for i in range(n)]
     foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3)
     pub = wins[0][1].pub
+    descriptor = _descriptor(rng)
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, "cap": 4,
-                                     "circuit": rng.choice(rc.CIRCUITS), "pinned": "ab" * 20,
+    committed = {} if name == "no-circuit" else {"cap": 4, "circuit": hashlib.sha512(descriptor).hexdigest()}
+    events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
                                      "key_sha512": hashlib.sha512(pub).hexdigest()})]
     for (d, s), end in zip(wins, ends):
         events += [("open", s.sid, rc._open(rng, d["window"], pub)), ("end", s.sid, rc._end(s, **end))]
@@ -405,11 +415,11 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     key = rc._key(1) if name == "forged-ledger" else rc._key(0)
     ledger = rc.ledger_lines(events if name != "no-close" else [e for e in events if e[0] != "period-close"], key,
                              leaves if name != "no-close" else [q for q, e in zip(leaves, events) if e[0] != "period-close"])
-    windows = [_evidence(d) for d, _s in wins]
+    windows = [_evidence(d, descriptor) for d, _s in wins]
     out = {"key": wins[0][0]["key"], "ledger": ledger, "name": pname}
     i = rng.randrange(n)
     match name:
-        case "honest" | "incomplete" | "no-close" | "forged-ledger":
+        case "honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit":
             pass
         case "missing":
             del windows[i]
@@ -417,9 +427,17 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
             i, j = rng.sample(range(n), 2)
             windows[i], windows[j] = windows[j], windows[i]
         case "extra":
-            windows.append(_evidence(fd) if rng.random() < 0.5 else dict(windows[i]))
+            windows.append(_evidence(fd, descriptor) if rng.random() < 0.5 else dict(windows[i]))
         case "foreign":
-            windows.insert(rng.randrange(n), _evidence(fd))
+            windows.insert(rng.randrange(n), _evidence(fd, descriptor))
+        case "other-circuit":
+            other = _descriptor(rng)
+            while other == descriptor:
+                other = _descriptor(rng)
+            windows[i]["descriptor"] = other.hex()
+        case "descriptor-form":
+            h = windows[i]["descriptor"]
+            windows[i]["descriptor"] = rng.choice([h.upper(), h[:-1], "", "zz", 5, None, list(descriptor)])
         case "unopened":
             out["name"] = next(p for p in rc.PERIODS if p != pname)
         case "name":
@@ -427,8 +445,9 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
         case "window-refused":
             windows[i]["proofs"] = _mutate_proofs(windows[i]["proofs"], rng, rng.choice(["failed", "missing"]), [])
         case "windows-form":
+            drop = rng.choice(["proofs", "descriptor"])
             windows = rng.choice([None, {"0": windows[0]}, windows[:i] + [5] + windows[i + 1:],
-                                  windows[:i] + [{k: v for k, v in windows[i].items() if k != "proofs"}]
+                                  windows[:i] + [{k: v for k, v in windows[i].items() if k != drop}]
                                   + windows[i + 1:]])
         case "key-form":
             out["key"] = rng.choice([None, {**out["key"], "public": "00"}])
@@ -438,7 +457,7 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
-                "windows-form", "forged-ledger", "key-form"]
+                "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 

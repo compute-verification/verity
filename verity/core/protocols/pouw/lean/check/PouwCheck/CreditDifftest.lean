@@ -14,7 +14,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
 * `outcome` (`drawn`'s and `proofs`, as `credit.outcome` takes them) and `a-link` (`rounds`, `entries`, as
   `credit.a_link` takes them): null, or `{"refused": [code, why]}`.
 * `window` (`credit`'s, `layout` and `proofs`, as `credit.window` takes them): `{"credited": [indices]}`, and `period`
-  (`key`, `ledger`, `name`, `windows`, as `credit.period_credit` takes them): `{"credited": [[indices], …]}`; or
+  (`key`, `ledger`, `name`, `windows`, as `credit.period_credit` takes them, each window's evidence `window`'s and its
+  `descriptor` in hex): `{"credited": [[indices], …]}`; or
   `{"refused": [code, why]}`.
 -/
 

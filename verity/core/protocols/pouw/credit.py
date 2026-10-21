@@ -23,7 +23,8 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
 * **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
-  `period_credit` a refused window refuses its period.
+  `period_credit` each window must also prove the circuit the period's open committed (`challenger.credited_session`:
+  the SHA-512 of the descriptor its proofs were verified against), and a refused window refuses its period.
 * **The A rows are the round roots'** (`a_link`): each registered A value of the window (a value named ``…/a/<K>``,
   `h1window.roles`) over L rows and S steps is the tree whose rows ``[s·L/S, (s+1)·L/S)`` round s's root commits as
   aligned subtrees. Each round's ``a`` lists, for every A value, its ``[level, index, root]`` subtrees in row order, and
@@ -60,6 +61,7 @@ LEVELS = 64
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[0-9]+")
+_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
@@ -85,10 +87,14 @@ LAYOUT_FORM = ("the window's layout is not {calls, linears, m, tile}, h1window.p
 COIN_FORM = "the draw coin is not a SHA-512 digest (128 lowercase hex)"
 DRAW_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of "
              "printable ASCII strings")
-#: a window's evidence in a period
+#: a window's evidence, as `window` reads it
 WINDOW_KEYS = ("calls", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window")
-WINDOWS_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(WINDOW_KEYS) + "}, "
+#: a window's evidence in a period: `WINDOW_KEYS` and the descriptor of the circuit its proofs were verified against
+PERIOD_KEYS = ("calls", "descriptor", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window")
+WINDOWS_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PERIOD_KEYS) + "}, "
                 "in its close's order")
+DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
+                  "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
 PROOFS_FORM = "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
 LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
@@ -423,17 +429,27 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
 def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
                   ) -> tuple[list[list[int]] | None, tuple[str, str] | None]:
     """Each window's credited calls, in the close's order, of period `name`, and None; or None and the refusal: the
-    period's windows are exactly its close's (`period`), and each window's evidence (``{window, session, salt, calls,
-    served, rounds, draw, layout, proofs}``, as `window` reads it, under the same ledger) is credited by `window`. A
-    refused window refuses the whole period (``window``), so a period earns only when every window in it does."""
-    if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(WINDOW_KEYS) for w in windows)):
+    period's windows are exactly its close's (`period`), each window proves the circuit the period's open committed
+    (``circuit``: its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashes to it,
+    `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, served, rounds, draw,
+    layout, proofs}``, as `window` reads it, under the same ledger) is credited by `window`. A refused window refuses
+    the whole period (``circuit`` or ``window``), so a period earns only when every window in it does."""
+    if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(PERIOD_KEYS) for w in windows)):
         return None, ("period", WINDOWS_FORM)
     roots = [w["window"].get("root") if isinstance(w["window"], dict) else None for w in windows]
     why = period(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
+    k = Ch.ChallengerKey.from_json(key)
     out = []
     for i, w in enumerate(windows):
+        if not (type(w["descriptor"]) is str and _HEX.fullmatch(w["descriptor"])):
+            return None, ("circuit", f"window {i} of period {name}: {DESCRIPTOR_HEX}")
+        try:
+            Ch.credited_session(ledger, w["window"], k, bytes.fromhex(w["descriptor"]), verify)
+        except Ch.CoinError as e:
+            return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
+                                     f"nothing: {e}")
         got, why = window(key, ledger, w["window"], w["session"], w["salt"], w["calls"], w["served"], w["rounds"],
                           w["draw"], w["layout"], w["proofs"], verify)
         if why is not None:
@@ -577,6 +593,6 @@ def a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
     return None
 
 
-__all__ = ["CALLS_TAG", "CREDIT", "DEPTH", "DRAW_TAG", "LAYOUT_KEYS", "LEVELS", "RECORD_K", "ROUND_TAG", "VERDICTS",
-           "WINDOW_KEYS", "a_link", "calls_root", "cover", "credited", "draw_root", "drawn", "is_a", "law", "merkle_depth",
-           "outcome", "period", "period_credit", "round_root", "strata", "tree_root", "window"]
+__all__ = ["CALLS_TAG", "CREDIT", "DEPTH", "DRAW_TAG", "LAYOUT_KEYS", "LEVELS", "PERIOD_KEYS", "RECORD_K", "ROUND_TAG",
+           "VERDICTS", "WINDOW_KEYS", "a_link", "calls_root", "cover", "credited", "draw_root", "drawn", "is_a", "law",
+           "merkle_depth", "outcome", "period", "period_credit", "round_root", "strata", "tree_root", "window"]

@@ -82,8 +82,9 @@ K = min(27,713, N) (`law`). `outcome`: the window is accepted only when every un
 outcome and it is an accept; a failed or missing one refuses the whole window. `window` is both on one served window,
 the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows presented
 are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete, so a period
-with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also credits each of
-them (`window`), a refused one refusing the period. `aLink`: each round's root (the one the
+with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also requires each of
+them to prove the circuit the period's open committed (its descriptor's SHA-512,
+`SampledProofs.Challenger.creditedSession`) and credits it (`window`), a refused one refusing the period. `aLink`: each round's root (the one the
 challenger received before that round's coin) is `credit.round_root` of the serving process's own round root and that
 round's rows of every registered A value (`…/a/<K>`) as aligned subtrees (`credit.cover`), and each A value's registered
 root must be the frame-v3 SHA-512 tree over those subtrees and its domain's pads.

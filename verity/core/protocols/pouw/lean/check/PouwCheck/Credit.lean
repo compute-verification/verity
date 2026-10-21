@@ -24,7 +24,8 @@ it, string for string:
   whole window is refused (no partial credit). `window` is `credit.window`: `credited`, then `outcome` under the served
   window's arguments (the stream its root, the registration its draw root, the receipt `{"receipts": …}`).
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
-  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it credited.
+  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
+  the period's committed circuit (`creditedSession`) and credited.
 * `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
 
@@ -72,9 +73,14 @@ def DRAW_ARGS : String :=
   "printable ASCII strings"
 def WINDOW_KEYS : List String :=
   ["calls", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
+def PERIOD_KEYS : List String :=
+  ["calls", "descriptor", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
 def WINDOWS_FORM : String :=
-  "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate WINDOW_KEYS ++ "}, " ++
+  "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate PERIOD_KEYS ++ "}, " ++
   "in its close's order"
+def DESCRIPTOR_HEX : String :=
+  "the window's descriptor is not the bytes of the circuit its proofs were verified against in lowercase hex (its " ++
+  "canonical JSON without annotations, the bytes program_digest hashes)"
 def PROOFS_FORM : String := "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
@@ -358,20 +364,32 @@ def period (key ledger name roots : Json) : R Unit := do
       throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
         "present the period's windows in the order its close lists them")
 
+/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
+def isHexBytes (s : String) : Bool :=
+  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
 /-- `credit.period_credit`: each window's credited calls of period `name`, in its close's order: the period's windows
-are exactly its close's (`period`) and each window is credited (`window`), a refused window refusing the period. -/
+are exactly its close's (`period`), each window proves the circuit the period's open committed (`circuit`: its
+descriptor hashes to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`), a refused
+window refusing the period. -/
 def periodCredit (key ledger name windows : Json) : R (List (List Nat)) := do
   let some ws := (match windows with
-      | .arr a => if a.all (fun w => keys w == some WINDOW_KEYS) then some a.toList else none
+      | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
       | _ => none) | throw ("period", WINDOWS_FORM)
   let roots := Json.arr (ws.toArray.map fun w => match get w "window" with
     | j@(.obj _) => get j "root"
     | _ => .null)
   period key ledger name roots
   let nm := (str? name).getD ""
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
   for (w, i) in ws.zipIdx do
     let f := get w
+    let some d := (match f "descriptor" with
+        | .str s => if isHexBytes s then hex? (.str s) else none
+        | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
+    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
+      ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     let got ← (window key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served") (f "rounds") (f "draw")
       (f "layout") (f "proofs")).mapError fun (c, why) =>
         ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")

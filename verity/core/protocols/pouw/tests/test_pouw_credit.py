@@ -61,6 +61,8 @@ PERIOD_EXPECT = {
     "name": ("period", "the period is not named"), "window-refused": ("window", "so the period earns nothing"),
     "windows-form": ("period", Cr.WINDOWS_FORM), "forged-ledger": ("coin", "the auditor's ledger is not trusted"),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
+    "other-circuit": ("circuit", "prove the period's declared circuit"),
+    "no-circuit": ("circuit", "commits no cap or circuit"), "descriptor-form": ("circuit", Cr.DESCRIPTOR_HEX),
 }
 UNTIED = "Register the A value whose rows each round's root committed"
 A_LINK_EXPECT = {
@@ -248,6 +250,21 @@ def test_a_period_counts_only_closed_and_complete(seed):
     assert refused is None and got == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
     for name in ("no-close", "incomplete", "missing", "order", "foreign"):
         assert _period(name, seed)[0] is None, name
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_window_proving_another_circuit_refuses_the_period(seed):
+    """A window whose proofs were verified against a circuit other than the one the period's open committed counts
+    toward no period (`challenger.credited_session`), so its period earns nothing, though every window is otherwise
+    credited; so does a period that committed no circuit."""
+    d = cases.period_instance(random.Random(f"other-circuit/{seed}"), "other-circuit")
+    for w in d["windows"]:
+        assert Cr.window(d["key"], d["ledger"], *(w[k] for k in cases.WINDOW_ARGS[2:]), rc.lms_verify)[1] is None
+    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
+    assert "doesn't count toward it, so the period earns nothing" in refused[1]
+    got, refused = _period("no-circuit", seed)
+    assert got is None and refused[0] == "circuit"
 
 
 @pytest.mark.parametrize("name", sorted(A_LINK_EXPECT))
