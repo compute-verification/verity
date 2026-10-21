@@ -369,8 +369,8 @@ theorem ksA_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col
 
 /-- **The inner rounds' forks bind at `deployRecC`, at the statement `x`** (`ForksBindAt`): two inner views at `Be`'s
 fork at round `j` that differ at message `j` differ before the last round, where the readers' messages are the runs'
-(`hP`) and the runs share their coins before `j`; or at the last, where the two representatives differ, so the readings do
-(`Bound.readL_ne_of_repL`). Both views accept (`hA`), so the calls or the columns differ, and `LastBindsEC` gives a
+(`hP`) and the runs share their coins before `j`; or at the last, where the two representatives differ, so the readings
+do (`Bound.readL_ne_of_repL`). Both views accept (`hA`), so the calls or the columns differ, and `LastBindsEC` gives a
 collision among `IVStar`'s calls, which the witnesses record (`hL`). -/
 theorem forksBindAt_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
