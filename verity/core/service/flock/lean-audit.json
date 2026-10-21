@@ -27,6 +27,7 @@
   "Flock.Test.TableCap",
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
+  "Flock.TmplOrder",
   "VStar"
  ],
  "exempt": {
