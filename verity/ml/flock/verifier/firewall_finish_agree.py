@@ -4,15 +4,16 @@
 
     python firewall_finish_agree.py --lean flock-firewall --dump DIR --out DIR -- FINISH_ARG...
 
-`DIR` holds, per firewalled table `T`, `table{T}.req` (its level-0 request, `flock-firewall link`'s), `table{T}.root` (the
-root of record, the Lean loop's), `table{T}.finish_root` (the session's Lean finish's) and `table{T}.rust_root`
-(`commit_zk`'s); and per rep `R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request), `table{T}-rep{R}.proof` (`zk_finish`'s
-proof file) and `table{T}-rep{R}.lean` (the session's Lean finish's, on salts for levels ≥ 1 it drew itself and the
-prover's trees took). Each table's three roots must be one, and each rep's two files one. Then one `flock-firewall finish
-FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw` its `session.json`, ...) gets every
-table's request, answered with the root of record. Then each rep's request with its passed values moved
-(`table{T}-rep{R}.vals` says where they sit), after the rep's salts (`salts T R`), must stop `finish` with no file: a
-constraint fails on the rep's pads (`stopped`). Writes DIR/result.json; exits 1 on any disagreement.
+`DIR` holds, per firewalled table `T`, `table{T}.req` (its level-0 request, `flock-firewall finish`'s `table`),
+`table{T}.root` (the root of record, the Lean loop's), `table{T}.finish_root` (the session's Lean finish's) and
+`table{T}.rust_root` (`commit_zk`'s); and per rep `R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request),
+`table{T}-rep{R}.proof` (`zk_finish`'s proof file) and `table{T}-rep{R}.lean` (the session's Lean finish's, on salts for
+levels ≥ 1 it drew itself and the prover's trees took). Each table's three roots must be one, and each rep's two files
+one. Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw`
+its `session.json`, ...) gets every table's request, answered with the root of record. Then each rep's request with its
+passed values moved (`table{T}-rep{R}.vals` says where they sit), after the rep's salts (`salts T R`), must stop
+`finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json; exits 1 on any
+disagreement.
 """
 from __future__ import annotations
 

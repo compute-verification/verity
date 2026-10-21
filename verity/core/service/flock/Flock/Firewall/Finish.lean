@@ -9,8 +9,8 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
 
 * `rowsFft`, `commitFw`: a level ≥ 1's commitment of an F-table, its codeword by the additive FFT (`Link.fft`) on each lane
   (`FlockComplete.commitP`'s, which evaluates each entry on its own), its leaves `hm96-sha512/v1`'s in tasks.
-* `commit0`: level 0's commitment of the table the transport hands it (`Link.In`, the same table `flock-firewall link`
-  commits; `FlockComplete.commitPZk`'s). `commitOf`: the same commitment read off the table's `Level0`, which the session
+* `commit0`: level 0's commitment of the table the transport hands it (`Link.In`, the table `Link.parse` reads;
+  `FlockComplete.commitPZk`'s). `commitOf`: the same commitment read off the table's `Level0`, which the session
   loop drew and committed (`Level0.ofDraws_ok`: its rows, layers and root are `Link`'s of its own inputs).
 * `zerocheckFw`, `lincheckFw`: the masked zerocheck and lincheck sending the passed values `v_i` as `v_i + h_i`
   (`FlockComplete.zerocheckCut`, `lincheckCut` at `masked i = v_i + h_i`), `final_c`'s too: the inner proof holds the
@@ -75,7 +75,7 @@ def commitRows (lv : Level) (rows : Array (Array F128)) (salt : Nat → ByteArra
 def commitFw (lv : Level) (g : Array F128) (salt : Nat → ByteArray) : Commit := commitRows lv (rowsOf lv g) salt
 
 /-- **Level 0's commitment** of the table `i` at level `lv` with `t_pad` paddings (`FlockComplete.commitPZk`'s): the rows
-`flock-firewall link` commits (`Link.rows`), under the table's level-0 salts. -/
+`Link.rows`, under the table's level-0 salts. -/
 def commit0 (lv : Level) (tPad : Nat) (i : Link.In) : Commit :=
   commitRows lv (Link.rows lv tPad i.g i.extra i.lanePad) i.salt
 
@@ -294,7 +294,7 @@ def parseRep (t : Tab) (hiSalts : Array ByteArray) (b : ByteArray) : V RepIn := 
     return { draws, vals, xs, hiSalts, coins }
   (rd.run' 0).run b
 
-/-- **A table's state** from `flock-firewall link`'s request bytes (`Link.parse`) at the statement `st`. -/
+/-- **A table's state** from a table's request bytes (`Link.parse`) at the statement `st`. -/
 def tabOf (st : Setup) (b : ByteArray) : V Tab := do
   if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
   let (sch, tPad) ← Zk.schedule st.m
