@@ -20361,6 +20361,7 @@
     "Flock.Desc.unroll": "638fe7510e5750ee10fc270b2d6296cb19fc2bfff467aa0b9eb89e5558fa1730"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -27611,12 +27612,12 @@
    "guarantees": ["Accounting.SecurityProofs.TS.CheckedSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Checked.Layer": {
-   "digest": "8a7317bc58c668357efe9b64aec4ba98d0faa8f2057fb9fc120259bd3c4ead89",
+   "digest": "4b30f883b847a59820ea9b2b7d1d78178f1536205683b777b5b7110a463640fd",
    "definitions": {
     "Accounting.TS.Checked.CheckedRel": "05482861c21c1c50446046fc7230c58f35ff1910808d1b09bd4ed405291920ef",
     "Accounting.TS.Checked.checkedLayer": "1b2f7f278a5dc2227240b14b42c7a657a1dbe64232586a3643a73dc6c065454c",
-    "Accounting.TS.Checked.openedReg": "6674a6b5801b69c04def75fcbf9b49574ddf4f5a992dabc3248a860f6c64148a",
-    "Accounting.TS.Checked.regRead": "092d0ee49ba7af29baa4fe633c749d0772733be57572d8d5c40921adc577673a",
+    "Accounting.TS.Checked.openedReg": "0a024a28952877e4411b5c9ad95e6215c11f162fb4ab761dd52f95702493d87e",
+    "Accounting.TS.Checked.regRead": "bfa6bfc2e73a1ea7408549dbb9ba43778f697014964c664e052b0ed64bc31f90",
     "Accounting.TS.Checked.rowsReg": "0b5b5bf94c84747485894659a4e17df66ae07167f5410b91818aef3d4e22bd7d"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.CheckedSessionSound"]
