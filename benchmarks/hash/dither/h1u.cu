@@ -222,6 +222,71 @@ __device__ __forceinline__ uint4 ld4(const void* p) {
   }
 }
 
+// L2 eviction priorities, the bytes unchanged: H1U_EVF = 1 h1u's and h1k's B (weight) and workspace loads evict first
+// (each is read once a step), H1S_EVL = 1 h1s_noise's workspace stores evict last (the units read them a few calls later)
+#ifndef H1U_EVF
+#define H1U_EVF 0
+#endif
+#ifndef H1S_EVL
+#define H1S_EVL 0
+#endif
+template <int H, bool EF>
+__device__ __forceinline__ uint2 ld2e(const void* p) {
+  if constexpr (!EF) {
+    return ld2<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint2 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <int H, bool EF>
+__device__ __forceinline__ uint4 ld4e(const void* p) {
+  if constexpr (!EF) {
+    return ld4<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint4 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <bool EL>
+__device__ __forceinline__ void st4l(uint4* p, uint4 v) {
+  if constexpr (!EL) {
+    *p = v;
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(pol));
+    asm volatile("st.global.L2::cache_hint.v4.u32 [%0], {%1, %2, %3, %4}, %5;" ::"l"(p), "r"(v.x), "r"(v.y), "r"(v.z),
+                 "r"(v.w), "l"(pol)
+                 : "memory");
+  }
+}
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -300,7 +365,7 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
     uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
 #pragma unroll
     for (int q = 0; q < 4; ++q)
-      o[q] = make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]);
+      st4l<H1S_EVL>(o + q, make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]));
   }
 }
 
@@ -485,7 +550,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-      b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -504,7 +569,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
-          const uint4 v = ld4<H1U_L2HINT_WS>(src + w);
+          const uint4 v = ld4e<H1U_L2HINT_WS, H1U_EVF>(src + w);
           dst[4 * w] = v.x;
           dst[4 * w + 1] = v.y;
           dst[4 * w + 2] = v.z;
@@ -583,7 +648,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-            cw[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
+            cw[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
@@ -846,7 +911,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int m = 0; m < KNI; ++m) {
       const u32 k = pi + 32 * KP * m, kb = k >> 2, w = k & 3;
       const u64 t = kb < 32 ? (u64)kb * rb + blk : 32ull * rb + (u64)(kb - 32) * cb + blk;
-      v[m] = ld4<H1U_L2HINT_WS>(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
+      v[m] = ld4e<H1U_L2HINT_WS, H1U_EVF>(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
     }
   };
   const auto store_noise = [&](u32 bf, const uint4(&v)[KNI]) {
@@ -932,7 +997,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
-      b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   // round r's segment in ring slot r % NS, loaded KD rounds ahead
