@@ -44,14 +44,13 @@ theorem FlockSoundness.ZK.Table.swPre_sReg {F K W Salt Seed D Hi VL : Type} [Fie
 theorem FlockSoundness.ZK.Table.cut_sHat_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) {P P' : T.PreView} (h : P.sHat = P'.sHat) :
     (T.cut S P).sHat = (T.cut S P').sHat := by
-  first
-    | (unfold FlockSoundness.ZK.Table.cut; rw [h]; done)
-    | (simp only [FlockSoundness.ZK.Table.cut, h]; done)
-    | (rcases P with ⟨a⟩
-       rcases P' with ⟨b⟩
-       dsimp only at h
-       subst h
-       rfl)
+  unfold FlockSoundness.ZK.Table.cut
+  rw [h]
+
+/-- A cut's region claims are the view's. -/
+theorem FlockSoundness.ZK.Table.cut_sReg {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
+    (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (S : T.Sent) (P : T.PreView) :
+    (T.cut S P).sReg = P.sReg := rfl
 
 /-- The switched pre-final view's `ŝ`, leaves by position, is the honest one's at any leaves. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swPreWith_sHat {K W Hi VL : Type} [Field K]
@@ -88,6 +87,7 @@ theorem swCutE_sReg (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claim
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
     (swCutE x c w v τ j).sReg = (cutE x c w τ j).sReg := by
   unfold swCutE cutE swCutAt cutAt
+  simp only [Table.cut_sReg]
   exact ZkView.Coined.swPreWith_sReg _ _ _ _ _ _
 
 /-- A rep source's switched vectors read the cut's `ŝ` and region claims alone. -/
@@ -96,9 +96,7 @@ theorem repSrcCut_sv_congr (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Compo
     (h1 : (cut j).sHat = (cut' j).sHat) (h2 : (cut j).sReg = (cut' j).sReg) :
     (repSrcCut P x cz cut j r).sv = (repSrcCut P x cz cut' j r).sv := by
   funext k
-  first
-    | (simp only [repSrcCut, h1, h2]; done)
-    | (unfold repSrcCut; dsimp only; rw [h1, h2]; done)
+  simp only [repSrcCut, h1, h2]
 
 /-- **The switched source's switched vectors are the honest source's**, at every table and rep. -/
 theorem swSrcE_sv (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
