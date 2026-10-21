@@ -442,6 +442,10 @@
    "owner": "@memory-accounting",
    "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
   },
+  "Accounting.Remote.Held.Assumptions.Covers": {
+   "owner": "@memory-accounting",
+   "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040"
+  },
   "Accounting.Remote.Held.Assumptions.Disks": {
    "owner": "@memory-accounting",
    "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
@@ -450,9 +454,17 @@
    "owner": "@memory-accounting",
    "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
   },
+  "Accounting.Remote.Held.Assumptions.Links": {
+   "owner": "@memory-accounting",
+   "digest": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a"
+  },
   "Accounting.Remote.Held.Assumptions.LiveCoins": {
    "owner": "@memory-accounting",
    "digest": "68bf6e4151cfbf0c550493d145934dc046109cd73fd4e09a2c1d79218323d84a"
+  },
+  "Accounting.Remote.Held.Assumptions.Paced": {
+   "owner": "@memory-accounting",
+   "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e"
   },
   "Accounting.Remote.Held.Assumptions.Routed": {
    "owner": "@memory-accounting",
@@ -3077,6 +3089,18 @@
    "signature": ["Accounting.SecurityProofs.Remote.Held : Accounting.Guarantees.Remote.Held"],
    "assumptions": [],
    "type_hash": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTime": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.HeldOverTime : Accounting.Guarantees.Remote.HeldOverTime"],
+   "assumptions": [],
+   "type_hash": "78904f53bd36d6f11d5a17e9f1a3a28d63a1f716e2b228a43538ae06c43b112c"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.HeldOverTimeLinks : Accounting.Guarantees.Remote.HeldOverTimeLinks"],
+   "assumptions": [],
+   "type_hash": "1d80b85ac63a83d13745f1efaaa3b28b669426784b4c01aa4e864f3291c0b344"
   },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
@@ -9671,8 +9695,6 @@
    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver": "unstated: OverlapFloorK restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver": "unstated: StagedFloorKOneSided restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
-   "Accounting.Guarantees.Remote.HeldOverTime": "unstated: the remote audit's memory line held over time under Identity, for a paced session (the declared time-held line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
-   "Accounting.Guarantees.Remote.HeldOverTimeLinks": "unstated: the remote audit's memory line held over time with the boundary links charged, no Identity (the declared link-charged line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
    "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
    "Pouw.Guarantees.Window.WindowEps": "unstated: M2 with C1, a window's epsilon from its calls' in the compiled tables' shape (max of the calls' knowledge constants, plus one window-level collision term of the prover's state, plus the sum of their link terms at the window's state, at a draw that depends on the registration); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), and its theorem Pouw.SecurityProofs.Window.WindowEps is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowEps reads the deployed draw with each session a call; stated with WindowEps, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
@@ -9785,7 +9807,9 @@
    "Pouw.Guarantees.FiatShamir.FiatShamirFloor": "unstated: proofs' gap (7), the Fiat-Shamir floor per prover (breakBoundFS, ecr/sha-512 at each adversary's collision finders within budgets computed from its time, plus eps_id and T*tau, the grinding term T*mu^m of Daniel's 17 Oct ruling on per-matmul Fiat-Shamir seeds); stated for red team and proofs' review (RT-DELTA r2, CMP-33, CMP-59), not proved yet",
    "Pouw.Guarantees.FiatShamir.SteerBoundOfMoment": "unstated: GRIND's per-query moment as SteerBound's instance (proofs' gap (7)); stated, not proved yet",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
-   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows."
+   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
+   "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11830,8 +11854,19 @@
    ]
   },
   "Definitions.Accounting.Remote.Held": {
-   "digest": "b44c25c2a9688f025e4e814fbd516d012c84d691831647e5f50d402bf77540be",
+   "digest": "e29ed9ab7210982fc05209cd8213180f489ac4aaba346f6344914943a182c120",
    "definitions": {
+    "Accounting.Remote.Held.Pace": "e909b0bf93b82569ba92de5d3018bce6f314fef752fc3c4c482d419286123ffa",
+    "Accounting.Remote.Held.Pace.credited": "86160e5af5519c17bdf5720ba4f2aeab765ed0dd56e13c3ba4ba52f3d60f2307",
+    "Accounting.Remote.Held.Pace.ended": "e99cb056dedade9af1ea0afd16418b86b5da82dbc077928b0704c70e1f2fd787",
+    "Accounting.Remote.Held.Pace.fill": "a8361124d292f6e346bee40327dcb0988c63edc4c4e703642485b81430bb4302",
+    "Accounting.Remote.Held.Pace.first": "ea87fdffe57cf2cea78d190cf5f4693bbda10a1fbfcec546af52e5d6187a11f6",
+    "Accounting.Remote.Held.Pace.longest": "7c46b7e0f81bfaeec33e8423b0932fed15ccff9229c1c3acea7058ce7ff94a98",
+    "Accounting.Remote.Held.Pace.rate": "f217a73886a3eda115f44d479b28fb3c7a397a541ea28ba5f4735f8fbd6ddb7f",
+    "Accounting.Remote.Held.Pace.released": "12903518593691f82aae1e8e77562463894dca215ea8efdf0326c276464c9df3",
+    "Accounting.Remote.Held.Pace.size": "9e3204c325c91dec5cdf5be139b6c382e239b3a820297f705a5fee1a0a4a6766",
+    "Accounting.Remote.Held.Pace.start": "8dcb418f06d17af368919811c6133b6021e2f7c06b64ba64c8fd3bcdb825f4e5",
+    "Accounting.Remote.Held.Pace.stop": "ad2f3932f9854cf57bde5531ed38516c04cebfd5008359869aa685f7974d6840",
     "Accounting.Remote.Held.Trace": "d9e4172a28affbe2f34f7f996ef26e46a977137450155bbdaa3a75527cf847f2",
     "Accounting.Remote.Held.Trace.Holds": "287675d5fa1e1562213326a6f5af7a8c85ea11c510ad950f9f42782efbe10163",
     "Accounting.Remote.Held.Trace.accepts": "fe2d9f4db6bc2395652525e25215d3d0c007852c71e097df5a84f87994cb0d60",
@@ -11841,6 +11876,7 @@
     "Accounting.Remote.Held.Trace.disk": "ac4dfa8fdb631eeec596a922096903424ddf643d16bd94921038dfb1a439eb5b",
     "Accounting.Remote.Held.Trace.entered": "acf73bf82b62b3996db64dbdcd3f26e5d90ec452709c7a12c621838a7ac93f84",
     "Accounting.Remote.Held.Trace.held": "9e75bd81e4f38f7653e9cb526db5133cdfef5c51dd36e2dd28b08ac366b4ab62",
+    "Accounting.Remote.Held.Trace.heldOver": "7558a8f3a1120a08af106deb06b24e042c1bfb6cf94b59ae7be3c703d3016a23",
     "Accounting.Remote.Held.Trace.link": "86f373799becc962d970d5c43d91d3e669954e0ce8af349a5aae68cd3d59c0b3",
     "Accounting.Remote.Held.Trace.mem": "214e16fb25d8c1ce8dbc428b2bba6207e8e326a7ba139ed3dc2d7286a86bc4c5",
     "Accounting.Remote.Held.Trace.passes": "08914f6ed9585e2d336a51956fa3745cf387fb3238bada7d525e71a5282d2605",
@@ -11852,7 +11888,11 @@
     "Accounting.Remote.Held.Trace.wrong": "66ce2491350791110ed2c59d50766f1b981e1aa4408d3acc2767af6201e430d9",
     "Accounting.Remote.Held.over": "7aea3c330c4455d8d1aecb5649147bc73cae0c6f8137f3d65d6a95b0227b0cda"
    },
-   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldOverTime",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
+   ]
   },
   "Definitions.Accounting.Remote.Node": {
    "digest": "3ced36c3ec6c09e23dd55b57b41035d8deb9eeabd9805652c774d7a51937a2b8",
@@ -15258,6 +15298,8 @@
     "Accounting.SecurityProofs.PouwEndToEndPerRun",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldOverTime",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -24157,18 +24199,25 @@
    ]
   },
   "Models.Accounting.Assumptions.RemoteHeld": {
-   "digest": "b68ee7f302bb93e595319449c0d6673fb23151147ebb86d6bbed45c95f05303a",
+   "digest": "a145a7c71c38f972f8afe65900e0f5d33a6ea42e48b987756536f332a40d9773",
    "definitions": {
     "Accounting.Remote.Held.Assumptions.Causal": "aea522d86a7abda05eeeb5fcd299485f663d29f83a8a1b4128e8c015b3dcad71",
     "Accounting.Remote.Held.Assumptions.ChipCeiling": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae",
+    "Accounting.Remote.Held.Assumptions.Covers": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040",
     "Accounting.Remote.Held.Assumptions.Disks": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca",
     "Accounting.Remote.Held.Assumptions.Identity": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236",
+    "Accounting.Remote.Held.Assumptions.Links": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a",
     "Accounting.Remote.Held.Assumptions.LiveCoins": "68bf6e4151cfbf0c550493d145934dc046109cd73fd4e09a2c1d79218323d84a",
+    "Accounting.Remote.Held.Assumptions.Paced": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e",
     "Accounting.Remote.Held.Assumptions.Routed": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c",
     "Accounting.Remote.Held.Assumptions.SketchBound": "193fa80d7712162f27061c4a392ad4c4703e5ce2a95a7877a8c553b6fce258b4",
     "Accounting.Remote.Held.Assumptions.SquaringCeiling": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
    },
-   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldOverTime",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
+   ]
   },
   "Models.Accounting.Assumptions.Sheet": {
    "digest": "e430a97d67e112236beeb55fd27d9e1630ec47ff36f07038c3cb2278412a320b",
@@ -24884,11 +24933,17 @@
    ]
   },
   "Models.Accounting.Guarantees.RemoteHeld": {
-   "digest": "483ed8eba00728994e2718cad1f4adfddeab7580d3b64d0a5fefd5fed8bc8207",
+   "digest": "097b1b820998c9c872823b878c6b1435cd788653738182f8940af5f9e77aba5c",
    "definitions": {
-    "Accounting.Guarantees.Remote.Held": "b2ba939df43e0c2bc88a656861e9bc078ee880c453fe55db327849510177734f"
+    "Accounting.Guarantees.Remote.Held": "b2ba939df43e0c2bc88a656861e9bc078ee880c453fe55db327849510177734f",
+    "Accounting.Guarantees.Remote.HeldOverTime": "c517640ef38ecf24afe66801ff68ba878f859b62e49598015954a624bc8fb64f",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinks": "d9db2915acb77292412b96196d3849249a135f4d4447625200876a7154dfed74"
    },
-   "guarantees": ["Accounting.SecurityProofs.Remote.Held"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.Held",
+    "Accounting.SecurityProofs.Remote.HeldOverTime",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
+   ]
   },
   "Models.Accounting.Guarantees.Requirement": {
    "digest": "7a21f16296c6f5514f2dd726a10ec31d1e2e1490f70224f575c8f058aade0f4b",
