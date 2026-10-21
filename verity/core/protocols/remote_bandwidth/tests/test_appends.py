@@ -87,7 +87,7 @@ class Run:
                         window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
         self.clock = Clock()
         if registry is None:
-            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+            self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins")),
                              not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))

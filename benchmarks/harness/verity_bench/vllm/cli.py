@@ -48,7 +48,8 @@ def run(a: Any) -> int:
         preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)
     modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
-    arms = resolve_arms(spec.arms if a.arms is None else a.arms, modules)
+    names = spec.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
+    arms = resolve_arms(names, modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     points = expand_sweep(sweep)
     a.out.mkdir(parents=True, exist_ok=True)
     doc = run_benchmark(
