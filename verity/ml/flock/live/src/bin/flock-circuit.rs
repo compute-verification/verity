@@ -1220,8 +1220,10 @@ struct FirewallDraws {
 /// table), the root of record (`table{T}.root`) and the session's Lean finish's (`.finish_root`); and each rep's request
 /// (`Flock.Firewall.Finish.parseRep`) beside the session's Lean finish's proof file of it (`table{T}-rep{R}.req`, `.lean`),
 /// where the request's passed values sit (`.vals`: their byte offset and word count), and the algebraic phase's rounds
-/// [`flock_live::firewall::Checker::scheduled`] releases (`.skel`, as `Flock.Firewall.Skeleton.encode` writes them):
-/// `firewall_finish_agree`'s inputs.
+/// [`flock_live::firewall::Checker::scheduled`] releases (`.skel`, as `Flock.Firewall.Skeleton.encode` writes them), with
+/// what drove the rep's Lean frame: its start (`.start`), every request after it (`.frame`), its salts for levels ≥ 1
+/// (`.hi`, as `Flock.Firewall.Finish.saltsBytes` writes them) and its opening's request (`.open`), and the session's
+/// `Commit` coins (`link.bin`): `firewall_finish_agree`'s inputs.
 fn finish_dump() -> Option<std::path::PathBuf> {
     std::env::var_os("FC_FINISH_DUMP").map(Into::into)
 }
@@ -1545,6 +1547,15 @@ impl Firewall {
     fn begin_rep(&mut self, rep: usize, zk: &ZkRep) -> Result<(), String> {
         let hi = self.lean_hi.get_mut(rep).and_then(Option::take).ok_or_else(|| flock_live::firewall::refused(
             format!("table {} rep {rep}: no Lean salts for levels ≥ 1 (a table's reps are 0 and 1, each begun once)", self.table)))?;
+        let prefix = self.dump.as_ref().map(|d| d.join(format!("table{}-rep{rep}", self.table)));
+        if let Some(p) = &prefix {
+            let mut b = (hi.len() as u64).to_le_bytes().to_vec();
+            for x in &hi {
+                b.extend((x.len() as u64).to_le_bytes());
+                b.extend(x);
+            }
+            std::fs::write(p.with_extension("hi"), b).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
+        }
         {
             let mut d = self.draws.lock().unwrap_or_else(PoisonError::into_inner);
             d.shared.lock().unwrap_or_else(PoisonError::into_inner).preset(hi)
@@ -1578,6 +1589,9 @@ impl Firewall {
         self.relations = names;
         let mut lean = zk.lean.lock().unwrap_or_else(PoisonError::into_inner).take()
             .unwrap_or_else(|| Err(flock_live::firewall::refused("a firewalled rep without its Lean frame")))?;
+        if let Some(p) = &prefix {
+            lean.dump(p).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
+        }
         if let Some(prev) = self.rep.as_ref() {
             lean.prior(&prev.coins)?;
         }
@@ -1753,6 +1767,10 @@ impl Firewall {
         let r = self.rep.as_mut().unwrap();
         let extras = r.extras.clone().ok_or_else(|| refused("the opening began before the device's Commit"))?;
         let body = flock_live::firewall::open_body(&extras, &r.rounds);
+        if let Some(dir) = &self.dump {
+            let p = dir.join(format!("table{}-rep{}.open", self.table, r.rep));
+            std::fs::write(&p, &body).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
+        }
         let (link, mut end) = flock_live::firewall::shadow_pair();
         let (fin, table, rep) = (self.finish.clone(), self.table, r.rep);
         r.opening = Some(std::thread::spawn(move || {
@@ -3907,6 +3925,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 }
                             }
                             link_pts = Some(p.clone());
+                            if let Some(dir) = finish_dump().filter(|_| firewall_on(st)) {
+                                let f = dir.join("link.bin");
+                                std::fs::write(&f, f128_bytes(&p.concat())).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", f.display()));
+                            }
                             flock_live::firewall_transcript::with(|t| t.relayed_link(&p.concat()));
                             p
                         }

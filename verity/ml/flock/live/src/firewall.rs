@@ -485,6 +485,9 @@ pub struct LeanFrame {
     child: Option<std::process::Child>,
     stdin: Box<dyn std::io::Write + Send>,
     stdout: std::io::BufReader<Box<dyn std::io::Read + Send>>,
+    /// the start's line, and `FC_FINISH_DUMP`'s copy of every request after it ([`LeanFrame::dump`])
+    start: String,
+    log: Option<std::fs::File>,
 }
 
 /// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
@@ -559,7 +562,8 @@ impl LeanFrame {
         let mut child = Command::new(exe).arg("frame").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
             .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
         let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
-        LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)) }.begin(lay, mask)
+        LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)), start: String::new(), log: None }
+            .begin(lay, mask)
     }
 
     /// Starts a rep as [`LeanFrame::start`] does, as one of the Lean session loop's frames, at `addr` (its `FRAMES` address,
@@ -568,7 +572,8 @@ impl LeanFrame {
         let tcp = std::net::TcpStream::connect(addr).map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
         let _ = tcp.set_nodelay(true);
         let reader = tcp.try_clone().map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
-        LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)) }.begin(lay, mask)
+        LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)), start: String::new(), log: None }
+            .begin(lay, mask)
     }
 
     fn begin(mut self, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
@@ -577,6 +582,7 @@ impl LeanFrame {
         let f = &mut self;
         let start = serde_json::json!({"layout": {"n_mlv": lay.n_mlv, "n_lc": lay.n_lc, "n_ood0": lay.n_ood0, "k0": lay.k0},
                                        "mask": {"w0": mask.w0, "n": mask.n, "blocks": mask.blocks}});
+        f.start = start.to_string();
         writeln!(f.stdin, "{start}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
         let len = f.reply()?.ok_or_else(|| refused("the Lean frame's start answered without its draws"))?;
         let (s, leaves) = (lay.len(), Code::new(lay.len() + K_PAD).n);
@@ -595,6 +601,32 @@ impl LeanFrame {
                                           tau_salt: b[tau..tau + TAU_SALT_BYTES].to_vec() };
         let drawn = Drawn { pads, salts: b[tau + TAU_SALT_BYTES..len - 64].to_vec(), root: b[len - 64..].try_into().unwrap() };
         Ok((self, drawn))
+    }
+
+    /// `FC_FINISH_DUMP`: the frame's start to `{prefix}.start`, and every request from here on to `{prefix}.frame`, as the
+    /// frame reads them (`Flock.Firewall.Drive.parse`).
+    pub fn dump(&mut self, prefix: &std::path::Path) -> std::io::Result<()> {
+        let at = |ext: &str| prefix.with_extension(ext);
+        std::fs::write(at("start"), &self.start)?;
+        self.log = Some(std::fs::File::create(at("frame"))?);
+        Ok(())
+    }
+
+    /// One request: its line, then its bytes.
+    fn send(&mut self, line: &str, parts: &[&[u8]]) -> std::io::Result<()> {
+        use std::io::Write;
+        self.stdin.write_all(line.as_bytes())?;
+        for p in parts {
+            self.stdin.write_all(p)?;
+        }
+        self.stdin.flush()?;
+        if let Some(l) = self.log.as_mut() {
+            l.write_all(line.as_bytes())?;
+            for p in parts {
+                l.write_all(p)?;
+            }
+        }
+        Ok(())
     }
 
     fn line(&mut self) -> Result<String, String> {
@@ -622,9 +654,7 @@ impl LeanFrame {
     /// The table's earlier rep's algebraic-phase coins, before this rep's first round: the rank check covers its claim
     /// points too.
     pub fn prior(&mut self, coins: &[F128]) -> Result<(), String> {
-        use std::io::Write;
-        write!(self.stdin, "prior {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
-            .map_err(|e| refused(format!("the Lean frame's prior coins: {e}")))?;
+        self.send(&format!("prior {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's prior coins: {e}")))?;
         self.reply().map(|_| ())
     }
 
@@ -635,9 +665,8 @@ impl LeanFrame {
     /// place ([`LeanFrame::check`]). A round the frame's refusals stop (`stop WHY`: the rank check) panics with its reason,
     /// before anything of it leaves.
     pub fn round(&mut self, content: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
-        use std::io::{Read, Write};
-        write!(self.stdin, "round {n} {}{}\n", content.len(), if fail { " fail" } else { "" })
-            .and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.flush())
+        use std::io::Read;
+        self.send(&format!("round {n} {}{}\n", content.len(), if fail { " fail" } else { "" }), &[content])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
@@ -655,9 +684,8 @@ impl LeanFrame {
     /// refusal of the scheduled round itself is an error, and a round its refusals stop panics with its reason, as in
     /// [`LeanFrame::round`].
     pub fn check(&mut self, content: &[u8], sched: &[u8], n: usize) -> Result<(Vec<u8>, Option<String>), String> {
-        use std::io::{Read, Write};
-        write!(self.stdin, "round {n} {} {}\n", content.len(), sched.len())
-            .and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.write_all(sched)).and_then(|_| self.stdin.flush())
+        use std::io::Read;
+        self.send(&format!("round {n} {} {}\n", content.len(), sched.len()), &[content, sched])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
@@ -680,9 +708,7 @@ impl LeanFrame {
     /// The coins the stream answered the round last released: `Ok(Some(why))` when the frame's refusals stop the rep on them
     /// (a zerocheck outer coin `r_j = 1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`).
     pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
-        use std::io::Write;
-        write!(self.stdin, "coins {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
-            .map_err(|e| refused(format!("the Lean frame's coins: {e}")))?;
+        self.send(&format!("coins {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's coins: {e}")))?;
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
             return Ok(Some(why.to_string()));
@@ -693,8 +719,8 @@ impl LeanFrame {
     /// Whether the rep ended with every masked phase closed, every pad of the layout used and the inner proof's rounds
     /// released, and if so whether it is stopped.
     pub fn finish(&mut self) -> Result<bool, String> {
-        use std::io::{BufRead, Write};
-        writeln!(self.stdin, "finish").and_then(|_| self.stdin.flush()).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
+        use std::io::BufRead;
+        self.send("finish\n", &[]).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
         let mut line = String::new();
         self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
         match line.trim_end() {
