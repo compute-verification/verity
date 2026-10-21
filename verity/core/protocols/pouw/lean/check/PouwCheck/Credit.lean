@@ -8,6 +8,7 @@ import PouwWindow.Draw
 import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
+import SampledProofs.Registered
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
@@ -38,12 +39,20 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
   its descriptor, then `Internal.outcome`'s rule under the served window's arguments (the stream its root, the
-  registration its draw root, the receipt `{"receipts": …}`).
+  registration its draw root, the receipt `{"receipts": …}`) and `Internal.registration`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
   the period's committed circuit (`creditedSession`) and credited.
 * `Internal.aLink` is `credit._a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
+* `Internal.registration` is `credit._registration`: each drawn unit's proof outcome is the verifier of record's
+  verdict for its session (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against, and the
+  session's registered finding, each registered port's value and the root its reads were opened against). The entries
+  are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
+  window's open root and the committed descriptor's SHA-512 (`SampledProofs.Registered.domainAt`, PRF-127); each proof
+  was verified against that descriptor, opened only values the window registers once, each at its registered root, and
+  opened its unit's K's A value. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
+  proof opened, under this window's registration.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -100,7 +109,13 @@ def WINDOWS_FORM : String :=
 def DESCRIPTOR_HEX : String :=
   "the window's descriptor is not the bytes of the circuit its proofs were verified against in lowercase hex (its " ++
   "canonical JSON without annotations, the bytes program_digest hashes)"
-def PROOFS_FORM : String := "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
+/-- A drawn unit's proof outcome: the verifier of record's verdict for the session that proved it. -/
+def PROOF_KEYS : List String := ["program", "registered", "unit", "verdict"]
+def PROOFS_FORM : String :=
+  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
+  "record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
+  "descriptor it verified the session against, and registered its finding, each registered port's {value, root}, " ++
+  "port and value printable ASCII and root a SHA-512 digest"
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
 def NO_A : String :=
@@ -453,6 +468,17 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
+/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
+registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
+def finding? (x : Json) : Option (List (String × String × String)) :=
+  if isObj x then (fields x).mapM fun (port, e) =>
+    match keys e, get e "value", get e "root" with
+    | some ["root", "value"], .str v, .str r =>
+      if _root_.PouwCheck.plain port && _root_.PouwCheck.plain v && (digest? (.str r)).isSome then some (port, v, r)
+      else none
+    | _, _, _ => none
+  else none
+
 /-- `credit._proved`: none when every unit of `drawn` has exactly one outcome and it is an accept, and no other unit
 has one; else the refusal (`outcome`, `missing` or `failed`). -/
 def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
@@ -460,7 +486,8 @@ def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
   let .arr ps := proofs | throw ("outcome", PROOFS_FORM)
   let mut seen : Std.HashMap Nat String := {}
   for p in ps.toList do
-    let some (u, v) := (if keys p == some ["unit", "verdict"] then
+    let some (u, v) := (if keys p == some PROOF_KEYS && (digest? (get p "program")).isSome
+          && (finding? (get p "registered")).isSome then
         match nat? (get p "unit"), get p "verdict" with
         | some u, .str v => if VERDICTS.contains v then some (u, v) else none
         | _, _ => none
@@ -600,6 +627,93 @@ def Internal.aLink (rounds entries : Json) : R Unit := do
         "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
         "rows each round's root committed")
 
+/-- `credit._entry`: a registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with
+`word_bits` only when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows and words from 1
+to `MAX_ROWS`. -/
+def entryOk (e : Json) : Bool :=
+  let rows := fun (k : String) => (nat? (get e k)).any fun n => 1 ≤ n && n ≤ MAX_ROWS
+  let shape := match keys e with
+    | some ["domain", "leaves", "root", "value", "words"] => true
+    | some ["domain", "leaves", "root", "value", "word_bits", "words"] => nat? (get e "word_bits") == some 32
+    | _ => false
+  shape && ((str? (get e "value")).any _root_.PouwCheck.plain) && (digest? (get e "root")).isSome
+    && (str? (get e "domain")).isSome && rows "leaves" && rows "words"
+
+/-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
+holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
+(`SampledProofs.Registered.domainAt`): an A value's binds the window's open root (PRF-127); any other's, held across
+windows, binds none. -/
+def domainOf (program window : String) (e : Json) : R String := do
+  let v := (str? (get e "value")).getD ""
+  let d ← (SampledProofs.Registered.domainAt program v ((nat? (get e "words")).getD 0) ((nat? (get e "leaves")).getD 0)
+    ((nat? (get e "word_bits")).getD 16) (if isA (.str v) then some window else none)).mapError
+    fun why => ("registration", why)
+  pure (Flock.hexOf d)
+
+def otherRegistration (v : String) : String :=
+  s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of {v} " ++
+  "under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for an A value, " ++
+  "the window's open root, the root the auditor's ledger opened its session for): the entry is another " ++
+  "registration's, another window's or another circuit's"
+
+def registrationRefuse {α : Type} (why : String) : R α := throw ("registration", why)
+
+/-- `_registration`'s `held`: the refusal of the registered value `v`'s entry `e`, none when it is one-stage's form and
+its domain is `domainOf`'s. -/
+def held (program window v : String) (e : Json) : R (Option String) := do
+  unless entryOk e do
+    return some (s!"registered value {v}'s entry is not one-stage's \{value, root, leaves, words, domain} (with " ++
+      s!"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
+  pure (if str? (get e "domain") == some (← domainOf program window e) then none else some (otherRegistration v))
+
+/-- `credit._registration`: none when the window's registered `entries` are its own registration's and each drawn unit's
+proof (`proofs`, one accepted outcome a unit, as `proved` holds them) is a session verified against it, else the
+refusal (`registration`). Each A value's domain, and each other value's a proof opened, is `domainOf` the window's open
+root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every registered port
+its session opened (its `registered` finding) is of a value the window registers once, at that value's registered
+root; and it opened its unit's K's A value (`…/a/<K>`, the unit's stratum's in `ss`). A step of `window`, after
+`Internal.aLink` has held each A value's root to the segments the round roots commit. -/
+def Internal.registration (window program : String) (entries proofs : Json) (ss : Array Flock.Draw.WorkStratum) :
+    R Unit := do
+  let es := match entries with
+    | .arr a => a.toList
+    | _ => []
+  for e in es do
+    if isA (get e "value") then
+      if let some why ← held program window ((str? (get e "value")).getD "") e then registrationRefuse why
+  let names := es.map fun e => str? (get e "value")
+  let ps := (match proofs with
+    | .arr a => a.toList
+    | _ => []).filterMap fun p => (fun u f => (u, get p "program", f)) <$> nat? (get p "unit") <*> finding? (get p "registered")
+  let mut checked : List String := []
+  for (u, prog, f) in ps.mergeSort fun a b => a.1 ≤ b.1 do
+    let k := ((ss.find? fun s => s.units.any fun (lo, hi) => lo ≤ u && u < hi).map
+      fun s => String.ofList (s.template.toList.drop 1)).getD ""
+    unless str? prog == some program do
+      registrationRefuse (s!"drawn unit {u}'s proof was verified against another circuit than the window's (its " ++
+        "program is not the SHA-512 of the descriptor whose layout the window was drawn over): verify every drawn " ++
+        "unit's session against the window's committed circuit")
+    let mut opened := false
+    for (port, v, root) in f do
+      let n := names.count (some v)
+      if n != 1 then
+        registrationRefuse (s!"drawn unit {u}'s proof opened port {port} against {v}, which the window registers " ++
+          s!"{if n > 1 then "twice" else "not"}: its session was verified against another registration than the " ++
+          "window's")
+      let e := (es.find? fun e => str? (get e "value") == some v).getD .null
+      if !checked.contains v && !isA (.str v) then
+        if let some why ← held program window v e then registrationRefuse why
+      checked := v :: checked
+      unless str? (get e "root") == some root do
+        registrationRefuse (s!"drawn unit {u}'s proof opened port {port}'s rows of {v} against another root than the " ++
+          s!"one the window registered for {v}: its session was verified against another registration, or the " ++
+          "window's entry is not the root its sessions opened")
+      opened := opened || (isA (.str v) && (v.splitOn "/").getLast? == some k)
+    unless opened do
+      registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} of the window, so nothing ties the A " ++
+        "rows it proved to the ones the round roots committed: verify each drawn unit's session with the window's A " ++
+        "value registered")
+
 /-- `credit._HEX`: bytes as lowercase hex, at least one. -/
 def isHexBytes (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -625,6 +739,7 @@ def windowLayout (key ledger window session salt calls served rounds draw descri
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
+  Internal.registration ((str? (get window "root")).getD "") (Flock.hexOf (Flock.Sha512.hash d)) entries proofs ss
   pure (got, layout)
 
 /-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
@@ -634,8 +749,11 @@ root), `Internal.aLink` (each A value among the registered `entries` the tree ov
 the layout of its circuit (`layoutOf` of `descriptor`, the bytes in hex of the circuit its proofs were verified
 against) with its manifest one row per call of it, and `Internal.outcome`'s rule on the draw coin `credited` read at its
 period's committed K `k`, the stream the window's root, the registration its draw root and the receipt
-`{"receipts": …}`, its last round's receipts. `periodCredit` ties `descriptor` to the circuit the window's period
-committed. -/
+`{"receipts": …}`, its last round's receipts, each of `proofs` the verifier of record's verdict for a drawn unit's
+session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's own registration's, under its open root
+and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
+values at their registered roots, its K's A value among them). `periodCredit` ties `descriptor` to the circuit the
+window's period committed. -/
 def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
     R (List Nat) :=
   (·.1) <$> windowLayout key ledger window session salt calls served rounds draw descriptor entries proofs k
