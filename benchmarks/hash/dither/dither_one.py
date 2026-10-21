@@ -348,9 +348,13 @@ class Window:
         self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
-            torch.cuda.synchronize()
+            self.cap_sync()
         self.phase(None)
         self.t_before = time.perf_counter()
+
+    def cap_sync(self) -> None:
+        """A captured step's wait, after its poison and inputs, before its forward."""
+        torch.cuda.synchronize()
 
     def after(self) -> None:
         self.phase("forward_wait")

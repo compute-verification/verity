@@ -1,5 +1,5 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>`, labelled form=ASK-71 A (provisional) as every dither-a arm.
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1]`, labelled form=ASK-71 A (provisional) as every dither-a arm.
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
@@ -37,6 +37,18 @@ itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).
 
+-ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1) moves round s and step s's units off the steps' path, every value committed
+under round s as without it.  Step s + 1's forward reads nothing of round s, so the engine's step s + 1 starts once forward
+s (its served y among it) is done: on the serving stream after forward s, before forward s + 1 can write them, step s's
+z/y and served-y records, admit rows, step and A roots are copied into round-ring slot s mod R (and its A slots into the
+units' ring, as without -ov); a sender thread builds round s's tables and tree on the tree streams from that slot, beside
+forward s + 1, and sends round s's root; a dispatcher thread dispatches step s's units as soon as coin s is back.  The
+host holds the rings: step s's copies wait until round s - R is sent and step s - D's units are dispatched (and, on the
+GPU, done).  `check` holds each capture to what forward s committed, cloned on the serving stream at its end, against
+round s as built beside forward s + 1 (the GPU's events give how long it ran beside it), and "fault_ring" overwrites a
+bit of step s's ring copy of call 0's z during step s + 1, before round s's tables: refused on round s's z-step leaf and
+root alone.
+
     import dither_so as SO
     SO.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="hbr", h1u="h1u_kr.so", ao="m", pt=True, depth=4)
     llm = LLM(model=int8_exact_checkpoint, ...)
@@ -44,8 +56,13 @@ and committed under round s + 1, after coin s: refused on round s's z-step and y
 """
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import hashlib
+import queue
+import threading
 import time
+import traceback
 
 import torch
 import triton
@@ -60,8 +77,11 @@ FORM = DA.FORM
 LIB_ENV = DA.LIB_ENV
 CG = None
 ORDER = "statement (RT4-INT-12): A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
+OV_ORDER = ("-ov: round s built beside forward s + 1 from ring copies taken after forward s, its root sent before coin s; "
+            "step s's units dispatched once coin s is back")
 # the faults of the order last: fault_zlate moves round s + 1's z/y leaves, so the step after it is no capture's
 CAPTURES = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_rearly", "fault_zlate")
+CAPTURES_OV = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_ring", "fault_rearly", "fault_zlate")
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
@@ -76,6 +96,7 @@ class SoWindow(DO.Window):
     group_slots = True
     depth = 2
     a_once = False
+    overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
 
     def __init__(self, *args, **kwargs):
         if self.depth < 2:
@@ -83,7 +104,7 @@ class SoWindow(DO.Window):
         super().__init__(*args, **kwargs)
         self.pipe = CO.RoundPipe(self.coins, time.monotonic)
         # the gate's generation runs past its last capture until that step's receipts are in a round
-        self.gate_extra = self.depth + 8
+        self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.cap_of: dict[int, str] = {}
         self.m_of: dict[int, int] = {}
         self.stashed: set[int] = set()
@@ -113,8 +134,29 @@ class SoWindow(DO.Window):
         self.m_of[self.s] = m
         if self.cap is not None:
             self.cap_of[self.s] = self.cap
+        if self.overlap and DA.SIDE:
+            DA.SIDE[0].ov.forward_starts(self.s)
+
+    def cap_sync(self) -> None:
+        # under -ov an earlier round's trees and units run now on streams of their own; the poison and the step's
+        # inputs are on the serving stream
+        if self.overlap:
+            torch.cuda.current_stream().synchronize()
+        else:
+            super().cap_sync()
+
+    def arm(self, m: int, names: tuple | None = None) -> None:
+        self.drain()
+        super().arm(m, names)
+
+    def drain(self) -> None:
+        """Under -ov: every round handed to the sender sent, every step's units dispatched, the device idle."""
+        if self.overlap and DA.SIDE:
+            DA.SIDE[0].ov.drain()
 
     def after(self) -> None:
+        if self.overlap:
+            return self._after_ov()
         sd: SoSide = DA.SIDE[0]
         d = self.depth - 1
         main = torch.cuda.current_stream()
@@ -243,7 +285,63 @@ class SoWindow(DO.Window):
         if self.s + 1 >= DF.ROUNDS:
             raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
 
+    def _after_ov(self) -> None:
+        """-ov's step end: step s's ring copies on the serving stream (once the rings' last readers are past them), a
+        capture's view of what forward s committed, and round s handed to the sender."""
+        sd: SoSide = DA.SIDE[0]
+        ov: Ov = sd.ov
+        main = torch.cuda.current_stream()
+        s, m, cap, D = self.s, self.m, self.cap, self.depth
+        ov.ev["fwd1"][s % Ov.EV].record(main)
+        self.phase("forward_wait")
+        main.synchronize()
+        t_fwd = time.perf_counter()
+        if self.a_once:
+            self.phase("a_tables")
+            if not self.flags & DO.F_NW_TILES:
+                for x in self.slot_groups.values():
+                    x[:, m:].zero_()
+                self.scale_all[:, m:].zero_()
+            self.c.build(self.pre["a"], self.stepv[0:1])
+        self.phase("ring_wait")
+        # ring slot s mod D's last reader is step s - D's units, round slot s mod R's round s - R
+        ov.wait(lambda: ov.dispatched_upto >= s - D and ov.sent_upto >= s - ov.R)
+        t_ring = time.perf_counter()
+        self.phase("stash")
+        if s >= D:
+            main.wait_event(sd.udone[s % D])
+        if cap is not None:
+            ov.poison(s % ov.R)
+        sd.stash(s)
+        ov.copy(s)
+        if cap is not None:
+            ov.watch.add(s)
+            br = self.bset.roots.cpu()
+            self.caps[cap].update(
+                a=[x.clone() for x in self.slot], sa=[x.clone() for x in self.scale], z=[x.clone() for x in self.z],
+                y=[x[:m].clone() for x in self.ydump] if self.ydump else None,
+                zy=list(ov.zy.clone().split(ov.zl)), ysv=list(ov.ysv.clone().split(ov.yl)),
+                b_roots=[unwords(br[8 * w:8 * w + 8]) for w in range(self.L)])
+        ov.put(s)
+        t_end = time.perf_counter()
+        self.phase(None)
+        self.phases.append({"s": s, "m": m, "forward_ms": 1e3 * (t_fwd - self.t_before),
+                            "ring_wait_ms": 1e3 * (t_ring - t_fwd), "stash_ms": 1e3 * (t_end - t_ring),
+                            "between_ms": 1e3 * (t_end - t_fwd)})
+        self.s += 1
+        self.steps += 1
+        if self.s + 1 >= DF.ROUNDS:
+            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+
     def stats(self) -> dict:
+        ov = DA.SIDE[0].ov if self.overlap and DA.SIDE else None
+        if ov is not None:
+            ov.drain()
+            for ph in self.phases:
+                s = ph.pop("s", None)
+                if s is not None:
+                    ph.update(ov.ph_round.pop(s, {}))
+                    ph.update(ov.ph_units.pop(s, {}))
         doc = super().stats()
         pipe = self.pipe
         n = len(pipe.openings)
@@ -268,6 +366,9 @@ class SoWindow(DO.Window):
                      "order_reason": self.order_why, "coins_back": n, "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest()}
+        if ov is not None:
+            doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
+                                    "units_dispatched": ov.dispatched_upto + 1}
         return doc
 
 
@@ -318,6 +419,7 @@ class SoSide(DA.Side):
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
+        self.ov = Ov(win, self, win.overlap) if win.overlap else None
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         win = self.win
@@ -426,7 +528,309 @@ class SoSide(DA.Side):
 
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
-                "a_overlap": self.so_ao, "unit_steps": self.unit_steps}
+                "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
+                "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
+
+
+def _remap(c, st, data=None, out=None):
+    """A set of `st`'s tables over its own levels and roots, each table's rows at data(w, tab) and root at out(w) where
+    given."""
+    return c.set([dataclasses.replace(t, data=t.data if data is None else data(w, t), out=t.out if out is None else out(w))
+                  for w, t in enumerate(st.tabs)])
+
+
+class Ov:
+    """-ov's rounds beside the next forward (the module docstring): the round ring (R slots of step s's records, admit
+    rows, step and A roots, each with its own admit, z/y, served-y and units' y tables, step trees and round), the sender
+    thread (round s's tables and tree on the tree streams, its root sent) and the dispatcher thread (step s's units once
+    coin s is back).  The host's counters order the rings: `put_upto` (rounds handed over), `sent_upto` (rounds built
+    and sent) and `dispatched_upto` (steps whose units are enqueued)."""
+
+    EV = 8      # the GPU's events a step, in a ring of this many steps (the host's waits keep them that far apart)
+
+    def __init__(self, win: SoWindow, sd: SoSide, ring: int):
+        if not 1 <= ring < self.EV - 1:
+            raise ValueError(f"dither-a-so -ov: the round ring's depth is 1 to {self.EV - 2}, not {ring}")
+        self.win, self.sd, self.R = win, sd, ring
+        dev, c, L = win.dev, win.c, win.L
+        # the live records as one buffer each (no forward has written them yet), so a step's ring copy is a launch each
+        old = list(sd.zy)
+        self.zl, self.yl = [x.numel() for x in sd.zy], [x.numel() for x in sd.ysv]
+        self.zy = torch.empty(sum(self.zl), dtype=torch.uint8, device=dev)
+        self.ysv = torch.empty(sum(self.yl), dtype=torch.uint8, device=dev)
+        sd.zy, sd.ysv = list(self.zy.split(self.zl)), list(self.ysv.split(self.yl))
+        sd.zyset = _remap(c, sd.zyset, data=lambda w, t: sd.zy[w])
+        sd.ysset = _remap(c, sd.ysset, data=lambda w, t: sd.ysv[w])
+        sd.yuset = _remap(c, sd.yuset, data=lambda w, t: sd.zy[w][t.data.data_ptr() - old[w].data_ptr():])
+        win.pre["z"] = sd.zyset
+        del old
+        kinds = win.round_kinds
+        self.yi, self.zi, self.ri = kinds.index("y-step"), kinds.index("z-step"), kinds.index("receipt-step")
+        self.zy_r = [torch.empty_like(self.zy) for _ in range(ring)]
+        self.ysv_r = [torch.empty_like(self.ysv) for _ in range(ring)]
+        self.admit_r = [torch.empty_like(win.admit) for _ in range(ring)]
+        self.stepv_r = [torch.empty_like(win.stepv) for _ in range(ring)]
+        self.a_off = win.pre["mid"].level_off[0]
+        self.sets = []
+        for q in range(ring):
+            zv, yv = self.zy_r[q].split(self.zl), self.ysv_r[q].split(self.yl)
+            rnd = c.set(list(win.pre["round"].tabs))
+            mid = _remap(c, win.pre["mid"], out=lambda i: rnd.leaves_addr(0) + 64 * i)
+            if mid.level_off != win.pre["mid"].level_off:
+                raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the window's")
+            self.sets.append({
+                "round": rnd, "mid": mid,
+                "admit": _remap(c, win.pre["admit"], data=lambda w, t: self.admit_r[q],
+                                out=lambda w: mid.leaves_addr(1) + 64 * w),
+                "zy": _remap(c, sd.zyset, data=lambda w, t: zv[w], out=lambda w: mid.leaves_addr(2) + 64 * w),
+                "ys": _remap(c, sd.ysset, data=lambda w, t: yv[w], out=lambda w: mid.leaves_addr(self.yi) + 64 * w),
+                "yu": _remap(c, sd.yuset, data=lambda w, t: zv[w][t.data.data_ptr() - sd.zy[w].data_ptr():])})
+        if win.tree_streams is not None:
+            self.ts, self.ads = win.tree_streams
+        else:
+            self.ts, self.ads = torch.cuda.Stream(device=dev), None
+        self.fork, self.joined, self.done = torch.cuda.Event(), torch.cuda.Event(), torch.cuda.Event()
+        self.ev = {k: [torch.cuda.Event(enable_timing=True) for _ in range(self.EV)]
+                   for k in ("copied", "t0", "t1", "fwd0", "fwd1", "fault")}
+        self.root_host = torch.empty(8, dtype=torch.int64).pin_memory()
+        self.ybad_host = torch.empty(L, dtype=torch.bool).pin_memory()
+        self.cv = threading.Condition()
+        self.put_upto = self.sent_upto = self.dispatched_upto = self.fwd_upto = -1
+        self.error: str | None = None
+        self.draining = False
+        self.zlate: tuple | None = None
+        self.watch: set[int] = set()
+        self.faulted: set[int] = set()
+        self.t: dict[int, dict] = {}
+        self.dev_index = torch.cuda.current_device()
+        self.ph_round: dict[int, dict] = {}
+        self.ph_units: dict[int, dict] = {}
+        self.q_send: queue.SimpleQueue = queue.SimpleQueue()
+        self.q_units: queue.SimpleQueue = queue.SimpleQueue()
+        for name, qu, fn in (("dither-ov-rounds", self.q_send, self._round), ("dither-ov-units", self.q_units, self._units)):
+            threading.Thread(target=self._loop, args=(qu, fn), name=name, daemon=True).start()
+
+    # -- the host's order -------------------------------------------------------------------------------------------
+
+    def wait(self, ready) -> None:
+        with self.cv:
+            while self.error is None and not ready():
+                self.cv.wait()
+            if self.error is not None:
+                raise RuntimeError(f"dither-a-so -ov: {self.error}")
+
+    def _set(self, **kw) -> None:
+        with self.cv:
+            for k, v in kw.items():
+                setattr(self, k, v)
+            self.cv.notify_all()
+
+    def forward_starts(self, s: int) -> None:
+        """Step s's forward is next on the serving stream (its `before` done)."""
+        self.ev["fwd0"][s % self.EV].record()
+        self._set(fwd_upto=s)
+
+    def put(self, s: int) -> None:
+        self._set(put_upto=s)
+        self.q_send.put(s)
+
+    def drain(self) -> None:
+        self._set(draining=True)
+        try:
+            self.wait(lambda: self.sent_upto >= self.put_upto and self.dispatched_upto >= self.put_upto)
+        finally:
+            self._set(draining=False)
+        torch.cuda.synchronize()
+
+    def _loop(self, qu: queue.SimpleQueue, fn) -> None:
+        torch.cuda.set_device(self.dev_index)
+        while True:
+            s = qu.get()
+            try:
+                with torch.inference_mode():
+                    fn(s)
+            except BaseException as e:  # noqa: BLE001
+                tb = traceback.format_exc(limit=6).strip().splitlines()[-4:]
+                self._set(error=f"{threading.current_thread().name}, step {s}: {type(e).__name__}: {e} ({' | '.join(tb)})")
+                return
+
+    @contextlib.contextmanager
+    def phase(self, name: str):
+        """`Window.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
+        if not self.win.nvtx:
+            yield
+            return
+        torch.cuda.nvtx.range_push(DO.PHASE_RANGE + name)
+        try:
+            yield
+        finally:
+            torch.cuda.nvtx.range_pop()
+
+    # -- the serving stream, after forward s --------------------------------------------------------------------------
+
+    def poison(self, q: int) -> None:
+        for st in self.sets[q].values():
+            st.level.view(torch.uint8).fill_(DF.POISON)
+            st.roots.view(torch.uint8).fill_(DF.POISON)
+
+    def copy(self, s: int) -> None:
+        """Step s's records, admit rows, step and A roots (round s's inputs that forward s + 1 overwrites) into round
+        slot s mod R."""
+        win, q = self.win, s % self.R
+        self.zy_r[q].copy_(self.zy)
+        self.ysv_r[q].copy_(self.ysv)
+        self.admit_r[q].copy_(win.admit)
+        self.stepv_r[q].copy_(win.stepv)
+        o, n = self.a_off, 8 * win.L
+        self.sets[q]["mid"].level[o:o + n].copy_(win.pre["mid"].level[o:o + n])
+        self.ev["copied"][s % self.EV].record()
+
+    # -- the sender: round s ------------------------------------------------------------------------------------------
+
+    def _round(self, s: int) -> None:
+        win, sd, c, L, D = self.win, self.sd, self.win.c, self.win.L, self.win.depth
+        q, e = s % self.R, s % self.EV
+        st, stepv, ts, ads = self.sets[q], self.stepv_r[q][0:1], self.ts, self.ads
+        cap, kinds = win.cap_of.get(s), win.round_kinds
+        t_start = time.perf_counter()
+        with self.phase("ov_leaf_tables"), torch.cuda.stream(ts):
+            ts.wait_event(self.ev["copied"][e])
+            if cap == "fault_ring":
+                # during step s + 1, before round s's tables: bit 0 of call 0's first z word in step s's ring copy
+                self.wait(lambda: self.fwd_upto > s or self.draining)
+                if self.fwd_upto > s:
+                    ts.wait_event(self.ev["fwd0"][(s + 1) % self.EV])
+                self.zy_r[q][0:1].bitwise_xor_(1)
+                self.ev["fault"][e].record(ts)
+                self.faulted.add(s)
+            self.ev["t0"][e].record(ts)
+            if ads is not None:
+                self.fork.record(ts)
+                ads.wait_event(self.fork)
+                with torch.cuda.stream(ads):
+                    c.build(st["admit"], stepv)
+                    self.joined.record(ads)
+            else:
+                c.build(st["admit"], stepv)
+            for k in ("zy", "ys", "yu"):
+                c.build(st[k], stepv)
+            o = st["mid"].level_off[self.yi]
+            self.ybad_host.copy_((st["mid"].level[o:o + 8 * L].view(L, 8) != st["yu"].roots.view(L, 8)).any(1),
+                                 non_blocking=True)
+        # its receipt-step leaf: step s - D + 1's receipt roots, once its units are enqueued
+        j = s - (D - 1)
+        t_leaves = time.perf_counter()
+        with self.phase("ov_receipt_wait"):
+            self.wait(lambda: self.dispatched_upto >= j)
+        t_units = time.perf_counter()
+        with self.phase("ov_round"), torch.cuda.stream(ts):
+            o = st["mid"].level_off[self.ri]
+            lv = st["mid"].level[o:o + 8 * L]
+            if j < 0:
+                lv.zero_()
+            else:
+                sd.dispatched.pop(j, None)
+                ts.wait_event(sd.udone[j % D])
+                if win.cap_of.get(j) == "fault_rr":
+                    lv.view(torch.uint8).fill_(DF.POISON)
+                else:
+                    lv.copy_(sd.rroots[j % D])
+            if ads is not None:
+                ts.wait_event(self.joined)
+            c.build(st["mid"], stepv)
+            rl, zi, yi = st["round"].level, self.zi, self.yi
+            if cap == "fault_zlate":
+                self.zlate = (rl[8 * zi:8 * zi + 8].clone(), rl[8 * yi:8 * yi + 8].clone())
+                for i in (zi, yi):
+                    rl[8 * i:8 * i + 8].view(torch.uint8).fill_(DF.POISON)
+            elif self.zlate is not None:
+                rl[8 * zi:8 * zi + 8].copy_(self.zlate[0])
+                rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
+                self.zlate = None
+            c.build(st["round"], stepv)
+            self.root_host.copy_(st["round"].roots[0:8], non_blocking=True)
+            self.ev["t1"][e].record(ts)
+            self.done.record(ts)
+        with self.phase("ov_root_wait"):
+            self.done.synchronize()
+        t_root = time.perf_counter()
+        root = unwords(self.root_host)
+        with self.phase("ov_send"):
+            i = win.pipe.send(root)
+        if i != s + 1:
+            raise RuntimeError(f"step {s}'s round went out as round {i}, not {s + 1}")
+        t_sent = time.perf_counter()
+        bad = self.ybad_host.nonzero().flatten().tolist()
+        if bad:
+            sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
+        caps = win.caps
+        prev = win.cap_of.get(s - 1)
+        late = win.cap_of.pop(j, None) if j >= 0 else None
+        if (cap in caps) or (late in caps) or (prev == "fault_zlate" and prev in caps):
+            with torch.cuda.stream(ts):
+                rv, mv, yu = st["round"].level.cpu(), st["mid"].level.cpu(), st["yu"].roots.cpu()
+            mo = st["mid"].level_off
+            leaves = [unwords(rv[8 * k:8 * k + 8]) for k in range(len(kinds))]
+
+            def mleaves(i: int) -> list[bytes]:
+                return [unwords(mv[mo[i] + 8 * w:mo[i] + 8 * w + 8]) for w in range(L)]
+            if cap in caps:
+                caps[cap].update(root=root, index=i, leaves=leaves, a_roots=mleaves(0), admit_roots=mleaves(1),
+                                 z_roots=mleaves(2), y_roots=mleaves(self.yi), y_root_bad=bad,
+                                 yu_roots=[unwords(yu[8 * w:8 * w + 8]) for w in range(L)])
+            if late in caps:
+                caps[late].update(late_s=s, late_index=i, late_leaves=leaves, late_root=root)
+            if prev == "fault_zlate" and prev in caps:
+                caps[prev].update(next_leaves=leaves)
+        win.round_log.append({"s": s, "m": win.m_of.get(s), "root": root.hex()[:32]})
+        self.ph_round[s] = {"trees_ms": 1e3 * (t_root - t_start - (t_units - t_leaves)),
+                            "receipts_wait_ms": 1e3 * (t_units - t_leaves), "record_host_ms": 1e3 * (t_sent - t_root),
+                            "round_host_ms": 1e3 * (time.perf_counter() - t_start)}
+        if s >= 1:
+            self._beside(s - 1)
+        self._set(sent_upto=s)
+        self.q_units.put(s)
+
+    def _beside(self, s: int) -> None:
+        """Round s's tree build against forward s + 1 on the GPU's clock (both done: round s + 1 is handed over after
+        forward s + 1), from step s's ring copy."""
+        e, f = s % self.EV, (s + 1) % self.EV
+        ref = self.ev["copied"][e]
+        t0, t1 = ref.elapsed_time(self.ev["t0"][e]), ref.elapsed_time(self.ev["t1"][e])
+        f0, f1 = ref.elapsed_time(self.ev["fwd0"][f]), ref.elapsed_time(self.ev["fwd1"][f])
+        x = {"tree_gpu_ms": t1 - t0, "beside_forward_ms": max(0.0, min(t1, f1) - max(t0, f0))}
+        if s in self.ph_round:
+            self.ph_round[s].update(x)
+        if s in self.watch:
+            self.watch.discard(s)
+            x.update(copied_to_tree_ms=t0, tree_end_ms=t1, forward_next_start_ms=f0, forward_next_end_ms=f1)
+            if s in self.faulted:
+                self.faulted.discard(s)
+                x["fault_at_ms"] = ref.elapsed_time(self.ev["fault"][e])
+            self.t[s] = x
+
+    # -- the dispatcher: step s's units --------------------------------------------------------------------------------
+
+    def _units(self, s: int) -> None:
+        win, sd, pipe = self.win, self.sd, self.win.pipe
+        t0 = time.perf_counter()
+        with self.phase("ov_coin_wait"):
+            opening = pipe.opening(s + 1)
+        t_coin = time.perf_counter()
+        win.coin_waits.append(1e3 * (t_coin - t0))
+        name = win.cap_of.get(s)
+        if name == "fault_rearly":
+            held = pipe.opening(s)
+            salt = win.HT.live_salt(win.coins.commitment, held.coin, held.index, pipe.roots[s])
+        else:
+            salt = win.HT.live_salt(win.coins.commitment, opening.coin, opening.index, pipe.roots[s + 1])
+        g = win.caps.get(name) if name is not None else None
+        if g is not None:
+            g.update(opening=opening, salt_used=salt, coin_got_at=pipe.got_at.get(s + 1), dispatched_at=time.monotonic())
+        with self.phase("ov_units_dispatch"):
+            sd.dispatch(s, salt, win.m_of.pop(s), g)
+        self.ph_units[s] = {"coin_wait_ms": 1e3 * (t_coin - t0), "dispatch_ms": 1e3 * (time.perf_counter() - t_coin)}
+        self._set(dispatched_upto=s)
 
 
 CONF: dict = {}
@@ -439,15 +843,20 @@ def side() -> SoSide:
     return DA.SIDE[0]
 
 
-def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None) -> None:
+def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
+          ov: int = 0) -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
-    window this module's (ring depth `depth`) and its op's calls this module's Side (before the engine is built)."""
-    if unit not in DA.KONE or ao not in AO or depth < 2:
+    window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
+    calls this module's Side (before the engine is built)."""
+    global CAPTURES
+    if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0:
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
-                         f"depth at least 2 (not {depth})")
+                         f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth)
-    SoWindow.depth, SoWindow.a_once = depth, ao.startswith("b")
+    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov)
+    SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
+    if ov:
+        CAPTURES = CAPTURES_OV
     DO.Window = SoWindow
     DA.side = side
 
@@ -462,7 +871,9 @@ def stats(win: SoWindow):
 
 def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3) -> dict:
     """`which`'s capture: dither_a's checks on round s and, for its receipts, round s + D - 1, every receipt under coin
-    s's salt from the challenger's opening, and the order (the module docstring)."""
+    s's salt from the challenger's opening, and the order (the module docstring); under -ov also that round s, built
+    beside forward s + 1 from the ring, covers what forward s committed ("ov")."""
+    win.drain()
     torch.cuda.synchronize()
     g = win.caps.get(which, {})
     need = ("a", "receipts", "opening", "late_root")
@@ -487,6 +898,32 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     rest_ok = not (doc["receipts_vs_h1r_bad"] or doc["z_vs_int_mm_bad"] or doc["y_vs_dequant_z_bad"]
                    or doc["y_leaf_vs_dequant_z_bad"] or doc["a_roots_bad"] or doc["admit_roots_bad"] or doc["z_roots_bad"]
                    or doc["y_served_roots_bad"] or doc.get("receipt_roots_bad"))
+    ov = None
+    if win.overlap:
+        # what forward s committed (the capture: cloned on the serving stream at its end, before forward s + 1) against
+        # round s as the sender built it from the ring, and how long that build ran beside forward s + 1 (GPU events,
+        # ms from the ring copy)
+        t = DA.SIDE[0].ov.t.get(s, {})
+        ov = {"ring": win.overlap, **{k: round(v, 3) for k, v in t.items()},
+              "covers_forward_s": (all(rd[k] for k in ("a_step", "admit_step", "z_step", "y_step")) and rd["root"]
+                                   and not (doc["a_roots_bad"] or doc["admit_roots_bad"] or doc["z_roots_bad"]
+                                            or doc["y_served_roots_bad"])),
+              "beside_forward": t.get("beside_forward_ms", 0.0) > 0.0}
+        doc["ov"] = ov
+    if which == "fault_ring" and ov is not None:
+        # step s's ring copy of call 0's z overwritten during step s + 1, before round s's tables: refused on call 0's
+        # z root, round s's z-step leaf and its root alone, forward s's own values and every other commitment kept
+        fa = ov.get("fault_at_ms")
+        ov["fault_during_next_forward"] = (fa is not None and ov["forward_next_start_ms"] <= fa
+                                           <= min(ov["forward_next_end_ms"], ov["copied_to_tree_ms"]))
+        others = all(v for k, v in rd.items() if k not in ("z_step", "root"))
+        doc["conforming"] = (doc["z_roots_bad"] == [0] and not rd["z_step"] and not rd["root"] and others
+                             and not (doc["receipts_vs_h1r_bad"] or doc["z_vs_int_mm_bad"] or doc["y_vs_dequant_z_bad"]
+                                      or doc["y_leaf_vs_dequant_z_bad"] or doc["a_roots_bad"] or doc["admit_roots_bad"]
+                                      or doc["y_served_roots_bad"] or doc.get("receipt_roots_bad"))
+                             and order["ok"] and order["units_salt_is_the_coins"] and ov["fault_during_next_forward"])
+        doc["ok"] = doc["ok"] and order["ok"]
+        return doc
     if which == "fault_zlate":
         # withheld from round s (refused there on its z-step and y-step leaves and root alone) and found under round
         # s + 1, after coin s
@@ -507,6 +944,8 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
         doc["ok"] = doc["ok"] and order["ok"] and order["units_salt_is_the_coins"]
         return doc
     good = order["ok"] and order["units_salt_is_the_coins"]
+    if ov is not None and which == "gate":
+        good = good and ov["covers_forward_s"] and ov["beside_forward"]
     if "conforming" in doc:
         doc["conforming"] = doc["conforming"] and good
     doc["ok"] = doc["ok"] and good
@@ -520,4 +959,9 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     v["order"] = ORDER
     v["order_ok"] = bool(gate.get("order", {}).get("ok"))
     v["ok"] = v["ok"] and v["order_ok"]
+    if "ov" in gate:
+        # -ov: round s built beside forward s + 1 covers what forward s committed, and fault_ring (in `more`) refused
+        v["ov"] = OV_ORDER
+        v["ov_ok"] = bool(gate["ov"].get("covers_forward_s") and gate["ov"].get("beside_forward"))
+        v["ok"] = v["ok"] and v["ov_ok"] and any(x.get("which") == "fault_ring" for x in more)
     return v
