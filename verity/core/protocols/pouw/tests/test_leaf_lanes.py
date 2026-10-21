@@ -91,6 +91,27 @@ def test_the_statement_set_and_its_reads():
         LL.reads(32, 32, "seeds")
 
 
+def test_every_statements_partials_are_registered_reads_and_an_unregistered_row_does_not_open():
+    """A port the verifier's registered reads (``own``) don't name is free in the checked relation (RT4-LOGIC-29c), so in
+    each of the 33 statements every port reading the partials is a registered read of the after-draw tree at its row."""
+    for kind, ln in LL.statements(32, 32):
+        got = {p: r for p, (v, r) in LL.reads(32, 32, kind, ln).items() if v == LL.PARTIALS}
+        assert got == ({LL.PARTIALS: ln} if kind == LL.LANE else {f"p{x}": x for x in range(32)})
+    reg, pd = "ab" * 64, "12" * 64
+    rows = [[ln, 7] for ln in range(4)]
+    mine = PR.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
+    resalted = PR.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
+    elsewhere = PR.commit(pd, LL.PARTIALS, rows, "cd" * 64, schema=G.SCHEMA_V2)
+
+    def opens(t, position, row):
+        return G.verify_read(mine.domain, mine.root, position, t.bcs[row], t.path(position), G.SCHEMA_V2)
+
+    assert all(opens(mine, ln, ln) for ln in range(4))
+    assert not opens(mine, 3, 2), "another row of the tree at row 3"
+    assert not opens(resalted, 3, 3), "row 3's words committed outside the registered tree"
+    assert not opens(elsewhere, 3, 3), "row 3 of a tree under another registration"
+
+
 def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root():
     reg, pd = "ab" * 64, "12" * 64
     parts = PR.commit(pd, LL.PARTIALS, [[ln, 0] for ln in range(4)], reg, schema=G.SCHEMA_V2)
