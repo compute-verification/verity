@@ -21,9 +21,13 @@ little-endian), `x = sha512_row_v2_digest` over it, and its leaf `row_leaf(D, r,
 domain is the same in every format; the leaf frame binds the format. The verifier's reads file names a value's format
 under `row_schema` when it is not `hm96-sha512/row/v1` (`schema_entry`), and the Lean verifier checks each port in its
 own format: a port's rows must be of the format its registration names, and a bit row exactly `words * word_bits` bits.
+A bit row's leaves pack the parameter's narrower leaves (`row_leaves`): H1's A, K int8 codes of one-bit leaves, is a
+`row/v2` value of `words = K/2` leaves of `word_bits = 16`, a row 8K of the parameter's leaves.
 
 A read is at a *public position* when the verifier derives it from its own program (`reads`): a unit's parameter whose
-leaves are exactly row `r` of a registered value reads row `r`, for every unit, before anything is served. A statement
+leaves are exactly row `r` of a registered value reads row `r`, for every unit, before anything is served; a parameter
+that is an array of whole rows (H1's tile reads R rows of A) reads each element's row at its own key `name[i]`, the
+circuit's port of that row, and the Lean verifier holds each such port as its own registered port. A statement
 that reads row `r` commits it with the registration's salt, so its `b || c` is the registered one, and opens it: header
 `registered: {port: {"value", "positions", "paths"}}`, each of the port's table rows its position and its frame-v3 path
 (the siblings, leaf level first, 64 bytes each, hex). The verifier checks the port's row width, each path to the
@@ -64,6 +68,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEM
 from verity.ml.circuits.codec import canonical_json, jcs_domain_error
 from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array
 
 from . import partition as P
 
@@ -168,12 +173,27 @@ def parameter_gates(program: Program, value: str) -> range:
     return range(gates[0], gates[0] + len(gates))
 
 
-def shape(program: Program, value: str, words: int) -> int:
-    """The rows of `value` read `words` leaves at a time."""
-    n = len(parameter_gates(program, value))
-    if words < 1 or n % words:
-        raise ValueError(f"parameter {value!r}: {n} leaves are not rows of {words}")
-    return n // words
+def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
+    """The parameter's leaves in one registered row of `words` leaves: `words` under `SCHEMA`, each parameter leaf its own
+    registered leaf; under a bit-row schema the row's `words * word_bits` bits, as many parameter leaves of the parameter's
+    own width as they hold (H1's A: K int8 codes of one-bit leaves, K/2 u16 words)."""
+    if _schema(schema) == SCHEMA or words < 1:
+        return words
+    word_bits = width(program, value)
+    w = dict(program.fn.signature()[0])[value].homogeneous_width()
+    if words * word_bits % w:
+        raise ValueError(f"parameter {value!r}: a {schema} row of {words} {word_bits}-bit leaves is no whole number of its "
+                         f"{w}-bit leaves")
+    return words * word_bits // w
+
+
+def shape(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
+    """The rows of `value` read `words` leaves at a time, in `schema`'s rows (`row_leaves`)."""
+    n, k = len(parameter_gates(program, value)), row_leaves(program, value, words, schema)
+    if k < 1 or n % k:
+        raise ValueError(f"parameter {value!r}: {n} leaves are not rows of {words}" +
+                         (f" ({k} of its leaves in a {schema} row)" if k != words else ""))
+    return n // k
 
 
 def leaf(dom: CommitmentDomain, position: int, bc: bytes, schema: str = SCHEMA) -> bytes:
@@ -270,18 +290,31 @@ def verify_read(dom: CommitmentDomain, root: bytes, position: int, bc: bytes, pa
     return digest == root
 
 
-def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+def _row(hits: Sequence[tuple[str, int] | None], value: str, k: int) -> int | None:
+    """The row of `value` that `hits` (each leaf's owner) is, whole and in order, `k` leaves to a row; None if it is not."""
+    first = hits[0][1] if hits and hits[0] is not None and hits[0][0] == value else -1
+    if first < 0 or first % k or len(hits) != k or list(hits) != [(value, first + j) for j in range(k)]:
+        return None
+    return first // k
+
+
+def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
+          schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """Every unit's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
     the result `{template parameter: {"value", "rows"}}`, `rows` one entry per unit of the population (the row it reads,
-    None for a unit of another template). A unit's parameter that holds a registered leaf must be exactly one row, and a
-    template's parameter reads the same value in every unit or in none: a read at a computed position is no public read.
-    The units are a template query's instances; a `Q_word` or `Q_call` unit reads no registered value (`ValueError`)."""
+    None for a unit of another template). A unit's parameter that holds a registered leaf must be exactly one row, read
+    under its own name, or an array whose every element is one whole row of the value (H1's A: a tile's R rows), each
+    element `i` read under `name[i]`, as the circuit's port of that row; and a template's parameter reads the same value
+    in every unit or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
+    value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). The units are a
+    template query's instances; a `Q_word` or `Q_call` unit reads no registered value (`ValueError`)."""
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
     owner: dict[int, tuple[str, int]] = {}
+    per_row = {v: row_leaves(program, v, w, (schemas or {}).get(v, SCHEMA)) for v, w in values.items()}
     for v, w in values.items():
-        shape(program, v, w)
+        shape(program, v, w, (schemas or {}).get(v, SCHEMA))
         for k, gate in enumerate(parameter_gates(program, v)):
             owner[gate] = (v, k)
     template = {k: tid for k, tid, _a, _n in tp.ranges}
@@ -294,32 +327,37 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int])
         for name, t in nodes[k].fn.signature()[0]:
             s, at = gates[at:at + t.leaves], at + t.leaves
             hits = [owner.get(g) for g in s]
-            value, row = None, None
+            value, rows = None, {}
             if any(hits):
-                value, first = hits[0] or (None, -1)
-                w = values.get(value, 0)
-                if value is None or first % w or len(s) != w or hits != [(value, first + j) for j in range(w)]:
-                    raise ValueError(f"unit {u}: parameter {name!r} is not one whole row of a registered value")
-                row = first // w
+                value = hits[0][0] if hits[0] is not None else None
+                w = per_row.get(value, 0)
+                if value is not None and len(s) == w and (row := _row(hits, value, w)) is not None:
+                    rows = {name: row}
+                elif value is not None and isinstance(t, Array) and t.n > 1 and t.elem.leaves == w:
+                    rows = {f"{name}[{i}]": _row(hits[i * w:(i + 1) * w], value, w) for i in range(t.n)}
+                if not rows or None in rows.values():
+                    raise ValueError(f"unit {u}: parameter {name!r} is not one whole row of a registered value, nor an "
+                                     "array of whole rows of one")
             if value_of.setdefault((template[k], name), value) != value:
                 raise ValueError(f"unit {u}: parameter {name!r} of {template[k]} reads {value!r}, and in another unit "
                                  f"{value_of[(template[k], name)]!r}")
-            if value is None:
-                continue
-            entry = out.setdefault(name, {"value": value, "rows": [None] * tp.population})
-            if entry["value"] != value:
-                raise ValueError(f"parameter {name!r} reads {entry['value']!r} in one template and {value!r} in another")
-            entry["rows"][u] = row
+            for key, row in rows.items():
+                entry = out.setdefault(key, {"value": value, "rows": [None] * tp.population})
+                if entry["value"] != value:
+                    raise ValueError(f"parameter {key!r} reads {entry['value']!r} in one template and {value!r} in another")
+                entry["rows"][u] = row
     return out
 
 
-def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+def registered_entries(program: Program, values: Mapping[str, int],
+                       schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
-    (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`)."""
+    (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`; `leaves`: `shape`, in the value's row
+    format from `schemas`, default `SCHEMA`)."""
     prog = P.program_digest(program)
     out = {}
     for v, w in values.items():
-        n, b = shape(program, v, w), width(program, v)
+        n, b = shape(program, v, w, (schemas or {}).get(v, SCHEMA)), width(program, v)
         out[v] = {"leaves": n, "words": int(w), "word_bits": b, "domain": domain(prog, v, w, n, b).domain_id.hex()}
     return out
 
@@ -472,9 +510,9 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     (`registration.check`'s `outputs`). `schemas` (`{value: schema}`) gives a value's row format when it is not
     `SCHEMA` (`row_schema`, `schema_entry`): the format of the circuit port that reads it, which the Lean verifier holds
     the port to."""
-    mine = registered_entries(program, values)
+    mine = registered_entries(program, values, schemas)
     out = {}
-    for name, r in reads(program, query, values).items():
+    for name, r in reads(program, query, values, schemas).items():
         root = roots.get(r["value"])
         if root is None:
             raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
@@ -488,6 +526,6 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
 __all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_SALT", "WORD_BITS",
            "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
-           "row_digest", "row_words", "schema_entry", "shape", "sources",
+           "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_salt"]
