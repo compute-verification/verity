@@ -73,6 +73,7 @@ def hold (dir : System.FilePath) (s part : String) : IO Flock.Firewall.Session.H
       unless ← h.tryLock do
         withRecord dir fun r => r.op fun evs => ((), evs.push (.wait s part))
         IO.eprintln s!"firewall: {s} at {part} waits for the outer slot"
+        (← IO.getStderr).flush
         h.lock
       slot.set (some h)
       let admitted ← (withRecord dir (seat · s part)).tryCatch fun e => do
