@@ -993,19 +993,19 @@ holds up no other session.
 starts it as its Lean session loop (§10.4's `flock-firewall session` with a hold on each session, `Session.Hold`;
 `FC_CORE_FIREWALL`, else this checkout's build), and the loop keeps `verity_flock.firewall`'s record byte for byte
 (`record.jsonl` read whole and appended under `record.lock`, `slot.lock` the outer slot, both `flock(2)` locks):
-`live/src/firewall_record_vectors.json`, which `release::tests::the_shared_vectors_hold`,
-`test_the_record_is_the_rust_firewalls_byte_for_byte` and `test_firewall_release_agreement.py` run. Like the relay, the
+`live/src/firewall_record_vectors.json`, which `test_the_record_is_the_shared_vectors_byte_for_byte` and
+`test_firewall_release_agreement.py` run. Like the relay, the
 loop answers a session's `Ping`s itself, and at its first other request takes the slot, then records the slot and the
 admission in one read of the record (`Core.Firewall.seat`: the statements' order is enforced there), before anything of
 the session reaches the challenger. It relays the session's rounds as §10.4 says, holds its proofs and `Finish`, and at
 `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a stop, as is a
 `Finish` with fewer than the session's proofs (two a table; the send check refused, and `flock-circuit` then sends
 `Finish` at once) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
-leave, and serve's verdict is its release or its stop. `flock_live::release` is the Rust reference that decision is held
-to (`verity/core/service/firewall/tests`), and nothing serves through it. Every stop the loop makes, and a fault of its
-own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own verdict; a prover killed while
-its session holds the slot is that session's stop, which the loop records, or, where the loop ended with it, the next
-session to take the slot. A session cut before its first request other than
+leave, and serve's verdict is its release or its stop. `verity/core/service/firewall/tests` holds these stages to
+Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
+loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
+verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
+loop ended with it, the next session to take the slot. A session cut before its first request other than
 `Ping` records nothing, and the statement stays next: no message of it has reached the challenger. `flock-circuit` proves
 one session (`--warm 0 --runs 1`: each statement is served once), refuses `FC_VERIFY_AHEAD` (the slot is held until each
 session's verdict), and reports the outcome the loop recorded. `verity_flock.firewall` stays as the inner side
@@ -1040,9 +1040,9 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 | ends its own session only (each V* statement against its own `serve`, no relay) | `Σ_p log₂(s_p + 2)`, `s_p = M_p` stops inner and `2 M_p` outer | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without the outer's `Finish` bit and the never-opened sessions) |
 
 The first row holds wherever the inner phase runs `rec_live --firewall --parts` and the outer phase runs through the
-firewall (`flock-circuit prove --firewall-state`, or the tests' relay; `release::tests` and `tests/test_firewall_release.py`,
-a rule a test). Ending the recursive session at its first stop isn't enough for it. If the worker chose which V*
-statements come and in what order, each outer statement would be released or never opened at its choice, with at most one
+firewall (`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and
+`verity/core/service/firewall/tests`, a rule a test). Ending the recursive session at its first stop isn't enough for
+it. If the worker chose which V* statements come and in what order, each outer statement would be released or never opened at its choice, with at most one
 stopped, and the order in which the challenger's `serve`s are reached would come on top, if the challenger can see it: the
 second row. So the statements and their order are fixed when the recursive session opens, and `admit` serves only the
 next statement not yet released, once: a statement never opened is a stop where it stands, and nothing after it is
