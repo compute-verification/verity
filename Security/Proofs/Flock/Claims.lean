@@ -105,6 +105,7 @@ import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.CapPorts
 import Proofs.Flock.Claims.Recursion.TopsStaged
 import Proofs.Flock.Claims.Recursion.FinOpen
+import Proofs.Flock.Claims.Recursion.TrServed
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
