@@ -5,15 +5,18 @@ over the world.  The driver calls `commit` in the first instrumented run once ev
 and before any draw: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
 deferred (`require`), since an in-process replay draws its seed inside finalize.
 
-Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's vllm-v1 root, and the rank
+Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
 keeps two ranks' ports, whose population, partition and leaf counts can coincide, in distinct domains.  A rank that writes no window,
 or whose root is not the one the TP run root combines, exits the Commit before its challenge.
 
 The verifier's own window of rank ``r`` (`window_of_record`) comes from the Commit's record alone, no committed value read: the TP run
 root and every rank's root of its first instrumented run (`record`: ``runs.jsonl``, refused unless the TP run root combines those
-roots), and the population over rank ``r``'s Programs of record (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of
-record for the rank in ``versions.json`` and the rank's) for the workload the record served.  `source` holds a registration's window to it: ``served``, its run
-``<TP run root>/rank<r>``, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+roots under the form the record's ``root_tag`` names, `tp.run_root.combine`), and the population over rank ``r``'s Programs of record
+(`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of record for the rank in ``versions.json`` and the rank's) for the
+workload the record served.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
+SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
+commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
+record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``)."""
 from __future__ import annotations
 
 import hashlib
@@ -107,8 +110,9 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     """The TP Commit's record (its ``--out``): the world, TP run root and every rank's root of its pair-0 instrumented run, the one
     whose windows `commit` wrote (``runs.jsonl``, which each Commit into the same ``--out`` appends to: the last such row, the run
     ``versions.json`` is of), refused unless the TP run root combines exactly those roots; the root tag, each rank's Programs of
-    record and the workload (``versions.json``)."""
-    from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
+    record and the workload (``versions.json``).  The roots combine under the form the record's root tag names (`tp.run_root.combine`:
+    v2, or an old record's v1, which `source` refuses as served), and any other tag is refused."""
+    from verity_vllm.pipeline.tp import run_root as RT
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
@@ -121,11 +125,9 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     roots = {int(k): str(v["run_root"]) for k, v in (c.get("per_rank") or {}).items()}
     if sorted(roots) != list(range(world)):
         raise ValueError(f"the record's ranks {sorted(roots)} are not the world of {world}")
-    if tp_run_root(world, {r: bytes.fromhex(x) for r, x in roots.items()}).hex() != c["tp_run_root"]:
-        raise ValueError(f"the record's TP run root {c['tp_run_root'][:16]} does not combine its ranks' roots")
     v = json.loads((d / "versions.json").read_text())
-    if v.get("root_tag") != TP_ROOT_TAG.decode():
-        raise ValueError(f"the record's root tag {v.get('root_tag')!r} is not {TP_ROOT_TAG.decode()!r}")
+    if RT.combine(v.get("root_tag"), world, {r: bytes.fromhex(x) for r, x in roots.items()}).hex() != c["tp_run_root"]:
+        raise ValueError(f"the record's TP run root {c['tp_run_root'][:16]} does not combine its ranks' roots")
     argv = [str(x) for x in v.get("argv") or []]
     return {"world": world, "tp_run_root": c["tp_run_root"], "roots": {str(r): roots[r] for r in range(world)}, "root_tag": v["root_tag"],
             "of_record": (v.get("sampled_replay") or {}).get("of_record") or {}, "label": row.get("label"),
@@ -161,9 +163,13 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
 
 def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
     """A rank's registration's ``window`` held to the verifier's own (`window_of_record`): ``served`` with no stand-in link, its run
-    the rank's of record, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    the rank's of record under a SHA-512 TP run root (``sha512``, `deferred_rows.source`'s 64-byte test: an old record's SHA-256 v1
+    root is refused), its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    from verity_vllm.pipeline.deferred_rows import SERVED_ROOT
+
     w = registered or {}
-    ok = {"kind": w.get("kind") == "served", "run": w.get("run") == mine.run, "tp": w.get("tp") == held["tp"],
-          "served_programs": w.get("served_programs") == held["served_programs"], "no_link": "of" not in w and "link" not in w}
+    ok = {"kind": w.get("kind") == "served", "run": w.get("run") == mine.run, "sha512": len(held["tp"]["tp_run_root"]) == 2 * SERVED_ROOT,
+          "tp": w.get("tp") == held["tp"], "served_programs": w.get("served_programs") == held["served_programs"],
+          "no_link": "of" not in w and "link" not in w}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
             "detail": {"kind": w.get("kind"), "run": w.get("run"), "tp": w.get("tp")}}

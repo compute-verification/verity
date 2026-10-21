@@ -23,8 +23,8 @@ premise that asked the openings to pass under every nonce would leave none, sinc
 
 Whether the frame round there is live reads nothing more of the check: it is the frame's own taking of the coins
 (`frameAnswer`) and the round (`Frame.round`). `HelloParses` is a hypothesis here, which
-`Flock.zk_server_lean_coinLayer` takes as `LeanRelease.HelloEq` and `LeanRelease.HelloDParses`
-(`helloParses_of_helloEq`): the kernel evaluates `Hello.parse` at no `Hello` (`Lean.Json.parse` is `partial`).
+`Flock.zk_server_lean_coinLayer` takes as `LeanRelease.HelloIs` and `LeanRelease.HelloDParses`
+(`helloEq_of_helloIs`, `helloParses_of_helloEq`): the kernel evaluates `Hello.parse` at no `Hello` (`Lean.Json.parse` is `partial`).
 -/
 
 namespace Claims.ZKMal.CoinPass

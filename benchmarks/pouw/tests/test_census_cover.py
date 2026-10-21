@@ -16,9 +16,11 @@ every bit-exact program the tree carries for that device maps to one of the vect
 
 A SASS opcode's class is the one the census reads off a timed program (`loads.rates_by_class`: `class_of`, a side unit's
 or TLD's by the program's name), on every device: the H200's and B200's data have no map of their own. An opcode it
-leaves unclassed counts in the exporter's declared catch-all (`CATCH_ALL`: by device key, A2's on that device's data
-sheet; by vector name, that vector's), which must then be priced at π* itself. NOP is left out: it changes no state, so
-the program without its NOPs is the same program.
+leaves unclassed, or whose class the statement's vector has no line for, is a warp instruction no class of the
+statement names, so it counts in the exporter's declared catch-all (`CATCH_ALL`: by device key, A2's on that device's
+data sheet; by vector name, that vector's), which must then be priced at π* itself; a class the vector lists but π*
+prices at 0 is a gap whatever the catch-all. NOP is left out: it changes no state, so the program without its NOPs is
+the same program.
 
 A gap someone is closing goes on `CLOSING` by device and instruction, so it holds while a statement moves to a new vector,
 with its owner and reason. An entry fails once its instruction has its own class priced at π* on every statement of its
@@ -38,6 +40,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
 from verity_machine_model.model import DATA, attacks, devices, model, vector, vectors
 
 POUW = Path(__file__).resolve().parents[1]
@@ -211,7 +214,9 @@ def gaps(sts: list[Statement], progs: list[Program]) -> dict[tuple[str, str], Ga
             for item, x in p.n.items():
                 if not x or (p.sass and item in NO_WORK):
                     continue
-                k = (class_of(p, item) or st.catch_all) if p.sass else item
+                k = class_of(p, item) if p.sass else item
+                if st.catch_all and (k is None or k not in st.price):
+                    k = st.catch_all
                 if k is None:
                     why = "has no class (loads.class_of)"
                 elif k not in st.price:
@@ -271,13 +276,13 @@ def stale(sts: list[Statement], found: dict[tuple[str, str], Gap],
 
 
 RT3_120 = "RT3-120 (cursor/ca-sm120-unclassed-ea24)"
-INT_HB = "INT-HB (#2699)"
 UNOWNED = "none yet: compute-accounting's coordinator"
 
 #: Gaps being closed, as of 19 Oct 2026: (device, instruction) → (owner, reason). Each is an escape of its device's
 #: headline FOLD-OPT until its owner lands the class (a `loads.CLASS_RULES` rule and its census lines on π*'s rows) or a
 #: catch-all priced on them. The witnesses are census_cover_sass.json's runs: cpw_routes r20261019-192718-5d46 (RTX PRO
-#: 6000), rt3_dc r20261019-183610-89bd (H200) and r20261019-192247-8771 (B200).
+#: 6000), rt3_dc r20261019-183610-89bd (H200) and r20261019-192247-8771 (B200), and red_generic r20261020-001850-def6
+#: (its H200 and B200 SASS, art:9463456f9f).
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     # sm_120, unclassed. On DS-120, #2791's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the measured
     # reading (VF3r-16 at JI3s_0, #2791's VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
@@ -300,8 +305,8 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "LDC"): (UNOWNED, "the constant-bank loads of cpw_routes modes 0-8 and 10"),
     ("sm_120", "LDC.64"): (UNOWNED, "cpw_routes modes 2, 3, 5 and 7's 64-bit constant-bank loads"),
     # sm_120, classed since #2761 (loads.class_of: the H200's and B200's checkpoint loops issue them), with no sm_120
-    # line, so neither DS-120 (whose catch-all takes only what no class names) nor the measured reading prices them; a
-    # line on DS_issue and the measured π* row closes each
+    # line: DS-120's catch-all covers each, and the measured reading has neither a line nor a catch-all for them; a line
+    # on DS_issue and the measured π* row closes each
     ("sm_120", "STG.E.128"): (RT3_120, "cpw_routes modes 1 and 8-10's checkpoint egress (RT3-120-6); facet_break uc's stg128: STG128"),
     ("sm_120", "STG.E"): (RT3_120, "facet_break uc's stg32 probe (on RT3-120's branch): STG32"),
     ("sm_120", "STS"): (RT3_120, "facet_break uc's sts32 probe: STS32"),
@@ -313,25 +318,6 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
     ("sm_120", "UBLKRED.G.S.XOR"): (UNOWNED, "cpw_routes modes 8-10's bulk reduce-xor (1 to 16 KB): TMAred512"),
     ("sm_120", "UTMA16K"): (UNOWNED, "the TMA loads of twelve honest profiles' [per_mma] (c-fx1, the l7qs kernels, fattn)"),
-    # sm_90 and sm_100, for #2699's DS-90, DC-90-ri, DS-100 and DC-100-ri: rt3_dc's bit-exact lane loops (RT3-DC-1/-4).
-    # #2761 classes each and gives the class an issue-row line on both censuses; they close with #2699's statements
-    ("sm_90", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32"),
-    ("sm_90", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128"),
-    ("sm_90", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128"),
-    ("sm_90", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: STS32"),
-    ("sm_90", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: STG128"),
-    ("sm_90", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: REDG32"),
-    ("sm_90", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: REDUX"),
-    ("sm_90", "ISETP.LE.AND"): (INT_HB, "the loop test of rt3_dc's lr_seg4, lr_red*, lr8w_*: ISETP"),
-    ("sm_100", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32"),
-    ("sm_100", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128"),
-    ("sm_100", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128"),
-    ("sm_100", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: STS32"),
-    ("sm_100", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: STG128"),
-    ("sm_100", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: REDG32 (RT3-DC-4)"),
-    ("sm_100", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: REDUX"),
-    ("sm_100", "VIADD"): (INT_HB, "rt3_dc lr8w_seg4's add: VIADD"),
-    ("sm_100", "MOV"): (INT_HB, "rt3_dc lr_red8's move: NOROW"),
 }
 
 
@@ -342,8 +328,8 @@ UNCLASSED = "toy.unclassed"
 
 def test_the_check_finds_an_unclassed_instruction():
     """An instruction with no class (UNCLASSED), a classed instruction free at π* (SHFL.BFLY) and a class the vector has
-    no line for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers only the unclassed
-    instruction."""
+    no line for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers the unclassed
+    instruction and the class with no line, never a listed class π* prices at 0."""
     st = Statement("toy", "sm_120", DATA, "toy", {"R": Fraction(1)}, {"ALU": Fraction(1), "SHFL": Fraction(0)}, None,
                    "lean_headline.py")
     p = Program("sm_120", "toy", {"LOP3.LUT": 2, UNCLASSED: 1, "SHFL.BFLY": 1, "NOP": 3}, True)
@@ -352,7 +338,7 @@ def test_the_check_finds_an_unclassed_instruction():
     assert {i for _, i in found} == {UNCLASSED, "SHFL.BFLY", "IMAD"}
     assert found[("toy", UNCLASSED)].cls is None and found[("toy", "SHFL.BFLY")].cls == "SHFL"
     caught = Statement(**{**st.__dict__, "catch_all": "ALU"})
-    assert set(gaps([caught], [p])) == {("toy", "SHFL.BFLY")}
+    assert set(gaps([caught], [p, q])) == {("toy", "SHFL.BFLY")}
 
 
 def test_a_closing_entry_waits_for_its_own_class():
@@ -375,17 +361,20 @@ def test_the_cover_reads_every_source():
     assert any("/honest/" in n for n in names) and any("/designs/" in n for n in names)
     assert any(n.startswith("attack ") for n in names) and any(n.startswith("facet_break ") for n in names)
     assert any(n.startswith("cpw_routes ") for n in names) and any(n.startswith("rt3_dc ") for n in names)
+    assert {p.key for p in progs if p.name.startswith("red_generic ")} == {"sm_90", "sm_100"}
     for st in statements():
         assert st.catch_all is None or st.price.get(st.catch_all, 0) > 0, (st.label, st.catch_all)
     assert {k for k, _ in CLOSING} <= set(devices())
 
 
+@pytest.mark.slow
 def test_every_instruction_is_priced_at_each_statements_certificate():
     """No instruction of a bit-exact program is free at a headline statement's π*, past CLOSING's entries."""
     open_ = [g for (_, item), g in gaps(statements(), programs()).items() if (g.st.key, item) not in CLOSING]
     assert not open_, "\n".join(fix(g) for g in sorted(open_, key=lambda g: (g.st.vector, g.item)))
 
 
+@pytest.mark.slow
 def test_each_closing_entry_is_still_a_gap():
     """A CLOSING entry whose instruction now has its own class priced at every statement's π* is closed: delete it."""
     sts = statements()

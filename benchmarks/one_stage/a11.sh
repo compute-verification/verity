@@ -7,9 +7,11 @@
 # kinds: a11_kinds.py on each sent descriptor (inputs/*.json.gz), JSON in $OUT/kinds-<name>.json.
 # audit: a11.py on the sent value slices and checkpoint subset (inputs/a11-values*.tar, inputs/a11-ckpt*.tar, both from
 #   a11_slice.py), or on a11.py --save-values' directory (inputs/a11-saved*.tar, which skips the fold), the probe's table
-#   (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a11.
+#   (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a11. With A11_REPROBE=K1,K2 the
+#   table's kinds K1 and K2 are probed again first (a11_kinds.py --table, $OUT/kinds-reprobe.json) and the audit reads that.
 # env: A11_MODE  A11_MEM_GB (the job's --mem-gb)  A11_JOBS (a11_kinds' --jobs)  A11_CHILD_GB (its --mem-gb)  A11_ONLY (its --only)
-#      A11_K (a11.py's --k)  A11_CACHE (the build cache, kept on the node)  A11_ARGS (more a11.py arguments)
+#      A11_K (a11.py's --k)  A11_CACHE (the build cache, kept on the node)  A11_ARGS (more a11.py arguments)  A11_REPROBE
+#      A11_BOOLEAN (a11_kinds' --boolean: kinds probed through their Boolean version first)
 # Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
 # pin is kept) or a session's archive.
 set -uo pipefail
@@ -32,7 +34,8 @@ kinds)
     n=$(basename "$d" .json.gz)
     log "a11 kinds: $n"
     "$PY" benchmarks/one_stage/a11_kinds.py --descriptor "$d" --out "$OUT/kinds-$n.json" --jobs "${A11_JOBS:-12}" \
-      --mem-gb "${A11_CHILD_GB:-160}" ${A11_ONLY:+--only "$A11_ONLY"} 2>&1 | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
+      --mem-gb "${A11_CHILD_GB:-160}" ${A11_ONLY:+--only "$A11_ONLY"} ${A11_BOOLEAN:+--boolean "$A11_BOOLEAN"} 2>&1 \
+      | tee -a "$OUT/kinds-$n.log" | cut -c1-2000 || rc=1
   done
   wait
   log "a11 kinds: done, builds $(cat "$W/flock.dir" "$W/lean.dir" 2>/dev/null | tr '\n' ' ')"
@@ -50,8 +53,16 @@ audit)
     VARG=(--values "$V")
   fi
   log "a11: values $(du -sh "$V" | cut -f1) (${VARG[0]}), k ${A11_K:-default}"
+  KINDS=$(ls "$IN"/kinds*.json | head -1)
+  if [ -n "${A11_REPROBE:-}" ]; then
+    log "a11: probing $A11_REPROBE again from $(basename "$KINDS")"
+    "$PY" benchmarks/one_stage/a11_kinds.py --table "$KINDS" --only "$A11_REPROBE" --out "$OUT/kinds-reprobe.json" \
+      --jobs "${A11_JOBS:-4}" --mem-gb "${A11_CHILD_GB:-160}" ${A11_BOOLEAN:+--boolean "$A11_BOOLEAN"} 2>&1 \
+      | tee -a "$OUT/kinds-reprobe.log" | cut -c1-2000
+    KINDS=$OUT/kinds-reprobe.json
+  fi
   # shellcheck disable=SC2086
-  "$PY" benchmarks/one_stage/a11.py --bin "$BIN" --lean "$LEAN" "${VARG[@]}" --kinds "$(ls "$IN"/kinds*.json | head -1)" \
+  "$PY" benchmarks/one_stage/a11.py --bin "$BIN" --lean "$LEAN" "${VARG[@]}" --kinds "$KINDS" \
     --roles "$IN/derive-report.json" --out "$W/a11" ${A11_K:+--k "$A11_K"} ${A11_ARGS:-} \
     2>&1 | tee -a "$OUT/a11.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}

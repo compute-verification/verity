@@ -4,8 +4,9 @@ stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded s
 its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
 (hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
 Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's leaves) the trees are the same
-as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots; a
-tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds vllm-v1's roots, unchanged.
+as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as
+the replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
+vllm-v1's roots, unchanged.
 """
 from __future__ import annotations
 
@@ -243,6 +244,9 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
         assert not com.verify(rc, replace(o, salt=bytes([o.salt[0] ^ 1]) + o.salt[1:]))
         assert not com.verify(rc, replace(o, path=o.path[:-1]))
         assert not com.verify(rc, replace(o, index=o.index + 1))
+        ro = rep.open_range(0, 0, min(2, rrc.steps[0].n_leaves))
+        assert rep.verify_range(rrc, ro) and ro.salts == b"".join(R.salt(rep.row_keys[0], i) for i in range(ro.lo, ro.hi))
+        assert not rep.verify_range(rrc, replace(ro, salts=bytes(len(ro.salts))))
         rep.reset()
         rep.replay_row_keys = {}
         with pytest.raises(RuntimeError, match="no salt key for step 0"):
@@ -271,8 +275,6 @@ def test_what_rows_sha512_refuses(monkeypatch):
         NC.NativeCollectCommitter(eng, commit_scheme="rows-sha256", **base)
     com = committer(monkeypatch)
     try:
-        with pytest.raises(NotImplementedError, match=R.NAME):
-            com.open_range(0, 0, 1)
         with pytest.raises(ValueError, match=R.NAME):
             com.add_padding_steps([object()])
     finally:

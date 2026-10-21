@@ -39,6 +39,7 @@ broken before them); a run the machine killed runs again once.
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import functools
 import json
@@ -229,18 +230,32 @@ def failing(run_dir: Path) -> str | None:
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple[str, int | None, str | None, str | None]]:
     """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`) from `research status RUN --json`, which
     fetches `PROGRESS` with its records; a run it can't read is ("unknown", None, None, None)."""
-    out = {}
     also = [x for n in PROGRESS for x in ("--also", n)]
-    for rid in ids:
+
+    def one(rid: str) -> tuple[str, int | None, str | None, str | None]:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
         try:
             run = json.loads(r.stdout)["runs"][0]
             state = run.get("state") or "unknown"
-            out[rid] = (state, run.get("rc"), run.get("ended_utc"),
-                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
+            return (state, run.get("rc"), run.get("ended_utc"),
+                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None)
         except (ValueError, KeyError, IndexError):
-            out[rid] = ("unknown", None, None, None)
-    return out
+            return ("unknown", None, None, None)
+
+    return dict(zip(ids, _each(one, ids)))
+
+
+#: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (20 Oct: the control pod's
+#: first tick took 33 min reading about 40 runs one at a time)
+STATUS_JOBS = 8
+
+
+def _each(fn, items: list) -> list:
+    """``fn`` of each of ``items``, `STATUS_JOBS` at a time, in their order."""
+    if len(items) < 2:
+        return [fn(x) for x in items]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=STATUS_JOBS) as ex:
+        return list(ex.map(fn, items))
 
 
 def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
@@ -314,16 +329,16 @@ def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
     """The local run dirs of ``ids`` with their steps, suite reports and failed suites' logs fetched (`research status --also`)."""
-    dirs = []
-    for rid in ids:
+    def one(rid: str) -> Path | None:
         if (d := _fetch(repo, rid, [*PROGRESS, "suites.json", "suites-lean.json", TOUCHED_REPORT])) is None:
-            continue
+            return None
         logs = [f"{where}/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log") for where in ("suites", TOUCHED_LOGS)]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
         if logs:
             _fetch(repo, rid, logs)
-        dirs.append(d)
-    return dirs
+        return d
+
+    return [d for d in _each(one, ids) if d is not None]
 
 
 def failed_steps(run_dir: Path) -> list[dict]:

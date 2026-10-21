@@ -118,3 +118,28 @@ def test_a_quota_at_80_percent_of_its_limit_is_a_finding(monkeypatch):
     monkeypatch.setattr(F, "nb", lambda *a, **k: {"items": items})
     assert F.quota_findings() == [{"quota": "compute.instance.non-gpu.vcpu", "region": "uk-south2", "usage": 576, "limit": 600,
                                    "share": 0.96}]
+
+
+def test_a_restarted_loop_doesnt_post_a_quota_alert_it_already_posted_that_day(tmp_path, monkeypatch):
+    """Each supervisor restart re-posted every quota alert (four at 02:06, 02:19 and 02:23Z on 20 Oct): what was told is kept per UTC
+    day in $FLEET_DIR, and a day's file older than two days goes."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
+    monkeypatch.setattr(F, "sample", lambda now: None)
+    monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
+    monkeypatch.setattr(F, "quota_findings", lambda: [{"quota": "q", "region": r, "usage": 9, "limit": 10, "share": 0.9}
+                                                      for r in ("uk-south2", "us-central1")])
+    t0 = 1_800_000_000                                                            # 2027-01-15T08:00Z, not the report's hour
+    old = tmp_path / f"quota-told-{F.utc(t0 - 3 * 86400)[:10]}.json"
+    old.write_text('["q@uk-south2"]\n')
+    posts: list[str] = []
+
+    def run(now: float) -> None:
+        assert F.loop(clock=lambda: now, sleep=lambda s: None, send=lambda args, text: posts.append(text), passes=1) == 0
+
+    run(t0)
+    assert len(posts) == 2 and "q in uk-south2: 9 of 10 (90%)" in posts[0] and not old.exists()
+    assert json.loads((tmp_path / f"quota-told-{F.utc(t0)[:10]}.json").read_text()) == ["q@uk-south2", "q@us-central1"]
+    run(t0 + 600)
+    assert len(posts) == 2, "a restart the same UTC day posts nothing again"
+    run(t0 + 86400)
+    assert len(posts) == 4, "the next day posts each quota once more"
