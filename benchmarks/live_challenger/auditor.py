@@ -703,7 +703,8 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
                               "ended or expired")
         outcomes = window_outcomes(lines, p["windows"])
         return {"period": name, "lane": p["lane"], "by": by, "windows": outcomes,
-                "complete": bool(outcomes) and all(w["complete"] for w in outcomes), "closed_utc": utc(now)}
+                "complete": bool(outcomes) and all(w["complete"] for w in outcomes), "pinned": pinned,
+                "closed_utc": utc(now)}
 
     if verb not in PERIOD_KINDS or not NAME.fullmatch(name) or not (lane == READ_ONLY or NAME.fullmatch(lane)):
         raise Refused(f"period: {args}")
@@ -801,7 +802,7 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
            "ended": why or summary.get("ended") or ("closed by the client" if closed else f"serve.py exited {rc}"),
            "files": files, "released": released,
            "complete": complete, "record_leaf": record_leaf, "commitment": commitment_of(out), "refused_hellos": hellos,
-           "ended_utc": utc(now())}
+           "pinned": pinned, "ended_utc": utc(now())}
     return append(host, "end", session, lambda lines: end, I, sign)
 
 

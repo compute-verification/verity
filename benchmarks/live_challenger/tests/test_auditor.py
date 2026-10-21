@@ -196,6 +196,7 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
 
     end = A.run(host, session, signer=signer, pinned=PIN, now=lambda: T1, argv=argv, wait=client)
     assert end["body"]["rc"] == 0 and end["body"]["closed"] and end["body"]["ended_utc"] == "2026-10-20T09:40:00Z"
+    assert end["body"]["pinned"] == PIN
     assert end["body"]["released"] == {"positions": 1, "replay": 0} and end["body"]["complete"] is False
     record_leaf = int(json.loads((out / R.RECORD).read_text())["signature"][:8], 16)
     assert end["body"]["record_leaf"] == record_leaf and A.leaf_of(end["sig"]) > record_leaf
@@ -207,7 +208,7 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)["cd" * 64]["end"] == end
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == (host.key / "public").read_bytes()
-    commitment, roots = R.trusted_session(out, [host.ledger], {"root": "cd" * 64}, key,
+    commitment, roots = R.trusted_session(out, [host.ledger], {"root": "cd" * 64}, key, [PIN],
                                           lambda k, m, s: lms.verify(P, k.public, m, lms.Signature.decode(P, s)))
     assert roots == {"positions": (bytes(64),), "replay": ()} and commitment.root.hex() == end["body"]["commitment"]
     assert json.loads((out / R.RECORD).read_text())["host"] == body["host"] == f"vy-challenger-1.{session}"
@@ -227,6 +228,7 @@ def test_a_session_whose_pin_moved_after_its_admission_does_not_run(host, signer
     end = A.run(host, session, signer=signer, pinned="d" * 40, now=lambda: T1, argv=["/nonexistent/serve"])
     assert end["body"]["rc"] == 2 and not end["body"]["closed"] and "the pin moved" in end["body"]["ended"]
     assert end["body"]["files"] == {} and not (host.sessions / session / "out").exists()
+    assert end["body"]["pinned"] == "d" * 40
     with pytest.raises(A.Refused, match="not a pinned tree"):
         A.pinned_commit(Path("/workspace"))
     assert A.pinned_commit(Path("/opt/vy-challenger") / PIN) == PIN

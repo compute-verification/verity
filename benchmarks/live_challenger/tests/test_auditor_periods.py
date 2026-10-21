@@ -184,7 +184,7 @@ def test_vy_admins_window_for_a_lane_counts_in_that_lanes_period_and_no_lane_key
     end(host, signer, dev["session"], True)
     closed = ok(admin(host, signer, "period-close --name k1"))
     assert closed["body"]["windows"] == [{"root": "01" * 64, "session": dev["session"], "complete": True}]
-    assert closed["body"]["complete"] is True and closed["body"]["lane"] == "kernels"
+    assert closed["body"]["complete"] is True and closed["body"]["lane"] == "kernels" and closed["body"]["pinned"] == PIN
     assert checked(host)["k1"]["windows"] == [dev["session"]]
 
 

@@ -29,6 +29,9 @@ SERVE = Path(__file__).resolve().parents[1] / "serve.py"
 STUB = Path(__file__).resolve().parent / "stub_serve.py"
 FAMILIES = [["positions", 2], ["replay", 1]]
 HOST = "vy-nebius-cpu-1"
+#: the auditor host's pinned tree, and the verifier's copy of main's first-parent history holding it
+PIN = "ab" * 20
+MAIN = ["0f" * 20, PIN]
 #: the test key: eight leaves, enough for two sessions and the auditor's open and end of each
 PARAMS = lms.Params(64, 4, 3)
 
@@ -70,7 +73,7 @@ class Auditor:
 
     def open(self, session: str, root: str | None = None) -> None:
         self.windows[session] = {"root": root or hashlib.sha512(session.encode()).hexdigest()}
-        self.append("open", session, {"window": self.windows[session], "host": HOST, "pinned": "ab" * 20,
+        self.append("open", session, {"window": self.windows[session], "host": HOST, "pinned": PIN,
                                       "key_sha512": hashlib.sha512(self.public).hexdigest(), "by": "proofs"})
 
     def end(self, session: str, out: Path, closed: bool = True) -> None:
@@ -79,7 +82,7 @@ class Auditor:
             "closed": closed, "rc": 0 if closed else 1, "complete": closed,
             "files": {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(out.iterdir()) if p.is_file()},
             "record_leaf": int(record["signature"][:8], 16), "commitment": record["commitment"]["root"],
-            "refused_hellos": len((out / R.HELLOS).read_text().splitlines())})
+            "refused_hellos": len((out / R.HELLOS).read_text().splitlines()), "pinned": PIN})
 
 
 def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None, session: str | None = None,
@@ -108,7 +111,7 @@ def trusted(out: Path, auditor: Auditor, session: str = "s-out", closed: bool = 
     key = C.ChallengerKey.from_json(json.loads((out / R.KEY).read_text()))
     assert key.public == auditor.public
     auditor.end(session, out, closed)
-    return R.trusted_session(out, [auditor.path], auditor.windows[session], key, lms_verify)
+    return R.trusted_session(out, [auditor.path], auditor.windows[session], key, MAIN, lms_verify)
 
 
 def close(out: Path) -> dict:
