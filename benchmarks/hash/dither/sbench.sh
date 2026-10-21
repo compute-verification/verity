@@ -58,7 +58,16 @@ case " $* " in *dither-a-hbc*)
     || { echo "sbench: NVCC_FAIL h1u_kc"; grep -v "^ptxas info" "$OUT/build-h1u_kc.log" | tail -30; exit 11; }
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
   grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
-  export HB_H1U_KC=$S/h1u_kc.so ;;
+  export HB_H1U_KC=$S/h1u_kc.so
+  # and, with HB_KC_H1C_FLAGS (h1c.cu's knobs), its own libh1c.so: its A, z, y and receipt tables (DITHER_H1C_KC)
+  read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
+  if [ ${#kh[@]} -gt 0 ]; then
+    nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared "${kh[@]}" \
+      -o "$S/libh1c_kc.so" benchmarks/hash/dither/h1c.cu > "$OUT/build-h1c_kc.log" 2>&1 \
+      || { echo "sbench: NVCC_FAIL h1c_kc"; grep -v "^ptxas info" "$OUT/build-h1c_kc.log" | tail -30; exit 11; }
+    echo "sbench: libh1c_kc.so with ${HB_KC_H1C_FLAGS}" | tee -a "$OUT/kc-flags.txt"
+    export DITHER_H1C_KC=$S/libh1c_kc.so
+  fi ;;
 esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
