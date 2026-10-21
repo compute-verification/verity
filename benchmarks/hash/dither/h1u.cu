@@ -112,6 +112,12 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_L2PF
 #define H1K_L2PF 0
 #endif
+// H1K_CPA = S >= 2 (in H1K_PD's place): h1k's producers copy their A and B words with cp.async into a ring of S stages in
+// dynamic shared memory (S x 2 KiB a producer), round r + S - 1's issued at round r into the stage round r - 1 read
+// (behind that round's barrier), so S - 1 rounds of loads are in flight and none holds a register
+#ifndef H1K_CPA
+#define H1K_CPA 0
+#endif
 // H1U_CARVE = 1: kh_one's units kernels ask for the maximum shared-memory carveout, once a process each, before their
 // first launch (the driver's default on an RTX PRO 6000 holds one 42 KB h1u CTA an SM, where registers allow two)
 #ifndef H1U_CARVE
@@ -123,6 +129,8 @@ static_assert(16 % (H1U_PD + H1U_RING) == 0, "a chunk's 16 segments are whole ri
 static_assert(!H1U_RING || !H1U_SPLIT, "H1U_RING is h1u's ring; h1p keeps H1U_PD sets");
 static_assert(H1K_PD >= 0 && H1K_PD <= 3, "h1k's ring: 0 (one set) to 3 rounds ahead");
 static_assert(H1K_L2PF % 4 == 0, "h1k's L2 prefetch distance is whole 128-byte lines of segments");
+static_assert(H1K_CPA == 0 || (H1K_CPA >= 2 && H1K_CPA <= 8 && !H1K_PD && !H1K_L2PF),
+              "h1k's cp.async ring: 2 to 8 stages, in place of H1K_PD's register ring and H1K_L2PF");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
 
@@ -291,6 +299,32 @@ __device__ __forceinline__ void st4l(uint4* p, uint4 v) {
                  : "memory");
   }
 }
+// 8 bytes global -> shared through cp.async (H1K_CPA), with ld2e's L2 prefetch size and eviction policy
+#define H1U_CP8(Q) asm volatile("cp.async.ca.shared.global" Q " [%0], [%1], 8;" ::"r"(d), "l"(p) : "memory")
+#define H1U_CP8P(Q) asm volatile("cp.async.ca.shared.global.L2::cache_hint" Q " [%0], [%1], 8, %2;" ::"r"(d), "l"(p), "l"(pol) : "memory")
+template <int H, bool EF>
+__device__ __forceinline__ void cp8e(void* s, const void* p) {
+  static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+  const u32 d = (u32)__cvta_generic_to_shared(s);
+  if constexpr (!EF) {
+    if constexpr (H == 0) H1U_CP8("");
+    else if constexpr (H == 64) H1U_CP8(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8(".L2::128B");
+    else H1U_CP8(".L2::256B");
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    if constexpr (H == 0) H1U_CP8P("");
+    else if constexpr (H == 64) H1U_CP8P(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8P(".L2::128B");
+    else H1U_CP8P(".L2::256B");
+  }
+}
+#undef H1U_CP8
+#undef H1U_CP8P
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
+template <int N>
+__device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
@@ -1008,12 +1042,34 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   // round r's segment in ring slot r % NS, loaded KD rounds ahead
   constexpr int KD = H1K_PD ? H1K_PD : 1, NS = H1K_PD ? H1K_PD + 1 : 1;
   uint2 pa[NS][4], pb[NS][4];
+  const u32 R = ks / KP;
+#if H1K_CPA
+  // stage st's [0 A | 1 B][producer][r][lane]
+  extern __shared__ uint2 h1k_cp[];
+  constexpr u32 CS = H1K_CPA;
+  const auto cp_seg = [&](u32 sg, u32 st) {
+    const u32 kofs = 32 * sg + 8 * q;
+    uint2* sa = h1k_cp + (2 * st * KP + pp) * 128 + lane;
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      cp8e<H1U_L2HINT, false>(sa + 32 * r, Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      cp8e<H1U_L2HINT, H1U_EVF>(sa + KP * 128 + 32 * r, Bb + (u64)(8 * r + g) * K + kofs);
+    }
+  };
+  if (wp) {
+#pragma unroll
+    for (u32 d = 0; d + 1 < CS; ++d) {
+      if (d < R) cp_seg(KP * d + pp, d);
+      cp_commit();
+    }
+  }
+#else
   if (wp) {
 #pragma unroll
     for (int d = 0; d < KD; ++d)
       if (KP * d + pp < ks) load_seg(KP * d + pp, pa[d], pb[d]);
   }
-  const u32 R = ks / KP;
+#endif
   uint4 nv[KNI];
   const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4], uint2(&na)[4], uint2(&nb)[4]) {
     if (wp) {
@@ -1025,6 +1081,17 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         const bool sx = H1K_NXD ? r >= 1 && ((KP * (r - 1)) & 15) == 0 && blk + 1 < chunks : nx;
         if (nx) load_noise(blk + 1, nv);
         uint2 ca[4], cw[4];
+#if H1K_CPA
+        if (r + CS - 1 < R) cp_seg(sg + KP * (CS - 1), (r + CS - 1) % CS);
+        cp_commit();
+        cp_wait<CS - 1>();
+        const uint2* sa = h1k_cp + (2 * (r % CS) * KP + pp) * 128 + lane;
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          ca[i] = sa[32 * i];
+          cw[i] = sa[KP * 128 + 32 * i];
+        }
+#else
         if (H1K_PD && sg + KP * KD < ks) load_seg(sg + KP * KD, na, nb);
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
@@ -1032,6 +1099,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
           cw[i] = rb4[i];
         }
         if (!H1K_PD && sg + KP < ks) load_seg(sg + KP, ra, rb4);
+#endif
         if (H1K_L2PF && ((sg + H1K_L2PF) & 3) == 0 && sg + H1K_L2PF < ks)
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + H1K_L2PF));
         const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][0][0][0]);
@@ -1671,12 +1739,30 @@ static void carve() {
 }
 
 #if H1U_KSPLIT
+// h1k<MD, PL, KP>'s dynamic shared memory (H1K_CPA's stages), its attributes set once a process before the first launch
+// or occupancy query (a failure surfaces as the launch's error)
+template <int MD, bool PL, int KP>
+static unsigned h1k_dyn() {
+  constexpr unsigned b = H1K_CPA * 2 * KP * 128 * sizeof(uint2);
+  if constexpr (b != 0) {
+    static const bool set = [] {
+      const void* f = (const void*)h1k<MD, PL, KP>;
+      return cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)b) == cudaSuccess
+             && cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                     (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess;
+    }();
+    (void)set;
+  }
+  return b;
+}
+
 template <int MD, bool PL, int KP>
 static void launch_k(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                      const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
   carve<h1k<MD, PL, KP>>();
-  h1k<MD, PL, KP><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                                  (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
+  h1k<MD, PL, KP><<<units, 32 * (KP + 1), h1k_dyn<MD, PL, KP>(), s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
+                                                                       (const u64*)seeds, (const uint8_t*)live, (u32*)out,
+                                                                       (const u32*)ws, oo);
 }
 
 // h1k<MD, PL, KP>'s CTAs resident at once (SMs x the occupancy calculator's CTAs an SM; 0 if either query fails), read
@@ -1686,7 +1772,8 @@ static unsigned h1k_wave() {
   static const unsigned w = [] {
     int dev = 0, sms = 0, per = 0;
     if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess
-        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), 0) != cudaSuccess)
+        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), h1k_dyn<MD, PL, KP>())
+               != cudaSuccess)
       return 0u;
     return (unsigned)(sms * per);
   }();
