@@ -41,11 +41,10 @@ theorem yields_forIn_size {α : Type} (body : ℕ → Array α → Reader.M (For
 /-- **A decoded proof has `R − 1` recursive proofs**, `R + 1` its schedule's levels. -/
 theorem decodeProof_rproofs {sh : Shape} {bytes : ByteArray} {p : Proof} (h : decodeProof sh bytes = .ok p) :
     p.ligerito.recursiveProofs.size = sh.sched.levels.size - 1 - 1 := by
-  unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post _ fun q : Proof => q.ligerito.recursiveProofs.size = sh.sched.levels.size - 1 - 1) p'
+  replace h := (Flock.decodeProof_read h).1
+  unfold decodeRead at h
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
+  refine (?_ : Post _ fun q : Proof => q.ligerito.recursiveProofs.size = sh.sched.levels.size - 1 - 1) p
     ⟨_, _, hrun⟩
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_

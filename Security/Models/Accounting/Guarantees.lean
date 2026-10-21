@@ -1,6 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Actual.Threaded
-import Models.Accounting.Guarantees.Actual.WipePool
+import Models.Accounting.Guarantees.Actual.WipeBridge
 import Models.Accounting.Guarantees.Actual.Dampener
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
@@ -10,12 +10,16 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.CoinFlow
+import Models.Accounting.Guarantees.Compose
+import Models.Accounting.Guarantees.ComposePeriod
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.FpG1
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Headline
+import Models.Accounting.Guarantees.HeadlineDc
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -46,6 +50,7 @@ import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.TS.LowBit
+import Models.Accounting.Guarantees.TS.Fixed
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
@@ -56,12 +61,13 @@ tiers and chained passes, the causal horizon bound on its samples and its conser
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
-the memory cap's lifetime pool over wipes, localization, composition and fit,
+localization, composition and fit,
 the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's
-guarantee, their per-run forms, PoUW's work lower bound on an isolated node, a declared circuit's live and read bits
-from the blocks the audit credits, PoUW's credits and help as its placed execution's gates, the grinding premium
-under hashed seeds and the deployed tile's moment, stacking's carrier lemma with the deployed remote audit for devices
-that read from carriers, also read against a declared circuit's requirement, and the composed guarantee for a declared
-circuit that passes the stacking property: its credited live and read bits from an accepted stacked audit. -/
+guarantee, their per-run forms, PoUW's work lower bound on an isolated node, PoUW's credit on an arbitrary declared
+circuit compiled to its templates, a declared circuit's live and read bits from the blocks the audit credits, PoUW's
+credits and help as its placed execution's gates, the grinding premium under hashed seeds and the deployed tile's
+moment, stacking's carrier lemma with the deployed remote audit for devices that read from carriers, also read against
+a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the stacking property:
+its credited live and read bits from an accepted stacked audit. -/

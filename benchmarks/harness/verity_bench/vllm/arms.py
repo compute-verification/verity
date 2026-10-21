@@ -9,6 +9,8 @@ from typing import Any, Mapping
 
 from verity_vllm.engine.hooks import Hooks
 
+from verity_bench.vllm.presets import NO_CONTROL, ArmSettings
+
 
 @dataclass(frozen=True)
 class Arm:
@@ -22,6 +24,8 @@ class Arm:
     kernel_digest: str | None = None
     experimental: bool = False
     resident: bool = True
+    #: a protocol arm's protocols config for `verity_vllm.LLM` (`presets.ArmSettings`), "$NAME" values unexpanded
+    protocols_config: Mapping[str, Mapping[str, Any]] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -118,22 +122,56 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
     return tuple(bound)
 
 
-def _protocol_arm(name: str) -> Arm:
+def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
+    """A protocol arm: the preset's precision and stock FP8 as its control, unless its `ArmSettings` say otherwise."""
+
     entries = tuple(x for x in name.split("+") if x)
     if not entries or any(":" not in e for e in entries):
         raise ValueError(f"unknown benchmark arm {name!r}; use a built-in, protocol:scheme, or --arm-module")
-    return Arm(name, protocols=entries, control="stock-fp8")
+    s = settings or ArmSettings()
+    control = "stock-fp8" if s.control is None else None if s.control == NO_CONTROL else s.control
+    config = {k: dict(v) for k, v in s.protocols_config.items()} or None
+    return Arm(name, protocols=entries, precision=s.precision, control=control, protocols_config=config)
 
 
-def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[str, ...] = ()) -> tuple[Arm, ...]:
-    """Resolve the comma-separated arm ids, replacing matching ids with experimental modules."""
+def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
+    """The arm's protocols config as `verity_vllm.LLM` takes it: each ``"$NAME"`` value read from `environ` (a missing
+    one raises, naming it), and PoUW's ``coins`` an in-process challenger of epoch 0 (`pouw.challenged`) when PoUW is
+    enabled, since its install draws the epoch's salt from a live coin and a config can't carry one."""
+
+    def expand(value: Any, where: str) -> Any:
+        if isinstance(value, str) and value.startswith("$"):
+            if value[1:] not in environ:
+                raise ValueError(f"arm {arm.id!r}: {where} reads ${value[1:]}, which the point's environment doesn't set "
+                                 "(the spec's setup exports it)")
+            return environ[value[1:]]
+        return value
+
+    config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
+    if not any(e.partition(":")[0] == "pouw" for e in arm.protocols):
+        return config
+    from verity_vllm.protocol_options import pouw
+
+    return pouw.challenged(config, arm.protocols)
+
+
+def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[str, ...] = (),
+                 settings: Mapping[str, ArmSettings] | None = None) -> tuple[Arm, ...]:
+    """Resolve the comma-separated arm ids, replacing matching ids with experimental modules; a protocol arm takes its
+    `ArmSettings` from `settings`, by id."""
 
     requested = [x.strip() for x in (names.split(",") if isinstance(names, str) else names) if x.strip()]
     custom = {a.id: a for a in map(experimental_arm, module_specs)}
     duplicate_modules = len(custom) != len(module_specs)
     if duplicate_modules:
         raise ValueError("two --arm-module values expose the same arm id")
-    out = [custom.get(name) or BUILTINS.get(name) or _protocol_arm(name) for name in requested]
+    settings = settings or {}
+    stray = sorted(set(settings) - set(requested))
+    if stray:
+        raise ValueError(f"arm settings name arms not in --arms: {stray}")
+    out = [custom.get(name) or BUILTINS.get(name) or _protocol_arm(name, settings.get(name)) for name in requested]
+    if any(name in settings and (name in custom or name in BUILTINS) for name in requested):
+        raise ValueError("arm settings are a protocol arm's; built-in and experimental arms carry their own")
     if len({a.id for a in out}) != len(out):
         raise ValueError("benchmark arm ids must be unique")
     unused = sorted(set(custom) - {a.id for a in out})

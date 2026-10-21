@@ -32,7 +32,10 @@ g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fa
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one
 terms off in the epilogue). E4M3's integers to 120 and E2M1x2 at integer block scales to 10 (10 * 12 + 1) stay in
 int8, so on int8 units g1 is its device's Dither-2S design: on B200 and H200 the record itself, on sm_120 Dither-2S
-with fx1's keyed IMAD a word (`fpx-g1s-fx1`).
+with fx1's keyed IMAD a word (`fpx-g1s-fx1`), which is not sm_120's record. That is H1 (co32c-u16, decision 82;
+`dither-c-peel-fx1`): weights to 110 with U on +-16, so g1 runs on it with E4M3 weights to 104 and block scales to 9
+(`g1h_check.py`), at H1's ε only if its centred served word is the committed one; `g1h_eps.py` prices the correction
+as a skip term otherwise.
 
 FP-NATIVE's FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, activations the nearest level plus
 its gap times b + b' - 1, note:20261019T0525Z-draft-fp-native) is 2SP with its twin and served GEMM one: each k32

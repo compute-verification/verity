@@ -147,6 +147,27 @@ def test_a_new_head_on_top_of_the_admitted_one_keeps_its_place_and_any_other_goe
     assert [m.pr for m in members] == [1, 3, 2]
 
 
+def test_an_unmarked_new_head_on_top_keeps_the_admitted_head_in_place_until_its_mark(world):
+    """CI-119, 20 Oct: #2729, at 92 on `next`, was pushed one commit on and dropped while its new head's preflight ran, so its
+    mark ~1 h later sent it to 123. A new head that descends from the admitted one keeps the admitted head on `next` until it
+    is marked; a rewritten one still drops the PR until it is."""
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "b2\n"}))
+    world.gh.put(3, world.change({"c.txt": "c3\n"}))
+    q = world.queue()
+    q.sync()
+    assert world.on_next(q) == [1, 2, 3]
+    world.gh.put(1, h1b := world.change({"a.txt": "a1 fixed\n"}, base=h1), ready=False)    # pushed, its preflight still running
+    members, entries = q.sync()
+    assert [(m.pr, m.head) for m in members][0] == (1, h1) and [m.pr for m in members] == [1, 2, 3]
+    world.gh.ready.add((1, h1b))                                                             # marked
+    members, _ = q.sync()
+    assert [(m.pr, m.head) for m in members][0] == (1, h1b) and [m.pr for m in members] == [1, 2, 3]
+    world.gh.put(2, world.change({"b.txt": "b2 rewritten\n"}), ready=False)                  # not on top of h2: dropped
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 3] and h2
+
+
 def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller_pins(world, monkeypatch):
     """12 Oct: the hand-landing recipe pinned 2026-09-28T23:00Z for reproducible merge ids, a merge on `next` built under it
     (ba87196a8) landed with that date, and `git log --since` over `main` stopped early there."""
@@ -731,6 +752,33 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
     assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
+
+
+def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_another(world, capsys):
+    """20 Oct: `git push && research queue ready 2848 --mark` marked the old head, since GitHub's headRefOid lagged the push."""
+    from research.queue import SHA_READS, MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    old, new = world.change({"s.txt": "old\n"}), world.change({"s.txt": "new\n"})
+    world.gh.put(5, old, ready=False)
+    reads = []
+
+    def sleep(s):
+        reads.append(s)
+        if len(reads) == 2:
+            world.gh.put(5, new, ready=False)
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sha=new[:12], sleep=sleep) == 0
+    labels = StoreLabels(world.store, log=world.logs.append)
+    assert len(reads) == 2 and labels.ready(5, new) is True and labels.ready(5, old) is False
+
+    other = world.change({"s.txt": "other\n"})
+    capsys.readouterr()
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), sha=other, sleep=reads.append) == 1
+    assert len(reads) == 2 + SHA_READS - 1
+    err = capsys.readouterr().err
+    assert f"GitHub has its head at {new[:12]}, not {other[:12]}" in err and "run this again" in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(5, other) is False
 
 
 def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, capsys):

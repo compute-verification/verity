@@ -3545,6 +3545,15 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
     with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
         remote.wake(m, ["ssh"], nebius=no_creds)
 
+    def plain_start(*args):   # the CLI's --async start prints its operation's id, which fleet.nb can't parse (T1R, 19 Oct)
+        if args[2] == "start":
+            raise json.JSONDecodeError("Expecting value", "computeoperation-x", 0)
+        return nebius(*args)
+
+    answers = iter([1, 0])
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    assert remote.wake(m, ["ssh"], nebius=plain_start, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
+
 
 def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
     """INF-50: OOM and lost-check alerts name a run's sender from its request; workers never set RESEARCH_AGENT_URL, and a worker

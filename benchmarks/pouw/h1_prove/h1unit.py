@@ -48,6 +48,16 @@ PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 
 
+def tile() -> str:
+    """The unit's Definition: ``H1_TILE`` v1 (`h1tile.PouwH1Tile`, z the exact A Bᵀ) or v3 (`h1tile.PouwH1Tile3`, the one
+    stream: z = O' - sum_d 128^d D_d of the folded words, with its wrap correction and dither peel; A Bᵀ too)."""
+    import os
+    t = os.environ.get("H1_TILE", "v1")
+    if t not in ("v1", "v3"):
+        raise ValueError(f"H1_TILE={t!r}: v1 or v3")
+    return t
+
+
 def unit_salt(coin: bytes) -> bytes:
     """`pouw.salt`, the units' one coin: SHA-512 of the epoch's opened salt coin under this harness's tag."""
     return hashlib.sha512(SALT_TAG + bytes(coin)).digest()
@@ -94,7 +104,7 @@ class Shape:
         from verity.ml.circuits.ops.boolean import gemm as BG
         from verity.core.protocols.pouw.circuit import h1tile as H
         exact = bind(BG.GemmAccumulatorS8, K=self.k, **BG.GEMM_SM120_S8)
-        return bind(H.PouwH1Tile, EXACT=exact, R=self.r, C=self.c,
+        return bind(H.PouwH1Tile3 if tile() == "v3" else H.PouwH1Tile, EXACT=exact, R=self.r, C=self.c,
                     PAIRS=tuple((i, j) for i in range(self.r) for j in range(self.c)))
 
     def stager(self, name: str, circuit=None):

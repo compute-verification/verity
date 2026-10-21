@@ -23,13 +23,13 @@ plain verifier binding its own last message.
   it and `RecDeploy.PlainLastBindsOrSlack` (`RecDeploy.plainLastBinds_of_canonical`), which allows, beside a collision,
   two proof files at one position that differ in their bytes and decode alike (`RecDeploy.ProofSlack`).
 
-**Where the decoder stands.** At the decoder this tree builds (`verity/core/service/flock/Flock/Proof.lean`)
-`CanonicalProofFiles` is false: `decodeProof` ignores the bytes after the proof pair, and reads `matrix_evals` at any
-length and drops it. Either gives two files with one decoding. The verifier hashes each file whole and compares the
-digest with the record's `proof_sha` (S17), so the two decisions' calls differ, and no custody check pins `proof_sha`,
-so they need not collide. CANON1's change to the decoder (`Reader.runAll`, `matrix_evals` at length 0, with
-`Flock.Test.ProofCanon`'s guards) refuses both; every other field `decodeProof` reads is kept in the `Proof` it returns
-or read at one value, so there it is to hold.
+**Where the decoder stands.** The verifier hashes each proof file whole and compares the digest with the record's
+`proof_sha` (S17), and no custody check pins `proof_sha`, so two files with one decoding would give two decisions with
+different calls that need not collide. `decodeProof` (`verity/core/service/flock/Flock/Proof.lean`) accepts a file
+only if it is `Flock.Wire.proofFile` of what it decodes to, so there are no such two files
+(`Flock.decodeProof_canonical`): `CanonicalProofFiles` holds (`RecDeploy.canonicalProofFiles`), and (P4) at the
+deployed bound record holds at SHA-512 with no premise (`RecDeploy.lastBindsEC_deployed_sha512_closed`,
+`LastBindsClosed`).
 
 **Where the record's text stands.** The verifier reads the record's text only through `Json.parse`
 (`LastGap.decision_congr_record`), so two records that parse alike give one decision with the same calls and the same
@@ -42,7 +42,7 @@ when the record lists it. So the calls are compared as sets throughout (ASK-76):
 
 `PlainLastBindsOrSlack` is the collision charge through the plain verifier's steps. `LastColsDeployed` splits it into
 its columns half, proved at SHA-512 (`RecDeploy.plainColsBind_sha512`), and its calls half
-(`RecDeploy.PlainCallsBindOrSlack`), open.
+(`RecDeploy.PlainCallsBindOrSlack`), proved at SHA-512 too (`RecDeploy.plainCallsBindOrSlack_sha512`).
 -/
 
 namespace Claims.Recursion
@@ -405,8 +405,8 @@ def ProofSlack (l l' : Msg) : Prop :=
 
 /-- **`PlainLastBinds` up to the decoder's slack**: its hypotheses give a collision among the decision's calls, or two
 proof files at one position that differ in their bytes and decode alike (`ProofSlack`). It is the collision charge
-through the plain verifier's steps: its columns half holds at SHA-512, and its calls half, with the calls compared as
-sets, is open (`LastColsDeployed`). -/
+through the plain verifier's steps: its columns half and its calls half, with the calls compared as sets, hold at
+SHA-512 (`LastColsDeployed`, `CallsOfProofs`). -/
 def PlainLastBindsOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →

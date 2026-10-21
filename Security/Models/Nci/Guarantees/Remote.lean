@@ -61,13 +61,14 @@ def DampenerRemote : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (Φ Δ H : ℝ)
     (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (Γ : ℕ) (α b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
-    (dd e : ℕ),
+    (dd e : ℕ) (Mc : Containment r.D d.D),
     0 ≤ p → 0 < ε → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ wrong p →
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →
     (∀ ω, Assumptions.TerminalDetection (bad ω) ident τ Δ) →
     (∀ ω j t, ∑ b ∈ bad ω with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    r.Contains d → Complies Γ α d → T.Threaded Γ (α * Γ) dd e →
+    Complies Γ α d → Assumptions.BaselineRegistered r d (PartialContainment.ofContainment Mc) →
+    T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     (∀ ω, 0 < M ω) → (∀ ω, M ω ≤ Mu ω + Mr ω + T.M.card + Mx ω) →
     (∀ ω, (Mu ω : ℝ) ≤ mfu * κ * U / 2) →

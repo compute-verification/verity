@@ -13,8 +13,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the challenger draws two live coins a window, its challenge `σ_t` and its openings coin,
-   and commits to them (`coins.Challenger`).  The prover gets the commitment first (`Session.commitment`).
+2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
+   its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
+   on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
+   once, after the root the verifier recorded for it, which the challenger's signed log keeps
+   (`Session.released_reason`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
@@ -24,8 +27,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree
    bound to the plan and sends the root and the plan, whole or as its change from the previous pass's
    (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
-   step `s` of the served circuit's execution (the engine step), and its plan is the blocks the circuit reads at `s`:
-   the steps are public, and strictly increase over the session's passes.  The chain runs across the session's windows: a window's first
+   step `s` of the served circuit's execution (the engine step), and its plan holds every complete block the circuit
+   reads at `s`, filler beside them allowed (`PlanMatches`): the steps are public, and strictly increase over the
+   session's passes.  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
@@ -66,9 +70,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
-   each pass's credit is its receipts at the link's D bits each, at most the circuit's reads at its step
-   (`Ledger.linked`), less the share ε of it the units' draw leaves unproved, its δ added to the ledger's error
-   (`Ledger.error`);
+   each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
+   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less the
+   share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -87,7 +91,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
@@ -525,24 +529,22 @@ class Prover:
     commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
     None if it does not."""
 
-    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.CoinCommitment, *,
+    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.LiveCommitment, *,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
         self.store, self.commitment, self.entropy = store, commitment, entropy
         self.tiles = _tiles(tiles, store.registration.bind)
 
-    def run(self, challenge: coins.CoinOpening, i: int, previous: bytes, plan: Plan | None = None, *,
+    def run(self, challenge: coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None, *,
             head: bytes | None = None) -> Pass:
         """Pass i of the window whose challenge is `challenge`, after the root `previous`, its seed binding `head`, the
         chain over every append the verifier will have received before this pass's root (`chained`; None without
         one, the honest prover's `Store.head`): refused unless the coin is a window's challenge and opens against the
         session's commitment."""
         t = getattr(challenge, "index", None)
-        reason = coins.coin_reason(self.commitment, challenge, t)
-        if reason is None and t >= self.commitment.count // 2:
-            reason = f"coin {t} is an openings coin, not a window's challenge"
+        reason = coins.coin_reason(self.commitment, challenge, coins.CHALLENGE, t)
         if reason is not None:
             raise ValueError(reason)
-        return self.pass_under(t, i, receipts.seed(challenge.coin, i, chained(previous, head)), plan)
+        return self.pass_under(t, i, receipts.seed(coins.coin(challenge), i, chained(previous, head)), plan)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
@@ -650,6 +652,12 @@ class WindowRecord:
                 "lengths": list(self.lengths), "opened_ns": self.opened_ns, "post_seed": list(self.post_seed),
                 "profile": self.profile.to_json(), "released_ns": self.released_ns, "span_ns": self.span_ns,
                 "stale": list(self.stale), "steps": list(self.steps), "window": self.window}
+
+
+def window_profile(lengths: Sequence[int], drawn: int, delta: float) -> IntegrityProfile:
+    """A window's openings law (`WindowRecord.profile`): `drawn` distinct receipts uniform over its passes' `lengths`
+    receipts, at `delta`."""
+    return IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})
 
 
 @dataclass(frozen=True, slots=True)
@@ -771,14 +779,16 @@ def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
 
 class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns`, which
+    `coins` are the session's coins through the one challenger (`coins.Coins`), committed before the session, each
+    asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
+    window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
     the session's: they take indices from N up, and a later session over the store starts again from N."""
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, challenger: coins.Challenger, *,
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
@@ -788,10 +798,11 @@ class Session:
         if type(not_before_ns) is not int or not_before_ns < 0:
             raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
                              "registration for its first: a nonnegative integer")
-        c = challenger.commitment
-        if c.registration != registration.digest or c.count != params.coins:
-            raise ValueError(f"the challenger's coins are not this session's: {params.coins} coins for this registration")
-        self.params, self.registration, self.challenger = params, registration, challenger
+        if (type(coins_) is not coins.Coins or coins_.registration != registration.digest
+                or coins_.windows != params.windows):
+            raise ValueError(f"the challenger's coins are not this session's: {params.windows} windows' coins for this "
+                             "registration")
+        self.params, self.registration, self.coins = params, registration, coins_
         self.tiles = _tiles(tiles, registration.bind)
         self.clock, self.not_before_ns = clock, not_before_ns
         self.windows: list[_Window] = []
@@ -808,16 +819,38 @@ class Session:
         self._planned: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
         self._step = -1
+        self._latest = coins_.window
 
     @property
-    def commitment(self) -> coins.CoinCommitment:
+    def commitment(self) -> coins.LiveCommitment:
         """The session's coin commitment, sent to the prover before the first coin."""
-        return self.challenger.commitment
+        return self.coins.commitment
 
-    def _release(self, t: int, now: int) -> coins.CoinOpening:
-        opening = self.challenger.open(t)
-        self.windows.append(_Window(opening.coin, now))
+    def _release(self, t: int, now: int) -> coins.LiveOpening:
+        """σ_t, after the last root received (R before any).  `now`, read before the challenger is asked, is its
+        release in the record: the coin leaves later, so the record's span is the longer."""
+        opening = self.coins.challenge(t, self._latest)
+        self.windows.append(_Window(coins.coin(opening), now))
         return opening
+
+    def released_reason(self, signed: coins.LiveCommitment, received: dict[str, Sequence[bytes]]) -> str | None:
+        """Why this session's coins are not the challenger's as it signed them (`coins.released_reason`), the commitment
+        `signed` and the roots `received` read from the challenger's side; None when they are."""
+        return coins.released_reason(self.coins, [w.roots for w in self.windows],
+                                     [a[2].root for a in self._appends], signed, received)
+
+    def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey,
+                       verify: coins.Verify, period: str | None = None) -> str | None:
+        """Why this session's coins are not those of the one challenger session the auditor's ledger opens for its
+        window `{root: R}` (`coins.trusted`: the ledger's published `heads` and the session's files in `directory`,
+        under the pinned `key`, inside the audit's `period` when it names one), held to them as `released_reason`
+        holds them; None when they are.  So coins from a second challenger session, opened for another root or refused
+        by the ledger as a second open for R, are refused."""
+        try:
+            signed, received = coins.trusted(self.coins, directory, heads, key, verify, period)
+        except coins.CoinError as e:
+            return f"the challenger's session for this session's window is not trusted: {e}"
+        return self.released_reason(signed, received)
 
     def _live(self) -> None:
         if self.failed is not None:
@@ -834,7 +867,7 @@ class Session:
         b = self.windows[t].boundary_ns
         return None if b is None else b + self.params.deadline_ns
 
-    def start(self) -> coins.CoinOpening:
+    def start(self) -> coins.LiveOpening:
         """`σ_0`, released now: refused before `not_before_ns`."""
         if self.windows:
             raise SessionError("a session starts once")
@@ -844,7 +877,7 @@ class Session:
                                "before it over this store may still be reading")
         return self._release(0, now)
 
-    def boundary(self) -> coins.CoinOpening | None:
+    def boundary(self) -> coins.LiveOpening | None:
         """The end of the next unended window: the following window's challenge, or None, the close, after the last.
         Refused sooner than `window_ns` after the window's challenge left."""
         self._live()
@@ -880,17 +913,19 @@ class Session:
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
         more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
-        reply is the first index and the append's coin `c_a`, drawn now (`coins.Challenger.append_coin`), under which
-        the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`, if it is
-        malformed or would take the store past its codec's `max_blocks`; `coin`, drawing none, if its root was sent
-        before (a retry never redraws) or the last window's roots are final, so no root can follow it."""
+        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`),
+        under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
+        if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
+        sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
+        append coins are all released."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
-        if root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final):
+        if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
+                or self.coins.appends == self.coins.commitment.family(coins.APPEND)):
             return self._fail(self.filling, "coin")
-        first, coin = self.extent, self.challenger.append_coin()
+        first, coin = self.extent, coins.coin(self.coins.append(root))
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
                               coin))
         self._roots.add(root)
@@ -937,8 +972,9 @@ class Session:
         registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
         its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
         `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
-        is to be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
-        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  A paced session's window holds at
+        is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
+        plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
+        missing or not above.  A paced session's window holds at
         most k roots, and a later one is out of turn (`order`).  The root's arrival, the clock now, goes in the record.
         Returns the rejection they cause, if any."""
         self._live()
@@ -987,7 +1023,7 @@ class Session:
         self.windows[t].heads.append(self._head)
         self.windows[t].stale.append(below)
         self.windows[t].arrived.append(now)
-        self._plan, self._step = plan, step
+        self._plan, self._step, self._latest = plan, step, root
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
@@ -1009,8 +1045,8 @@ class Session:
             return self._fail(t, "few")
         if t == self.params.windows - 1 and len(self._joined) < len(self._appends):
             return self._fail(t, "coin")
-        coin = self.challenger.open(self.params.windows + t)
-        key = derive(coin.coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": t})
+        coin = coins.coin(self.coins.openings(t, w.roots[-1]))
+        key = derive(coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": t})
         ends = tuple(itertools.accumulate(plan.length for plan in w.plans))
         draws = []
         for u in key.subset(min(self.params.samples, ends[-1]), ends[-1], "openings"):
@@ -1103,8 +1139,7 @@ class Session:
         out = []
         for t, w in enumerate(self.windows):
             lengths = tuple(plan.length for plan in w.plans)
-            profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
-                                       self.params.delta, drawn={"receipt": len(w.draws)})
+            profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
                                     tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
@@ -1187,30 +1222,36 @@ class Registry:
     def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
         """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with."""
+        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
+        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "
                                 "second draws no codec seed until the verifier closes the first and counts its sessions")
+        if _bind(kw.get("bind", False)):
+            raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
+                             "(RemoteAudit, in Lean) covers receipts of a block alone")
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
 
     def session(self, params: Params, registration: Registration, tiles: Tiles | None, *, not_before_ns: int,
                 clock: Callable[[], int] = time.monotonic_ns, entropy: Callable[[int], bytes] = os.urandom,
-                index: int | None = None) -> Session:
-        """The next session over the node's live registration, its coins `coins.Challenger(digest, k, …)` with k its
-        sessions so far (`index`, if given, must be k), kept to be counted at `close`.  Refused for a registration
-        that isn't its node's live one, drawn here."""
+                index: int | None = None, challenger: Callable[[int], object] | None = None) -> Session:
+        """The next session over the node's live registration, k its sessions so far (`index`, if given, must be k),
+        kept to be counted at `close`.  Its coins are epoch k of `challenger(k)`, the one challenger's session for it
+        (`coins.Coins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
+        for a registration that isn't its node's live one, drawn here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
             raise RegistryError("a session runs over its node's live registration, drawn by this registry")
         k = len(x.sessions)
         if index is not None and index != k:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
-        session = Session(params, registration, tiles, coins.Challenger(registration.digest, k, params.coins, entropy),
-                          not_before_ns=not_before_ns, clock=clock)
+        c = (coins.local(registration.digest, k, params.windows, entropy) if challenger is None
+             else coins.Coins(challenger(k), registration.digest, k, params.windows))
+        session = Session(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
 
@@ -1256,8 +1297,9 @@ class Registry:
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
-              "[b_(t−1), D_t]; on a requirement link, each pass's credit is its receipts at D bits each, at most the "
-              "circuit's reads at its step, less the link's ε of the session's (the whole of it from any one window)",
+              "[b_(t−1), D_t]; on a requirement link, each pass's credit is the circuit's reads from complete blocks "
+              "at its step, less a block for each planned block it credits no receipt of (`linked_bits`, "
+              "RequirementMoved), less the link's ε of the session's (the whole of it from any one window)",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -1288,12 +1330,18 @@ class PostSeedVerdict(Protocol):
 
 class RequirementLink(Protocol):
     """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
-    reads it: whether the link `holds`; `density_bits`, D, the fewest bits of the circuit's values that any block a
-    plan holds carries; and `read_bits(step)`, the bits the circuit reads at a step (`requirement.Requirement.read_bits`
-    in `verity.ml.circuits`).  It holds once the proof units have shown, for every pass, that its plan holds only
-    blocks the circuit reads at the pass's step (`PlanMatches`; the plan unit, I4's), each carrying at least D of its
-    values' bits (`Packs` under the census's layout rule), and that every free in the memory map, of a registered
-    block or a written one, is at its values' last read (the memory-map unit, I4's).  `mapped(record)` is the
+    reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
+    (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
+    blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
+    the proof units have shown, for every pass, that its plan holds every complete block the circuit reads at the
+    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
+    PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
+    map, of a registered block or a written one, is at its values' last read (the memory-map unit, I4's).  The link
+    is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
+    rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
+    and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
+    plan unit that lets a plan leave blocks out (PlanShard at GAPS > 0) makes each shard's count public, and so how
+    many of a shard's blocks each plan holds; at GAPS = 0 every count is its shard's size.  `mapped(record)` is the
     memory-map unit's verdict on this session's record: that W's memory map, the one the plan unit's plans are of,
     makes exactly the appends of the chain `Record.appends` (None without one), each a write at its production step,
     in the map's order, at the index the verifier gave it; that each pass's head (`WindowRecord.heads`) is the chain
@@ -1301,16 +1349,14 @@ class RequirementLink(Protocol):
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
     (`WindowRecord.stale`, which the unit recomputes from those appends) of the first pass after its step, and of the
     same payload; and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link
-    holds on what their draw established: `epsilon`, the most share of the linked credit (Σ min(n·D, read_bits(step))
-    over the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding
-    a block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes the link as given, credits 1 − ε of the
-    linked credit, adds δ to its error, and refuses a link whose `mapped` isn't True of the record."""
+    holds on what their draw established: `epsilon`, the most share of the linked credit (`linked_bits` summed over
+    the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding a
+    block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes
+    the link as given, credits 1 − ε of the linked credit, adds δ to its error, and refuses a link whose `mapped`
+    isn't True of the record."""
 
     @property
     def holds(self) -> bool: ...
-
-    @property
-    def density_bits(self) -> int: ...
 
     @property
     def epsilon(self) -> float: ...
@@ -1372,7 +1418,8 @@ class Ledger(_Terms):
     openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
     event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
     the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
-    `linked`: whether the credit is the served circuit's (capped at its reads, on a `RequirementLink`); without a link
+    `linked`: whether the credit is the served circuit's (its reads at each pass's step, on a `RequirementLink`:
+    `linked_bits`); without a link
     the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
     `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `RateAuditSketch`'s."""
@@ -1474,6 +1521,35 @@ def named_bits(k: int, queries_log2: int = QUERIES_LOG2) -> int:
     return k * queries_log2 - max(0, math.floor(factorial * (1 - 2.0 ** -40)) - 1)
 
 
+def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes: int,
+                post_seed: bool) -> tuple[int, ...]:
+    """Each pass's credit on a requirement link, in bits, its post-seed receipts credited or not (`post_seed`).
+
+    `Accounting.Guarantees.RequirementMoved`: when the pass's plan covers the complete blocks the circuit reads at its
+    step (`PlanMatches`, the link's to hold), a pass that moved the planned blocks M moved every bit the circuit reads
+    from complete blocks at that step, r = `read_bits(step)`, but at most a block's b bits for each planned block
+    outside M.  A pass computes one receipt a planned block, so one whose receipts are all credited covers its plan,
+    and is credited r: a credited receipt that wasn't a read from node memory (wrong, or answered from the chip, a
+    rebuild, the host or a link) is a planned block outside M, which `sample` and the other terms already charge a
+    block each.  One credited n of its plan's L receipts (its post-seed ones uncredited, without the property's
+    verdict) is credited r − (L − n)·b, at least 0: the same lemma, its L − n uncredited blocks outside M.  A planned
+    block the circuit doesn't read at the step (filler) adds nothing to r and costs nothing.  `PlanMatches` packs the
+    values read into the planned blocks (`Packs`), so r is at most L·b: a link reading more is refused, since it can't
+    hold."""
+    bits = 8 * block_bytes
+    out = []
+    for length, n, s in zip(window.lengths, window.credited(post_seed), window.steps, strict=True):
+        r = requirement.read_bits(s)
+        if type(r) is not int or r < 0:
+            raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
+        if r > length * bits:
+            raise ValueError(f"the circuit reads {r} bits from complete blocks at step {s}, more than its pass's plan "
+                             f"of {length} blocks of {bits} bits holds: PlanMatches packs the values read into the "
+                             "planned blocks, so this link doesn't hold; read_bits is the step's creditedReadBits")
+        out.append(max(0, r - (length - n) * bits))
+    return tuple(out)
+
+
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
@@ -1495,18 +1571,20 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
     its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
-    memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is its credited
-    receipts at D bits each, at most the bits the circuit reads at the pass's step, so
-    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt.
+    memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
+    circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
+    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`Ledger.linked`), and a plan topped
+    up with filler earns nothing for it; `sample` still charges a whole block for a wrong receipt, as
+    `RequirementMoved` charges a planned block the pass didn't move.
     The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
     session's, since the unproved share may sit in any one window; the link's δ is added to `error` and
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
-    density, epsilon, link_delta = 8 * record.block_bytes, 0.0, 0.0
+    epsilon, link_delta = 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
-            raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
+            raise ValueError("a requirement link whose proofs don't hold credits nothing: pass None, and the credit is "
                              "the node's reads of its store, not the circuit's")
         if any(len(x) != w.passes for w in record.windows for x in (w.steps, w.heads)):
             raise ValueError("a requirement link reads each pass's step and head, and this record's passes name none: "
@@ -1514,11 +1592,8 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         if requirement.mapped(record) is not True:
             raise ValueError("a requirement link whose memory-map unit doesn't make this record's appends (its "
                              "`appends` chain, each pass's head through the appends of the steps below its own, each "
-                             "re-key below the next pass's stale bound) caps nothing: frees, re-keys and append order "
+                             "re-key below the next pass's stale bound) credits nothing: frees, re-keys and append order "
                              "chosen after the seed are advice no term charges")
-        density = requirement.density_bits
-        if type(density) is not int or not 1 <= density <= 8 * record.block_bytes:
-            raise ValueError(f"a link's density is a whole number of bits from 1 to a block's {8 * record.block_bytes}")
         epsilon, link_delta = requirement.epsilon, requirement.delta
         if type(epsilon) not in (int, float) or not 0 <= epsilon <= 1:
             raise ValueError("a link's epsilon is the share of its credit its units' draw leaves unproved, 0 to 1")
@@ -1555,13 +1630,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     def credited_bytes(w: WindowRecord) -> float:
         if requirement is None:
             return sum(w.credited(credit)) * b
-        out = 0
-        for n, s in zip(w.credited(credit), w.steps):
-            r = requirement.read_bits(s)
-            if type(r) is not int or r < 0:
-                raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
-            out += min(n * density, r)
-        return out / 8
+        return sum(linked_bits(w, requirement, b, credit)) / 8
 
     windows, carriers, credits = [], [carried(w) for w in record.windows], [credited_bytes(w) for w in record.windows]
     unproved = epsilon * sum(credits)

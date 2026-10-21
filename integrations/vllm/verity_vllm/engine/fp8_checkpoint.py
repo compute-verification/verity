@@ -71,6 +71,7 @@ QUANTIZATION = {"activation_scheme": "dynamic", "fmt": "e4m3", "quant_method": "
 COPY_PATTERNS = ("*.json", "*.txt", "*.model", "*.py")
 CONFIG = "config.json"
 INDEX = "model.safetensors.index.json"
+LM_HEAD = "lm_head.weight"
 #: rows of W quantized at a time (a multiple of BLOCK): bounds the float32 temporaries to a few hundred MB
 STRIPE = 8 * BLOCK
 _ELEM = {"F64": 8, "I64": 8, "F32": 4, "I32": 4, "BF16": 2, "F16": 2, "I16": 2, "F8_E4M3": 1, "F8_E5M2": 1, "I8": 1, "U8": 1,
@@ -128,7 +129,9 @@ def quantize(w: np.ndarray, s: np.ndarray, block: int = BLOCK) -> np.ndarray:
 class Recipe:
     """What a data-free weight recipe changes in the container: the made weight's dtype, its scale tensor and quantization_config.
     `scales(w)` maps float32 rows of W to their scale rows (`rows_per_scale` weight rows each), `quantize(w, s)` to the stored
-    bytes; `refusal(n, k)` names a shape the recipe cannot make (None = makes it).  `of` is the pin's key naming its BF16 base."""
+    bytes; `refusal(n, k)` names a shape the recipe cannot make (None = makes it).  `of` is the pin's key naming its BF16 base.
+    `lm_head`: the recipe also makes `LM_HEAD` [vocab_size, K] by the same rule, the config's `modules_to_not_convert` is empty,
+    and a checkpoint with tied embeddings or without its own `LM_HEAD` is refused (the embedding, a gather, stays as it is)."""
 
     id: str
     weight_dtype: str
@@ -140,6 +143,7 @@ class Recipe:
     quantize: Callable[[np.ndarray, np.ndarray], np.ndarray]
     quantization: dict[str, Any]
     of: str
+    lm_head: bool = False
 
 
 FP8 = Recipe(id=RECIPE, weight_dtype="F8_E4M3", scale_suffix="weight_scale_inv", rows_per_scale=BLOCK,
@@ -179,7 +183,9 @@ def shard_layout(header: dict[str, Any], vocab: int, recipe: Recipe = FP8) -> li
         shape = [int(d) for d in info["shape"]]
         if len(shape) > 2:
             raise ValueError(f"{name}: a {len(shape)}-D tensor has no place in a dense checkpoint")
-        if is_linear(info, vocab):
+        if recipe.lm_head and name == LM_HEAD and shape[0] != vocab:
+            raise ValueError(f"{name}: {shape} is not [vocab_size {vocab}, K]")
+        if is_linear(info, vocab) or (recipe.lm_head and name == LM_HEAD):
             if info["dtype"] not in _WIDEN or not name.endswith(".weight"):
                 raise ValueError(f"{name}: a 2-D {info['dtype']} tensor that is not a float `.weight`")
             n, k = shape
@@ -274,22 +280,27 @@ def make_shard(src: Path, dst: Path, vocab: int, recipe: Recipe = FP8) -> tuple[
     return digest, {name: dst.name for name, *_ in layout}, n_vocab, sum(b - a for a, b in offsets.values())
 
 
-def dense_vocab(cfg: dict[str, Any]) -> int:
+def dense_vocab(cfg: dict[str, Any], recipe: Recipe = FP8) -> int:
     """The base config's vocabulary size, refusing what the recipe does not make: a quantized base, a MoE (its router is a 2-D
-    weight the integration keeps in bf16, and the integration models no FP8 MoE)."""
+    weight the integration keeps in bf16, and the integration models no FP8 MoE), and under a recipe that makes the LM head, tied
+    embeddings (`tie_word_embeddings` true or absent: the LM head would be the embedding's own tensor)."""
     if cfg.get("quantization_config"):
         raise ValueError(f"the base checkpoint is already quantized ({cfg['quantization_config'].get('quant_method')!r})")
     if cfg.get("num_experts") or cfg.get("num_local_experts"):
         raise ValueError("a mixture-of-experts checkpoint: the recipe makes dense checkpoints only")
     if not isinstance(cfg.get("vocab_size"), int):
         raise ValueError("config.json names no integer vocab_size")
+    if recipe.lm_head and cfg.get("tie_word_embeddings", True) is not False:
+        raise ValueError(f"tie_word_embeddings is {cfg.get('tie_word_embeddings', '<absent>')!r}: {recipe.id} quantizes the LM head, "
+                         "which a tied checkpoint shares with the embedding")
     return cfg["vocab_size"]
 
 
 def fp8_config(base_config: bytes, recipe: Recipe = FP8) -> bytes:
     cfg = json.loads(base_config)
-    dense_vocab(cfg)
-    cfg["quantization_config"] = dict(sorted(dict(recipe.quantization, modules_to_not_convert=["lm_head"]).items()))
+    dense_vocab(cfg, recipe)
+    kept = [] if recipe.lm_head else ["lm_head"]
+    cfg["quantization_config"] = dict(sorted(dict(recipe.quantization, modules_to_not_convert=kept).items()))
     return (json.dumps(cfg, indent=2, ensure_ascii=False) + "\n").encode()
 
 
@@ -307,7 +318,7 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
     if not shards:
         raise ValueError(f"no safetensors shard in {base_dir}")
     base_config = (base_dir / CONFIG).read_bytes()
-    vocab = dense_vocab(json.loads(base_config))
+    vocab = dense_vocab(json.loads(base_config), recipe)
     files: dict[str, dict[str, Any]] = {}
     weight_map: dict[str, str] = {}
     n_vocab = total = 0
@@ -319,6 +330,8 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
         total += n
     if not n_vocab:
         raise ValueError(f"no tensor has the config's vocab_size {vocab} as a dimension: the embedding is not where the recipe looks")
+    if recipe.lm_head and LM_HEAD not in weight_map:
+        raise ValueError(f"{recipe.id} makes {LM_HEAD}, and no shard holds one")
     cfg = fp8_config(base_config, recipe)
     (out_dir / CONFIG).write_bytes(cfg)
     files[CONFIG] = {"sha256": hashlib.sha256(cfg).hexdigest(), "size": len(cfg), "digest_source": "recipe"}

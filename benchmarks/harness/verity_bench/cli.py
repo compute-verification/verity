@@ -62,13 +62,15 @@ def _point(args: Any) -> int:
             raise ValueError(f"checkpoint {spec.preset.model} hashes to {found}, not the spec's model_digest "
                              f"{spec.preset.model_digest}")
     preset, eager = served(spec.preset, spec.eager)
-    arms = resolve_arms(spec.arms, spec.arm_modules)
+    arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     doc = run_benchmark(
         preset,
         arms,
         (item.point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
+        warmups=spec.warmups,
+        max_warmups=spec.max_warmups,
         factory=ProcessEngineFactory(eager=eager),
         git_commit=plan.toolchain.commit,
         config_identity={

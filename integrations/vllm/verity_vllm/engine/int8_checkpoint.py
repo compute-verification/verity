@@ -1,7 +1,9 @@
-"""Int8 checkpoints for the exact-int8 linears, made offline from a pinned BF16 checkpoint: the recipe ``verity-int8-channel127/v1``.
+"""Int8 checkpoints for the exact-int8 linears, made offline from a pinned BF16 checkpoint: the recipes ``verity-int8-channel127/v1``
+and ``/v2``.
 
-    verity-vllm int8-checkpoint make --role ROLE [--hf-home DIR]        re-make a registered int8 pin and check every file's sha256
-    verity-vllm int8-checkpoint pin --base-role ROLE --role ROLE --repo ID [--hf-home DIR]
+    verity-vllm int8-checkpoint make --role ROLE [--hf-home DIR]        re-make a registered int8 pin (under its own recipe) and check
+                                                                          every file's sha256
+    verity-vllm int8-checkpoint pin --base-role ROLE --role ROLE --repo ID [--recipe ID] [--hf-home DIR]
                                                                           make one and print its new manifest entry
 
 The weights the plain step reads (``engine.int8_exact``, ``TargetProfile.int8_exact``): ``benchmarks/ppl/steps.py``'s
@@ -20,10 +22,15 @@ N and K must be multiples of 8 (``torch._int_mm``'s shape rule on CUDA), else th
 ``quantization_config = {"modules_to_not_convert": ["lm_head"], "quant_method": "verity_int8", "weight_max": 127}``, the vLLM
 method ``engine.int8_vllm`` registers.  The pin's ``int8_of`` names its BF16 base.  Int8 pins live in
 ``manifests/checkpoints-int8.json`` (`config.SIBLING_MANIFESTS`), which ``config.checkpoint_entries`` reads with ``checkpoints.json``.
+
+``verity-int8-channel127/v2`` is v1 plus the LM head: ``lm_head.weight`` [vocab_size, K] is made by the same row rule (an int8
+``lm_head.weight`` and an F32 ``lm_head.weight_scale`` [vocab_size, 1]), and ``modules_to_not_convert`` is ``[]``, so vLLM's
+``ParallelLMHead`` serves the int8 linear too.  The embedding stays as the base has it (a gather, not a product).  A config with
+``tie_word_embeddings`` true or absent is refused, as is a checkpoint without an ``lm_head.weight`` of its own.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -34,6 +41,7 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 RECIPE = "verity-int8-channel127/v1"
+RECIPE_V2 = "verity-int8-channel127/v2"
 QUANTIZATION = {"quant_method": TargetProfile.INT8_EXACT_QUANTIZATION, "weight_max": E.W_MAX}
 
 
@@ -53,6 +61,16 @@ def quantize(w: np.ndarray, s: np.ndarray) -> np.ndarray:
 INT8 = F.Recipe(id=RECIPE, weight_dtype="I8", scale_suffix="weight_scale", rows_per_scale=1, scale_shape=lambda n, k: [n, 1],
                 refusal=lambda n, k: "not a multiple of 8 on both axes" if n % 8 or k % 8 else None,
                 scales=channel_scales, quantize=quantize, quantization=QUANTIZATION, of="int8_of")
+INT8_V2 = replace(INT8, id=RECIPE_V2, lm_head=True)
+RECIPES = {r.id: r for r in (INT8, INT8_V2)}
+
+
+def recipe_of(entry: dict) -> F.Recipe:
+    """The int8 recipe a pin was made by (its `recipe.id`)."""
+    rid = (entry.get("recipe") or {}).get("id")
+    if rid not in RECIPES:
+        raise C.UsageError(f"{entry.get('role')}: recipe {rid!r} is none of the int8 recipes {sorted(RECIPES)}")
+    return RECIPES[rid]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,10 +94,14 @@ class PinOptions:
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None)
     by: str = option("--by", default="int8-checkpoint pin", help="resolved_by of the entry")
     at: str = option("--at", help="resolved_at of the entry (UTC, ISO 8601)")
+    recipe: str = option("--recipe", default=RECIPE, choices=sorted(RECIPES), help="the int8 recipe (v2 also makes the LM head)")
 
 
 COMMANDS = {"make": MakeOptions, "pin": PinOptions}
 
 
 def main(a: MakeOptions | PinOptions) -> int:
-    return F.run(a, INT8, "int8-checkpoint")
+    if isinstance(a, PinOptions):
+        return F.run(a, RECIPES[a.recipe], "int8-checkpoint")
+    entry = next((c for c in C.checkpoint_entries(a.checkpoints) if c.get("role") == a.role), None)
+    return F.run(a, recipe_of(entry) if entry is not None else INT8, "int8-checkpoint")

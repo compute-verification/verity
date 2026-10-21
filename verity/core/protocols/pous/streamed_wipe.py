@@ -29,9 +29,11 @@ session has four steps:
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
-cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict and the egress the
-network certifier counted, in whole MiB (15 bits), which the bound reads.  `retained_bits` and `challenges_for` are the
-guarantee's bound, which says how much of the prior content can survive an accepted wipe.
+cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
+verdict and the egress the network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
+(`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in `verity/core/devices/memory_challenger/lean/`, reading the
+records' `to_json`), and `verdict` here is the reference that port is difftested against.  `retained_bits` and
+`challenges_for` are the guarantee's bound, which says how much of the prior content can survive an accepted wipe.
 """
 
 from __future__ import annotations
@@ -130,7 +132,7 @@ class WipeParams:
 
     @property
     def covered(self) -> bool:
-        """Whether the guarantee covers this reveal: the sequential one, one index a batch."""
+        """Whether the guarantee covers this reveal: the sequential one, one index a batch.  `verdict` refuses any other."""
         return self.batch == 1
 
     @property
@@ -152,6 +154,10 @@ class WipeCommitment:
                 "session": self.session.hex(), "labels": p.labels, "label_bytes": LABEL_BYTES, "k": p.k,
                 "batch": p.batch, "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers],
                 "clock": "CLOCK_MONOTONIC ns"}
+
+    def to_json(self) -> dict[str, Any]:
+        """The commitment as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Commitment.ofJson`): its header."""
+        return self.header()
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +181,10 @@ class BatchRecord:
         return (self.b.to_bytes(4, "big") + self.first.to_bytes(4, "big") + self.count.to_bytes(4, "big")
                 + self.send_ns.to_bytes(8, "big") + self.receipt_ns.to_bytes(8, "big") + self.wrong.to_bytes(4, "big")
                 + self.digest)
+
+    def to_json(self) -> dict[str, Any]:
+        return {"b": self.b, "first": self.first, "count": self.count, "send_ns": self.send_ns,
+                "receipt_ns": self.receipt_ns, "wrong": self.wrong, "digest": self.digest.hex()}
 
 
 def batch_digest(indices: Sequence[int], answers: bytes) -> bytes:
@@ -205,6 +215,13 @@ class SignedWipe:
 
     def message(self) -> bytes:
         return message(self.commitment, self.ended, self.fill_start_ns, self.fill_end_ns, self.batches, self.egress_bits)
+
+    def to_json(self) -> dict[str, Any]:
+        """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
+        return {"commitment": self.commitment.to_json(), "ended": self.ended, "fill_start_ns": self.fill_start_ns,
+                "fill_end_ns": self.fill_end_ns, "batches": [r.to_json() for r in self.batches],
+                "egress_bits": self.egress_bits, "scheme": self.scheme, "public_key": self.public_key.hex(),
+                "signature": self.signature.hex()}
 
 
 def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end_ns: int,
@@ -338,8 +355,8 @@ class Prover:
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
 EGRESS_MAX_UNITS = (1 << 15) - 1
-"""A proof unit's outputs are at most 16 bits, the verdict's one and the count's 15, so the count saturates at 32 GiB
-less one MiB."""
+"""The verdict's unit stays in the least public size class, 16 bits: the verdict's one and the count's 15, so the count
+saturates at 32 GiB less one MiB."""
 
 
 def egress_units(egress_bits: int) -> int:
@@ -363,7 +380,8 @@ class Verdict:
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published when it opened.  It fails closed: an unknown
-    scheme, an untrusted key or a bad signature rejects whatever the batches say."""
+    scheme, an untrusted key or a bad signature rejects whatever the batches say, and a commitment whose batch size the
+    guarantee doesn't cover (`WipeParams.covered`) rejects the session however it ran."""
     reasons: list[str] = []
     verify = schemes.get(signed.scheme)
     if verify is None:
@@ -380,6 +398,8 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     p = commitment.params
+    if not p.covered:
+        reasons.append(f"batch size {p.batch} is uncovered: the guarantee covers the sequential reveal, batch size 1")
     if signed.ended != COMPLETE or len(signed.batches) != p.batches:
         reasons.append(f"the session ended {signed.ended} after {len(signed.batches)} of {p.batches} batches")
     for b, r in enumerate(signed.batches):

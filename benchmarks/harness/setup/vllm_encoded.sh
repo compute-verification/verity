@@ -41,7 +41,7 @@ else
   VE_HOW=built
   VE_TMP=$(mktemp -d "$VE_CACHE/.$VE_KEY.XXXXXX")
   # A preempted point (SIGTERM) takes its partial build with it.
-  trap 'kill "${VE_PIDS[@]}" 2> /dev/null; wait; rm -rf "$VE_TMP"; exit 143' TERM INT
+  trap 'kill "${VE_PIDS[@]}" 2> /dev/null || true; wait; rm -rf "$VE_TMP"; exit 143' TERM INT
   declare -A VE_PIDS=()
   for lib in "${VE_ORDER[@]}"; do
     # shellcheck disable=SC2086

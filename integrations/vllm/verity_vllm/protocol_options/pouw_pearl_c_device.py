@@ -32,10 +32,11 @@ device's primary context:
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
-* **Each pass** (`begin`, `end`): the transcript is every call's A root and one tile tree over every leaf, in call order,
-  under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the pass also writes what the
-  prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per weight, the leaves, the
-  tile tree and the manifest (`write_manifest`) that the reference verifier reads
+* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which a server calls at each engine step's end,
+  since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root and one tile tree over
+  every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
+  pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels
+  per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
@@ -318,7 +319,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
 
 class PearlCDeviceRun(GraphCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
-    the passes the bench and the verifier need (`begin`, `end`)."""
+    the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
@@ -692,6 +693,13 @@ class PearlCDeviceRun(GraphCalls):
                 out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
             self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
         self.details["passes"].append(out)
+        return out
+
+    def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None) -> dict[str, Any]:
+        """`end` the open pass and `begin` the next (with `begin`'s arguments), so a pass is never left ended: a call after
+        this lands in the next pass, and `finish` doesn't end this one twice.  Returns the ended pass's commitment."""
+        out = self.end()
+        self.begin(retain, run, schedule)
         return out
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
