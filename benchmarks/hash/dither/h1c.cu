@@ -69,8 +69,11 @@
 #ifndef H1C_SEGMID
 #define H1C_SEGMID 0
 #endif
-#ifndef H1C_SMINB
-#define H1C_SMINB 1
+// unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
+#ifdef H1C_SMINB
+#define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
+#else
+#define H1C_SEGS_BOUNDS __launch_bounds__(HT)
 #endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID),
               "H1C_LVF, H1C_DOMSEG, H1C_MK and H1C_SEGMID are H1C_HB's");
@@ -801,8 +804,8 @@ __device__ __forceinline__ void seg_head(Hb& s, const H1Tab& T, int j, int ns) {
 constexpr int SEGMID_MAX = 16;
 
 // dom = 1 (H1C_DOMSEG): block row 0 is h1c_domains' work, a thread a table, and row y + 1 table y's segments
-extern "C" __global__ void __launch_bounds__(HT, H1C_SMINB) h1c_segs(H1Tab* __restrict__ tabs, int ntab,
-                                                                    const int* __restrict__ step, int dom) {
+extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step,
+                                                   int dom) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   if ((int)blockIdx.y < dom) {
     const int t = blockIdx.x * blockDim.x + threadIdx.x;
