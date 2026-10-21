@@ -53,7 +53,30 @@ def test_legalize_splits_a_root_segment_across_two_groups_port_bits_and_unrolls_
     before = T.ordered(tmpl)
     assert not before["ok"] and before["padding"] == 1, before
     legal, st = T.legalize(tmpl)
-    assert st == {"split_segs": 1, "single_calls": 2}, st
+    assert st == {"split_segs": 1, "split_runs": 0, "single_calls": 2}, st
     assert T.ordered(legal)["ok"] and T.ordered(T.parse(T.write(legal)))["ok"]
     assert T.flat_lines(T.unroll(legal)) == T.flat_lines(T.unroll(tmpl))
     assert T.flat_lines(T.unroll(legal))[1 + 256:1 + 258] == ["1 128 1 127", "1 129 1 128"]
+
+
+def _broadcast(nb: int = 6, w: int = 80) -> list[str]:
+    """Blocks of ``w`` rows from 128: a port bit's copy, a chain, and a last row reading the chain's end and block 0's
+    first row, which in block 0 is a column of its own."""
+    k = 128 + nb * w
+    rows = {i: f"1 {i} 1 {i}" for i in range(8)}
+    for b in range(nb):
+        o = 128 + b * w
+        rows[o] = f"1 0 1 {k}"
+        rows |= {o + t: f"1 {o + t - 1} 1 {k}" for t in range(1, w - 1)}
+        rows[o + w - 1] = f"1 {o + w - 2} 1 128"
+    rows[k] = f"1 {k} 1 {k}"
+    return [f"flock-ir-unit/v2 bcast {k + 1} {k} 1 0 1 1 8 0"] + [rows.get(i, "0 0") for i in range(k + 1)]
+
+
+def test_the_emitter_makes_no_run_whose_copy_0_reads_its_own_columns_through_an_input(monkeypatch):
+    lines = _broadcast()
+    t, stats = T.emit(T.parse_flat(lines))
+    assert stats["order"]["ok"] and stats["unaligned_runs"] > 0, stats
+    assert T.flat_lines(T.unroll(T.parse(T.write(t)))) == lines
+    monkeypatch.setattr(T._Emitter, "_aligned", lambda self, lv, i0, P, m, D: m)
+    assert T.emit(T.parse_flat(lines))[1]["order"]["late"] > 0

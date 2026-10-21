@@ -326,11 +326,17 @@ def _cut(segs, cuts: list[int]) -> tuple[tuple[int, int, int], ...]:
 def legalize(t: Tmpl) -> tuple[Tmpl, dict]:
     """``t`` with every segment that straddles what ``ordered`` tells apart split: a Definition's own columns and its
     inputs, and in the root the input rows' end, an input group's port bits and the constant. A segment of a run of
-    copies that steps can't be split for every copy at once, so its run becomes single copies first, as does a root run
-    straddling the input rows' end. It unrolls to the same rows."""
+    copies that steps can't be split for every copy at once, so its run becomes single copies first. A root run
+    straddling the input rows' end becomes the run below it, the copy across it and the run above. It unrolls to the same
+    rows."""
     ic, ports = _ports(t)
-    st = {"split_segs": 0, "single_calls": 0}
+    st = {"split_segs": 0, "split_runs": 0, "single_calls": 0}
     defs = list(t.defs)
+
+    def sub(c: Call, a: int, b: int) -> Call:
+        return Call(c.e, b - a, c.base + a * c.stride, c.stride,
+                    tuple((ln, at + a * step, step if b - a > 1 else 0) for ln, at, step in c.segs))
+
     for d, D in enumerate(defs):
         root = d == t.root
         cuts = [D.cols] + ([ic, D.cols - 1] + [x for p in ports for x in p] if root else [])
@@ -340,16 +346,23 @@ def legalize(t: Tmpl) -> tuple[Tmpl, dict]:
             hi = at + max(c.count - 1, 0) * step + ln
             return ln > 0 and any(at < x < hi for x in cuts)
 
+        def pieces(c: Call) -> list[Call]:
+            w = defs[c.e].cols
+            if c.count > 1 and root and c.base < ic < c.base + (c.count - 1) * c.stride + w:
+                j1 = (ic - c.base - w) // c.stride + 1 if c.base + w <= ic else 0
+                j2 = -(-(ic - c.base) // c.stride)
+                st["split_runs"] += 1
+                st["single_calls"] += j2 - j1
+                return ((pieces(sub(c, 0, j1)) if j1 else []) + [sub(c, j, j + 1) for j in range(j1, j2)]
+                        + (pieces(sub(c, j2, c.count)) if j2 < c.count else []))
+            if c.count > 1 and any(straddles(c, s) and s[2] for s in c.segs):
+                st["single_calls"] += c.count
+                return [sub(c, j, j + 1) for j in range(c.count)]
+            return [c]
+
         calls = []
         for c in D.calls:
-            edge = root and c.base < ic < c.base + max(c.count - 1, 0) * c.stride + defs[c.e].cols
-            if c.count > 1 and (edge or any(straddles(c, s) and s[2] for s in c.segs)):
-                parts = [Call(c.e, 1, c.base + j * c.stride, c.stride,
-                              tuple((ln, at + j * step, 0) for ln, at, step in c.segs)) for j in range(c.count)]
-                st["single_calls"] += c.count
-            else:
-                parts = [c]
-            for p in parts:
+            for p in pieces(c):
                 segs = _cut(p.segs, cuts) if any(straddles(p, s) for s in p.segs) else p.segs
                 st["split_segs"] += len(segs) - len(p.segs)
                 calls.append(Call(p.e, p.count, p.base, p.stride, segs))
@@ -383,6 +396,7 @@ class _Emitter:
         self.ids: dict[Def, int] = {}
         self.cshape: list[tuple] = []  # (callee, count, stride, segment lengths, segment steps)
         self.cids: dict[tuple, int] = {}
+        self.unaligned = 0  # candidate runs cut short or dropped by `_aligned`
 
     def _def(self, d: Def) -> int:
         e = self.ids.get(d)
@@ -410,7 +424,7 @@ class _Emitter:
         n, k = len(lv.start), self.k
         lens = np.diff(lv.ptr)
         mx = int(lens.max()) if n else 0
-        pw = np.cumprod(np.full(mx + 1, _B, np.uint64))
+        pw = np.cumprod(np.full(max(mx, self.gram) + 1, _B, np.uint64))
         sig = np.empty(n, np.uint64)
         for a in range(0, n, _CHUNK):
             b = min(n, a + _CHUNK)
@@ -465,6 +479,36 @@ class _Emitter:
                 break
             grow *= 2
         return m, D
+
+    def _aligned(self, lv: _Level, i0: int, P: int, m: int, D: np.ndarray) -> int:
+        """How many of the run's ``m`` copies keep each reference of a copy, as a span of columns, wholly the copy's own
+        (stepping with it), wholly before the copy or wholly after it, so that ``Tmpl.ordered`` reads the run's
+        bindings as ordered; 0 if copy 0 doesn't."""
+        o0 = int(lv.start[i0])
+        L = int(lv.start[i0 + P]) - o0
+        p0, p1 = int(lv.ptr[i0]), int(lv.ptr[i0 + P])
+        r = lv.refs[p0:p1].astype(np.int64)
+        s = D.astype(np.int64)
+        n = np.ones(p1 - p0, np.int64)
+        const = np.zeros(p1 - p0, bool)
+        for u in range(i0, i0 + P):
+            a, b = int(lv.ptr[u]) - p0, int(lv.ptr[u + 1]) - p0
+            sid = int(lv.shape[u])
+            if sid >= _ROW:
+                n[a:b] = self._spans(sid, b - a)
+            else:
+                const[a:b] = r[a:b] == self.k
+        own = (o0 <= r) & (r + n <= o0 + L) & (s == L)
+        before, after = r + n <= o0, r >= o0 + L
+        if (~(const | own | before | after)).any():
+            return 0
+        up = before & ~own & ~const & (s > L)
+        if up.any():
+            m = min(m, int(((o0 - r[up] - n[up]) // (s[up] - L)).min()) + 1)
+        down = after & ~const & (s < L)
+        if down.any():
+            m = min(m, int(((r[down] - o0 - L) // (L - s[down])).min()) + 1)
+        return m
 
     def _make(self, lv: _Level, i0: int, P: int, D: np.ndarray) -> tuple[int, list[tuple[int, int, int]]]:
         """Copy 0 of a run as a Definition, and the run's input blocks ``(lo, hi, step)`` in global columns."""
@@ -549,6 +593,10 @@ class _Emitter:
                     break
                 if shape[i] == shape[j]:
                     m, D = self._run(lv, i, j - i, limit)
+                    if m >= 2:
+                        m2 = self._aligned(lv, i, j - i, m, D)
+                        self.unaligned += m2 < m
+                        m = m2
                     if m >= 2 and m * (j - i) > best[0] * best[1]:
                         best = (m, j - i, D)
                 j = nxt[j]
@@ -633,7 +681,7 @@ class _Emitter:
                  "def_calls": sum(len(d.calls) for d in t.defs),
                  "segs": sum(len(c.segs) for d in t.defs for c in d.calls), "root_rows": len(rows),
                  "root_refs": sum(len(a) + len(b) for _, a, b in rows), "root_calls": len(calls),
-                 "shared_defs": sum(1 for v in uses.values() if v > 1), "legalized": legal, "order": ordered(t)}
+                 "shared_defs": sum(1 for v in uses.values() if v > 1), "unaligned_runs": self.unaligned, "legalized": legal, "order": ordered(t)}
         return t, stats
 
 

@@ -205,7 +205,8 @@ theorem portSpan_mono {t : Tmpl} {lo hi lo' hi' : Nat} (h : t.portSpan lo hi = t
 
 /-- **A copy writes only its own columns.** -/
 theorem place_local {defs : Array Def} {k : Nat}
-    (hfits : ∀ d (df : Def), defs[d]? = some df → df.fits defs = true) (fuel : Nat) : ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' →
+    (hfits : ∀ (d : Nat) (df : Def), defs[d]? = some df → df.fits defs = true) (fuel : Nat) :
+    ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' →
       ∀ x, (x < o ∨ o + (defs.getD d default).cols ≤ x) → Same x acc' acc := by
   induction fuel with
   | zero => intro d o inp acc acc' h; cases h
@@ -259,7 +260,7 @@ theorem row_reads {df : Def} {o ic k : Nat} {P : Nat → Prop} {inp : List Nat} 
 
 /-- **An ordered copy past the input rows keeps every row reading only columns it may.** -/
 theorem place_good {defs : Array Def} {k ic : Nat} {P : Nat → Prop} {F : Array Bool}
-    (hF : ∀ d (df : Def), defs[d]? = some df → F.getD d false = true → df.ordered F = true) (fuel : Nat) :
+    (hF : ∀ (d : Nat) (df : Def), defs[d]? = some df → F.getD d false = true → df.ordered F = true) (fuel : Nat) :
     ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' → F.getD d false = true → ic ≤ o →
       (∀ x ∈ inp, Reads ic k P o x) → Good ic k P acc → Good ic k P acc' := by
   induction fuel with
@@ -313,10 +314,10 @@ theorem rows_good {t : Tmpl} {acc : Acc} (ho : t.ordered = true) (hr : t.rows = 
   unfold Tmpl.ordered at ho
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at ho
   obtain ⟨hdefs, hroot⟩ := ho
-  have hfits : ∀ d (df : Def), t.defs[d]? = some df → df.fits t.defs = true := fun d df h => by
+  have hfits : ∀ (d : Nat) (df : Def), t.defs[d]? = some df → df.fits t.defs = true := fun d df h => by
     obtain ⟨hd, e⟩ := getD_of_some h
     rw [← e]; exact (hdefs d hd).1
-  have hF : ∀ d (df : Def), t.defs[d]? = some df → (flags t.defs).getD d false = true →
+  have hF : ∀ (d : Nat) (df : Def), t.defs[d]? = some df → (flags t.defs).getD d false = true →
       df.ordered (flags t.defs) = true := fun d df h hf => by
     obtain ⟨hd, e⟩ := getD_of_some h
     rw [← e]; exact imp_of_or (hdefs d hd).2 hf
