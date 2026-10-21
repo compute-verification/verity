@@ -46,10 +46,8 @@ theorem commitRowsP_tree {hs : Hashes V} {ms : MerkleScheme} {nd : ByteArray →
   generalize hF : forIn (m := V) (β := Array (Array ByteArray) × Array ByteArray) [0:lv.d - lv.cap] (#[L 0], L 0) _ = e
   obtain ⟨r, hr, hI⟩ := FlockComplete.forIn_ok_inv' (lv.d - lv.cap) (#[L 0], L 0)
     (fun i (p : Array (Array ByteArray) × Array ByteArray) => p.1 = (Array.range (i + 1)).map L ∧ p.2 = L i)
-    ⟨by first
-        | simp
-        | simp only [Array.range_succ, Array.append_singleton, Array.range_eq_empty_iff.mpr (rfl : 0 = 0),
-            Array.push_empty, Array.map_singleton], rfl⟩ (by
+    ⟨show #[L 0] = (Array.range 1).map L by
+      rw [show Array.range 1 = #[0] by first | rfl | simp [Array.range_succ_eq_map], Array.map_singleton], rfl⟩ (by
       intro i _ p hp
       refine ⟨(p.1.push (L (i + 1)), L (i + 1)), ?_, ?_, rfl⟩
       · rw [hp.2, FlockComplete.mapM_ok _ fun i => hn _ _]
