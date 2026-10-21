@@ -20,8 +20,10 @@
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
 // H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
 // than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
-// block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them, and
-// H1C_MK = 1 a leaf's M_key y from M_key's columns, a block's stage of them in shared memory, not 192 byte-table rows.
+// block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them,
+// H1C_MK = 1 a leaf's M_key y from M_key's columns, a block's stage of them in shared memory, not 192 byte-table rows, and
+// H1C_MID = 1 (with H1C_MK) a leaf's x, c, h and frame hashes from the block's snapshots of their messages' constant
+// heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -37,7 +39,11 @@
 #ifndef H1C_MK
 #define H1C_MK 0
 #endif
+#ifndef H1C_MID
+#define H1C_MID 0
+#endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
+static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -825,16 +831,40 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
   __syncthreads();
 }
 
-// row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf
-__device__ __forceinline__ void leaf_x(const H1Tab& T, long long i, uint8_t* b, u64 x[8]) {
-  const int ns = nseg_of(T.len);
-  Hb s;
-  hb_init(s, b);
+// row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf.  sn (H1C_MID,
+// leaf_head's snapshots) null: every message from its first byte
+constexpr int SNW = 32;  // a snapshot's words: hb_save's 9 and a partial block
+__device__ __forceinline__ void x_head(Hb& s, const H1Tab& T) {
   hb_bytes(s, HC.qtag, HC.qtag_len);
   hb_be(s, 8ull * T.len, 8);
-  hb_be(s, (u64)ns, 8);
+  hb_be(s, (u64)nseg_of(T.len), 8);
   hb_be(s, 1024, 4);
   hb_zeros(s, 128 - HC.qtag_len - 20);
+}
+__device__ __forceinline__ void frame_head(Hb& s, const H1Tab& T) {
+  hb_frame(s, "leaf", 4);
+  hb_be(s, 64, 8);
+  hb_words(s, T.dom, 8);
+}
+// snapshot k of table T's constant heads: 0 x's header, 1 salt_prefix, 2 leaf_prefix, 3 the frame leaf's prefix
+__device__ __forceinline__ void leaf_head(const H1Tab& T, int k, uint8_t* b, u64* o) {
+  Hb s;
+  hb_init(s, b);
+  if (k == 0) x_head(s, T);
+  else if (k == 1) hb_words(s, HC.salt_prefix, 16);
+  else if (k == 2) hb_words(s, HC.leaf_prefix, 16);
+  else frame_head(s, T);
+  hb_save(s, o);
+}
+__device__ __forceinline__ void leaf_x(const H1Tab& T, long long i, uint8_t* b, u64 x[8], const u64* sn = nullptr) {
+  const int ns = nseg_of(T.len);
+  Hb s;
+  if (sn) {
+    hb_load(s, sn, b);
+  } else {
+    hb_init(s, b);
+    x_head(s, T);
+  }
   hb_words(s, T.segs + i * ns * 8, 8 * ns);
   hb_final(s, x);
 }
@@ -860,24 +890,34 @@ __device__ __forceinline__ void leaf_salt(const H1Tab& T, long long i, const int
   }
 }
 __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
-                                         u64 mk[8], u64 out[8]) {
+                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
   u64 c[8], h[8];
   Hb s;
-  hb_init(s, b);
-  hb_words(s, HC.salt_prefix, 16);
+  if (sn) {
+    hb_load(s, sn + SNW, b);
+  } else {
+    hb_init(s, b);
+    hb_words(s, HC.salt_prefix, 16);
+  }
   hb_words(s, y, 24);
   hb_final(s, c);
 #pragma unroll
   for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
-  hb_init(s, b);
-  hb_words(s, HC.leaf_prefix, 16);
+  if (sn) {
+    hb_load(s, sn + 2 * SNW, b);
+  } else {
+    hb_init(s, b);
+    hb_words(s, HC.leaf_prefix, 16);
+  }
   hb_words(s, mk, 8);
   hb_words(s, c, 8);
   hb_final(s, h);
-  hb_init(s, b);
-  hb_frame(s, "leaf", 4);
-  hb_be(s, 64, 8);
-  hb_words(s, T.dom, 8);
+  if (sn) {
+    hb_load(s, sn + 3 * SNW, b);
+  } else {
+    hb_init(s, b);
+    frame_head(s, T);
+  }
   hb_uint(s, (u64)i);
   hb_uint(s, (u64)i);
   hb_be(s, (u64)HC.schema_len, 8);
@@ -901,11 +941,19 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
     // a block with a row leaf: every thread runs hb_mk's barriers, the row leaves' threads hash their salts first
     const bool real = i < T.count;
     u64 x[8], y[24], mk[8];
+#if H1C_MID
+    __shared__ u64 sn[4 * SNW];  // lane 0 of warp k writes snapshot k; hb_mk's first barrier publishes them
+    static_assert(HT == 4 * 32, "a warp a snapshot");
+    if ((threadIdx.x & 31) == 0) leaf_head(T, threadIdx.x >> 5, b, sn + SNW * (threadIdx.x >> 5));
+    const u64* snp = sn;
+#else
+    const u64* snp = nullptr;
+#endif
     if (real) leaf_salt(T, i, step, b, y);
     hb_mk(y, mk, btab, bf, real);
     if (real) {
-      leaf_x(T, i, b, x);
-      leaf_out(T, i, b, x, y, mk, out);
+      leaf_x(T, i, b, x, snp);
+      leaf_out(T, i, b, x, y, mk, out, snp);
     }
   }
   if (i >= width || (i < T.count && !T.data)) return;
