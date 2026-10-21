@@ -39,8 +39,8 @@ def LeafLanesSound : Prop :=
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
     (out : ∀ x w i k, (sess x w i k).Out) (ok : String) (dq : List ℤ → ℤ)
     (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
-    (decL : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
-    (decC : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → CombineView nw)
+    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),

@@ -19,7 +19,8 @@ a token, so `Proofs/Accounting.lean` imports it.
 
 namespace Flock.SoundAtBridge.RowsSession
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkHidden
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkReg
 
 variable (s : RowsSession)
 
@@ -54,8 +55,8 @@ decodes (`LeafShared` at one path) give every lane's `LaneOk` and the combine's 
 partials record `parts`, and the lanes cover the leaf. -/
 theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32}
-    {sess : Option (Fin 32) → RowsSession} {decL : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
-    {decC : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → CombineView nw} {pub : Pub}
+    {sess : Option (Fin 32) → RowsSession} {decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
+    {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} {pub : Pub}
     {parts : Fin 32 → Fin nw → BitVec 32} {receipt : Fin nw → BitVec 32} {L : Leaf K}
     (hC : Accounting.Assumptions.TS.LeafChecks dq part sess decL decC)
     (hL : ∀ l, decL (sess (some l)) (openedReg (sess (some l))) = laneView L pub (parts l) l)
@@ -107,7 +108,7 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
         (out x w i k).2.1 ≠ Finset.univ := by
     intro x ⟨hacc, hrel⟩
     by_contra hno
-    push_neg at hno
+    push Not at hno
     apply hrel
     refine unitServed_of (hC x w i) ((hSh x w i).1) ((hSh x w i).2) fun k => ?_
     obtain ⟨hk1, hk2⟩ := hno k (Finset.mem_univ _)

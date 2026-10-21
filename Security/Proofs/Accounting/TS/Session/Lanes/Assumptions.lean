@@ -40,8 +40,8 @@ y-XOR and `2s + 1` its z-XOR). -/
 def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (sess : Option (Fin 32) → RowsSession)
-    (decL : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
-    (decC : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
+    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
   (∀ l (vals : Fin (sess (some l)).Circ.N → Bool),
       (∀ u, ∀ g ∈ (sess (some l)).P.io u, (sess (some l)).Circ.eval vals g = vals g) →
       (decL (sess (some l)) (rowsReg (sess (some l)) vals)).ok = true →
@@ -72,8 +72,8 @@ It holds by construction when the service registers each committed row once and 
   statement's `ok` row, at their known content, as ports of `own`. -/
 def LeafShared {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
-    (decL : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
-    (decC : ∀ s : RowsSession, (ℕ → ℕ → Option Bool) → CombineView nw)
+    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K) :
     Prop :=
