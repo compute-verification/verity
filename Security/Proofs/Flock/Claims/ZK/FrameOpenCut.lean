@@ -51,26 +51,29 @@ theorem l0Body_zero : l0Body P T cap n k0 y nb msg e0 e1 0 =
     P ++ encs [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap, .label Zk.LABEL_OPEN.toUTF8] ++
       (Frame.sq 2 n).enc := by
   unfold l0Body
-  split_ifs <;> first | rfl | omega
+  rw [if_pos (show (0 : ℕ) = 0 from rfl)]
 
 theorem l0Body_one : l0Body P T cap n k0 y nb msg e0 e1 1 =
     encs (Claims.ZKServer.oodFr y nb) ++ (Frame.sq 1 1).enc := by
   unfold l0Body
-  split_ifs <;> first | rfl | omega
+  rw [if_neg (show ¬ (1 : ℕ) = 0 by omega), if_pos (show (1 : ℕ) = 1 from rfl)]
 
 theorem l0Body_msg {i : ℕ} (hi : i < k0) : l0Body P T cap n k0 y nb msg e0 e1 (i + 2) =
     encs (Claims.ZKServer.pairFr (msg i).1 (msg i).2) ++ (Frame.sq 2 2).enc := by
   unfold l0Body
-  split_ifs <;> first | rfl | omega
+  rw [if_neg (show ¬ i + 2 = 0 by omega), if_neg (show ¬ i + 2 = 1 by omega),
+    if_pos (show i + 2 < k0 + 2 by omega), Nat.add_sub_cancel]
 
 theorem l0Body_e : l0Body P T cap n k0 y nb msg e0 e1 (k0 + 2) =
     encs (Claims.ZKServer.pairFr e0 e1) ++ (Frame.sq 2 2).enc := by
   unfold l0Body
-  split_ifs <;> first | rfl | omega
+  rw [if_neg (show ¬ k0 + 2 = 0 by omega), if_neg (show ¬ k0 + 2 = 1 by omega),
+    if_neg (show ¬ k0 + 2 < k0 + 2 by omega), if_pos (show k0 + 2 = k0 + 2 from rfl)]
 
 theorem l0Body_r1 : l0Body P T cap n k0 y nb msg e0 e1 (k0 + 3) = (Frame.sq 2 2).enc := by
   unfold l0Body
-  split_ifs <;> first | rfl | omega
+  rw [if_neg (show ¬ k0 + 3 = 0 by omega), if_neg (show ¬ k0 + 3 = 1 by omega),
+    if_neg (show ¬ k0 + 3 < k0 + 2 by omega), if_neg (show ¬ k0 + 3 = k0 + 2 by omega)]
 
 end Body
 
@@ -186,8 +189,10 @@ theorem sampleKP_stop (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {
   exact LigLock.bind_go_err (squeezeP_cut_err coin 2 two_ne_zero t hl)
 
 theorem absorbK_ok (v : F256) (t : Transcript) :
-    absorbK v t = .ok ((), { t with pending := (#[v.c0, v.c1] : Array F128).foldl F128.pushBytes
-      (t.pending ++ header 3 2 (#[v.c0, v.c1] : Array F128).size) }) := rfl
+    absorbK v t =
+      .ok ((), { t with
+        pending := (#[v.c0, v.c1] : Array F128).foldl F128.pushBytes
+          (t.pending ++ header 3 2 (#[v.c0, v.c1] : Array F128).size) }) := rfl
 
 theorem pow_ok (v : UInt64) (t : Transcript) :
     pow v t = .ok ((), { t with pending := t.pending ++ header 5 0 (le64 v).size ++ padded (le64 v) }) := rfl
@@ -229,10 +234,11 @@ theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k 
 /-! ## The cut opening -/
 
 /-- The frames' bytes, step by step. -/
-macro "l0_simp" : tactic => `(tactic| (simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc,
-  absorbSlice_enc, afterSq, Claims.ZKServer.empty_toList, Array.toList_toArray, Claims.ZKServer.oodFr,
-  Claims.ZKServer.pairFr, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append,
-  List.append_assoc]; try rfl))
+macro "l0_simp" : tactic => `(tactic| (
+  simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+    Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+    List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+  try rfl))
 
 /-- **Level 0's masked opening, cut round by round**: answered by `asksCut` from `l` and cut `j < k_0 + 4` rounds on, the
 masked Ligerito at any pads `h` and nonces stops past the openings having sent level 0's first `j + 1` bodies
@@ -332,7 +338,7 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
         intro tt' he
         rw [show i + 3 = sch.k0 + 2 by omega, l0BodyAt_e, ← hlast]
         simp only [Claims.toMsg, framed_enc, he]
-        rfl
+        try rfl
       by_cases hj3 : j = i + 3
       · subst hj3
         refine cutStop_bind (cutStop_err (sampleKP_stop coin _ (by simp only [Array.size_push]; omega)) ?_)
