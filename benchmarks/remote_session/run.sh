@@ -41,9 +41,10 @@
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
-# are, under ROLE=both too: with `--challenger serve --challenger-key DIR` each session's coins come from the challenger's own process,
-# `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
-# ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
+# are, under ROLE=both too: with `--challenger serve --challenger-key DIR` each session's coins come from the
+# challenger's own process, `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under
+# out/challenger. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it
+# (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
 # lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
 # `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
