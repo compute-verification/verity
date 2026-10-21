@@ -93,28 +93,35 @@ def analyse(path: str, arm: str | None) -> dict:
 
 
 def idle(ks: list[tuple[str, int, int, int]], uq: int, steps: int) -> dict:
-    """The units stream's gaps (ms a step) by what likely released its next kernel: the part of the last kernel on
-    another stream to end inside the gap ("none": no kernel ended in it, the host's launch), and by the next kernel's
-    part on the units stream."""
+    """The units stream's gaps over 1 us in each step (the kernels after one dithera_commit up to the next), by the
+    next kernel's part and what likely released it: the part of the last kernel on another stream to end inside the
+    gap ("none": none ended in it, so the host's launch or the graph's own latency); the median step's (a decode step's
+    once decode steps are most of the range), with its busy time and wall."""
     mine = sorted((s, e, n) for n, s, e, q in ks if q == uq)
     others = sorted((e, n) for n, s, e, q in ks if q != uq)
     oends = [e for e, _ in others]
-    by_rel: dict[str, float] = {}
-    by_next: dict[str, float] = {}
-    pairs: dict[str, float] = {}
-    for (s0, e0, _), (s1, _, n1) in zip(mine, mine[1:]):
-        g = s1 - max(e0, s0)
-        if g <= 1000:
-            continue
-        i = bisect_right(oends, s1) - 1
-        rel = SP.part(others[i][1], None) if i >= 0 and others[i][0] > e0 else "none"
-        by_rel[rel] = by_rel.get(rel, 0) + g / 1e6 / steps
-        nxt = SP.part(n1, None)
-        by_next[nxt] = by_next.get(nxt, 0) + g / 1e6 / steps
-        pairs[f"{nxt} <- {rel}"] = pairs.get(f"{nxt} <- {rel}", 0) + g / 1e6 / steps
-    order = lambda d: dict(sorted(d.items(), key=lambda kv: -kv[1]))
-    return {"gaps_over_1us_ms": sum(by_rel.values()), "by_releaser": order(by_rel), "by_next": order(by_next),
-            "next_by_releaser": dict(list(order(pairs).items())[:16])}
+    commits = sorted(e for n, s, e, q in ks if n.startswith("dithera_commit"))
+    per: list[dict] = []
+    for c0, c1 in zip(commits, commits[1:]):
+        w = [k for k in mine if c0 < k[0] and k[1] <= c1]
+        pairs: dict[str, float] = {}
+        for (s0, e0, _), (s1, _, n1) in zip(w, w[1:]):
+            g = s1 - max(e0, s0)
+            if g <= 1000:
+                continue
+            i = bisect_right(oends, s1) - 1
+            rel = SP.part(others[i][1], None) if i >= 0 and others[i][0] > e0 else "none"
+            key = f"{SP.part(n1, None)} <- {rel}"
+            pairs[key] = pairs.get(key, 0) + g / 1e6
+        per.append({"wall_ms": (c1 - c0) / 1e6, "busy_ms": sum(e - s for s, e, _ in w) / 1e6,
+                    "units": sum(1 for *_, n in w if SP.part(n, None) == SP.PARTS[4][0]), "gaps": pairs})
+    per.sort(key=lambda p: p["wall_ms"])
+    keys = {k for p in per for k in p["gaps"]}
+    med = lambda xs: float(np.median(xs)) if xs else 0.0
+    gaps = {k: med([p["gaps"].get(k, 0.0) for p in per]) for k in keys}
+    return {"steps": len(per), "median_wall_ms": med([p["wall_ms"] for p in per]),
+            "median_busy_ms": med([p["busy_ms"] for p in per]), "units_per_step": sorted({p["units"] for p in per}),
+            "median_gaps_ms": dict(sorted(((k, v) for k, v in gaps.items() if v > 0.005), key=lambda kv: -kv[1]))}
 
 
 def main() -> None:
