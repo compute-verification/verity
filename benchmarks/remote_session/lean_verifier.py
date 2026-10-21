@@ -21,7 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 import wire
 
@@ -206,41 +206,29 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
         None if pace is None else audit.Pace(pace["k"], pace["window_ns"]))
 
 
-class Tape:
-    """The challenger's generator, drawing from `entropy` and keeping what it drew: a session's committed coins
-    (`coins`, each drawn before its salt) and its append coins (`appends`), as the Lean's session takes them."""
-
-    def __init__(self, count: int, entropy: Callable[[int], bytes]) -> None:
-        self.count, self.entropy, self.drawn = 2 * count, entropy, []
-
-    def __call__(self, n: int) -> bytes:
-        out = self.entropy(n)
-        self.drawn.append(out)
-        return out
-
-    @property
-    def coins(self) -> list[bytes]:
-        return self.drawn[:self.count:2]
-
-    @property
-    def appends(self) -> list[bytes]:
-        return self.drawn[self.count:]
+def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
+    """The session's coins as the Lean's session takes them: its 2W committed coins (window t's challenge at t, its
+    openings coin at W + t), each one the challenger never released 32 zero bytes, which no event reads, and the append
+    coins in the order released."""
+    zero, w = bytes(coins.COIN_BYTES), c.windows
+    out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
+    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (w - len(out[1]))],
+            [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
 class Transcript:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
-    parameters, committed coins and `not_before_ns`, then each event in the order the verifiers took it (`event`, as
-    the Lean read it), a window's openings (`verify`, the wire's frames) where its verdict was set, and the append
-    coins drawn (`close`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
-    openings. Every committed coin is kept, never its salt: the case replays each under a zero salt, and nothing a
+    parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),
+    a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
+    (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
+    openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
     verifier answers reads the commitment."""
 
-    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, coins: list[bytes],
-                 not_before_ns: int) -> None:
+    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
         head = {"registration": registration_json(registration), "params": params_json(params),
-                "coins": [c.hex() for c in coins], "not_before_ns": not_before_ns}
+                "not_before_ns": not_before_ns}
         self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
         self.thread.start()
 
@@ -250,8 +238,8 @@ class Transcript:
     def verify(self, t: int, frames: list[bytes]) -> None:
         self.items.put(("verify", t, frames))
 
-    def close(self, append_coins: list[bytes]) -> dict:
-        self.items.put(("close", append_coins))
+    def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+        self.items.put(("close", released))
         self.thread.join()
         return self.result
 
@@ -272,7 +260,8 @@ class Transcript:
                     item = self.items.get()
                     if item[0] == "close":
                         closed = True
-                        put('],"append_coins":' + json.dumps([c.hex() for c in item[1]]) + "}")
+                        put('],"coins":' + json.dumps([c.hex() for c in item[1][0]]) + ',"append_coins":'
+                            + json.dumps([c.hex() for c in item[1][1]]) + "}")
                         break
                     put("," if events else "")
                     events += 1

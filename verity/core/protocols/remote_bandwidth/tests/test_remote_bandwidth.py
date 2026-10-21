@@ -127,14 +127,15 @@ def honest(prover, t, i, challenges, previous, plan):
 
 
 def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=honest, plan=None,
-          sent=None, label=b"coins"):
+          sent=None, label=b"coins", coins_=None):
     """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
-    root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not."""
+    root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
+    The session's coins are `coins_`, or a challenger in this process drawing under `label`."""
     tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
-    s = Session(p, store.registration, verifier_tiles or tiles, challenger(store, p, label), not_before_ns=0,
+    s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                 clock=clock)
     prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]

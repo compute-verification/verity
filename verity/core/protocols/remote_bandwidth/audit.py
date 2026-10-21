@@ -91,7 +91,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
@@ -838,6 +838,19 @@ class Session:
         `signed` and the roots `received` read from the challenger's side; None when they are."""
         return coins.released_reason(self.coins, [w.roots for w in self.windows],
                                      [a[2].root for a in self._appends], signed, received)
+
+    def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey,
+                       verify: coins.Verify) -> str | None:
+        """Why this session's coins are not those of the one challenger session the auditor's ledger opens for its
+        window `{root: R}` (`coins.trusted`: the ledger's published `heads` and the session's files in `directory`,
+        under the pinned `key`), held to them as `released_reason` holds them; None when they are.  So coins from a
+        second challenger session, opened for another root or refused by the ledger as a second open for R, are
+        refused."""
+        try:
+            signed, received = coins.trusted(self.coins, directory, heads, key, verify)
+        except coins.CoinError as e:
+            return f"the challenger's session for this session's window is not trusted: {e}"
+        return self.released_reason(signed, received)
 
     def _live(self) -> None:
         if self.failed is not None:

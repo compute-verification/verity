@@ -35,8 +35,9 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveChallenger, LiveCommitment, LiveOpening,
-                                                             LiveRecord, live_reason, order_reason)
+from verity.core.protocols.sampled_proofs import remote
+from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
+                                                             LiveOpening, LiveRecord, Verify, live_reason, order_reason)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -193,5 +194,15 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey,
+            verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+    """What the challenger signed for the session's window, read on the auditor's side (`remote.trusted_session`): the
+    one challenger session the auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the
+    session's own (`window`), its files in `directory`, under the pinned `key`; its commitment and the roots its signed
+    release log shows it received.  Raises `CoinError` naming why."""
+    return remote.trusted_session(directory, heads, window(coins.registration, coins.session), key, verify)
+
+
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",
-           "coin", "coin_reason", "families", "layout_reason", "local", "released_reason", "window", "window_root"]
+           "coin", "coin_reason", "families", "layout_reason", "local", "released_reason", "trusted", "window",
+           "window_root"]
