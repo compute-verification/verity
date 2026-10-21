@@ -39,8 +39,14 @@ workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-
 the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for the window
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
 (`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
-session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). The batch workload admits the
-first prompt alone after the batch, so it admits per round; the fill workload admits in round 0 only.
+session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
+its coins as one manifest (`pouw_h1.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
+with the window accepted (`pouw_h1_challenger.period_reason`). The batch workload admits the first prompt alone after the
+batch, so it admits per round; the fill workload admits in round 0 only.
+
+``--served`` (fill) commits the 64's window's A codes and B rows as its window Program's registered values
+(`pouw_h1_served.Served`, the pouw setting ``served``), which `calls_root` binds and the commitment carries, and records
+the trees and `pouw_h1_served.register`'s outcome (`served_check`). ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 """
 from __future__ import annotations
 
@@ -298,6 +304,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.protocol_options import pouw
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    from verity_vllm.protocol_options import pouw_h1_served as SV
 
     decl = PH.FILL
     outdir = Path(a.out)
@@ -345,9 +352,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
+        served = SV.Served() if a.served and name == "fill" else None
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
-                                              transcript_dir=str(tdir), admission="round-0"))
+                                              transcript_dir=str(tdir), admission="round-0", served=served))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
@@ -374,6 +382,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             end = time.monotonic()
             serving[0] = False
             h1.close()
+            out["close_s"] = round(time.monotonic() - end, 1)
             steps = sorted(stamps)
             step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in steps]
             rows = h1.step_rows()
@@ -407,6 +416,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
         if a.challenger:
             out["ok"] = bool(out["ok"] and out["challenger"] == {"closed": True})
+        if served is not None:
+            out["served"] = served_check(h1, served, tdir)
+            out["ok"] = bool(out["ok"] and out["served"]["committed"])
         print(f"[fill] {name} {json.dumps({k: v for k, v in out.items() if k not in ('commitment', 'z')}, default=str)[:3000]}",
               flush=True)
         return out
@@ -428,6 +440,25 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
           f"step_s(64)={h['decode_step_s_median']} step_s(1)={doc['h1_solo'].get('decode_step_s_median')} "
           f"tok/s(64)={h['serve']['tokens_per_s']} tok/s(1)={doc['h1_solo'].get('serve', {}).get('tokens_per_s')} "
           f"digest={h['tokens_digest'][:16]}", flush=True)
+    return doc
+
+
+def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
+    """The window's served trees (`pouw_h1_served`): each committed value's entry, what `close` refused, and the outcome of
+    `pouw_h1_served.register` (``register_served`` reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up,
+    so it refuses the trees' v2 rows, ValueError, until then)."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "ks": served.ks() if served.registered else [],
+                           "committed": bool(served.registered) and not served.refused,
+                           "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
+                                                                         "refused": list(served.refused)}}
+    try:
+        regs = SV.register(h1, directory=tdir)
+        doc["register"] = {"registered": {str(k): SV.file(k) for k in regs}}
+    except ValueError as e:
+        doc["register"] = {"refused": str(e)[:2000]}
+    print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
+          flush=True)
     return doc
 
 
@@ -472,7 +503,7 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 
 
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
-                     window_file: str | None = None) -> dict[str, Any]:
+                     window_file: str | None = None, period: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
@@ -480,12 +511,15 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.newest`), the window held to the session it opened for its Commit's root
     (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
-    within)."""
+    within). The record is held to its coins as one manifest (`pouw_h1.manifest_reason`), and with `period` the ledger
+    must credit the lane's period with the window accepted (`pouw_h1_challenger.period_reason`)."""
     from verity.core.protocols.sampled_proofs import remote
+    from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
+    sid = (rec["commitment"].get("session") or {}).get("session")
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "ledger": ledger, "window_file": window_file,
                            "coin_source": rec["commitment"].get("coin_source")}
@@ -496,22 +530,28 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             doc["window"] = json.loads(Path(window_file).read_text())
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key)
         else:
-            sid = (rec["commitment"].get("session") or {}).get("session")
             newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
+    doc["manifest"] = PH.manifest_reason(rec)
+    if period is not None:
+        try:
+            newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)
+            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, [sid] if doc["reason"] is None else [])}
+        except Exception as e:  # noqa: BLE001
+            doc["period"] = {"name": period, "reasons": [f"{type(e).__name__}: {e}"]}
     for name in (remote.RECORD, remote.CLOSE):
         try:
             doc[name] = json.loads((d / name).read_text())
         except (OSError, ValueError) as e:
             doc[name] = {"error": str(e)}
     doc["rounds"] = len(rec["commitment"].get("rounds") or ())
-    doc["ok"] = doc["reason"] is None
+    doc["ok"] = doc["reason"] is None and doc["manifest"] is None and not (doc.get("period") or {}).get("reasons")
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / "pouw_h1_challenger.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print(f"POUW-H1-CHALLENGER {'OK' if doc['ok'] else 'FAIL'} rounds={doc['rounds']} host={doc[remote.RECORD].get('host')} "
-          f"reason={doc['reason']}", flush=True)
+          f"reason={doc['reason']} manifest={doc['manifest']} period={doc.get('period')}", flush=True)
     return doc
 
 
@@ -552,6 +592,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
                     help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
                          "research@HOST), which opens the reserved session on the window's open root")
+    ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
+                                                     "the ledger must credit with it accepted")
+    ap.add_argument("--served", action="store_true", help="fill: commit the window's A codes and B rows as its Program's "
+                                                          "registered values (pouw_h1_served.Served) and try to register them")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
@@ -561,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window)["ok"] else 1
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1
