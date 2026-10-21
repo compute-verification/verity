@@ -190,14 +190,24 @@ def _evaluate_gates(
 
 
 def _timed_token_gates(
-    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]]
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
 ) -> list[dict[str, Any]]:
     """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
-    before timing, so an arm that computed something else only when timed would pass it."""
+    before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
+    without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in blocks
+    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
 
     out = []
     for arm in arms:
         if not arm.control:
+            if mode != "resident":
+                continue
+            for point in points:
+                want = _token_digest(tokens[(arm.id, point.id)])
+                bad = sorted(r["rep"] for r in samples[(arm.id, point.id)] if r.get("token_digest") != want)
+                out.append({"arm": arm.id, "control": None, "against": "gate", "point": point.id,
+                            "kind": "timed-tokens", "passed": not bad, **({"reps": bad} if bad else {})})
             continue
         for point in points:
             mine = {r["rep"]: r.get("token_digest") for r in samples[(arm.id, point.id)]}
@@ -504,7 +514,7 @@ def run_benchmark(
         mode = "blocks"
 
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples)
+        gates += _timed_token_gates(arms, points, samples, tokens, mode)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, interleave=mode)
     doc = {

@@ -32,7 +32,7 @@ from verity_bench.vllm.presets import (
     served,
 )
 from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
+from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
 from verity_bench.vllm.table import render
 
 
@@ -68,7 +68,7 @@ class FakeEngine:
         self.events.append(("measure", self.arm.id, point.id))
         scale = 1.0 if self.arm.id == "stock-fp8" else 2.0
         return {
-            "token_digest": self.timed_digest or ("bad" if self.bad_tokens else "good"),
+            "token_digest": self.timed_digest or _token_digest({f"{point.id}-0": (8 if self.bad_tokens else 7, 9)}),
             "metrics": {
                 "time_per_output_token_s": scale * slower if self.drift else scale * (rep + 1),
                 "time_to_first_token_s": scale * 2,
@@ -1010,9 +1010,23 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
     in its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
-    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens"]
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["control"]]
     assert not gate["passed"] and gate["reps"] == [0, 1] and doc["points"] == []
     validate(doc)
+
+
+def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
+    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
+    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+
+    doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
+    assert (gate["against"], gate["passed"], gate["reps"]) == ("gate", False, [0, 1]) and doc["points"] == []
+    good = bench()
+    assert all(g["passed"] for g in good["gates"] if g["kind"] == "timed-tokens") and good["points"]
+    blocks = bench(FakeFactory(resident_failure="candidate"))
+    assert blocks["execution"]["interleave"] == "blocks"
+    assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
