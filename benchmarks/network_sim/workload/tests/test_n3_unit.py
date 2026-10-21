@@ -370,7 +370,8 @@ def test_n2_and_n3_run_on_every_link_window_and_only_n3_holds_the_content(sim):
     """Every link-window of the run is committed under each port's declared occupancy profile, and each of its
     port-windows has N3's ok bit. N2 compares no grid in the clear, so frames edited in content alone (flip-bit, fill)
     pass N2 on every link-window and N3 refuses exactly the ports N3 in the clear refuses; an extra frame is off the
-    profile, so N2 refuses its link-windows too."""
+    profile, so N2 refuses its link-windows too, and N3 those and the later ones whose frames it shifts (no frame names
+    its message, so each is read at its position)."""
     for t in (None, *TAMPERS):
         (setup, windows), report = sim[t]
         links = U.link_checks(setup, windows)
@@ -386,9 +387,21 @@ def test_n2_and_n3_run_on_every_link_window_and_only_n3_holds_the_content(sim):
         if t is None:
             assert not n2 and not n3
         elif t == "b1:extra-frame":
-            assert n2 == {(setup.links[p][0], w) for p, w in n3}
+            assert n2 and n2 <= {(setup.links[p][0], w) for p, w in n3}
         else:
             assert not n2 and n3
+
+
+def test_v5_with_the_template_accepts_every_honest_window_and_refuses_where_v3_does(sim):
+    """Every frame the simulator sends is `active.data_frames`' (its HELLOs from the source's outbox), so N3Window_v5
+    with the requests' template accepts every window of the honest run and refuses exactly the tampered ones."""
+    for t in (None, *TAMPERS):
+        (setup, windows), _ = sim[t]
+        v5 = U.sim_v5(setup, windows)
+        assert [(r["port"], r["window"]) for r in v5] == [(w.port, w.window) for w in windows]
+        refused = {(r["port"], r["window"]) for r in v5 if not r["ok"]}
+        assert refused == not_ok(windows) and bool(refused) == (t is not None), t
+        assert all(r["by"] == "unit" for r in v5 if r["recorded"])
 
 
 def test_a_tampered_window_runs_the_unit_and_the_position_of_its_honest_one(sim):

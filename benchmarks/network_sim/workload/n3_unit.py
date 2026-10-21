@@ -55,7 +55,8 @@ first min(r, B) bytes, and the text the data (RAW) or its base64 (BASE64; `assem
 
 **The outbox** (`outbox_rows`): a unit's outgoing messages in φ's send order (`Phi.send_order`), back to back, each
 message the bytes `framing.encode` packs its crossing values into, then the framing bytes the unit sends besides them
-(`Statement.framing`: the lab's request lengths and heads, which public structure fixes). Its rows overlap: row q holds bytes
+(`Statement.framing`: the simulator's `HELLO`s, the lab's request lengths and heads, which public structure fixes). Its
+rows overlap: row q holds bytes
 qB ... qB + 2B - 1 (zero past the end) for q < k = max(1, ceil(bytes / B)), and zero rows follow up to a power of two.
 A message is then one contiguous range of its source's outbox, and any run of at most B of its bytes lies in one row,
 the row of the run's first byte, so a frame reads it as one segment, one row.
@@ -1478,10 +1479,6 @@ class Statement:
         """Where the unit's `framing` starts in its outbox."""
         return len(self.outboxes[0][unit]) - len(self.framing.get(unit, b""))
 
-    def message(self, m: F.Message) -> list[tuple]:
-        """The message's bits as pieces: one run of its source's outbox."""
-        return [("r", (m.src,), 8 * self.outboxes[1][m.stream], 8 * ((m.bits + 7) // 8))]
-
     def table(self, seed: bytes) -> UnitTable:
         """Every unit's outbox, registered."""
         return UnitTable.register(self.outboxes[0], self.phi.frame_bytes, self.program, seed)
@@ -1511,28 +1508,38 @@ def statement(public: dict, witness: dict) -> Statement:
                      bytes.fromhex(public.get("program", "")), bytes.fromhex(public.get("placement", "")))
 
 
-def _data_frame(kind: int, stream: int, payload: list[tuple], n: int, B: int) -> list[tuple]:
-    return [const(HEADER.pack(kind, stream, n)), *payload, zeros(B - HEADER.size - n)]
+def sim_framing(S: Statement) -> tuple[dict[str, bytes], dict[tuple[str, str], int]]:
+    """What each unit sends besides its messages' bytes: the `HELLO` of each connection it opens
+    (`framing.hello_data`), in send order, and each one's offset in its unit's by connection."""
+    data: dict[str, bytes] = {}
+    at = {}
+    for src, dst in S.phi.openers():
+        at[src, dst] = len(data.get(src, b""))
+        data[src] = data.get(src, b"") + F.hello_data(S.hw, src, dst)
+    return data, at
 
 
-def sim_declared(S: Statement) -> dict[str, list[tuple[int, list[tuple]]]]:
-    """Per certified link direction, φ's frames as (bucket, pieces) in grid order: send order, stably by bucket."""
-    phi, B = S.phi, S.phi.frame_bytes
-    room = B - HEADER.size
+def sim_declared(S: Statement, hellos: dict[tuple[str, str], int]) -> dict[str, list[tuple[int, list[tuple]]]]:
+    """Per certified link direction, φ's frames as (bucket, pieces) in grid order: send order, stably by bucket. A
+    message's frames are `active.data_frames` of its run of its source's outbox, and a connection's `HELLO` that of its
+    run of its source's framing (at `hellos` past `Statement.framing_at`)."""
+    from . import n3_canonical as C
+
+    phi, B, base = S.phi, S.phi.frame_bytes, S.outboxes[1]
     streams = phi.by_stream()
+    cut: dict[int, list[list[tuple]]] = {}
     out: dict[str, list[tuple[int, list[tuple]]]] = {}
     for key, slots in phi.slots().items():
         frames = []
         for s in slots:
             if s.kind == "hello":
-                frames.append((s.bucket, [const(F.hello(S.hw, s.src, s.dst, B))]))
+                (hello,) = C.data_pieces([(s.src, S.framing_at(s.src) + hellos[s.src, s.dst], F.HELLO.size)], B)
+                frames.append((s.bucket, hello))
                 continue
             m = streams[s.stream]
-            message = S.message(m)
-            nbytes, last = (m.bits + 7) // 8, s.index == F.frame_count(m, B) - 1
-            lo, hi = s.index * room, min((s.index + 1) * room, nbytes)
-            frames.append((s.bucket, _data_frame(LAST if last else DATA, m.stream, _slice(message, 8 * lo, 8 * hi),
-                                                 hi - lo, B)))
+            if m.stream not in cut:
+                cut[m.stream] = C.data_pieces([(m.src, base[m.stream], m.nbytes)], B)
+            frames.append((s.bucket, cut[m.stream][s.index]))
         out[key] = sorted(frames, key=lambda x: x[0])
     return out
 
@@ -1739,7 +1746,8 @@ def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, 
     declares, and every port has a window for each of them and for each window it recorded past them."""
     S = statement(public, witness)
     links = sim_ports(S.hw)
-    declared = sim_declared(S)
+    S.framing, hellos = sim_framing(S)
+    declared = sim_declared(S, hellos)
     per_bucket = [n for v in (*declared.values(), *records.values()) for n in Counter(b for b, _ in v).values()]
     grid = GridParams(buckets, max([1] + per_bucket), S.phi.frame_bytes)
     W = max([b for v in declared.values() for b, _ in v] + [-1]) // buckets + 1
@@ -1803,7 +1811,7 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
 # --- the demo ---------------------------------------------------------------------------------------------------------
 
 DEMO_FRAMES = [
-    [const(encode_frame(LAST, F.HELLO_STREAM, F.HELLO.pack(0, 1), 16))],
+    [const(encode_frame(LAST, 0, F.HELLO.pack(0, 1), 16))],
     [const(HEADER.pack(DATA, 1, 5)), ("r", ("u0",), 8 * 14, 8 * 5), zeros(2)],
     [const(HEADER.pack(DATA, 1, 6)), ("b", (("r", ("u1",), 0, 8), ("r", ("u0",), 8 * 20, 8)), 2), const(b"\n\n"),
      zeros(1)],
@@ -1880,6 +1888,7 @@ def link_checks(setup: Setup, windows: list[Window], checked: Sequence[dict] = (
 
 
 def _sim(args) -> dict:
+    from . import n3_canonical as C
     from .block import Context
     from .n3 import merge
     from .run import run_memory
@@ -1897,10 +1906,20 @@ def _sim(args) -> dict:
     setup, windows = sim_windows(public, witness, records, args.buckets)
     checked = _sized(windows, not args.reference_only)
     links = link_checks(setup, windows, checked)
+    v5 = sim_v5(setup, windows)
     summary = summarize(checked) | {"link_windows": len(links), "link_windows_ok": sum(r["ok"] for r in links),
-                                    "n2_not_ok": [f"{r['link']}[{r['window']}]" for r in links if not r["n2"]]}
+                                    "n2_not_ok": [f"{r['link']}[{r['window']}]" for r in links if not r["n2"]],
+                                    "n3_v5": C.summary(v5)}
     return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summary,
-            "windows": checked, "link_windows": links}
+            "windows": checked, "link_windows": links, "n3_v5": v5}
+
+
+def sim_v5(setup: Setup, windows: Sequence[Window]) -> list[dict]:
+    """N3Window_v5's verdicts with the template on the simulator's windows: every frame on every link direction is
+    `active.data_frames`', the requests' template (`n3_canonical.INGRESS`)."""
+    from . import n3_canonical as C
+
+    return C.verdicts(setup, windows, kinds=dict.fromkeys(setup.links, C.INGRESS))
 
 
 def _lab(args) -> dict:

@@ -141,15 +141,17 @@ def replay_windows(plan: dict, setup, run: Path, records: dict[str, Sequence[Rec
     return n3, n3.attach(windows_of(records))
 
 
-def verdicts(setup: U.Setup, windows: Sequence[U.Window]) -> list[dict]:
-    """v5's verdict with its direction's template on each window, by its unit's reference or by public data."""
+def verdicts(setup: U.Setup, windows: Sequence[U.Window], kinds: dict[str, int] | None = None) -> list[dict]:
+    """v5's verdict on each window with its port's template, by its unit's reference or by public data: `kinds` gives
+    each port's, `EGRESS` (events) or `INGRESS` (`data_frames`), by default its link's end."""
     B = setup.fmt.B
+    kinds = kinds or {p: d for p, (_, d) in setup.links.items()}
     ports: dict[int, list[str]] = {}
-    for p, (_, d) in setup.links.items():
+    for p, d in kinds.items():
         ports.setdefault(d, []).append(p)
     out = []
     for w in windows:
-        d = setup.links[w.port][1]
+        d = kinds[w.port]
         r = {"port": w.port, "window": w.window, "recorded": len(w.frames)}
         if w.instance is None:
             out.append(r | {"by": "public data", "ok": w.why == U.EMPTY and not w.frames, "why": w.why})
