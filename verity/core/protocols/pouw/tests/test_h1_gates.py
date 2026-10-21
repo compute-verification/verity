@@ -39,9 +39,9 @@ LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")
 #: the tile's versions on this tree: v1, the one-stream v3 and the gated v4 (#2902's)
 TILES = {v: d for v, d in ((1, H.PouwH1Tile), (3, getattr(H, "PouwH1Tile3", None)), (4, getattr(H, "PouwH1Tile4", None)))
          if d is not None}
-#: a tile's classes that are bodies, not primitives: the tile and v1's exact accumulator (`EXACT`, whose type v3 and v4
-#: take and never call)
-BODIES = {v: {f"PouwH1Tile_v{v}"} | ({"GemmAccumulatorS8_v2"} if v == 1 else set()) for v in TILES}
+#: a tile's classes that are bodies, not primitives: v1's exact accumulator (`EXACT`, whose type v3 and v4 take and never
+#: call); the tile is its Program's root, not a class of its census
+BODIES = {v: {"GemmAccumulatorS8_v2"} if v == 1 else set() for v in TILES}
 #: Lean's budgeted classes in property/v1's names
 BUDGETED = {"rounding": "roundings", "compareSelect": "compare_select", "fold": "folds"}
 
