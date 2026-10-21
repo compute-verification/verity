@@ -26,7 +26,7 @@ import Proofs.Flock.Claims.ZK.FinishInner
 namespace Flock.Firewall.Finish
 
 open FlockLevel3 FlockSoundness.Discharge.Composed.ZerocheckMasked
-open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_foldl_dot)
+open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_foldl_dot mul_sum')
 open Transcript
 
 /-! ## The batched constraint where no constraint fails -/
@@ -68,8 +68,12 @@ theorem outer_fold_linAt (ws : Array F128) (ls : Array Zk.Lin) (h : Array F128) 
         ext k
         simp only [Finset.mem_range, Finset.mem_filter, lt_min_iff]
         omega
-      rw [Finset.sum_congr rfl hent, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_range_succ, ← ih, hlin,
-        of_add, of_mul]
+      have hms : GF128.of ws[n]! * ∑ k ∈ Finset.range h.size,
+            (if k < min h.size ls[n]!.a.size then GF128.of ls[n]!.a[k]! * GF128.of h[k]! else 0) =
+          ∑ k ∈ Finset.range h.size, GF128.of ws[n]! *
+            (if k < min h.size ls[n]!.a.size then GF128.of ls[n]!.a[k]! * GF128.of h[k]! else 0) :=
+        mul_sum' _ _ _
+      rw [Finset.sum_congr rfl hent, Finset.sum_add_distrib, ← hms, Finset.sum_range_succ, ← ih, hlin, of_add, of_mul]
       ring
 
 /-- **`Lin.combo` on the pads' length** evaluates to the weighted sum of `failingOn`'s values of its forms, whatever
@@ -103,7 +107,8 @@ theorem batched_of_noFail (lay : Zk.PadLayout) {h : Array F128} {cons : Array (S
     refine Finset.sum_eq_zero fun i hi => ?_
     have hi' := (lt_min_iff.1 (Finset.mem_range.1 hi)).2
     obtain ⟨q, hq, hq2⟩ := Array.mem_map.1 (Array.getElem_mem hi')
-    rw [getElem!_pos _ i hi', ← hq2, hz q hq, ← GF128.zero_eq, mul_zero]
+    rw [getElem!_pos ((cons ++ Zk.triple lay eps (eps * h[lay.fa]! + h[lay.tx]!) (h[lay.fb]! + h[lay.ty]!)).map (·.2))
+      i hi', ← hq2, hz q hq, ← GF128.zero_eq, mul_zero]
   have e' := eq_of_of e
   rw [hs] at e'
   unfold evalL at e'
