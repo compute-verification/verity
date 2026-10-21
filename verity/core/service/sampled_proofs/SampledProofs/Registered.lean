@@ -16,7 +16,8 @@ gates are then its own nodes' gates.
   `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
   `"word_bits"` beside them when it is not 16: SHA-512 of the frame-v3 `domain` message over `B`, `uint(-2 + 2)`, the range's
   identity `identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": 0, "step": 1, "stop": rows})` and
-  `uint(rows)`.
+  `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
+  registered in one window opens under no other window's domain, and a value held across windows leaves it out.
 -/
 import Flock.Program
 import Flock.Public
@@ -35,6 +36,8 @@ def SCHEMA : String := Flock.HmRow.ROW_SCHEMA
 def WORD_BITS : Nat := 16
 def WIDTHS : List Nat := [16, 32]
 def WIDTH_KEY : String := "word_bits"
+/-- The domain binding's key a per-window value adds: the window's open root. -/
+def WINDOW_KEY : String := "window"
 def ENTRY_KEYS : Array String := sortStrings #["value", "root", "leaves", "words", "domain"]
 
 /-! A type's element or field is smaller than it: `widthSet`'s and `lower`'s termination. -/
@@ -144,6 +147,20 @@ def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray 
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
 
+/-- `registered.domain(program, value, words, leaves, word_bits, window).domain_id`: `domain`, and for a per-window value
+(`some r`, `r` the window's open root) the same with `"window": r` in the binding. -/
+def domainAt (program value : String) (words leaves wordBits : Nat) : Option String → V ByteArray
+  | none => domain program value words leaves wordBits
+  | some r => do
+    if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
+    let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
+      ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
+      (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ [(WINDOW_KEY, Json.str r)])
+    let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+    let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
+      (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
+    return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
+
 /-- The verifier's own entry for one registered value: its rows (`leaves`), their `words`, `word_bits` and domain (hex). -/
 structure Entry where
   value : String
@@ -154,15 +171,18 @@ structure Entry where
 
 /-- `registered_entries`: the verifier's own entry for each parameter it expects registered (`values`: `(parameter,
 words)`, in order), or an error where Python raises: no such parameter, its gates not one interval, `words` not dividing
-them into rows, or its leaves not one width of at most 32 bits. -/
-def entries (d : Desc) (ps : Array Param) (values : Array (String × Nat)) : V (Array Entry) :=
+them into rows, or its leaves not one width of at most 32 bits. `window`: the window's open root, which every value's
+domain binds but the ones in `fixed`, the values held across windows (`domainAt`). -/
+def entries (d : Desc) (ps : Array Param) (values : Array (String × Nat)) (window : Option String := none)
+    (fixed : Array String := #[]) : V (Array Entry) :=
   values.mapM fun (v, w) => do
     let some p := ps.find? (·.name == v) | throw s!"{v} is not a parameter of the program"
     let some (_, n) := p.gates | throw s!"parameter {v}: its gates are not one interval"
     if w < 1 || n % w != 0 then throw s!"parameter {v}: {n} leaves are not rows of {w}"
     let b ← width p
     return { value := v, leaves := n / w, words := w, wordBits := b,
-             domain := Flock.hexOf (← domain (Flock.hexOf d.sha512) v w (n / w) b) }
+             domain := Flock.hexOf (← domainAt (Flock.hexOf d.sha512) v w (n / w) b
+               (if fixed.contains v then none else window)) }
 
 def Entry.toJson (e : Entry) : Json :=
   Json.mkObj [("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("word_bits", Lean.toJson e.wordBits),

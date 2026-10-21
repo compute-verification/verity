@@ -96,15 +96,16 @@ def rule (law : Json) : V Json := do
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
-/-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value` and `root`, which
-`Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
+/-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value`, `root` and
+`domain`, which `Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
 private def logRecord (j : Json) : V Json := do
   let j ← obj j "a record of the log"
   let r := getD j "registered"
   if truthy r && !(match r with
-      | .arr es => es.all fun e => (getD e "value" matches .str _) && (getD e "root" matches .str _)
+      | .arr es => es.all fun e =>
+        (getD e "value" matches .str _) && (getD e "root" matches .str _) && (getD e "domain" matches .str _)
       | _ => false) then
-    throw "a record of the log registers values that are not objects with a string value and root"
+    throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
 def paramsOfJson (j : Json) : V Params := do
@@ -113,6 +114,8 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "pinned").isSome then keys.push "pinned" else keys
   let keys := if (field? j "outputs").isSome then keys.push "outputs" else keys
+  let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
+  let keys := if (field? j "held").isSome then keys.push "held" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -182,11 +185,21 @@ def paramsOfJson (j : Json) : V Params := do
       if !(stream.length == 128 && isHex stream) then throw "the binding's stream is not lowercase hex of 64 bytes"
       if !(isHex prover && prover.length % 2 == 0) then throw "the binding's prover is not lowercase hex bytes"
       pure (some (stream, prover))
+  let windowRoot ← match getD j "window_root" with
+    | .null => pure none
+    | .str r => if r.length == 128 && isHex r then pure (some r) else throw "a window root is lowercase hex of 64 bytes"
+    | _ => throw "a window root is lowercase hex of 64 bytes"
+  let held ← match getD j "held" with
+    | .null => pure #[]
+    | .arr vs => vs.mapM fun v => match v with
+      | .str v => if registered.any (·.1 == v) then pure v else throw s!"held value {v}: not a registered value"
+      | _ => throw "held values are a list of registered values"
+    | _ => throw "held values are a list of registered values"
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered,
-                         params, supplied, pinned, outputs, binding }, delta }
+                         params, supplied, pinned, outputs, binding, windowRoot, held }, delta }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b

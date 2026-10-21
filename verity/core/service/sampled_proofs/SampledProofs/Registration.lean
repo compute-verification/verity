@@ -11,8 +11,14 @@ digest, and R1–R7 against the verifier's own copies (`check`).
 A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (with
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
 (`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
-before the salt), and each value an earlier record of the log registered to that record's root (`heldRoots`). The
-verifier expects a v2 record exactly when it expects values registered. A value it fills itself (`supplied`,
+before the salt), and each value an earlier record of the log registered under the domain it takes now to that record's
+root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered.
+
+A verifier that names its window's open root R (`windowRoot`, which it reads from the challenger's signed open of the
+window, never from the record) takes every registered value's domain under R (`Registered.domainAt`) but the ones it
+holds across windows: `held` (the weights), and its pinned, supplied and output values (`fixedOf`). A window-independent
+program then registers each window's values under the same names: a per-window value is held to no earlier window's
+root, and a root registered in another window opens under no domain R7 takes. A value it fills itself (`supplied`,
 `Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to its binding and the record's
 window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
 (`R7-supplied`), never to the log's.
@@ -84,18 +90,34 @@ structure Verifier where
   outputs : Array (String × String × String) := #[]
   /-- the stream and prover it registers the record for, `(stream, prover)`, each lowercase hex -/
   binding : Option (String × String) := none
+  /-- the window's open root, lowercase hex of 64 bytes, from the challenger's signed open of the window -/
+  windowRoot : Option String := none
+  /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
+  held : Array String := #[]
 
 private def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
 
-/-- `registration.held_roots`: `(value, root)` for every value an earlier record of the log registered, the root of its
-first registration. -/
-def heldRoots (log : Array Json) : Array (String × String) :=
+/-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
+def fixedOf (v : Verifier) : Array String :=
+  v.held ++ v.pinned.map (·.1) ++ v.supplied.map (·.1) ++ v.outputs.map (·.1)
+
+/-- The verifier's own entries (`registration._check_registered`'s `registered_entries`): each value's domain under the
+window's open root, but `fixedOf`'s. -/
+def ownEntries (v : Verifier) : V (Array Registered.Entry) :=
+  Registered.entries v.program.desc v.params v.registered v.windowRoot (fixedOf v)
+
+/-- `registration.held_roots`, read at the verifier's own entries (`mine`, none where they don't compute): `(value,
+root)` for each of its values an earlier record of the log registered under the domain `mine` gives it, the root of
+its first registration under that domain. -/
+def heldRoots (log : Array Json) (mine : V (Array Registered.Entry)) : Array (String × String) :=
+  let mine := match mine with | .ok m => m | .error _ => #[]
   log.foldl (fun held rec => match getD rec "registered" with
-    | .arr es => es.foldl (fun held e => match getD e "value", getD e "root" with
-      | .str v, .str r => if held.any (·.1 == v) then held else held.push (v, r)
-      | _, _ => held) held
+    | .arr es => es.foldl (fun held e => match getD e "value", getD e "root", getD e "domain" with
+      | .str v, .str r, .str d =>
+        if held.any (·.1 == v) || !mine.any (fun w => w.value == v && w.domain == d) then held else held.push (v, r)
+      | _, _, _ => held) held
     | _ => held) #[]
 
 /-- `registration._output_port`: the `roots` entry for `port` of the log's first record with digest `record` (its last,
@@ -250,8 +272,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- R7
   if v2 then
-    c := checkOutputs c (get "registered") (Registered.entries v.program.desc v.params v.registered)
-      (v.pinned ++ heldRoots v.log) v.supplied
+    c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
   return c
