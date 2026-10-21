@@ -145,9 +145,9 @@ theorem ref_reads {df : Def} {o w ic k : Nat} {P : Nat → Prop} {inp : List Nat
     Reads ic k P w (df.ref o inp k v) := by
   unfold Def.ref
   by_cases h1 : v < df.cols
-  · rw [if_pos h1]
+  · rw [ite_eq_left h1]
     exact Or.inr ⟨hv h1, fun h => absurd h (by omega)⟩
-  · rw [if_neg h1]
+  · rw [ite_eq_right h1]
     split
     · rcases getD_cases inp (v - df.cols) k with e | e
       · rw [e]; exact Or.inl rfl
@@ -160,9 +160,9 @@ theorem ref_reads {df : Def} {o w ic k : Nat} {P : Nat → Prop} {inp : List Nat
 theorem root_ref {df : Def} {k v : Nat} : (v < df.cols ∧ df.ref 0 [] k v = v) ∨ df.ref 0 [] k v = k := by
   unfold Def.ref
   by_cases h1 : v < df.cols
-  · exact Or.inl ⟨h1, by rw [if_pos h1]; omega⟩
+  · exact Or.inl ⟨h1, by rw [ite_eq_left h1]; omega⟩
   · right
-    rw [if_neg h1]
+    rw [ite_eq_right h1]
     split <;> simp
 
 theorem mem_bound {c : Call} {g : Nat → Nat} {j x : Nat} (h : x ∈ c.bound g j) :
