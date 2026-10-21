@@ -201,7 +201,7 @@ theorem asksOf_rel (coins : Array (Array F128)) (base n : ℕ) (hn : base + coin
     AsksRel (bridge base) (asksOf coins).toC (FlockComplete.asksCut (coinsFrom base coins) n) where
   link _ _ _ _ _ _ _ h := by cases h
   round c k l hl a k' h := by
-    change (asksOf coins).round c |>.run k = _ at h
+    change ((asksOf coins).round c).run k = _ at h
     dsimp only [asksOf] at h
     rw [StateT.run_bind, StateT.run_get, pure_bind] at h
     rcases hk : coins[k]? with _ | cs
