@@ -82,12 +82,18 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
 
 
+def gate_argv(argv: list[str], args: Any) -> list[str]:
+    """The command running the gate's verb `args` through `argv`: over ssh the gate's forced command reads the remote
+    command line with ``shlex.split``, so the words go as one shell-quoted line (a ``--families`` JSON has spaces)."""
+    return [*argv, shlex.join(args)] if Path(argv[0]).name == "ssh" else [*argv, *args]
+
+
 def gate_command(argv: list[str]) -> Any:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``."""
     def verb(*args: str) -> dict[str, Any]:
-        return json.loads(subprocess.run([*argv, *args], check=True, capture_output=True, text=True).stdout)
+        return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
     def gate(session: str, root: str) -> dict[str, Any]:
         answer = verb("open", "--session", session, "--root", root)

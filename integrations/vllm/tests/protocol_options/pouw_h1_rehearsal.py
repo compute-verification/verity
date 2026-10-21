@@ -131,7 +131,8 @@ class Gate:
         self.argv, self.log = argv, []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
-        p = subprocess.run([*self.argv, *args], capture_output=True)
+        from tests.protocol_options.pouw_h1_gpu import gate_argv
+        p = subprocess.run(gate_argv(self.argv, args), capture_output=True)
         return p.returncode, p.stdout + (p.stderr if p.returncode else b"")
 
     def __call__(self, *args: str) -> dict[str, Any]:

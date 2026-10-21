@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -120,6 +121,17 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     assert h["calls"] == 6 and h["layout_static"] and h["commitment"]["draw"]["coin"] and h["served"]["committed"]
     record = json.loads((out / PH.CALLS_FILE).read_text())
     assert record["commitment"] == h["commitment"] and PHC.manifest_reason(record) is None
+
+
+def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
+    """The live gate's forced command splits ssh's remote command line with ``shlex.split``: a reserve's ``--families``
+    (JSON, with spaces) arrives as one word, and a local gate gets the words as they are."""
+    from tests.protocol_options import pouw_h1_gpu as GPU
+    ssh = ["ssh", "-i", "k", "-o", "BatchMode=yes", "research@host"]
+    verb = ["reserve", "--peer", "vy-nebius-2", "--families", PHC.families(18)]
+    got = GPU.gate_argv(ssh, verb)
+    assert got[:len(ssh)] == ssh and shlex.split(" ".join(got[len(ssh):])) == verb
+    assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
 
 
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
