@@ -482,7 +482,7 @@ class _Runner:
 
 
 def _runners(monkeypatch, *modules):
-    """vLLM's model runner modules as this process holds them once an engine is built (`engine.hooks.MODEL_RUNNERS`), each
+    """vLLM's model runner modules as this process holds them once an engine is built (`pouw.MODEL_RUNNERS`), each
     with a fresh `_Runner` subclass, each module's a subclass of the one before; the classes, in order."""
     out, base = [], _Runner
     for mod in modules or ("vllm.v1.worker.gpu.model_runner",):

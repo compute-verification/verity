@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import time
 from collections import deque
 from collections.abc import Mapping
@@ -64,7 +65,6 @@ from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
 
-from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
@@ -577,6 +577,17 @@ def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
     return apply
 
 
+#: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
+MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+
+
+def model_runners() -> tuple[type, ...]:
+    """The ``GPUModelRunner`` classes of `MODEL_RUNNERS` that this process has imported, without importing any: once an
+    engine is built, its runner's class is among them."""
+    found = (getattr(sys.modules.get(m), "GPUModelRunner", None) for m in MODEL_RUNNERS)
+    return tuple(dict.fromkeys(c for c in found if c is not None))
+
+
 def _step_ends(run: PPD.PearlCDeviceRun):
     """The wrapper of a model runner's ``execute_model`` that ends ``run``'s pass once the step's forward has returned
     (`PearlCDeviceRun.end_step`).  This is the step's own boundary under sync and async scheduling alike.  With async
@@ -710,7 +721,7 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-        step_ends, runners = _step_ends(run), hooks.model_runners()
+        step_ends, runners = _step_ends(run), model_runners()
         for cls in runners:
             h.wrap(cls, "execute_model", step_ends)
         run.details["pass_ends"] = ("each engine step, at the model runner's execute_model" if runners else

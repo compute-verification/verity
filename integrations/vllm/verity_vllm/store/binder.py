@@ -35,12 +35,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from verity_vllm.engine.hooks import MODEL_RUNNERS, Hooks
+from verity_vllm.engine.hooks import Hooks
 from verity_vllm.store.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
 from verity_vllm.store.registry import RemoteBandwidthReceipt, Store, TagReceipt
 
 if TYPE_CHECKING:
     from verity.core.protocols.remote_bandwidth.audit import Tiles
+
+RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 
 def default_receipt() -> Receipt:
@@ -394,7 +396,7 @@ class Binder:
     def install(self, hooks: Hooks | None = None) -> Binder:
         h = self.hooks = hooks or Hooks(tag="verity-store")
         binder = self
-        for mod in MODEL_RUNNERS:
+        for mod in RUNNERS:
             if importlib.util.find_spec(mod) is None:
                 continue
             cls = importlib.import_module(mod).GPUModelRunner
