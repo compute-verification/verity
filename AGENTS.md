@@ -24,7 +24,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `claims`: the ids of security claims.
     - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
       package `verity_difftest`) holds the Python that mirrors each one to the Lean.
-    - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
+    - `service/flock/`: C-Flock's executable verifier of record (no dependencies), and the ZK server's Lean
+      (`Flock.Firewall`, the `flock-firewall` binary). `service/firewall/` (`core_firewall`) is the ZK server's release
+      side and record.
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
     reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
@@ -267,10 +269,17 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
+    (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
+    `flock-firewall`, and its release side `core_firewall`, `verity/core/service/firewall/`, with its difftest), the
+    PoUS grader (`verity/core/protocols/pous/lean/`) and
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
     bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
+  - The ZK server is Lean: what leaves the firewall is what its Lean draws, computes or checks (the session loop, each
+    rep's frame, level 0, the finish's proof file, the record and the release decision; live `PROTOCOL.md` §10.4,
+    §10.5). `flock-circuit` (Rust) runs the prover beside it, and still computes the values §10.4 names as Rust's, which
+    the analysis assumes (`FirewallComputes`): among them the scheduled rounds the Lean frame holds the device's to,
+    the opening's being the shadow opening's, on `commit_zk`'s prover data. Its other checks can only refuse more.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for

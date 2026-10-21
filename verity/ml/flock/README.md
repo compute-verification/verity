@@ -26,7 +26,10 @@ and what the merge gate runs per family: `../../../archive/README.md`.
     registration.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
-  `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session.
+  `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with
+  `FC_FIREWALL=1`, `flock-circuit` runs beside the ZK server, which is Lean (`../../core/service/flock/Flock/Firewall`,
+  `flock-firewall`, and its release side `../../core/service/firewall/`): `live/PROTOCOL.md` §10 says what each side
+  computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
 - `verifier/`: the verifier of record: the specification `PROTOCOL.md`, the executable Lean verifier (`../../core/service/flock/`,
@@ -36,8 +39,7 @@ and what the merge gate runs per family: `../../../archive/README.md`.
 C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
 (`verity_vllm.commit.serving_rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
-(`--m0-pythonpath`), not from the checkout. C-Flock ZK (M1/M2) is on draft PRs #123 and #138: #123 targets M0's branch
-(`cursor/flock-m0-prover-4d6a`), which `main` has merged, and #138 is stacked on #123.
+(`--m0-pythonpath`), not from the checkout. C-Flock ZK is `flock-circuit prove --zk` (`live/PROTOCOL.md`).
 `flock-circuit` also reads the typed statement (`verity/flock-circuit/types`, `verity_flock.typed_statement`) of a
 flat class and of a template whose instance type places calls (GEMM) and reads tables (attention, as placed `table/v2`
 reads): `live/src/typed.rs` derives the rows from the types and layouts, as the verifier does, and `flock-circuit rows`

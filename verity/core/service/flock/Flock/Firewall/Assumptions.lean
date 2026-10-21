@@ -4,9 +4,11 @@
 The contract derives what the schedule fixes, and checks every commitment, pad and coin itself. What the firewall fixes by
 its own computation it only reports: its level-0 recheck commitment (`By.recheck`), its opening of that commitment
 (`By.shadow`), and the values it computes from its pads and the values that passed, `final_c'` and the inner proof
-(`By.own`). Today's Rust computes them (`firewall.rs`: the recheck's `commit_zk`, `ShadowLink`, `zkv::replay`, `prove_inner`),
-but for the inner proof's `(ρ, σ)` and `Y`, which the rep's Lean frame computes from its draws and the coins and holds the
-stream to (`Frame.innerOwn`), and the contract checks only that what leaves is what the transcript reports. `FirewallComputes spec t` names that
+(`By.own`). Today's Rust computes them (`firewall.rs`: `ShadowLink` on `commit_zk`'s prover data, `zkv::replay`,
+`prove_inner`), but for the level-0 root, which is `Flock.Firewall.Link`'s (the session loop's `Level0`, else the Lean
+finish's `table`; `commit_zk`'s must equal it), and the inner proof's `(ρ, σ)` and `Y`, which the rep's Lean frame
+computes from its draws and the coins and holds the stream to (`Frame.innerOwn`). The contract checks only that what
+leaves is what the transcript reports. `FirewallComputes spec t` names that
 assumption: each such value is `spec`'s for its name. It bears on zero knowledge only: the verifier checks every outer
 proof whatever the firewall computed, so no soundness statement reads it.
 -/

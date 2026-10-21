@@ -850,9 +850,10 @@ The frame's protocol:
 A `stop` ends the rep where the coins stand, as an honest prover's refusal does. The masking challenger still runs as the
 speed reference. Its inner challenger (`firewall::Gate`) frames what it would send, holds that to the Lean round byte for
 byte, refuses on any difference, and hands the stream only the Lean round; the inner proof's rounds go through it the same
-way. The values of `final_c'`, `τ`'s commitment, the inner proof's openings (outside the stream, in the proof's bytes),
-the recheck and the shadow opening are still Rust's (`FirewallComputes`), as are the scheduled rounds the pass decision
-reads; the inner proof's `[ρ, σ]` and `Y` are the frame's. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
+way. The values of `final_c'`, `τ`'s commitment and the shadow opening (on `commit_zk`'s prover data, §10.2) are still
+Rust's (`FirewallComputes`), as are the scheduled rounds the pass decision reads; the inner proof's `[ρ, σ]` and `Y` are
+the frame's, the level-0 root of record is the Lean `Link`'s (§10.2), and the proof file, the inner proof's openings
+included, is the Lean finish's (below). Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
 **The proof file is the Lean finish's.** Each session has one Lean finish (`Flock.Firewall.Finish`) on the statement the
