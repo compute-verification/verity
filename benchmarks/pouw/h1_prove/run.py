@@ -9,8 +9,9 @@ challenger and the verifier never hold a row, a salt or a served value):
 1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and draw coins; the prover commits the window's
    A and B rows (`window.py commit`) as the registered values a/<K> and b/<K> of the window's public Program, and the
    salt coin opens after those roots are recorded;
-2. the prover serves every tile's z and receipt under the unit salt (`h1unit.unit_salt` of the coin) and commits them
-   (`window.py serve`); the registration (the window's four roots) is recorded, and the draw coin opens after it. The
+2. the prover serves every tile's z and receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt`
+   of the coin's stand-in for the certifier's reveal, the epoch as the window, a stand-in stream and prover) and commits
+   them (`window.py serve`); the registration (the window's four roots) is recorded, and the draw coin opens after it. The
    verifier builds the window's public Program and its template-instance partition from the commitment's public shape
    (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and ``--partition``), holds
    the commitment's registration to them (`check_registration`), and the stager builds its statement bound to them;
@@ -262,8 +263,10 @@ def epoch(work: Path, name: str, layer: str, number: int, a, record: dict,
     after = digest(com_bytes)
     so = ch.open("salt", after)
     assert coin_reason(ch.commitment, so, "salt", after) is None
-    salt = U.unit_salt(so.coin)
+    salt = U.unit_salt(U.stand_in_reveal(so.coin), number)
     rec["salt_opening"] = so.to_json()
+    rec["salt"] = {"by": "pouw_salt", "reveal": "stand-in: h1unit.stand_in_reveal of the salt coin", "window": number,
+                   "stream": U.STREAM.hex(), "prover": U.PROVER.hex()}
     t = time.time()
     served = prover("serve", str(work / name), salt.hex(), str(work / f"{name}-served.json"), "--workers", str(a.workers))
     rec["serve_seconds"] = round(time.time() - t, 1)

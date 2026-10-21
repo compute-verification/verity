@@ -96,6 +96,9 @@ import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
+import Proofs.Flock.Claims.ZK.FinishCommit
+import Proofs.Flock.Claims.ZK.FinishPiop
+import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -443,9 +446,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
+  `FinalRoundEq` and `ProgReads` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
   about what the transport hands `flock-firewall link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`; `HelloEq`
-  follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow` and the `Finish`'s round facts about the session loop
+  follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and `CoinsRead`)
+  and the `Finish`'s round facts about the session loop
   (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
   (`LeanRelease.checkIs_coinLayer`).
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
@@ -471,6 +475,18 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
+* `FinishCommit`: the firewall's own `Finish` (`Flock.Firewall.Finish`) commits as the masked prover does. Its codeword
+  by the FFT is `encodeRows`'s (`Flock.Firewall.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`,
+  in any lawful monad, `FlockComplete.commitP` returns `commitFw`'s commitment and `FlockComplete.commitPZk` of the
+  table `flock-firewall link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
+  their openings agree (`openP_eq`).
+* `FinishPiop`: the firewall's transcript, zerocheck, lincheck and ring switch are the masked session's from its source,
+  by unfolding through `Asks.toC`: **`Flock.Firewall.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,
+  `lincheckCut` at the masked values) and **`ringSwitchP_eq`** (`ringSwitchCut` at the switched vectors).
+* `FinishInner`: the firewall's pads commitment is the masked prover's (`Flock.Firewall.Finish.innerCommitP_eq`, through
+  `InnerCommit.toC`), and its inner proof, which never checks the batched constraint, is `FlockComplete.innerP`'s
+  wherever that constraint holds at every coin (**`innerP_eq`**), which it does at pads with `h_ab = h_a·h_b` and
+  `w = x·y` where `repFw`'s stop does not fire (**`batched_of_failingOn`**: no constraint `failingOn` the pads).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,

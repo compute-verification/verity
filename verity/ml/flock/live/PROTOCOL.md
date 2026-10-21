@@ -784,10 +784,18 @@ opening at the schedule's place, not the prover's: the session stream's at `Comm
 stream in table order, rep 0's before rep 1's, at the coin counts the verifier's replay draws (`Session.planOf`;
 `flock-firewall session --schedule` prints them). A `Commit` or `Round` anywhere else is refused before it reaches the
 auditor, and so is a `Finish` before the schedule's last opening. A coin it refuses, or one asked for after a refusal,
-is answered `Refused("PROVER-STOPPED: …")`. `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own
-connection and Rust's checks. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
-(`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests and last request are proved,
-and its link and frame feeding are still assumed.
+is answered `Refused("PROVER-STOPPED: …")`. The reps' frames are the loop's own: it prints `FRAMES 127.0.0.1:PORT` after
+its `LISTENING` line, and each connection there is one rep's frame (`Session.frames`, the protocol below), which
+`firewall::LeanFrame::connect` starts. A rep stream's `Round` leaves only as the release of the frame bound to its
+stream, byte for byte and at its coin count, or at the stream's first round as the stream's domain frame and the release
+of a frame bound to none, which is then bound to it (`Frames.carry`); anything else is refused before it reaches the
+auditor. Once a round's coins open the tree, the loop sets them as its frame's coins before the prover receives them
+(`Frames.feedOf`), and the frame's `coins N` takes those and no others (`Frames.take`: Rust's bytes must be them).
+`FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection, Rust's checks and a frame
+process per rep. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
+(`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its
+frames take are proved (`loop_coinsRead`), and its link and the frames' state (`ProgReads`: the `prior` coins and the
+rounds Rust hands them) are still assumed.
 
 The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,
@@ -807,7 +815,8 @@ The frame's protocol:
   and whose `finish` is `stop`. At the opening's label the frame runs the rank check, and a mask slot of less than full
   rank is answered `stop WHY`.
 - **coins**: after each released round, `coins N` and the coins the stream answered it. No round and no `finish` is taken
-  while they are owed. A zerocheck outer coin 1, level 0's `ρ_0, ρ_1` dependent over F128 (the four words after its last
+  while they are owed. One of the session loop's frames takes the coins the loop opened for its round instead, and
+  refuses (`err WHY`) where there are none or the bytes Rust sent are others. A zerocheck outer coin 1, level 0's `ρ_0, ρ_1` dependent over F128 (the four words after its last
   masked value) and the inner proof's `β = 0` are answered `stop WHY`.
 - **the inner proof**: its four rounds (`ε`, the batching coins, `β`, the queries), after the opening's, are the
   firewall's own and come alone (`round N LEN`), which the frame takes nowhere else: `zk_finish` proves it on a

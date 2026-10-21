@@ -126,7 +126,7 @@ class PearlCArm:
 
         def make(original: Any) -> Any:
             def step(*a: Any, **kw: Any) -> Any:
-                if stack.active is None or stack._pass is not None:
+                if stack.active is None or stack.open_pass is not None:
                     return original(*a, **kw)
                 with stack.pass_():
                     return original(*a, **kw)
@@ -172,7 +172,7 @@ class PearlCArm:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}
 
     def close(self, target: Any = None) -> None:
-        if self.stack is not None and self.stack._pass is None:
+        if self.stack is not None and self.stack.open_pass is None:
             self.stack.activate(None)
 
 
