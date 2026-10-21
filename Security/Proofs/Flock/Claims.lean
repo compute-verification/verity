@@ -96,6 +96,7 @@ import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Recursion.SchedHolo
 import Proofs.Flock.Claims.Recursion.SchedCount
+import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.LayoutBCap
 import Proofs.Flock.Claims.Recursion.LayoutBTops
