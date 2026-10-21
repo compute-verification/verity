@@ -93,7 +93,6 @@ theorem liveAsks_rel (ch : Frame.Chan) (C C' : Array (Array F128)) (hC : ∀ i <
         · show ((liveAsks ch C live).round c).run got = _
           simp only [liveAsks, StateT.run_bind, StateT.run_get, StateT.run_set, StateT.run_pure, pure_bind, hs, hCk,
             hn', Bool.false_eq_true, ↓reduceIte]
-          all_goals rfl
         · rw [Array.getElem?_push]
           split
           · rename_i hik
@@ -242,12 +241,11 @@ theorem repFw_parts (C' : Array (Array F128)) (hs : Hashes (StateT ℕ V)) (st :
   unfold repFw at h
   obtain ⟨⟨p, zl, cons⟩, tr₁, k₁, h1, h2⟩ := tmw_bind_ok h
   dsimp only at h2
-  obtain ⟨u, tr₂, k₂, h3, h4⟩ := tmw_bind_ok h2
-  split at h3
-  · cases h3
-  · rename_i hne
+  split at h2
+  · obtain ⟨u, tr₂, k₂, h3, -⟩ := tmw_bind_ok h2
     cases h3
-    obtain ⟨inner, tr₃, k₃, h5, h6⟩ := tmw_bind_ok h4
+  · rename_i hne
+    obtain ⟨inner, tr₃, k₃, h5, h6⟩ := tmw_bind_ok h2
     cases h6
     exact ⟨p, zl, cons, tr₁, k₁, inner, h1, by simpa using hne, h5, rfl⟩
 
@@ -276,10 +274,10 @@ def innerProg (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : Rep
 
 /-- **`innerLive` is its pads commitment, then `innerProg`.** -/
 theorem innerLive_eq (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) :
-    innerLive ch t rep dom q = do
+    innerLive ch t rep dom q = (do
       let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) (padsOf q.draws) (saltAt q.draws.salts) :
         V InnerCommit) : LiveM InnerCommit)
-      let _ ← (innerProg ch t rep dom q ic).run (Transcript.init #[] dom) := rfl
+      let _ ← (innerProg ch t rep dom q ic).run (Transcript.init #[] dom)) := rfl
 
 /-- **The live inner rep runs `repFw`'s inner proof**: where the port's `repCons` (`repFw`'s, answered by `asksOf C'`,
 which is the request's coins `q.coins` below their count) returns the proof `p`, level-0 messages `zl`, constraints
