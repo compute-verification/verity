@@ -4,18 +4,19 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
-#   2. layer.py records the window's int8 codes from the checkpoint (layer L's q/k/v/gate/up at H1's quantizers; a second
-#      window from other tokens) and run.py prepare commits, serves, draws, opens, checks the openings and has the drawn
-#      units staged, while stage.py builds the unit's circuit (the long step at K = 4096), bound to the window's Program
-#      once the commitment gives its shape
+#   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
+#      quantizers; a second window from other tokens) and run.py prepare commits (the rows and every tile's z/y record),
+#      serves, draws, opens, checks the openings and has the drawn units staged, while stage.py builds the unit's circuit
+#      (the long step at K = 4096), bound to the window's Program once the commitment gives its shape
 #   3. one loopback --zk session per statement (the drawn units; the other window's unit; the drawn units on a tampered A
 #      row; the in-proof negatives, each also as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn,
 #      each prover under the firewall (FC_FIREWALL=1: the Lean session loop, its level-0 draw and Lean finish) unless
 #      H1_FIREWALL=0
 #   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and registered reads
-#      (--program, --partition, --registered: honest ACCEPT with its units derived; flipped-z, wrong-receipt, other-window
-#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-z and their -skip runs
-#      REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#      (--program, --partition, --registered: honest ACCEPT with its units derived; flipped-zy, wrong-receipt, other-window
+#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-d, the record negatives
+#      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
+#      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)

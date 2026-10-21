@@ -27,6 +27,8 @@
 * `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
   seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R, decision 121).
 * `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W (decision 104).
+* `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`, RT4-INT-33): the record a registered input,
+  its z the tile's A Bᵀ and its y the served dequant (`PouwZyDequant`, the activation scale first, no bias).
 * `h1window`: an H1 window as one public Program of those tiles in fixed slots (`PouwH1Window`), the tile R × C a
   parameter and one tile template per distinct K (`PouwH1WindowTile`, its A and B rows ``a_k<K>`` and ``b_k<K>``),
   each linear's B rows registered once for all its calls; its template-instance partition derives its units, and

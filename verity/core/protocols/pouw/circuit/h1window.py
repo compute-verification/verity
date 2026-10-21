@@ -1,11 +1,16 @@
 """H1's window as one public Program: every R × C tile of a window's calls is one call of its call's contraction K's
-template (`template`: one call of the tile unit, `h1tile.PouwH1Tile`, at that K), so the verifier derives the window's
-units from its own copy of the Program under the `Q_template_instances` query of its templates (`query`), and a served
-path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
+template (`template`: one call of the tile unit, `h1zy.PouwH1TileZy` over `h1tile.PouwH1Tile`, at that K), so the verifier
+derives the window's units from its own copy of the Program under the `Q_template_instances` query of its templates
+(`query`), and a served path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the window binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
   down_proj's calls, at K the intermediate size, instantiate their own template in the same Program.
+* **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
+  rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
+  dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
+  rows (`h1zy.ROW`: an A row is its K codes then its f32 s_a, a B row its K weight codes then their f32 s_w). The record
+  is an input, so the unit's outputs are the receipt and one bit.
 * **Templates.** K's template takes the tile's parameters with its A and B rows named for their K, ``a_k<K>`` and
   ``b_k<K>`` (`template_params`): `registered.reads` keys a unit's rows by its template's parameter names, so a mixed-K
   window registers in one read, A row i of K's units under ``a_k<K>[i]``, each port with its own width and domain, and
@@ -16,13 +21,15 @@ path registers the trees it commits as the Program's parameters (`one_stage.serv
   ``a/<K>``: blocks of ``M`` rows each (`slot`, a power of two of at least R, the token rows padded with zero rows), one
   block per input a step's calls of that K read. ``b/<K>`` is the B rows of the linears of that K, linear after linear,
   each linear's n rows once (a whole number of C): every call of a linear, in any step, reads the same rows, so a window
-  of S steps registers Σn weight rows, not S × Σn. ``salt`` is the units' one coin, ``position`` one row per unit (its
-  number), and ``roots`` the window's seed-group roots.
+  of S steps registers Σn weight rows, not S × Σn. ``zy`` is one record per unit (`h1zy.RECORD`, 48 R C bits: its cells'
+  s32 z, row-major, then their bf16 y), row u unit u's, the served ``scaled_mm_zy`` record of its tile (a padded row's
+  cells z = 0 and y = +0). ``salt`` is the units' one coin, ``position`` one row per unit (its number), and ``roots`` the
+  window's seed-group roots.
 * **Units** are the tiles, call by call and row block major. Tile ``(c, ti, tj)`` is the unit on rows
-  ``block M + [R ti, R ti + R)`` of ``a/<K>`` and on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>``, at position its
-  number. The Program's result is each call's tiles' outputs in turn (their widths depend on K), and unit u's outputs are
-  row u of the window's ``z`` and ``receipt``. `unit_reads` gives, from the Program's own references, the row of each
-  parameter that each of a unit's template parameters reads.
+  ``block M + [R ti, R ti + R)`` of ``a/<K>``, on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>`` and on row u of
+  ``zy``, at position u, its number. The Program's result is each call's tiles' outputs in turn (their widths depend on
+  K), and unit u's outputs are row u of the window's ``receipt`` and ``ok``. `unit_reads` gives, from the Program's own
+  references, the row of each parameter that each of a unit's template parameters reads.
 * **Ports.** ``salt`` is the units' coin (`In(kind="coin")`), ``position`` their positions (`In(kind="position")`), and each
   unit's receipt a sink of the result (`Out(sink=True)`, `_ports`): the window is no seed, so the port rules follow the coin
   into every tile, and a unit that returns no sink is refused.
@@ -42,14 +49,15 @@ from verity.ml.circuits.refs import coll_concat, runs
 from verity.ml.circuits.types import Array, Tuple
 
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
-#: the tile unit's parameters, in order: its R A rows, its C B rows, the salt, its position, the roots
-TILE_PARAMS = ("a", "b", "salt", "position", "roots")
+#: the tile unit's parameters, in order: its R A rows, its C B rows, its z/y record, the salt, its position, the roots
+TILE_PARAMS = ("a", "b", "zy", "salt", "position", "roots")
 #: the window's parameters after each K's ``a/<K>`` and ``b/<K>``
-SHARED = ("salt", "position", "roots")
-#: the unit's outputs (`h1tile`'s record), each a row per unit of the window's outputs
-OUTPUTS = ("z", "receipt")
+SHARED = ("zy", "salt", "position", "roots")
+#: the unit's outputs (`h1zy`'s), each a row per unit of the window's outputs
+OUTPUTS = ("receipt", "ok")
 
 
 def slot(rows: int, tile: tuple[int, int]) -> int:
@@ -65,13 +73,19 @@ def roles(ks: Iterable[int]) -> tuple[str, ...]:
     return tuple(r for k in sorted(set(ks)) for r in (f"a/{k}", f"b/{k}")) + SHARED
 
 
-def tile_unit(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
-    """The tile unit at contraction ``k``: `h1tile.PouwH1Tile` (or ``definition``, its v3) over
+def h1_tile(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
+    """The H1 tile at contraction ``k``: `h1tile.PouwH1Tile` (or ``definition``, its v3) over
     ``GemmAccumulatorS8_v2{K, sm120}``, R × C ``tile``, every (i, j) pair."""
     r, c = tile
     exact = bind(BG.GemmAccumulatorS8, K=int(k), **BG.GEMM_SM120_S8)
     return bind(definition or H.PouwH1Tile, EXACT=exact, R=int(r), C=int(c),
                 PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
+
+
+def tile_unit(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
+    """The tile unit at contraction ``k``: `h1zy.PouwH1TileZy` over `h1_tile` (``definition`` its H1 tile, `h1tile.PouwH1Tile`
+    unless given, or its v3), which reads its unit's z/y record and proves it."""
+    return Z.unit(h1_tile(k, tile, definition))
 
 
 def template_params(k: int) -> tuple[str, ...]:
@@ -134,8 +148,9 @@ def _signature(S: Any) -> tuple:
         blocks = 1 + max(blk for lin, blk in S.CALLS if ks[lin] == k)
         params += [(f"a/{k}", Array(blocks * S.M, at.elem)),
                    (f"b/{k}", Array(sum(n for _name, kk, n in S.LINEARS if kk == k), bt.elem))]
-    salt, position, roots = (t for _name, t in S.TILES[0][1].signature()[0][2:])
-    params += [("salt", salt), ("position", Array(sum(_tiles(S)), position)), ("roots", roots)]
+    zy, salt, position, roots = (t for _name, t in S.TILES[0][1].signature()[0][2:])
+    units = sum(_tiles(S))
+    params += [("zy", Array(units, zy)), ("salt", salt), ("position", Array(units, position)), ("roots", roots)]
     ret = Tuple(*(Array(n, tiles[ks[lin]].signature()[1]) for (lin, _blk), n in zip(S.CALLS, _tiles(S))))
     return tuple((S.PREFIX + role, t) for role, t in params), ret
 
@@ -151,7 +166,8 @@ def _body(B: Any, S: Any, *params: Any) -> Any:
             a0 = blk * S.M + r * ti
             for tj in range(n_of[lin] // c):
                 j0 = b0[lin] + c * tj
-                outs.append(B.call(tiles[k], a[a0:a0 + r], b[j0:j0 + c], got["salt"], got["position"][len(outs)],
+                u = len(outs)
+                outs.append(B.call(tiles[k], a[a0:a0 + r], b[j0:j0 + c], got["zy"][u], got["salt"], got["position"][u],
                                    got["roots"]))
     return coll_concat(_signature(S)[1], outs)
 
@@ -178,11 +194,11 @@ def _sinks(unit: Any) -> list[tuple[int, int]]:
 
 
 PouwH1Window = CompositeDefinition(
-    "PouwH1Window", 2, ("TILES", "LINEARS", "CALLS", "M", "PREFIX"), _signature, _body, register=False, ports=_ports,
+    "PouwH1Window", 3, ("TILES", "LINEARS", "CALLS", "M", "PREFIX"), _signature, _body, register=False, ports=_ports,
     doc="One H1 window's tiles, call by call and row block major: TILES[K] on rows block M + [R ti, R ti + R) of a/K (each "
         "K's A blocks of M rows) and on rows [C tj, C tj + C) of the call's linear in b/K (each K's LINEARS' B rows once, "
-        "linear after linear), the salt, the tile's position and the window's roots; every parameter named PREFIX and its "
-        "role.")
+        "linear after linear), the tile's z/y record (row u of zy for tile u), the salt, the tile's position and the "
+        "window's roots; every parameter named PREFIX and its role.")
 
 
 def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, int]], m: int, tile: tuple[int, int],
@@ -191,7 +207,9 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
     order, its A slot ``m`` and its R × C ``tile``, over the tile unit at each K (`tile_unit`, or ``unit(K)``), its
     parameters named ``prefix`` and their roles. Refused (ValueError): no linear or no call, a linear named twice or that no
     call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no power of two of at least
-    R, an A block of a K that no call reads, or a unit whose rows aren't R × C or whose shared parameters differ by K."""
+    R, an A block of a K that no call reads, or a unit whose rows aren't R × C rows of K codes and their scale
+    (`h1zy.ROW`), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
+    other than its receipt and ``ok``, or whose shared parameters differ by K."""
     linears = tuple((str(name), int(k), int(n)) for name, k, n in linears)
     calls = tuple((str(lin), int(blk)) for lin, blk in calls)
     r, c = (int(x) for x in tile)
@@ -212,9 +230,17 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
     units = tuple((k, make(k)) for k in sorted(set(ks.values())))
     shared = None
     for k, t in units:
-        sig = t.signature()[0]
+        sig, ret = t.signature()
         if tuple(name for name, _t in sig) != TILE_PARAMS or (sig[0][1].n, sig[1][1].n) != (r, c):
             raise ValueError(f"the tile unit at K = {k} is no {r} × {c} tile over {TILE_PARAMS}: {sig}")
+        if (sig[0][1].elem, sig[1][1].elem) != (Z.ROW(k), Z.ROW(k)):
+            raise ValueError(f"the tile unit at K = {k} reads A and B rows of {sig[0][1].elem.leaves} and "
+                             f"{sig[1][1].elem.leaves} bits, not {k} codes and the row's f32 scale (h1zy.ROW, {8 * k + 32} bits)")
+        if sig[2][1] != Z.RECORD(r, c):
+            raise ValueError(f"the tile unit at K = {k} reads a {sig[2][1].leaves}-bit record, not its {r} × {c} cells' z "
+                             f"then y (h1zy.RECORD, {48 * r * c} bits): a record of z alone leaves the served y unproved")
+        if tuple(name for name, _t in getattr(ret, "fields", ())) != OUTPUTS:
+            raise ValueError(f"the tile unit at K = {k} returns {ret}, not {OUTPUTS}")
         if shared is not None and tuple(t for _n, t in sig[2:]) != shared:
             raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {units[0][0]}")
         if not _sinks(t):
@@ -269,10 +295,10 @@ def _inputs(program: Program) -> dict[int, str]:
 
 def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     """The rows unit ``u`` of the window's Program reads (``tp`` its template partition, `P.evaluate`'s): for each of its
-    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, ``salt``, ``position``, ``roots``; `registered.reads`'
-    keys), the window's parameter and the row of it, one whole row of its elements; and for each of its outputs (``z``,
-    ``receipt``, after the Program's prefix), row ``u`` of the window's. From the unit's call alone, so a unit costs its
-    parameters at any K."""
+    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, ``zy``, ``salt``, ``position``, ``roots``;
+    `registered.reads`' keys), the window's parameter and the row of it, one whole row of its elements; and for each of its
+    outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the window's. From the unit's call alone, so a
+    unit costs its parameters at any K."""
     k, _m = tp.locate(u)
     (inputs, params), node, out = _scan(program), program.root.body.nodes[k], {}
     for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], node.args)):
