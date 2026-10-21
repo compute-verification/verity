@@ -19,5 +19,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs",
           # verifier.py and its in-process harness, which the stub verifier runs
           "benchmarks/remote_session",
-          # the host's deployed files: the configuration the gate reads, the tunnel's ports
-          "tools/research/src/research/pods/nebius/verifier"]
+          # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its
+          # publish imports from the pinned tree
+          "tools/research/src/research"]

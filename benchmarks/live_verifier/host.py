@@ -537,12 +537,18 @@ def execute(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
     return end
 
 
-def replay_main(argv: list[str], log: Path) -> int:
-    """`replay.py`'s main in this process, its printout to `log`."""
-    for p in (str(REPLAY), str(DIFFTEST)):
+def replay_module():
+    """`replay.py`, imported from this tree as the host's python3 (no site packages, `-I`) reaches it."""
+    for p in (str(TREE), str(REPLAY), str(DIFFTEST)):
         if p not in sys.path:
             sys.path.insert(0, p)
     import replay
+    return replay
+
+
+def replay_main(argv: list[str], log: Path) -> int:
+    """`replay.py`'s main in this process, its printout to `log`."""
+    replay = replay_module()
     with open(log, "w") as f, contextlib.redirect_stdout(f):
         return replay.main([str(a) for a in argv])
 

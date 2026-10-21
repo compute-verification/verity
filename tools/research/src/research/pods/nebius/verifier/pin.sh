@@ -2,7 +2,8 @@
 # vy-verifier-pin COMMIT < TAR: pin the tree the verifier runs from, as root. TAR is infra's `git archive` of a pushed commit (below);
 # it is unpacked root-owned at /opt/vy-verifier/COMMIT, never changed after. The Lean toolchain the remote audit's Lake package names
 # is installed under /opt/elan (root's) and linked as COMMIT/.lean-bin. Each Lake package's .lake is auditor's, and `lake build
-# remote-audit-verifier remote-audit-difftest` runs there as auditor, so neither a run nor a replay waits on a build. Last,
+# remote-audit-verifier remote-audit-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as
+# auditor, so neither a run nor a replay waits on a build. Last,
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
 # it for an installed COMMIT skips the unpack and reads no TAR.
 #
@@ -43,7 +44,8 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
   install -d -m 0755 -o auditor -g auditor "$d/.lake"
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
-  sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest" | tail -1
+  sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest &&
+         cd '$T/verity/core/service/sampled_proofs' && lake build sampled-proofs-verifier" | tail -1
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"
 echo "pinned: $O/current -> $c"

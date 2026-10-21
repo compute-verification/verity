@@ -14,6 +14,7 @@ import io
 import json
 import re
 import shlex
+import subprocess
 import sys
 import tarfile
 from datetime import datetime, timezone
@@ -333,6 +334,22 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     assert json.loads(argv[argv.index("--meta") + 1]) == {
         "run": RUN, "by": LANE, "pinned": PIN, "peer": "vy-nebius-2", "period": "memory-line-1",
         "requested_utc": "2026-10-21T13:00:00Z", "end": {"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}, "replay": None}
+
+
+@pytest.mark.parametrize("code", [
+    "print(host.replay_module().__file__)",
+    "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
+    "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
+    "sys.argv = ['auditor_line.py', '--help']; runpy.run_path(str(host.VERIFIER.parent / 'auditor_line.py'), "
+    "run_name='__main__')",
+])
+def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
+    """The host runs its units with its own python3 (`-I`), where neither `verity` nor any other package is installed:
+    each import the run, the replay and the publish make resolves within the pinned tree."""
+    p = subprocess.run([sys.executable, "-I", "-S", "-c", f"import runpy, sys; sys.path.insert(0, {str(HERE.parent)!r}); "
+                        f"import host; {code}"], capture_output=True, text=True, cwd=tmp_path)
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert "site-packages" not in p.stdout
 
 
 def names(tar: tarfile.TarFile) -> set[str]:
