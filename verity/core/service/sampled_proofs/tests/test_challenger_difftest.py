@@ -577,6 +577,16 @@ def session(j: Any) -> Any:
     return _refusing(go)
 
 
+def credited(j: Any) -> Any:
+    _request(j, ["descriptor", "key", "ledger", "window"])
+    d = _hex(j["descriptor"])
+
+    def go():
+        return Ch.credited_session(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), d,
+                                   lms_verify)._asdict()
+    return _refusing(go)
+
+
 HELLOS = ['{"error":"a client\'s frames are hello","peer":"10.0.0.7"}', "x", "", "\u00e9\x7f"]
 
 
@@ -1319,6 +1329,40 @@ def session_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+CREDITED_NAMES = ["honest", "other-circuit", "descriptor-edited", "no-period", "ledger", "descriptor-form"]
+
+
+def _descriptor(rng: random.Random) -> bytes:
+    """A declared window Program's descriptor as the verifier holds it (canonical JSON), or bytes of any kind."""
+    if rng.random() < 0.3:
+        return rng.randbytes(rng.choice([1, 64, 1000]))
+    calls = [{"module": f"model.layers.{i}.mlp", "k": rng.choice([4096, 14336])} for i in range(rng.randint(0, 6))]
+    return canonical_json_text({"calls": calls, "root": "RemoteWindow", "schema": "verity-program/v1"}).encode()
+
+
+def credited_case(rng: random.Random, name: str) -> Any:
+    """A window in its lane's period whose circuit is the SHA-512 of the descriptor the verifier holds; then a period
+    committing another circuit, the descriptor edited, the window in no period, a refused ledger, a descriptor not hex."""
+    if name == "ledger":
+        j = ledger_case(rng, rng.choice(LEDGER_NAMES[1:]))
+        if isinstance(j, dict):
+            j["descriptor"] = _descriptor(rng).hex()
+        return j
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s, period=rng.choice(["open", "closed"]))
+    d = _descriptor(rng)
+    lg.period_open["circuit"] = rng.choice(CIRCUITS) if name == "other-circuit" else hashlib.sha512(d).hexdigest()
+    j = {"descriptor": d.hex(), "key": s.key.to_json(), "ledger": lg.lines(), "window": lg.window}
+    match name:
+        case "descriptor-edited":
+            j["descriptor"] = rng.choice([_flip(d.hex(), rng.randrange(len(d))), (d + b"\n").hex(), d[:-1].hex()])
+        case "no-period":
+            j["ledger"] = lg.lines([e for e in lg.events if not e[0].startswith("period")])
+        case "descriptor-form":
+            j["descriptor"] = rng.choice([None, 5, d.hex().upper() + "AB", d.hex() + "0", ["00"]])
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -1340,6 +1384,8 @@ HEAD = D.Port(PIECES, "challenger_head", head, _cases(head_case, HEAD_NAMES), pa
               of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
                  need_rejects=False, of_record="lean")
+CREDITED = D.Port(PIECES, "challenger_credited", credited, _cases(credited_case, CREDITED_NAMES), package=PACKAGE,
+                  need_rejects=False, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -1348,7 +1394,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
-        (SESSION, session_case, SESSION_NAMES, 300)]
+        (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
