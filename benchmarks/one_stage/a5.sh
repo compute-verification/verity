@@ -2,7 +2,9 @@
 # One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through registration, the verifier's Lean
 # draw, M0's prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
 # tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
-# `verity-vllm serving-rows` on it. M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch.
+# `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),
+# which A5 takes only over a SHA-512 run root of record. M0's flock-circuit and Lean's flock-verify are built from this tree, in
+# scratch.
 #   research run --on M --project verity --cwd clone --mem-gb 16 -- python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/one_stage/a5.sh
 # Kept in $OUT: a5's records and logs, the public files, the session (its proofs and record), the binaries' sha256 and the
@@ -30,19 +32,26 @@ sha256sum $BIN $LEAN | tee $O/binaries.sha256
 
 # serving: the CPU Commit and its window, from the sealed bundle
 S=$W/served
-(cd integrations/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
-t0=$(date +%s%N)
-$REPO/.venv/bin/verity-vllm serving-rows $S/commit/replay_bundle_p1 --row-dir $S/row --partition $S/partition.json --out $S/window \
-  > $O/serving-rows.log 2>&1 || { tail -20 $O/serving-rows.log; exit 8; }
-echo "serving_rows_s=$(( ($(date +%s%N) - t0) / 1000000 ))e-3" | tee -a $O/serving-rows.log
-mkdir -p $O/window && cp $S/window/{registration,window,partition,index}.json $S/window/m*-public.bin $O/window/
+WINDOW=${WINDOW:-stand-in}
+if [ "$WINDOW" = served ]; then
+  (cd integrations/vllm && $PY -m tests.pipeline.served_rope $S --served) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
+  WIN=$S/hook
+else
+  (cd integrations/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
+  t0=$(date +%s%N)
+  $REPO/.venv/bin/verity-vllm serving-rows $S/commit/replay_bundle_p1 --row-dir $S/row --partition $S/partition.json --out $S/window \
+    > $O/serving-rows.log 2>&1 || { tail -20 $O/serving-rows.log; exit 8; }
+  echo "serving_rows_s=$(( ($(date +%s%N) - t0) / 1000000 ))e-3" | tee -a $O/serving-rows.log
+  WIN=$S/window
+fi
+mkdir -p $O/window && cp $WIN/{registration,window,partition,index}.json $WIN/m*-public.bin $O/window/
 
 # the verifier's lowering: a synthetic input set of the template (its values are never read)
 $PY -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 4 --seed 1 --out $W/sets > $O/sets.log 2>&1 || exit 9
 
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
-$PY benchmarks/one_stage/a5.py --bundle $S/commit/replay_bundle_p1 --row-dir $S/row --partition $S/partition.json --window $S/window \
+$PY benchmarks/one_stage/a5.py --bundle $S/commit/replay_bundle_p1 --row-dir $S/row --partition $S/partition.json --window $WIN \
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p $O/a5

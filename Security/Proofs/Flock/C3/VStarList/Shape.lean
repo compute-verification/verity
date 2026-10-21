@@ -6,7 +6,8 @@ import Proofs.Flock.VBridge.Family.Structure
 
 The verifier's list (`RecVStar.statements`) is V*'s statements (`VStar.statementsOf`, `rec-open` and `rec-residuals`,
 the parts of `specHolo` at a private inner shape: `statements_holo`), then candidate 3's (`candidate3Statements`):
-RecSparse at the inner shape's `sparse` entry, then R's levels and the parts of R's opening at META's `stacked`. `checkCandidate3` refuses a list with an opening off R's shape, and
+RecSparse at the inner shape's `sparse` entry, then R's levels and the parts of R's opening at META's `stacked`; then
+RecCap (`VStar.capStatement`, `.cap N`). `checkCandidate3` refuses a list with an opening off R's shape, and
 `candidate3Statements` RecSparse without R and an R off the two claims or off the bucket's `table_m`. So:
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
@@ -27,11 +28,20 @@ theorem eok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
+/-- **RecCap's statement is `.cap N`** (`VStar.capStatement`, `N = 2^cap₀`). -/
+theorem capStatement_ok {vsh : VStar.Algebra.Shape} {K : VStar.Stmt} (h : VStar.capStatement vsh = .ok K) :
+    ∃ n, K = .cap n := by
+  unfold VStar.capStatement at h
+  obtain ⟨s, -, h⟩ := eok_bind h
+  split at h <;> cases h
+  exact ⟨_, rfl⟩
+
 /-- **The verifier's list**: V*'s statements at the inner shape, holo where it is (`statementsOf`), then candidate 3's,
-and `checkCandidate3` passes. -/
+then RecCap (`.cap n`), and `checkCandidate3` passes. -/
 theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss) :
-    ∃ vsh A C, VStar.statementsOf vsh i.holo = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C ∧
-      Flock.RecVStar.checkCandidate3 i (A ++ C) = .ok () := by
+    ∃ vsh A C n, VStar.statementsOf vsh i.holo = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧
+      VStar.capStatement vsh = .ok (.cap n) ∧ ss = A ++ C ++ #[.cap n] ∧
+      Flock.RecVStar.checkCandidate3 i (A ++ C ++ #[.cap n]) = .ok () := by
   unfold Flock.RecVStar.statements at h
   dsimp only at h
   split at h
@@ -47,19 +57,23 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   · cases h
   obtain ⟨A, hA, h⟩ := eok_bind h
   obtain ⟨C, hC, h⟩ := eok_bind h
+  obtain ⟨K, hK, h⟩ := eok_bind h
+  obtain ⟨n, rfl⟩ := capStatement_ok hK
   obtain ⟨u, hu, h⟩ := eok_bind h
+  obtain ⟨u', -, h⟩ := eok_bind h
   cases h
-  exact ⟨_, A, C, hA, hC, rfl, hu⟩
+  exact ⟨_, A, C, n, hA, hC, hK, rfl, hu⟩
 
 /-- **The verifier's list at a private inner shape**: V*'s holo statements (`statementsHolo`, the parts of
-`specHolo`), then candidate 3's. -/
+`specHolo`), then candidate 3's, then RecCap. -/
 theorem statements_holo {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss)
     (hh : i.holo = true) :
-    ∃ vsh A C, VStar.statementsHolo vsh = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C ∧
-      Flock.RecVStar.checkCandidate3 i (A ++ C) = .ok () := by
-  obtain ⟨vsh, A, C, hA, hC, e, hu⟩ := statements_ok h
+    ∃ vsh A C n, VStar.statementsHolo vsh = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧
+      VStar.capStatement vsh = .ok (.cap n) ∧ ss = A ++ C ++ #[.cap n] ∧
+      Flock.RecVStar.checkCandidate3 i (A ++ C ++ #[.cap n]) = .ok () := by
+  obtain ⟨vsh, A, C, n, hA, hC, hK, e, hu⟩ := statements_ok h
   rw [hh] at hA
-  exact ⟨vsh, A, C, hA, hC, e, hu⟩
+  exact ⟨vsh, A, C, n, hA, hC, hK, e, hu⟩
 
 /-- **Candidate 3's statements**: none without a `sparse` entry; with one, RecSparse at it first, and R at the two
 claims and the bucket's `table_m` (which a `sparse` entry needs, `stacked_of_candidate3`). -/
@@ -216,14 +230,16 @@ theorem opening_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : 
     {m c j : ℕ} {S : Flock.RecOpen.GfS} {ports : List (String × ℕ)} {nv : ℕ}
     (hs : VStar.Stmt.opening m c j S ports nv ∈ ss) :
     ∃ sp, i.sparse = some sp ∧ m = Flock.RecVStar.tableM sp ∧ c = Flock.RecVStar.STACKED_CLAIMS := by
-  obtain ⟨vsh, A, C, hA, hC, rfl, hck⟩ := statements_ok h
+  obtain ⟨vsh, A, C, n, hA, hC, -, rfl, hck⟩ := statements_ok h
   have hAo : VStar.Stmt.opening m c j S ports nv ∉ A := by
     obtain ⟨s, sp, ps, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp
   have hCo : VStar.Stmt.opening m c j S ports nv ∈ C := by
     rcases Array.mem_append.1 hs with h' | h'
-    · exact absurd h' hAo
-    · exact h'
+    · rcases Array.mem_append.1 h' with h' | h'
+      · exact absurd h' hAo
+      · exact h'
+    · simp at h'
   obtain ⟨hnone, hsome⟩ := candidate3_ok hC
   cases hsp : i.sparse with
   | none =>
@@ -244,7 +260,7 @@ theorem opening_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : 
 theorem sparse_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss)
     {sp : Flock.RecSparse.Shape} (hsp : i.sparse = some sp) :
     VStar.Stmt.sparse sp (Flock.RecVStar.hRound i.m i.kLog) ∈ ss := by
-  obtain ⟨vsh, A, C, -, hC, rfl, -⟩ := statements_ok h
+  obtain ⟨vsh, A, C, n, -, hC, -, rfl, -⟩ := statements_ok h
   obtain ⟨rest, hCe, -⟩ := (candidate3_ok hC).2 sp hsp
   rw [hCe]
   simp
@@ -256,7 +272,7 @@ theorem stacked_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : 
     ∃ sch, Flock.fast100 r.m = some sch ∧ ∀ l < sch.levels.size,
       VStar.Stmt.recOpenStacked l (2 ^ (sch.levels[l]!).lanes) ((sch.levels[l]!).d - (sch.levels[l]!).cap)
         (sch.levels[l]!).q ∈ ss := by
-  obtain ⟨vsh, A, C, -, hC, rfl, -⟩ := statements_ok h
+  obtain ⟨vsh, A, C, n, -, hC, -, rfl, -⟩ := statements_ok h
   unfold Flock.RecVStar.candidate3Statements at hC
   cases hsp : i.sparse with
   | none =>
@@ -279,8 +295,8 @@ theorem stacked_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : 
     rename_i sch hsch
     obtain ⟨x, -, hC⟩ := eok_bind hC
     cases hC
-    exact ⟨sch, hsch, fun l hl => Array.mem_append.2 (.inr (Array.mem_append.2 (.inl (Array.mem_append.2
-      (.inr (Array.mem_map.2 ⟨l, List.mem_toArray.2 (List.mem_range.2 hl), rfl⟩))))))⟩
+    exact ⟨sch, hsch, fun l hl => Array.mem_append.2 (.inl (Array.mem_append.2 (.inr (Array.mem_append.2 (.inl
+      (Array.mem_append.2 (.inr (Array.mem_map.2 ⟨l, List.mem_toArray.2 (List.mem_range.2 hl), rfl⟩))))))))⟩
 
 /-- **`table_m`**: the cells' `NU + P_LOG + T_LOG`, with `P_LOG = ⌊log₂ (2 ELL + 1)⌋ + 1`, at least `PAD_TO`. -/
 theorem tableM_eq (nu ell sLog tLog : ℕ) :

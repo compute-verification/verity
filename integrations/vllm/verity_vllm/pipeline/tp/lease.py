@@ -5,7 +5,8 @@ finalize has fixed every rank's root and taken off its hooks, and before any che
 
 1. every rank says what still needs its device after its root (``rank_kept``); a reason on any rank keeps the lease to the exit;
 2. every rank leaves its device (``rank_off``): its committer's worker stopped, the model's parameters and buffers copied to host
-   memory (the sampled replay, its weights self-check and the cross-rank embedding leg read them there), its NCCL groups destroyed;
+   memory (the sampled replay, its weights self-check and the cross-rank embedding leg read them there) but for those its weights view
+   already holds on the host (`acquire.as_loaded`), which are emptied, its NCCL groups destroyed;
 3. every rank resets its CUDA context (``rank_reset``); from then on it sees no device, ends at once if a context reappears, and
    exits without vLLM's worker teardown, which would open one;
 4. the driver resets its own context, sees nvidia-smi list nothing on any leased GPU, and lets go of every lock at once.
@@ -55,24 +56,38 @@ def _parallel_state() -> Any:
     return parallel_state
 
 
-def _to_host(model: Any) -> int:
+def _replaced(st: dict[str, Any]) -> set[int]:
+    """The model's tensors that the rank's weights (``st["weights"]``, a `protocol_options.WeightsView` when `acquire.as_loaded` or an
+    option replaced some) read from elsewhere: every reader after the release reads those names from the view's host tensors."""
+    plain = getattr(st.get("weights"), "plaintext", None) or {}
+    model = st["eng"].model
+    return {id(t) for n, t in [*model.named_parameters(), *model.named_buffers()] if n in plain}
+
+
+def _to_host(model: Any, drop: set[int] = frozenset()) -> tuple[int, int]:
     """Every parameter and buffer of ``model`` on the device moved to host memory in place (the same tensor objects, so any reader
-    holding them reads the host copy); returns the bytes moved."""
+    holding them reads the host copy), except those in ``drop``, which nothing reads after the release and which are emptied (a
+    TP rank's MXFP4 Marlin experts, the size of its model, already on the host as loaded); returns the bytes moved and dropped."""
     seen: set[int] = set()
-    n = 0
+    moved = dropped = 0
     for t in [*model.parameters(), *model.buffers()]:
         if id(t) in seen or not t.is_cuda:
             continue
         seen.add(id(t))
-        t.data = t.data.cpu()
-        n += t.numel() * t.element_size()
-    return n
+        n = t.numel() * t.element_size()
+        if id(t) in drop:
+            t.data = t.data.new_empty(0, device="cpu")
+            dropped += n
+        else:
+            t.data = t.data.cpu()
+            moved += n
+    return moved, dropped
 
 
 def rank_off(worker: Any) -> dict[str, Any]:
     """On a rank: off its device, which its context still holds: the committer's worker thread stopped (its exit after the reset would
-    open a context), the model to host memory, the distributed groups (NCCL communicators, their threads) destroyed, the allocator's
-    cache emptied."""
+    open a context), the model to host memory but for what its weights view replaced (`_replaced`), the distributed groups (NCCL
+    communicators, their threads) destroyed, the allocator's cache emptied."""
     import gc
 
     import torch
@@ -81,7 +96,7 @@ def rank_off(worker: Any) -> dict[str, Any]:
     t0 = time.perf_counter()
     getattr(st["com"], "_stop_worker", lambda: None)()
     torch.cuda.synchronize()
-    moved = _to_host(st["eng"].model)
+    moved, dropped = _to_host(st["eng"].model, _replaced(st))
     torch.cuda.synchronize()
     t1 = time.perf_counter()
     err = None
@@ -94,8 +109,8 @@ def rank_off(worker: Any) -> dict[str, Any]:
     gc.collect()
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
-    return {"rank": int(st["rank"]), "moved_bytes": moved, "to_host_s": round(t1 - t0, 3), "teardown_s": round(time.perf_counter() - t1, 3),
-            "teardown_error": err}
+    return {"rank": int(st["rank"]), "moved_bytes": moved, "dropped_bytes": dropped, "to_host_s": round(t1 - t0, 3),
+            "teardown_s": round(time.perf_counter() - t1, 3), "teardown_error": err}
 
 
 def _exit(_proc: Any) -> None:
@@ -172,9 +187,10 @@ def release(llm: Any, rpc_timeout: float, after: str, *, wait: Callable[[float],
     spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3), "ranks": [ranks[r] for r in sorted(ranks)]}
     if why is not None:
         return GL.keep(_TL, why, after=after, shutdown_error=err, ranks=spans["ranks"])
-    moved = sum(int(o.get("moved_bytes") or 0) for o in ranks.values())
+    moved, dropped = (sum(int(o.get(k) or 0) for o in ranks.values()) for k in ("moved_bytes", "dropped_bytes"))
     GL.let_go(_TL, drv, after=after, shutdown_error=err, spans=spans,
-              done=f"{len(ranks)} ranks off their GPUs ({moved >> 20} MiB of weights to host memory, NCCL groups destroyed), every CUDA context reset")
+              done=f"{len(ranks)} ranks off their GPUs ({moved >> 20} MiB of weights to host memory, {dropped >> 20} MiB their weights view "
+                   f"holds on the host emptied, NCCL groups destroyed), every CUDA context reset")
     return True
 
 

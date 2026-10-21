@@ -68,24 +68,24 @@ the next step's reads, its blocks are the step's own append (`Change.append_tree
 appends sent before whose writes the step records.  The appends are sent before the root of any pass whose plan
 holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
-unit's to prove against the record's append chain, each pass's head and each pass's stale bound
-(`audit.Record.appends`, `WindowRecord.heads`, `WindowRecord.stale`, `RequirementLink.mapped`, `PROTOCOL.md` §8
-"The memory map's choices"): frees, re-keys and append order chosen after the seed would otherwise be advice.  So a
-step's appends are sent after the pass at that step's root and before the next pass's, and a re-key's old index is
-below the stale bound of the pass after its step.
+unit's to prove against the record's append chain and each pass's head (`audit.Record.appends`,
+`WindowRecord.heads`, `RequirementLink.mapped`, `PROTOCOL.md` §8 "The memory map's choices"): frees, re-keys and
+append order chosen after the seed would otherwise be advice.  So a step's appends are sent after the pass at that
+step's root and before the next pass's, and a re-key's old index is below the stale bound of the pass after its step
+(`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).
 
 Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
-step=s)`, public), and the steps of a session's passes strictly increase.  Its plan is the blocks the circuit reads at
-`s`: with every resident block read, the blocks resident at `s`, registered or written at a step before `s` and not
-freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
+step=s)`, public), and the steps of a session's passes strictly increase.  Its plan holds every complete block the
+circuit reads at `s`, filler beside them allowed: here the blocks resident at `s`, registered or written at a step
+before `s` and not freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
 `Definitions.Accounting.Requirement`).
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
 did and the device has since encoded, and its frees are of blocks whose values the step read last.  `Replay.take(s)`
 is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's `Session.receive(...,
 change=...)`), the blocks appended and released between them, of which a block appended and released in between is in
-neither; it refuses a step at or before one already applied or taken.  That a pass's plan is the blocks the circuit
-reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement, inside zero
-knowledge.
+neither; it refuses a step at or before one already applied or taken.  That a pass's plan holds every complete block
+the circuit reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement,
+inside zero knowledge.
 """
 
 from __future__ import annotations

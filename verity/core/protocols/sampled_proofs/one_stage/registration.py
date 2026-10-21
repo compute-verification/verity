@@ -1,4 +1,4 @@
-"""The registration record (`docs/audit-protocols.md` §0.1): what serving is committed to, fixed before the verifier draws.
+"""The registration record (README "The registration record"): what serving is committed to, fixed before the verifier draws.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -21,21 +21,37 @@
     `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
-  - R6: `previous` is the digest of this prover's last record (null for the first), and no earlier record has the same
-    window.
+  - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
+    window, and for a bound verifier the window names its stream and prover (Binding).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
   to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
   the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
-* **`window`** is provenance only. `kind` says whether the roots are what serving committed (`served`) or a fresh
-  commitment to values captured from serving (`stand-in`, whose link to the served root is provenance, not proof).
+* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what serving
+  committed (`served`) or a fresh commitment to values captured from serving (`stand-in`, whose link to the served root
+  is provenance, not proof).
 * **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
   "domain"}, ...]` (with `"word_bits"` for a value whose leaves are not 16 bits), the program's weights, constants and
   tables committed once under hiding leaves (`registered`), and R7 holds them to the verifier's own list and to the roots
-  the log's earlier records registered. A record registers values exactly when it is v2; v1's bytes are unchanged.
+  the log's earlier records registered, or to a root the verifier held before the record (`pinned`: weights recorded
+  before the salt). A record registers values exactly when it is v2; v1's bytes are unchanged.
+* **Supplied values**: a registered value the verifier fills itself (`supplied`, `registered.supplied_root`: rows of the
+  record's roots, positions after the log's, its coin bound to its binding and the record's window and its own bytes,
+  under public salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the
+  record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
+  salt bound to it is one salt a window.
+* **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
+  under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
+  so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
+* **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
+  P}}`, the NCI baseline's `output` provenance) reuses that output's commitment instead of committing it afresh: its entry
+  takes port P's domain and root from the `roots` of the log's record with digest D, and P's leaf count must be the value's
+  rows (`R7-output` when the log holds no such record or port, or the counts differ). Its rows stay under the earlier
+  run's hiding leaves, so nothing about the value is opened, and the reads open against that root under that domain
+  (`registered.reads_file`'s `domains`).
 """
 from __future__ import annotations
 
@@ -119,19 +135,38 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
+          binding: Mapping[str, str] | None = None,
+          outputs: Mapping[str, Mapping[str, str]] | None = None,
+          schemas: Mapping[str, str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
-    earlier records, and the parameters it expects registered (`registered`: `{parameter: words}`).  `partition`: the
+    earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
+    fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
+    record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
+    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); and of the ones it doesn't fill,
+    those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
+    that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
-    own (`registered_entries`) and a value an earlier record of the log registered to that record's root (`held_roots`):
-    a value is committed once, and the log is the only place the verifier holds its roots.  R3 reads `ports` by name, so
+    own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered to
+    that record's root (`held_roots`): a value is committed once; a supplied value's root is the one it recomputes from
+    this record and the log (`registered.supplied_root`) instead, and an output value's domain and root are its earlier
+    record's port's (`R7-output`, in the values' sorted order before the other R7 codes).  R3 reads `ports` by name, so
     its codes come in the ports' sorted order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
+    sup = G.sources(supplied if supplied is not None else {})
+    if supplied is not None and not v2:
+        raise ValueError("supplied values are registered values: the verifier expects none registered")
+    pins = _pins(pinned, registered or {}, sup)
+    outs = _outputs(outputs, registered or {}, sup, pins)
+    formats = _schemas(schemas, registered or {}, sup)
+    bound = _binding(binding)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -199,18 +234,115 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
+    if bound is not None:
+        w = rec["window"] if isinstance(rec["window"], Mapping) else {}
+        for k in ("stream", "prover"):
+            if w.get(k) != bound[k]:
+                c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, held_roots(earlier))
+        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier,
+                          bound, outs, formats)
     return c.verdict()
 
 
-def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str]) -> None:
+def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mapping[str, int], supplied: Mapping[str, Any],
+             pinned: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+    """The verifier's output values, `{value: (record digest, port)}`, each of a value it expects registered and neither
+    fills nor pinned, an object of exactly a `record` (lowercase hex of 64 bytes) and a `port` (a string); ValueError
+    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if outputs is None:
+        return {}
+    if not isinstance(outputs, Mapping) or not registered:
+        raise ValueError(f"output values are an object of registered values' earlier ports: {outputs!r}")
+    out = {}
+    for v, o in outputs.items():
+        if (v not in registered or v in supplied or v in pinned or not isinstance(o, Mapping) or set(o) != {"port", "record"}
+                or not isinstance(o["port"], str)
+                or not (isinstance(o["record"], str) and len(o["record"]) == 128 and _HEX.fullmatch(o["record"]))):
+            raise ValueError(f"output value {v!r}: not a registered value it neither fills nor pinned, with an earlier "
+                             f"record's digest and a port: {o!r}")
+        out[v] = (o["record"], o["port"])
+    return out
+
+
+def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
+    """The verifier's row formats, each of a value it expects registered and doesn't fill, one of `registered.SCHEMAS`;
+    ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if schemas is None:
+        return {}
+    if not isinstance(schemas, Mapping) or not registered:
+        raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
+    for v, s in schemas.items():
+        if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
+    return dict(schemas)
+
+
+def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str) -> Mapping[str, Any] | None:
+    """The `roots` entry for `port` of the log's record with digest `record` (its last, as a dict reads it), or None."""
+    for r in log:
+        try:
+            d = digest(r)
+        except (TypeError, ValueError):
+            continue
+        if d != record:
+            continue
+        roots = r.get("roots")
+        hits = [e for e in roots if isinstance(e, Mapping) and e.get("port") == port] if isinstance(roots, list) else []
+        return hits[-1] if hits else None
+    return None
+
+
+def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
+    """The verifier's pinned roots, each of a value it expects registered and doesn't fill itself, as lowercase hex of
+    64 bytes; ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if pinned is None:
+        return {}
+    if not isinstance(pinned, Mapping) or not registered:
+        raise ValueError(f"pinned roots are an object of registered values' roots: {pinned!r}")
+    for v, r in pinned.items():
+        if v not in registered or v in supplied or not (isinstance(r, str) and len(r) == 128 and _HEX.fullmatch(r)):
+            raise ValueError(f"pinned value {v!r}: not a registered value it doesn't fill, pinned to 64 bytes: {r!r}")
+    return dict(pinned)
+
+
+def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
+    """The verifier's binding: exactly `stream`, its stream's digest (lowercase hex of 64 bytes), and `prover`, the identity
+    it registered the prover under (lowercase hex of whole bytes); ValueError otherwise, which the Lean verifier refuses
+    too (`OneStage.paramsOfJson`)."""
+    if binding is None:
+        return None
+    if not (isinstance(binding, Mapping) and set(binding) == {"stream", "prover"}):
+        raise ValueError(f"a binding is exactly a stream and a prover: {binding!r}")
+    s, p = binding["stream"], binding["prover"]
+    if not (isinstance(s, str) and len(s) == 128 and _HEX.fullmatch(s)):
+        raise ValueError(f"the binding's stream is not lowercase hex of 64 bytes: {s!r}")
+    if not (isinstance(p, str) and _HEX.fullmatch(p) and len(p) % 2 == 0):
+        raise ValueError(f"the binding's prover is not lowercase hex bytes: {p!r}")
+    return {"stream": s, "prover": p}
+
+
+def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
+                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
+                      binding: Mapping[str, str] | None = None,
+                      outputs: Mapping[str, tuple[str, str]] | None = None,
+                      schemas: Mapping[str, str] | None = None) -> None:
     try:
-        mine = G.registered_entries(program, values)
+        mine = G.registered_entries(program, values, schemas)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
+    held = dict(held)
+    for v, (d, p) in sorted((outputs or {}).items()):
+        port = _output_port(log, d, p)
+        ok = (port is not None and type(port.get("leaves")) is int and port["leaves"] == mine[v]["leaves"]
+              and isinstance(port.get("domain"), str) and isinstance(port.get("root"), str))
+        if not ok:
+            c.fail("R7-output", {"value": v, "record": d, "port": p, "verifier": port})
+            continue
+        mine[v] = {**mine[v], "domain": port["domain"]}
+        held[v] = port["root"]
     keys = set(G.ENTRY_KEYS)
     if not isinstance(got, list) or not all(isinstance(e, Mapping) and keys <= set(e) <= keys | {G.WIDTH_KEY} for e in got):
         c.fail("R7-registered", got)
@@ -232,8 +364,23 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         width = e.get(G.WIDTH_KEY, G.WORD_BITS)
         if type(width) is not int or width != want["word_bits"] or e.get(G.WIDTH_KEY) == G.WORD_BITS:
             c.fail("R7-word_bits", {"value": v, "registered": width, "verifier": want["word_bits"]})
-        if v in held and e["root"] != held[v]:
+        if v in held and v not in supplied and e["root"] != held[v]:
             c.fail("R7-held", {"value": v, "registered": e["root"], "verifier": held[v]})
+    prog = P.program_digest(program) if supplied else None
+    for v in sorted(supplied):
+        want, e = mine.get(v), by_value.get(v)
+        if want is None:
+            c.fail("R7-supplied", {"value": v, "verifier": "not a value it expects registered"})
+            continue
+        if e is None:
+            continue
+        try:
+            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding)
+        except ValueError as err:
+            c.fail("R7-supplied", {"value": v, "verifier": str(err)})
+            continue
+        if e["root"] != root:
+            c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],

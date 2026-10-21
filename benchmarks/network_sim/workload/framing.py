@@ -1,18 +1,19 @@
-"""The framing φ: crossing values to positions in streams, streams to B-byte frames, frames to the links that carry them.
+"""The framing φ: crossing values to positions in messages, messages to B-byte frames, frames to the links that carry them.
 
-**Messages.** The crossing edges from unit U to unit V read at one tick are one message, and each message is one stream on
-every link it crosses. Messages are numbered in canonical order (read tick, source unit, destination unit), and message i
-is stream i + 1. Inside a message, edges are in value order and each value's bits are packed one after another, least
-significant first, from bit 0 of byte 0; `positions` gives each value's bit offset, so its bytes are
-[offset // 8, ⌈(offset + width) / 8⌉). The last byte's unused bits are 0.
+**Messages.** The crossing edges from unit U to unit V read at one tick are one message. Messages are numbered in
+canonical order (read tick, source unit, destination unit), and message i is φ's stream i + 1, a name the wire doesn't
+carry. Inside a message, edges are in value order and each value's bits are packed one after another, least significant
+first, from bit 0 of byte 0; `positions` gives each value's bit offset, so its bytes are [offset // 8, ⌈(offset + width)
+/ 8⌉). The last byte's unused bits are 0.
 
-**Frames.** A stream's bytes are cut by the registered rule *packed*, the active certifier's on ingress: full `DATA` frames of
-B − 9 payload bytes, then one `LAST` frame with the rest. Each frame is `verity.core.protocols.certifier.active.encode_frame`'s:
-a header (kind u8, stream u32, length u32), the payload, and zero fill to B bytes.
+**Frames.** A message's bytes are `verity.core.protocols.certifier.active.data_frames`', the canonical framing: `DATA`
+frames on `CANONICAL_STREAM` of B − 9 bytes each, the last zero-filled, so every frame's header is one constant and a
+frame says nothing of the message it belongs to. φ, which is public, fixes where each message starts and ends: a
+connection carries its messages in send order, each in `frame_count` frames.
 
-**Declared traffic D.** Each connection (source unit, destination unit) opens with one `HELLO` frame on stream 0, a `LAST`
-frame whose payload is the two units' indices (u16 each, big-endian) in `Hardware.unit_names` order: a function of public
-data, so it carries nothing. A frame therefore has room for at least `HELLO.size` payload bytes.
+**Declared traffic D.** Each connection (source unit, destination unit) opens with one `HELLO` frame, the `data_frames`
+of the two units' indices (u16 each, big-endian) in `Hardware.unit_names` order: a function of public data, so it
+carries nothing. A frame therefore has room for at least `HELLO.size` payload bytes.
 
 **Links and buckets.** A message crosses the certified unit boundaries on the route from its first edge's source leaf to its
 destination leaf (`Hardware.watched`), and on each its frames are counted in the bucket of the message's read tick, at the
@@ -28,12 +29,11 @@ import struct
 from collections import defaultdict
 from dataclasses import dataclass
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame
+from verity.core.protocols.certifier.active import HEADER, data_frames, request_placement
 
 from .hardware import Hardware
 from .placement import Edge
 
-HELLO_STREAM = 0
 HELLO = struct.Struct(">HH")
 
 
@@ -48,6 +48,10 @@ class Message:
     @property
     def bits(self) -> int:
         return sum(e.width for e in self.edges)
+
+    @property
+    def nbytes(self) -> int:
+        return (self.bits + 7) // 8
 
     @property
     def ready_tick(self) -> int:
@@ -87,32 +91,44 @@ def decode(m: Message, payload: bytes) -> dict[int, int]:
     return out
 
 
-def cut(stream: int, payload: bytes, frame_bytes: int) -> list[bytes]:
-    """The packed rule: full DATA frames, then one LAST frame (which may be empty)."""
-    room = frame_bytes - HEADER.size
-    if room < 1:
-        raise ValueError(f"a {frame_bytes}-byte frame has no room for a payload")
-    chunks = [payload[i:i + room] for i in range(0, len(payload), room)] or [b""]
-    return [encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, frame_bytes) for j, c in enumerate(chunks)]
+def cut(data: bytes, frame_bytes: int) -> list[bytes]:
+    """`data_frames` of the bytes, frame by frame."""
+    out = data_frames(data, frame_bytes)
+    return [out[i:i + frame_bytes] for i in range(0, len(out), frame_bytes)]
+
+
+def head(frame_bytes: int) -> bytes:
+    """Every frame's header."""
+    return request_placement(frame_bytes)[2]
+
+
+def room(frame_bytes: int) -> int:
+    return frame_bytes - HEADER.size
 
 
 def frame_count(m: Message, frame_bytes: int) -> int:
-    return max(1, -(-((m.bits + 7) // 8) // (frame_bytes - HEADER.size)))
+    return max(1, -(-m.nbytes // room(frame_bytes)))
+
+
+def hello_data(hw: Hardware, src: str, dst: str) -> bytes:
+    names = hw.unit_names()
+    return HELLO.pack(names.index(src), names.index(dst))
 
 
 def hello(hw: Hardware, src: str, dst: str, frame_bytes: int) -> bytes:
-    names = hw.unit_names()
-    return encode_frame(LAST, HELLO_STREAM, HELLO.pack(names.index(src), names.index(dst)), frame_bytes)
+    (f,) = cut(hello_data(hw, src, dst), frame_bytes)
+    return f
 
 
 def read_hello(hw: Hardware, frame: bytes) -> tuple[str, str] | None:
     """(source unit, destination unit) of a `HELLO` frame, or None."""
-    kind, stream, payload = decode_frame(frame)
     names = hw.unit_names()
-    if kind != LAST or stream != HELLO_STREAM or len(payload) != HELLO.size:
+    if len(frame) < HEADER.size + HELLO.size:
         return None
-    s, d = HELLO.unpack(payload)
-    return (names[s], names[d]) if s < len(names) and d < len(names) else None
+    s, d = HELLO.unpack_from(frame, HEADER.size)
+    if s >= len(names) or d >= len(names) or frame != hello(hw, names[s], names[d], len(frame)):
+        return None
+    return names[s], names[d]
 
 
 @dataclass(frozen=True)
@@ -139,6 +155,10 @@ class Phi:
     def send_order(self) -> list[Message]:
         return sorted(self.messages, key=lambda m: (m.ready_tick, m.stream))
 
+    def connection(self, src: str, dst: str) -> list[Message]:
+        """The messages the connection carries after its `HELLO`, in send order."""
+        return [m for m in self.send_order() if (m.src, m.dst) == (src, dst)]
+
     def openers(self) -> dict[tuple[str, str], Message]:
         """Per connection (source unit, destination unit), the first message sent on it."""
         out: dict[tuple[str, str], Message] = {}
@@ -159,7 +179,7 @@ class Phi:
             b = self.hw.bucket(m.read_tick)
             for key in self.route(m):
                 if m.stream in openers:
-                    out[key].append(Slot(b, "hello", HELLO_STREAM, 0, m.src, m.dst))
+                    out[key].append(Slot(b, "hello", 0, 0, m.src, m.dst))
                 out[key] += [Slot(b, "data", m.stream, j, m.src, m.dst) for j in range(frame_count(m, self.frame_bytes))]
         return dict(out)
 
@@ -174,7 +194,7 @@ class Phi:
         return out
 
     def frames(self, m: Message, value: dict[int, int]) -> list[bytes]:
-        return cut(m.stream, encode(m, value), self.frame_bytes)
+        return cut(encode(m, value), self.frame_bytes)
 
 
 def phi(hw: Hardware, edges: list[Edge], frame_bytes: int) -> Phi:

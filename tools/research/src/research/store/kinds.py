@@ -83,7 +83,8 @@ KINDS: dict[str, str] = {
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "
-                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank, the Match, Commit and replay "
+                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank (a request Program's census "
+                             "digest beside it), the Match, Commit and replay "
                              "verdicts, the evidence's art: ids); meta {row, outcome, world, tree}; refs.build = the vllm-build/v1 holding "
                              "the Programs, refs.manifest, refs.match, refs.commit, refs.conformance; label row",
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
@@ -106,6 +107,18 @@ KINDS: dict[str, str] = {
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
+    "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
+                            "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
+                            "key_sha512}",
+    "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
+                            "the opener's gate key, end entries counting each family's released coins, leaves increasing); "
+                            "payload windows.jsonl, the v1 entries first; meta as v1's; label challenger-ledger head by infra",
+    "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
+                             "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1|v2 "
+                             "whose end entry seals out/",
+    "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
+                         "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
+                         "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
 }
 
 

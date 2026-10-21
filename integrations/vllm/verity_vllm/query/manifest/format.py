@@ -7,7 +7,8 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `components_fold_digest` (a B>=2 manifest's program digest before GP-01's), `request_label` (`r<k>`)
 * Program names      -- `split_name` / `spec_family` / `spec_statics` over an `instances.json.gz` row, `collector_path` / `wrapper_prefix_of`
                         (Program module path -> the implementation's `named_modules()` path), `segment_steps` at the sampling events
-* stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, the fused-MoE block planes (`moe_geometry` / `moe_identities`)
+* stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, what a batch-level row's committed stream must hold
+                        (`batch_launch_shortfall`), the fused-MoE block planes (`moe_geometry` / `moe_identities`)
 * manifest rows      -- the lifted dtypes of the padded construction, the promoted-row observation rule (`promoted_observation`: a pre-flip
                         v1 manifest's `promoted: true` rows); the binder and the layout-level `coverage_check` over these rows are
                         `verity_vllm.query.manifest.bind`
@@ -15,11 +16,10 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
+too, with its TP-04 policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -322,6 +322,13 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
+def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
+    """The MoE modules whose block rows are `moe_block_stream` planes, from each row's (family, module): those with router rows, which
+    give the planes their M tokens (`moe_geometry`).  Under any other module a `moe_plane_kind` row is a Call like the rest (DeepSeek-V4's
+    Marlin block, routed by a Definition no plane names)."""
+    return frozenset(m for f, m in rows if moe_plane_kind(f, m) == "router")
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
@@ -368,16 +375,111 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
     return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
+#: the M1 stream's classes in buffer order (native_collect.cpp `widths`, `name_id_seq`); MS only under the guarded-max policy
+M1_STREAM_ORDER = ("S", "P", "RP", "ROW", "O", "FIN", "MS")
+_M1_GEOM_RE = re.compile(r"^g(\d+)x(\d+)x(\d+)(?:x(\d+)x(\d+))?$")
+
+
+def hidden_stream_widths(NB: int, BN: int, D: int, ms: bool = False) -> dict[str, int]:
+    """u32 words per (slab, query row) of each M1 stream class; `mat_total_words` is HB x M x their sum."""
+    N = NB * BN
+    w = dict(zip(M1_STREAM_ORDER, (N, N, N // 2, NB * 8, NB * D, 4, NB)))
+    if not ms:
+        del w["MS"]
+    return w
+
+
+def hidden_stream_geometry(name: str) -> tuple[int, int, int, int, int] | None:
+    """`g<slabs>x<rows>x<NB>[x<BN>x<D>]` -> (slabs, rows, NB, BN, D); a name without the tile is FA2's legacy tile (BN, D) = (128, 64)."""
+    m = _M1_GEOM_RE.match(name)
+    if not m:
+        return None
+    a, b, nb, bn, d = m.groups()
+    return int(a), int(b), int(nb), int(bn or 128), int(d or 64)
+
+
+def batch_launch_shortfall(geometry: Any, active_rows: list[int], members: Iterable[tuple[str, int]]) -> str | None:
+    """What the M1 stream committed for one batch-level hidden row (one attention layer's launch at one engine step) lacks, named; None
+    when it is whole.  `geometry`: the row's launch geometry (HB, M, NB, BN, D, n_seq[, ms]; `compose.compose_global`); `active_rows`: the
+    token rows of each sequence executing at the step (the declared composition over the executed prefix); `members`: (member, words) of
+    every tensor committed under the row's op at the step, a ⊥ padding plane (`.../bot`) aside.
+    The tap stages the launch whole, `g<n*h>x<M>x<NB>[x<BN>x<D>]`, or as one rectangle per executing sequence and class,
+    `s<i>/g<h>x<rows_i>x<NB>[x<BN>x<D>]/<class>` (h = HB / n_seq slabs a sequence); NB is the declared one while every declared sequence
+    executes, at most it once one has stopped.  A whole launch stages at least the declared M rows a slab: a manifest composed before
+    `compose_global` read FA3's packing declares an FA3 launch's M as its query rows, without the KV group's heads.  Every tensor holds at
+    least the words its name's geometry declares (`mat_total_words`, `hidden_stream_widths`)."""
+    if not isinstance(geometry, dict) or any(k not in geometry for k in ("HB", "M", "NB", "BN", "D", "n_seq")):
+        return "the batch-level row carries no launch geometry"
+    HB, M, NB, BN, D, n_decl = (int(geometry[k]) for k in ("HB", "M", "NB", "BN", "D", "n_seq"))
+    ms = bool(geometry.get("ms"))
+    n = len(active_rows)
+    if n_decl <= 0 or HB % n_decl:
+        return f"launch HB {HB} is not {n_decl} sequences of slabs"
+    if not 0 < n <= n_decl:
+        return f"{n} sequences executing, the launch is declared over {n_decl}"
+    h = HB // n_decl
+    nb_ok = (lambda nb: nb == NB) if n == n_decl else (lambda nb: 0 < nb <= NB)
+    whole: list[tuple[str, tuple, int]] = []
+    seqs: dict[int, dict[str, tuple[tuple, int]]] = {}
+    for member, words in members:
+        parts = member.split("/")
+        if parts[-1] == "bot":
+            continue
+        if len(parts) == 1 and (geo := hidden_stream_geometry(parts[0])):
+            whole.append((member, geo, int(words)))
+        elif len(parts) == 3 and parts[0][:1] == "s" and parts[0][1:].isdigit() and parts[2] in M1_STREAM_ORDER and (geo := hidden_stream_geometry(parts[1])):
+            planes = seqs.setdefault(int(parts[0][1:]), {})
+            if parts[2] in planes:
+                return f"{member} committed twice"
+            planes[parts[2]] = (geo, int(words))
+    if whole and seqs:
+        return f"{len(whole)} whole launch(es) beside the per-sequence planes of {len(seqs)} sequence(s)"
+    if whole:
+        if len(whole) > 1:
+            return f"{len(whole)} whole launches committed: {[w[0] for w in whole[:3]]}"
+        member, (a, b, nb, bn, d), words = whole[0]
+        if (a, bn, d) != (n * h, BN, D) or b < M or not nb_ok(nb):
+            return (f"whole launch {member} committed; {n} executing sequence(s) of this launch stage g{n * h}x{'>=' + str(M)}x"
+                    f"{NB if n == n_decl else '<=' + str(NB)} (BN {BN}, D {D})")
+        want = mat_total_words(a, b, nb, bn, d, ms)
+        return None if words >= want else f"whole launch {member}: {words} words committed, its geometry declares {want}"
+    if not seqs:
+        return "no M1 stream tensor committed"
+    if sorted(seqs) != list(range(n)):
+        return f"the planes of sequences {['s' + str(i) for i in sorted(seqs)]} committed, {n} sequence(s) executing"
+    classes = list(hidden_stream_widths(1, 1, 1, ms))
+    tiles: set[tuple[int, int, int, int]] = set()
+    rows: list[int] = []
+    for i in range(n):
+        planes = seqs[i]
+        if sorted(planes) != sorted(classes):
+            return f"s{i} carries {sorted(planes)}, every executing sequence carries {classes}"
+        geos = {geo for geo, _w in planes.values()}
+        if len(geos) != 1:
+            return f"s{i}: its planes name {len(geos)} geometries"
+        (hh, sl, nb, bn, d), = geos
+        tiles.add((hh, nb, bn, d))
+        rows.append(sl)
+        widths = hidden_stream_widths(nb, bn, d, ms)
+        for c, (_geo, words) in planes.items():
+            if words < hh * sl * widths[c]:
+                return f"s{i}/{c}: {words} words committed, g{hh}x{sl}x{nb} declares {hh * sl * widths[c]}"
+    if len(tiles) != 1:
+        return f"the sequences of one launch name {len(tiles)} different (slabs, NB, BN, D)"
+    (hh, nb, bn, d), = tiles
+    if (hh, bn, d) != (h, BN, D) or not nb_ok(nb):
+        return f"per-sequence planes of {hh} slabs, NB {nb}, BN {bn}, D {d}; the launch declares {h} slabs a sequence, NB {NB}, BN {BN}, D {D}"
+    if sorted(rows) != sorted(int(r) for r in active_rows):
+        return f"sequence rows {sorted(rows)} committed, {sorted(int(r) for r in active_rows)} scheduled"
+    return None
+
+
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`)."""
-    from verity_vllm.program.compact import expanded_file_args
-    with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
-        inst = json.load(f)
-    for r in (inst.get("rows") or ()) if expand else ():   # a v2 file's argument progressions -> the v1 per-leaf run lists
-        a = r.get("args")
-        if a:
-            r["args"] = expanded_file_args(a)
+    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    (`instances_file.read_instances`): read them, never modify them in place."""
+    from verity_vllm.program.instances_file import read_instances
+    inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     res = json.load(open(os.path.join(program_dir, "result.json")))
     art = None
     p = os.path.join(program_dir, "artifact.json")

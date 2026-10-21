@@ -40,7 +40,7 @@ def rust(tmp_path_factory):
 @pytest.fixture(scope="module")
 def rust_judged(tmp_path_factory):
     """The Rust reference with the Lean decision as its judge (`core-firewall decide`, through `release::lean_judge`), as
-    `flock-circuit prove --firewall-state` runs each outer session."""
+    `flock-circuit prove --firewall-state` ran each outer session before `core-firewall session` took the release side."""
     exe = D.build(R.PKG, "core-firewall")
     with D.Server([str(R.rust_reference()), str(tmp_path_factory.mktemp("rust-judged-state")), str(exe)]) as s:
         yield s

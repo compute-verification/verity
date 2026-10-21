@@ -48,7 +48,7 @@ build reaches it.
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
 only on a Lean error at a position in one of the tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
-`guarantees:` failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
+failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
 yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
 run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
 guarantees by name.
@@ -206,6 +206,24 @@ def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
     links.pop(pkg, None)
 
 
+def read_links(tree: Path) -> dict[str, str]:
+    """The tree's `LINKS`; none when the file is missing or not a JSON object (a write in place that failed after its
+    truncation, on a full disk or a stopped run, left it empty), so each package's dependencies are taken again, as in a
+    new tree."""
+    try:
+        links = json.loads((tree / LINKS).read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+    return links if isinstance(links, dict) else {}
+
+
+def write_links(tree: Path, links: dict[str, str]) -> None:
+    """`LINKS`, replaced whole, so a write that fails (a full disk, a stopped run) leaves the previous file."""
+    tmp = tree / f"{LINKS}.tmp"
+    tmp.write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, tree / LINKS)
+
+
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies."""
@@ -274,7 +292,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     finally:
         AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in cross + fails if f.startswith(("guarantees:", "assumptions:"))]
+    return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
 
 def sandboxed() -> bool:
@@ -292,6 +310,31 @@ LEAN_SLOT = _module(ROOT / "tools" / "verity" / "check" / "lean_slot.py", "lean_
 FAST_POOL = "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
+#: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;
+#: vy-nebius-cpu-2, 19 Oct: three lanes' runs refused in 0 s behind a 53-minute one), and how often it looks
+TREE_WAIT_S, TREE_POLL_S = 3 * 3600, 20
+_sleep, _clock = time.sleep, time.monotonic
+
+
+def hold_tree(held, tree: Path, log=print) -> bool:
+    """Take ``held``'s lock (the tree's `.lock`), waiting up to `TREE_WAIT_S` for the run that holds it, whose id `.who`
+    beside it names; False when it is still held then."""
+    who, start, told = tree / ".who", _clock(), None
+    while True:
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            holder = who.read_text().strip() if who.is_file() else "unknown"
+            if _clock() - start >= TREE_WAIT_S:
+                log(f"lean-records: another run holds {tree} ({holder}), still after {TREE_WAIT_S} s: nothing ran")
+                return False
+            if holder != told:
+                log(f"lean-records: another run holds {tree} ({holder}); waiting, retrying every {TREE_POLL_S} s")
+                told = holder
+            _sleep(TREE_POLL_S)
+    who.write_text(f"{os.environ.get('RESEARCH_RUN_ID') or 'a run'} (pid {os.getpid()})\n")
+    return True
 
 
 def records_tree() -> Path:
@@ -329,7 +372,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                   out: Path | None = None, log=print) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`); check.py's exit status, or 2 when ``tree`` is not under
-    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree."""
+    `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree past `TREE_WAIT_S`."""
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
         log(f"lean-records: {tree} is not under {base}: the fast path builds only on its own trees, never on check's "
@@ -360,12 +403,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         tree = tree or records_tree()
         tree.mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
-            try:
-                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                log(f"lean-records: another run holds {tree}")
+            if not hold_tree(held, tree, log):
                 return 2
-            links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+            links = read_links(tree)
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
             todo, rc = [pkg, *requirers(pkg, pkgs)], 0
@@ -377,7 +417,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
-                (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+                write_links(tree, links)
                 mine_out = out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
                 argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
                         *(["--update"] if update and p == pkg else []),
@@ -437,7 +477,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
-        links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+        links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
@@ -487,7 +527,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 compared.append(pkg)
                 log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
         finally:
-            (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+            write_links(tree, links)
     log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
         f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
     return 1 if failed else 0

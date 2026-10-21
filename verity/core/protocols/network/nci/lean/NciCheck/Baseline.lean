@@ -1,0 +1,343 @@
+import NciCheck.Desc
+
+/-!
+# θ's provenance: the baseline is registered (CMP-66)
+
+`NciCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
+says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
+`Nci.Assumptions.BaselineRegistered` states what θ must hold: values that, before the run's commitment, were outputs of
+an earlier certified declared computation or registered public data. `evaluate` checks it: the policy check
+(`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance against what the proof service holds.
+
+## The instance and the trusted input
+
+The instance is `NciCheck.Desc`'s with one more field:
+* `provenance`: one object per θ entry, in θ's order, exactly one of
+  - `{"kind": "registered", "registration": D, "value": V, "root": R}`: registered public data, the value `V` that the
+    registration record with digest `D` registers (its `registered` list, `verity/registration/v2`) under the root `R`;
+  - `{"kind": "output", "record": D, "port": P, "root": R}`: an output of an earlier certified declared computation,
+    the port `P` of the registration record `D`, whose run the service's verifier accepted, with `roots[P].root = R`.
+
+The trusted input, beside the instance, is what the service holds, never the prover's word: an object of exactly
+* `log`: the prover's registration records, oldest first, as the service's R6 keeps them (each record's `previous` the
+  digest of the one before, `null` for the first; the digest `SHA-512(format || 0 || canon(record))`, `digest`);
+* `accepted`: the digests of the records whose runs the service's verifier accepted (its verdict records);
+* `run`: the digest of the run under check's own record, so "earlier" is a position in the log, not a clock;
+* `params`: the verifier's own copy of its program function's parameters, `[[name, type], ...]` as a body's params are
+  written. The descriptor names no parameters (`verity/ml/circuits/PROTOCOL.md` §5.1: the root starts with each
+  parameter's input nodes, in parameter order), so these say which parameter each θ node holds a part of: they must
+  lower onto the root's input nodes exactly (`ownersOf`), as `SampledProofs.Registered.params` requires.
+
+## The binding
+
+Each θ entry lies in a root input node `k` whose gates are `w` bits each, part of the parameter `p` whose input nodes hold
+`n_p` gates. The run's own record registers `p` (R7) under a hiding root, and the entry is bound when that root is the
+cited `R`: the frame-v3-sha512 root over hm96-sha512 rows determines the rows, short of a SHA-512 collision among the
+inputs hashed along the two trees (`Nci.Assumptions.RootsBind`, the binding premise the reduction names). For
+`registered` that is R7's `held` rule (a value keeps its root across records); for `output` it is R7's rule for a value
+whose provenance is an earlier output, which takes that port's domain and leaf count (`one_stage/registration.py`).
+
+## Refusals
+
+In the order checked, after every code of `NciCheck.Desc.evaluate` (whose θ codes come first: `theta-unknown`,
+`theta-not-input`, `theta-not-registered`, `theta-duplicate`; then its owners' and `empty-iu`), so that the policy check's
+statements (`NciCheck.Properties`) stand as they are:
+* `theta-provenance`: `provenance` missing, not an array of one entry per θ entry, or an entry of neither form;
+* `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, an
+  accepted digest that is no string, `run` the digest of no record of the log, or `params` not distinct names of types;
+* then θ entry by entry:
+  - `theta-record-unknown`: `D` is the digest of no record of the log;
+  - `theta-not-earlier`: `D` is the run's own record or one after it;
+  - `theta-uncertified`: the entry is an `output` and `D`'s run has no accepting verdict;
+  - `theta-root`: `D` registers no value `V` (or has no port `P`) whose root is `R` (its last entry for `V` or `P`, as
+    Python's dict reads it);
+  - `theta-unbound`: the run's record is not this program's (its `program` is not `Prog.sha512`), `params` don't lower
+    onto the root's input nodes, or the run's record has no `registered` entry for `p` whose root is `R`;
+  - `theta-width`: `D`'s rows and words don't give `p`'s `n_p` gates of `w` bits, rounded up to whole u16 words (for
+    `output`: the port's leaf count is not the run's rows for `p`, or the run's rows and words don't give them).
+
+## Cost
+
+O(log + params' input nodes + θ · (log + one record)): one digest per record of the log, one lowering of the parameters
+onto the root body's input nodes, and per θ entry lookups in two records. Nothing here walks a gate.
+-/
+
+namespace NciCheck.Baseline
+
+open Lean (Json toJson)
+open Flock.Program
+
+/-! ## JSON -/
+
+/-- Python's `d.get(k)`: a missing key, or a `j` that is no object, reads as `null`. -/
+def getD (j : Json) (k : String) : Json := (j.getObjVal? k).toOption.getD Json.null
+
+def keys? : Json → Option (Array String)
+  | .obj kvs => some ((kvs.toArray.map (·.1)).qsort (· < ·))
+  | _ => none
+
+/-- The last entry of `j`'s array `f` whose `k` is the string `v`: the entry for `v` of a list keyed by `k`, as Python's
+`{e[k]: e for e in …}` reads it. -/
+def lastWith (j : Json) (f k v : String) : Option Json :=
+  match getD j f with
+  | .arr es => es.reverse.find? fun e => getD e k == Json.str v
+  | _ => none
+
+/-! ## The log -/
+
+def FORMAT : String := "verity/registration/v1"
+def FORMAT_V2 : String := "verity/registration/v2"
+
+/-- A registration record's digest, `SHA-512(format || 0 || canon(record))` with its own format (v1 or v2) as the tag
+(`registration.digest`, `SampledProofs.Registration.digest`), as lowercase hex. -/
+def digest (rec : Json) : Except String String := do
+  let tag := if getD rec "format" == Json.str FORMAT_V2 then FORMAT_V2 else FORMAT
+  return Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ (← Flock.canon rec).toUTF8))
+
+/-! ## The parameters, lowered onto the input nodes (§5.1, as `SampledProofs.Registered.lower`) -/
+
+private theorem lt_array (n : Nat) (e : Ty) : sizeOf e < sizeOf (Ty.array n e) := by simp; omega
+
+private theorem lt_tuple {f : Ty} {fs : Array Ty} (h : f ∈ fs) : sizeOf f < sizeOf (Ty.tuple fs) := by
+  have := Array.sizeOf_lt_of_mem h; simp; omega
+
+private theorem lt_record {f : String × Ty} {fs : Array (String × Ty)} (h : f ∈ fs) :
+    sizeOf f.2 < sizeOf (Ty.record fs) := by
+  have := Array.sizeOf_lt_of_mem h; cases f; simp at *; omega
+
+/-- `Type.width_set`: the leaf widths, computed structurally (an `Array` of no elements has none). -/
+def widthSet : Ty → List Nat
+  | .value w => [w]
+  | .array n e => if n == 0 then [] else widthSet e
+  | .tuple fs => (fs.toList.attach.flatMap fun ⟨f, _⟩ => widthSet f).eraseDups
+  | .record fs => (fs.toList.attach.flatMap fun ⟨f, _⟩ => widthSet f.2).eraseDups
+termination_by t => sizeOf t
+decreasing_by
+  · exact lt_array _ _
+  · exact lt_tuple (Array.mem_def.mpr ‹_›)
+  · exact lt_record (Array.mem_def.mpr ‹_›)
+
+/-- The input nodes a parameter of type `t` lowers to, `(width, n)` each: one node when its leaves are one width, else
+each field or element in order. -/
+def lower (t : Ty) : Array (Nat × Nat) :=
+  match widthSet t with
+  | [w] => #[(w, t.leaves)]
+  | _ => match t with
+    | .array n e => let l := lower e; (Array.range n).foldl (fun acc _ => acc ++ l) #[]
+    | .tuple fs => fs.attach.foldl (fun acc ⟨f, _⟩ => acc ++ lower f) #[]
+    | .record fs => fs.attach.foldl (fun acc ⟨f, _⟩ => acc ++ lower f.2) #[]
+    | .value _ => #[]
+termination_by sizeOf t
+decreasing_by
+  · exact lt_array _ _
+  · exact lt_tuple ‹_›
+  · exact lt_record ‹_›
+
+/-- Per root node, the parameter (its index in `ps`) whose input nodes it is one of, `none` for a Call: when the
+parameters, lowered in order, are exactly the root body's input nodes in body order, each one's width and member count. -/
+def ownersOf (P : Prog) (ps : Array (String × Ty)) : Option (Array (Option Nat)) := Id.run do
+  let nodes := (P.defs[P.root]!).body.nodes
+  let flat := (ps.mapIdx fun i p => (lower p.2).map (i, ·)).foldl (· ++ ·) #[]
+  let mut own : Array (Option Nat) := Array.replicate nodes.size none
+  let mut at_ := 0
+  for k in [0:nodes.size] do
+    let n := nodes[k]!
+    if !Desc.isInputNode P n then continue
+    let some w := inputWidth? (P.defs[n.fn]!).key | return none
+    match flat[at_]? with
+    | some (i, (w', m)) =>
+      if w' != w || m != n.members then return none
+      own := own.set! k (some i)
+      at_ := at_ + 1
+    | none => return none
+  if at_ != flat.size then return none
+  return some own
+
+/-- Per parameter, the gates of its input nodes: root node `k` holds gates `[offs[k], offs[k + 1])`. -/
+def countsOf (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
+  (List.range own.size).foldl (fun c k => match own[k]! with
+    | some i => c.modify i (· + (offs[k + 1]! - offs[k]!))
+    | none => c) (Array.replicate n 0)
+
+/-! ## The trusted input -/
+
+def TRUSTED_KEYS : Array String := #["accepted", "log", "params", "run"]
+
+/-- The trusted input, read: the log and each record's digest, the accepted digests, the run's position in the log, and
+the program function's parameters. -/
+structure Trusted where
+  log : Array Json
+  digests : Array String
+  accepted : Array String
+  run : Nat
+  params : Array (String × Ty)
+
+/-- The trusted input, refused (`trusted`) where it is not as the docstring states. -/
+def trustedOf (tr : Json) : Except String Trusted := do
+  if keys? tr != some TRUSTED_KEYS then throw "trusted"
+  let .arr log := getD tr "log" | throw "trusted"
+  let mut digests : Array String := #[]
+  for rec in log do
+    if !(rec matches .obj _) then throw "trusted"
+    let want := match digests.back? with
+      | some d => Json.str d
+      | none => Json.null
+    if getD rec "previous" != want then throw "trusted"
+    let .ok d := digest rec | throw "trusted"
+    digests := digests.push d
+  let .arr acc := getD tr "accepted" | throw "trusted"
+  let accepted ← acc.mapM fun a => match a with
+    | .str s => pure s
+    | _ => throw "trusted"
+  let .str run := getD tr "run" | throw "trusted"
+  let some r := digests.findIdx? (· == run) | throw "trusted"
+  let .arr ps := getD tr "params" | throw "trusted"
+  let params ← ps.mapM fun p => match p with
+    | .arr #[.str k, t] => match Ty.ofJson t with
+      | .ok ty => pure (k, ty)
+      | .error _ => throw "trusted"
+    | _ => throw "trusted"
+  if (params.map (·.1)).toList.eraseDups.length != params.size then throw "trusted"
+  return { log, digests, accepted, run := r, params }
+
+/-! ## Provenance -/
+
+inductive Kind where
+  | registered
+  | output
+  deriving BEq, Inhabited
+
+/-- One θ entry's provenance: its kind, the record `D` it cites, the value `V` or port `P`, and the root `R`. -/
+structure Prov where
+  kind : Kind
+  record : String
+  name : String
+  root : String
+  deriving Inhabited
+
+def REGISTERED_KEYS : Array String := #["kind", "registration", "root", "value"]
+def OUTPUT_KEYS : Array String := #["kind", "port", "record", "root"]
+
+/-- An entry of `provenance`, of exactly one of the two forms, every field a string. -/
+def provOf (p : Json) : Option Prov := do
+  let str (k : String) : Option String := match getD p k with
+    | .str s => some s
+    | _ => none
+  match ← str "kind" with
+  | "registered" =>
+    guard (keys? p == some REGISTERED_KEYS)
+    pure { kind := .registered, record := ← str "registration", name := ← str "value", root := ← str "root" }
+  | "output" =>
+    guard (keys? p == some OUTPUT_KEYS)
+    pure { kind := .output, record := ← str "record", name := ← str "port", root := ← str "root" }
+  | _ => none
+
+/-- `provenance`: one entry per θ entry (`theta-provenance` otherwise). -/
+def provenanceOf (j : Json) (n : Nat) : Except String (Array Prov) := do
+  let .arr ps := getD j "provenance" | throw "theta-provenance"
+  if ps.size != n then throw "theta-provenance"
+  ps.mapM fun p => match provOf p with
+    | some q => pure q
+    | none => throw "theta-provenance"
+
+/-- A registered entry's rows (`leaves`), `words` and `word_bits` (16 where the key is absent), each a natural. -/
+def dims (e : Json) : Option (Nat × Nat × Nat) := do
+  let r ← natOf? (getD e "leaves")
+  let w ← natOf? (getD e "words")
+  let b ← match (e.getObjVal? "word_bits").toOption with
+    | none => pure 16
+    | some j => natOf? j
+  return (r, w, b)
+
+/-- A θ entry in root node `k`, whose gates are `width` bits each, with provenance `p`: checked against the trusted
+input `T`, the program's digest `program`, each root node's parameter `own` and each parameter's gate count `counts`. -/
+def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
+    (p : Prov) : Except String Unit := do
+  let some d := T.digests.findIdx? (· == p.record) | throw "theta-record-unknown"
+  if d ≥ T.run then throw "theta-not-earlier"
+  if p.kind == .output && !T.accepted.contains p.record then throw "theta-uncertified"
+  let src := T.log[d]!
+  let cited := match p.kind with
+    | .registered => lastWith src "registered" "value" p.name
+    | .output => lastWith src "roots" "port" p.name
+  let some e := cited | throw "theta-root"
+  if getD e "root" != Json.str p.root then throw "theta-root"
+  let run := T.log[T.run]!
+  if getD run "program" != Json.str program then throw "theta-unbound"
+  let some (some i) := own[k]? | throw "theta-unbound"
+  let some mine := lastWith run "registered" "value" T.params[i]!.1 | throw "theta-unbound"
+  if getD mine "root" != Json.str p.root then throw "theta-unbound"
+  let bits := 16 * ((width + 15) / 16)
+  let fits := match p.kind with
+    | .registered => match dims e with
+      | some (r, w, b) => r * w == counts[i]! && b == bits
+      | none => false
+    | .output => match natOf? (getD e "leaves"), dims mine with
+      | some l, some (r, w, b) => l == r && r * w == counts[i]! && b == bits
+      | _, _ => false
+  if !fits then throw "theta-width"
+
+/-- θ's provenance on an instance the policy check gave a verdict, θ entry `t` lying in root node `node offs θ[t]`
+(`offs` the root body's offsets). -/
+def provenance (j tr : Json) (node : Array Nat → Nat → Nat) : Except String Unit := do
+  let i ← parse j
+  let P ← match decode i.program.toUTF8 with
+    | .ok P => pure P
+    | .error _ => throw "program"
+  let ps ← provenanceOf j i.theta.size
+  let T ← trustedOf tr
+  let body := (P.defs[P.root]!).body
+  let own := (ownersOf P T.params).getD (Array.replicate body.nodes.size none)
+  let counts := countsOf body.offsets own T.params.size
+  let program := Flock.hexOf P.sha512
+  for t in [0:i.theta.size] do
+    let k := node body.offsets ((natOf? i.theta[t]!).getD 0)
+    let width := (inputWidth? (P.defs[(body.nodes[k]!).fn]!).key).getD 0
+    entryStep T program own counts k width ps[t]!
+
+/-- The check of record: `NciCheck.Desc.evaluate` (θ and the owners per root node), then θ's provenance against the
+trusted input `tr`; the verdict is the policy check's. -/
+def evaluate (j tr : Json) : Except String Json := do
+  let out ← Desc.evaluate j
+  provenance j tr fun _ k => k
+  return out
+
+/-- The reference: `NciCheck.evaluate` (θ and the owners per gate), then θ's provenance, gate `g` of θ lying in the root
+node that holds it (`Desc.nodeOf`). -/
+def evaluateUnrolled (j tr : Json) : Except String Json := do
+  let out ← NciCheck.evaluate j
+  provenance j tr Desc.nodeOf
+  return out
+
+/-- The fix a refusal's `message` gives, for the codes of θ's provenance. -/
+def fixOf : String → Option String
+  | "theta-provenance" => some ("give `provenance`, one entry per theta entry in theta's order: {kind: registered, " ++
+      "registration, value, root} or {kind: output, record, port, root}")
+  | "trusted" => some ("the trusted input is the service's: {log: the prover's registration records in R6's chain, " ++
+      "accepted: accepted record digests, run: the run's own record's digest, params: [[name, type], ...]}")
+  | "theta-record-unknown" => some "cite a record of the prover's registration log by its digest"
+  | "theta-not-earlier" => some "cite a record registered before the run's own"
+  | "theta-uncertified" => some "an output in theta must come from a run the service's verifier accepted"
+  | "theta-root" => some "cite the root the record registers for that value (or holds for that port)"
+  | "theta-unbound" => some ("register the theta node's parameter in the run's own record under the cited root (R7: " ++
+      "a value keeps its root, and one from an earlier output takes that port's domain and leaf count)")
+  | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
+  | _ => none
+
+/-- A refusal as JSON: `{"error": code}`, with its `message` (`fixOf`, else `NciCheck.fixOf`). -/
+def refusal (code : String) : Json :=
+  match fixOf code with
+  | some m => Json.mkObj [("error", Json.str code), ("message", Json.str m)]
+  | none => NciCheck.refusal code
+
+def check (j tr : Json) : Json :=
+  match evaluate j tr with
+  | .ok r => r
+  | .error code => refusal code
+
+def checkUnrolled (j tr : Json) : Json :=
+  match evaluateUnrolled j tr with
+  | .ok r => r
+  | .error code => refusal code
+
+end NciCheck.Baseline

@@ -95,7 +95,8 @@ theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
     (hroot : FV3.root (zo.rd.port (.inl (u, ⟨_, hq⟩))).domain
       (leavesV (zo.rd.port (.inl (u, ⟨_, hq⟩))).domain rows salt) Sha512.hash =
         (zo.rd.port (.inl (u, ⟨_, hq⟩))).root)
-    (hn : (zo.rd.port (.inl (u, ⟨_, hq⟩))).leaves = rows.size) {top : ByteArray} (htop : top.size = 64)
+    (hn : (zo.rd.port (.inl (u, ⟨_, hq⟩))).leaves = rows.size)
+    (hs : (zo.rd.port (.inl (u, ⟨_, hq⟩))).schema = HmRow.ROW_SCHEMA) {top : ByteArray} (htop : top.size = 64)
     (hrow : rows[zo.rd.readAt (.inl (u, ⟨_, hq⟩))]! = capRow top) :
     (∀ t < 512, RegOut zo u hj (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + t)
         (bitL top.data.toList t)) ∨
@@ -104,7 +105,7 @@ theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
             (FlockVBridge.Decode.regVal zo (.inl (u, ⟨_, hq⟩))))
           (zo.rd.ws (.inl (u, ⟨_, hq⟩))) (zo.rd.wpath (.inl (u, ⟨_, hq⟩))) = some (x, y) ∧ x ≠ y ∧
         FlockSoundness.Refine.H512 x = FlockSoundness.Refine.H512 y := by
-  obtain ⟨-, hor⟩ := tie_root zo.rd hp hroot hn
+  obtain ⟨-, hor⟩ := tie_root zo.rd hp hroot hn hs
   exact hor.imp (fun he => hT_of_enc zo hj hl hob hlaid hq hp hseg htop (he.trans (congrArg rowInV hrow))) id
 
 /-- **`opensTopAt_of_regs`' `hT` at R's level 0, by the read's leaf**: `hT_of_root` with the read's leaf in place of

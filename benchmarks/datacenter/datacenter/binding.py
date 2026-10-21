@@ -11,9 +11,9 @@ census's grain: a gate's leaf and step are its node's. The placement is private 
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 
-What is public is the placement's `Profile`: the occupancy each certifier port must show, the work each block is to be
-credited with and the proof units it rests on, the trusted data each block consumes, the registered stores and the
-registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
+What is public is the placement's `Profile`: the occupancy each certifier port must show, the committed bits each block
+exports through it, the work each block is to be credited with and the proof units it rests on, the trusted data each
+block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
 placement itself.
 """
 from __future__ import annotations
@@ -144,7 +144,19 @@ class Placement:
         salt, salt_out, pinned = self._custody(plan.registration, weights or {})
         return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
                        dict(ticks or {}), self.registration.root if self.registration else None, units,
-                       L.census_of(self.program)["digest"], partition)
+                       L.census_of(self.program)["digest"], partition, self._exported(plan))
+
+    def _exported(self, plan: Plan) -> dict[Port, float]:
+        """The committed bits each egress port carries out of its block in the epoch: every crossing from a block, to
+        another block or outside, at the first egress port on its path, read within `plan.epoch`."""
+        dc, out = self.datacenter, {}
+        for x in crossings(self):
+            if self.block(x.src) is None or x.at not in plan.epoch:
+                continue
+            port = next((q for hop in hops(x.path, x.src) if (q := dc.port(*hop)) and q.direction == "egress"), None)
+            if port is not None:
+                out[port] = out.get(port, 0.0) + x.value.bits
+        return out
 
     def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
         """Each block's proof units under the registered partition, as core's one-stage verifier evaluates and checks it,
@@ -229,7 +241,8 @@ class Profile:
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
     block's proof units (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
     rests on, and whether that partition was the one-stage registration's or the served query's, assumed (`partition`:
-    "registered", "assumed", or None when no partition applies)."""
+    "registered", "assumed", or None when no partition applies). The export (`exported`): the committed bits each
+    egress port carries out of its block in the epoch, to another block or outside, from the declared crossings."""
 
     datacenter: Datacenter
     plan: Plan
@@ -246,6 +259,7 @@ class Profile:
     units: dict[str, int] = field(default_factory=dict)
     census: str | None = None
     partition: str | None = None
+    exported: dict[Port, float] = field(default_factory=dict)
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""

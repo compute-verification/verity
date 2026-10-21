@@ -3,10 +3,10 @@ a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's wor
 committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
 
-    python -m tests.pipeline.served_rope OUT        (from integrations/vllm)
+    python -m tests.pipeline.served_rope OUT [--served]        (from integrations/vllm)
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
-one JSON line."""
+one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`)."""
 from __future__ import annotations
 
 import gzip
@@ -28,17 +28,22 @@ CHUNK = 64
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path) -> dict:
-    """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it."""
+def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str | None = None) -> dict:
+    """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
+    ``seed`` draws its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
+    of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members' (unset = vllm-v1; rows-sha512: a TP rank's, `served_tp`)."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
 
-    dh = T.DH
-    T.DH = D
+    dh, i0 = T.DH, T.I
+    T.DH, T.I = D, i0 if I is None else int(I)
     try:
-        rng = np.random.default_rng(17)
+        rng = np.random.default_rng(seed)
         inst, woff = T._program(rope=True)
+        for r in inst["rows"] if silu else ():
+            if r["spec"].startswith("SiluMul_v1{"):
+                r["spec"] = silu + r["spec"][len("SiluMul_v1"):]
         w = T._bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
         for f in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
             w[woff[f][0]:woff[f][1]] = 0x3F80
@@ -47,9 +52,9 @@ def commit(root: Path) -> dict:
         prompts = {"r0": [1, 2], "r1": [5, 3]}
         world = T.Honest(inst, woff, w, prompts)
         bmap, _ = world.bmap_and_reader()
-        com, rc = commit_members(dict(sorted(world.store.items())))
+        com, rc = commit_members(dict(sorted(world.store.items())), commit_scheme=commit_scheme)
     finally:
-        T.DH = dh
+        T.DH, T.I = dh, i0
 
     out, row_dir = root / "commit", root / "row"
     (row_dir / "build_request").mkdir(parents=True)
@@ -88,12 +93,31 @@ def commit(root: Path) -> dict:
     return {"out": out, "row_dir": row_dir, "partition": pf, "world": world, "run_root": rc.run_root.hex(), "inst": inst}
 
 
+def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
+    """The in-Commit hook's window over the Commit's members (`serving_rows.readers`, its request as the row stage writes it) in
+    ``out_dir``: ``served``.  The hook reads the bundle's store opened against the record where a Commit's reads its committer."""
+    from verity_vllm.pipeline import deferred_rows as DRW
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    req = out_dir.with_name(out_dir.name + ".request.json")
+    req.write_text(json.dumps({"dir": str(out_dir), "partition": str(c["partition"]), "run": run, "committer": {"source": "served_rope"}}))
+    SRW.readers(str(req), r.store, r.run, DRW.opened_weights(r), r.programs, bmap, r.arrivals, r.loaded, r.manifest, "rope-d64-cpu", r.digests)
+    if (out_dir / "error.txt").exists():
+        raise RuntimeError(f"the in-Commit hook failed: {(out_dir / 'error.txt').read_text()[-2000:]}")
+    return out_dir
+
+
 def main(argv: list[str]) -> int:
     root = Path(argv[0])
     root.mkdir(parents=True, exist_ok=True)
     c = commit(root)
-    print(json.dumps({"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
-                      "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}))
+    out = {"commit": str(c["out"]), "bundle": str(RB.path(c["out"], 1)), "row_dir": str(c["row_dir"]),
+           "partition": str(c["partition"]), "run_root": c["run_root"], "program_digest": c["inst"]["digest"]}
+    if "--served" in argv[1:]:
+        out["hook"] = str(hook(c, root / "hook"))
+    print(json.dumps(out))
     return 0
 
 

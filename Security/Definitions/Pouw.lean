@@ -8,6 +8,7 @@ import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
+import Definitions.Pouw.FiatShamir
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3
 import Definitions.Pouw.Fp8Atom.Fp32
@@ -23,6 +24,7 @@ import Definitions.Pouw.Fp8Atom.Vectors.Ada
 import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
+import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
@@ -135,6 +137,14 @@ them by the rounding margin outright, unpinned.
 
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
+
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+
+The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
+coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
+g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
+`Models.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
+the record's headlines already cover by their own quantifier over committed values.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

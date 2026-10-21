@@ -1,5 +1,11 @@
 {
  "definitions": {
+  "I32Div_v2": {
+   "and": 2141
+  },
+  "I32Rem_v2": {
+   "and": 2110
+  },
   "MarlinMoeSchedule_v2{KT=2,NT=2,GRID=5}": {
    "and": 6709
   },

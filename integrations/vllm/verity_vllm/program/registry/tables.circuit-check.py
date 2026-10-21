@@ -12,7 +12,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import tables
 
     return [
-        # the Definitions that read a registered table (`gelu_tanh_bf16`, `tanh_rn`) through `TableRead16x1_v1`, `TableRead27x2_v1`
+        # the Definitions that read a registered table (`gelu_tanh_bf16`, `tanh_rn`) through `TableRead16x1_v1`, `TableRead27x2_v1`;
+        # no rule binds them (`boolean_tanh` computes both tables' entries)
         ("GeluTanhMul_v3", lambda: bind(tables.GeluTanhMulV3, I=16)),
         ("TanhF32Rn_v2", lambda: bind(tables.TanhF32RnV2)),
     ]
