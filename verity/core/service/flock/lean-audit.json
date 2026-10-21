@@ -28,6 +28,7 @@
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
   "Flock.Test.MaskLog",
+  "Flock.Test.FrameStep",
   "VStar"
  ],
  "exempt": {
