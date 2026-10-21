@@ -23,8 +23,12 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   and its rows, row i's salt `audit.hm96_salt` of the run's key at the value's nonce (`nonce`). The A scale is no value
   of the window Program: no unit reads it, and it stays bound in each call's A table under its round root, with y and z
   (`pouw_h1.H1Run`).
-* **When.** `Served.record` keeps each call's codes as the run records it and `Served.close` commits the trees at the
-  run's `close`, after its last round; `calls_root` binds their entries (`digest`), so the draw's coin opens after them.
+* **When.** `Served.record` keeps each call's codes as the run records it. At each round's close `Served.segments` hands
+  the run step s's rows of each ``a/<K>`` as aligned subtrees (`credit.cover`), which round s's root commits before its
+  coin (`pouw_h1_requests.round_row`, PRF-132); the first round fixes the values' domains under the `declared` window
+  Program with the window's prefix. `Served.close` commits the trees at the run's `close`, after its last round, refused
+  unless its Program is that one and each A tree is the one over the round roots' segments (`credit.a_link`);
+  `calls_root` binds their entries (`digest`), so the draw's coin opens after them.
   What `close` refuses (a window that isn't static, no key, blocks that aren't one per linear, a call whose codes aren't
   its shared block's, an odd K, a linear with no weight or whose weight isn't its n × K int8 codes or changes within the
   window, what `h1window.program` refuses) leaves no tree, and `trees` raises it.
@@ -43,6 +47,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.pouw.circuit import h1window as HW
@@ -50,6 +55,8 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedRegistration, ServedTree, register_served
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
+from verity.ml.commitments import hm96
+from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -140,6 +147,10 @@ class Served:
     _got: list[tuple[Any, np.ndarray]] = field(default_factory=list)
     #: each linear's weight, the tensor and its codes, taken once
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
+    #: from the first round's `segments`: the declared Program's digest, and each A value, its K, its blocks a step and
+    #: its tree's index in `roles` order (`nonce`)
+    _digest: str | None = None
+    _a: list[tuple[str, int, int, int]] = field(default_factory=list)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -168,6 +179,46 @@ class Served:
             self._weights[call.layer] = (weight, w)
         elif not np.array_equal(held[1], w):
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
+
+    def _open(self, run: Any) -> None:
+        key = self.key(run.commits)
+        program = declared(run.shapes_, run.modules, run.rows, run.steps, self.tile, self.blocks, prefix(key), self.unit)
+        self._digest, self.m = P.program_digest(program), HW.slot(run.rows, self.tile)
+        first = layout(run.shapes_, [(0, w) for w in range(len(run.shapes_))], self.blocks)
+        ks = sorted({k for _n, k in run.shapes_})
+        roles = HW.roles(ks)
+        self._a = [(prefix(key) + roles[2 * i], k, 1 + max(b for b, (_n, kw) in zip(first, run.shapes_) if kw == k), 2 * i)
+                   for i, k in enumerate(ks)]
+
+    def segments(self, run: Any, r: int) -> dict[str, list[tuple[int, int, bytes]]]:
+        """Round r's rows of each A value, the blocks step r's calls read (`layout`), as the aligned subtrees
+        (`credit.cover`, each ``(level, index, root)``) of the tree `close` registers, row j's leaf its codes' under
+        `nonce`'s salt; the first round fixes the values' domains under the declared window Program (`declared`, the
+        window's `prefix`). Nothing once the window is refused, and it then registers nothing."""
+        if self.refused:
+            return {}
+        try:
+            if self._digest is None:
+                self._open(run)
+            blocks = layout(run.shapes_, [(r, w) for w in range(len(run.shapes_))], self.blocks)
+        except ValueError as e:
+            self.refused.append(f"round {r}: {e}")
+            return {}
+        inst, out = hm96.SHA512, {}
+        for value, k, per, i in self._a:
+            codes, have, lo = np.zeros((per * self.m, k), np.int8), set(), r * per * self.m
+            for c, got in self._got:
+                b = blocks[c.layer] - r * per
+                if c.step == r and c.k == k and b not in have:
+                    have.add(b)
+                    codes[b * self.m:b * self.m + len(got)] = got
+            dom = G.domain(self._digest, value, k // 2, run.steps * per * self.m)
+            leaves = [G.leaf(dom, lo + j, inst.commit_string(inst.default_key, sha512_row_v2_digest(row.tobytes(), 8 * k),
+                                                            hm96_salt(run._key, nonce(i), lo + j)), V2)
+                      for j, row in enumerate(codes)]
+            out[value] = [(lv, ix, _subtree(dom, leaves[(ix << lv) - lo:((ix + 1) << lv) - lo], lv, ix))
+                          for lv, ix in CR.cover(lo, lo + len(leaves))]
+        return out
 
     def close(self, run: Any) -> None:
         """Commit the window's A and B trees under the window Program, after the run's last round."""
@@ -203,6 +254,10 @@ class Served:
             self.refused.append(str(e))
             return
         digest, pre = P.program_digest(self.program), prefix(key)
+        if digest != self._digest:
+            self.refused.append("the window Program at the close is not the declared one its first round fixed its A "
+                                "values' domains under")
+            return
         rows: list[np.ndarray] = []
         for k in ks:
             nb = 1 + max(blk for (kk, blk) in a if kk == k)
@@ -215,6 +270,9 @@ class Served:
                                                [hm96_salt(run._key, nonce(i), j) for j in range(len(r))], schema=V2)
                            for i, (role, r) in enumerate(zip(HW.roles(ks), rows))]
         self._got, self._weights = [], {}
+        why = CR.a_link(run.round_log, self.entries())
+        if why is not None:
+            self.refused.append(why[1])
 
     def ks(self) -> list[int]:
         """The window's contractions, ascending: one tile template, one A and one B value each."""
@@ -242,6 +300,15 @@ class Served:
     def query(self) -> dict[str, Any]:
         """The window Program's partition query: every tile of each K's template one unit (`h1window.query`)."""
         return HW.query(self.program)
+
+
+def _subtree(dom: Any, leaves: Sequence[bytes], level: int, index: int) -> bytes:
+    """The root of subtree `index` at `level` over its leaves, hashed as `merkle.tree_levels` hashes the whole tree."""
+    nodes = list(leaves)
+    for d in range(level):
+        base = index << (level - d - 1)
+        nodes = [dom.node(d, base + j, nodes[2 * j], nodes[2 * j + 1]) for j in range(len(nodes) // 2)]
+    return nodes[0]
 
 
 def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:

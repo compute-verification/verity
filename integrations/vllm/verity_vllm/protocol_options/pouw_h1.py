@@ -294,8 +294,9 @@ class H1Run:
     is recorded.
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
-    to run, and round s closes once step s's last linear is recorded (or at `close`): its root
-    (`pouw_h1_requests.round_root`) over the step's calls, its request table and its slot table is recorded with
+    to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
+    over the step's calls, its request table and its slot table, and with ``served`` the step's A rows of the window
+    Program's ``a/<K>`` values (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
@@ -501,11 +502,10 @@ class H1Run:
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
-            root = RQ.round_root(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts)
-            coin = self.rounds.record(root) if self.rounds is not None else None
-            self.round_log.append({"round": r, "root": root.hex(), "calls": calls.hex(),
-                                   "requests": table.commitment.root.hex(), "slots": slots.commitment.root.hex(),
-                                   "receipts": receipts.hex(), "coin": coin.to_json() if coin else None})
+            row = RQ.round_row(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts,
+                               self.served.segments(self, r) if self.served is not None else {})
+            coin = self.rounds.record(bytes.fromhex(row["root"])) if self.rounds is not None else None
+            self.round_log.append({**row, "coin": coin.to_json() if coin else None})
 
     def receipts_of(self, r: int) -> bytes:
         """Round r's receipts (`pouw_h1_requests.receipts_digest`): its calls' receipt roots as handed to `receipt`."""

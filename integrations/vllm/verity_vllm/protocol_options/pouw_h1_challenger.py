@@ -735,13 +735,9 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     except (CoinError, KeyError, TypeError, ValueError) as e:
         return f"the window's salt can't be derived from its record ({e})"
     for row in c.get("rounds") or ():
-        try:
-            r = row["round"]
-            parts = [bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "receipts")]
-        except (KeyError, TypeError, ValueError) as e:
-            return f"a round of the log is malformed ({e})"
-        if RQ.round_root(salt, r, *parts).hex() != row.get("root"):
-            return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
+        why = RQ.round_reason(salt, row) if isinstance(row, Mapping) else "a round of the log is not an object"
+        if why is not None:
+            return why
     why = RQ.tables_reason(salt, c.get("rounds") or (), rows)
     if why is not None:
         return why

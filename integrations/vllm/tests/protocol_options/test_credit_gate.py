@@ -31,6 +31,7 @@ from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_prover as PV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_records as ZR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 
 from tests.protocol_options import challenger_host as CH  # noqa: E402
 
@@ -184,11 +185,11 @@ def auditor(tmp_path, monkeypatch):
     return host
 
 
-def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True):
+def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, served=None):
     """One small call (m rows of K, N = `n`) through `arm` with H1 installed (T = `ROWS`), its request admitted with an
     m-token prompt (with none: prompt embeddings, so no entry); the run closed and its y and run returned, the served y
     the plain linear's when `exact`. Its coins are the auditor host's challenger's with `remote` (the `auditor` fixture),
-    else held in this process."""
+    else held in this process; with `served` (`pouw_h1_served.Served`) its rows are the window Program's values."""
     layer = Linear(n, 1, arm)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
@@ -197,7 +198,8 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True):
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
     ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"rows": ROWS, "steps": 1, "retain_steps": retain,
-                                                                         "runner": runner, **coins}})
+                                                                         "runner": runner, **coins,
+                                                                         **({"served": served} if served else {})}})
     comp = PO.install(Model(layer), ctx)
     try:
         req = SimpleNamespace(req_id="r", prompt_token_ids=list(range(m)) if prompt else None,
@@ -456,7 +458,7 @@ def test_the_gate_passed_call_is_credited_by_cores_rules_only_with_every_drawn_u
     """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, so core's
     `credited` (through the auditor's ledger and the session's files) names it; the window credits nothing while a
     drawn unit's proof outcome is missing or rejected (`outcome`), and nothing until every A value is the round roots'
-    tree (`a_link`)."""
+    tree (`a_link`): a window with no served trees has none."""
     _y, run = _serve(ZyArm(), remote=True, n=64)
     assert auditor.ended() is None
     rec = _record(run)
@@ -474,7 +476,24 @@ def test_the_gate_passed_call_is_credited_by_cores_rules_only_with_every_drawn_u
     assert failed["outcome"][0] == "failed" and failed["credit"] is None
     accepted = verdict([0, 1], [{"unit": 0, "verdict": "accept"}, {"unit": 1, "verdict": "accept"}])
     assert accepted["outcome"] is None and accepted["credited"] is None
-    assert accepted["a_link"] is not None and accepted["credit"] is None
+    assert accepted["a_link"] == ("a-link", CR.ENTRIES_FORM) and accepted["credit"] is None
+
+
+def test_an_honest_served_window_is_credited_through_cores_credited_a_link_and_outcome(auditor):
+    """PRF-132: a served window (its A codes and B rows the window Program's values, each round's root over its A rows)
+    whose call gate-passed is credited by core's rules once its drawn unit's proof is accepted: `credited` names the
+    call, `a_link` holds the registered A tree to the round roots, and `outcome` accepts; the record's manifest holds."""
+    from tests.protocol_options.test_pouw_h1_served import _unit
+    _y, run = _serve(ZyArm(), remote=True, n=64, served=SV.Served(PH.TILE, _unit()))
+    assert auditor.ended() is None and not run.served.refused and run.served.registered
+    rec = _record(run)
+    assert any(CR.is_a(e["value"]) for e in rec["commitment"]["served"]["entries"])
+    out = PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key, [0],
+                            [{"unit": 0, "verdict": "accept"}])
+    assert {k: out[k] for k in ("manifest", "credited", "a_link", "outcome")} == dict.fromkeys(
+        ("manifest", "credited", "a_link", "outcome")), out
+    assert out["calls"] == out["credit"] == [0]
+    assert PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key, [0], [])["credit"] is None
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(auditor):

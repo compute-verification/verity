@@ -21,6 +21,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
@@ -488,8 +489,9 @@ def test_each_admitted_request_is_a_leaf_under_its_rounds_root_recorded_before_i
         assert (row["requests"], row["slots"], row["calls"]) == (table.commitment.root.hex(), slots.commitment.root.hex(),
                                                                  calls.hex())
         assert row["receipts"] == (run.receipts_of(r - 1) if r else RQ.NO_RECEIPTS).hex()
-        assert row["root"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root,
-                                            bytes.fromhex(row["receipts"])).hex()
+        assert row["inner"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root,
+                                             bytes.fromhex(row["receipts"])).hex()
+        assert row["a"] == {} and row["root"] == CR.round_root(r, bytes.fromhex(row["inner"]), {}).hex()
     for e in run.requests:
         assert RQ.request_reason(run.round_log, coins, SALT, 32, e, run.open_request(e.index), run.open_first(e.index),
                                  admission=RQ.PER_ROUND) is None
@@ -509,9 +511,8 @@ def _deferred(run, name=True):
         slots[r] = RQ.slot_table(SALT, r, 32, owners[r], KEY)
         calls = RQ.step_digest(SALT, r, [m for m in manifest if m["step"] == r])
         receipts = bytes.fromhex(run.round_log[r]["receipts"])
-        root = RQ.round_root(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root, receipts)
-        log.append({"round": r, "root": root.hex(), "calls": calls.hex(), "requests": tables[r].commitment.root.hex(),
-                    "slots": slots[r].commitment.root.hex(), "receipts": receipts.hex(), "coin": rounds.record(root).to_json()})
+        row = RQ.round_row(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root, receipts, {})
+        log.append({**row, "coin": rounds.record(bytes.fromhex(row["root"])).to_json()})
     return (log, rounds.challenger.commitment, late,
             lambda e: _opening(tables[e.round], e.round, [x for x in late if x.round == e.round].index(e)),
             lambda s, p: _opening(slots[s], s, p), lambda e: _opening(slots[e.round], e.round, e.slot))
@@ -559,9 +560,8 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
     assert why(e0, dataclasses.replace(o0, value=o1.value)) == "request 0: the leaf opened under round 0 is not its entry"
     late = dataclasses.replace(e0, round=1)
     table = RQ.request_table(SALT, 1, 32, [late, *run.admitted[1]], KEY)
-    root = RQ.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root, bytes.fromhex(log[1]["slots"]),
-                         bytes.fromhex(log[1]["receipts"]))
-    moved = [log[0], {**log[1], "requests": table.commitment.root.hex(), "root": root.hex()}, log[2]]
+    moved = [log[0], {**log[1], **RQ.round_row(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root,
+                                               bytes.fromhex(log[1]["slots"]), bytes.fromhex(log[1]["receipts"]), {})}, log[2]]
     assert why(late, _opening(table, 1, 0), log=moved, first=run.open_slot(1, 0)) == \
         "request 0: round 1's coin: coin was not opened after what the verifier recorded"
     assert why(e0, _opening(table, 1, 0), log=moved) == wrong

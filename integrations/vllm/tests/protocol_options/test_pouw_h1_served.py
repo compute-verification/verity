@@ -348,3 +348,38 @@ def test_register_registers_the_whole_window_once_in_one_file(tmp_path, monkeypa
 def test_the_window_registers():
     run, _ws, _inputs = _window(W1)
     SV.register(run)
+
+
+def test_each_round_root_commits_its_steps_a_rows_and_the_registered_a_tree_is_the_one_over_them():
+    """PRF-132 (`credit.a_link`): round s's root is over its inner root and step s's rows of each ``a/<K>`` as aligned
+    subtrees, so the registered A trees are the ones fixed before each round's coin. A segment changed under the round
+    root, a segment changed with its round root recomputed, and an A tree registered over other rows are refused, and a
+    window whose codes change after their round closed registers nothing."""
+    from verity.core.protocols.pouw import credit as CR
+    run, _ws, _inputs = _window(W1)
+    log, entries = run.round_log, run.served.entries()
+    assert [sorted(x["a"]) for x in log] == [[SV.prefix(W1) + f"a/{k}" for k in KS]] * STEPS
+    assert all(RQ.round_reason(run.salt, x) is None for x in log) and CR.a_link(log, entries) is None
+    v = SV.prefix(W1) + "a/16"
+    seg = log[1]["a"][v][0]
+    bent = [log[0], {**log[1], "a": {**log[1]["a"], v: [[seg[0], seg[1], "ee" * 64], *log[1]["a"][v][1:]]}}]
+    assert RQ.round_reason(run.salt, bent[1]) == "round 1's root is not over its inner root and its A segments (`credit.round_root`)"
+    assert CR.a_link(bent, entries)[1].startswith("round 1's root is not over its inner root and its A segments")
+    resealed = [log[0], {**bent[1], "root": CR.round_root(1, bytes.fromhex(log[1]["inner"]), {
+        name: [(lv, i, bytes.fromhex(h)) for lv, i, h in segs] for name, segs in bent[1]["a"].items()}).hex()}]
+    assert CR.a_link(resealed, entries)[1].startswith(f"registered A value {v}'s root is not the tree over the segments")
+    a = run.served.registered[0]
+    other = G.Registered.commit(a.program, a.value, [[w ^ 1 for w in r] for r in a.rows], a.salts, schema=SV.V2)
+    assert CR.a_link(log, [other.entry(), *entries[1:]])[1].startswith(f"registered A value {v}'s root is not the tree")
+    rng = np.random.default_rng(0)
+    late = PH.H1Run("t", SALT, MODULES, SHAPES, T, STEPS, key=b"\1" * 32, served=SV.Served(TILE, _unit(), BLOCKS, window=W1))
+    ws = [_codes(rng, n, k) for n, k in SHAPES]
+    x = _codes(rng, SERVED, 16)
+    for w, (a_in, wt) in enumerate(zip([x, x, _codes(rng, SERVED, 32)], ws)):
+        late.record(w, a_in, torch.rand(SERVED) + 0.5, wt, torch.ones(wt.shape[0], 1))
+    for _c, codes in late.served._got[:2]:
+        codes[0, 0] ^= 1
+    late.close()
+    assert late.served.registered and any("is not the tree over the segments" in r for r in late.served.refused)
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(late)
