@@ -125,6 +125,14 @@ def test_option_a_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
     assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
 
 
+def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
+    """RT3-LOGIC-6's restatement of the H200's and B200's headlines: FOLD-OPT at π* and the proof service's named
+    premises, as sm_120's."""
+    for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
+        assert "the H200's and the B200's" in get(e).name, e
+    assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")
