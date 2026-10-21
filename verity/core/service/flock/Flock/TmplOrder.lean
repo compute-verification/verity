@@ -27,7 +27,7 @@ theorem mem_dropPairs : ∀ {l : List Nat} {x : Nat}, x ∈ dropPairs l → x �
       · exact List.mem_cons.2 (Or.inr (mem_dropPairs h))
 
 /-- Every column of a canonical row is one of the row's. -/
-theorem mem_canon {xs : Array Nat} {x : Nat} (h : x ∈ (canon xs).toList) : x ∈ xs.toList := by
+theorem mem_canon {xs : Array Nat} {x : Nat} (h : x ∈ (Flock.Tmpl.canon xs).toList) : x ∈ xs.toList := by
   have h' : x ∈ dropPairs xs.toList.mergeSort := h
   exact List.mem_mergeSort.1 (mem_dropPairs h')
 
@@ -54,7 +54,7 @@ theorem getD_set! (xs : Array (Array Nat)) (c x : Nat) (v : Array Nat) :
   · subst hx
     by_cases hs : c < xs.size
     · exact Or.inr ⟨rfl, by simp [hs]⟩
-    · exact Or.inl (by simp [hs, Array.getElem?_eq_none (Nat.le_of_not_lt hs)])
+    · exact Or.inl (by simp [hs])
   · exact Or.inl (by simp [hx])
 
 /-- `write` changes column `c`'s rows only, to `a` and `b`. -/
@@ -204,8 +204,8 @@ theorem portSpan_mono {t : Tmpl} {lo hi lo' hi' : Nat} (h : t.portSpan lo hi = t
 /-! ## Copies -/
 
 /-- **A copy writes only its own columns.** -/
-theorem place_local {defs : Array Def} {k : Nat} (hfits : ∀ d df, defs[d]? = some df → df.fits defs = true)
-    (fuel : Nat) : ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' →
+theorem place_local {defs : Array Def} {k : Nat}
+    (hfits : ∀ d (df : Def), defs[d]? = some df → df.fits defs = true) (fuel : Nat) : ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' →
       ∀ x, (x < o ∨ o + (defs.getD d default).cols ≤ x) → Same x acc' acc := by
   induction fuel with
   | zero => intro d o inp acc acc' h; cases h
@@ -247,7 +247,7 @@ theorem place_local {defs : Array Def} {k : Nat} (hfits : ∀ d df, defs[d]? = s
 ones, reads only columns a row at its column may. -/
 theorem row_reads {df : Def} {o ic k : Nat} {P : Nat → Prop} {inp : List Nat} {col : Nat} {a : Array Nat}
     (hinp : ∀ x ∈ inp, Reads ic k P o x) (hic : ic ≤ o) (ha : ∀ v ∈ a.toList, df.cols ≤ v ∨ v < col) :
-    ∀ c ∈ (canon (a.map (df.ref o inp k))).toList, Reads ic k P (o + col) c := by
+    ∀ c ∈ (Flock.Tmpl.canon (a.map (df.ref o inp k))).toList, Reads ic k P (o + col) c := by
   intro c hc
   have hc' := mem_canon hc
   rw [Array.toList_map] at hc'
@@ -259,7 +259,7 @@ theorem row_reads {df : Def} {o ic k : Nat} {P : Nat → Prop} {inp : List Nat} 
 
 /-- **An ordered copy past the input rows keeps every row reading only columns it may.** -/
 theorem place_good {defs : Array Def} {k ic : Nat} {P : Nat → Prop} {F : Array Bool}
-    (hF : ∀ d df, defs[d]? = some df → F.getD d false = true → df.ordered F = true) (fuel : Nat) :
+    (hF : ∀ d (df : Def), defs[d]? = some df → F.getD d false = true → df.ordered F = true) (fuel : Nat) :
     ∀ {d o inp acc acc'}, place defs k fuel d o inp acc = .ok acc' → F.getD d false = true → ic ≤ o →
       (∀ x ∈ inp, Reads ic k P o x) → Good ic k P acc → Good ic k P acc' := by
   induction fuel with
@@ -293,7 +293,7 @@ theorem place_good {defs : Array Def} {k ic : Nat} {P : Nat → Prop} {F : Array
 /-- A root row past the input rows, reading only the constant or earlier columns, port bits if input columns. -/
 theorem root_row_reads {df : Def} {ic k : Nat} {P : Nat → Prop} {col : Nat} {a : Array Nat} (hk : k = df.cols - 1)
     (ha : ∀ v ∈ a.toList, df.cols ≤ v + 1 ∨ (v < col ∧ (ic ≤ v ∨ P v))) :
-    ∀ c ∈ (canon (a.map (df.ref 0 [] k))).toList, Reads ic k P (0 + col) c := by
+    ∀ c ∈ (Flock.Tmpl.canon (a.map (df.ref 0 [] k))).toList, Reads ic k P (0 + col) c := by
   intro c hc
   have hc' := mem_canon hc
   rw [Array.toList_map] at hc'
@@ -313,10 +313,10 @@ theorem rows_good {t : Tmpl} {acc : Acc} (ho : t.ordered = true) (hr : t.rows = 
   unfold Tmpl.ordered at ho
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at ho
   obtain ⟨hdefs, hroot⟩ := ho
-  have hfits : ∀ d df, t.defs[d]? = some df → df.fits t.defs = true := fun d df h => by
+  have hfits : ∀ d (df : Def), t.defs[d]? = some df → df.fits t.defs = true := fun d df h => by
     obtain ⟨hd, e⟩ := getD_of_some h
     rw [← e]; exact (hdefs d hd).1
-  have hF : ∀ d df, t.defs[d]? = some df → (flags t.defs).getD d false = true →
+  have hF : ∀ d (df : Def), t.defs[d]? = some df → (flags t.defs).getD d false = true →
       df.ordered (flags t.defs) = true := fun d df h hf => by
     obtain ⟨hd, e⟩ := getD_of_some h
     rw [← e]; exact imp_of_or (hdefs d hd).2 hf
