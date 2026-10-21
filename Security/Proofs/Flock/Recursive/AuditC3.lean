@@ -757,8 +757,9 @@ each stream round's coins read off the history's prefix at the last round it tak
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
 below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates
-to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet
-established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it.
+to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_caps`)
+and does not reach the Holo statements (i) is about, and `BitsLin2` is not yet derived from it.
 -/
 def RecursiveAuditC3 : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate

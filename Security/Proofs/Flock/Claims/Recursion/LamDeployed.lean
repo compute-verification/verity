@@ -8,8 +8,8 @@ import Definitions.Claims.RecursionLin
 
 `Claims.Recursion.lamLin2` is the number `BitsLin2` states route 2C's bits at, with the inner Flock's roots linear
 (`KSLin2`). Here it is evaluated at the deployed records `KSLin2On` at the dense statements is stated at from its
-premises (`ksLin2_deployed`, `ksLin2_deployed_plain`): the compiled record `recBoundAt rel b L` whose inner view runs `IVStar` of the deployed bound
-record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the deployed plain record's numbers).
+premises (`ksLin2_deployed`, `ksLin2_deployed_plain`): the compiled record `recBoundAt rel b L` whose inner view runs
+`IVStar` of the deployed bound record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the deployed plain record's numbers).
 
 **`lamLin2_deployed_ge`**: `λ₂(x) ≥ 100` at every statement `x` whose inner statement is in the plain scope
 (`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
