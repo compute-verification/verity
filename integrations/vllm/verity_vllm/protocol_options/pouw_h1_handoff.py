@@ -49,7 +49,13 @@ class Resumed(remote.RemoteChallenger):
     one that hello was answered with."""
 
     def __init__(self, sock: socket.socket, commitment: LiveCommitment) -> None:
-        self._wire, self._ended, self.commitment = remote._Wire(sock), None, commitment
+        self._answered = commitment
+        super().__init__(sock)
+
+    def _ask(self, head: dict, kind: str, read: Any) -> Any:
+        if head.get("type") == "hello":
+            return self._answered
+        return super()._ask(head, kind, read)
 
 
 def _record(rec: LiveRecord | None) -> dict[str, Any] | None:
