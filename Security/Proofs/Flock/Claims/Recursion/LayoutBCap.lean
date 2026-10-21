@@ -140,8 +140,6 @@ theorem layoutBCap_msgAt_zero (x : Msg) (s : ℕ) :
 
 theorem layoutBCap_fixedAt_zero (x : Msg) : (layoutBCap topsAt fin).fixedAt x 0 = none := rfl
 
-theorem layoutBCap_pieceAt (x : Msg) (i : ℕ) : (layoutBCap topsAt fin).pieceAt x i = lastPieces fin x i := rfl
-
 end Layout
 
 /-- A part's held rows exist only where its circuit parses. -/
@@ -222,7 +220,7 @@ theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg �
           have hc : ¬ (j + 1 + 1 = layoutOf.rounds x) := by
             rw [hL]
             omega
-          rw [layoutBCap_pieceAt, lastPieces, if_neg hc]
+          simp only [layoutBCap, lastPieces, if_neg hc]
         refine ⟨?_, fun _ => hpc⟩
         cases ht : sr.2.1.isEmpty with
         | false =>
@@ -252,7 +250,7 @@ theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg �
         · have hc : 2 * rs.size + 1 + 1 = layoutOf.rounds x := by
             rw [hL]
             omega
-          rw [layoutBCap_pieceAt, lastPieces, if_pos hc]
+          simp only [layoutBCap, lastPieces, if_pos hc]
           exact hF x st hst hf
         · exfalso
           simp [layoutBCap, hsr'] at h0
@@ -287,7 +285,7 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
       show ¬ (j + 1 + 1 = (FlockDeploy.V false).k (xIOf x))
       rw [hK]
       omega
-    rw [layoutBCap_pieceAt, lastPieces, if_neg hc]
+    simp only [layoutBCap, lastPieces, if_neg hc]
 
 /-! ## `KSLin2` at `layoutBCap` -/
 
