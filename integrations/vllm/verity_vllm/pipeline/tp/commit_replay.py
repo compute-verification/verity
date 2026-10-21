@@ -11,7 +11,8 @@ back: the value correspondence before the C2's components, the weights pin, cros
 cross-rank pass of every pair.
 
 Per rank (`replay_rank`), the bundle is opened against its manifest and against the record: the manifest sha256 the record names, the
-rank's run root in `runs.jsonl` and its combination into the pair's TP run root, the dumped store's step roots folding to it, the
+rank's run root in `runs.jsonl` and its combination into the pair's TP run root (under the form the record's ``root_tag`` names,
+`tp.run_root.combine`: SHA-512 over rows-sha512's 64-byte roots, or an older record's SHA-256 v1), the dumped store's step roots folding to it, the
 binding map's digest, the required manifest and the rank's Programs of record.  The rank's weight SHARDS are composed from the
 checkpoint (`weights_of_record.compose` at the rank's (world, rank)) and opened against the committed weights root
 (`cpu_replay.open_weights`).  Then the same C2 as the rank's process runs in place (`rank_replay.evaluate`, the same seed), and its
@@ -79,7 +80,7 @@ def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
 def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int) -> tuple[dict, dict, Any, Any, dict]:
     """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused."""
     from verity_vllm.commit import store_dump as SD
-    from verity_vllm.pipeline.tp.commit import tp_run_root
+    from verity_vllm.pipeline.tp import run_root as RT
 
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
@@ -92,7 +93,11 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     if c is None or c.get("commit_pass") is not None or "replay_deferred" not in c:
         raise Refused(f"pair {pair} rank {rank}: no rank awaiting its deferred replay in {out / 'runs.jsonl'}")
     vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}
-    if len(vec) != int(dd["world"]) or tp_run_root(int(dd["world"]), vec).hex() != row["commit"].get("tp_run_root") or ctx["tp_run_root"] != row["commit"]["tp_run_root"]:
+    try:
+        combined = RT.combine(json.loads((out / "versions.json").read_text()).get("root_tag"), int(dd["world"]), vec).hex()
+    except ValueError as e:
+        raise Refused(f"pair {pair}: the commitment vector does not combine into a TP run root: {e}") from e
+    if len(vec) != int(dd["world"]) or combined != row["commit"].get("tp_run_root") or ctx["tp_run_root"] != row["commit"]["tp_run_root"]:
         raise Refused(f"pair {pair}: the commitment vector does not combine into the TP run root of record {str(row['commit'].get('tp_run_root'))[:16]}")
     store, run = SD.load(bdir / "store")
     folded = store._run_root(run)

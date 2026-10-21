@@ -30,12 +30,23 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
 
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
-its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
+its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.  In a
+certified window, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
+`salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
+before it drew that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
+challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
-(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
-coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
+and a replay of a recorded draw `COIN_EARLY` too.  `salt` is the rule on a live window's salt coin, read through the
+same session as `rounds`: S is the session the auditor's signed ledger reserves for the window and R the root its open
+entry opened S on, which the verifier recomputes from the window's record and S (`salt.window_open_root`); the
+session's signed log shows R alone as what its salt coin followed, and under the commitment it signed the salt coin
+opened once, after R.
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
+opens and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the
+prover hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and
+the round roots are the ones its signed log shows it received.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -49,6 +60,7 @@ from fractions import Fraction
 from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
@@ -57,7 +69,8 @@ from verity.ml.commitments import Commitment, Opening, VerificationLimits, verif
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import row_leaf
+from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.ml.crypto import lms
 from verity.ml.randomness import derive, frame
 
 ID = "verity/pouw/v1"
@@ -73,17 +86,31 @@ VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: one-stage's served domain (`registration.served_domain`), the window root's
 SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
-#: a tile proof's first two rows, in its header's key order: its A row and its B row, each side's fp8-p row schema
+#: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
+#: the ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s ``in_rows``)
+PC8_PORTS = ("a0", "b0")
 SALT_BYTES = 192
 BC_BYTES = 128
+ROW_V2 = "hm96-sha512/row/v2"
+#: a salted unit's public row: the window's certified salt, the unit's position (a u64) and its entry's side roots
+PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * 64)
+PUBLIC_ROW_SALT_DOMAIN = b"verity/pouw/public-row-salt/v1\0"
+
+
+class Salted(NamedTuple):
+    """A salted tile template's unit: R A rows and C B rows, then its public row ``pub``, the pinned circuit's first
+    R + C + 1 ports in that order, each an ``hm96-sha512/row/v2`` row (`PouwH1Tile`'s ``a0..``, ``b0..``, ``pub``)."""
+    r: int
+    c: int
 
 
 class Tile(NamedTuple):
     tile_work: int
     query: str
     circuit: str
+    salted: Salted | None = None
 
 
 #: the tile templates the verifier pins (Lean's `PouwCheck.tiles`, of record): each one's work per tile, its check query's
@@ -105,6 +132,13 @@ TILES = {
         4096,
         "0f93d0dce725a5269061b91a1eb39ad294a1369c6f47814880acc74cef30aad734b0067d1cc7f5347bf9db4279a6519eb0abfa000c581759b14fd0ed5a7f9647",
         "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af"),
+    "PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8,PAIRS=((0,0),(0,1),(0,2),(0,3),"
+    "(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,0),(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),"
+    "(2,7),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7))}": Tile(
+        64 * 32,
+        "1083a2eb9d13f77afdb936ecac9e780aa63b7f993795a8ff59d9d05ca7259c455c1220a833979cd975f907e97d9045033c5427950b7953dd33ac26cfdef44631",
+        "571e56a77368c64505e46a2affd6360d869cf17d272f86926bbb6d8974f2c39177b351e15c20bbf8fd78cbb87a4951f9e3a1062edab8e4a57905eb99e6074b2f",
+        Salted(4, 8)),
 }
 
 
@@ -605,15 +639,91 @@ def _no_constant(s: str) -> Any:
     raise ValueError(f"{s} is not JSON")
 
 
-def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any) -> str | None:
+def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
+    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out (`h1unit.pub_words`):
+    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first."""
+    x = salt + position.to_bytes(8, "big") + roots[0] + roots[1]
+    if len(x) * 8 != PUBLIC_ROW_BITS:
+        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits")
+    return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
+
+
+def public_row_salt(context: str, position: int) -> bytes:
+    """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
+    blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
+    ctx = context.encode()
+    head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
+
+
+def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:
+    """The b ‖ c of unit `position`'s public row (`public_row`) under `public_row_salt`: the 128 bytes the verifier
+    requires at the public row's place in the proof's body."""
+    return Wd._HM.commit_string(Wd._HM.default_key, sha512_row_v2_digest(public_row(salt, position, roots), PUBLIC_ROW_BITS),
+                                public_row_salt(context, position))
+
+
+def certified_salt(raw: bytes | None, context: str, reveal: bytes, committed: bytes | None, stream: bytes | None,
+                   prover: bytes | None) -> bytes:
+    """The certified window's salt that `pass_epoch` checks the pass's against (`_certified_salt`), which `opening` holds
+    every drawn salted unit's public row to.  Raises `Co.DomainError` or `Refused` where `pass_epoch` refuses."""
+    if raw is None:
+        raise Co.DomainError("the window names no pass, whose epoch the challenger re-starts from its manifest")
+    return _certified_salt(_manifest(raw), reveal, context, committed, stream, prover)[0]
+
+
+def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
+    """A certified window (its context names a PoUW window, `salt.window_of`) opens only a salted template's units, under
+    the 64-byte certified salt the verifier holds; any other window, no salt and no salted unit."""
+    if PS.window_of(p["context"]) is not None:
+        if t is None or t.salted is None:
+            return ("the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the "
+                    "window's certified salt")
+        if type(salt) is not bytes or len(salt) != PS.SALT_BYTES:
+            return f"the window is certified, and the verifier holds no {PS.SALT_BYTES}-byte certified salt for it"
+    elif salt is not None:
+        return "the window is not certified, so it has no certified salt for a unit to read"
+    elif t is not None and t.salted is not None:
+        return "the window's template's unit reads a salt, which only a certified window has"
+    return None
+
+
+def _ports(lay: Salted | None) -> list[str]:
+    """The side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. C-Flock reads
+    port k's b ‖ c at the body's k-th place, in the order of the circuit's ports, not of the header's keys."""
+    return list(PC8_PORTS) if lay is None else [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)]
+
+
+def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
+    """A salted unit's n rows of one side, ``[{"index", "path"}, …]``, or None."""
+    if not (isinstance(o, list) and len(o) == n and all(isinstance(x, dict) for x in o)):
+        return None
+    out = [(x.get("index"), _path(x.get("path"))) for x in o]
+    return None if any(not _int(i) or s is None for i, s in out) else out
+
+
+def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
+            salt: bytes | None = None) -> str | None:
     """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered window root, else why
     not (`served_commit.check`).  `units` is the draw's (None for a unit opened undrawn, the filler's); `op` the prover's
     opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
     its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
-    first two rows, in its header's key order (serde's, as C-Flock reads it), are its A row and its B row, and its body
-    starts with their b ‖ c."""
+    A row and B row are its circuit's first two ports, ``a0`` and ``b0`` (`PC8_PORTS`), whose schemas the header names,
+    and its body starts with their b ‖ c.  The header's keys, in its key order (serde's), list the opened side rows
+    first and in port order (`_ports`): a header that orders them otherwise is refused, never read in its own order.
+
+    `salt` is a certified window's salt (`certified_salt`), and a certified window opens only a salted template's units
+    (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
+    rows) and ``"b"`` (C rows): tile (i, j) of its entry (`window.tile_in`) is A rows R·i + k and B rows C·j + k, and
+    the proof's body starts with their b ‖ c and then its public row's, which must be `public_bc` of the window's context,
+    `salt`, the unit's position and the entry's side roots."""
     if units is not None and unit not in units:
         return f"unit {unit} is not drawn"
+    t = TILES.get(p["check"]["template"])
+    why = _salt_reason(p, t, salt)
+    if why is not None:
+        return why
+    lay = t.salted if t is not None else None
     rec = c["record"]
     dom = window_domain(p, rec)
     roots = {r["port"]: r for r in rec["roots"]}
@@ -630,18 +740,26 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     e = op.get("entry")
     if not _int(e):
         return "the opening names no entry"
-    salt, sibs = _fromhex(op.get("entry_salt"), SALT_BYTES), _path(op.get("window_path"))
-    sides = {s: op.get(s) for s, _ in OPENED}
-    paths = {s: _path(o.get("path")) if isinstance(o, dict) else None for s, o in sides.items()}
-    if salt is None or sibs is None or any(p_ is None or not _int(sides[s].get("index")) for s, p_ in paths.items()):
+    esalt, sibs = _fromhex(op.get("entry_salt"), SALT_BYTES), _path(op.get("window_path"))
+    if lay is None:
+        sides = {s: op.get(s) for s, _ in OPENED}
+        paths = {s: _path(o.get("path")) if isinstance(o, dict) else None for s, o in sides.items()}
+        opened = None if any(p_ is None or not _int(sides[s].get("index")) for s, p_ in paths.items()) else \
+            {s: [(sides[s]["index"], paths[s])] for s in paths}
+    else:
+        opened = {s: _sides(op.get(s), n) for s, n in (("a", lay.r), ("b", lay.c))}
+        opened = None if None in opened.values() else opened
+    if esalt is None or sibs is None or opened is None:
         return (f"the opening's salt is not {SALT_BYTES} bytes, or a path or a side's index is not one (paths of SHA-512 "
                 "digests)")
-    if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, salt)), sibs)):
+    if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, esalt)), sibs)):
         return f"entry {e} is not the registered window's entry"
     try:
-        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
+        i, j = Wd.tile_in(entry, unit)
     except ValueError as x:
         return f"entry {e}: {x}"
+    at = {"a": [i], "b": [j]} if lay is None else {"a": [lay.r * i + k for k in range(lay.r)],
+                                                  "b": [lay.c * j + k for k in range(lay.c)]}
     head, nl, body = pub.partition(b"\n")
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
@@ -654,25 +772,40 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's header has no instance count"
     if n != 1:
         return f"the proof has {n} instances, not one tile"
-    t = TILES.get(p["check"]["template"])
     if t is None or h.get("circuit_sha512") != t.circuit:
         return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
-    if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
-        return "the proof's first rows are not an A row and a B row of the registered schemas"
-    if len(body) < 2 * BC_BYTES:
-        return "the proof's body holds no A row and B row"
-    for i, (side, schema) in enumerate(OPENED):
-        o = sides[side]
-        if o["index"] != at[side]:
-            return f"side {side}: the opening is of row {o['index']}, not the unit's row {at[side]}"
+    ports = _ports(lay)
+    if lay is None:
+        if not isinstance(s, dict) or [s.get(x) for x in ports] != [schema for _, schema in OPENED]:
+            return "the proof's first rows are not an A row and a B row of the registered schemas"
+        if len(body) < 2 * BC_BYTES:
+            return "the proof's body holds no A row and B row"
+    else:
+        names = ports + ["pub"]
+        if not isinstance(s, dict) or any(s.get(x) != ROW_V2 for x in names):
+            return f"the proof's rows {', '.join(names)} are not {ROW_V2} rows"
+        if len(body) < (lay.r + lay.c + 1) * BC_BYTES:
+            return "the proof's body holds no A rows, B rows and public row"
+    if sorted(s)[:len(ports)] != ports:
+        return f"the proof's header does not list its rows {', '.join(ports)} first, in its circuit's port order"
+    k = 0
+    for side, schema in OPENED:
         sdom = Wd.side_domain(dom.domain_id, side)
-        bc = body[i * BC_BYTES:(i + 1) * BC_BYTES]
-        if not (at[side] < sdom.count and verify_path(sdom, entry.root_a if side == "a" else entry.root_b, at[side],
-                                                      row_leaf(sdom, at[side], Wd._HM.tree_leaf(Wd._HM.default_key, bc),
-                                                               schema), paths[side])):
-            return f"side {side}: the proof's committed row is not entry {e}'s row {at[side]}"
+        for want, (idx, path) in zip(at[side], opened[side]):
+            if idx != want:
+                return f"side {side}: the opening is of row {idx}, not the unit's row {want}"
+            bc = body[k * BC_BYTES:(k + 1) * BC_BYTES]
+            if not (want < sdom.count and verify_path(sdom, entry.root_a if side == "a" else entry.root_b, want,
+                                                      row_leaf(sdom, want, Wd._HM.tree_leaf(Wd._HM.default_key, bc),
+                                                               schema if lay is None else ROW_V2), path)):
+                return f"side {side}: the proof's committed row is not entry {e}'s row {want}"
+            k += 1
+    if lay is not None and body[k * BC_BYTES:(k + 1) * BC_BYTES] != public_bc(p["context"], salt, unit,
+                                                                             (entry.root_a, entry.root_b)):
+        return (f"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s "
+                "side roots")
     return None
 
 
@@ -681,6 +814,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it
 MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
+#: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
+#: verifier, which holds the reveal, reads it, and that verifier reads no other
+MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 #: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
@@ -830,10 +966,74 @@ def _check_workload(us: list[dict], roots: dict[int, bytes]) -> None:
         raise Co.DomainError("every weight of the workload is committed, and only those")
 
 
-def _epoch_salt(m: dict, coins: Any, recorded: bool) -> tuple[bytes, str]:
+def _certified_workload(m: dict) -> tuple[list[dict], dict[int, bytes]]:
+    schema = m.get("schema")
+    if schema != MANIFEST_CERTIFIED:
+        if not _str(schema):
+            raise Refused("the pass's manifest names no schema")
+        raise Co.DomainError(f"schema {schema!r}, not {MANIFEST_CERTIFIED}: the window is certified")
+    return _workload(m)
+
+
+def _recorded(us: list[dict], roots: dict[int, bytes], committed: bytes | None, stream: bytes | None,
+              prover: bytes | None) -> None:
+    _check_workload(us, roots)
+    if not (type(stream) is bytes and len(stream) == PS.STREAM_BYTES and type(prover) is bytes
+            and len(prover) == PS.PROVER_BYTES):
+        raise Co.DomainError(f"the verifier holds no {PS.STREAM_BYTES}-byte stream digest and {PS.PROVER_BYTES}-byte "
+                             "prover id for the window")
+    if type(committed) is not bytes or len(committed) != PS.WEIGHTS_ROOT_BYTES:
+        raise Co.DomainError("the verifier holds no record the certifier made before it drew the window's salt")
+    if PS.pouw_record(weights_root(Co.SCHEME, roots), stream, prover) != committed:
+        raise Co.DomainError("the pass's weights, stream and prover are not those the certifier recorded before it drew "
+                             "the window's salt")
+
+
+def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | None, prover: bytes | None
+                    ) -> str | None:
+    """Why a certified window's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
+    recorded with the certifier before it drew the window's salt (`salt.committed`); None when it is.  `pass_epoch`'s
+    rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the certifier
+    reveals a window once, so a registration whose stream or prover wasn't recorded gets no reveal."""
+    if raw is None:
+        return "the window names no pass, whose epoch the challenger re-starts from its manifest"
+    try:
+        _recorded(*_certified_workload(_manifest(raw)), committed, stream, prover)
+    except (Co.DomainError, Refused) as e:
+        return str(e)
+    return None
+
+
+def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | None, stream: bytes | None,
+                    prover: bytes | None) -> tuple[bytes, str]:
+    """A certified window's pass under the window's `stream` and `prover`: `committed`, what the certifier recorded
+    before it drew the window's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
+    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
+    window's `context` names, the window, the stream and the prover."""
+    us, roots = _certified_workload(m)
+    if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
+        raise Co.DomainError(f"the verifier's reveal is not a {PS.SALT_BYTES}-byte salt")
+    window = PS.window_of(context)
+    if window is None:
+        raise Co.DomainError("the window's context names no PoUW window, whose certifier salt the pass's is")
+    _recorded(us, roots, committed, stream, prover)
+    salt = PS.pouw_salt(reveal, window, stream, prover)
+    if salt.hex() != m.get("salt"):
+        raise Co.DomainError("the pass's salt is not the certifier's for its window, stream and prover")
+    return salt, "certifier"
+
+
+def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "",
+                committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None
+                ) -> tuple[bytes, str]:
     """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
     (the coin rule's) or `Refused` (a manifest it can't read)."""
+    if reveal is not None:
+        return _certified_salt(m, reveal, context, committed, stream, prover)
     schema = m.get("schema")
+    if schema == MANIFEST_CERTIFIED:
+        raise Co.DomainError(f"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a "
+                             "certified window's verifier, which holds the certifier's reveal, reads it")
     if schema == MANIFEST_RECORDED and not recorded:
         raise Co.DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded "
                              "pass reads it")
@@ -879,14 +1079,21 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool) -> tuple[bytes, str]:
     return salt, how
 
 
-def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False) -> tuple[str | None, tuple[str, str] | None]:
-    """How the pass's salt was had (``coin``, or ``recorded beacon`` in a replay of a recorded pass) and None, or None and
-    the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under `coins`, the challenger's
-    own coin commitment (its JSON), and the window's `context` names it by its SHA-512."""
+def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
+               committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None
+               ) -> tuple[str | None, tuple[str, str] | None]:
+    """How the pass's salt was had (``coin``, ``recorded beacon`` in a replay of a recorded pass, or ``certifier``) and
+    None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under
+    `coins`, the challenger's own coin commitment (its JSON), and the window's `context` names it by its SHA-512.  A
+    certified window's verifier holds `reveal`, the certifier's salt for the PoUW window the context names, as
+    `salt.revealed` read it, `committed`, what PoUW recorded with the certifier before it drew that salt, as
+    `salt.committed` read it, and the window's `stream` and `prover`; its window passes only a pass salted by it
+    (`MANIFEST_CERTIFIED`, the salt `salt.pouw_salt(reveal, p, stream, prover)`) over weights whose root
+    `salt.pouw_record` binds with the stream and the prover in `committed`, and a certified pass passes only there."""
     if raw is None:
         return None, ("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
     try:
-        _, how = _epoch_salt(_manifest(raw), coins, recorded)
+        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context, committed, stream, prover)
     except Co.DomainError as e:
         return None, ("coin", str(e))
     except Refused as e:
@@ -937,16 +1144,74 @@ def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
     return {"stream": stream, "registration": registration, "receipt": hashlib.sha512(body.encode()).hexdigest()}
 
 
+def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.ml.crypto.lms`).
+    A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
+    verify."""
+    p = lms.Params(64, key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+#: a live window's coins as the draw's check of record reads them
+SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} "
+               "(`challenger.trusted_commitment`), not a bare commitment")
+
+
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+COIN_KEY = "coin-key"
+NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
+OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
+SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, "
+                 "not seeded coins")
+
+
+def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tuple[str, str] | None]:
+    """A live window's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
+    window's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
+    commitment a live epoch's; else None and the refusal."""
+    if sorted(coins) != ["key", "record"]:
+        return None, ("coin", SIGNED_LIVE)
+    try:
+        want = Ch.ChallengerKey.from_json(pinned)
+    except Ch.CoinError as e:
+        return None, (COIN_KEY, f"{NO_PINNED_KEY}: {e}")
+    try:
+        key = Ch.ChallengerKey.from_json(coins["key"])
+    except Ch.CoinError as e:
+        return None, ("coin", f"the verifier's challenger key is malformed: {e}")
+    if key != want:
+        return None, (COIN_KEY, OTHER_KEY)
+    why = Ch.record_reason(want, coins["record"], lms_verify)
+    if why is not None:
+        return None, ("coin", why)
+    c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
+    return (None, ("coin", why)) if (why := Wd.live_epoch_reason(c)) is not None else (c, None)
+
+
 def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
-         units: Any) -> tuple[str, str] | None:
+         units: Any, key: Any = None) -> tuple[str, str] | None:
     """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
-    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why)."""
-    try:
-        c = coins_of(coins, recorded)
-    except Refused as e:
-        return "coin", f"the verifier's coins are malformed: {e}"
+    registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``draw`` or ``sampler``, and why). A
+    seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the window's parameters pin a challenger
+    key. A live one (`window.LIVE_SCHEME`, a certified window's) is read only from its challenger's signed record with
+    the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the window's
+    parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
+    refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
+    refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""
+    live = isinstance(coins, dict) and ("record" in coins or coins.get("scheme") == Wd.LIVE_SCHEME)
+    if live:
+        c, refused = _live_coins(coins, key)
+        if c is None:
+            return refused
+    elif key is not None:
+        return COIN_KEY, SEEDED_PINNED
+    else:
+        try:
+            c = coins_of(coins, recorded)
+        except (Refused, Ch.CoinError) as e:
+            return "coin", f"the verifier's coins are malformed: {e}"
     if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
         return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
     if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
@@ -954,10 +1219,13 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     if not (_nat(k) and _nat(population) and 1 <= population and k <= population):
         return "draw", "the law is not subset:k over N with k <= N and N >= 1"
     try:
-        o = opening_of(opening)
-    except Refused as e:
+        o = Ch.LiveOpening.from_json(opening) if live else opening_of(opening)
+    except (Refused, Ch.CoinError) as e:
         return "coin", f"the draw's {e}"
-    why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
+    if live:
+        why, old = Ch.live_reason(c, o, Wd.DRAW, 0, bytes.fromhex(registration)), False
+    else:
+        why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
         return "coin", f"the draw's {why}"
     ctx, n = draw_key_context(stream, registration, receipt), 2 * k * width(population) + 64
@@ -970,17 +1238,79 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
-# ---- a live window's round coins ---------------------------------------------------------------------------------------
+# ---- a live window's salt and round coins -----------------------------------------------------------------------------
 
-def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
-    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
-    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
-    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+NO_RESERVE = ("the auditor's ledger opens the window's session without reserving it: a window's open root binds the "
+              "session a signed reserve entry names")
+SALT_FORM = "the window's weights' root and its round-0 request table's root are not SHA-512 digests"
+OTHER_WINDOW = ("the session's open root is not the window's: salt.window_open_root of its weights' root, its round-0 "
+                "request table's root and the session")
+NOT_RECEIVED = "the challenger's log does not show the window's open root as the one root its salt coin followed"
+
+
+def salt(key: Any, ledger: Any, window: Any, session: Any, weights_root: Any, requests_root: Any, opening: Any,
+         verify: Ch.Verify) -> tuple[str, str] | None:
+    """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
+    it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
+    the auditor's signed v2 ledger `ledger` opens and ends closed for `window` (``{root}``) under the pinned challenger
+    key `key`, from that session's files `session` (`challenger.audited_session` and `session_named`, its signatures
+    checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
+    refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the window's weights'
+    root `weights_root` and its round-0 request table's root `requests_root` (hex, from the window's record) and S; the
+    session's signed log shows R, alone, as the root its salt coin followed; and under the commitment the session
+    signed, a live epoch's, `opening` is the epoch's ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`).
+    Else the refusal (``coin`` or ``salt``, and why).  A session opened for one window's weights and requests salts no
+    other window, and a window salted in one session passes under no other."""
+    try:
+        k = Ch.ChallengerKey.from_json(key)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's challenger key is malformed: {e}"
+    try:
+        a = Ch.audited_session(ledger, window, k, verify)
+        c, received = Ch.session_named(a, k, session, verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
+    why = Wd.live_epoch_reason(c)
+    if why is not None:
+        return "coin", why
+    named = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == a.session}
+    if "reserve" not in named:
+        return "salt", NO_RESERVE
+    s, r = named["reserve"]["session"], bytes.fromhex(Ch.root_of(named["open"]))
+    hexes = [bytes.fromhex(x) if _str(x) and _DIGEST.fullmatch(x) else None for x in (weights_root, requests_root)]
+    if None in hexes:
+        return "salt", SALT_FORM
+    w, t = hexes
+    if PS.window_open_root(w, t, s) != r:
+        return "salt", OTHER_WINDOW
+    if received.get(Wd.SALT, ()) != (r,):
+        return "salt", NOT_RECEIVED
+    try:
+        o = Ch.LiveOpening.from_json(opening)
+    except Ch.CoinError as e:
+        return "coin", f"the salt's {e}"
+    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
+    return None if why is None else ("coin", f"the salt's {why}")
+
+
+def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
+           ) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins, read through the challenger's own session and never a
+    commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
+    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
+    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
+    `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
+    the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
     and why)."""
     try:
-        c = Ch.LiveCommitment.from_json(coins)
+        k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
-        return "coin", f"the verifier's coins are malformed: {e}"
+        return "coin", f"the verifier's challenger key is malformed: {e}"
+    try:
+        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
         return "rounds", "the round roots are not a list of SHA-512 digests"
     if not isinstance(openings, list):
@@ -991,8 +1321,13 @@ def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
             os_.append(Ch.LiveOpening.from_json(o))
         except Ch.CoinError as e:
             return "coin", f"round coin {i}: {e}"
-    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
-    return None if why is None else ("coin", why)
+    rs = tuple(bytes.fromhex(r) for r in roots)
+    why = Wd.rounds_reason(c, list(rs), os_)
+    if why is not None:
+        return "coin", why
+    if received.get(Wd.ROUND, ()) != rs:
+        return "rounds", "the round roots are not the roots the challenger's log shows it received, in order"
+    return None
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -1036,6 +1371,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
-           "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
+           "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
+           "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
+           "rounds", "salt", "unit_draw", "verify_path", "window_domain"]

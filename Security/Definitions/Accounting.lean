@@ -1,5 +1,9 @@
 import Definitions.Accounting.Actual
 import Definitions.Accounting.Actual.Source
+import Definitions.Accounting.Actual.WipeDraw
+import Definitions.Accounting.Actual.WipeHeld
+import Definitions.Accounting.Actual.WipePool
+import Definitions.Accounting.Actual.WipePrf
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.BandwidthAudit
 import Definitions.Accounting.BoundReceipt
@@ -8,6 +12,8 @@ import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
 import Definitions.Accounting.Carrier
+import Definitions.Accounting.Compose
+import Definitions.Accounting.ComposePeriod
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
@@ -15,6 +21,7 @@ import Definitions.Accounting.Filler
 import Definitions.Accounting.HMu
 import Definitions.Accounting.Gates
 import Definitions.Accounting.Headline
+import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
@@ -38,8 +45,10 @@ import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Requirement
 import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
+import Definitions.Accounting.Served
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
+import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
@@ -59,4 +68,5 @@ receipts bound to the matmul on two locations, the deployed bound receipt's sket
 run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, stacking's carriers:
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
-its, and the gate model the lower bounds on a declared circuit are proved over (`Gates`). -/
+its, the run tree of a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds
+on a declared circuit are proved over (`Gates`). -/

@@ -69,7 +69,7 @@ theorem holoStreams_of_list {i : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : 
   obtain ⟨⟨_, hsh⟩, -⟩ := shape_of_statements hss
   obtain ⟨hf, -, -, -, hk, -⟩ := FlockVBridge.Family.shape?_eq hsh
   obtain ⟨sp, hsp⟩ := Option.isSome_iff_exists.1 hsp
-  obtain ⟨_, _, _, -, hC, -, -⟩ := FlockC3.VStarList.statements_ok hss
+  obtain ⟨_, _, _, _, _, -, hC, -⟩ := FlockC3.VStarList.statements_ok hss
   have hst := FlockC3.VStarList.stacked_of_candidate3 hC hsp
   obtain ⟨sch, hf', -⟩ := FlockC3.VStarList.stacked_of_list hss hst
   replace hf' : Flock.fast100 (RecVStar.tableM sp) = some sch := hf'

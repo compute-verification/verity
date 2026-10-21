@@ -155,6 +155,38 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
 
 
+def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
+    """verity-flock's tests run the verifier's binaries, which no plan builds (`check.py --plan` left the suite unkeyed): built by
+    check's lean-build, or this runner's `lean_build`, before the suite runs, they are keyed by the verifier's sources, so a
+    plan keys the suite as the check that ran it did, built or not.  A lakefile that requires another package keeps the bytes."""
+    import hashlib
+
+    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    (lean / "Flock").mkdir(parents=True)
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
+    (lean / "Flock" / "A.lean").write_text("def a := 1\n")
+    (lean / ".gitignore").write_text(".lake\n")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                     '[tool.verity.tests]\nartifacts = ["verity/core/service/flock/.lake/build/bin/'
+                                                     'flock-verify", "pkg/.lake/build/bin/tool"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    absent = S.artifact_ids(suite)
+    assert absent["verity/core/service/flock/.lake/build/bin/flock-verify"].startswith("built from ")
+    assert absent["pkg/.lake/build/bin/tool"] == "absent"
+    (lean / ".lake" / "build" / "bin").mkdir(parents=True)
+    (lean / ".lake" / "build" / "bin" / "flock-verify").write_bytes(b"a build")
+    assert S.artifact_ids(suite) == absent, "built or not, the same sources"
+    (lean / "Flock" / "A.lean").write_text("def a := 2\n")
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite) != absent, "other sources"
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "mathlib"\n')
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
+
+
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
@@ -352,6 +384,28 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
+
+
+def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
+    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
+    measured from the merge-base."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    fork = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b" / "tests" / "test_b.py").write_text("def test_b():\n    assert True\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "main moves b")
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "topic", fork)
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "the branch moves a")
+    assert S.merge_base(main) == fork and S.merge_base(fork) == fork
+    pkgs = S.members()
+    assert [s.name for s in S.touched(S.discover(), pkgs, S.merge_base(main), S.worktree(), S.locked())] == ["a"]
+    assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):

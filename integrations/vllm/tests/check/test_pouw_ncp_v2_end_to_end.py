@@ -467,9 +467,9 @@ def test_an_a_strip_that_is_not_the_quantized_input_is_rejected(world):
 
 @pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"])
 def test_every_other_scheme_stays_refused_beside_sampled_proofs(scheme):
-    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
+    ctx = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
     assert any("no Definition" in r for r in PO.refusals(ctx))
-    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
+    ok = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(ok) == ()
 
 

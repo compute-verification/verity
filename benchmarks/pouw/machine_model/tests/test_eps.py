@@ -509,13 +509,16 @@ def test_sm89_the_fold_binds_honest():
 
 
 def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
-    """EPS1 DC's H200 and B200: duo binds the floor program on each one's joint ALU facet at L = 32. On sm_90 a wgmma
-    takes 62.77 SMSP-cycles of that facet and 62.74 of issue, so lane words save time at every q* (no threshold) and
-    ε_machine is 4% at q* = 2.03; on sm_100 a tcgen05.mma takes 1.09 of issue, so on lanes only dp4a's 8 IMAD bound q*.
-    The uniform datapath (UP, and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated
-    stream: DC r5) takes 0.60% of the B200's words off JPA100_0 at q* = 2.03, so it has no threshold either; on the
-    H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
-    spacing's cost."""
+    """EPS1 DC's H200 and B200 at L = 32. On sm_90 duo binds the floor program on the joint ALU facet: a wgmma takes
+    62.77 SMSP-cycles of it and 62.74 of issue, so lane words save time at every q* (no threshold) and ε_machine is 4%
+    at q* = 2.03. On sm_100 the tensor holds no lane pipe row: beside the saturated tcgen05.mma the exact tclaneU_lop3
+    keeps the tensor at 0.999 and LOP3 at 0.991 of alone, so census.py writes no JPA100 row, duo binds the ALU pipe A
+    alone, and a word on lanes saves nothing there (threshold 0 without the uniform route). The uniform datapath (UP,
+    and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated stream: DC r5) takes 0.59% of
+    the B200's words off A at q* = 2.03, so it has no threshold; on the H200 JI90_0 charges a uniform instruction 0.96,
+    which closes it. At L = 256 the B200 stays ALU-bound: 8 MMAs hold the tensor pipe 4015 SMSP-cycles a 32768 words,
+    under the fold's 4016 of ALU (RT-BLACKWELL-16: JPA100_1, fitted to the block-timed tclane_lop3_r128, coupled the
+    two, read this floor tensor-bound at 5410 and the cheat at over 20%)."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
     duo = [n for n in E.designs(sm90) if "-li" not in n]
     assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
@@ -527,14 +530,16 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     assert s.cheat(2.03).words["uniform"] == pytest.approx(0, abs=1e-9)
     p100 = E.machine("", sm100)
     s = E.setup(E.design("dither-2s-l32", sm100), p100, sm100, "floor", "floor")
-    assert s.as_built.T * 32768 == pytest.approx(10.9668404 + 2048 * 1.9602715, rel=1e-6)
-    assert s.as_built.binding == ("JPA100_0",) and E.threshold(s, uniform=False) == pytest.approx(8, abs=1e-4)
-    assert p100.load(s.as_built.n)["TM100_0"] * 32768 == pytest.approx(19.911599 + 32 * 16.5392944, rel=1e-6)
-    assert s.machine_eps(2.03, uniform=False) < 0.001
-    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0060, abs=1e-4)
-    assert s.machine_eps(2.03) == pytest.approx(0.00570, abs=1e-4)
+    load = p100.load(s.as_built.n)
+    assert not any(r.startswith("JPA100") for r in load)
+    assert s.as_built.binding == ("A",) and s.as_built.T == pytest.approx(load["A"], rel=1e-12)
+    assert E.threshold(s, uniform=False) == 0 and s.machine_eps(0.5, uniform=False) == 0
+    assert load["TM100_0"] * 32768 == pytest.approx(19.9132141 + 32 * 16.5392944, rel=1e-6)
+    assert E.threshold(s) is None and s.cheat(2.03).words["uniform"] == pytest.approx(0.0059, abs=1e-4)
+    assert s.machine_eps(2.03) == pytest.approx(0.00595, abs=1e-4)
     far = E.setup(E.design("dither-2s-l256", sm100), p100, sm100, "floor", "floor")
-    assert far.as_built.binding == ("JPA100_1",) and far.machine_eps(2.03) > 0.2
+    fl = p100.load(far.as_built.n)
+    assert far.as_built.binding == ("A",) and 0.999 < fl["M"] / fl["A"] < 1 and far.machine_eps(2.03) < 0.01
 
 
 def test_dc_li_binds_honest_on_the_lane_facet():
@@ -573,7 +578,57 @@ def test_sm90_ffma_filler_has_no_uniform_form():
     for q in (1.22, 0.5):
         assert E.eps(ds, pi, q, d, operands="free", credit="floor").cheat.filler_uniform == (0.0,)
     imad = replace(ds, filler=(replace(ds.filler[0], mix={"IMAD": 1.0}),))
-    assert E.eps(imad, pi, 0.5, d, operands="free", credit="floor").cheat.filler_uniform[0] > 0.0
+    assert E.eps(imad, pi, 1.22, d, operands="free", credit="floor").cheat.filler_uniform[0] > 0.0
+
+
+def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
+    """RT2-HOPPER-9, -11 and RT3-DC-1, -4: the bit-exact checkpoint routes (four segments' words in one STG.128, an XOR on
+    the uniform datapath, shared-memory and L2 atomics, a transpose through shared memory), each instruction at its
+    census class, and the check reads the checkpoint word, not its program, so the cheater folds by any mix of the
+    design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them. With
+    ♭ at REDUX they beat it by 1.47% on DS-90 and 1.97% on DC-90-ri, where the cheater folds by the generic CP_RED2 and
+    CP_RED8 and the global CP_RED8 (ATOME32, REDG32 and REDUX on the JI90 lines the H200 measured beside the IGMMA,
+    r20261021-070616-d06c and r20261021-074303-da7f); ♭ on the same menu folds by cp-red2 (3 LOP3 and 2 REDG a segment)
+    on DS-90 and by the generic cp-red2 and cp-red8 on DC-90-ri, and ε_machine is 0 there and 0.047% on DC-90-ri.
+    Honest's kernel folds by REDUX, so γ doesn't move."""
+    d = DEVICES / "sm_90"
+    ds = E.design("dither-2s-licpw-redux-p1-l32", d)
+    assert list(ds.fold_routes) == ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8",
+                                    "cp-red-generic", "cp-red2-generic", "cp-red8-generic", "cp-xt"] and ds.fold_routes_source
+    assert ds.with_fold_cost(0.5).fold_routes["cp-seg4u"]["UNI"] == pytest.approx(0.0078125 * 0.5 / ds.fold_cost())
+    plain = replace(ds, fold_routes={})
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
+        pi = E.machine(vec, d)
+        s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
+        assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
+        assert replace(s0, design=ds).machine_eps(q) == pytest.approx(attack, abs=1e-6), vec
+        assert s.machine_eps(q) == pytest.approx(eps, abs=1e-6), vec
+        h = E.setup(ds, pi, d, "free", "H")
+        assert not h.as_built.folds and not h.baseline.folds and h.cheat(q).folds == s.cheat(q).folds
+        e, e0 = (E.eps(x, pi, q, d, operands="free", credit="floor") for x in (ds, plain))
+        assert e.gamma == e0.gamma and e.T_honest == e0.T_honest
+    s = E.setup(ds, E.machine("DS-90", d), d, "free", "floor")
+    assert s.baseline.folds == s.cheat(0.5).folds == pytest.approx({"cp-red2": 1.0})
+    assert s.baseline.T * 128 == pytest.approx(4.1875)
+    assert E.setup(plain, s.machine, d, "free", "floor").baseline.T * 128 == pytest.approx(4.25)
+
+
+def test_the_l2_xor_checkpoints_on_the_menu_span_their_family():
+    """RT2-HOPPER-1 and RT3-DC-1: the checkpoint's lane XOR in memory, a LOP3 and b red.global.xor (REDG) a segment,
+    2a + b ≥ 8, is bit-exact. CP_RED, CP_RED2 and CP_RED8, (a, b) = (4, 1), (3, 2) and (0, 8), are on the menu, a REDG at
+    REDG32: one issue slot, and on DC-90 and DC-90-ri AT90's 290 SMSP-cycles too, the L2's atomic row. The family's
+    (2, 4) and (1, 6) are mixes of CP_RED2 and CP_RED8, so with them on the menu ♭ and ε_machine don't move."""
+    d = DEVICES / "sm_90"
+    ds = E.design("dither-2s-licpw-redux-p1-l32", d)
+    assert {"cp-red", "cp-red2", "cp-red8"} <= set(ds.fold_routes)
+    red = {f"cp-red{b}": {"ALU": (64 + a) / 128, "IMAD": 0.5, "REDG32": b / 128} for a, b in ((2, 4), (1, 6))}
+    assert set(E.machine("DS-90", d).c["REDG32"]) == {"DS_issue"}
+    for vec in ("DC-90", "DC-90-ri"):
+        pi = E.machine(vec, d)
+        assert {"issue", "AT90"} <= set(pi.c["REDG32"]), vec
+        s, r = (E.setup(x, pi, d, "free", "floor") for x in (ds, replace(ds, fold_routes={**ds.fold_routes, **red})))
+        assert r.baseline.T == pytest.approx(s.baseline.T), vec
+        assert r.machine_eps(1.22) == pytest.approx(s.machine_eps(1.22), abs=1e-9), vec
 
 
 HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
@@ -612,9 +667,9 @@ def test_dc_the_headline_holds_decision_76s_margin():
     moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
     dither-2s-li-l32, the H200's headline before LI-CP-W, is the thin design: its 0.02 FFMA filler puts honest on JI90_0
     by only the ALU pipe's 1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's
-    binding off JI90_0 and opens the lane route, taking core to 0.98% (it crosses 1% past a 2.1% margin). A 0.05 FFMA
-    filler a word restores the full margin (core back to its 0.574% floor) at γ 1.589, the cheapest add-on; its ε_skip
-    at the larger ♭ is CALC's to re-price."""
+    binding off JI90_0 and opens the lane route, taking core to 1.084% with the peel at sm_90a's own counts (RT-ISA-7;
+    0.98% at sm_120's): it crosses 1% past a 1.7% margin. A 0.05 FFMA filler a word restores the full margin (core back
+    to its 0.679% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's to re-price."""
     worst = {}
     for dev, (name, vec) in HEADLINE.items():
         data = device(dev)
@@ -633,10 +688,11 @@ def test_dc_the_headline_holds_decision_76s_margin():
     sm90 = device("sm_90")
     p90 = E.machine("", sm90)
     thin = E.design("dither-2s-li-l32", sm90)
-    assert E.eps(thin, p90, HEADLINE_Q, sm90, operands="free", credit="floor").core() == pytest.approx(0.00576, abs=5e-5)
-    assert 0.0095 < _worst_core_under_margin(sm90, p90, thin, 0.02) < 0.0099
+    assert E.eps(thin, p90, HEADLINE_Q, sm90, operands="free", credit="floor").core() == pytest.approx(0.00681, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, thin, 0.02) == pytest.approx(0.01084, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, thin, 0.016) < 0.01 < _worst_core_under_margin(sm90, p90, thin, 0.018)
     wide = replace(thin, filler=(E.lane_fill(0.05, {"FFMA": 1.0}),))
-    assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00574, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00679, abs=5e-5)
 
 
 def test_cli_device(capsys):

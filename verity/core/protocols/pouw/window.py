@@ -59,16 +59,17 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
-from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  Round r's coin opens once, after the
-verifier recorded round r's root, the root of the values round r commits, and round r's noise key is `round_key` of that
-coin and that root.  `rounds_reason` is the rule on a window's round coins (Lean: `PouwWindow.Rounds`).
+from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
+window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
+rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
+round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
+window's round coins (Lean: `PouwWindow.Rounds`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import math
-import os
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -744,7 +745,9 @@ def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
     return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
 
 
-def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes] = os.urandom) -> Ch.LiveChallenger:
+def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
+    """A live epoch's challenger, its coins and hm96 salts drawn from `entropy`: a served one's is the Lean verifier of
+    record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
 
 

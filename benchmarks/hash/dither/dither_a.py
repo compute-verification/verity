@@ -23,7 +23,8 @@ forks, and a piece ends at an attention).  Between steps dither_one's Window bui
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
 is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
-then its y = dequant(z), 0 past m) and the window builds every call's leaf table between steps in the row z tables'
+then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
+`scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
 the draw (CA, 00:33Z: every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
@@ -38,8 +39,9 @@ window builds the receipt trees and the admit tables between steps on streams of
 With ls=True (-ls) each step's seeds read the live salt of the round before it (`Window.step_salt`).
 The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and receipt-step (`dither_one.ROUND_EXTRA`).
 Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
-(`dithera_ycommit`); between steps the window builds the served y's tables, whose roots are the y-step leaves, and a y
-table over the zy records' y halves, and a call whose two roots differ refuses its step (CA's RT4-INT-11). The
+(`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the window builds the served y's tables, whose
+roots are the y-step leaves, and a y table over the zy records' y halves, and a call whose two roots differ refuses its
+step (CA's RT4-INT-11). The
 receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts
 (RT4-INT-13); the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after
 the coin the step's noise read (RT4-INT-12, which needs the units after their round's coin, beside the next step).
@@ -51,7 +53,8 @@ the coin the step's noise read (RT4-INT-12, which needs the units after their ro
 
 `check` on the gate, control and fault captures (each step's buffers 0xA5 before its kernels wrote them): every call's
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
-zero past m; the served y (dumped) = dequant(z); every receipt = h1r v1's on the saved slots under the window's salt and
+zero past m; the served y (dumped) = dequant(z); every record's y (-zy) = dequant(z) at s_a, and dq(0, +0, s_w) past m,
+as the served y's records; every receipt = h1r v1's on the saved slots under the window's salt and
 the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`), and
 their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
 tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
@@ -89,8 +92,8 @@ LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
 # (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
-# (bf16), 0 past m, which the epilogue writes as one record a unit and the window commits between steps (ZY_KIND,
-# provisional until INT-TIE names the fields); "none" no z stored
+# (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
+# window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
 # cost floor, never credited
 ZMODES = {"none": 0, "row": 1, "zy": 2}
@@ -100,7 +103,7 @@ AO = ("", "a", "as", "m", "ms", "mn")
 AO_SEEDS = ("as", "ms", "mn")
 NA_MULTI = 4
 ZY_KIND = "zy-unit-table"
-# a call's y alone, one hiding leaf a unit (its UR x UC bf16, 0 past m): the served y's table and the units' (the -zy
+# a call's y alone, one hiding leaf a unit (its UR x UC bf16, dq(0, +0, s_w) past m): the served y's table and the units' (the -zy
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
@@ -154,16 +157,18 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
                 tl.store(z_ptr + offs_m[:, None] * N + offs_n[None, :], zv, mask=mask)
             else:
                 # one record a UR x UC unit (row block i // UR, column block j // UC; record (i // UR) (N / UC) + j // UC):
-                # its z int32 row-major, then its y = dequant(z) bf16 row-major (0 past m), as dither_a.ZY's leaf
+                # its z int32 row-major, then its y = dequant(z) bf16 row-major, as dither_a.ZY's leaf; a slot past m is
+                # zero codes under s_a = +0 (scaled_mm_zy's empty row), so its y is h1zy's dq(0, +0, s_w), not 0
                 r = offs_m[:, None] % UR
                 c = offs_n[None, :] % UC
                 u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
                 tl.store(z_ptr + u * (UR * UC * 3 // 2) + r * UC + c, zv, mask=mask)
                 sa = tl.load(sa_ptr + offs_m, mask=mask_m, other=0.0)
+                sa = tl.where(offs_m < m, sa, 0.0)
                 sb = tl.load(sb_ptr + offs_n, mask=mask_n, other=0.0)
-                yv = acc.to(tl.float32) * sa[:, None]
+                yv = zv.to(tl.float32) * sa[:, None]
                 yv = yv * sb[None, :]
-                yb = tl.where(live, yv.to(tl.bfloat16).to(tl.int16, bitcast=True), 0)
+                yb = yv.to(tl.bfloat16).to(tl.int16, bitcast=True)
                 tl.store(y_ptr + u * (UR * UC * 3) + 2 * UR * UC + r * UC + c, yb, mask=mask)
 
 
@@ -240,11 +245,12 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
 
 
 @triton.jit
-def dithera_ycommit(y_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, UC: tl.constexpr,
+def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, UC: tl.constexpr,
                     BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
-    # the served y (int16 view; the bytes the next layer reads), rows < m, 0 past m, into the call's y records (unit
-    # row block, then column block; Y_KIND); F_NW_TILES = 2: nothing written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped
-    # in place first, so the next layer and the record read the tampered y
+    # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row block,
+    # then column block; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
+    # written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped in place first, so the next layer and the record read the
+    # tampered y
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     if (flags & 2) == 0:
@@ -257,6 +263,9 @@ def dithera_ycommit(y_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, 
             first = (offs_m[:, None] == 0) & (offs_n[None, :] == 0)
             v = tl.where(first, (v ^ 1).to(tl.int16), v)
             tl.store(y_ptr + offs_m[:, None] * stride_y + offs_n[None, :], v, mask=ld & first)
+        sb = tl.load(sb_ptr + offs_n, mask=offs_n < N, other=0.0)
+        pad = (tl.zeros((BLOCK_N,), dtype=tl.float32) * sb).to(tl.bfloat16).to(tl.int16, bitcast=True)
+        v = tl.where(ld, v, pad[None, :])
         u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
         tl.store(dst_ptr + u * (UR * UC) + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC, v,
                  mask=(offs_m < T)[:, None] & mask_n)
@@ -438,15 +447,17 @@ class Side:
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
                                    UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
 
-    def ycommit(self, w: int, y: torch.Tensor) -> None:
-        """On the serving stream after call w's GEMM: the served y into the call's y records (`dithera_ycommit`)."""
+    def ycommit(self, w: int, y: torch.Tensor, s_w: torch.Tensor) -> None:
+        """On the serving stream after call w's GEMM: the served y into the call's y records, dq(0, +0, s_w) past m
+        (`dithera_ycommit`)."""
         if not self.ysv:
             return
         n, t = y.shape[1], self.win.t
         ur, uc = self.unit_of[w]
-        dithera_ycommit[(triton.cdiv(t, 32), triton.cdiv(n, 128))](y.view(torch.int16), self.ysv[w].view(torch.int16),
-                                                                   self.win.S, y.shape[0], n, t, y.stride(0), UR=ur,
-                                                                   UC=uc, BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
+        dithera_ycommit[(triton.cdiv(t, 32), triton.cdiv(n, 128))](y.view(torch.int16), s_w,
+                                                                   self.ysv[w].view(torch.int16), self.win.S,
+                                                                   y.shape[0], n, t, y.stride(0), UR=ur, UC=uc,
+                                                                   BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
 
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
@@ -523,7 +534,7 @@ class Side:
             self.side.wait_event(self.a_done[i])
             self.a_used.add(i)
             self.gemm(w, xq, s_a, wt, s_w, y)
-            self.ycommit(w, y)
+            self.ycommit(w, y, s_w)
             rc = rc or self.units(w, M, st, s_w)
             if self.ao == "mn":
                 self.u_done[i].record(self.side)
@@ -531,7 +542,7 @@ class Side:
         else:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
-            self.ycommit(w, y)
+            self.ycommit(w, y, s_w)
             rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st, s_w)
         if rc:
             raise RuntimeError(f"dither-a call {w} (M={M}): a side launch returned {rc}")
@@ -582,7 +593,8 @@ def zy_bytes(unit: tuple[int, int]) -> int:
 def zy_fields_of(window: str, s: int, w: int, module: str, t: int, n: int, unit: tuple[int, int]) -> dict:
     ur, uc = unit
     return {"window": window, "step": s, "linear": w, "module": module, "slots": t, "n": n, "unit": [ur, uc],
-            "record": f"z {ur}x{uc} int32 LE row-major, then y = dequant(z) {ur}x{uc} bf16 LE row-major; 0 past m",
+            "record": f"z {ur}x{uc} int32 LE row-major, then y = dequant(z) {ur}x{uc} bf16 LE row-major; past m z 0 "
+                      "and y dequant(0, +0, s_w)",
             "order": "unit row block, then column block", "schema": CM.SCHEMA}
 
 
@@ -598,7 +610,8 @@ def y_bytes(unit: tuple[int, int]) -> int:
 def y_fields(win: DO.Window, w: int, s: int, unit: tuple[int, int]) -> dict:
     ur, uc = unit
     return {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "n": win.nk[w][0],
-            "unit": [ur, uc], "record": f"y {ur}x{uc} bf16 LE row-major; 0 past m", "order": "unit row block, then column block",
+            "unit": [ur, uc], "record": f"y {ur}x{uc} bf16 LE row-major; past m dequant(0, +0, s_w)",
+            "order": "unit row block, then column block",
             "schema": CM.SCHEMA}
 
 
@@ -765,6 +778,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                 "admit-step": CM.step_root(CM.domain(f_step, L, "admit-step"), [s_cpu[w] for w in range(L)]),
                 "z-step": CM.step_root(CM.domain(f_step, L, "z-step"), [z_cpu[w] for w in range(L)])}
     kinds = win.round_kinds
+    # an empty slot's record y, past m: dq(0, +0, s_w) (h1zy's; +0 under a finite positive s_w)
+    pads = [E.dequantize(torch.zeros((1, win.nk[w][0]), dtype=torch.int32, device=win.dev),
+                         torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
+            for w in range(L)] if zy else []
     if zy:
         # RT4-INT-11: the served y's records (what ycommit read from the served y) hashed here, their step root the
         # round's y-step leaf; the run-time check (device roots of the served y against the units' y) against the
@@ -782,10 +799,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             if g["y"] is not None:
                 yr = y_rows(g["ysv"][w], t, n, u)
                 x = yr[:m] ^ g["y"][w].view(torch.int16)
-                if bool(x.any()) or bool(yr[m:].any()):
+                past = bool((yr[m:] != pads[w]).any())
+                if bool(x.any()) or past:
                     dump_bad.append(w)
-                    if which == "fault_y" and not (x.nonzero().tolist() == [[0, 0]] and int(x[0, 0]) == 1
-                                                   and not bool(yr[m:].any())):
+                    if which == "fault_y" and not (x.nonzero().tolist() == [[0, 0]] and int(x[0, 0]) == 1 and not past):
                         fy_bad.append(w)
         step_cpu["y-step"] = CM.step_root(CM.domain(f_step, L, "y-step"), [ys_cpu[w] for w in range(L)])
         doc["y_served_roots_bad"] = [w for w in range(L) if ys_cpu[w] != g["y_roots"][w]]
@@ -813,7 +830,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["round"] = {**{k.replace("-", "_"): step_cpu[k] == g["leaves"][i] for i, k in enumerate(kinds)},
                     "root": rnd == g["root"]}
     # z = A B^T by int_mm on the committed A, zero past m; the served y = dequant(z); under "zy" the leaf's y = dequant
-    # of the leaf's z (0 past m) = the served y
+    # of the leaf's z = the served y, and dq(0, +0, s_w) past m
     z_bad, y_bad, yleaf_bad = [], [], []
     zr, yl = [], []
     for w in range(L):
@@ -830,7 +847,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         yd = E.dequantize(zr[w][:m], g["sa"][w][:m], win.sw[w]).view(torch.int16)
         if g["y"] is not None and not torch.equal(yd, g["y"][w].view(torch.int16)):
             y_bad.append(w)
-        if zy and not (torch.equal(yl[w][:m].view(torch.int16), yd) and not bool(yl[w][m:].view(torch.int16).any())):
+        if zy and not (torch.equal(yl[w][:m].view(torch.int16), yd) and not bool((yl[w][m:].view(torch.int16) != pads[w]).any())):
             yleaf_bad.append(w)
     doc["z_vs_int_mm_bad"], doc["y_vs_dequant_z_bad"] = z_bad, y_bad if g["y"] is not None else None
     doc["y_leaf_vs_dequant_z_bad"] = yleaf_bad if zy else None

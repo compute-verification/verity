@@ -40,11 +40,15 @@
 # auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
-# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
-# are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
-# ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
-# both) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
-# `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
+# words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
+# --challenger-key DIR` each session's coins come from the challenger's own process,
+# `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
+# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
+# python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
@@ -56,7 +60,9 @@
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
-# tunnel; its Commit refuses --remote-verifier until it puts the store binder on its engine. Milestone 3's thin slice,
+# tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
+# run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
+# row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
 #   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
@@ -114,8 +120,9 @@ if [ "$ROLE" = verifier ]; then
   # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
+  eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" ${VERIFIER_ARGS:-} \
+  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -177,8 +184,9 @@ fi
   fi
   V=
   if [ "$ROLE" = both ]; then
+    eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" $RS/verifier.py $VERIFY_ARGS > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" $RS/verifier.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then
