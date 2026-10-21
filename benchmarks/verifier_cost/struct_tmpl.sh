@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# The H1 tile unit's structural template (PRF-133): per SHAPE ("K" for the 4×8 tile, "K R C" otherwise),
+# `python -m verity_flock.struct_lower` lowers the unit with each specialized Definition once and its calls kept as calls,
+# writes it as flock-ir-tmpl/v1 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
+# Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
+# --check K, the unit at K is unrolled and evaluated against the flat lowering first. Run from a clone:
+#   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+#     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
+# $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
+# under 1 GB is kept as unit-SHAPE.tmpl.
+set -euo pipefail
+O=${OUT:?run under research run, which sets OUT}
+L=$PWD/verity/core/service/flock
+S=$(mktemp -d)
+trap 'rm -rf "$S"' EXIT
+command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
+uv sync -q --all-packages --extra torch-cpu
+mkdir -p "$S/tmpl"
+cp benchmarks/verifier_cost/flock_tmpl/Main.lean "$L/lean-toolchain" "$S/tmpl/"
+cat > "$S/tmpl/lakefile.toml" <<EOF
+name = "flock_tmpl"
+defaultTargets = ["flock-tmpl"]
+
+[[require]]
+name = "flock_verifier"
+path = "$L"
+
+[[lean_exe]]
+name = "flock-tmpl"
+root = "Main"
+EOF
+(cd "$S/tmpl" && lake build flock-tmpl) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
+X=$S/tmpl/.lake/build/bin/flock-tmpl
+while [ $# -gt 0 ]; do
+  if [ "$1" = --check ]; then
+    k=$2
+    shift 2
+    /usr/bin/time -v uv run python -m verity_flock.struct_lower "$k" --check > "$O/check-$k.out" 2> "$O/check-time-$k.txt" \
+      || { tail -40 "$O/check-time-$k.txt" >&2; exit 1; }
+    grep '^STRUCT ' "$O/check-$k.out" | sed 's/^STRUCT //' | tee "$O/check-$k.json"
+    grep -q '"mismatched_bits": 0,' "$O/check-$k.json" || { echo "K=$k: the structural unit's outputs differ" >&2; exit 1; }
+    continue
+  fi
+  tag=${1// /x}
+  shift
+  t=$S/unit-$tag.tmpl
+  /usr/bin/time -v uv run python -m verity_flock.struct_lower ${tag//x/ } --out "$t" > "$O/struct-$tag.out" \
+    2> "$O/struct-time-$tag.txt" || { tail -40 "$O/struct-time-$tag.txt" >&2; exit 1; }
+  grep '^STRUCT ' "$O/struct-$tag.out" | sed 's/^STRUCT //' | tee "$O/struct-$tag.json"
+  /usr/bin/time -v "$X" read "$t" > "$O/read-$tag.out" 2> "$O/read-time-$tag.txt" \
+    || { cat "$O/read-$tag.out" "$O/read-time-$tag.txt" >&2; exit 1; }
+  grep '^PHASE ' "$O/read-$tag.out" | sed 's/^PHASE //' | tee "$O/read-$tag.jsonl"
+  grep -E 'Maximum resident|Elapsed' "$O"/{struct,read}-time-$tag.txt
+  [ "$(stat -c %s "$t")" -lt 1000000000 ] && mv "$t" "$O/" || rm -f "$t"
+done
