@@ -726,7 +726,10 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
         old = s3.get(key)
         if old is not None:
             if old != rec:
-                raise CacheError(f"{key} is already published with other contents")
+                # a rerun of one commit (vy-nebius-1, 21 Oct): its first build stays, every blob of it checked on `get`
+                log(f"lean-cache: {pkg}: {key} is already published, from a build whose artifacts differ from this one's; "
+                    f"kept it")
+                return "kept"
             return "already published"
         t0 = time.monotonic()
         with ThreadPoolExecutor(THREADS) as ex:

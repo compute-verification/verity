@@ -23,6 +23,11 @@ product and epilogue with X and W read through host tensor descriptors (kernel p
 out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.
+
+`scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
+writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
+record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
+slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.
 """
 from __future__ import annotations
 
@@ -32,6 +37,7 @@ import torch
 import triton
 import triton.language as tl
 
+from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
@@ -143,6 +149,93 @@ def exactlin_scaled_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, M, N, K, strid
     _epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, offs_m < M, offs_n < N, stride_cm)
 
 
+@triton.jit
+def _zy_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR: tl.constexpr,
+                 UC: tl.constexpr):
+    mask_m = offs_m < M
+    mask_n = offs_n < N
+    # a masked split's atomic_xchg leaves rows past M undefined; they are empty slots, whose z is 0
+    acc = tl.where(mask_m[:, None], acc, 0)
+    sa = tl.load(sa_ptr + offs_m, mask=mask_m, other=0.0)
+    sb = tl.load(sb_ptr + offs_n, mask=mask_n, other=0.0)
+    y = acc.to(tl.float32) * sa[:, None]
+    y = (y * sb[None, :]).to(tl.bfloat16)
+    tl.store(c_ptr + stride_cm * offs_m[:, None] + offs_n[None, :], y, mask=mask_m[:, None] & mask_n[None, :])
+    # record (i // UR) (N / UC) + j // UC: UR x UC int32 z, then UR x UC bf16 y, each row-major
+    u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
+    cell = (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC
+    mask = (offs_m < T)[:, None] & mask_n[None, :]
+    tl.store(z_ptr + u * (UR * UC * 3 // 2) + cell, acc, mask=mask)
+    tl.store(yr_ptr + u * (UR * UC * 3) + 2 * UR * UC + cell, y.to(tl.int16, bitcast=True), mask=mask)
+
+
+@triton.jit
+def exactlin_scaled_mm_zy(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, ws_ptr, cnt_ptr, M, N, K, T, stride_am,
+                          stride_bn, stride_cm, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+                          SPLIT_K: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
+    pid = tl.program_id(0)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    pid_m = pid // num_pid_n
+    pid_n = pid % num_pid_n
+    live = pid_m * BLOCK_M < M
+    nk = tl.cdiv(K, BLOCK_K)
+    per = tl.cdiv(nk, SPLIT_K)
+    k_lo = tl.program_id(1) * per
+    k_hi = tl.where(live, tl.minimum(k_lo + per, nk), k_lo)
+    offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M).to(tl.int64)
+    offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N).to(tl.int64)
+    offs_k = tl.arange(0, BLOCK_K).to(tl.int64)
+    mask_m = offs_m < M
+    mask_n = offs_n < N
+    a_ptrs = a_ptr + stride_am * offs_m[:, None] + (k_lo * BLOCK_K + offs_k)[None, :]
+    b_ptrs = b_ptr + (k_lo * BLOCK_K + offs_k)[:, None] + stride_bn * offs_n[None, :]
+    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32)
+    for k in range(k_lo, k_hi):
+        mask_k = offs_k < K - k * BLOCK_K
+        a = tl.load(a_ptrs, mask=mask_m[:, None] & mask_k[None, :], other=0)
+        b = tl.load(b_ptrs, mask=mask_k[:, None] & mask_n[None, :], other=0)
+        acc = tl.dot(a, b, acc, out_dtype=tl.int32)
+        a_ptrs += BLOCK_K
+        b_ptrs += BLOCK_K
+    if SPLIT_K == 1:
+        _zy_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR, UC)
+    else:
+        if live:
+            # exactlin_scaled_mm's split-K, then the one epilogue
+            mask = mask_m[:, None] & mask_n[None, :]
+            ws_ptrs = ws_ptr + offs_m[:, None] * N + offs_n[None, :]
+            tl.atomic_add(ws_ptrs, acc, mask=mask, sem="relaxed")
+            _membar_gl(pid)
+            tl.debug_barrier()
+            done = tl.atomic_add(cnt_ptr + pid, 1, sem="acq_rel")
+            if done == SPLIT_K - 1:
+                _membar_gl(pid)
+                tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
+                tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
+                _zy_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR, UC)
+        elif tl.program_id(1) == 0:
+            _zy_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR, UC)
+
+
+@triton.jit
+def exactlin_scaled_mm_zy_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, M, N, K, T, stride_cm,
+                              BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+                              WARP_SPECIALIZE: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
+    pid = tl.program_id(0)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    off_m = (pid // num_pid_n) * BLOCK_M
+    off_n = (pid % num_pid_n) * BLOCK_N
+    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32)
+    nk = tl.where(off_m < M, tl.cdiv(K, BLOCK_K), 0)
+    for k in tl.range(0, nk, warp_specialize=WARP_SPECIALIZE):
+        a = a_desc.load([off_m, k * BLOCK_K])
+        b = b_desc.load([off_n, k * BLOCK_K])
+        acc = tl.dot(a, b.T, acc, out_dtype=tl.int32)
+    offs_m = off_m + tl.arange(0, BLOCK_M).to(tl.int64)
+    offs_n = off_n + tl.arange(0, BLOCK_N).to(tl.int64)
+    _zy_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR, UC)
+
+
 def quant_warps(k: int) -> int:
     return 16
 
@@ -247,6 +340,39 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
                                           num_stages=stages, **OPTS)
 
 
+def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor, zy: torch.Tensor,
+                 rows: int, cfg: Cfg | None = None, work: Workspace | None = None):
+    """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
+    from the same accumulator, in place."""
+    m, k = xq.shape
+    n = w.shape[0]
+    assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.stride(1) == 1 and w.stride(1) == 1
+    assert s_a.dtype == torch.float32 and s_a.numel() == m and s_a.is_contiguous()
+    assert s_w.dtype == torch.float32 and s_w.numel() == n and s_w.is_contiguous()
+    assert y.dtype == torch.bfloat16 and y.shape == (m, n) and y.stride(1) == 1
+    assert zy.dtype == torch.uint8 and zy.shape == (zy_units(m, n, rows), ZY_BYTES) and zy.is_contiguous(), zy.shape
+    bm, bn, bk, warps, stages, split, tma = cfg or default_cfg(m, n, k)
+    tiles = triton.cdiv(rows, bm) * triton.cdiv(n, bn)
+    z32, y16 = zy.view(torch.int32), zy.view(torch.int16)
+    if tma:
+        from triton.tools.tensor_descriptor import TensorDescriptor
+        assert split == 1, cfg
+        a_desc = TensorDescriptor.from_tensor(xq, [bm, bk])
+        b_desc = TensorDescriptor.from_tensor(w, [bn, bk])
+        return exactlin_scaled_mm_zy_tma[(tiles,)](a_desc, b_desc, s_a, s_w, y, z32, y16, m, n, k, rows, y.stride(0),
+                                                   BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, WARP_SPECIALIZE=tma == 2,
+                                                   UR=UNIT[0], UC=UNIT[1], num_warps=warps, num_stages=stages, **OPTS)
+    if split > 1:
+        assert work is not None and m * n <= work.ws.numel() and tiles <= work.cnt.numel(), (m, n, tiles)
+        ws, cnt = work.ws, work.cnt
+    else:
+        ws, cnt = z32, z32
+    return exactlin_scaled_mm_zy[(tiles, split)](xq, w, s_a, s_w, y, z32, y16, ws, cnt, m, n, k, rows, xq.stride(0),
+                                                 w.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk,
+                                                 SPLIT_K=split, UR=UNIT[0], UC=UNIT[1], num_warps=warps,
+                                                 num_stages=stages, **OPTS)
+
+
 def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor):
     """The exact linear into caller-owned (xq, s_a, y)."""
     quant_rows(x, xq, s_a)
@@ -289,20 +415,39 @@ def row_quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return xq, s
 
 
+def _plan(m: int, n: int, k: int, device: torch.device) -> tuple[Cfg, Workspace | None]:
+    """A call's config (`pick`) and, for a split-K one, the device's workspace, made at the device's first split-K call; a
+    capture that would make it runs the config unsplit instead (the same values), since a workspace made inside a capture
+    would live in the graph's pool."""
+    dev = device.index
+    cfg, work = pick(m, n, k, arch(dev)), None
+    if cfg[5] > 1:
+        if dev not in _WORK and not torch.cuda.is_current_stream_capturing():
+            _WORK[dev] = Workspace(device)
+        work = _WORK.get(dev)
+        if work is None:
+            cfg = Cfg(*cfg[:5], 1, cfg[6])
+    return cfg, work
+
+
 def product(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
-    """`verity_int8::scaled_mm`'s CUDA body: y [M, N] bf16, allocating only it.  A split-K config uses the device's
-    workspace, made at the device's first split-K call; a capture that would make it runs the config unsplit instead
-    (the same values), since a workspace made inside a capture would live in the graph's pool."""
+    """`verity_int8::scaled_mm`'s CUDA body: y [M, N] bf16, allocating only it, at `_plan`'s config."""
     m, n, k = xq.shape[0], w.shape[0], w.shape[1]
     y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
     if m:
-        dev = xq.device.index
-        cfg, work = pick(m, n, k, arch(dev)), None
-        if cfg[5] > 1:
-            if dev not in _WORK and not torch.cuda.is_current_stream_capturing():
-                _WORK[dev] = Workspace(xq.device)
-            work = _WORK.get(dev)
-            if work is None:
-                cfg = Cfg(*cfg[:5], 1, cfg[6])
-        scaled_mm(xq, s_a, w, s_w.reshape(-1), y, cfg, work)
+        scaled_mm(xq, s_a, w, s_w.reshape(-1), y, *_plan(m, n, k, xq.device))
     return y
+
+
+def product_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+               rows: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """`verity_int8::scaled_mm_zy`'s CUDA body: (y [M, N] bf16, zy [units, ZY_BYTES] uint8), allocating only them, at
+    `product`'s config.  A call of no rows has only empty slots, so every record's bytes are zero."""
+    m, n, k = xq.shape[0], w.shape[0], w.shape[1]
+    y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
+    zy = torch.empty((zy_units(m, n, rows), ZY_BYTES), dtype=torch.uint8, device=xq.device)
+    if m:
+        scaled_mm_zy(xq, s_a.reshape(-1), w, s_w.reshape(-1), y, zy, rows, *_plan(m, n, k, xq.device))
+    else:
+        zy.zero_()
+    return y, zy

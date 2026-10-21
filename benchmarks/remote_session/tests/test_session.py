@@ -943,11 +943,15 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
-    def wrong(self, check):
-        res = settle(self, check)
+    def changed(res):
         if res.get("accepted") != 1:
             return res
         return {"failure": "receipt", "window": 1, "at": [0, 0], "openings": res["openings"], "ns": res["ns"]}
+
+    def wrong(self, check, answered=None):
+        if answered is None:
+            return changed(settle(self, check))
+        return settle(self, check, lambda res: answered(changed(res)))
 
     monkeypatch.setattr(verifier.Pair, "settle", wrong)
     closed = []
@@ -1025,10 +1029,95 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
     assert r["disagreement"]["event"] == "record"
 
 
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
+LEAN = verifier.lv.Lean
+
+
+class HeldLean(LEAN):
+    """The Lean process with every request from its first event on held back until `release` (the test calls it as
+    the prover's passes end): a Lean as slow to answer and to check as can be. A request the driver waits on while
+    they're held is noted in `waited`, and releases them."""
+
+    made: list[HeldLean] = []
+
+    def __init__(self, exe, done) -> None:
+        self.hold, self.held, self.waited, self.holding, self.released = threading.Lock(), [], [], False, False
+        super().__init__(exe, done)
+        HeldLean.made.append(self)
+
+    def _put(self, request, body, answered) -> None:
+        with self.hold:
+            self.holding = self.holding or request["op"] == "event"
+            if self.holding and not self.released:
+                self.held.append((request, body, answered))
+                return
+        super()._put(request, body, answered)
+
+    def call(self, request, body=b""):
+        with self.hold:
+            waiting = self.holding and not self.released
+            if waiting:
+                self.waited.append(request["op"])
+        if waiting:
+            self.release()
+        return super().call(request, body)
+
+    def release(self) -> None:
+        with self.hold:
+            self.released = True
+            for item in self.held:
+                super()._put(*item)
+            self.held.clear()
+
+
+@pytest.fixture
+def held_lean(monkeypatch):
+    """Every Lean process the test starts is a `HeldLean`, released as the prover says its passes are done."""
+    HeldLean.made = []
+    idle = PassClock.idle
+
+    def released(self) -> None:
+        for lean in HeldLean.made:
+            lean.release()
+        idle(self)
+
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    monkeypatch.setattr(PassClock, "idle", released)
+    return HeldLean.made
+
+
+SCHEDULE = ("released_ns", "boundary_ns", "deadline_ns", "passes", "arrivals_ns", "slack_ns", "draws_sent_ns")
+
+
+@pytest.mark.parametrize("defer_openings", [True, False])
+def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw(monkeypatch, held_lean,
+                                                                                     defer_openings):
+    """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
+    first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
+    beside them (`--overlap-openings`), a paced session runs the schedule it runs with a Lean that answers at once,
+    every coin, boundary, root and draw at the same tick, and is still accepted only on the Lean's verdict of each of
+    its windows and its record."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    monkeypatch.setattr(verifier.lv, "Lean", LEAN)
+    (plain,), _ = run("honest", paces=[pace], defer_openings=defer_openings)
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    (r,), (pr,) = run("honest", paces=[pace], defer_openings=defer_openings)
+    assert len(held_lean) == 1 and held_lean[0].waited == [] and held_lean[0].released
+    assert r["accepted"] and pr["accepted"] and r["disagreement"] is None and r["verdict"] == "lean"
+    assert len(r["lean_check_ns"]) == r["windows"] == 12 and all(type(x) is int and x > 0
+                                                                for x in r["lean_check_ns"].values())
+    assert [{k: w[k] for k in SCHEDULE} for w in r["windows_seen"]] == \
+        [{k: w[k] for k in SCHEDULE} for w in plain["windows_seen"]]
+    assert r["record"]["public"]["pace"] == plain["record"]["public"]["pace"]
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
     reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
-    at that window as `disagreement`."""
+    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    if not held:
+        monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     event = verifier.lv.receive_event
 
@@ -1058,7 +1147,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     def session():
         from verity.core.protocols.remote_bandwidth import coins
 
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         return s
@@ -1076,7 +1165,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
     assert s.windows[0].steps == [5]
     assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
-    assert appended(s) == audit.Verdict(0, False, "coin") and s.challenger.appends == 1
+    assert appended(s) == audit.Verdict(0, False, "coin") and s.coins.appends == 1
     for step in (5, 4):
         s = session()
         appended(s)
@@ -1124,7 +1213,7 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})
