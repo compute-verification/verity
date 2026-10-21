@@ -58,9 +58,9 @@ opening that fails (`strat_eval_cons`).
   premises on the transport are the transport's trusts alone, each a named hypothesis for a stated reason: the
   server's `Hello` is `flock-firewall hello`'s at the statement's files (`LeanRelease.HelloIs`, which gives
   `LeanRelease.HelloEq` by `helloEq_of_helloIs`: that command's `Hello` is the coin layer's), the firewall's own link and
-  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `flock-firewall link`'s, and at the
-  deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`
-  is Rust's `Firewall::finish`), the transport
+  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `Flock.Firewall.Link`'s, and at the
+  deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`'s
+  proof files are the session's Lean finish's, `Flock.Firewall.Finish`), the transport
   requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`) and hands the frame a rep
   state and coins read from the coins the openings open (`ReadsCoins`: the state, `ProgReads`, Rust's `LeanFrame`; the
   coins, `CoinsRead`), the `Finish` is one past the
@@ -583,9 +583,9 @@ theorem helloRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
 
 /-- **The link is the session's**: after `Hello`'s answer, where the protocol has coins and the frame takes the
 answer's, the firewall's own link (its recheck's roots) is the session's switched link at the tape. A named hypothesis,
-one of the transport's trusts: the link (`link`) is the recheck's, the level-0 roots `flock-firewall link` commits from
-the leaves under the salts on the firewall's tape (`Flock.Firewall.Link.root`), which `Firewall::new` runs and
-`Firewall::root` sends (`flock-circuit`). At the deployed tables it follows from the transport handing that command the
+one of the transport's trusts: the link (`link`) is the recheck's, the level-0 roots `Flock.Firewall.Link` commits from
+the leaves under the salts on the firewall's tape (`Flock.Firewall.Link.root`), which the session loop's `Level0` runs
+(else the session's Lean finish, at the table's level-0 request) and `Firewall::root` sends (`flock-circuit`). At the deployed tables it follows from the transport handing that command the
 tape's tables and framing its roots (`LeanRelease.LinkIs`, `LeanRelease.linkRoundEq_of_linkIs` in `LinkRecheck`). -/
 def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (x : Msg) (w : Flock.Wit) : Prop :=
@@ -596,8 +596,10 @@ def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.r
 openings pass and whose last coins the frame takes, `Final.encode` of the record and proof files the firewall builds
 itself is the session's switched last message at the coins the openings open. A live run's `Finish` is one the
 firewall's own `Finish` takes (`LeanRelease.finStops_of_live`), so it says nothing where that stops. A named hypothesis,
-one of the transport's trusts: the record and proof files (`files`) are `Firewall::finish`'s in Rust (`flock-circuit`),
-which no Lean code computes; only their encoding, `Final.encode`, is Lean's. -/
+one of the transport's trusts: the proof files in `files` are the session's Lean finish's (`Flock.Firewall.Finish`,
+`proofFile`, each rep's `repFw` at the values the firewall passed and every round's coins), which `flock-circuit` sends
+as the session's `Proof`s. That they encode the session's last message is not yet proved about that code: it follows
+from `FrameAdmits` and `FinishIs` (`finalRoundEq_of_finishIs`, `FinishRound`). -/
 def FinalRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
@@ -921,8 +923,9 @@ a theorem:
   `CoinLayer.helloD_eq`, so `LeanRelease.HelloEq` follows, `helloEq_of_helloIs`), and the coin check reads the session's
   `Hello` with that nonce (`LeanRelease.HelloParses`);
 * the transport requests each opening at the schedule's place (`LeanRelease.ReqsFollow`);
-* the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `flock-firewall link`'s roots, which
-  `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: Rust's `Firewall::finish`);
+* the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `Flock.Firewall.Link`'s roots, which
+  `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: the session's Lean finish's
+  proof files, `Flock.Firewall.Finish`, from `FrameAdmits` and `FinishIs`);
 * the transport hands the frame a rep state and coins that are functions `pc`, `cc` of the coins the openings open, on
   the histories its check passes (`LeanRelease.ReadsCoins`: the state, `ProgReads`, is Rust's `LeanFrame`; the coins,
   `CoinsRead`, the session loop's own, `loop_coinsRead`);

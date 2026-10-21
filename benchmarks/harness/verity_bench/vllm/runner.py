@@ -14,13 +14,14 @@ import time
 import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -193,14 +194,24 @@ def _evaluate_gates(
 
 
 def _timed_token_gates(
-    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]]
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
 ) -> list[dict[str, Any]]:
     """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
-    before timing, so an arm that computed something else only when timed would pass it."""
+    before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
+    without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in blocks
+    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
 
     out = []
     for arm in arms:
         if not arm.control:
+            if mode != "resident":
+                continue
+            for point in points:
+                want = _token_digest(tokens[(arm.id, point.id)])
+                bad = sorted(r["rep"] for r in samples[(arm.id, point.id)] if r.get("token_digest") != want)
+                out.append({"arm": arm.id, "control": None, "against": "gate", "point": point.id,
+                            "kind": "timed-tokens", "passed": not bad, **({"reps": bad} if bad else {})})
             continue
         for point in points:
             mine = {r["rep"]: r.get("token_digest") for r in samples[(arm.id, point.id)]}
@@ -608,7 +619,7 @@ def run_benchmark(
         mode = "blocks"
 
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples)
+        gates += _timed_token_gates(arms, points, samples, tokens, mode)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
@@ -659,6 +670,53 @@ class _DirectLLM:
         # The worker process exits immediately after close and releases vLLM's
         # process-owned CUDA state.
         pass
+
+
+PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+
+
+def _pass_per_step(llm: Any, hooks: Any) -> tuple[Any, dict[str, int]] | None:
+    """Each engine step its own Pearl-C pass, as the experimental arm runs it (`benchmarks.pouw.pearl_c_vllm.bench_arm`).
+    `pouw.install` opens one pass for the install's life, whose tile, call and screened-row buffers a served run outgrows
+    within a few prefill steps (`pouw_pearl_c_device.LEAF_CAPACITY`, `FLAG_ROWS`). The adapter exposes no pass boundary,
+    so the device run is its option's ``release`` (``run.finish``). Returns the run and the running totals of its passes
+    (`PASS_COUNTS` and ``passes``), None when the arm runs no Pearl-C device run."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    option = llm.protocols.get("pouw") if llm.protocols is not None else None
+    run = getattr(getattr(option, "release", None), "__self__", None)
+    if not isinstance(run, PPD.PearlCDeviceRun):
+        return None
+    totals = dict.fromkeys(("passes", *PASS_COUNTS), 0)
+
+    def make(original: Any) -> Any:
+        def step(*a: Any, **kw: Any) -> Any:
+            run.begin()
+            out = original(*a, **kw)
+            done = run.end()
+            totals["passes"] += 1
+            for key in PASS_COUNTS:
+                totals[key] += int(done.get(key) or 0)
+            return out
+
+        return step
+
+    hooks.wrap(llm.vllm.llm_engine, "step", make)
+    return run, totals
+
+
+def _pearl_c_gate(run: Any) -> dict[str, Any]:
+    """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
+    (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+
+    check = PearlCArm()
+    check.run, check.schedule = run, run.schedule.name
+    check.weights = {w: x.tensor for w, x in run.weights.items()}
+    return {**check.gate(None), "provided": True}
 
 
 def _kv_cache_tokens(llm: Any) -> int | None:
@@ -738,7 +796,7 @@ class _VllmEngine:
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
 
-        self.arm, self.obj, self.installed = arm, plugin(arm), None
+        self.arm, self.obj, self.installed, self.pearl_c = arm, plugin(arm), None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -750,6 +808,7 @@ class _VllmEngine:
                 self.target.hooks.uninstall()
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
+        kernel_digest = arm.kernel_digest
         engine = engine_args(preset, arm.precision or preset.precision, resident=resident, eager=eager)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
@@ -767,9 +826,18 @@ class _VllmEngine:
                  if engine.get(k) is not None},
             )
         else:
+            config: dict[str, Any] = {}
             if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
+                config = protocols_config(arm, os.environ)
+                if config:
+                    engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
+            if arm.protocols:
+                self.pearl_c = _pass_per_step(self.llm, self.target.hooks)
+                cubin = config.get("pouw", {}).get("cubin")
+                if cubin:
+                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
@@ -782,7 +850,7 @@ class _VllmEngine:
                 if self.obj is not None and callable(
                     self.obj.get("kernel_digest") if isinstance(self.obj, Mapping) else getattr(self.obj, "kernel_digest", None)
                 )
-                else arm.kernel_digest
+                else kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
@@ -812,7 +880,8 @@ class _VllmEngine:
             got = _callback(self.obj, "spans", self.target, None)
             if got is not None:
                 return got
-        return {} if self.llm.protocols is None else self.llm.protocols.info()
+        info = {} if self.llm.protocols is None else self.llm.protocols.info()
+        return info if self.pearl_c is None else {**info, "pearl_c": dict(self.pearl_c[1])}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
@@ -895,7 +964,7 @@ class _VllmEngine:
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
-            return {"passed": True, "provided": False}
+            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c[0])
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}

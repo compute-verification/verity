@@ -1,6 +1,6 @@
 """The streamed wipe's verdict on a record (`streamed-wipe-verdict`, `MemoryChallenger.StreamedWipe`) against
-`streamed_wipe.verdict`: the whole verdict (accepted, reasons word for word, the egress in MiB, and `covered`, which is
-`WipeParams.covered`) on records as `wipe_verdict.py` writes them from honest sessions at every batch size, sessions
+`streamed_wipe.verdict`: the whole verdict (accepted, reasons word for word, and the egress in MiB) on records as
+`wipe_verdict.py` writes them from honest sessions at every batch size (each above 1 refused as uncovered), sessions
 under one adversarial edit (`wipe_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a
 caller passes; then the named negative controls through `wipe_verdict.verdict` and `judge`, the calls a caller makes, and
 the switch itself."""
@@ -75,8 +75,8 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 
 @pytest.mark.slow
 def test_verdict_agrees(server):
-    """The whole verdict on drawn records under the test signers' keys: accepted ones at every batch size, every
-    rejection reason, refusals."""
+    """The whole verdict on drawn records under the test signers' keys: accepted ones at batch size 1, rejected ones
+    above it, every rejection reason, refusals."""
     stats = D.run(port(records()), examples=600, server=server)
     assert stats.outputs > 300 and stats.rejects > 30, stats
 
@@ -104,14 +104,21 @@ def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(), egress_bits:
                  egress_bits=egress_bits)
 
 
+def _uncovered(batch: int) -> str:
+    return f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
+
+
 def controls() -> dict[str, tuple[W.Session, tuple[str, ...], int]]:
     """The negative controls, each a session, the reasons its verdict gives and its egress in MiB, beside the honest
-    sessions (batch sizes 1 and 2: the second accepted and not covered)."""
+    session at batch size 1; an otherwise honest session at batch size 2 is one, rejected as uncovered."""
     s = _honest()
     mib = 1
     return {
         "honest": (s, (), mib),
-        "honest, batch 2": (_honest(batch=2), (), mib),
+        "honest, batch 2": (_honest(batch=2), (_uncovered(2),), mib),
+        "late answer, batch 2": (_honest(batch=2, spends=(1, LIMIT + 1)),
+                                 (_uncovered(2), "the session ended late after 2 of 2 batches",
+                                  f"batch 1 is past its deadline of {LIMIT} ns"), mib),
         "bad signature": (W._signature(s, M._flip(s.signed.signature, 100)), ("the signature does not verify",), mib),
         "untrusted signer": (dataclasses.replace(s, trusted=()),
                              ("the session is signed by a key that is not a trusted memory challenger's",), mib),
@@ -153,7 +160,7 @@ def test_negative_controls(server):
         assert python == sw.Verdict(not reasons, reasons, mib), (name, python)
         assert V.verdict(s.signed, s.commitment, **kw) == python, name
         lean = V.lean(s.signed, s.commitment, **kw)
-        assert lean["covered"] == s.commitment.params.covered == (name != "honest, batch 2"), (name, lean)
+        assert s.commitment.params.covered == ("batch 2" not in name), name
         for decide in V.VERDICTS:
             v, sides = V.judge(s.signed, s.commitment, decide=decide, **kw)
             assert v == python and set(sides) == {"lean": {"lean"}, "both": {"lean", "python"},
@@ -169,7 +176,7 @@ def test_a_disagreement_is_refused(monkeypatch):
     s = _honest()
     kw = {"trusted": set(s.trusted), "schemes": M.ts.SCHEMES}
     real = V.python(s.signed, s.commitment, **kw)
-    for edit in ({"accepted": False}, {"reasons": ["x"]}, {"egress_mib": 2}, {"covered": False}):
+    for edit in ({"accepted": False}, {"reasons": ["x"]}, {"egress_mib": 2}):
         monkeypatch.setattr(V, "python", lambda *a, edit=edit, **k: real | edit)
         v, sides = V.judge(s.signed, s.commitment, decide="both", **kw)
         assert not v.accepted and v.egress_mib == sw.EGRESS_MAX_UNITS and v.reasons[0].startswith(V.DISAGREE), (edit, v)

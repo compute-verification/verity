@@ -114,7 +114,7 @@ def _declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
     peer = ar.Peer(plan, ar.wire_params(setup))
     arrivals: dict[int, list[bytes]] = defaultdict(list)
     for q in sorted(plan["requests"], key=lambda q: (q["enqueue"], q["send_ms"], q["stream"])):
-        data = ar.request_frames(q["stream"], peer.request(q), peer.B)
+        data = ar.request_frames(peer.request(q), peer.B)
         arrivals[q["enqueue"]] += [data[k : k + peer.B] for k in range(0, len(data), peer.B)]
     bucketer = cgrid.Certifier(setup.ingress_link, i)
     for t in range(plan["windows"] * i.buckets):

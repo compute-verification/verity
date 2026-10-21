@@ -126,7 +126,7 @@ outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` (ASK-
 weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
 `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and
-`BitsLin2` is not yet derived from it. -/
+`BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -234,7 +234,7 @@ round hold the run's commit string there, which the readers read, so each part's
 per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the
 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet
-established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it.
+established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
 -/
 def KSBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=

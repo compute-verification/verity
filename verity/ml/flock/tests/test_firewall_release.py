@@ -314,12 +314,12 @@ def _vector_op(fw: FW.Firewall, op: list):
     return getattr(fw, k)(*op[1:])
 
 
-def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
+def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
     recursive session released whole, statements that can't be one's), the budget, the schedule, and strings Python
-    escapes. ``flock_live::release``'s ``the_shared_vectors_hold`` runs the same file, so the two firewalls read and write
-    one record."""
+    escapes. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two firewalls
+    read and write one record."""
     v = json.loads(VECTORS.read_text())
     assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
     for c in v["cases"]:
@@ -330,7 +330,7 @@ def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
 
 def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp_path):
     """At its ``budget``-th failure a stream refuses every outer session and every open; the budget is the same at every
-    open. A scheduled recursive session is the Rust firewall's: this module's relay refuses it, rather than release its
+    open. A scheduled recursive session is the Lean firewall's: this module's relay refuses it, rather than release its
     proofs before their time."""
     fw = FW.Firewall(tmp_path / "fw")
     log: list = []
@@ -353,7 +353,7 @@ def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp
     s = fw.open("other", ["L0"], release={"start_ms": 0, "windows_ms": [1000]})
     fw.finish(s)
     out, _ = _outer(fw, s, "L0", HONEST, Challenger(log, "s"))
-    assert out["why"].endswith("its release schedule needs the Rust firewall (flock-circuit prove --firewall-state)")
+    assert out["why"].endswith("its release schedule needs the Lean firewall (core-firewall session: flock-circuit prove --firewall-state)")
     assert not any(name in ("b", "s") for name, _ in log)
 
 

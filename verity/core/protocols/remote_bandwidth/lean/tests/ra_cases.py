@@ -6,7 +6,7 @@ The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indice
 `audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
 refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
 the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
-event sets, with a `coins.Challenger` whose generator replays the case's coins (`Tape`).
+event sets, its coins those of a challenger that replays the case's (`Replay`).
 
 A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
@@ -29,6 +29,7 @@ from verity_difftest import protocol as P
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
@@ -217,20 +218,27 @@ class Clock:
         return self.now
 
 
-class Tape:
-    """The challenger's generator replaying a case's coins: each committed coin with a zero salt, then the append coins in
-    the order drawn. Past them it refuses the case, as the Lean does."""
+class Replay:
+    """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
+    case's 2W, then its append coins in the order drawn, each the audit's 32 bytes padded to the challenger's 64 under a
+    zero salt. Past the case's append coins it refuses the case, as the Lean does."""
 
-    def __init__(self, committed: list[bytes], appends: list[bytes]) -> None:
-        self.out = [x for c in committed for x in (c, bytes(coins.HM96.salt_bytes))]
-        self.appends = list(appends)
+    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> None:
+        a = max(coins.APPENDS, len(appends))
+        padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in [*committed, *appends]]
+        out = iter(x for c in padded + [bytes(LIVE_COIN_BYTES)] * (a - len(appends))
+                   for x in (c, bytes(HM96.salt_bytes)))
+        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a), lambda n: next(out))
+        self.commitment, self.appends = self.live.commitment, len(appends)
 
-    def __call__(self, n: int) -> bytes:
-        if self.out:
-            return self.out.pop(0)
-        if self.appends:
-            return self.appends.pop(0)
-        raise D.Reject("the append coins ran out")
+    def open(self, label: str, index: int, after: bytes) -> coins.LiveOpening:
+        if label == coins.APPEND and index >= self.appends:
+            raise D.Reject("the append coins ran out")
+        return self.live.open(label, index, after)
+
+
+def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes]) -> coins.Coins:
+    return coins.Coins(Replay(k, windows, committed, appends), reg.digest, k, windows)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -326,8 +334,8 @@ def session(v: Any) -> dict:
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins, Tape(committed, appends)),
-                not_before_ns=not_before, clock=clock)
+    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends), not_before_ns=not_before,
+                clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
 
@@ -387,9 +395,9 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
     if op == "session":
         which, kw, committed, appends, not_before, index = a
         reg = drawn[which] if isinstance(which, int) else which
-        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(),
-                      entropy=Tape(committed, appends), index=index)
-        return {"session": s.commitment.session}
+        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends))
+        return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
         x = r._live.get(audit._node(node))
@@ -505,13 +513,13 @@ class Run:
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.challenger = coins.Challenger(reg.digest, 0, self.params.coins, entropy=Entropy(b"coins"))
-        self.s = Session(self.params, reg, None, self.challenger, not_before_ns=not_before_ns, clock=self.clock)
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"))
+        self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
                                    entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
-        self.challenges: dict[int, coins.CoinOpening] = {}
+        self.challenges: dict[int, coins.LiveOpening] = {}
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
@@ -574,7 +582,7 @@ class Run:
         return self._call(event, lambda: self.s.receive(t, i, root, runs, change=change, step=step))
 
     def run(self, plan: Plan | None = None, change=None, *, step: int | None = None, send: dict | None = None,
-            challenge: coins.CoinOpening | None = None, previous: bytes | None = None, head=False,
+            challenge: coins.LiveOpening | None = None, previous: bytes | None = None, head=False,
             at: int | None = None) -> Any:
         """One honest pass of the current window, its plan sent whole (None: the registered store) or as its `change`,
         covering `step` (None: the one after the last). `send` replaces what is sent; `challenge`, `previous` and
@@ -624,7 +632,8 @@ class Run:
     def case(self) -> dict:
         p = self.params
         return {"append_coins": [c.hex() for c in self.append_coins],
-                "coins": [c.hex() for c, _ in self.challenger._coins], "events": self.events,
+                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:2 * p.windows]],
+                "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
                            "min_passes": p.min_passes, "pace": None if p.pace is None else p.pace.to_json(),
@@ -1017,6 +1026,25 @@ def honest_paced(r: Run) -> None:
     r.finish()
 
 
+def honest_paced_drawn_at_k(r: Run) -> None:
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
+    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    window before its deadline."""
+    r.start()
+    r.run()
+    r.close(0)
+    r.run()
+    r.close(0, at=r.clock.now + 1)
+    r.boundary()
+    r.close(0, at=r.clock.now + 1)
+    r.verify(0)
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.close(1, at=r.clock.now + 1)
+    r.verify(1)
+
+
 def malformed_root(r: Run) -> None:
     r.start()
     r.receive(0, 0, bytes(32), step=0)
@@ -1129,6 +1157,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
+    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
     "late": (World(), dict(deadline_ns=5), late, "late"),
     "plan-repeated-block": (World(), {}, lambda r: plan(r, ((0, 3), (2, 2))), "plan"),

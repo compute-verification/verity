@@ -145,8 +145,9 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier draws.
-- **The challenger** is the auditor's online service. It draws every coin of a session from its own generator, commits
-  to them before the session, and releases each once (`coins.Challenger`).
+- **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
+  `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
+  and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.Coins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.Session` is the verifier and drives the challenger.
 
@@ -310,20 +311,31 @@ process ends early, until `--close`. The registry's record holds digests and out
 
 ## 4. The coins and the chained passes
 
-Before a session the challenger draws its \(2W\) coins and commits to them (`coins.py`), and the prover receives the
-commitment before the first coin:
+Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
+(`coins.py`, `sampled_proofs.challenger`), and the prover receives the commitment before the first coin:
 
 ~~~text
-c_k         32 bytes from the challenger's generator; window t's challenge σ_t = c_t, its openings coin c_(W+t)
-x_k         SHA512("verity/remote-bandwidth/coin/v0\0" ‖ c_k)
-value_k     hm96-sha512 tree_leaf(key, commit_string(key, x_k, y_k)), y_k a fresh 192-byte salt, key hm96-sha512's pinned key
-root        frame-v3-sha512 over value_0 … value_(2W−1): CommitmentDomain(SHA512("verity/remote-bandwidth/coins/v0\0" ‖
-            registration digest ‖ u64be session), −1, positions 0 … 2W − 1, "sha512"), schema "verity/remote-bandwidth/coins/v0"
-opening     (k, c_k, y_k, path): checked by the prover against the root (`coin_reason`)
+layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's index over its registration), families
+            challenge W, openings W and append A (`coins.APPENDS` unless the session names its own)
+c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
+            a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
+            window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
+R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
+after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
+            t's last root; append i's coin after append i's root
+opening     (epoch, label, index, after, coin, salt, path): checked by the prover against the commitment (`coin_reason`)
 ~~~
 
 The challenger can't choose a coin after seeing a root, and hm96 keeps every coin hidden until it is released. This
-is the construction of PoUW's epoch coins.
+is the construction of PoUW's epoch coins, from the same challenger. Each coin leaves once, after the root the verifier
+recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
+The verifier holds that log to its own record (`Session.released_reason`): the commitment it used, the same roots in
+the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
+its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's signed
+ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
+period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
+(period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
+keep the coins it likes (RT4-INT-17).
 
 The verifier releases \(\sigma_0\) at the session's start (`Session.start`). At window \(t\)'s end it sends the boundary
 message, which is \(\sigma_{t+1}\), or the close after the last window (`Session.boundary`). Each is one-way: no round
@@ -377,12 +389,12 @@ hold or adds one it does, rejects with `plan`.
 **Appends and releases.** Blocks written after the codec seed (KV pages) join the store mid-session. The prover commits
 their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
 bound to the registration's digest over the indices it takes) and sends its root and size (`Session.append`). The
-verifier assigns the store's next fresh indices, from \(N\) up, draws the append's coin \(c_a\) from the challenger's
-generator (`Challenger.append_coin`), and replies with the first index and the coin:
+verifier assigns the store's next fresh indices, from \(N\) up, asks the challenger for the append's coin \(c_a\), its
+next append coin, opened after the append's root (`Coins.append`), and replies with the first index and the coin:
 
 ~~~text
 prover → verifier   {"type": "append", "root": hex(append tree's root), "count": n}
-verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_a 32 bytes, drawn when the root arrives
+verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_a 32 bytes, released after the root arrives
 ~~~
 
 So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encoding (§3), is fixed before any pass whose
@@ -706,7 +718,10 @@ before it.)
 
 ## 6. Openings and the accept rule
 
-Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed. A window with
+Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed, or, in a paced
+session (§7, "Pacing"), once it holds its \(k\) roots, past which it takes none, and its boundary has left (so \(D_t\) is
+set): so the challenger's signed log, where
+the openings coin's request names the window's last root, fixes a paced window's end at that root. A window with
 fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger releases the window's openings coin
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it
 (`Session.close`): `derive(c_(W+t), "verity/remote-bandwidth/openings/v0", {registration, window: t}).subset(min(s,

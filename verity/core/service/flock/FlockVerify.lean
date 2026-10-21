@@ -311,7 +311,8 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 /-- `--registered F`: the verifier's own registered reads (`Registered.ofJson`: per registered port, the value, its
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
-form. -/
+form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
+would keep one of them. -/
 def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port))) := do
   let some f := argOf args flag | return .ok none
@@ -322,9 +323,12 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
     | none => return .error s!"{ctx}: not UTF-8"
-    | some t => match Lean.Json.parse t with
-      | .ok j => return ((Registered.ofJson j).mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
-      | .error e => return .error s!"{ctx}: not JSON: {e}"
+    | some t => match Lean.Json.parse t, JsonKeys.dupKey t with
+      | .ok _, some k =>
+        return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
+      | .ok j, none =>
+        return ((Registered.ofJson j).mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
+      | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
@@ -653,9 +657,9 @@ coin server's record of the inner session whose `c_k` its rows must be (`--rec-i
 `rec-residuals/…` or `rec-sparse/…` unit) needs the inner transcript, whose link points the inner session's record must
 hold (`RecVStar.innerLink`); a circuit-table level's `out` reads `rec-top-L<l>` at each opening's node (`RecCoins.checkLink`)
 and its rows are the tops the coin server recorded (`RecVStar.checkTopRows`), whose rounds and sizes are the inner
-shape's schedule's (`RecVStar.checkLinkRounds`). The table's level-0 cap statement (`rec-cap/n<N>`, the list's last) reads
-`rec-top-L0` at every node in order and V*'s zero rows (`RecCoins.checkCap`), and needs the inner transcript, whose
-`root_B` its rows are. At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+shape's schedule's (`RecVStar.checkLinkRounds`). Each level's cap statement (`rec-cap/n<N>` at level 0, the list's last;
+`rec-cap/n<N>-l<l>` at a later level) reads `rec-top-L<l>` at every node in order and V*'s zero rows (`RecCoins.checkCap`),
+and needs the inner transcript, whose `root_B` or both reps' level-`l` tops its rows are. At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -852,7 +856,7 @@ Its verifier-registered values are checked against the verifier's coins (`RecCoi
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
-tops (`RecCoins.checkLink`). The level-0 cap statement (`rec-cap/n<N>`) is checked against its registered reads and
+tops (`RecCoins.checkLink`). Each level's cap statement (`rec-cap/…`) is checked against its registered reads and
 the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
