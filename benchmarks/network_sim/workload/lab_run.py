@@ -21,8 +21,10 @@ is ready and reads the origin from its stdin; all are timed from that origin on 
 - Per block, in `na-bI-cert`, mockdc's proxy (`mockdc.Process(ns, "proxy", cfg)`: `active.Proxy` unmodified), whose
   upstream is the block.
 - On the outside host, the client (`client` role), with one link to each proxy. It reads every link to its end, keeping
-  `active_replay.Peer`'s digest of each window. It relays each message once its last chunk is in, and sends each block's
-  requests in session order as soon as their messages are in, the first ones half a bucket after the origin. At the end
+  `active_replay.Peer`'s digest of each window, and takes the k-th event on a link for position k, the order the
+  certifier's shaper hands in. It relays each message once its last chunk is in, and sends each block's requests in
+  session order as soon as their messages are in (`active.request_frames`), the first ones half a bucket after the
+  origin. At the end
   it commits the run inputs and reads the answers (`outside.json`).
 
 **Calibration**, before the processes start, as a trace is calibrated. The orchestrator evaluates the Program session by
@@ -35,7 +37,9 @@ request's release. The run lasts the windows that cover the model's last respons
 
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
-records show it: the timing. N3 over the same raw records (`lab.check`): the content. And the answers against the Program
+records show it: the timing. N3 over the same raw records (`lab.check`): the content. N3Window_v5 with the canonical
+framing's templates (`n3_canonical.verdicts` on `n3_unit.lab_windows`) on each of them: the content as the proof unit
+checks it, every frame its direction's template on the committed outboxes. And the answers against the Program
 evaluated in one process.
 
 **Tampering** (`--tamper BLOCK:MODE`): `flip-bit` flips the first bit of the block's first outbound message, which N3
@@ -45,10 +49,11 @@ frames its events.
 
 **Outputs** in `--out`: `report.json` (the calibration); per block `BLOCK/`, with `plan.json`, the proxy's records and log,
 the block's `server.json`, `server.events.gz` and `result.json`, the client's `peer.json` and the certifier's `audit.json`;
-`outside.json`, `public.json`, `witness.json`, `n3.json`, and `summary.json`: per block the certifier's verdicts and timing
-and N3's verdict, and the answers against the reference. The exit status is 0 when every process exited cleanly and the
-run is what `--expect` says: `accepted` (every block's certifier audit accepts, N3 holds and the answers are the
-reference's) or `refused` (the tampered block's certifier audit or N3 refuses).
+`outside.json`, `public.json`, `witness.json`, `n3.json`, `n3_v5.json` (v5's verdict on each window), and `summary.json`:
+per block the certifier's verdicts and timing, N3's verdict and v5's, and the answers against the reference. The exit
+status is 0 when every process exited cleanly and the run is what `--expect` says: `accepted` (every block's certifier
+audit accepts, N3 holds, v5 accepts every window and the answers are the reference's) or `refused` (the tampered
+block's certifier audit, N3 or v5 refuses).
 """
 from __future__ import annotations
 
@@ -75,13 +80,15 @@ import graph
 import records
 from datacenter import Cadence
 from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import HEADER, PAD, decode_frame
+from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, request_frames
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync
 
 from . import framing as F
 from . import lab as L
 from . import model as M
+from . import n3_canonical as C
+from . import n3_unit as U
 from . import values as V
 from .block import Context
 from .hardware import OUTSIDE, Hardware
@@ -138,10 +145,6 @@ def model_run(lab: L.Lab, D: int) -> dict[str, list[tuple[float, int]]]:
     return sent
 
 
-def request_frames(lab: L.Lab, s: L.Session) -> int:
-    return max(1, math.ceil(lab.request_length(s) / (FRAME_BYTES - HEADER.size)))
-
-
 def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[str, dict]]:
     """The calibration report on the modeled run, one configuration per block, and each block's plan for the proxy and
     the audit."""
@@ -152,7 +155,7 @@ def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[s
         for s, (t, release) in zip(lab.sessions[b], sent[b], strict=True):
             frames += [{"session": s.name, "index": k, "anchor": release, "ready": release + D}
                        for k in range(len(lab.positions(b, s.index)))]
-            arrival += [t + FABRIC_MS / 2] * request_frames(lab, s)
+            arrival += [t + FABRIC_MS / 2] * lab.request_frames(s)
         configs.append({"name": f"{name}/{b}", "egress": [{"link": L.EGRESS, "frames": frames}],
                         "ingress": [{"link": L.INGRESS, "arrival_ms": arrival}]})
     report = calibration.calibrate({"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS, "frame_bytes": FRAME_BYTES,
@@ -167,7 +170,7 @@ def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[s
     plans = {}
     for b in lab.blocks:
         sessions = [[s.name, s.stream, [D] * len(lab.positions(b, s.index))] for s in lab.sessions[b]]
-        requests = [{"stream": s.stream, "session": s.name, "frames": request_frames(lab, s), "trace_ms": t,
+        requests = [{"stream": s.stream, "session": s.name, "frames": lab.request_frames(s), "trace_ms": t,
                      "enqueue": math.ceil(t / setup.ingress_params.bucket_ms), "send_ms": t}
                     for s, (t, _) in zip(lab.sessions[b], sent[b], strict=True)]
         release = ar.model_releases(requests, setup.ingress_params, windows, setup.egress_params.bucket_ms)
@@ -312,6 +315,7 @@ class Client:
         self.payloads = {s: F.encode(m, self.values) for s, m in lab.messages.items() if m.src == OUTSIDE}
         self.when = dict.fromkeys(self.payloads, 0.0)
         self.chunks: dict[int, dict[int, bytes]] = defaultdict(dict)
+        self.position = dict.fromkeys(lab.blocks, 0)
         self.arrived = asyncio.Event()
         self.B, self.tau = params["frame_bytes"], params["bucket_ms"] / 1000
         self.bucket_bytes = params["allocation"] * self.B
@@ -341,14 +345,15 @@ class Client:
             del buffer[:whole]
 
     def _frame(self, block: str, frame: bytes, now: float) -> None:
-        kind, stream, event = decode_frame(frame)
+        """A link frame: the block's next event, the certifier's shaper handing them in position order."""
+        kind, stream, body = decode_frame(frame)
         if kind == PAD:
             return
-        parsed = L.parse(event)
-        if parsed is None or parsed[0] >= len(self.lab.events[block]):
-            self.strays.append(f"{block}: a frame of stream {stream} that is no event of the Program")
+        p, self.position[block] = self.position[block], self.position[block] + 1
+        chunk = event_data(body) if (kind, stream) == (DATA, CANONICAL_STREAM) else None
+        if chunk is None or p >= len(self.lab.events[block]):
+            self.strays.append(f"{block}: frame {p} is no event of the Program")
             return
-        p, chunk = parsed
         _, m, j = self.lab.events[block][p]
         got = self.chunks[m.stream]
         got[j] = chunk
@@ -367,7 +372,7 @@ class Client:
             while any(m.stream not in self.payloads for m in s.inbound):
                 await self.arrived.wait()
             last = max([last, *(self.when[m.stream] for m in s.inbound)])
-            writer.write(ar.request_frames(s.stream, self.lab.request(s, self.payloads), self.B))
+            writer.write(request_frames(self.lab.request(s, self.payloads), self.B))
             log["send_late_ms"].append(round((time.monotonic() - last) * 1000, 3))
 
     async def run(self, links: dict[str, tuple[asyncio.StreamReader, asyncio.StreamWriter]], origin: float) -> None:
@@ -597,11 +602,17 @@ def run(args) -> int:
     n3 = L.check(public, witness, published)
     for key, obj in (("public", public), ("witness", witness), ("n3", n3.to_json())):
         (out / f"{key}.json").write_text(json.dumps(obj, indent=1))
+    v5_setup, v5_windows = U.lab_windows(public, witness, published, grids=(setup.egress_params, setup.ingress_params),
+                                         sync_set=setup.sync_set)
+    v5 = C.verdicts(v5_setup, v5_windows)
+    (out / "n3_v5.json").write_text(json.dumps(v5, indent=1))
     for b in lab.blocks:
         mine = [v for v in n3.violations if v.where.split(":")[0] in (b, "")]
         blocks[b]["n3"] = {"accepted": not mine, "violations": [f"{v.code} {v.where}: {v.detail}" for v in mine]}
+        blocks[b]["n3_v5"] = C.summary([r for r in v5 if r["port"].split(":")[0] == b])
     answers = results[OUTSIDE]["answers"]
-    accepted = all(x["certifier"]["accepted"] and x["n3"]["accepted"] for x in blocks.values()) and answers == reference
+    accepted = all(x["certifier"]["accepted"] and x["n3"]["accepted"] and not x["n3_v5"]["refused"]
+                   for x in blocks.values()) and answers == reference
     summary = {"workload": args.workload, "spec": config["spec"], "blocks": blocks, "n3": n3.to_json() | {"violations": None},
                "answers": answers, "reference": reference, "answers_equal": answers == reference, "accepted": accepted,
                "delta_buckets": D, "session_compute_ms": {k: round(v * 1000, 3) for k, v in compute.items()},
@@ -617,6 +628,8 @@ def run(args) -> int:
         print(f"{b}{' (' + x['tamper'] + ')' if x['tamper'] else ''} certifier audit "
               f"{'ACCEPTED' if x['certifier']['accepted'] else 'REFUSED (' + ', '.join(failed) + ')'}; "
               f"N3 {'holds' if x['n3']['accepted'] else 'REFUSED (' + '; '.join(x['n3']['violations'][:3]) + ')'}; "
+              f"N3 v5 {'REFUSED (' + ', '.join(x['n3_v5']['refused']) + ')' if x['n3_v5']['refused'] else 'ACCEPTED'} "
+              f"on {x['n3_v5']['accepted']} of {x['n3_v5']['windows']} windows; "
               f"latest tick {max((v for v in late.values() if v is not None), default=0):.1f} ms late against "
               f"{x['slack_ms']:.0f} ms of slack, "
               f"{sum(x['ticks_over_slack'].values())} over")
@@ -628,7 +641,8 @@ def run(args) -> int:
     if not clean:
         print(f"a process failed: {codes}", file=sys.stderr)
     if args.expect == "refused":
-        hit = tamper is not None and not (blocks[tamper[0]]["certifier"]["accepted"] and blocks[tamper[0]]["n3"]["accepted"])
+        t = blocks[tamper[0]] if tamper is not None else None
+        hit = t is not None and not (t["certifier"]["accepted"] and t["n3"]["accepted"] and not t["n3_v5"]["refused"])
         print(f"run {'REFUSED' if not accepted else 'ACCEPTED'}; the tampered block {'is' if hit else 'is not'} refused")
         return 0 if clean and hit else 1
     print(f"run {'ACCEPTED' if accepted else 'REFUSED'}")

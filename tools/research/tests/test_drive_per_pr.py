@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import pytest
 
 from research import merge, queue_stats
-from research.drive import plan_launch, plan_state, undeferred
+from research.drive import launch_vars, plan_launch, plan_state, undeferred
 from research.queue import main as queue_main
 from test_queue import World, _git
 from test_queue_drive import Harness, _check, _tip
@@ -49,7 +49,7 @@ class Shadow(Harness):
 
     def launch(self, repo, commit, machine, agreement):
         ids = super().launch(repo, commit, machine, agreement)
-        self.envs[commit] = tuple(os.environ.get(k) for k in ENV)
+        self.envs[commit] = tuple(launch_vars().get(k) for k in ENV)
         return ids
 
     def fetch(self, rid, names):

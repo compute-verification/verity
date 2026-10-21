@@ -306,7 +306,7 @@ theorem circuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := b
   have hLive : prob Live ≤ δs := prob_lift PL (live_le R (shareCone Sc Cd Np) Kd ρ δs hρN hδs)
   have hCov : (Cd.atIR.layer hr hK pr).Covers Pl (jointMode R) (fun _ t => (tileWords Sc Cd Np t : ℝ))
       (wordsOf Sc Cd : ℝ) :=
-    CoversProof.serviceCovers Sc Cd.atIR hr hK R Pl pr hwf (fun _ _ => Nat.zero_le _) hG
+    CoversProof.serviceCovers Sc Cd.atIR hr hK R Pl pr hwf (fun _ _ => Or.inl (Nat.zero_le _)) hG
   have hFix := hUF (WorkProof.writerReads Cd.atIR hr hK pr)
   have hCount := WorkProof.wordsOf_le_sum Sc Cd hwf hN
   have hsub : ∀ x, (Pl.accepts x ∧

@@ -24,10 +24,10 @@ live round a call; they differ in the served output and in what a receipt unit r
 * `yOpen`, the alternative kernels prices: no second tree; each receipt unit opens the Commit's own `y` rows of its tile
   and its Program checks `dequant(z) = y`, `z` an inner wire;
 * `perCall`, a round a call: round `c` is call `c`'s (`steps × calls` rounds, 2,304 for Llama-3.1-8B); its root
-  covers the call's A rows, its coin noises the call's GEMM, and the call's receipts and its served `y = dequant(z)`
-  go under round `c + 1`'s root, `y` as each unit's own output words, so the Commit's `y` tree is the units' (one
-  tree, compared by root). Its `y` reads the coin (`Tie.noised`, reachability: the coin is in `y`'s cone), which is
-  what puts Compose's cut of `y` after the coin; `h1tile`'s `z`, its own dot, reads none, and Compose's cut would
+  covers the call's A rows, its coin noises the call's GEMM, its served `y = dequant(z)` goes under round `c + 1`'s
+  root, as each unit's own output words, so the Commit's `y` tree is the units' (one tree, compared by root), and the
+  call's receipts under a later round's root, from `c + 1`'s to the draw's. Its `y` reads the coin (`Tie.noised`,
+  reachability: the coin is in `y`'s cone), which is what puts Compose's cut of `y` after the coin; `h1tile`'s `z`, its own dot, reads none, and Compose's cut would
   then put `y` before the coin its GEMM needs. It was the schedule a path whose served product is the noised one
   needs, which credit no longer asks (below).
 
@@ -79,9 +79,19 @@ units keep their number, each gaining its tile's `z` or `y` words.
 `commitCoin` is the coin before which the served code commits a value of each class (`Cls`) of round `r`, as the
 served code is to do it: the registration (the weights' root over every linear's root(B)) before the salt coin and so
 before round `0`'s; a call's A rows and their scales, the request entries its round admits and its `z` or `y` rows
-under its round's root, before its coin (`perCall`'s `z` and `y` under the next round's, with its receipts); its
-receipts under the next round's root, the last round's in the manifest before the draw. Every served arm is to commit
-in this order, each round's coin live and drawn after its root (RT4-INT-12, 20 Oct). An arm that forms a call's A rows
+under its round's root, before its coin (`perCall`'s `z` and `y` under the next round's); its receipts under the root
+of any later round, up to the draw's: the next round's at the earliest (`commitCoin`'s), round `r + D − 1`'s in a ring
+of depth `D`, and the last rounds' in the manifest before the draw coin (`Tie.receipt`). Every served arm is to commit
+in this order, each round's coin live and drawn after its root (RT4-INT-12, 20 Oct).
+
+A receipt's commit coin is a range because only gates of its own unit read it (`Tie.readers`). It is then in its own
+unit's late cone and in no other unit's, so committing it after later coins leaves no other unit's proof reading a
+value chosen after that unit's noise, and no reader whose skip goes uncharged: its own unit's proof checks it when the
+unit is drawn, and the unit's cone pays for it when it isn't. The draw coin still follows every commitment. That
+is `Accounting.Compose.LayerCommitted`'s second case. The ring hides the live coins' round trip off the prover's node,
+about 100 ms, behind `D` steps: about 104 ms a token at `D = 2` (the next round's root), 0.09 ms at `D = 6` (kernels'
+#3003; `Properties.Served.witTieRing`). An A row gets no such range: written after its reader's coin, `A = −b` cancels a
+one-bit dither (RT4-INT-12). An arm that forms a call's A rows
 after the coin or salt its noise reads is in no form here: dither-a, dither-one and `serve.py`'s seeded mode do today,
 and kernels moves dither-a to this order (#2889). A request entry is a run input (`act`), not a registered one:
 certified serving releases a window's requests after its salt frame, so no queue root can precede the salt (RT3-INT-9).
@@ -91,12 +101,12 @@ always-proved units are not in the per-call Program `Properties.Served.ServedUni
 circuit is one (RT2-INT-5). They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
-rounds the layout's, each value's commit coin `commitCoin` of its class, and the IR facts that put each class's value
-at the cut `commitCoin` names (a weight registered, an A row or a `y` row a run input read only by its own call, a
-receipt reading its round's coin). `TieCommits` states that the tie gives `Accounting.Compose.LayerCommitted`, and
-`TieLive` that it gives `Declared.Live` under any scheme: the two `Scope` conjuncts that are protocol structure. The
-units, the population and the draw, which read the verifier's partition of each call's Program, are
-`Properties.Served`'s. `EpochTie` ties an epoch's windows: each one's `Tie`, and each timed from the one salt's release,
+rounds the layout's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
+the draw), and the IR facts that put each class's value at the cut `commitCoin` names (a weight registered, an A row or
+a `y` row a run input read only by its own call, a receipt reading its round's coin and read only by its own unit).
+`TieCommits` states that the tie gives `Accounting.Compose.LayerCommitted`, and `TieLive` that it gives
+`Declared.Live` under any scheme: the two `Scope` conjuncts that are protocol structure. The units, the population and
+the draw, which read the verifier's partition of each call's Program, are `Properties.Served`'s. `EpochTie` ties an epoch's windows: each one's `Tie`, and each timed from the one salt's release,
 `Pouw.TimedRun.ts`, the start of the interval `Pouw.Guarantees.WorkBetweenSaltAndDeadline` counts work in. `CreditTie`
 is `Tie` with what useful-work credit needs of the circuit (`ValueChecked`): a necessary condition, which no credit
 statement reads yet.
@@ -117,8 +127,9 @@ statement is over the declared circuit; these are the checks that make its `comm
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
   whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today (#2639 l.446–454,
   `window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins (RT2-INT-6, SG-11);
-* `receipt`: round `r + 1`'s root over round `r`'s receipt roots, the last round's in the manifest before the draw
-  coin; each drawn unit's receipt opened under it;
+* `receipt`: round `r`'s receipt roots under the root of one later round, recorded before that round's coin (round
+  `r + D − 1`'s in a ring of depth `D`), or under the manifest before the draw coin, at the commit coin the declared
+  circuit gives them; each drawn unit's receipt opened under it;
 * the unit's position `base s w + u`, computed by the verifier from the layout, never read; the unit's salt
   `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier from the challenger's opening of
   round `r`'s coin and the recorded root, never read from the record (`serve.py`'s reference recomputation reads the
@@ -264,9 +275,10 @@ inductive Cls
 
 /-- **The coin before which the served code commits a value** of class `k` of round `r` in form `F`, of the window's
 `F.rounds L` rounds (the draw is the last): the registration before round `0`'s; A rows, `zTree`'s `z` and the
-Commit's `y` before their round's; receipts and `perCall`'s `y`, which read their round's coin, before the
-next round's. `inner` and `coin` values are committed nowhere (`Tie.inner` sets an inner value's commit coin to its
-cut; a coin is no value the prover writes). -/
+Commit's `y` before their round's; `perCall`'s `z` and `y`, which read their round's coin, before the next round's.
+A receipt's is the earliest it may be committed at, the next round's: `Tie.receipt` lets it go later, by the draw.
+`inner` and `coin` values are committed nowhere (`Tie.inner` sets an inner value's commit coin to its cut; a coin is
+no value the prover writes). -/
 def commitCoin (F : Form) : Cls → ℕ → ℕ
   | .registered, _ => 0
   | .act, r => r
@@ -321,11 +333,14 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   noised product is its public Program's (`Properties.Served.ServedUnits`);
 * `forms`, `linked`: an `outZ` or `outY` gate is `zTree`'s or `perCall`'s and a `served` gate `yOpen`'s, and every
   receipt's unit has its form's link to the served output (`Form.Links`);
-* `commit`, `inner`: a value of an opened class is committed at `commitCoin` of its form, class and round, and an
-  inner value at its own cut.
-The `commit` and `inner` fields are how the declared circuit is built from the layout; the others are facts of each
-call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the commit
-coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
+* `commit`, `receipt`, `inner`: a value of an opened class other than a receipt is committed at `commitCoin` of its
+  form, class and round; a receipt after its round's coin and by the draw, under any later round's root or the
+  manifest (a ring of depth `D` puts step `s`'s under round `s + D − 1`'s); an inner value at its own cut;
+* `readers`: only gates of a receipt's own unit read it, so it is in no other unit's late cone, and committing it
+  after later coins leaves no reader in another unit (the module docstring; Compose's `LayerCommitted`, second case).
+The `commit`, `receipt` and `inner` fields are how the declared circuit is built from the layout; the others are facts
+of each call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the
+commit coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
 structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
   calls : Cd.calls = L.steps * L.calls
   rounds : Cd.rounds = F.rounds L
@@ -345,14 +360,19 @@ structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ 
   forms : ∀ i, i < Cd.dag.length → ((cls i = .outZ ∨ cls i = .outY) → F = .zTree ∨ F = .perCall) ∧
     (cls i = .served → F = .yOpen)
   linked : ∀ i, i < Cd.dag.length → cls i = .receipt → F.Links Cd cls i
-  commit : ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin →
+  commit : ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin → cls i ≠ .receipt →
     Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i))
+  receipt : ∀ i, i < Cd.dag.length → cls i = .receipt →
+    F.roundOf L (Cd.call i) + 1 ≤ Cd.commitRound i ∧ Cd.commitRound i ≤ Cd.rounds
+  readers : ∀ i, i < Cd.dag.length → cls i = .receipt →
+    ∀ j, j < Cd.dag.length → Cd.Reads j i → Cd.unit j = Cd.unit i
   inner : ∀ i, i < Cd.dag.length → cls i = .inner → Cd.commitRound i = Cd.cutOf i
 
 /-- **The tie gives the service's commit order**: a declared circuit that is a served window, in any form, meets
-`LayerCommitted`. The commit coins are then no later than the IR's cuts: a weight's `0`; an A row's or a `y` row's,
-its round, its first reader's; a `zTree` `z` word's, its round, the floor of its cut; a receipt's
-or `perCall`'s `y` word's, the round after its own, which its coin read reaches. -/
+`LayerCommitted`. Every commit coin but a receipt's is then no later than its IR cut (the first case): a weight's `0`;
+an A row's or a `y` row's, its round, its first reader's; a `zTree` `z` word's, its round, the floor of its cut;
+`perCall`'s `z` or `y` word's, the round after its own, which its coin read reaches; an inner value's, its cut. A
+receipt is a computed value only its own unit reads, committed by the draw (the second case). -/
 def TieCommits : Prop :=
   ∀ (ι : Type) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
 
@@ -453,7 +473,8 @@ every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epo
 `PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use (RT4-INT-12, 20 Oct):
 * a call's A rows and their scales go under its round's root before that round's live coin, and so do its `z` and `y`
   leaves in a form of a round a step;
-* its receipts, which read the coin, follow it under the next round's root, and so do `perCall`'s `z` and `y`.
+* its receipts, which read the coin, follow it under a later round's root, by the draw (the next round's at the
+  earliest, round `s + D − 1`'s in a ring of depth `D`), and `perCall`'s `z` and `y` under the next round's root.
 A unit's noise reads its round's coin and its round's root, which is over its call's A table (the unit's salt in the
 module docstring's run-time list), so no noise exists before the A rows it noises are committed. A key that read only
 the salt and the call index would let a prover that holds the salt write A after its noise: `A = −b` cancels a one-bit
