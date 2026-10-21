@@ -1005,6 +1005,9 @@
    "owner": "@lean",
    "digest": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e"
   },
+  "Nci.Cover.Assumptions.ActivationReads": {
+   "owner": "@training"
+  },
   "Nci.Cover.Assumptions.ColumnsIncompressible": {
    "owner": "@training",
    "digest": "db289a17daf39dbe23016dfadb6521dbcfae1cd0257a7ac5675fd21b6d35d295"
@@ -1040,6 +1043,9 @@
   "Nci.Cover.Circuit.ReachesIn": {
    "owner": "@training",
    "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
+  },
+  "Nci.Cover.Cube.Wide": {
+   "owner": "@training"
   },
   "Nci.Cover.Keyed.PerValueCut": {
    "owner": "@training",
@@ -7154,6 +7160,21 @@
    "assumptions": [],
    "type_hash": "9b7ebc3c11d321b0ca20fd1f28e98b3d12e0a123d22e19527be38f95e30e55ef"
   },
+  "Nci.Cover.SecurityProofs.KeyedActivationReads": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumIntensity": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.PartialSumsRead": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.Slowdown": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.Slowdown : Nci.Cover.Guarantees.Slowdown"],
@@ -10055,7 +10076,12 @@
    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, Security/Definitions/Nci/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/Checked.lean joins it to a verdict (coverTrained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
-   "Nci.Cover.SecurityProofs.CoverTrainingAligned": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit bit by bit (Circuit.ofDecl, with activation regions of whole words, wordBits, Security/Definitions/Nci/BitView.lean) and a declaration that contains it with its baseline registered (the named BaselineRegistered), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; stating its join to a verdict among the properties, as for CoverTraining, is what would give it an acceptance."
+   "Nci.Cover.SecurityProofs.CoverTrainingAligned": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit bit by bit (Circuit.ofDecl, with activation regions of whole words, wordBits, Security/Definitions/Nci/BitView.lean) and a declaration that contains it with its baseline registered (the named BaselineRegistered), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; stating its join to a verdict among the properties, as for CoverTraining, is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumsRead": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and a cover of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), a fact of their wiring, not about the NCI check's code; a check of declared inference blocks joined to the cover theorem is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ActivationReads (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ActivationReads (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.KeyedActivationReads": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named ColumnsIncompressible (Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, concluding the named ActivationReads (Security/Models/Nci/Assumptions/CoverPartialSum.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.PartialSumKeyedCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Models/Nci/Assumptions/Cover.lean, Security/Models/Nci/Assumptions/CoverFanOut.lean) and the structural Wide, not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

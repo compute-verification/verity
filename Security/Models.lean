@@ -20,6 +20,7 @@ import Models.Nci.Guarantees.Activations
 import Models.Nci.Guarantees.Cover
 import Models.Nci.Guarantees.CoverFanOut
 import Models.Nci.Guarantees.CoverFanOutValue
+import Models.Nci.Guarantees.CoverPartialSum
 import Models.Nci.Guarantees.CoverWidth
 import Models.Nci.Guarantees.CoverTraining
 import Models.Pous.Assumptions
