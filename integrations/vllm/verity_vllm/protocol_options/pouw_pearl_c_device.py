@@ -32,11 +32,11 @@ device's primary context:
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
-* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, and `end_step` does so at each engine step's end,
-  which the PoUW option hooks on the model runner, since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root and one tile tree over
-  every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
-  pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels
-  per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
+* **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option's model runner hook does at
+  each engine step's end, since one pass's buffers hold a few prefill steps at most): the transcript is every call's A root
+  and one tile tree over every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a
+  retain directory, the pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, B's
+  rows and tree levels per weight, the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
@@ -239,7 +239,7 @@ class _Pass:
     files: list[dict] = field(default_factory=list)
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
-    stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_step`)
+    stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
 
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
@@ -320,7 +320,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
 
 class PearlCDeviceRun(GraphCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
-    the passes the bench and the verifier need (`begin`, `end`, `end_pass`, `end_step`)."""
+    the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: CoinCommitment, opening: CoinOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
@@ -636,14 +636,15 @@ class PearlCDeviceRun(GraphCalls):
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
-    def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None) -> None:
+    def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
+              stepped: bool = False) -> None:
         """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
         when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
-        that directory, from poisoned outputs, and its manifest names `run`."""
+        that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: an engine step's end begins it."""
         if self.side is not None and self.side.stream is not None:     # the last pass's side lane is done before anything new
             self.torch_stream(self.stream()).wait_stream(self.side.stream)
         self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme))
-        self.cur = _Pass(Path(retain) if retain else None, run)
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()
 
@@ -696,28 +697,18 @@ class PearlCDeviceRun(GraphCalls):
         self.details["passes"].append(out)
         return out
 
-    def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None) -> dict[str, Any]:
+    def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
+                 step: bool = False) -> dict[str, Any]:
         """`end` the open pass and `begin` the next (with `begin`'s arguments), so a pass is never left ended: a call after
-        this lands in the next pass, and `finish` doesn't end this one twice.  Returns the ended pass's commitment.
-
-        When the open pass is one an engine step's end began (`end_step`) and holds no call yet, that step's pass is already
-        ended, so this ends nothing: it returns that step's commitment, and only begins the open pass again to apply
-        arguments that are given."""
-        if self.cur.stepped and not self.cur.matmuls:
+        this lands in the next pass, and `finish` doesn't end this one twice.  Returns the ended pass's commitment.  `step`:
+        an engine step's forward has returned (the PoUW option's hook, `pouw.install`).  Without it, a pass a step began that
+        has no call yet is that step's, already ended: nothing ends, the step's commitment is returned, and arguments apply."""
+        if not step and self.cur.stepped and not self.cur.matmuls:
             if retain or run or schedule:
-                self.begin(retain, run, schedule)
-                self.cur.stepped = True
+                self.begin(retain, run, schedule, stepped=True)
             return self.details["passes"][-1]
         out = self.end()
-        self.begin(retain, run, schedule)
-        return out
-
-    def end_step(self) -> dict[str, Any]:
-        """An engine step's forward has returned (the PoUW option's hook on the model runner, `pouw.install`): end its pass,
-        empty or not, and begin the next.  Returns the step's commitment."""
-        out = self.end()
-        self.begin()
-        self.cur.stepped = True
+        self.begin(retain, run, schedule, stepped=step)
         return out
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:

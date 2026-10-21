@@ -590,10 +590,11 @@ def model_runners() -> tuple[type, ...]:
 
 def _step_ends(run: PPD.PearlCDeviceRun):
     """The wrapper of a model runner's ``execute_model`` that ends ``run``'s pass once the step's forward has returned
-    (`PearlCDeviceRun.end_step`).  This is the step's own boundary under sync and async scheduling alike.  With async
-    scheduling, vLLM executes step s + 1 before it updates the scheduler from step s, so ``Scheduler.update_from_output``
-    would close one pass over two forwards.  The wrappers made from one call share a depth, so a call inside another (a
-    dummy run's, a subclass's runner wrapping its base's) ends the pass once.  A forward that raises leaves its pass open."""
+    (`PearlCDeviceRun.end_pass` with ``step``).  This is the step's own boundary under sync and async scheduling alike.
+    With async scheduling, vLLM executes step s + 1 before it updates the scheduler from step s, so
+    ``Scheduler.update_from_output`` would close one pass over two forwards.  The wrappers made from one call share a depth,
+    so a call inside another (a dummy run's, a subclass's runner wrapping its base's) ends the pass once.  A forward that
+    raises leaves its pass open."""
     depth = [0]
 
     def make(orig):
@@ -604,7 +605,7 @@ def _step_ends(run: PPD.PearlCDeviceRun):
             finally:
                 depth[0] -= 1
             if not depth[0]:
-                run.end_step()
+                run.end_pass(step=True)
             return out
         return execute_model
     return make
