@@ -65,9 +65,11 @@ theorem roundListed_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt} {rs : 
     simpa using List.find?_eq_none.1 hf k (List.mem_range.2 hk)
 
 /-- What `readX` read of V*'s list and the parts: the list builds at the verifier's own inner shape, the parts number
-as its statements, and each part's circuit names its statement's message-round ports (`portsNamed`). -/
+as its statements, each part's circuit names its statement's message-round ports (`portsNamed`), and the last part's
+circuit has RecCap's port `top` (`capPorted`). -/
 theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
-    ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true := by
+    ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true ∧
+      capPorted r.w.parts = true := by
   unfold readX at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
@@ -76,7 +78,8 @@ theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
   have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
   subst h'
   obtain ⟨h1, h2⟩ := not_or.1 hl
-  exact ⟨vs, toOption_eq_some hvs, not_not.1 h1, by simpa using h2⟩
+  obtain ⟨h2, h3⟩ := not_or.1 h2
+  exact ⟨vs, toOption_eq_some hvs, not_not.1 h1, by simpa using h2, by simpa using h3⟩
 
 /-- **A part's circuit has each port its statement registers under a `rec-c<k>`**, where `portsNamed` passes. -/
 theorem port_of_portsNamed {parts : List PartX} {vs : Array VStar.Stmt} (h : portsNamed parts vs = true) {s : ℕ}
@@ -104,7 +107,7 @@ at both reps' rows in some statement `s` (`roundsListed_of_statements`), and par
 (`readX_listed`), so part `s` holds rep `j / R`'s row of round `j` (`heldRows`). -/
 theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := by
   intro x st _ _ r j sr hr hsr _ hA
-  obtain ⟨vs, hvs, hlen, hpn⟩ := readX_listed hr
+  obtain ⟨vs, hvs, hlen, hpn, -⟩ := readX_listed hr
   unfold streamRound at hsr
   rw [hr, Option.bind_some] at hsr
   cases hrs : repSched r.shape with

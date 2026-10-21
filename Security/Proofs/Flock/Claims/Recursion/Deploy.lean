@@ -170,10 +170,18 @@ def portsNamed (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
     | some c => need.all fun q => c.ports.any (·.name == q.1)
     | none => need.isEmpty
 
+/-- **RecCap's part's circuit has its port `top`**: the last part's circuit, as the setup parses it (`partCircuit`), has
+a port named `top`, RecCap's one input (`VStar.capSub`). RecCap's session refuses a part without: `checkFile` holds the
+circuit's bytes to V*'s, and `checkParsed` its row ports to V*'s (`RecVStar.vstarRows`, `top` among them). -/
+def capPorted (parts : List PartX) : Bool :=
+  match parts[parts.length - 1]?.bind partCircuit with
+  | some c => c.ports.any (·.name == "top")
+  | none => false
+
 /-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
 and pass Flock's own setup and statement check with a draw (`innerOk`), the verifier's own inner shape reads
 (`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape, whose circuit names the
-statement's message-round ports (`portsNamed`). -/
+statement's message-round ports (`portsNamed`), the last part's RecCap's port `top` (`capPorted`). -/
 def readX (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
@@ -184,7 +192,7 @@ def readX (x : Claims.Msg) : Option XR := do
     innerOk w.inner
     pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
-  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false then none
+  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false then none
   pure ⟨w, ri, partition, shape, dims⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
