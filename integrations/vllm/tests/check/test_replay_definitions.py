@@ -104,6 +104,7 @@ def test_a_build_whose_descriptor_is_not_the_program_of_record_is_refused(tmp_pa
     assert f"is Program {dg[:16]}, not the Program of record {'ab' * 8}" in DF.refusal(str(d), "ab" * 64, specs)
     (d / "descriptor.json.gz").unlink()
     assert "has no descriptor.json.gz" in DF.refusal(str(d), dg, specs)
+    assert DF.refusal(str(d), dg, []) is None      # a Program the replay evaluates no row of
 
 
 def test_the_check_reads_bodies_not_ids(tmp_path, monkeypatch):

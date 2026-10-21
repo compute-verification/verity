@@ -43,10 +43,13 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 
 def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
-    ``digest``, or None."""
+    ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
     from verity.ml.circuits.codec import program_digest
     from verity_vllm.program.registry.catalog import load
 
+    specs = list(specs)
+    if not specs:
+        return None
     p = os.path.join(program_dir, "descriptor.json.gz")
     if not os.path.exists(p):
         return f"{program_dir} has no descriptor.json.gz: the Definitions its Build bound cannot be read"
