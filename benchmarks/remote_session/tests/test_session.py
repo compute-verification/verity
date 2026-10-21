@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, ledger, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -151,9 +151,12 @@ class TickingBackend(prover.CpuBackend):
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
-        then=None, transcript: Path | None = None, **kv):
+        then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
-    `paces` if given; `then(v)` once they end."""
+    `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
+    (`coins.APPENDS` when the plan names a session that appends, else none); `then(v)` once they end."""
+    if appends is None:
+        appends = coins.APPENDS if any(m not in ("honest", "skip") for m, _ in prover.parse_plan(plan)) else 0
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -172,7 +175,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
-                          transcript=transcript)
+                          transcript=transcript, challenger=challenger, appends=appends)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -361,6 +364,30 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert not dropping["accepted"] and not pd["accepted"]
     assert dropping["failure"]["failure"] == "receipt" and pd["failure_on_dropped"] is True
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
+
+
+def test_a_session_reserves_append_coins_only_when_it_appends_and_an_append_past_them_is_refused(monkeypatch):
+    """Each session's coins are W challenges, W openings coins and the verifier's `appends` append coins, with no
+    append family at `--appends 0` (the default): the honest session is accepted on those coins, and a kv session's
+    first append, which has no coin, is its `coin` rejection (on the books; `python`, since the Lean takes only the
+    append coins released)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    import challengers
+
+    layouts, local = [], challengers.Local.open
+
+    def opened(self, registration, k, windows, appends):
+        c = local(self, registration, k, windows, appends)
+        layouts.append(c.commitment.families)
+        return c
+
+    monkeypatch.setattr(challengers.Local, "open", opened)
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0,
+                                 verdict="python")
+    assert layouts == [((coins.CHALLENGE, 3), (coins.OPENINGS, 3))] * 2
+    assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
+    assert not kv["accepted"] and kv["failure"]["failure"] == "coin" and kv["appended"] == 0
+    assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
 
 def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appends(monkeypatch):
@@ -769,7 +796,6 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
 
     import challengers
     import replay
-    from verity.core.protocols.remote_bandwidth import coins
     from verity.core.protocols.sampled_proofs import challenger as C
 
     asked = []
@@ -1254,8 +1280,6 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
-        from verity.core.protocols.remote_bandwidth import coins
-
         s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
@@ -1314,8 +1338,6 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
     appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
     withdrawal outside the message's releases is the session's `release` rejection."""
-    from verity.core.protocols.remote_bandwidth import coins
-
     reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows,
                           lifetime=2, deferred=True)

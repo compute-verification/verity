@@ -71,7 +71,11 @@ auditor host's challenger through its gate, a session reserved in the audit's pe
 window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
-fail it is refused as `coins`, the reason in its `challenger`.
+fail it is refused as `coins`, the reason in its `challenger`. Each session reserves the coins it will use: W
+challenges, W openings coins and `--appends` append coins, none by default (`coins.families`), so the challenger's
+close of an honest session that ran to its end is complete, and a session whose prover appends (kv, serve) names its
+count. An append past them refuses the session: `coin` on the books, and under the Lean, whose session holds only
+the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
@@ -762,7 +766,7 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
-                 appends: int = coins.APPENDS) -> None:
+                 appends: int = 0) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
@@ -1445,8 +1449,11 @@ def main() -> int:
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
-    ap.add_argument("--appends", type=int, default=coins.APPENDS,
-                    help="each session's append coins, the most appends it takes (`coins.families`)")
+    ap.add_argument("--appends", type=int, default=0, metavar="A",
+                    help="each session's append coins, the most appends it takes (`coins.families`): none by default, "
+                         "so a session that appends nothing reserves no append family and its challenger releases "
+                         "every coin it reserved; a session whose prover appends (kv, serve) names its count, such as "
+                         f"{coins.APPENDS}")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1479,6 +1486,8 @@ def main() -> int:
         return 0
     if a.out is None:
         ap.error("--out is required")
+    if a.appends < 0:
+        ap.error("--appends is a count, 0 or more")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
