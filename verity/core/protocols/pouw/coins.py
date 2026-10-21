@@ -12,8 +12,10 @@ from its entropy (a served one's: the Lean verifier of record's, `verifier.coins
 The hm96 leaves keep every unopened coin statistically hidden (``hm96/PROTOCOL.md``); binding rests on SHA-512's collision
 resistance.  The challenger opens a coin only once the verifier has recorded what the coin must follow (`CoinOpening.after`:
 the weights' root for the salt coin, the transcript's commitment for the draw coin), and never twice, so a retry never
-redraws.  `coin_reason` is the verifier's check of an opening: the epoch, the label, the record it followed, and the opening
-against the published root.  A coin that doesn't open against the epoch's commitment is refused.
+redraws.  These are a seeded epoch's coins; a live window's salt coin follows its own open root instead
+(`salt.window_open_root`, `core_check.salt`), since the weights' root is the same in every window of a model.
+`coin_reason` is the verifier's check of an opening: the epoch, the label, the record it followed, and the opening against
+the published root.  A coin that doesn't open against the epoch's commitment is refused.
 
 The coins are live and the verifier designated: an outcome convinces the auditor, who trusts its own challenger, and no
 third party.  There is no public beacon and no Fiat–Shamir over a prover's commitment.

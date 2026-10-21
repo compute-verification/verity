@@ -43,16 +43,15 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
-  A window's own session off the node, ``--gate USER@HOST`` (or ``$POUW_CHALLENGER_GATE``), is reserved at infra's gate
-  when the window starts (`coins.reserve`) and opened (`coins.open_window`) on its root R =
-  `salt.window_open_root(weights' root, round-0 request table's root, session)` once both roots are committed, its
-  salt coin after R: that waits on #2950 (cursor/ca-salt-window-ea24, 8a26707261), so ``--gate`` is refused until it
-  lands.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``,
-  with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session opened before the run, for
-  development only: its salt coin opens after the registration root, so a gate session's challenger, which opens it only
-  after the session's root, refuses it.  The layout is the window's (`coins.layout`) and the manifest records the
-  session.  Without a session the challenger is `window.live_challenger` in this process, and the run is labelled
-  ``coins=in-process (not certified)``, as is every seeded run.
+  This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
+  H1 path, `integrations/vllm/verity_vllm/protocol_options/pouw_h1.py` (#3053), which holds the salt, round-0 request
+  table, open root R, session S and requests_root rules (#2950, PRF-132), so ``--gate USER@HOST`` (or
+  ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
+  ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
+  opened before the run, for development and timing only: its salt coin opens after the registration root, so a gate
+  session's challenger, which opens it only after the session's root, refuses it.  The layout is the window's
+  (`coins.layout`) and the manifest records the session.  Without a session the challenger is `window.live_challenger`
+  in this process, and the run is labelled ``coins=in-process (not certified)``, as is every seeded run.
 * **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
   admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
   a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
@@ -409,10 +408,10 @@ def run(a: argparse.Namespace) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     rec = Record(out)
     if a.gate:
-        raise ValueError(f"--gate {a.gate}: a window's session opens on its root, salt.window_open_root(the weights' "
-                         "root, the round-0 request table's root, the session), and its salt coin after it, which wait "
-                         "on #2950 (cursor/ca-salt-window-ea24, 8a26707261); until it lands a window's coins are "
-                         "in-process, or a development session's (--challenger, --session)")
+        raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
+                         "record is vllm's H1 path, integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053), "
+                         "which holds the salt, round-0 request table, R, S and requests_root rules (#2950, PRF-132); "
+                         "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
     a.coins = a.coins or ("live" if at is not None else "seeded")
     live = a.coins == "live"
@@ -1074,8 +1073,8 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"the challenger session's id (default ${CO.SESSION_ENV}, its secret ${CO.SECRET_ENV}); "
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=os.environ.get(CO.GATE_ENV), metavar="USER@HOST",
-                    help=f"live: the window's own session from infra's gate (default ${CO.GATE_ENV}); refused until "
-                         "#2950 gives the root it opens on (salt.window_open_root)")
+                    help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
+                         "integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

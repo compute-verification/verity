@@ -20,7 +20,6 @@ from verity.core.protocols.certifier import active, online
 from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.active import (
     DATA,
-    LAST,
     Bucketer,
     Events,
     Proxy,
@@ -46,11 +45,53 @@ from verity.core.protocols.sampled_proofs.service import Registration
 
 
 def test_frames_round_trip_and_padding_is_zero():
-    frame = active.encode_frame(LAST, 7, b"abc", 32)
-    assert len(frame) == 32 and active.decode_frame(frame) == (LAST, 7, b"abc")
+    frame = active.encode_frame(DATA, 7, b"abc", 32)
+    assert len(frame) == 32 and active.decode_frame(frame) == (DATA, 7, b"abc")
     assert active.decode_frame(bytes(32)) == (active.PAD, 0, b"")
     with pytest.raises(ValueError):
         active.encode_frame(DATA, 1, b"x" * 24, 32)
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 63, 64, 65, 128, 200])
+def test_a_token_is_events_of_one_length_each_its_template(n):
+    """Every event is `EVENT_BYTES` long whatever it carries, its frame is the egress template's (the same bytes
+    before and after the text), and a token longer than `TOKEN_BYTES` is cut over events that give it back."""
+    token = bytes(random.Random(n).randrange(256) for _ in range(n))
+    evs = active.events(token)
+    assert len(evs) == max(1, -(-n // active.TOKEN_BYTES))
+    assert b"".join(active.event_data(e) for e in evs) == token
+    p, s, prefix, suffix = active.event_placement(B)
+    for e in evs:
+        frame = active.encode_frame(DATA, active.CANONICAL_STREAM, e, B)
+        assert len(e) == active.EVENT_BYTES and frame[:p] == prefix and frame[s : s + len(suffix)] == suffix
+        assert frame[s + len(suffix) :] == bytes(B - s - len(suffix))
+    with pytest.raises(ValueError):
+        active.event(bytes(active.TOKEN_BYTES + 1))
+    assert active.event_data(evs[0][:-1]) is None and active.event_data(evs[0].replace(b"verity", b"Verity")) is None
+
+
+@pytest.mark.parametrize("length", [0, 1, 499, 500, 503, 1536])  # B = 512: a frame holds 503 bytes after its header
+def test_requests_end_by_their_length_on_one_header(length):
+    """A request's frames all carry one header, its last is zero-filled, and `Requests` gives back each request's
+    bytes, numbering them by their order on the link."""
+    reqs = [bytes([k + 1]) * length for k in range(3)]
+    frames = [active.request_frames(r, B) for r in reqs]
+    assert [len(f) // B for f in frames] == [active.request_frame_count(length, B)] * 3
+    p, s, prefix, _ = active.request_placement(B)
+    wire, split, got = b"".join(frames), active.Requests(), {}
+    for f in (wire[i : i + B] for i in range(0, len(wire), B)):
+        assert f[:p] == prefix and s == B
+        k, data, last = split.feed(active.decode_frame(f)[2])
+        got.setdefault(k, []).append((data, last))
+    assert {k: b"".join(d for d, _ in v) for k, v in got.items()} == {k + 1: r for k, r in enumerate(reqs)}
+    assert all([last for _, last in v] == [False] * (len(v) - 1) + [True] for v in got.values())
+
+
+def test_an_event_body_is_what_follows_its_id_line():
+    """The proxy frames what follows the `id:` line: the position and an HTTP head before it aren't recorded."""
+    body = active.event(b"tok")
+    assert active.event_body(HEAD + b"id: 7\n" + body) == body == active.event_body(b"id:3\n" + body)
+    assert active.event_position(HEAD + b"id: 7\n" + body) == 7
 
 
 def test_events_are_cut_by_content_not_by_reads():
@@ -310,10 +351,13 @@ SESSIONS = [("a", 1, 0, (1, 1, 2, 3)), ("b", 2, 0, (2, 2, 3)), ("c", 3, 4, (1, 2
             ("e", 5, 12, (1, 1)), ("f", 6, 13, (2, 4, 4))]
 
 
+def body(session: str, index: int) -> bytes:
+    """Frame `index` of `session`'s response: the canonical event of its token."""
+    return active.event(f"{session} t{index}".encode())
+
+
 def event(session: str, index: int, n: int, position: int) -> bytes:
-    choice = {"index": 0, "text": f" t{index}", "finish_reason": "length" if index == n - 1 else None}
-    data = json.dumps({"id": session, "object": "text_completion", "choices": [choice]}, separators=(",", ":"))
-    return (HEAD if index == 0 else b"") + f"id: {position}\ndata: {data}\n\n".encode()
+    return (HEAD if index == 0 else b"") + b"id: %d\n" % position + body(session, index)
 
 
 def request(session: str, n: int) -> bytes:
@@ -327,8 +371,8 @@ def program(sessions=SESSIONS):
     middle of its send bucket a, so the ingress certifier releases it at a + 1, its anchor."""
     rows = [(a + 1 + d, a + 1, name, k, stream, len(ds)) for name, stream, a, ds in sessions for k, d in enumerate(ds)]
     rows.sort()
-    frames = [LogicalFrame(active.encode_frame(DATA, stream, event(name, k, n, p), B), anchor, k)
-              for p, (_, anchor, name, k, stream, n) in enumerate(rows)]
+    frames = [LogicalFrame(active.encode_frame(DATA, active.CANONICAL_STREAM, body(name, k), B), anchor, k)
+              for _, anchor, name, k, _, _ in rows]
     ready = [r[0] for r in rows]
     syncs, _, misses = choose_syncs([(frames, ready)], SYNC_SET, EGRESS.buckets)
     assert misses == 0
@@ -336,7 +380,7 @@ def program(sessions=SESSIONS):
 
 
 FRAMES, READY, SYNCS, ROWS = program()
-STREAM = [f.payload[1:5] for f in FRAMES]
+STREAM = [row[4] for row in ROWS]
 
 
 class Server:
@@ -433,11 +477,9 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
         clock.advance(t * TAU + TAU / 2)
         for name, stream, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                chunks = [body[i : i + B - active.HEADER.size] for i in range(0, len(body), B - active.HEADER.size)]
-                writer.write(b"".join(active.encode_frame(LAST if j == len(chunks) - 1 else DATA, stream, c, B)
-                                      for j, c in enumerate(chunks)))
-                sent += len(chunks)
+                request_wire = active.request_frames(request(name, len(ds)), B)
+                writer.write(request_wire)
+                sent += len(request_wire) // B
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         for p, (_, _, name, k, _, n) in enumerate(rows):
             if write_buckets[p] == t:
@@ -1304,7 +1346,7 @@ def test_an_ingress_tick_read_early_fails_closed_and_the_run_goes_on():
             await until(lambda p, t=t: len(p.lateness["egress"]) > t and len(p.lateness["ingress"]) > t)
             if t == early - 1:
                 clock.advance(t * TAU + TAU / 2)
-                link.chunks.put_nowait(active.encode_frame(LAST, 1, request("a", 1), B))
+                link.chunks.put_nowait(active.request_frames(request("a", 1), B))
                 await until(lambda p: p.link_frames_read == 1)
         await running
         server.writers["a"].close()
@@ -1355,7 +1397,7 @@ def test_a_server_that_refuses_a_stream_fails_ingress_closed():
         clock = VirtualClock(0.0)
         proxy = Proxy(upstream, EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
                       sleep=clock.sleep)
-        frame = active.encode_frame(LAST, 1, request("a", 1), B)
+        frame = active.request_frames(request("a", 1), B)
         running = asyncio.create_task(proxy.run(EmptyReader([frame]), NullWriter()))
         for t in range(WINDOWS * EGRESS.buckets):
             clock.advance(t * TAU)
@@ -1447,11 +1489,11 @@ async def replay_receipts(sessions, pause_at: int | None = None):
             continue
         await server.until(proxy.requests_released)
         clock.advance(t * TAU + TAU / 2)
-        for name, stream, a, ds in sessions:
+        for name, _, a, ds in sessions:
             if a == t:
-                body = request(name, len(ds))
-                writer.write(active.encode_frame(LAST, stream, body, B))
-                sent += 1
+                wire = active.request_frames(request(name, len(ds)), B)
+                writer.write(wire)
+                sent += len(wire) // B
         await proxy.until(lambda p, n=sent: p.link_frames_read >= n)
         written += server.write_due(t)
         await proxy.until(lambda p, n=written: len(p.frames) >= n)

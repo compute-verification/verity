@@ -1400,9 +1400,9 @@ TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
 #: competing with the trains for six slots); 16 CPUs, 160 GB (suites.py gives a parallel suite a worker per 9 GB of the cgroup's
 #: memory, so 64 GB left one at most 7 workers of the 16), 120 min (the slowest touched run took 48 min in a slot), `--jobs 16`
 TOUCHED_ON, TOUCHED_CPUS, TOUCHED_MEM_GB, TOUCHED_MAX_MIN = "auto", 16, 160, 120
-#: the gate's class in the cluster queue: capture (600) ranks above every lane's agent-test (work, 500;
-#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' pre-mark runs (19 Oct, infra and top)
-TOUCHED_CLASS = "capture"
+#: the gate's class in the cluster queue: gate (650) ranks above capture (600) and every lane's agent-test (work, 500;
+#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' runs in a node's cpu-hold line (INF-147)
+TOUCHED_CLASS = "gate"
 #: what `research run` prints of a run it launched
 LAUNCHED_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 

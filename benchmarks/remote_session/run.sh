@@ -40,10 +40,10 @@
 # auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
-# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
-# are, under ROLE=both too: with `--challenger serve --challenger-key DIR` each session's coins come from the
-# challenger's own process, `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under
-# out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
+# words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
+# --challenger-key DIR` each session's coins come from the challenger's own process,
+# `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
@@ -120,8 +120,9 @@ if [ "$ROLE" = verifier ]; then
   # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
+  eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" ${VERIFIER_ARGS:-} \
+  "$PY" $RS/verifier.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -183,8 +184,9 @@ fi
   fi
   V=
   if [ "$ROLE" = both ]; then
+    eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" $RS/verifier.py $VERIFY_ARGS ${VERIFIER_ARGS:-} > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" $RS/verifier.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then

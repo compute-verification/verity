@@ -1,7 +1,8 @@
 """The Lean verifier's checks of V*'s statement family (`Flock.RecVStar`): V*'s statements at an inner session's shape, as
 the verifier restates them, are the ones `rec_vstage.stage` writes (each level's `rec-open/l<LANES>-h<H>` over `2 q`
 openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over two reps, `rec_shape.outer`'s, and
-last RecCap, `rec-cap/n<N>` over level 0's cap of `N` nodes), and a
+then RecCap at each later level `l`, `rec-cap/n<N>-l<l>` over both reps' tops, and last RecCap, `rec-cap/n<N>` over
+level 0's cap of `N` nodes), and a
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
@@ -72,26 +73,28 @@ def _v_star(m: int, k: int, c: int, holo: bool = False) -> list[list]:
     return out + [[f"rec-residuals/m{m}-k{k}-c{c}-p{j}", 2] for j in range(len(RR.parts(RR.spec(sh))))]
 
 
-def _cap(m: int, k: int, c: int) -> list:
-    """RecCap at the shape, V*'s last statement: the ``2^cap₀`` nodes of level 0's cap (`rec_cap.unit_name`)."""
+def _caps(m: int, k: int, c: int) -> list[list]:
+    """RecCap at the shape, V*'s last statements: at each later level ``l`` both reps' ``2 · 2^cap_l`` nodes of its tops, then
+    the ``2^cap₀`` nodes of level 0's cap (`rec_cap.unit_name`)."""
     from verity_flock import rec_cap as RC
 
-    n = 1 << A.Shape(m, k, c).sched.levels[0].cap
-    return [RC.unit_name(n), n]
+    lv = A.Shape(m, k, c).sched.levels
+    later = [[RC.unit_name(2 << lv[l].cap, l), 2 << lv[l].cap] for l in range(1, len(lv))]
+    return later + [[RC.unit_name(1 << lv[0].cap), 1 << lv[0].cap]]
 
 
 def _listed(m: int, k: int, c: int, holo: bool = False) -> list[list]:
-    """The verifier's whole list at the shape: `_v_star`'s, then RecCap."""
-    return _v_star(m, k, c, holo) + [_cap(m, k, c)]
+    """The verifier's whole list at the shape: `_v_star`'s, then the RecCaps."""
+    return _v_star(m, k, c, holo) + _caps(m, k, c)
 
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
-    """The verifier's statements at the shape are V*'s, in order, then RecCap over level 0's 128 nodes, and each passes the
-    check under its own name and count."""
+    """The verifier's statements at the shape are V*'s, in order, then RecCap over each later level's tops and over level 0's
+    128 nodes, and each passes the check under its own name and count."""
     inner = _inner(tmp_path / "inner.json", *shape)
     rc, line = _statements(inner)
-    assert rc == 0 and line["statements"] == _listed(*shape) and _cap(*shape) == ["rec-cap/n128", 128], line
+    assert rc == 0 and line["statements"] == _listed(*shape) and _caps(*shape)[-1] == ["rec-cap/n128", 128], line
     for name, n in (line["statements"][0], line["statements"][-2], line["statements"][-1]):
         rc, line = _statements(inner, "--unit", name, "--instances", str(n))
         assert rc == 0 and line["checked"] == [name, n], line
@@ -479,7 +482,7 @@ def test_a_private_inner_sessions_part_is_v_stars_holo_part_byte_for_byte(tmp_pa
     ss = _v_star(m, k, c, holo=True)
     assert ss[-1] == [name, 2] and len(ss) == len(_v_star(m, k, c))
     rc, line = _statements(hidden)
-    assert rc == 0 and line["statements"] == ss + [_cap(m, k, c)], line
+    assert rc == 0 and line["statements"] == ss + _caps(m, k, c), line
     flags = ["--instances", "2", "--rec-part", str(len(ss) - 1), "--rec-bindings", str(own)]
     rc, line = _statements(hidden, "--circuit", str(tmp_path / "holo" / "circuit.txt"), *flags)
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
@@ -505,13 +508,13 @@ R_SHAPE = (23, 2)
 def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
     """Candidate 3's V* list, as `rec_vstage.stage --sparse` names its units: V*'s, then RecSparse over the two reps, R's levels
     over its one stream's openings (`rec_vstage.stage_stacked`), the parts of R's opening (`rec_residuals.stage_opening`), and
-    RecCap last."""
+    the RecCaps last."""
     from verity_flock import rec_sparse as SP
 
     sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
     return (_v_star(m, k, c) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
             + [[O.stacked_name(1 << lv.lanes, lv.d - lv.cap), lv.q] for lv in sh.sched.levels]
-            + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))] + [_cap(m, k, c)])
+            + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))] + _caps(m, k, c))
 
 
 def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(tmp_path):
@@ -526,7 +529,8 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
     want = _c3(*C3, SPARSE, R_SHAPE)
     assert rc == 0 and line["statements"] == want, line
     assert [s[0] for s in want[6:]] == ["rec-sparse/n18-e13-s6-t0", "rec-open-stacked/l64-h4", "rec-open-stacked/l16-h3",
-                                        "rec-open-stacked/l16-h1", "rec-opening/m23-c2-p0", "rec-cap/n128"], want
+                                        "rec-open-stacked/l16-h1", "rec-opening/m23-c2-p0", "rec-cap/n128-l1",
+                                        "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"], want
     rc, line = _statements(inner, "--unit", "rec-open-stacked/l16-h1", "--instances", "71")
     assert rc == 0 and line["checked"] == ["rec-open-stacked/l16-h1", 71], line
     cases = [

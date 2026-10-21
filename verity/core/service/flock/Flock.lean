@@ -72,6 +72,7 @@ import Flock.Firewall.FinishProver
 import Flock.Firewall.Frame
 import Flock.Firewall.Frames
 import Flock.Firewall.Link
+import Flock.Firewall.Level0
 import Flock.Firewall.Hello
 import Flock.Firewall.Session
 import Flock.Witness

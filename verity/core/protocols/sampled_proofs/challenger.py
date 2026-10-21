@@ -25,7 +25,8 @@ challenger is auditor-trusted, the auditor's device on a machine the prover does
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
 coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
-coin, and logs both on its clock.
+coin, and logs both on its clock.  `record_many` does that for several families' next coins at once, asked in one
+`open_many` (one round trip to a remote challenger).
 
 **The challenger's record** is the verifier's trusted coin commitment.  Before any coin opens, the challenger signs its
 commitment with its LMS key over SHA-512 (`LiveChallenger.sign_record`) and writes the record on its own host
@@ -92,6 +93,12 @@ window it opens no session for, so one session's coins pass for one window only.
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
+
+**A window counts toward its period** only when it proves the circuit the period's open committed (`credited_session`):
+the period's `circuit` is the declared circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
+circuit the window's sessions prove, its canonical JSON without annotations (the bytes `program_digest` hashes), so the
+check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
+no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
@@ -195,6 +202,8 @@ LEDGER_FORM = ("an auditor's ledger line is an entry {body, kind, prev, schema, 
 END_FORM = ("a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how "
             "many hellos it refused (refused_hellos) and seals " + ", ".join(SEALED_FILES))
 HEADS_FORM = "the auditor's published heads are a list of ledgers, each its lines"
+DESCRIPTOR_FORM = ("the descriptor of the circuit a window's sessions prove is bytes: its canonical JSON without "
+                   "annotations, the bytes program_digest hashes")
 HELLOS_FORM = "the challenger's refused hellos are a list of their lines"
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
 
@@ -1080,6 +1089,37 @@ def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, session: An
     return session_named(audited_session(ledger, window, key, verify), key, session, verify)
 
 
+def circuit_reason(period: str | None, circuit: Any, descriptor: Any) -> str | None:
+    """Why a window doesn't count toward `period` (None: no period holds it), whose open committed `circuit`, when
+    `descriptor` is the descriptor of the circuit the window's sessions prove (`DESCRIPTOR_FORM`); None when its SHA-512
+    is that circuit.  One hash over the descriptor's bytes, never a walk over the circuit it unrolls to."""
+    if type(descriptor) is not bytes:
+        return DESCRIPTOR_FORM
+    if period is None:
+        return ("the auditor's ledger holds the window's session in no period, so it counts toward none: open the lane's "
+                "period (period-open --cap N --circuit SHA512) before reserving the window")
+    if not _digest_hex(circuit):
+        return (f"period {period} commits no circuit, so no window counts toward it: open a period whose --circuit is "
+                "the declared circuit's SHA-512")
+    got = hashlib.sha512(descriptor).hexdigest()
+    if got != circuit:
+        return (f"the circuit the window's sessions prove (descriptor SHA-512 {got[:16]}...) is not {circuit[:16]}..., "
+                f"the one period {period} committed: prove the period's declared circuit, or open a period whose "
+                "--circuit is this descriptor's SHA-512")
+    return None
+
+
+def credited_session(ledger: Any, window: Any, key: ChallengerKey, descriptor: Any, verify: Verify) -> Audited:
+    """`audited_session`, counted toward its period: the window's session as the auditor's ledger names it, when
+    `descriptor`, the descriptor of the circuit the window's sessions prove, hashes to the circuit its period committed
+    (`circuit_reason`).  Raises `CoinError` naming why, so a window proving another circuit counts toward no period."""
+    audited = audited_session(ledger, window, key, verify)
+    why = circuit_reason(audited.period, audited.circuit, descriptor)
+    if why is not None:
+        raise CoinError(why)
+    return audited
+
+
 class LiveChallenger:
     """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
@@ -1128,6 +1168,11 @@ class LiveChallenger:
         coin, salt = self._coins[position]
         return LiveOpening(self.commitment.epoch, label, index, bytes(after), coin, salt, self._tree.open(position).path)
 
+    def open_many(self, requests: Sequence[tuple[str, int, bytes]]) -> list[LiveOpening]:
+        """`open` of each (label, index, after) of `requests`, in order: the in-process twin of
+        `remote.RemoteChallenger.open_many`, so a caller asks either challenger for several coins at once."""
+        return [self.open(label, index, after) for label, index, after in requests]
+
 
 class LiveRecord:
     """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
@@ -1150,33 +1195,60 @@ class LiveRecord:
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:
+        request = self._root(root)
+        opening = self.challenger.open(*request)
+        self._release(request[1], opening)
+        return opening
+
+    def _root(self, root: bytes) -> tuple[str, int, bytes]:
         if len(self.roots) == self.challenger.commitment.family(self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
         i = len(self.roots)
         self.roots.append(bytes(root))
         self._log.append({"event": "root", "label": self.label, "index": i, "root": bytes(root).hex(),
                           "received_at": self._clock()})
-        opening = self.challenger.open(self.label, i, root)
+        return self.label, i, bytes(root)
+
+    def _release(self, i: int, opening: LiveOpening) -> None:
         self.openings.append(opening)
         self._log.append({"event": "release", "label": self.label, "index": i, "after": opening.after.hex(),
                           "released_at": self._clock()})
-        return opening
 
     def reason(self) -> str | None:
         return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
 
 
+def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
+    """`LiveRecord.record` of each (record, root) of `asks`, the records one challenger's, their coins asked for in one
+    `open_many` (one round trip to a remote challenger): every root recorded in turn, then the coins, then each release.
+    A batch past a family's last coin records nothing; as with `record`, a coin the challenger doesn't release leaves
+    its root recorded without it, and nothing is returned."""
+    if not asks:
+        return []
+    challenger = asks[0][0].challenger
+    if any(r.challenger is not challenger for r, _ in asks):
+        raise CoinError("a batch's coins are one challenger's")
+    for r, _ in asks:
+        if len(r.roots) + sum(q is r for q, _ in asks) > challenger.commitment.family(r.label):
+            raise CoinError(f"every {r.label} coin of the epoch is open")
+    requests = [r._root(root) for r, root in asks]
+    openings = challenger.open_many(requests)
+    for (r, _), (_, i, _), opening in zip(asks, requests, openings):
+        r._release(i, opening)
+    return openings
+
+
 __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES",
            "COMMITMENT_FORM", "COMMITMENT_TAG", "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError",
-           "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
+           "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM", "RECORD_ROLE",
            "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
-           "cap_of", "circuit_of", "close_message", "extends", "key_of_record", "lane_of", "later", "layout_problem",
+           "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
-           "order_reason", "record_message", "record_reason", "released_roots_of", "root_of", "session_named",
-           "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
+           "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
+           "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "write_record"]

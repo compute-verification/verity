@@ -180,9 +180,11 @@ def _verify(level: Path, public: Path, registered: Path, shape: Path, inner: str
 
 
 def _acc_rows(dst: Path, level: Path) -> Path:
-    """Shared rows (`--rec-rows`) whose `acc0` is staged level `level`'s `rec-acc` registration (its `acc` port)."""
-    acc = json.loads((level / "registered.json").read_text())["ports"]["acc"]
-    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": acc}}))
+    """Shared rows (`--rec-rows`) whose `acc0` is staged level `level`'s `rec-acc` registration (its `acc` port), with its
+    `out` port's registration of the table's tops `rec-top-L<l>`, which `checkShared` requires registered."""
+    ports = json.loads((level / "registered.json").read_text())["ports"]
+    shared = {"acc0": ports["acc"], **({ports["out"]["value"]: ports["out"]} if "out" in ports else {})}
+    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": shared}))
     return dst
 
 
@@ -364,14 +366,16 @@ def level_major(built, once) -> Path:
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
-    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`)."""
-    dst.write_text(json.dumps(S.shared_rows(parts)))
+    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`), with the
+    recorded level 3's registration of its tops `rec-top-L3`."""
+    dst.write_text(json.dumps(S.shared_rows(parts, (), [SET / "L3"])))
     return dst
 
 
 @pytest.fixture(scope="module")
 def rows(algebra, tmp_path_factory) -> Path:
-    """The verifier's shared rows of the honest algebra: its message rounds `m<k>` and the running sums' `acc0`, `acc1`."""
+    """The verifier's shared rows of the honest algebra: its message rounds `m<k>` and the running sums' `acc0`, `acc1`, with
+    level 3's tops `rec-top-L3`."""
     return _rec_rows(tmp_path_factory.mktemp("rec-rows") / "rows.json", sorted(algebra.iterdir()))
 
 
@@ -424,7 +428,7 @@ CAP = "rec-cap/n128"
 def cap(built, once) -> Path:
     """RecCap staged over the honest inner session (`rec_vstage.stage_cap`): instance `i` reads node `i` of `rec-top-L0`."""
     def make(d):
-        res = S.stage_cap(SET / "inner-honest", d / "cap")
+        res = S.stage_cap(SET / "inner-honest", d / "cap", levels=[0])["L0"]
         assert res["instances"] == 128 and res["unit_agrees"] == [True] * 128, res
 
     return once("rec-coins-cap", make, _KEY) / "cap"
@@ -456,8 +460,8 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
         honest, bare, off, forged = [ex.submit(run, *a) for a in (
             (rows,), (None,), (other,), (rows, "--rec-inner-transcript", str(tmp_path / "transcript.json")))]
     assert honest.result() == S2_R7, honest.result()
-    assert bare.result() == (f"setup: {CAP}: its port top reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the "
-                             "verifier's shared rows (--rec-rows F), which register it"), bare.result()
+    assert bare.result() == (f"setup: {CAP}: its port top reads the table's tops rec-top-L0, which its level's RecCap holds; "
+                             "pass the verifier's shared rows (--rec-rows F), which register it"), bare.result()
     assert off.result() == (f"setup: {CAP}: its port top reads rec-top-L0, which the verifier's shared rows (--rec-rows) "
                             f"register as rec-top-L0: root {top['root']}, against {flipped}"), off.result()
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(CAP)}: port top's table row \d+ is not node 5 of circuit's root_B, "
@@ -654,7 +658,8 @@ def test_a_value_the_shared_rows_register_is_read_at_that_registration(forged, s
     coef = ports["coef"]
     other = {**coef, "root": coef["root"][:-1] + ("1" if coef["root"][-1] == "0" else "0")}
     rows = tmp_path / "rows.json"
-    rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": ports["acc"], "x-coef": other}}))
+    rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {
+        "acc0": ports["acc"], ports["out"]["value"]: ports["out"], "x-coef": other}}))
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its port coef reads {coef['value']}, which the verifier's shared rows (--rec-rows) "
                         f"register as x-coef: root {coef['root']}, against {other['root']}"), v["why"]

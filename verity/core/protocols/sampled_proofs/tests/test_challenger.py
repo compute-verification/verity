@@ -136,6 +136,31 @@ def test_the_record_logs_each_release_after_the_root_it_follows():
     assert [e["event"] for e in early.log] == ["root"] and early.reason() == "commit coin 0 was never opened"
 
 
+def test_record_many_records_every_root_then_asks_for_their_coins_at_once():
+    """`record_many` over two families of one challenger: each root recorded in turn, then the coins in one `open_many`
+    (the in-process challenger's opens them in order, as one at a time would), then each release; the same openings as
+    `record`'s; and a batch of two challengers' records, or past a family's last coin, records and asks for nothing."""
+    ticks = iter(range(100))
+    clock = lambda: float(next(ticks))  # noqa: E731
+    ch = C.LiveChallenger("verity/test/coins/v1", 3, [("other", 2), (LABEL, 2)], entropy("m"))
+    one = C.LiveChallenger("verity/test/coins/v1", 3, [("other", 2), (LABEL, 2)], entropy("m"))
+    a, b = C.LiveRecord(ch, "other", clock), C.LiveRecord(ch, LABEL, clock)
+    root = bytes([5]) * 64
+    got = C.record_many([(a, root), (b, root)])
+    assert got == [C.LiveRecord(one, "other").record(root), C.LiveRecord(one, LABEL).record(root)]
+    assert ch.open_many([("other", 1, root)]) == one.open_many([("other", 1, root)])
+    assert (a.roots, a.openings, b.roots, b.openings) == ([root], got[:1], [root], got[1:])
+    assert [(e["event"], e.get("received_at", e.get("released_at"))) for e in a.log + b.log] == \
+        [("root", 0.), ("release", 2.), ("root", 1.), ("release", 3.)]
+    assert a.reason() is None and b.reason() is None
+    other = C.LiveRecord(one, LABEL)
+    with pytest.raises(C.CoinError, match="one challenger's"):
+        C.record_many([(b, root), (other, root)])
+    with pytest.raises(C.CoinError, match="every commit coin of the epoch is open"):
+        C.record_many([(b, root), (b, root)])
+    assert (b.roots, b.openings, len(b.log)) == ([root], got[1:], 2) and C.record_many([]) == []
+
+
 def test_one_coin_and_a_family_of_many_open_alike():
     """A tree of one coin (no path) and families past a power of two (padded trees) open as the others do."""
     for families in ([(LABEL, 1)], [("other", 5), (LABEL, 3)], [(LABEL, 17)]):

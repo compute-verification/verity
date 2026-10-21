@@ -8,7 +8,7 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT`, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -608,6 +608,39 @@ def evict_lru(store: Path, kept: int) -> int:
             if home.is_dir():
                 shutil.rmtree(home, ignore_errors=True)
                 n += 1
+    return n
+
+
+#: the fast path's (`lean_changed.py --records`) trees a node keeps, its most recently used: each is a checkout with its own
+#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine)
+RECORDS_KEPT = 3
+
+
+def prune_records(store: Path, kept: int | None = None) -> int:
+    """Remove all but the ``kept`` (`RECORDS_KEPT`) trees of ``store`` (`lean-records/`) last used, by the newest of their
+    `.who`, `links.json` and `.lock`, each only when its `.lock` is free: a run holding or waiting on it keeps it. A link
+    to a tree elsewhere goes with its target. The number removed."""
+    kept = RECORDS_KEPT if kept is None else kept
+    used = []
+    for tree in store.iterdir() if store.is_dir() else ():
+        try:
+            if tree.is_dir():
+                stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
+                used.append((max(stamps, default=tree.stat().st_mtime), tree))
+        except OSError:
+            pass
+    n = 0
+    for _, tree in sorted(used, reverse=True)[kept:]:
+        try:
+            with open(tree / ".lock", "a") as f:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                target = tree.resolve()
+                shutil.rmtree(target, ignore_errors=True)
+                if tree.is_symlink():
+                    tree.unlink()
+                n += 1
+        except (BlockingIOError, OSError):
+            continue
     return n
 
 
@@ -1214,7 +1247,7 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"),
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
                "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0

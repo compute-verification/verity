@@ -18,8 +18,9 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
 * `cap`: the Merkle nodes `SHA-512(l ‖ r)` `d − cap` levels up from the leaves (`layer`), and `root` their concatenation,
   at level 0 of the table's `--zk` schedule (`Zk.schedule m`, which also fixes `t_pad`).
 
-`flock-firewall link` serves it to the firewall (`cmd`). Rust's `commit_zk` is the speed reference: the firewall holds its
-own root to this one and sends this one.
+The firewall's code reaches it through the session loop's `Flock.Firewall.Level0`, which commits the level 0 it draws,
+and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, on `parse`'s bytes). The root that
+leaves is one of these; Rust's `commit_zk`, whose output the firewall's shadow opening reads, must have the same root.
 -/
 import Flock.Firewall.Coins
 import Flock.Ligerito
@@ -198,32 +199,5 @@ def parse (m : Nat) (b : ByteArray) : V In := do
   let oS := oP + 16 * nL * tPad
   return { m, g, extra := fun e c => (ex[e]!)[c]!, lanePad := fun l k => (pads[l]!)[k]!
            salt := fun q => if q < nQ then b.extract (oS + 192 * q) (oS + 192 * (q + 1)) else ByteArray.empty }
-
-/-- `flock-firewall link`: the level-0 recheck, served on stdin and stdout. `table M LEN` followed by the `LEN` bytes of
-a table (`parse`) is answered `ok N` followed by the `N` bytes of its level-0 root (`root`). A malformed request is
-answered `err WHY` and ends the session. -/
-def cmd (_ : List String) : IO UInt32 := do
-  let stdin ← IO.getStdin
-  let stdout ← IO.getStdout
-  let refuse := fun (why : String) => do
-    stdout.putStrLn s!"err {why.replace "\n" " "}"
-    stdout.flush
-    return (1 : UInt32)
-  repeat
-    let line := (← stdin.getLine).replace "\n" ""
-    if line.isEmpty then break
-    match line.splitOn " " with
-    | ["table", m, len] =>
-      let (some m, some len) := (m.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let b ← Coins.readExact "link" stdin len
-      match parse m b with
-      | .ok i =>
-        let r := root i
-        stdout.putStrLn s!"ok {r.size}"
-        stdout.write r
-        stdout.flush
-      | .error e => return (← refuse e)
-    | _ => return (← refuse s!"a request `{line}`")
-  return 0
 
 end Flock.Firewall.Link
