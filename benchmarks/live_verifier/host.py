@@ -16,7 +16,10 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   `vy-admin` runs the same gate (`sudo vy-verifier-gate VERB ...`, `by` vy-admin).
 - **What runs.** `/opt/vy-verifier/current` -> `/opt/vy-verifier/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`), whose Lean executables pin.sh built; the commit is the directory's name, and every run's request names it
-  (`pinned`): a run whose pin moved before its unit started doesn't run. State is `auditor`'s, in `/var/lib/vy-verifier`
+  (`pinned`): a run whose pin moved before its unit started doesn't run. pin.sh appends each pin (commit, UTC time) to
+  `/opt/vy-verifier/pins.jsonl`, root's and append-only (`record_pin`, `chattr +a`), before it moves `current`; a run
+  starts only from the log's last pin, and its request names that line (`pin_log`), so every session can be held to a
+  pin infra made (RT4-INT-40). State is `auditor`'s, in `/var/lib/vy-verifier`
   (0700): `runs/<run>/`, the verifier's registry (`registry.json`, kept across runs, `verifier.py --registry`) and the key
   that reaches the challenger's gate (`.ssh/vy-challenger-gate`, which infra registers there for the lane in
   `verifier.json`).
@@ -104,6 +107,7 @@ class Host:
 
     root: Path = Path("/var/lib/vy-verifier")
     config: Path = Path("/etc/vy/verifier.json")
+    pins: Path = Path("/opt/vy-verifier/pins.jsonl")
 
     @property
     def runs(self) -> Path:
@@ -155,6 +159,45 @@ def read_json(path: Path) -> Any:
         return json.loads(path.read_text())
     except (OSError, ValueError):
         return None
+
+
+def append_only(path: Path) -> None:
+    subprocess.run(["chattr", "+a", str(path)], check=True)
+
+
+def record_pin(log: Path, commit: str, now: datetime, *, seal: Callable[[Path], None] = append_only) -> dict:
+    """pin.sh's last step before it moves `current`, as root: the pin's line (commit, UTC time) appended to `log`, which
+    is root's, 0644, and append-only (`chattr +a`, which only root can lift, as the challenger's ledger) before any line
+    is written. A failure here fails the pin, so `current` never names a tree the log doesn't."""
+    if not PINNED.fullmatch(commit):
+        raise Refused(f"pinned {commit!r}: a commit, 40 lowercase hex digits")
+    if not log.exists():
+        log.touch()
+        log.chmod(0o644)
+    seal(log)
+    line = {"commit": commit, "utc": utc(now)}
+    with open(log, "a") as f:
+        f.write(json.dumps(line, sort_keys=True) + "\n")
+    return line
+
+
+def pin_of(host: Host, pinned: str) -> dict:
+    """The pin log's line a run starts under: its last, which must name this tree's commit."""
+    try:
+        lines = host.pins.read_text().splitlines()
+    except OSError:
+        lines = []
+    if not lines:
+        raise Refused(f"{host.pins} records no pin: pin.sh logs every pin before it moves current, so no run starts "
+                      "from an unlogged tree")
+    try:
+        last = json.loads(lines[-1])
+    except ValueError:
+        raise Refused(f"{host.pins}'s last line isn't a pin: no run starts until pin.sh logs one") from None
+    if last.get("commit") != pinned:
+        raise Refused(f"the pin log's last pin is {last.get('commit')}, not this tree's {pinned}: a run starts only "
+                      "from the tree pin.sh last pinned")
+    return {"line": len(lines) - 1, "utc": last.get("utc")}
 
 
 # --- the gate (root) ----------------------------------------------------------------------------------------------------------
@@ -289,17 +332,18 @@ def gate_run(argv: list[str], host: Host, *, by: str, now: datetime, token: str,
     with locked(host.root / "gate.lock"):
         if units := busy():
             raise Refused(f"{', '.join(units)} runs: one unit at a time (stop RUN ends a run)")
+        logged = pin_of(host, pinned)
         run = f"v{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
         d = host.runs / run
         d.mkdir(mode=0o755, parents=False)
-        req = {"run": run, "by": by, "requested_utc": utc(now), "pinned": pinned, **req}
+        req = {"run": run, "by": by, "requested_utc": utc(now), "pinned": pinned, "pin_log": logged, **req}
         req["argv"] = verifier_argv(host, run, req, settings)
         (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
         own(d)
         own(d / "request.json")
         start(UNIT.format(run))
-    return {"run": run, "by": by, "pinned": pinned, "peer": req["peer"], "listen": f"127.0.0.1:{req['port']}",
-            "argv": req["argv"]}
+    return {"run": run, "by": by, "pinned": pinned, "pin_log": logged, "peer": req["peer"],
+            "listen": f"127.0.0.1:{req['port']}", "argv": req["argv"]}
 
 
 def log_tail(path: Path, n: int = LOG_LINES) -> list[str]:
@@ -310,12 +354,15 @@ def log_tail(path: Path, n: int = LOG_LINES) -> list[str]:
 
 
 def gate_status(rest: list[str], host: Host, busy: Callable[[], list[str]], pinned: str | None) -> dict:
-    """The host (no RUN): its pin, its active units and its runs. A run: its request, whether its verifier listens
-    (the prover connects only after), its end, its replay's, and its log's last lines."""
+    """The host (no RUN): its pin, the pin log's last lines, its active units and its runs. A run: its request, whether
+    its verifier listens (the prover connects only after), its end, its replay's, and its log's last lines."""
     units = busy()
     if not rest:
         runs = sorted(p.name for p in host.runs.iterdir() if RUN.fullmatch(p.name)) if host.runs.is_dir() else []
-        return {"pinned": pinned, "busy": units,
+        pins = log_tail(host.pins, 10 ** 6)
+        first = max(len(pins) - LOG_LINES, 0)
+        return {"pinned": pinned, "pins": [{"line": first + i, **json.loads(ln)} for i, ln in enumerate(pins[first:])],
+                "busy": units,
                 "runs": [{"run": r, "by": (read_json(host.runs / r / "request.json") or {}).get("by"),
                           "rc": (read_json(host.runs / r / "end.json") or {}).get("rc"),
                           "active": UNIT.format(r) in units} for r in runs[-50:]]}
@@ -668,7 +715,11 @@ def main(argv: list[str] | None = None) -> int:
         if argv[:1] == ["close"] and len(argv) == 2:
             print(json.dumps(close(host, argv[1])))
             return 0
-        print("usage: host.py gate VERB ... | run RUN | replay RUN | publish RUN | close NODE_HEX", file=sys.stderr)
+        if argv[:1] == ["pinned"] and len(argv) == 2:
+            print(json.dumps(record_pin(host.pins, argv[1], clock())))
+            return 0
+        print("usage: host.py gate VERB ... | run RUN | replay RUN | publish RUN | close NODE_HEX | pinned COMMIT",
+              file=sys.stderr)
         return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

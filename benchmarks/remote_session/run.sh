@@ -144,7 +144,7 @@ if [ "$ROLE" = prover ] && [ -n "${VERIFIER_SSH:-}" ]; then
   # The verifier host's run at PORT: this ssh -L listens here at once, so the lease waits for the host's tunnel account
   # to say the run's verifier listens (`listening PORT`).
   read -ra TO <<< "$VERIFIER_SSH"
-  ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+  ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
     -o ServerAliveInterval=15 -L "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   trap 'kill $T 2> /dev/null; rm -rf "$B"' EXIT
   for ((k = 0; k < ${TUNNEL_WAIT_S:-7200} / 5; k++)); do

@@ -53,7 +53,9 @@ def svc(tmp_path) -> H.Host:
     settings["challenger"]["ssh"] = SSH
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
-    return H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json")
+    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl")
+    H.record_pin(host.pins, PIN, T0, seal=lambda p: None)
+    return host
 
 
 class Units:
@@ -109,8 +111,9 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     assert units.started == [f"vy-verifier@{RUN}.service"]
     req = json.loads((svc.runs / RUN / "request.json").read_text())
     assert {k: v for k, v in req.items() if k != "argv"} == {
-        "run": RUN, "by": LANE, "requested_utc": "2026-10-21T13:00:00Z", "pinned": PIN, "peer": "vy-nebius-2",
-        "port": 7951, "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean"}
+        "run": RUN, "by": LANE, "requested_utc": "2026-10-21T13:00:00Z", "pinned": PIN,
+        "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "vy-nebius-2", "port": 7951,
+        "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean"}
     argv = req["argv"]
     assert argv == doc["argv"]
     assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
@@ -265,6 +268,7 @@ def test_a_read_only_key_starts_replays_stops_and_closes_nothing_but_reads(svc, 
     assert units.started == [f"vy-verifier@{RUN}.service"] and units.stopped == units.closed == []
     rc, out = call(svc, ["status"], units, key="-")
     assert rc == 0 and json.loads(out) == {"pinned": PIN, "busy": [f"vy-verifier@{RUN}.service"],
+                                           "pins": [{"line": 0, "commit": PIN, "utc": "2026-10-21T13:00:00Z"}],
                                            "runs": [{"run": RUN, "by": LANE, "rc": None, "active": True}]}
 
 
@@ -314,6 +318,64 @@ def test_a_run_whose_pin_moved_before_its_unit_started_does_not_run(svc):
     assert not (svc.runs / RUN / "out" / "verifier.log").exists() and end["transcripts"] == []
     with pytest.raises(H.Refused, match="has ended"):
         H.execute(svc, RUN, pinned=PIN, now=lambda: T1)
+
+
+def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_last(svc, tmp_path):
+    """RT4-INT-40: pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
+    sealed append-only before its first line, and a run starts only from the log's last pin and names that line."""
+    log, sealed = tmp_path / "log" / "pins.jsonl", []
+    log.parent.mkdir()
+    seal = lambda p: sealed.append(p.read_text())  # noqa: E731
+    assert H.record_pin(log, PIN, T0, seal=seal) == {"commit": PIN, "utc": "2026-10-21T13:00:00Z"}
+    assert sealed == [""] and log.stat().st_mode & 0o777 == 0o644
+    H.record_pin(log, "d" * 40, T1, seal=seal)
+    assert [json.loads(ln) for ln in log.read_text().splitlines()] == [
+        {"commit": PIN, "utc": "2026-10-21T13:00:00Z"}, {"commit": "d" * 40, "utc": "2026-10-21T13:30:00Z"}]
+    assert len(sealed) == 2
+    for bad in ("C" * 40, "c" * 39, "c" * 41, "", "../x"):
+        with pytest.raises(H.Refused, match="40 lowercase hex digits"):
+            H.record_pin(log, bad, T1, seal=seal)
+    assert len(log.read_text().splitlines()) == 2 and len(sealed) == 2
+
+    units = Units()
+    H.record_pin(svc.pins, "d" * 40, T1, seal=lambda p: None)
+    assert refused(call(svc, PACED, units)) == (
+        f"the pin log's last pin is {'d' * 40}, not this tree's {PIN}: a run starts only from the tree pin.sh last "
+        "pinned")
+    unlogged = H.Host(root=svc.root, config=svc.config, pins=tmp_path / "absent.jsonl")
+    assert "records no pin" in refused(call(unlogged, PACED, units))
+    assert units.started == [] and list(svc.runs.iterdir()) == []
+    H.record_pin(svc.pins, PIN, T1, seal=lambda p: None)
+    rc, out = call(svc, PACED, units, now=T1)
+    assert rc == 0 and json.loads(out)["pin_log"] == {"line": 2, "utc": "2026-10-21T13:30:00Z"}
+    run = json.loads(out)["run"]
+    assert json.loads((svc.runs / run / "request.json").read_text())["pin_log"]["line"] == 2
+    rc, out = call(svc, ["status"], units, key="-")
+    assert [(p["line"], p["commit"]) for p in json.loads(out)["pins"]] == [(0, PIN), (1, "d" * 40), (2, PIN)]
+
+
+def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
+    """Infra's review of #3062: elan is a release, its archive checked against a pinned sha256 before it runs (never a
+    script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
+    code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
+    assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
+    assert re.search(r"^ELAN=v\d+\.\d+\.\d+ ELAN_SHA256=[0-9a-f]{64}$", code, re.M)
+    assert "https://github.com/leanprover/elan/releases/download/$ELAN/" in code
+    assert code.index('echo "$ELAN_SHA256  $e/elan.tar.gz" | sha256sum -c') < code.index('"$e/elan-init"')
+    assert code.index('host.py" pinned "$c"') < code.index('ln -sfn "$c" "$O/current.tmp"')
+
+
+def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces_one():
+    """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
+    prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
+    forces one."""
+    setup = (PACKAGING / "setup.sh").read_text()
+    assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
+    verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
+    assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
+    serve = (ROOT / "benchmarks" / "live_challenger" / "serve.py").read_text()
+    assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
+        "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
 
 
 def test_fetch_reads_a_run_and_nothing_else(svc):

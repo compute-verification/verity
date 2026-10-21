@@ -81,7 +81,12 @@ while IFS= read -r ln || [ -n "$ln" ]; do
   acct=${BASH_REMATCH[1]} from=${BASH_REMATCH[2]} key=${BASH_REMATCH[4]} blob=${BASH_REMATCH[7]}
   case " $seen " in *" $blob "*) rm -f "$tmp"; die "$tunnels: a key that is on another line, or a gate key" ;; esac
   seen="$seen $blob"
-  tk[$acct]+=$(printf 'restrict,port-forwarding,pty,from="%s" %s' "$from" "$key")$'\n'
+  # A tunnel needs no terminal, and the prover's key gets none (run.sh's `ssh -T`). The challenger's keeps `pty` only because
+  # serve.py's `ssh -R`, pinned on vy-challenger-1, forces one (`-tt`), and ssh ends a session whose forced pty is refused;
+  # it goes once vy-challenger-1 runs a serve.py without -tt.
+  opts=restrict,port-forwarding
+  [ "$acct" = prover ] || opts+=,pty
+  tk[$acct]+=$(printf '%s,from="%s" %s' "$opts" "$from" "$key")$'\n'
 done < "$tunnels"
 for acct in prover challenger; do
   if ! id "$acct" > /dev/null 2>&1; then
