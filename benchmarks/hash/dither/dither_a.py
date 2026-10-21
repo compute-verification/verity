@@ -61,6 +61,8 @@ tree; one without the peel is refused).  The control (nothing written: the A slo
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
 served y[0, 0] flipped in place) must be refused at run time on every call's y root, every other commitment kept; and
 "fault_rr" (the round recorded without the receipt roots) must be refused on the receipt-step leaf and the round alone.
+With DITHER_LANE_REFS=1 the gate's check also holds the step's drawn leaves' lane partials (served_h1/partials.py, on the
+cpu and the served h1u build's kh_lanes) to SERVE-REG's gated lane (`lane_refs.served`).
 """
 from __future__ import annotations
 
@@ -107,6 +109,8 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
+# 1: the gate's check also holds option A's partials to SERVE-REG's gated lane on the step (served_h1/lane_refs.py)
+LANE_REFS_ENV = "DITHER_LANE_REFS"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -937,6 +941,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and not yleaf_bad and commits_ok and h1v3_ok
                  and y_match and not (zy and doc["y_refused_steps"])
                  and all(x["receipt_equal"] and x["z_equal_today"] for x in units_doc))
+    if which == "gate" and os.environ.get(LANE_REFS_ENV) == "1":
+        import lane_refs as LR
+        doc["lane_refs"] = LR.served(win, g, salt[0], getattr(SIDE[0], "h", None) if SIDE else None)
+        doc["ok"] = doc["ok"] and doc["lane_refs"]["ok"]
     return doc
 
 
