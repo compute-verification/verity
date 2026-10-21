@@ -45,16 +45,13 @@ use flock_field::F128;
 use flock_prover::pcs::Commitment;
 use serde_json::{Value, json};
 
-use crate::firewall::{Item, parse};
+use crate::firewall::{Item, LANE_PHASE, RING_SWITCH, parse};
 use crate::zk_veil::{self as zkv, InnerProof, L0_CLOSE, L0_OPEN, LABEL_INNER, LABEL_PADS, LABEL_PCS, LABEL_ZC, Layout, Lin};
 use crate::{KIND_SCALAR, KIND_SLICE, OP_BYTES, OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, Req, Resp, Transport, hex, push_header, push_padded};
 
 pub const FORMAT: &str = "verity/firewall-transcript/v0";
 pub const PUBLIC_FORMAT: &str = "verity/firewall-public/v0";
 
-/// The rows `zk_finish` adds to the replay's: the ring switch's, then level 0's lane phase.
-const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
-const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
 /// `firewall::skeleton`'s item that is the recheck commitment's cap (after the domain, the R1CS label and the digest): a value
 /// of the session's, fixed by the recheck, not by the statement.
 const SKELETON_CAP: usize = 3;

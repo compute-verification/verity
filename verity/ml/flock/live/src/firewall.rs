@@ -1040,6 +1040,25 @@ pub fn parse_cons(b: &[u8]) -> Result<Vec<(String, crate::zk_veil::Lin)>, String
     parsed.ok_or_else(|| refused(format!("the Lean finish's constraints: {} bytes that do not parse", b.len())))
 }
 
+/// The rows the Lean finish adds to the replay's (`Finish.repCons`): the ring switch's, then level 0's lane phase.
+pub const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
+pub const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
+
+/// The Lean finish's constraints (`parse_cons`) held to the statement's relations, name for name and in order: the replay's
+/// (`replay`), the ring switch's and, under Ligerito, level 0's lane phase. The inner proof's batching coins go one to a
+/// constraint and the recorder's relations go by these names, so any other sequence is refused.
+#[cfg(feature = "sha512")]
+pub fn relations_held(cons: &[(String, crate::zk_veil::Lin)], replay: &[&str], ligerito: bool) -> Result<(), String> {
+    let lane: &[&str] = if ligerito { &LANE_PHASE } else { &[] };
+    let want: Vec<&str> = replay.iter().chain(&RING_SWITCH).chain(lane).copied().collect();
+    let got: Vec<&str> = cons.iter().map(|c| c.0.as_str()).collect();
+    if got == want {
+        Ok(())
+    } else {
+        Err(refused(format!("the Lean finish's constraints {got:?} are not the statement's relations {want:?}")))
+    }
+}
+
 #[cfg(feature = "sha512")]
 impl Drop for LeanFinish {
     fn drop(&mut self) {
@@ -1599,6 +1618,23 @@ mod tests {
                 link.check(&device, rep[at].1).is_ok()
             };
             assert_eq!(got, c["pass"].as_bool().unwrap(), "{}", c["case"]);
+        }
+    }
+
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn lean_constraints_are_held_to_the_relations_name_for_name() {
+        let lin = || crate::zk_veil::Lin { c: F128::ZERO, a: vec![F128::ONE] };
+        let named = |ns: &[&str]| ns.iter().map(|n| (n.to_string(), lin())).collect::<Vec<_>>();
+        let replay = ["zerocheck final a·b", "zerocheck c_eval", "lincheck"];
+        let honest = [&replay[..], &RING_SWITCH, &LANE_PHASE].concat();
+        assert_eq!(relations_held(&named(&honest), &replay, true), Ok(()));
+        assert_eq!(relations_held(&named(&honest[..5]), &replay, false), Ok(()));
+        let renamed = [&replay[..2], &["lincheck sum"], &RING_SWITCH, &LANE_PHASE].concat();
+        let swapped = [&replay[..], &["ring switch c", "ring switch ab"], &LANE_PHASE].concat();
+        for bad in [renamed, swapped, honest[..6].to_vec(), [&honest[..], &["extra"]].concat()] {
+            let e = relations_held(&named(&bad), &replay, true).unwrap_err();
+            assert!(e.starts_with("FIREWALL-REFUSED: the Lean finish's constraints"), "{e}");
         }
     }
 }

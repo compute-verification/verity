@@ -1325,6 +1325,9 @@ struct Firewall {
     dump: Option<std::path::PathBuf>,
     /// each rep's salts for levels ≥ 1, the Lean finish's, drawn with the table and taken at the rep's start
     lean_hi: [Option<Vec<Vec<u8>>>; 2],
+    /// the statement's replay's constraint names, which the Lean finish's constraints are held to
+    /// ([`flock_live::firewall::relations_held`])
+    relations: Vec<&'static str>,
 }
 
 /// `FC_FIREWALL_TAMPER=cut-MODE`: the worker fails in one named way (§10.1's worker failures), in the rep that holds the table's
@@ -1505,7 +1508,7 @@ impl Firewall {
             }
         }
         Ok(Firewall { st: st.clone(), cm, root, draws, tamper, why: None, rep: None, lean_ok: 0, seen, cut_fired, t_recheck, cpu_recheck,
-                      table, finish: finish.clone(), dump, lean_hi })
+                      table, finish: finish.clone(), dump, lean_hi, relations: Vec::new() })
     }
 
     /// The rep's `cut-` control (the worker's failure), if its round is this rep's or later and it has not fired yet.
@@ -1549,14 +1552,13 @@ impl Firewall {
         }
         let (st, lay) = (&self.st, zk.lay);
         let (zc, lc) = zkv::from_exposed(&flock_live::firewall::tagged(lay.piop_exposed()), &lay);
+        let mut names: Vec<&'static str> = Vec::new();
         let items = flock_live::firewall::skeleton(&domain(&st.c, rep), LABEL_R1CS, &st.r1cs.statement_digest(), self.cm.cap.as_flattened().as_flattened(),
                                                 zkv::LABEL_ZC, zkv::LABEL_PADS,
-                                                |r| zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), r).map(|_| ()))?;
-        flock_live::firewall_transcript::with(|t| {
-            let names: Vec<&str> = zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]),
-                                               &mut flock_live::firewall::Recorder::default()).map(|r| r.cons.iter().map(|c| c.0).collect()).unwrap_or_default();
-            t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names)
-        });
+                                                |r| zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), r)
+                                                    .map(|rp| names = rp.cons.iter().map(|c| c.0).collect()))?;
+        flock_live::firewall_transcript::with(|t| t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names));
+        self.relations = names;
         let mut lean = zk.lean.lock().unwrap_or_else(PoisonError::into_inner).take()
             .unwrap_or_else(|| Err(flock_live::firewall::refused("a firewalled rep without its Lean frame")))?;
         if let Some(prev) = self.rep.as_ref() {
@@ -2087,18 +2089,21 @@ fn interned(name: String) -> &'static str {
 
 /// A firewalled rep after [`firewalled_end`] (the device's or the CPU's, whatever it did): its inner proof is the session's
 /// Lean finish's (`Flock.Firewall.Finish.innerLive`), on the rep's request (`end`'s, with the rep's draws and the coins of its
-/// PIOP and opening). The finish sends the constraints it replays, then each round of its inner proof, which leaves through
-/// the rep's Lean frame onto the rep's stream; the frame decides its stop on `β = 0` (the Lean finish's refusal where the frame
-/// went on is the firewall's fault), and then the frame's `Finish` ([`Firewall::frame_end`]). It speaks on schedule, as M1's
-/// simulator's does: the session stops at `Finish` when a constraint fails on the pads (`constraints_failing_on_pads`). The
-/// rep's proof file is the Lean finish's on every round's coins (`rep`), and only when the frame ended `ok` and no check failed
-/// the rep; else none leaves (an empty file).
+/// PIOP and opening). The finish sends the constraints it replays, which must be the statement's relations name for name
+/// ([`flock_live::firewall::relations_held`]; any other is the firewall's fault), then each round of its inner proof, which
+/// leaves through the rep's Lean frame onto the rep's stream; the frame decides its stop on `β = 0` (the Lean finish's refusal
+/// where the frame went on is the firewall's fault), and then the frame's `Finish` ([`Firewall::frame_end`]). It speaks on
+/// schedule, as M1's simulator's does: the session stops at `Finish` when a constraint fails on the pads
+/// (`constraints_failing_on_pads`). The rep's proof file is the Lean finish's on every round's coins (`rep`), and only when
+/// the frame ended `ok`, no check failed the rep and no constraint fails on its pads; else none leaves (an empty file, which
+/// the session never sends: it stops at its `Finish`).
 fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, mch: zkv::Masking<Gate<C>>, tp: Instant, t_upstream: f64,
                                                                      mut bk: Value, g: &Arc<Mutex<Firewall>>, end: FrameEnd) -> (Vec<u8>, Value) {
     use flock_live::firewall::refused;
     let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let FrameEnd { lean: mut frame, failed, mut req, finish: fin } = end;
+    let relations = g.lock().unwrap_or_else(PoisonError::into_inner).relations.clone();
     let body = req.body(&zk.pads, &zk.ic.salts);
     let (mut bytes, mut fails, mut inner_rounds) = (0usize, Vec::new(), Vec::<Vec<F128>>::new());
     let inner = fin.lock().unwrap_or_else(PoisonError::into_inner).inner(req.table, req.rep, &body, &mut |c: &[u8], n: usize| {
@@ -2112,7 +2117,9 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
         inner_rounds.push(coins.clone());
         Some(coins)
     }, &mut |b: &[u8]| {
-        let cons: Vec<(&'static str, zkv::Lin)> = flock_live::firewall::parse_cons(b)?.into_iter().map(|(n, l)| (interned(n), l)).collect();
+        let cons = flock_live::firewall::parse_cons(b)?;
+        flock_live::firewall::relations_held(&cons, &relations, zk.lay.ligerito())?;
+        let cons: Vec<(&'static str, zkv::Lin)> = cons.into_iter().map(|(n, l)| (interned(n), l)).collect();
         flock_live::firewall_transcript::with(|t| t.constraints(&cons));
         fails = zkv::failing(&cons, &zk.pads.h);
         Ok(())
@@ -2122,7 +2129,7 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
     }
     let t_zk = tz.elapsed().as_secs_f64();
     let lean = frame.finish();
-    let leaves = !failed && matches!(lean, Ok(false));
+    let leaves = !failed && fails.is_empty() && matches!(lean, Ok(false));
     g.lock().unwrap_or_else(PoisonError::into_inner).frame_end(lean, failed);
     let inner_coins = inner_rounds.concat();
     req.rounds.extend(inner_rounds);
@@ -4044,7 +4051,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 }
             }
             #[cfg(feature = "seed-injection")]
-            if plan.early_proofs && j + 1 < tabs.list.len() {
+            if plan.early_proofs && j + 1 < tabs.list.len() && stop_at_finish.is_none() {
                 for (rep, p) in proofs[early..].iter().enumerate() {
                     call(&t, Req::Proof { table: tb.name.clone(), rep: rep as u32, bytes: p.clone() })?;
                 }
