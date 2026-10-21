@@ -12,7 +12,9 @@ PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/|dsv4_v2_tre
 # at it.  c74d38bf6f, c9accad0ad, 6fd9f01777 and 18474e99c0 (#3075, #3076, #3077, #3079): replay row kernels (`kernels.dsv4_rows`)
 # for the 19 families the deferred replay held at its no-evaluator gate, each equal to its Definition; the replay reads them, and the
 # Commit's call-boundary evaluation (`evaluate_batch`) now takes a family's row kernel where it took the reference, the same words.
-# Neither the Build nor publish reads the code these fixes change.
+# 906df5058c (#3093): the deferred replay opens DeepSeek-V4's padded attn_sink and hc_attn_fn_broadcast by their Build roles
+# (`derived_weights`), as the weights of record do; only `tp-commit-replay` reads it.  Neither the Build nor publish reads the code
+# these fixes change.
 COMMIT_FIXES='integrations/vllm/verity_vllm/commit/binding.py 986fe71aa64a28158d0eb79f126ad061c9a284de 308391e05e6376641d6f5c1819706cdcfce9b30e
 integrations/vllm/tests/commit/test_binding_negatives.py f8e60d391a898a68ad4e80bcf23a244a7ce8ae2b 12ffd26912b4539a47b51d9c2eab8f606214964b
 integrations/vllm/verity_vllm/acquire/sources/moe_align_source.py 2ba05001747aac82998eb3667f2ba859dd111f42 db602f84830a3c2626dcfe4879ff5a03434cdc69
@@ -31,7 +33,9 @@ integrations/vllm/tests/program/test_dsv4_derive.py 8c48477289e67dda31ed96def6be
 integrations/vllm/tests/properties/dsv4_moe_capture_gpu.py e83cf1b06ce92f10e76d253104e2f51d51cce56c fe66dd4bc8ab534ed14170629bb3004c914d131d
 integrations/vllm/tests/properties/test_dsv4_moe_capture.py b9a5fbc85bc872b6cae1a6c06ecfe6281896d856 ab6f73f055acbd035206f05827cb1dd77a51a367
 integrations/vllm/tests/properties/dsv4_indexer_capture_gpu.py 0ec0019327ac283b35e8879eb43b30c972759631 394ca07704910601573b709f986f3a7983373b3e
-integrations/vllm/tests/properties/test_dsv4_indexer_capture.py bd27b0588ec34a9ca987fcb8072a1ad038135cee cea547bb244913a416b40092bfc958ea95930db2'
+integrations/vllm/tests/properties/test_dsv4_indexer_capture.py bd27b0588ec34a9ca987fcb8072a1ad038135cee cea547bb244913a416b40092bfc958ea95930db2
+integrations/vllm/verity_vllm/pipeline/cpu_replay.py e6c427b8a9cfc9d9eaedc8b2205712f5def6eb5d 6835421da06a36273b5519577557352703e635cb
+integrations/vllm/tests/pipeline/test_tp_replay_deferred.py ed4d627b719c936f45c84329ef39bc2de7ba93f0 cc76ecfb9fb3ce9edfc6d9f267f085fa54b2ab35'
 _blob() {  # _blob SHA PATH: PATH's blob at SHA, `-` when SHA holds no PATH
   git -C "$TREE" rev-parse -q --verify "$1:$2" || echo -
 }
