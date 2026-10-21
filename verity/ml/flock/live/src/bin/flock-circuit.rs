@@ -197,6 +197,34 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
     z
 }
 
+/// Under the Lean session loop (`plan.lean_frames`), a firewalled table's level-0 hiding and salts are the loop's: it draws
+/// them for the host's packed witness `z` and commits level 0 on them (`Flock.Firewall.Level0`). They replace `l0`'s and
+/// the table's level-0 salts, so the prover commits the codeword the loop did, and the loop's root is returned: the root of
+/// record. Without the loop, nothing changes and nothing is returned.
+#[cfg(feature = "sha512")]
+fn lean_level0(plan: &Plan, st: &Stmt, lig: LigeritoProfile, z: &[F128], l0: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+               salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
+    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
+    let Some(addr) = plan.lean_frames.as_deref() else { return Ok(None) };
+    if plan.zk_zero_pads {
+        return Err("FIREWALL-REFUSED: the Lean session loop draws level 0's hiding; zero pads are Rust's control".into());
+    }
+    let pcs = pcs_of(st, lig);
+    let lc = pcs.ligerito_prover_config().expect("Ligerito config");
+    let got = flock_live::firewall::lean_level0(addr, st.m, z, 1 << lc.initial_log_msg_cols, (1 << lc.initial_k) + EXTRA_LANES,
+                                                l0.t_pad, pcs.n_leaves())?;
+    l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
+    l0.pads = got.pads;
+    salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
+    Ok(Some(got.root))
+}
+
+#[cfg(not(feature = "sha512"))]
+fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: &mut flock_core::pcs::ligerito::zk::Level0Zk,
+               _: &Mutex<flock_live::zk_hooks::LeafSalts>) -> Result<Option<Vec<u8>>, String> {
+    Ok(None)
+}
+
 /// M1's hooks identity: what is masked, and what is not yet (the statement is not zero knowledge until the list is empty).
 /// `refused_coins`: the coins at which the prover stops, each before it sends anything that depends on them and reading only
 /// opened coins (live PROTOCOL.md, "Refused coins"):
@@ -1367,11 +1395,12 @@ fn flip_first(content: &mut [u8], op: u8) -> bool {
 
 impl Firewall {
     /// Installs the table's salt context (level 0's salts, then the draws [`FirewallDraws`] routes) and recomputes the level-0
-    /// commitment from the host witness `z` and the table's level-0 hiding `l0`, timed. The root of record is the Lean link's
-    /// (`flock-firewall link`, [`flock_live::firewall::lean_link`]), computed beside Rust's `commit_zk`, whose root must be the
-    /// same: a table whose two roots differ is refused.
+    /// commitment from the host witness `z` and the table's level-0 hiding `l0`, timed. The root of record is the Lean
+    /// session loop's (`lean_root`, its `Flock.Firewall.Level0`, which drew `l0` and the salts), else the Lean link's
+    /// (`flock-firewall link`, [`flock_live::firewall::lean_link`]); Rust's `commit_zk` runs beside it, and its root must be
+    /// the same: a table whose two roots differ is refused.
     fn new(st: &Arc<Stmt>, z: Vec<F128>, lig: LigeritoProfile, l0: &flock_core::pcs::ligerito::zk::Level0Zk,
-           salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Result<Firewall, String> {
+           salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool, lean_root: Option<Vec<u8>>) -> Result<Firewall, String> {
         let pcs = params(st.m, lig);
         let level0 = salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs.n_leaves());
         let link_salts = level0.clone();
@@ -1414,9 +1443,12 @@ impl Firewall {
             .start_handler(|_| IN_FIREWALL.with(|g| g.set(true))).build().expect("the firewall's thread pool"));
         let (exe, m) = (flock_live::firewall::lean_frame_exe(), st.m);
         let ((cm, pd, t_recheck, cpu_recheck), (lean, t_lean)) = std::thread::scope(|s| {
-            let lean = s.spawn(|| {
-                let t = Instant::now();
-                (flock_live::firewall::lean_link(&exe, m, &z, &l0.extra, &l0.pads, &link_salts), t.elapsed().as_secs_f64())
+            let lean = s.spawn(|| match lean_root {
+                Some(r) => (Ok(r), 0.0),
+                None => {
+                    let t = Instant::now();
+                    (flock_live::firewall::lean_link(&exe, m, &z, &l0.extra, &l0.pads, &link_salts), t.elapsed().as_secs_f64())
+                }
             });
             let (t0, c0) = (Instant::now(), flock_live::firewall::cpu_seconds());
             let (cm, pd) = pool.install(|| flock_core::pcs::commit::commit_zk(&z, &pcs, l0));
@@ -3590,7 +3622,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
     // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
-    let zk_pre = (plan.gpu && is_zk(st) && overlap).then(|| {
+    let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         std::thread::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
@@ -3659,8 +3691,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         for (j, tb) in tabs.list.iter().enumerate().skip(1) {
             let tc = Instant::now();
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
-            let l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
-            let root = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
+            let mut l0 = is_zk(&tb.st).then(|| level0_zk(&tb.st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
+            let lean = match (firewall_on(&tb.st), l0.as_mut(), wits[j].1.as_ref()) {
+                (true, Some(l), Some(WitData::Host((z, ..)))) => lean_level0(plan, &tb.st, lig, z, l, &salts_t[j])?,
+                _ => None,
+            };
+            let host = level0_root(&tb.st, wits[j].1.as_ref().expect("a table's witness"), lig, l0.as_ref(), &salts_t[j]);
+            let root = lean.unwrap_or(host);
             later.push((root, l0, tc.elapsed().as_secs_f64()));
         }
         let later_roots: Vec<Vec<u8>> = later.iter().map(|x| x.0.clone()).collect();
@@ -3687,7 +3724,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 .then(|| salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs_of(st, lig).n_leaves()));
             let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, j as u64);
             let tl0 = Instant::now();
-            let zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
+            let mut zk_level0 = if j == 0 { (is_zk(st) && zk_pre.is_none()).then(|| level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper)) } else { table_level0 };
+            let lean_root0 = match (j, firewalled, zk_level0.as_mut(), wt0.as_ref()) {
+                (0, true, Some(l0), Some(WitData::Host((z, ..)))) => lean_level0(plan, st, lig, z, l0, salts)?,
+                _ => None,
+            };
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else { tl0.elapsed().as_secs_f64() + t_table };
             // the firewall's level-0 recheck, before anything of the table is sent (counted in rep 0's prove time)
             let tg = Instant::now();
@@ -3701,7 +3742,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
                         None => Arc::new(zk_level0.clone().expect("level 0's hiding")),
                     };
-                    let mut g = Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu)?;
+                    let lean_root = if j == 0 { lean_root0.clone() } else { root0.clone().filter(|_| plan.lean_frames.is_some()) };
+                    let mut g = Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu, lean_root)?;
                     if let Some(t) = g.tamper.strip_prefix("later-") {
                         g.tamper = if j == 0 { String::new() } else { t.to_string() };
                     }

@@ -19,10 +19,13 @@ each connection is one session, relayed on a connection of its own to the audito
   stream is bound to, or at the stream's first round, the stream's domain frame and an unbound frame's release. Its coins,
   once opened, are the frame's (`Frames.feedOf`, `Frames.feed`), set before the prover receives them; the frame takes no
   others (`Frames.take`).
+* Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the
+  operating system for the packed witness the prover hands it, and commits level 0 on them (`level0`, `Level0.draw`). A
+  `Commit`'s roots leave only as those roots, each drawn at its table's `m` (`Level0.commit`), and the session then owns
+  its tables' `Level0`, until it ends.
 * `Finish` leaves only once the schedule's last opening has (`State.request`). What it carries is `Firewall::finish`'s
   (ZKFIN's), relayed as it is.
-* Every other frame is relayed as it is. For now those are the roots the firewall's own Lean link released (`link`) at
-  `Commit`, and `Proof`, which `Firewall::finish` decides.
+* Every other frame is relayed as it is. For now that is `Proof`, which `Firewall::finish` decides.
 
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
 coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
@@ -30,6 +33,7 @@ moves frames.
 -/
 import Flock.Firewall.SessionPlan
 import Flock.Firewall.Frames
+import Flock.Firewall.Level0
 import Std.Async.TCP
 import Std.Async.DNS
 
@@ -100,6 +104,7 @@ structure State where
   hello : Option Coins.Hello := none
   plan : Array (String × Nat) := #[]
   domains : Array (String × ByteArray) := #[]
+  tables : Array (String × Nat) := #[]
   session : Option Coins.Session := none
   stop : Option String := none
 
@@ -192,7 +197,23 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
     | [] => .error (S.refuse s!"{Coins.STOP}the Lean Hello: the verifier's Hello is not JSON")
     | m =>
       let domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r))
-      .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains }, ⟨m.toArray⟩)
+      let tables := spec.tables.zip (sts.map (·.m))
+      .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains, tables }, ⟨m.toArray⟩)
+
+/-- `k` named byte strings of `f` from byte `o`, after `acc` (reversed). -/
+def namedList (f : ByteArray) : Nat → Nat → List (String × ByteArray) → Option (List (String × ByteArray))
+  | 0, _, acc => some acc.reverse
+  | k + 1, o, acc => do
+    let (t, o) ← getBytes f o
+    let (r, o) ← getBytes f o
+    let t ← String.fromUTF8? t
+    namedList f k o ((t, r) :: acc)
+
+/-- A `Commit` frame's roots (`Req::Commit`'s, after its `root_f`): each table's name and level-0 root, in order. -/
+def commitRoots (f : ByteArray) : Option (List (String × ByteArray)) := do
+  let (_, o) ← getBytes f 1
+  let n ← getU32 f o
+  namedList f n (o + 4) []
 
 /-- A `Round` frame's content. -/
 def roundContent (f : ByteArray) : ByteArray :=
@@ -235,10 +256,11 @@ def resolve (addr : String) : IO SocketAddress := do
 
 /-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
 `auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
-`Round` against the frames `reg`, `Frames.carry`) and only then sent; a `Round`'s coins, once opened (`State.answer`), are
-fed to its frame (`Frames.feed`) before the prover receives them. -/
-def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Registry) (sid : Nat)
-    (p : Socket.Client) : IO Unit := do
+`Round` against the frames `reg`, `Frames.carry`, a `Commit` against the tables' level 0 `l0s`, `Level0.commit`) and
+only then sent; a `Round`'s coins, once opened (`State.answer`), are fed to its frame (`Frames.feed`) before the prover
+receives them. -/
+def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Registry)
+    (l0s : IO.Ref Level0.Registry) (sid : Nat) (p : Socket.Client) : IO Unit := do
   let a ← Socket.Client.mk
   (a.connect auditor).block
   a.noDelay
@@ -276,6 +298,18 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
         match carried with
         | .ok i => slot := some i
         | .error e =>
+          let (st', out) := st.refuse s!"{Coins.STOP}{e}"
+          st := st'
+          sendFrame p out
+          continue
+      if k == .commit then
+        let tables := st.tables
+        let bound : Except String Unit ← l0s.modifyGet fun R => match commitRoots f with
+          | none => (.error "a Commit frame whose roots the loop cannot read", R)
+          | some roots => match Level0.commit R sid tables roots with
+            | .ok R' => (.ok (), R')
+            | .error e => (.error e, R)
+        if let .error e := bound then
           let (st', out) := st.refuse s!"{Coins.STOP}{e}"
           st := st'
           sendFrame p out
@@ -323,23 +357,53 @@ def sockChan (c : Socket.Client) : IO Frame.Chan := do
     return b.extract 0 n
   return { getLine, readExact, write := fun b => (c.sendAll #[b]).block, flush := pure () }
 
+/-- **A table's level 0, drawn by the loop**, for the request line `line` on `ch`: `level0 M LEN` followed by the `LEN`
+bytes of the table's packed witness is answered `ok N R` followed by the `N` bytes of the hiding the loop drew for it from
+the operating system and the root it committed, the last `R` of them (`Level0.draw`, `Level0.drawsOf`), and the table's `Level0` is kept in
+`l0s` for the session whose `Commit` carries its root. Anything else is answered `err WHY`. -/
+def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO Unit := do
+  let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
+  match (line.replace "\n" "").splitOn " " with
+  | ["level0", m, len] =>
+    let (some m, some len) := (m.toNat?, len.toNat?) | say s!"err a request `{line.trim}`"
+    let b ← ch.readExact len
+    if len % 16 != 0 then return (← say s!"err a {len}-byte witness, not whole words")
+    match ← Level0.draw IO.getRandomBytes m (Frame.words b 0 (len / 16)) with
+    | .ok l =>
+      l0s.modify (·.push { l0 := l })
+      let d := Level0.drawsOf l
+      say s!"ok {d.size} {l.root.size}"
+      ch.write d
+    | .error e => say s!"err {e.replace "\n" " "}"
+  | _ => say s!"err a request `{line.trim}`"
+
 /-- **The loop's frames**: each connection to `srv` is one rep's frame (`Frame.serveWith` at the operating system's bytes,
 as `flock-firewall frame` serves it), in a slot of its own in `reg` (`Frames.hooks`), served on its own thread until it
-ends or the connection closes. -/
-def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) : IO Unit := do
+ends or the connection closes; or, where its first line is `level0 …`, one table's level 0 (`level0`). -/
+def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Level0.Registry) : IO Unit := do
   repeat
     let c ← srv.accept.block
     let _ ← IO.asTask (prio := .dedicated) do
-      let i ← reg.modifyGet fun R => let (R', i) := Frames.openSlot R; (i, R')
-      try
-        let _ ← Frame.serveWith IO.getRandomBytes (← sockChan c) (Frames.hooks reg i)
-      catch e => IO.eprintln s!"frame: {e}"
-      reg.modify (Frames.close · i)
+      let ch ← sockChan c
+      let first ← ch.getLine
+      if first.startsWith "level0 " then
+        try level0 ch l0s first catch e => IO.eprintln s!"level 0: {e}"
+      else
+        let i ← reg.modifyGet fun R => let (R', i) := Frames.openSlot R; (i, R')
+        let held ← IO.mkRef (some first)
+        let getLine : IO String := do
+          match ← held.modifyGet fun l => (l, none) with
+          | some l => pure l
+          | none => ch.getLine
+        try
+          let _ ← Frame.serveWith IO.getRandomBytes { ch with getLine } (Frames.hooks reg i)
+        catch e => IO.eprintln s!"frame: {e}"
+        reg.modify (Frames.close · i)
       try (c.shutdown).block catch _ => pure ()
 
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the statement
 flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
-for sessions and on a port the system picks for the reps' frames, prints `LISTENING 127.0.0.1:PORT` and then
+for sessions and on a port the system picks for the reps' frames and the tables' level 0, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
 on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
@@ -369,6 +433,7 @@ def cmd (args : List String) : IO UInt32 := do
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
   let reg : IO.Ref Frames.Registry ← IO.mkRef #[]
+  let l0s : IO.Ref Level0.Registry ← IO.mkRef #[]
   let sids ← IO.mkRef 0
   let srv ← Socket.Server.mk
   srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
@@ -379,14 +444,15 @@ def cmd (args : List String) : IO UInt32 := do
   IO.println s!"LISTENING 127.0.0.1:{(← srv.getSockName).port}"
   IO.println s!"FRAMES 127.0.0.1:{(← fsrv.getSockName).port}"
   (← IO.getStdout).flush
-  let _ ← IO.asTask (prio := .dedicated) (frames fsrv reg)
+  let _ ← IO.asTask (prio := .dedicated) (frames fsrv reg l0s)
   let _ ← IO.asTask (prio := .dedicated) do
     repeat
       let p ← srv.accept.block
       let sid ← sids.modifyGet fun n => (n, n + 1)
       let _ ← IO.asTask (prio := .dedicated) do
-        try serve S specs auditor reg sid p
+        try serve S specs auditor reg l0s sid p
         catch e => IO.eprintln s!"session: {e}"
+        l0s.modify (·.filter (·.bound.map (·.1) != some sid))
   let stdin ← IO.getStdin
   repeat
     if (← stdin.getLine).isEmpty then break

@@ -819,6 +819,60 @@ pub fn lean_link(exe: &std::path::Path, m: usize, z: &[F128], extra: &[Vec<F128>
     root
 }
 
+/// A table's level 0 as the Lean session loop drew and committed it (`Flock.Firewall.Level0`): the four extra lanes, every
+/// lane's padding, the level-0 salts (192 bytes a leaf) and the root, the cap concatenated.
+#[cfg(feature = "sha512")]
+pub struct LeanLevel0 {
+    pub extra: Vec<Vec<F128>>,
+    pub pads: Vec<Vec<F128>>,
+    pub salts: Vec<u8>,
+    pub root: Vec<u8>,
+}
+
+/// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
+/// level 0's hiding and salts from the OS for the host's packed witness `z` at `m`, commits level 0 on them and keeps it
+/// (`level0 M LEN` followed by `z`, answered `ok N R` and the draws then the root, its last `R` bytes). `extra_words`, `lanes` (the extra ones
+/// included), `t_pad` and `leaves` are the statement's level-0 sizes, which the answer must have.
+#[cfg(feature = "sha512")]
+pub fn lean_level0(addr: &str, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize, leaves: usize)
+                   -> Result<LeanLevel0, String> {
+    use std::io::{BufRead, Read, Write};
+    let fail = |e: String| refused(format!("the Lean loop's level 0 at {addr}: {e}"));
+    let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
+    let _ = tcp.set_nodelay(true);
+    let mut out = std::io::BufReader::new(tcp.try_clone().map_err(|e| fail(e.to_string()))?);
+    let body = f128_wire(z);
+    let mut w = &tcp;
+    write!(w, "level0 {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
+    let mut line = String::new();
+    out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
+    let l = line.trim_end();
+    let (n, r) = match (l.strip_prefix("ok ").and_then(|v| v.split_once(' ')), l.strip_prefix("err ")) {
+        (Some((n, r)), _) => match (n.parse::<usize>(), r.parse::<usize>()) {
+            (Ok(n), Ok(r)) => (n, r),
+            _ => return Err(fail(format!("the answer {l:?}"))),
+        },
+        (_, Some(why)) => return Err(fail(why.to_string())),
+        _ => return Err(fail(format!("the answer {l:?}"))),
+    };
+    use flock_core::pcs::ligerito::zk::EXTRA_LANES;
+    let o_pads = 16 * EXTRA_LANES * extra_words;
+    let o_salts = o_pads + 16 * lanes * t_pad;
+    let o_root = o_salts + crate::zk_hooks::SALT_BYTES * leaves;
+    if n != o_root + r || r == 0 {
+        return Err(fail(format!("{n} bytes with a {r}-byte root where the draws take {o_root}")));
+    }
+    let mut b = vec![0u8; n];
+    out.read_exact(&mut b).map_err(|e| fail(e.to_string()))?;
+    let words = |o: usize, k: usize| -> Vec<F128> {
+        (0..k).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
+                                 u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
+    };
+    Ok(LeanLevel0 { extra: (0..EXTRA_LANES).map(|e| words(16 * extra_words * e, extra_words)).collect(),
+                    pads: (0..lanes).map(|l| words(o_pads + 16 * t_pad * l, t_pad)).collect(),
+                    salts: b[o_salts..o_root].to_vec(), root: b[o_root..].to_vec() })
+}
+
 /// A firewalled session's `Hello` of record: `flock-firewall hello` (`Flock.Firewall.Hello` in the Lean verifier) sets the
 /// session's statement up from the statement's own files (`args`: `flock-verify verify --zk`'s statement flags, the public
 /// file the verifier's own) at the verifier's draw, and answers its `Hello` at a nonce it draws from the operating system.
