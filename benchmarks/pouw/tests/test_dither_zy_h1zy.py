@@ -305,6 +305,7 @@ def test_the_byte_layout_compared_is_int8_exacts_and_parses_as_h1zy_record():
 # -- CUDA ----------------------------------------------------------------------------------------------------------------
 
 @cuda
+@pytest.mark.slow
 def test_cuda_dither_records_are_h1zys_on_the_edge_call(record_property):
     """The edge call at the config dither-a picks: records parse as `h1zy.RECORD` into int_mm's z, every live cell's y and
     the served y are `h1zy.dequant`'s, and the records are `scaled_mm_zy`'s but where an empty slot's h1zy y isn't +0."""
@@ -320,6 +321,7 @@ def test_cuda_dither_records_are_h1zys_on_the_edge_call(record_property):
 
 
 @cuda
+@pytest.mark.slow
 @pytest.mark.xfail(strict=True, reason="dither-a's epilogue writes y = 0 past m; h1zy's empty slot is dq(0, +0, s_w), 0x8000 "
                                        "under a negative s_w and 0x7FFF under an infinite or NaN one")
 def test_cuda_dither_empty_slots_are_h1zys():
