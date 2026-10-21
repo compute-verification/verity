@@ -26,7 +26,9 @@ from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
+from verity.ml.circuits.refs import coll_concat  # noqa: E402
+from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
@@ -46,15 +48,25 @@ SALT = hashlib.sha512(b"salt").digest()
 W1, W2 = hashlib.sha512(b"window 1").digest(), hashlib.sha512(b"window 2").digest()
 V1, V16 = Value(1), Value(16)
 XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, lambda a, b: a ^ b, register=False)
+XOR16 = PrimitiveDefinition("H1ServedTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
+#: a receipt fold: the coin is its key, its return a sink
+FOLD16 = PrimitiveDefinition("H1ServedTestFold16", 1, (("key", V16), ("x", V16)), V16, lambda key, x: key ^ x,
+                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+#: the stand-in tile's ports, as the H1 tile's: the salt its coin, its position, and its receipt a sink
+TILE_PORTS = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}, ret={"receipt": Out(sink=True)})
 
 
 def _sig(S):
     return ((("a", Array(S.R, Array(8 * S.K, V1))), ("b", Array(S.C, Array(8 * S.K, V1))), ("salt", Array(4, V16)),
-             ("position", V16), ("roots", Array(2, Array(4, V16)))), V1)
+             ("position", V16), ("roots", Array(2, Array(4, V16)))), Record(("z", V1), ("receipt", V16)))
 
 
-StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig,
-                              lambda B, S, a, b, salt, position, roots: B.call(XOR1, a[0][0], b[0][0]), register=False)
+def _body(B, S, a, b, salt, position, roots):
+    x = B.call(XOR16, position, roots[0][0])
+    return coll_concat(_sig(S)[1], [B.call(XOR1, a[0][0], b[0][0]), B.call(FOLD16, salt[0], x)])
+
+
+StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False, ports=TILE_PORTS)
 
 
 def _unit(tile=TILE):
