@@ -24,6 +24,19 @@ sys.path.insert(0, str(H1.parent / "hidden_zk"))
 import h1unit as U  # noqa: E402
 
 
+def description(definition) -> dict:
+    """The unit's Program descriptor (`codec.encode_program`), the description a templated read would be bounded by: its
+    canonical bytes, its Definitions and their nodes, and the Program's gates."""
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.program import Program
+
+    prog = Program(definition)
+    desc = codec.encode_program(prog)
+    defs = desc.get("definitions", {})
+    nodes = sum(len((d.get("body") or {}).get("nodes", [])) for d in defs.values() if isinstance(d, dict))
+    return {"descriptor_bytes": codec.descriptor_size(desc), "definitions": len(defs), "nodes": nodes, "gates": prog.gates}
+
+
 def main() -> None:
     k, work = int(sys.argv[1]), Path(sys.argv[2])
     work.mkdir(parents=True, exist_ok=True)
@@ -47,6 +60,7 @@ def main() -> None:
             "pin": stager.pin, "circuit_bytes": (work / "circuit.txt").stat().st_size,
             "build_seconds": round(t1 - t0, 1), "stage_seconds": round(time.time() - t1, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
+    head |= description(shape.definition())
     (work / "build.json").write_text(json.dumps(head, indent=1))
     print("BUILT " + json.dumps(head), flush=True)
 
