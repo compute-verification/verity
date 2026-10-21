@@ -88,6 +88,7 @@ import Proofs.Flock.Claims.ZK.FrameMask
 import Proofs.Flock.Claims.ZK.FrameRounds
 import Proofs.Flock.Claims.ZK.FrameOpen
 import Proofs.Flock.Claims.ZK.FrameOpenCut
+import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -573,6 +574,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameOpenCut`: what the masked Ligerito sends at level 0. Cut after its `j`-th level-0 send, it stops past the
   openings having sent exactly bodies `0..j` (`l0Body`, `l0BodyAt`): the opening's prefix with `z`'s squeeze, the
   out-of-domain frame, the `k_0` lane messages, the pair of sums and the last squeeze (`ligeritoPZk_cutL0`).
+* `FrameOpenLive`: the cut opening at the pads and at `openLive`'s zero pads. The bodies without pads agree
+  (`l0BodyAt_free`), and each masked body is an `L0Round`'s zero-pad round and round at the pads with one squeeze
+  (`L0Sent`, `l0Sent_ood`, `l0Sent_lane`, `l0Sent_pair`, `l0Sent_zero`), which the frame releases as the body at the
+  pads (`L0Sent.release`, `L0Sent.roundHonest`, `L0Sent.roundFrames`); both openings, cut (`ligeritoPZk_cutL0_live`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
