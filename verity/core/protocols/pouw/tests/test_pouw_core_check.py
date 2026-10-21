@@ -611,6 +611,16 @@ ROUNDS_EXPECT = {
     "too-many": ("coin", "roots recorded, more than the epoch's"),
     "label": ("coin", "pouw/round coin 0: coin is the epoch's pouw/salt coin 0, not its pouw/round coin 0"),
 }
+#: the refusal each pin mutation aims at, `rounds`'s and `salt`'s alike
+PIN_EXPECT = {
+    "pin-not-main": ("coin", "which is not a commit of main's first-parent history: repin the host to a main commit"),
+    "repinned": ("coin", "the host was repinned mid-session; repin the host to a main commit between sessions"),
+    "no-pin": ("coin", "names no pinned tree: repin the host to a main commit"),
+    "pin-form": ("coin", "names a pinned tree that is not a commit (40 lowercase hex): repin the host to a main commit"),
+    "no-main": ("coin", "not trusted: the verifier holds no copy of main's history"),
+    "main-form": ("coin", "not trusted: the verifier's copy of main's history is malformed: "),
+}
+ROUNDS_EXPECT.update(PIN_EXPECT)
 
 
 def test_every_rounds_mutation_hits_its_refusal():
@@ -646,7 +656,7 @@ SALT_EXPECT = {
     "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
     "label": ("coin", "coin 0, not its pouw/salt coin 0"), "foreign": ("coin", "the salt's coin does not open against"),
     "foreign-epoch": ("coin", "the salt's coin is epoch "), "tampered": ("coin", "the salt's coin does not open against"),
-    "malformed": ("coin", "the salt's coin opening is malformed"),
+    "malformed": ("coin", "the salt's coin opening is malformed"), **PIN_EXPECT,
 }
 
 

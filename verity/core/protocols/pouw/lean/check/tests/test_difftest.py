@@ -258,7 +258,9 @@ def test_rounds(pass_server):
                  "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
                  "not trusted: the challenger's record is signed at leaf ",
                  "not trusted: the challenger's refused hellos are not the ",
-                 "the challenger's log shows it received"):
+                 "the challenger's log shows it received", "which is not a commit of main's first-parent history",
+                 "the host was repinned mid-session", "names no pinned tree",
+                 "not trusted: the verifier holds no copy of main's history"):
         assert any(part in k for k in ROUNDED), part
 
 

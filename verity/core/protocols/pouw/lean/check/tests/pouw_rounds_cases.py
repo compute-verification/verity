@@ -1,6 +1,7 @@
-"""The rounds and salt difftests' cases: `core_check.rounds`'s arguments, ``{"key", "ledger", "window", "session",
-"roots", "openings"}``, and `core_check.salt`'s, ``{"key", "ledger", "window", "session", "weights", "requests",
-"opening"}``.
+"""The rounds and salt difftests' cases: `core_check.rounds`'s arguments, ``{"key", "main", "ledger", "window",
+"session", "roots", "openings"}``, and `core_check.salt`'s, ``{"key", "main", "ledger", "window", "session", "weights",
+"requests", "opening"}``, every entry of their ledgers written by the host's tree at `PIN`, a commit of `MAIN`, the
+verifier's copy of main's first-parent history.
 
 A rounds case is an honest live window read through its challenger's session: a live epoch's coins
 (`window.live_challenger`), the challenger's record of them signed at leaf `RECORD_LEAF` of a small LMS key (the
@@ -12,8 +13,8 @@ and ending it closed, sealing the log and hellos the session's challenger left a
 commitment; its entries up to the session's open sign at leaves 0, 1, …, and those after at `RECORD_LEAF` + 2 on.  Then
 one mutation (`ROUNDS_NAMES`) aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an
 unsigned or tampered log, a ledger signed under another key, under v1, cut before the session's end or at a reused leaf,
-a second session for the window's root, an end naming another record leaf or no hellos, hellos it didn't seal, …) or the
-coin rule's.
+a second session for the window's root, an end naming another record leaf or no hellos, hellos it didn't seal, a host
+pinned outside main's first-parent history or repinned mid-session (`PIN_NAMES`), …) or the coin rule's.
 
 A salt case is an honest live window's salt coin read through its challenger's session the same way: the session S a
 reserve entry of the auditor's ledger names (every session of that ledger reserved first, the gate's two-step open),
@@ -50,6 +51,14 @@ PARAMS = lms.Params(64, 4, 5)
 RECORD_LEAF = 8
 HOST = "vy-challenger-test"
 LANE = "pouw"
+#: the commit of the host's tree that writes every entry of a case's ledger, one of `MAIN`, the verifier's copy of
+#: main's first-parent history
+PIN = "ab" * 20
+MAIN = ["0f" * 20, PIN, "c3" * 20]
+#: the mutations of the host's pin, for `rounds` and `salt` alike: the session pinned to a pushed commit main's
+#: first-parent history doesn't hold, its end repinned to another of main's commits, an end naming no pin or a malformed
+#: one, and the verifier holding no copy of main's history or a malformed one
+PIN_NAMES = ["pin-not-main", "repinned", "no-pin", "pin-form", "no-main", "main-form"]
 
 
 @functools.cache
@@ -116,8 +125,8 @@ def _window(rng: random.Random) -> dict:
     return {"root": rng.randbytes(64).hex()}
 
 
-def _open(rng: random.Random, window: dict, public: bytes) -> dict:
-    return {"window": window, "host": HOST, "pinned": rng.randbytes(20).hex(),
+def _open(rng: random.Random, window: dict, public: bytes, pin: str = PIN) -> dict:
+    return {"window": window, "host": HOST, "pinned": pin,
             "key_sha512": hashlib.sha512(public).hexdigest(), "port": 7811, "by": LANE,
             **({"for": LANE} if rng.random() < 0.3 else {})}
 
@@ -148,7 +157,7 @@ def _end(s: Session, **changes) -> dict:
              Ch.RECORD_FILE: hashlib.sha512(canonical_json_text(s.ch.record.to_json()).encode()).hexdigest(),
              Ch.CLOSE_FILE: hashlib.sha512(canonical_json_text(s.close).encode()).hexdigest()}
     body = {"closed": True, "files": files, "rc": 0, "record_leaf": RECORD_LEAF, "commitment": s.ch.commitment.root.hex(),
-            "refused_hellos": len(s.sealed_hellos), "complete": True}
+            "refused_hellos": len(s.sealed_hellos), "complete": True, "pinned": PIN}
     return {k: v for k, v in {**body, **changes}.items() if v is not None}
 
 
@@ -159,7 +168,8 @@ def _reserved(rng: random.Random, sid: str, body: dict) -> list[tuple[str, str |
     start = f"2026-10-{rng.randint(10, 28)}T{rng.randrange(24):02d}:{rng.randrange(60):02d}:{rng.randrange(60):02d}Z"
     asked = {**{k: body[k] for k in ("by", "for") if k in body}, "minutes": minutes}
     opened = Ch.later(start, rng.randint(0, minutes))
-    return [("reserve", sid, {**asked, "started_utc": start, "expires_utc": Ch.later(start, minutes)}),
+    return [("reserve", sid, {**asked, "started_utc": start, "expires_utc": Ch.later(start, minutes),
+                              "pinned": body["pinned"]}),
             ("open", sid, {**body, **asked, "opened_by": LANE, "started_utc": opened})]
 
 
@@ -169,14 +179,15 @@ def _bind(events: list) -> list:
     return [(k, sid, {**b, "reserve": at[sid]}) if k == "open" and sid in at else (k, sid, b) for k, sid, b in events]
 
 
-def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: bool = False, **end
+def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: bool = False, pin: str = PIN, **end
                   ) -> list[tuple[str, str | None, dict]]:
     """The window's session `s` opened and ended closed (its end's body changed by `end`), sealing the log and hellos its
-    challenger left, among up to two others, sometimes inside a period of lane `LANE` that a close ends.  `reserved`
-    reserves every session first, as the gate's two-step open does (`_reserved`), among up to one other: the period
-    counts its windows at their reserves."""
-    o = _open(rng, window, s.pub)
-    named = (_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)]) + [("end", s.sid, _end(s, **end))]
+    challenger left, its entries written by the host's tree at `pin`, among up to two others, sometimes inside a period
+    of lane `LANE` that a close ends.  `reserved` reserves every session first, as the gate's two-step open does
+    (`_reserved`), among up to one other: the period counts its windows at their reserves."""
+    o = _open(rng, window, s.pub, pin)
+    named = ((_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)])
+             + [("end", s.sid, _end(s, **{"pinned": pin, **end}))])
     others = []
     for i in range(rng.randint(0, 1 if reserved else 2)):
         sid = session_id(rng) if reserved else f"o-{i}"
@@ -190,14 +201,14 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
     if rng.random() < 0.5:
         name = rng.choice(PERIODS)
         events.insert(0, ("period-open", None, {"period": name, "lane": LANE, "by": LANE, "cap": 4,
-                                                "circuit": rng.choice(CIRCUITS), "pinned": "ab" * 20,
+                                                "circuit": rng.choice(CIRCUITS), "pinned": PIN,
                                                 "key_sha512": hashlib.sha512(s.pub).hexdigest()}))
         if rng.random() < 0.5:
             roots = {sid: b["window"]["root"] for kind, sid, b in events if kind == "open"}
             windows = [{"root": roots[sid], "session": sid, "complete": True}
                        for kind, sid, b in events if kind == ("reserve" if reserved else "open")]
             events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
-                                                  "complete": True}))
+                                                  "complete": True, "pinned": PIN}))
     return _bind(events)
 
 
@@ -211,7 +222,7 @@ def honest_rounds(rng: random.Random, name: str = "honest") -> tuple[dict, Sessi
     k = rng.randint(lo, rounds - 1 if name in _LEFT else rounds)
     salt = rng.randbytes(64) if name != "label" and rng.random() < 0.5 else None
     s = Session(rng, ch, [rng.randbytes(64) for _ in range(k)], salt=salt)
-    return {"key": s.key(), "window": _window(rng), "session": s.files(),
+    return {"key": s.key(), "main": list(MAIN), "window": _window(rng), "session": s.files(),
             "roots": [r.hex() for r in s.rounds.roots], "openings": [o.to_json() for o in s.rounds.openings]}, s
 
 
@@ -219,7 +230,29 @@ def with_ledger(d: dict, s: Session, rng: random.Random) -> dict:
     """Case `d` with the auditor's ledger for its window, unless its mutation wrote its own."""
     if "ledger" not in d:
         d["ledger"] = ledger_lines(ledger_events(rng, d["window"], s), _key(0))
-    return {k: d[k] for k in ("key", "ledger", "window", "session", "roots", "openings")}
+    return {k: d[k] for k in ("key", "main", "ledger", "window", "session", "roots", "openings")}
+
+
+def _pinned(d: dict, name: str, rng: random.Random, ledger) -> bool:
+    """Pin mutation `name` (`PIN_NAMES`) of case `d`, whose ledger `ledger(**keywords)` writes from `ledger_events`'s
+    keywords; whether `name` is one."""
+    match name:
+        case "pin-not-main":
+            d["ledger"] = ledger(pin=rng.randbytes(20).hex())
+        case "repinned":
+            d["ledger"] = ledger(pinned=rng.choice([c for c in MAIN if c != PIN]))
+        case "no-pin":
+            d["ledger"] = ledger(pinned=None)
+        case "pin-form":
+            d["ledger"] = ledger(pinned=rng.choice([PIN.upper(), PIN[:-2], PIN + "00", "", 5, [PIN]]))
+        case "no-main":
+            d["main"] = None
+        case "main-form":
+            d["main"] = rng.choice(["x", {"main": MAIN}, "\n".join(MAIN), MAIN + [PIN.upper()], MAIN + [None],
+                                    [c + "\n" for c in MAIN]])
+        case _:
+            return False
+    return True
 
 
 def _set(lines: list[str], i: int, **changes) -> list[str]:
@@ -240,6 +273,8 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
     ch, roots, ops, files = s.ch, d["roots"], d["openings"], d["session"]
     c = ch.commitment
     j = rng.randrange(len(ops)) if ops else 0
+    if _pinned(d, name, rng, lambda **kw: ledger_lines(ledger_events(rng, d["window"], s, **kw), _key(0))):
+        return
     match name:
         case "key-form":
             d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "W": 3}, {**d["key"], "H": 0},
@@ -365,7 +400,7 @@ ROUNDS_NAMES = ["key-form", "seeded-coins", "in-process", "not-live", "unsigned"
                 "reused-leaf", "other-session",
                 "other-key", "forged-ledger", "truncated", "unsealed", "rewritten",
                 "roots-form", "openings-list", "openings-form", "twice", "early", "early-root", "never", "swapped",
-                "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "too-many", "label"]
+                "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "too-many", "label", *PIN_NAMES]
 
 
 def rounds_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -378,7 +413,7 @@ def rounds_instance(rng: random.Random, name: str = "honest") -> dict:
 
 def rounds_args(d: dict) -> tuple:
     """`core_check.rounds`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
-    return d["key"], d["ledger"], d["window"], d["session"], d["roots"], d["openings"], lms_verify
+    return d["key"], d["main"], d["ledger"], d["window"], d["session"], d["roots"], d["openings"], lms_verify
 
 
 def session_id(rng: random.Random) -> str:
@@ -405,14 +440,15 @@ def honest_salt(rng: random.Random) -> tuple[dict, Session]:
     weights, requests, sid = rng.randbytes(64), rng.randbytes(64), session_id(rng)
     root = PS.window_open_root(weights, requests, sid)
     s = _salted(rng, ch.commitment, sid, root)
-    return {"key": s.key(), "window": {"root": root.hex()}, "session": s.files(), "weights": weights.hex(),
-            "requests": requests.hex(), "opening": s.salt[0].to_json()}, s
+    return {"key": s.key(), "main": list(MAIN), "window": {"root": root.hex()}, "session": s.files(),
+            "weights": weights.hex(), "requests": requests.hex(), "opening": s.salt[0].to_json()}, s
 
 
-def salt_ledger(rng: random.Random, window: dict, s: Session, reserved: bool = True, k: int = 0) -> list[str]:
+def salt_ledger(rng: random.Random, window: dict, s: Session, reserved: bool = True, k: int = 0, **events
+                ) -> list[str]:
     """The auditor's ledger opening session `s` for `window`, every session reserved first unless not `reserved`,
-    signed under key `k`."""
-    events = ledger_events(rng, window, s, reserved=reserved)
+    signed under key `k` (`events`: `ledger_events`'s other keywords)."""
+    events = ledger_events(rng, window, s, reserved=reserved, **events)
     return ledger_lines(events, _key(k), leaves_of(events, s.sid))
 
 
@@ -421,7 +457,7 @@ def with_salt_ledger(d: dict, s: Session, rng: random.Random) -> dict:
     its own."""
     if "ledger" not in d:
         d["ledger"] = salt_ledger(rng, d["window"], s)
-    return {k: d[k] for k in ("key", "ledger", "window", "session", "weights", "requests", "opening")}
+    return {k: d[k] for k in ("key", "main", "ledger", "window", "session", "weights", "requests", "opening")}
 
 
 def _resalted(d: dict, s: Session, rng: random.Random, root: bytes) -> Session:
@@ -435,6 +471,8 @@ def _mutate_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
     """Mutation `name` of salt case `d` over session `s`, and the session the auditor's ledger opens."""
     c, op, files = s.ch.commitment, d["opening"], d["session"]
     root, w, t = (bytes.fromhex(x) for x in (d["window"]["root"], d["weights"], d["requests"]))
+    if _pinned(d, name, rng, lambda **kw: salt_ledger(rng, d["window"], s, **kw)):
+        return s
     match name:
         case "key-form":
             d["key"] = rng.choice([None, {**d["key"], "public": "00"}, {**d["key"], "W": 3}, {**d["key"], "H": 0}])
@@ -503,7 +541,7 @@ def _mutate_salt(d: dict, s: Session, name: str, rng: random.Random) -> Session:
 
 SALT_NAMES = ["key-form", "no-ledger", "no-session", "forged-ledger", "in-process", "unsealed", "other-session",
               "not-live", "no-reserve", "form", "weights", "requests", "session", "weights-root", "received",
-              "opening-form", "after", "label", "foreign", "foreign-epoch", "tampered", "malformed"]
+              "opening-form", "after", "label", "foreign", "foreign-epoch", "tampered", "malformed", *PIN_NAMES]
 
 
 def salt_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -516,4 +554,5 @@ def salt_instance(rng: random.Random, name: str = "honest") -> dict:
 
 def salt_args(d: dict) -> tuple:
     """`core_check.salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
-    return d["key"], d["ledger"], d["window"], d["session"], d["weights"], d["requests"], d["opening"], lms_verify
+    return (d["key"], d["main"], d["ledger"], d["window"], d["session"], d["weights"], d["requests"], d["opening"],
+            lms_verify)
