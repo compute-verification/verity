@@ -126,8 +126,8 @@ theorem prob_servedEv (hk : s.kd = s.n)
     (hS : ∀ u, s.ServedRegistered u) : prob s.ServedEv s.G s.τ = 0 :=
   prob_audit_eq_zero s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr) s.ServedEv (fun R ω s' => by
     refine (prob_map (fun t => s.ServedEv (R, s.L.draw ω, t)) (s.wr (s.L.draw ω) R) _ s').trans ?_
-    exact le_antisymm ((prob_mono (fun o ho => s.servedEv_false hk hN hS R ω o ho) _ _).trans
-      (prob_false _ _).le) (zero_le _)) s.τ
+    exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => s.servedEv_false hk hN hS R ω o ho) _ _).trans
+      (prob_false _ _).le)) s.τ
 
 end RowsSession
 
