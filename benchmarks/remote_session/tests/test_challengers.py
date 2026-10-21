@@ -192,7 +192,8 @@ def test_the_gates_ports_are_the_hosts():
 def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
     """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
     gate's sessions (`challengers.Gate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
-    Neither appends, so each reserves W challenges and W openings coins and no append family. The honest session's
+    The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
+    family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
     openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
     coins unreleased and is not, and the period's close lists the two so."""

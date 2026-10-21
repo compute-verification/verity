@@ -154,9 +154,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
-    (`coins.APPENDS` when the plan names a session that appends, else none); `then(v)` once they end."""
-    if appends is None:
-        appends = coins.APPENDS if any(m not in ("honest", "skip") for m, _ in prover.parse_plan(plan)) else 0
+    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -366,11 +364,11 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
 
 
-def test_a_session_reserves_append_coins_only_when_it_appends_and_an_append_past_them_is_refused(monkeypatch):
-    """Each session's coins are W challenges, W openings coins and the verifier's `appends` append coins, with no
-    append family at `--appends 0` (the default): the honest session is accepted on those coins, and a kv session's
-    first append, which has no coin, is its `coin` rejection (on the books; `python`, since the Lean takes only the
-    append coins released)."""
+def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_append_past_them_is_refused(monkeypatch):
+    """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
+    a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
+    accepted.  At `appends=0` the kv session's first append has no coin and is its `coin` rejection, the honest one
+    accepted (on the books; `python`, since the Lean takes only the append coins released)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     import challengers
 
@@ -382,9 +380,17 @@ def test_a_session_reserves_append_coins_only_when_it_appends_and_an_append_past
         return c
 
     monkeypatch.setattr(challengers.Local, "open", opened)
+    pair = ((coins.CHALLENGE, 3), (coins.OPENINGS, 3))
+    (r,), (p,) = run("honest", samples=8, verdict="python")
+    assert r["accepted"] and p["accepted"] and layouts == [pair]
+    layouts.clear()
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, verdict="python")
+    assert honest["accepted"] and kv["accepted"] and ph["accepted"] and pk["accepted"] and kv["appended"] > 0
+    assert layouts == [pair + ((coins.APPEND, coins.APPENDS),)] * 2
+    layouts.clear()
     (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0,
                                  verdict="python")
-    assert layouts == [((coins.CHALLENGE, 3), (coins.OPENINGS, 3))] * 2
+    assert layouts == [pair] * 2
     assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
     assert not kv["accepted"] and kv["failure"]["failure"] == "coin" and kv["appended"] == 0
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
@@ -978,16 +984,22 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
         verifier.regions_of(layout, 16)
 
 
-def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None,
-            verdict: str = verifier.VERDICT) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
-    """A prover whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with `hello`'s
-    fields too: the verifier, its refusal if it refused, and the reason the prover read in its `bye`."""
+def greeted(lifetime: int, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
+            plan: str = "honest", verdict: str = verifier.VERDICT
+            ) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
+    `hello`'s fields too and without `drop`'s: the verifier, its refusal if it refused, and the reason the prover read
+    in its `bye`."""
     a, b = socket.socketpair()
     backend = prover.CpuBackend(16, random.Random(7))
     backend.deferred = deferred
-    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
     send = p.conn.send
-    p.conn.send = lambda head, body=b"": send(head | (hello or {}) if head["type"] == "hello" else head, body)
+
+    def greet(head: dict) -> dict:
+        return {k: x for k, x in (head | (hello or {})).items() if k not in drop}
+
+    p.conn.send = lambda head, body=b"": send(greet(head) if head["type"] == "hello" else head, body)
     heard = []
 
     def prove() -> None:
@@ -1020,6 +1032,22 @@ def test_a_prover_that_defers_residency_is_refused_under_a_lifetime_of_one_windo
     for lifetime, deferred in ((2, True), (1, False)):
         v, refused, heard = greeted(lifetime, deferred)
         assert refused is None and heard == [] and v.deferred is deferred and v.registry.drawn(b"test-node") == 1
+
+
+def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
+    """The hello says whether any session of the prover's plan appends: a plan of honest and skip sessions says not,
+    and its sessions reserve no append coins; any other plan, or a hello that doesn't say, keeps `coins.APPENDS`, and
+    a verifier given `appends` keeps its own.  A hello whose `appends` isn't a bool is refused with `bye`."""
+    for plan, drop, appends in (("honest,skip:0.25", (), 0), ("honest,kv:2", (), coins.APPENDS),
+                                ("serve", (), coins.APPENDS), ("honest", ("appends",), coins.APPENDS)):
+        v, refused, heard = greeted(audit.LIFETIME, False, plan=plan, drop=drop)
+        assert refused is None and heard == [] and v.appends_of() == appends, plan
+    v, refused, _ = greeted(audit.LIFETIME, False, plan="honest")
+    v.appends = 8
+    assert v.appends_of() == 8
+    v, refused, heard = greeted(audit.LIFETIME, False, hello={"appends": "no"})
+    assert refused is not None and "true or false" in str(refused) and heard == [f"refused: {refused}"]
+    assert v.registry.drawn(b"test-node") == 0
 
 
 @pytest.mark.parametrize("verdict", verifier.VERDICTS)
