@@ -1715,9 +1715,10 @@ def _domains(widths):
                      st.integers(0, 70) | st.integers(0, 1 << 40), st.sampled_from(widths))
 
 
-DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(_domains([16, 32]), st.one_of(
-    st.builds(lambda d, w: {**d, "window": w}, _domains([16, 32]),
-              st.sampled_from([WROOT, EARLIER_WROOT, WROOT.upper(), WROOT[:-2], "", None, 5, WROOT + "\n"])),
+DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(
+    _domains([16, 32]), st.builds(lambda d, w: {**d, "window": w}, _domains([16, 32]), st.sampled_from([WROOT, EARLIER_WROOT])),
+    _domains([16, 32]), st.one_of(st.builds(lambda d, w: {**d, "window": w}, _domains([16, 32]),
+                        st.sampled_from([WROOT.upper(), WROOT[:-2], "", None, 5, WROOT + "\n"])),
     _domains([0, 8, 24, 48]),
     st.builds(lambda k, v: {"leaves": 3, "program": "p", "value": "W", "word_bits": 16, "words": 2, k: v},
               st.sampled_from(["leaves", "program", "value", "word_bits", "words"]), JSON), JSON)), package=PACKAGE)
