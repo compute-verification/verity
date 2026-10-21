@@ -79,12 +79,15 @@ def learn(mp, ts: list[tuple[str, torch.Tensor]], retain_levels: bool, *, hold: 
 
 
 @pytest.mark.parametrize("retain_levels", [False, True], ids=["no-levels", "levels"])
-def test_a_learning_step_past_the_hold_peaks_within_twice_the_hold(monkeypatch, retain_levels):
+def test_a_learning_step_past_the_hold_peaks_within_twice_the_hold(monkeypatch, record_property, retain_levels):
     monkeypatch.setattr(WR, "WINDOW_MB", str(WINDOW_MB))
     ts = step_tensors()
     small = learn(monkeypatch, ts, retain_levels, hold=HOLD)
+    record_property("bound_bytes", BOUND)
+    record_property("peak_bytes", small.peak)
     assert small.peak <= BOUND, f"a learning step past rows_hold_bytes={HOLD} peaked at {small.peak} bytes, over the bound {BOUND}"
     full = learn(monkeypatch, ts, retain_levels, keys=small.keys)
+    record_property("default_hold_peak_bytes", full.peak)
     assert full.keys == small.keys
     assert [s.root for s in small.rc.steps] == [s.root for s in full.rc.steps] and small.rc.run_root == full.rc.run_root
     w, wf = small.rc.extra["windows"], full.rc.extra["windows"]
