@@ -160,9 +160,10 @@ def OutputPortIs (log : Array Json) (leaves : Nat) (record port : String) : Prop
     (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
 
 /-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
-registered (`Registration.ownEntries`: `Registered.entries`, each value's domain under its window's open root but the
-values it holds across windows); each output value it has an entry for has its earlier port, with the value's leaf
-count (`OutputPortIs`), and takes that port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
+registered (`Registration.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
+it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
+output value it has an entry for has its earlier port, with the value's leaf count (`OutputPortIs`), and takes that
+port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
 record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
 them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
 naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
