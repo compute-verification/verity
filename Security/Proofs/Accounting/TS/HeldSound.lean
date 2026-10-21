@@ -24,8 +24,7 @@ open FlockSoundness.Refine (H512)
 
 theorem regRead_at (s : RowsSession) (f : Fin s.n → Fin s.Circ.N → Bool) {u : Fin s.n} {g : Fin s.Circ.N}
     (hg : g ∈ s.P.io u) (hr : (s.rdU u).isRead (s.vb.pos g)) : regRead s f u.val g.val = some (f u g) := by
-  unfold regRead
-  dsimp only
+  dsimp only [regRead]
   split_ifs with h1 h2
   · rfl
   · exact (h2 ⟨hg, hr⟩).elim
@@ -90,9 +89,10 @@ theorem held_of_checked {ι : Type} (s : RowsSession) (o : s.Out) (ok : String)
   obtain ⟨-, vals, hv, hagree⟩ := hc
   refine Or.inl ⟨vals, hv, hagree, fun u hu => hR vals u (hagree u hu) fun g hw => ?_⟩
   refine ⟨_, tie_ok s ok hk hm hks hS hcol hw, ?_⟩
+  obtain ⟨hg, hr, -⟩ := hw
   have e := congrFun (congrFun hv u.val) g.val
   simp only [openedReg, rowsReg] at e
-  rw [regRead_at s _ hw.1 hw.2.1, regRead_at s _ hw.1 hw.2.1] at e
+  rw [regRead_at s _ hg hr, regRead_at s _ hg hr] at e
   exact (Option.some.inj e).symm
 
 end Accounting.TS.Held

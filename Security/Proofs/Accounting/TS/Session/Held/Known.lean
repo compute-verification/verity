@@ -53,15 +53,15 @@ theorem checkKnown_ok {reg : Registered.Port} {ks : Array (Array ℕ × ByteArra
   unfold Registered.checkKnown at h
   split at h
   · cases h
-  rename_i hs
-  split at h
-  · cases h
-  rename_i hl
   split at h
   · cases h
   split at h
   · cases h
-  rename_i hr
+  split at h
+  · cases h
+  have hs : ¬ (reg.schema != HmRow.ROW_SCHEMA_V2 || reg.wordBits != 16) = true := by assumption
+  have hl : ¬ (ks.size != reg.leaves) = true := by assumption
+  have hr : ¬ (FV3.root reg.domain (Registered.knownLeaves reg ks) Sha512.hash != reg.root) = true := by assumption
   simp only [bne_iff_ne, ne_eq, Bool.or_eq_true, not_or, not_not] at hs hl
   exact ⟨hs.1, hl, eq_of_not_bne hr⟩
 
