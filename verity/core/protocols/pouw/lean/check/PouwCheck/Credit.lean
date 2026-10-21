@@ -256,15 +256,15 @@ def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
   pure out
 
 def SCHEMA : String := "verity-ir/descriptor/v1"
-def WINDOW_FN : String := "PouwH1Window_v2"
+def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
-def SHARED : List String := ["salt", "position", "roots"]
+def SHARED : List String := ["zy", "salt", "position", "roots"]
 def DESCRIPTOR_FORM : String :=
   "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
 def NOT_WINDOW : String :=
-  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v2{TILES=…,LINEARS=…," ++
+  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
   "CALLS=…,M=…,PREFIX=…}, each binding canonical JSON, its TILES [[K, {\"fn\": template}], ...] by ascending K and " ++
   "its PREFIX a string (h1window.program's Program)"
 def BODY : String :=
