@@ -7,7 +7,9 @@ import Proofs.Nci.Cover.Paths
 
 `whole_use_entry`: a block that computes whole a counted product of use `j` is handed a gate of `A j`. The product's
 gate `g` reads the certificate's activation `a ∈ A j`, so `a ∈ I`; were `I` handed no gate of `A j`, it would compute
-every gate of `j`'s upstream products (`BackwardClosure`), and `UpdateHardness` would charge it `b D > k` bits.
+the output gate of each of `j`'s upstream products (`BackwardClosure`), and so each of their gates, which reaches the
+output inside the product and the region (`reachesIn_output`, `Entry`), and `UpdateHardness` would charge it `b D > k`
+bits.
 `ActivationCharge` counts these gates, distinct across uses since the regions are disjoint and none is in `θ`.
 
 `finished_sdiff_whole_card_le`: each counted product whose output gate `I` computes but not all of whose gates has a
@@ -26,16 +28,23 @@ theorem whole_use_entry {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq 
   intro j hj
   obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hj
   obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hp
-  obtain ⟨U, hUP, -, hDU, hcert⟩ := hU.upstream p.1 (Finset.mem_image_of_mem Prod.fst hpP)
+  obtain ⟨U, hUP, hUA, hDU, hcert⟩ := hU.upstream p.1 (Finset.mem_image_of_mem Prod.fst hpP)
   obtain ⟨g, hg, a, ha, hreach⟩ := hcert p hpP rfl
   obtain ⟨haPred, -⟩ := Finset.mem_inter.1 ha
   by_contra hne
   rw [Finset.not_nonempty_iff_eq_empty] at hne
-  have haI : a ∈ I := pred_subset_of_mem_computed hI.1 (hpI hg) haPred
-  have hUc : ∀ q ∈ U, M.m q ⊆ C.computed I := fun q hq x hx =>
-    BackwardClosure C I (A p.1) a x hI.1 haI hne (hreach q hq x hx)
-  have hpay := hH I hI.1 hI.2.1.le U hUP hUc
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+  have haI : a ∈ I := pred_subset_of_mem_computed (hpI hg) haPred
+  have hUc : ∀ q ∈ U, M.m q ⊆ C.computed I := by
+    intro q hq x hx
+    have hoI := BackwardClosure C I (A p.1) a (M.o q) haI hne (hreach q hq)
+    obtain ⟨π, hπ, hπm⟩ := reachesIn_output C (M.m q) (M.o q) (M.m_outputs q (hUP hq)) x hx
+    by_contra hxc
+    obtain ⟨g', hg'π, hg'I⟩ := Entry C I π x (M.o q) hπ (computed_subset C I hoI) hxc
+    have hg' : g' ∈ C.inputs I ∩ A p.1 := Finset.mem_inter.2 ⟨hg'I, hUA q hq (hπm g' hg'π)⟩
+    rw [hne] at hg'
+    exact Finset.notMem_empty g' hg'
+  have hpay := hH I hI.1.le U hUP hUc
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hD : (D : ℝ) ≤ (U.image Prod.snd).card := by exact_mod_cast hDU
   have := mul_le_mul_of_nonneg_left hD hb.le
   linarith
@@ -54,9 +63,9 @@ theorem ActivationCharge : Guarantees.ActivationCharge := by
   obtain ⟨hxi, hxA⟩ := Finset.mem_inter.1 hx
   exact Finset.mem_sdiff.2 ⟨hxi, Finset.disjoint_left.1 (hU.disjoint_θ j (hWuses hj)) hxA⟩
 
-/-- The counted products a subcircuit finishes without computing them whole are at most its inputs outside `θ`. -/
+/-- The counted products a set of gates finishes without computing them whole are at most its inputs outside `θ`. -/
 theorem finished_sdiff_whole_card_le {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
-    {I : Finset (Fin C.N)} (hI : C.Subcircuit I) :
+    {I : Finset (Fin C.N)} :
     (M.finished I \ M.whole I).card ≤ (C.inputs I \ C.θ).card := by
   have hPall : ∀ p ∈ M.finished I \ M.whole I, p ∈ M.Pall := fun p hp =>
     M.P_subset (Finset.mem_filter.1 (Finset.mem_sdiff.1 hp).1).1
@@ -66,7 +75,7 @@ theorem finished_sdiff_whole_card_le {C : Circuit} {J L : Type} [DecidableEq J] 
     obtain ⟨hpP, hoI⟩ := Finset.mem_filter.1 hpf
     obtain ⟨x, hxm, hxc⟩ := Finset.not_subset.1 fun h => hpw (Finset.mem_filter.2 ⟨hpP, h⟩)
     obtain ⟨π, hπ, hπm⟩ := reachesIn_output C (M.m p) (M.o p) (M.m_outputs p (hPall p hp)) x hxm
-    obtain ⟨g, hgπ, hgI⟩ := Entry C I π x (M.o p) hI hπ (computed_subset C I hoI) hxc
+    obtain ⟨g, hgπ, hgI⟩ := Entry C I π x (M.o p) hπ (computed_subset C I hoI) hxc
     exact ⟨g, Finset.mem_inter.2 ⟨hπm g hgπ, hgI⟩⟩
   have hdisj : ((M.finished I \ M.whole I : Finset (J × L)) : Set (J × L)).PairwiseDisjoint
       fun p => M.m p ∩ C.inputs I :=
