@@ -978,30 +978,31 @@ verdict the relay cuts the challenger's connection without forwarding `Finish`, 
 A refused or stopped session's worker is answered after the session has left the slot, so a worker that keeps talking
 holds up no other session.
 
-**The release decision is Lean's** (`Core.Firewall.decide`, `core-firewall decide`), and Rust runs it
-(`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
-NAME`, behind its send check (`FC_FIREWALL=1`, §10.4), runs each outer session straight to `serve` under the rules of this
-section, and keeps `verity_flock.firewall`'s record byte for byte: `live/src/firewall_record_vectors.json`, which
-`release::tests::the_shared_vectors_hold` and `test_the_record_is_the_rust_firewalls_byte_for_byte` both run. It takes the
-slot and admits the session in one read of the record (`Record::slot_admit`: the statements' order is enforced there,
-before the prover connects), runs its rounds, holds its proofs and `Finish` until the session's release time, and sends
-them, every proof before `Finish`. Rust's decision is the reference: once the session is refused, or once its rounds and
-the send check returned, `core-firewall decide` (`FC_CORE_FIREWALL`, else this checkout's build in
-`verity/core/service/firewall`) decides on the record as it was when the slot was taken, and a session it doesn't decide
-as Rust did (refused, stopped or sent, the why, the release time, and the record after the slot and the admission) is a
-stop, its why naming the difference; a refusal stays one. Nothing leaves that the Lean decision doesn't send, and a Lean
-that can't be run is a stop. `verity/core/service/firewall/tests/test_firewall_release_agreement.py` holds Rust's
-sessions with that judge to Lean's `outerSession`.
-Every stop (the send check's refusal, a fault, a panic, a missed time) drops the connection before `Finish`, and a
-prover killed while it holds the slot is recorded as its session's stop by the next one to take it. Since admission comes
-before the connection, a session cut before its first request is its statement's stop here; through the relay it records
-nothing, and the statement stays next. Either way no message of that statement has reached the challenger. It proves one
-session (`--warm 0 --runs 1`: each statement is served once) and refuses `FC_VERIFY_AHEAD` (the slot is held
-until each session's verdict). `verity_flock.firewall` stays as the inner side
+**The release side is Lean's** (`core-firewall session`, `Core.Firewall.Loop` in `verity/core/service/firewall`).
+`flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`, behind its send check (`FC_FIREWALL=1`, §10.4),
+starts it as its Lean session loop (§10.4's `flock-firewall session` with a hold on each session, `Session.Hold`;
+`FC_CORE_FIREWALL`, else this checkout's build), and the loop keeps `verity_flock.firewall`'s record byte for byte
+(`record.jsonl` read whole and appended under `record.lock`, `slot.lock` the outer slot, both `flock(2)` locks):
+`live/src/firewall_record_vectors.json`, which `release::tests::the_shared_vectors_hold`,
+`test_the_record_is_the_rust_firewalls_byte_for_byte` and `test_firewall_release_agreement.py` run. Like the relay, the
+loop answers a session's `Ping`s itself, and at its first other request takes the slot, then records the slot and the
+admission in one read of the record (`Core.Firewall.seat`: the statements' order is enforced there), before anything of
+the session reaches the challenger. It relays the session's rounds as §10.4 says, holds its proofs and `Finish`, and at
+`Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a stop, as is a
+`Finish` with fewer than the session's proofs (two a table; the send check refused, and `flock-circuit` then sends
+`Finish` at once) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
+leave, and serve's verdict is its release or its stop. `flock_live::release` is the Rust reference that decision is held
+to (`verity/core/service/firewall/tests`), and nothing serves through it. Every stop the loop makes, and a fault of its
+own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own verdict; a prover killed while
+its session holds the slot is that session's stop, which the loop records, or, where the loop ended with it, the next
+session to take the slot. A session cut before its first request other than
+`Ping` records nothing, and the statement stays next: no message of it has reached the challenger. `flock-circuit` proves
+one session (`--warm 0 --runs 1`: each statement is served once), refuses `FC_VERIFY_AHEAD` (the slot is held until each
+session's verdict), and reports the outcome the loop recorded. `verity_flock.firewall` stays as the inner side
 (`rec_live`'s opens, finishes and inner stops) and as the tests' relay. These decisions across sessions (whether a
 recursive session's next outer session goes on, and when its proofs leave) are outside `FirewallComputes`, in either
-language: that assumption covers the values one session's transcript reports the firewall fixed. The Lean decision
-checks them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
+language: that assumption covers the values one session's transcript reports the firewall fixed. The Lean loop
+decides them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
 and refuses a schedule.
 
 **Outer proofs one at a time.** The firewall has one slot across streams and protocols (`slot.lock` in its state directory,
