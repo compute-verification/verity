@@ -6,6 +6,9 @@
   "Properties.Proofs.Pouw",
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
+  "Properties.Pouw.Strata",
+  "Properties.Proofs.Pouw.Strata",
+  "Properties.Pouw.Credit",
   "Properties.Nci",
   "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
@@ -84,9 +87,12 @@
   "PouwCheck.Inputs",
   "PouwCheck.Check",
   "PouwCheck.Protocol",
+  "PouwCheck.Pass",
+  "PouwCheck.Credit",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
+  "Definitions.Pouw.RelativeSecurity",
   "Properties.Pouw.Commit",
   "PouwCommit.Tagged",
   "PouwCommit.Frame",
@@ -146,8 +152,13 @@
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
-   "except": [],
+   "except": ["Properties.Pouw.Credit"],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Pouw.Credit": {
+   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -1629,6 +1640,12 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -2523,6 +2540,14 @@
    },
    "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
     "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
+    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
+    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.epsAt"],
     "outcome": "accept"
    }
   },
