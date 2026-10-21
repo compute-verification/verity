@@ -795,13 +795,20 @@ opening at the schedule's place, not the prover's: the session stream's at `Comm
 stream in table order, rep 0's before rep 1's, at the coin counts the verifier's replay draws (`Session.planOf`;
 `flock-firewall session --schedule` prints them). A `Commit` or `Round` anywhere else is refused before it reaches the
 auditor, and so is a `Finish` before the schedule's last opening. A coin it refuses, or one asked for after a refusal,
-is answered `Refused("PROVER-STOPPED: …")`. The reps' frames are the loop's own: it prints `FRAMES 127.0.0.1:PORT` after
-its `LISTENING` line, and each connection there is one rep's frame (`Session.frames`, the protocol below), which
-`firewall::LeanFrame::connect` starts. A rep stream's `Round` leaves only as the release of the frame bound to its
-stream, byte for byte and at its coin count, or at the stream's first round as the stream's domain frame and the release
-of a frame bound to none, which is then bound to it (`Frames.carry`); anything else is refused before it reaches the
-auditor. Once a round's coins open the tree, the loop sets them as its frame's coins before the prover receives them
-(`Frames.feedOf`), and the frame's `coins N` takes those and no others (`Frames.take`: Rust's bytes must be them).
+is answered `Refused("PROVER-STOPPED: …")`. The reps' frames are the loop's own, and the loop drives them
+(`Frames`): it prints `FRAMES 127.0.0.1:PORT` after its `LISTENING` line, and a connection there whose first line is
+`rep SESSION I R` starts table `I`'s rep `R`'s frame for the live session named `SESSION` (`Frames.startRep`,
+`firewall::LeanFrame::rep`), at the statement's start (`Drive.start`), and is answered `ok N` and the `N` bytes of the
+draws the loop made for it and the pads' root, which the prover proves with. Every request the frame takes is the loop's,
+on the schedule `Drive.reqs` fixes: a rep stream's `Round` carries the device's round, and the loop places it as the
+algebraic phase's scheduled round (`Skeleton.rounds` on the table's level 0), then the opening's (`Finish.openLive`, run
+beside the loop on the extra claims at the `Commit`'s coins and the rep's salts for levels ≥ 1, one copy with the
+finish's), then the inner proof's own; rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
+refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
+receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered
+`finish` not stopped (`Frames.finish`). The Rust prover's `LeanFrame` then only stands in: it sends nothing on the
+frame and passes every round through, unmasked, to the loop.
 A connection there whose first line is `level0 SESSION M LEN`, followed by a table's `LEN`-byte packed witness, is that
 table's level 0 (`Session.level0`, §10.2) for the live session named `SESSION`: the hex of its coin tree's root, the first
 four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and the `N`

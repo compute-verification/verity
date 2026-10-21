@@ -975,15 +975,18 @@ struct ZkRep {
     t_commit: f64,
     /// Ligerito level 0's hiding, drawn once per session (both reps open the one level-0 codeword), with this rep's pair
     level0: Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
-    /// under the firewall, the rep's Lean frame, which drew `pads` and the pads tree's salts (or why it could not)
+    /// under the firewall, the rep's Lean frame, which drew `pads` and the pads tree's salts (or why it could not); `looped`:
+    /// the frame is the Lean session loop's, which masks the device's rounds itself
     lean: Mutex<Option<Result<flock_live::firewall::LeanFrame, String>>>,
+    looped: bool,
 }
 
-/// The rep's Lean frame and its draws, Rust's tree over them held to the frame's root: one of the Lean session loop's frames,
-/// at its `frames` address (`flock_live::firewall::LeanFrame::connect`), else a frame process of its own (`LeanFrame::start`).
-fn lean_draws(st: &Stmt, lay: &Layout, frames: Option<&str>) -> Result<(flock_live::firewall::LeanFrame, zkv::Pads, zkv::InnerCommit), String> {
+/// The rep's Lean frame and its draws, Rust's tree over them held to the frame's root: the Lean session loop's own frame of
+/// table `table`'s rep `rep` in the session it names `name`, at its `frames` address `addr`
+/// (`flock_live::firewall::LeanFrame::rep`), else a frame process of its own (`LeanFrame::start`).
+fn lean_draws(st: &Stmt, lay: &Layout, frames: Option<(&str, &str, usize, usize)>) -> Result<(flock_live::firewall::LeanFrame, zkv::Pads, zkv::InnerCommit), String> {
     let (frame, d) = match frames {
-        Some(addr) => flock_live::firewall::LeanFrame::connect(addr, lay, mask_slot(st))?,
+        Some((addr, name, table, rep)) => flock_live::firewall::LeanFrame::rep(addr, name, table, rep, lay, mask_slot(st))?,
         None => flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), lay, mask_slot(st))?,
     };
     let ic = zkv::InnerCommit::new(&d.pads, d.salts);
@@ -995,13 +998,17 @@ fn lean_draws(st: &Stmt, lay: &Layout, frames: Option<&str>) -> Result<(flock_li
 }
 
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
-/// Under the firewall the rep's Lean frame draws them instead, from the OS.
+/// Under the firewall the rep's Lean frame draws them instead, from the OS: the Lean session loop's, of the session it names
+/// and the table (`frame`), where the loop serves the session.
 #[allow(clippy::too_many_arguments)]
 fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
+              points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
+              frame: Option<(&str, usize)>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
-    let (mut pads, mut ic, lean) = match firewall_on(st).then(|| lean_draws(st, &lay, plan.lean_frames.as_deref())) {
+    let looped = firewall_on(st) && plan.lean_frames.is_some() && frame.is_some();
+    let at = plan.lean_frames.as_deref().zip(frame).map(|(a, (name, table))| (a, name, table, rep));
+    let (mut pads, mut ic, lean) = match firewall_on(st).then(|| lean_draws(st, &lay, at)) {
         Some(Ok((frame, pads, ic))) => (pads, Some(ic), Some(Ok(frame))),
         Some(Err(why)) => (zkv::Pads::draw(prng, &lay, rep), None, Some(Err(why))),
         None => (zkv::Pads::draw(prng, &lay, rep), None, None),
@@ -1022,7 +1029,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
         extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
     };
     ZkRep { lay, pads, ic, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
-            t_commit, level0: Arc::new(level0), lean: Mutex::new(lean) }
+            t_commit, level0: Arc::new(level0), lean: Mutex::new(lean), looped }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
@@ -1039,7 +1046,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
     let reps = [0usize, 1].map(|rep| {
         let id = id0 + rep as u64 * (1 + trees);
-        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts), id)
+        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts, None), id)
     });
     eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
     (t_level0, reps)
@@ -1102,7 +1109,9 @@ fn sent_pads(zk: &ZkRep) -> zkv::Pads {
 /// the refusals, and this challenger's are its cross-check (`defer`).
 fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C, zk: &ZkRep) -> (zkv::Masking<Gate<C>>, zkv::Pads) {
     let sent = sent_pads(zk);
-    let mut mch = zkv::Masking::new(Gate::new(ch), &zk.lay, &sent, zk.ic.root());
+    let mut gate = Gate::new(ch);
+    gate.raw = zk.looped;
+    let mut mch = zkv::Masking::new(gate, &zk.lay, &sent, zk.ic.root());
     mch.defer = firewall_on(st);
     let (st2, lay, pts, words) = (st.clone(), zk.lay, zk.points.clone(), mask_words(st));
     mch.at_open = Some(Box::new(move |coins: &[F128]| {
@@ -3867,7 +3876,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
                     None => (is_zk(st).then(|| {
                         let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-                        make_zkrep(st, plan, &mut prng, zk_level0.as_ref().unwrap(), zk_points, rep, id, salts)
+                        let name = flock_live::firewall::level0_session(&commit);
+                        make_zkrep(st, plan, &mut prng, zk_level0.as_ref().unwrap(), zk_points, rep, id, salts, Some((&name, j)))
                     }), None),
                 };
                 if let (Some(id), 1) = (pre_id, rep) {

@@ -477,9 +477,10 @@ impl Challenger for Framer<'_> {
 
 /// The outer firewall's release (PROTOCOL.md §10.1): one rep's Lean frame (`Flock.Firewall.Frame` in the Lean verifier), which
 /// draws the rep's prover randomness from the OS and commits it, computes each round that leaves from the device's unmasked
-/// round the firewall passed, and decides the rep's refusals from the coins the stream answered. Under the Lean session loop
-/// it is one of the loop's frames ([`LeanFrame::connect`], `Flock.Firewall.Session.frames`), whose coins are the ones the loop
-/// opened; else a `flock-firewall frame` process of its own ([`LeanFrame::start`]).
+/// round the firewall passed, and decides the rep's refusals from the coins the stream answered: a `flock-firewall frame`
+/// process of its own ([`LeanFrame::start`]). Under the Lean session loop the rep's frame is the loop's, which issues every
+/// request to it itself (`Flock.Firewall.Frames`): this only starts it there and takes its draws ([`LeanFrame::rep`]), and
+/// its requests answer as a frame that passes every round, the device's unmasked rounds leaving to the loop as they are.
 #[cfg(feature = "sha512")]
 pub struct LeanFrame {
     child: Option<std::process::Child>,
@@ -488,6 +489,8 @@ pub struct LeanFrame {
     /// the start's line, and `FC_FINISH_DUMP`'s copy of every request after it ([`LeanFrame::dump`])
     start: String,
     log: Option<std::fs::File>,
+    /// the frame is the Lean session loop's ([`LeanFrame::rep`]): no request leaves this process
+    looped: bool,
 }
 
 /// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
@@ -562,28 +565,32 @@ impl LeanFrame {
         let mut child = Command::new(exe).arg("frame").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
             .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
         let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
-        LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)), start: String::new(), log: None }
-            .begin(lay, mask)
+        LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)), start: String::new(), log: None,
+                    looped: false }
+            .begin(lay, mask, None)
     }
 
-    /// Starts a rep as [`LeanFrame::start`] does, as one of the Lean session loop's frames, at `addr` (its `FRAMES` address,
-    /// [`LeanSession::frames`]): the coins it takes are the ones the loop opened for the rounds it released.
-    pub fn connect(addr: &str, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
+    /// Starts table `table`'s rep `rep` of the session the Lean session loop names `name` ([`level0_session`]) as the loop's
+    /// own frame, at `addr` (its `FRAMES` address, [`LeanSession::frames`], `rep NAME TABLE REP`): the loop draws the rep's
+    /// randomness at the statement's start and drives the frame itself; the draws come back, which the rep proves with.
+    pub fn rep(addr: &str, name: &str, table: usize, rep: usize, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
         let tcp = std::net::TcpStream::connect(addr).map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
         let _ = tcp.set_nodelay(true);
         let reader = tcp.try_clone().map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
-        LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)), start: String::new(), log: None }
-            .begin(lay, mask)
+        LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)), start: String::new(), log: None,
+                    looped: true }
+            .begin(lay, mask, Some(format!("rep {name} {table} {rep}")))
     }
 
-    fn begin(mut self, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
+    fn begin(mut self, lay: &crate::zk_veil::Layout, mask: MaskSlot, line: Option<String>) -> Result<(Self, Drawn), String> {
         use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
         use std::io::{Read, Write};
         let f = &mut self;
         let start = serde_json::json!({"layout": {"n_mlv": lay.n_mlv, "n_lc": lay.n_lc, "n_ood0": lay.n_ood0, "k0": lay.k0},
                                        "mask": {"w0": mask.w0, "n": mask.n, "blocks": mask.blocks}});
         f.start = start.to_string();
-        writeln!(f.stdin, "{start}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
+        let first = line.unwrap_or_else(|| f.start.clone());
+        writeln!(f.stdin, "{first}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
         let len = f.reply()?.ok_or_else(|| refused("the Lean frame's start answered without its draws"))?;
         let (s, leaves) = (lay.len(), Code::new(lay.len() + K_PAD).n);
         let tau = 32 * s + 32 * K_PAD;
@@ -612,14 +619,16 @@ impl LeanFrame {
         Ok(())
     }
 
-    /// One request: its line, then its bytes.
+    /// One request: its line, then its bytes (none leaves a loop's frame, [`LeanFrame::rep`]).
     fn send(&mut self, line: &str, parts: &[&[u8]]) -> std::io::Result<()> {
         use std::io::Write;
-        self.stdin.write_all(line.as_bytes())?;
-        for p in parts {
-            self.stdin.write_all(p)?;
+        if !self.looped {
+            self.stdin.write_all(line.as_bytes())?;
+            for p in parts {
+                self.stdin.write_all(p)?;
+            }
+            self.stdin.flush()?;
         }
-        self.stdin.flush()?;
         if let Some(l) = self.log.as_mut() {
             l.write_all(line.as_bytes())?;
             for p in parts {
@@ -655,6 +664,9 @@ impl LeanFrame {
     /// points too.
     pub fn prior(&mut self, coins: &[F128]) -> Result<(), String> {
         self.send(&format!("prior {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's prior coins: {e}")))?;
+        if self.looped {
+            return Ok(());
+        }
         self.reply().map(|_| ())
     }
 
@@ -668,6 +680,9 @@ impl LeanFrame {
         use std::io::Read;
         self.send(&format!("round {n} {}{}\n", content.len(), if fail { " fail" } else { "" }), &[content])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        if self.looped {
+            return Ok(content.to_vec());
+        }
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
             panic!("{why}");
@@ -687,6 +702,9 @@ impl LeanFrame {
         use std::io::Read;
         self.send(&format!("round {n} {} {}\n", content.len(), sched.len()), &[content, sched])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
+        if self.looped {
+            return Ok((content.to_vec(), None));
+        }
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
             panic!("{why}");
@@ -709,6 +727,9 @@ impl LeanFrame {
     /// (a zerocheck outer coin `r_j = 1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`).
     pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
         self.send(&format!("coins {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's coins: {e}")))?;
+        if self.looped {
+            return Ok(None);
+        }
         let line = self.line()?;
         if let Some(why) = line.strip_prefix("stop ") {
             return Ok(Some(why.to_string()));
@@ -721,6 +742,9 @@ impl LeanFrame {
     pub fn finish(&mut self) -> Result<bool, String> {
         use std::io::BufRead;
         self.send("finish\n", &[]).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
+        if self.looped {
+            return Ok(false);
+        }
         let mut line = String::new();
         self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
         match line.trim_end() {
@@ -1251,7 +1275,7 @@ impl LeanSession {
         &self.addr
     }
 
-    /// Where a rep's Lean frame connects ([`LeanFrame::connect`]).
+    /// Where a rep's Lean frame starts ([`LeanFrame::rep`]).
     pub fn frames(&self) -> &str {
         &self.frames
     }
@@ -1269,16 +1293,19 @@ impl Drop for LeanSession {
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
 /// only the release, to the stream. With no release set it passes every call through: unfirewalled reps. A firewalled rep's
-/// inner proof, the session's Lean finish's, leaves through the Lean frame too (`flock-circuit`'s `zk_finish_fw`).
+/// inner proof, the session's Lean finish's, leaves through the Lean frame too (`flock-circuit`'s `zk_finish_fw`). `raw`:
+/// the release is the device's unmasked round, which the Lean session loop's frame masks ([`LeanFrame::rep`]), and is
+/// handed on without that comparison.
 pub struct Gate<C: Challenger> {
     pub inner: C,
     pub release: Option<Vec<u8>>,
+    pub raw: bool,
     pending: Vec<u8>,
 }
 
 impl<C: Challenger> Gate<C> {
     pub fn new(inner: C) -> Self {
-        Gate { inner, release: None, pending: Vec::new() }
+        Gate { inner, release: None, raw: false, pending: Vec::new() }
     }
 
     fn held(&self) -> bool {
@@ -1292,7 +1319,7 @@ impl<C: Challenger> Gate<C> {
         }
         let release = self.release.take().expect("a held round");
         let mine = std::mem::take(&mut self.pending);
-        if mine != release {
+        if !self.raw && mine != release {
             let at = mine.iter().zip(&release).position(|(a, b)| a != b).unwrap_or(mine.len().min(release.len()));
             panic!("{}", refused(format!("the masking challenger's round ({} bytes) and the Lean frame's ({} bytes) differ from byte {at}",
                                          mine.len(), release.len())));
