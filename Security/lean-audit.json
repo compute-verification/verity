@@ -1007,15 +1007,35 @@
   },
   "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
    "owner": "@training",
-   "digest": "4b56b0ace48baa7734a6215f314353085ba450414c6c8ddc68fe8c3e8533400d"
+   "digest": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69"
   },
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
-   "digest": "ef96d8fd4e2b803550dccbc8faf3f46944c7d8d6d87f4942e50e44fe0d8f066f"
+   "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
   },
   "Nci.Cover.Assumptions.Width": {
    "owner": "@training",
-   "digest": "03878ca63e6e1e3ca6197a18ee0fa218088fe2d7ff6bba5708727a89057e16c4"
+   "digest": "84a8eb5905ec91610207df277a3fae2bd424f442822d7cebc9fbae61b3464fa2"
+  },
+  "Nci.Cover.Circuit.Covers": {
+   "owner": "@training",
+   "digest": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a"
+  },
+  "Nci.Cover.Circuit.InferenceBlock": {
+   "owner": "@training",
+   "digest": "b3ec84098b496abd31795f892b34960eb334142feea4ddece6caa7d2c965f78f"
+  },
+  "Nci.Cover.Circuit.IsPath": {
+   "owner": "@training",
+   "digest": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949"
+  },
+  "Nci.Cover.Circuit.ReachesIn": {
+   "owner": "@training",
+   "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
+  },
+  "Nci.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -1408,30 +1428,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
-  "Nci.Cover.Circuit.Covers": {
-   "owner": "@training",
-   "digest": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a"
-  },
-  "Nci.Cover.Circuit.InferenceBlock": {
-   "owner": "@training",
-   "digest": "2022694c4d1ccc17c9873f6c8d2cd9b9865bdd1917d7c97d21ecfda534492c56"
-  },
-  "Nci.Cover.Circuit.IsPath": {
-   "owner": "@training",
-   "digest": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949"
-  },
-  "Nci.Cover.Circuit.ReachesIn": {
-   "owner": "@training",
-   "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
-  },
-  "Nci.Cover.Circuit.Subcircuit": {
-   "owner": "@training",
-   "digest": "8eb6724e2c9ef869922476725e5c9f8b884d8123c8ad7d4fd1a39604988b3720"
-  },
-  "Nci.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "42f848fa75df5b62d4067d981b4aec1bb1f9dd2c6e5f64780f92bad44b5bc530"
   }
  },
  "meaning": [
@@ -7068,6 +7064,15 @@
   "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
    "owner": "@training"
   },
+  "Nci.Cover.SecurityProofs.CutOfDisjointUpstreams": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CutWidthCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CutWidthIntensity": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.Entry": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.Entry : Nci.Cover.Guarantees.Entry"],
@@ -7097,6 +7102,9 @@
    "signature": ["Nci.Cover.SecurityProofs.WidthIntensity : Nci.Cover.Guarantees.WidthIntensity"],
    "assumptions": [],
    "type_hash": "2a6aceb7c68f84b05f034fb08815237122b85f452aa493a4c97e18ed42accaba"
+  },
+  "Nci.Cover.SecurityProofs.WidthOfCut": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
@@ -9966,7 +9974,11 @@
    "Nci.Cover.SecurityProofs.WidthIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, Security/Definitions/Nci/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Models/Nci/Assumptions/Baseline.lean), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/Checked.lean joins it to a verdict (coverTrained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoverTrainingAligned": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit bit by bit (Circuit.ofDecl, with activation regions of whole words, wordBits, Security/Definitions/Nci/BitView.lean) and a declaration that contains it with its baseline registered (the named BaselineRegistered), under the named UpdateHardness on the bit view (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; stating its join to a verdict among the properties, as for CoverTraining, is what would give it an acceptance.",
-   "Nci.Cover.SecurityProofs.WidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
+   "Nci.Cover.SecurityProofs.WidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.WidthOfCut": "frozen (no-function): It is about an arbitrary training circuit, its products with the activation's cut width (Security/Definitions/Nci/CoverWidth.lean) and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named UpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutOfDisjointUpstreams": "frozen (no-function): It is about an arbitrary training circuit and its products, two structural properties of their wiring (Security/Definitions/Nci/CoverWidth.lean), not about the NCI check's code; a check of a circuit's disjoint upstreams, joined to the cover theorem, is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutWidthIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutWidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14487,24 +14499,23 @@
    ]
   },
   "Definitions.Nci.Cover": {
-   "digest": "292b1db2c6de69384ff389f302abeab3e87dc5066d1b569f58a8b915771e9b75",
+   "digest": "9d55176ac6ebd314cca56284dccae77f737025d0b18d4a46bf0395b62787b220",
    "definitions": {
     "Nci.Cover.Circuit": "25aef445443bc925efdcb08eaf48e75c7b0372dfd7b76cba8153f160f3257219",
     "Nci.Cover.Circuit.Covers": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a",
-    "Nci.Cover.Circuit.InferenceBlock": "2022694c4d1ccc17c9873f6c8d2cd9b9865bdd1917d7c97d21ecfda534492c56",
+    "Nci.Cover.Circuit.InferenceBlock": "b3ec84098b496abd31795f892b34960eb334142feea4ddece6caa7d2c965f78f",
     "Nci.Cover.Circuit.IsPath": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949",
     "Nci.Cover.Circuit.N": "91b884841166c02cc43c97336c4bc5df52ceaeec6668cf3352576333e4751bdc",
     "Nci.Cover.Circuit.ReachesIn": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97",
-    "Nci.Cover.Circuit.Subcircuit": "8eb6724e2c9ef869922476725e5c9f8b884d8123c8ad7d4fd1a39604988b3720",
     "Nci.Cover.Circuit.computed": "39abffbb936a1148261dd298ee8b13a2f191f8de3e97c82350ad1e183883b792",
-    "Nci.Cover.Circuit.inputs": "ef317778379999f9149d596a0630d4904fca1c093894b8d32e02740a305f4920",
+    "Nci.Cover.Circuit.inputs": "568f686ecb438f38991d299b092c5f67550f8367ee6af07cea3483f5a2ba6e87",
     "Nci.Cover.Circuit.outputs": "b32817c9c6ef508afe011fced0c1e57ceff37910f928cc78c43e26f548b9698c",
     "Nci.Cover.Circuit.pred": "c299d020da7fcb18af95f532bf3b3bcfb0388aa36123a61fe3b7eaae836a3508",
     "Nci.Cover.Circuit.θ": "03e67d1fb23f4fd4382890336e039acfa062af86e09c30fb38ba80fc2ba0d88c",
-    "Nci.Cover.MulBlocks": "7950f3f7467d9c7d09fdda4143eb8b80a949ac2f66713a16d99ffbb1f991659e",
+    "Nci.Cover.MulBlocks": "576dd6896410ba4f9d55a2872b6a02481b4c2acaf2ddf37aa103aafd8de157e6",
     "Nci.Cover.MulBlocks.P": "662070ced616aca80b32325df4f846c2c52ebe3613b25b34d75de97ec30320b8",
     "Nci.Cover.MulBlocks.Pall": "03ae6066aeceac4cba24ab07d95b26cedd93508092f490db009c03a12f56831f",
-    "Nci.Cover.MulBlocks.Upstream": "42f848fa75df5b62d4067d981b4aec1bb1f9dd2c6e5f64780f92bad44b5bc530",
+    "Nci.Cover.MulBlocks.Upstream": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
     "Nci.Cover.MulBlocks.finished": "97320bfa4eff842bc4cb2ad893efec39347452be1d3197984f286640e8e7f184",
     "Nci.Cover.MulBlocks.m": "a4ef1a48b5c5fd399814ca11324c5120bd4610cc71af3f0e28388028d0953011",
     "Nci.Cover.MulBlocks.o": "6a53c2e156b127cfd3bcb81793ac3544d55c5f46bf17dd3fe96903fe04ed1e27",
@@ -25763,11 +25774,11 @@
    ]
   },
   "Models.Nci.Assumptions.Cover": {
-   "digest": "ff36abd6c997bbd5906639e380009d13ec2322d890227076827273cebb135501",
+   "digest": "ee0b755a1afa8a8448cff08ae50b335671705d19a4e95a21d2bb12f730c9e5c2",
    "definitions": {
-    "Nci.Cover.Assumptions.ConditionalUpdateHardness": "4b56b0ace48baa7734a6215f314353085ba450414c6c8ddc68fe8c3e8533400d",
-    "Nci.Cover.Assumptions.UpdateHardness": "ef96d8fd4e2b803550dccbc8faf3f46944c7d8d6d87f4942e50e44fe0d8f066f",
-    "Nci.Cover.Assumptions.Width": "03878ca63e6e1e3ca6197a18ee0fa218088fe2d7ff6bba5708727a89057e16c4"
+    "Nci.Cover.Assumptions.ConditionalUpdateHardness": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69",
+    "Nci.Cover.Assumptions.UpdateHardness": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
+    "Nci.Cover.Assumptions.Width": "84a8eb5905ec91610207df277a3fae2bd424f442822d7cebc9fbae61b3464fa2"
    },
    "guarantees": [
     "Nci.Cover.SecurityProofs.ActivationCharge",
@@ -25958,14 +25969,14 @@
    ]
   },
   "Models.Nci.Guarantees.Cover": {
-   "digest": "2d66cff9ac1e09157edfac1cd78aa68b4c09bacc1cb7603e32060a4ba5a6b492",
+   "digest": "c9dc39299c4b738c1916e9c2fe3849fe64f3923d847a25388cb3712b246cbd93",
    "definitions": {
     "Nci.Cover.Guarantees.ActivationCharge": "c9291f417b2977289e8db48ac3f7802ac5e272809010a0b806bfc418b48c8c33",
     "Nci.Cover.Guarantees.AdditiveCoverBound": "724363ccc019d226196da3a950beaa9cd2470f5c64ca738d7d96c374e5a378da",
     "Nci.Cover.Guarantees.AdditiveIntensity": "d6c871351532841efa50e6d898633fad4cd049991589aa62588d04f515109b1c",
-    "Nci.Cover.Guarantees.BackwardClosure": "926be53d0a5722f681ca06ec427999767e39a86afc34f4f6c2143b33f5e77dcb",
+    "Nci.Cover.Guarantees.BackwardClosure": "0079b32ecbbb003fce20c1f0643868afa49446d2a20e2cc73849d5bf68e4e1ed",
     "Nci.Cover.Guarantees.CoverBound": "59ba9c8d45077390f45b755b0bd09deb3023fc9ae1622075c7305870db3e832c",
-    "Nci.Cover.Guarantees.Entry": "d1e53836f88162354630da9ed0e8518828814ed97dc4c89c19bf2d8a6dbb9730",
+    "Nci.Cover.Guarantees.Entry": "135f610e704165a194f6d60fecfac519663cf7049356b644d6da85885f4f0055",
     "Nci.Cover.Guarantees.Intensity": "260f55eee2e11fca0d825aeb1e2e2337d53b07a77d206aa2cfaa6fcc796a56c1",
     "Nci.Cover.Guarantees.Slowdown": "2c49c775ab799cd3b4e413ea66e5949610edace282435fef7265729ee8853070",
     "Nci.Cover.Guarantees.WidthCoverBound": "f084873374b59c6666ced06385566691e0f73555ad646d7fac2da89c0c2a32da",
