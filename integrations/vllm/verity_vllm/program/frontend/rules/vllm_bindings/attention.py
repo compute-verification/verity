@@ -138,7 +138,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
 
     def extend_history(self, node, ctx) -> SimpleNamespace:
         """Append the call's k, v rows to its layer's history: the query rows `qrows` [T][NH][D] (`qs` q's shape), the history's
-        logs `klog`, `vlog` with the call's rows at positions P0..P0+T-1, and the module path `mp`."""
+        logs `klog`, `vlog` with the call's rows at positions P0..P0+T-1, whether the call is the `prefill` (it opens the history,
+        after any cached prefix), and the module path `mp`."""
         q, k, v, out, layer_name, _, _, dep = self._args(node)
         qc, kc, vc = ctx.coll(q), ctx.coll(k), ctx.coll(v)
         D = ctx.config.get("D") or ctx.allowed_dims.get("D")
@@ -186,12 +187,12 @@ class UnifiedAttentionWithOutputRule(StateRule):
         klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
-        return SimpleNamespace(qs=qs, T=T, NH=NH, D=D, KVH=KVH, qrows=qrows, klog=klog, vlog=vlog, P0=P0, mp=mp)
+        return SimpleNamespace(qs=qs, T=T, NH=NH, D=D, KVH=KVH, qrows=qrows, klog=klog, vlog=vlog, P0=P0, prefill=prefill, mp=mp)
 
     def emit(self, node, ctx):
         q, k, v, out, layer_name, _, _, dep = self._args(node)
         h = self.extend_history(node, ctx)
-        qs, T, NH, D, KVH, qrows, klog, vlog, P0, mp = h.qs, h.T, h.NH, h.D, h.KVH, h.qrows, h.klog, h.vlog, h.P0, h.mp
+        qs, T, NH, D, KVH, qrows, klog, vlog, P0, prefill, mp = h.qs, h.T, h.NH, h.D, h.KVH, h.qrows, h.klog, h.vlog, h.P0, h.prefill, h.mp
         outs = []
         obs_sel = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         role, extra, window = attn_kind_for(obs_sel)

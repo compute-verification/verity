@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.program.boolean import derived
+from verity_vllm.program.boolean import derived, write_word
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -321,8 +321,7 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # [R15 hopper HOP-03] a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
-                                  "conflict": bool(launch.get("conflict")),
-                                  **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
+                                  "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
     return cond
 
 
@@ -335,8 +334,7 @@ def _cuda_available() -> bool:
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
-        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0) -> dict:
+        target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
@@ -386,8 +384,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "missing": ["TopPMask (F-dense-02)", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
             raise _Refused()
-        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch
-        # geometry (S), refused with the reason when not a static
+        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch geometry (S)
         geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T))
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
@@ -582,7 +579,12 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                       "correspondence_digest": corr_digest,
                       "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
                                          "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
-    res["spec_histogram"] = _spec_histogram(program)
+    # a Boolean Program written through its word link (`build_instances`): the histogram of the rows' Definitions, and its own beside;
+    # its word Program beside its descriptor, for the readers in word units (`program.boolean.word_descriptor`)
+    res["spec_histogram"] = _spec_histogram(getattr(program, "word", None) or program)
+    if getattr(program, "word", None) is not None:
+        res["boolean_spec_histogram"] = _spec_histogram(program)
+        res["program"]["word_digest"] = write_word(out, program, rep.provenance["ir"]["word_digest"])
     res["rules_applied"] = rep.provenance["rules_applied"]
     res["n_applications"] = len(rep.provenance["applications"])
     res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}
@@ -727,12 +729,11 @@ class Options:
                                     help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     launch_context: str | None = option("--launch-context", default=None,
-                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
-                                        "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N "
-                                        "rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, "
-                                        "whose tile reads it; inert under FA2); without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', "
-                                        "which every token-count-dependent kernel choice reads (required then).  Omitted = own rows (a batch of one).  The row derives it "
-                                        "from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's max_seqlen_q over "
+                                        "every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N rows), JSON list [n0, n1, ...] "
+                                        "(per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, whose tile reads it; inert under FA2); "
+                                        "without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', which every token-count-dependent kernel choice "
+                                        "reads (required then).  Omitted = own rows (a batch of one).  The row derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:

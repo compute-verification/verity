@@ -26,6 +26,8 @@ noncomputable section
 /-- The classes of the `DS-100` census (its kinds). -/
 inductive Kind
   | ALU
+  | ATOME32
+  | ATOMS32
   | DMMA16816
   | DMMA1684
   | DMMA1688
@@ -34,6 +36,7 @@ inductive Kind
   | IMAD
   | IMMA16816_S8
   | IMMA16832_S8
+  | LDS128
   | LDTM_16X128B_X8
   | LDTM_16X256B_X4
   | LDTM_16X64B_X16
@@ -43,8 +46,16 @@ inductive Kind
   | LDTM_32X32B_X32
   | LDTM_32X32B_X4
   | LDTM_32X32B_X64
+  | NOROW
+  | REDG32
+  | REDUX
   | SHFL
+  | STG128
+  | STG32
+  | STS128
+  | STS32
   | UNI
+  | UNLISTED
   | UTCHMMA_BF16_M128_N256
   | UTCHMMA_F16_M128_N256
   | UTCHMMA_TF32_M128_N256
@@ -65,16 +76,18 @@ inductive Kind
   | UTCQMMA_E4M3_M128_N256
   | UTCQMMA_E5M2_M128_N256
   | UTCQMMA_MXF8F6F4_E4M3_M128_N256
+  | VIADD
   deriving DecidableEq
 
 instance instFintypeKind : Fintype Kind :=
-  Fintype.ofList [.ALU, .DMMA16816, .DMMA1684, .DMMA1688, .DMMA884, .FFMA, .IMAD, .IMMA16816_S8, .IMMA16832_S8,
-    .LDTM_16X128B_X8, .LDTM_16X256B_X4, .LDTM_16X64B_X16, .LDTM_32X32B_X1, .LDTM_32X32B_X128, .LDTM_32X32B_X16,
-    .LDTM_32X32B_X32, .LDTM_32X32B_X4, .LDTM_32X32B_X64, .SHFL, .UNI, .UTCHMMA_BF16_M128_N256, .UTCHMMA_F16_M128_N256,
-    .UTCHMMA_TF32_M128_N256, .UTCIMMA_M128_N128, .UTCIMMA_M128_N256, .UTCIMMA_M128_N256_SP, .UTCIMMA_M128_N32,
-    .UTCIMMA_M128_N64, .UTCIMMA_M64_N128, .UTCIMMA_M64_N256, .UTCIMMA_M64_N64, .UTCOMMA_MXF4NVF4_M128_N256,
-    .UTCOMMA_MXF4_M128_N256, .UTCQMMA_E2M1_M128_N256, .UTCQMMA_E2M3_M128_N256, .UTCQMMA_E3M2_M128_N256,
-    .UTCQMMA_E4M3_M128_N128, .UTCQMMA_E4M3_M128_N256, .UTCQMMA_E5M2_M128_N256, .UTCQMMA_MXF8F6F4_E4M3_M128_N256]
+  Fintype.ofList [.ALU, .ATOME32, .ATOMS32, .DMMA16816, .DMMA1684, .DMMA1688, .DMMA884, .FFMA, .IMAD, .IMMA16816_S8,
+    .IMMA16832_S8, .LDS128, .LDTM_16X128B_X8, .LDTM_16X256B_X4, .LDTM_16X64B_X16, .LDTM_32X32B_X1, .LDTM_32X32B_X128,
+    .LDTM_32X32B_X16, .LDTM_32X32B_X32, .LDTM_32X32B_X4, .LDTM_32X32B_X64, .NOROW, .REDG32, .REDUX, .SHFL, .STG128,
+    .STG32, .STS128, .STS32, .UNI, .UNLISTED, .UTCHMMA_BF16_M128_N256, .UTCHMMA_F16_M128_N256, .UTCHMMA_TF32_M128_N256,
+    .UTCIMMA_M128_N128, .UTCIMMA_M128_N256, .UTCIMMA_M128_N256_SP, .UTCIMMA_M128_N32, .UTCIMMA_M128_N64,
+    .UTCIMMA_M64_N128, .UTCIMMA_M64_N256, .UTCIMMA_M64_N64, .UTCOMMA_MXF4NVF4_M128_N256, .UTCOMMA_MXF4_M128_N256,
+    .UTCQMMA_E2M1_M128_N256, .UTCQMMA_E2M3_M128_N256, .UTCQMMA_E3M2_M128_N256, .UTCQMMA_E4M3_M128_N128,
+    .UTCQMMA_E4M3_M128_N256, .UTCQMMA_E5M2_M128_N256, .UTCQMMA_MXF8F6F4_E4M3_M128_N256, .VIADD]
     (by intro k; cases k <;> decide)
 
 /-- The Nsight Compute pipes the `DS-100` classes issue to. -/
@@ -249,6 +262,8 @@ issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread `
 form, whose k is its logical k, half that (A3: twice the dense peak on logical k); `none` off the tensor pipe. -/
 def Kind.form : Kind → Option (Ty × ℝ)
   | .ALU => none
+  | .ATOME32 => none
+  | .ATOMS32 => none
   | .DMMA16816 => some (.f64, 16 * 8 * 16 / 1)
   | .DMMA1684 => some (.f64, 16 * 8 * 4 / 1)
   | .DMMA1688 => some (.f64, 16 * 8 * 8 / 1)
@@ -257,6 +272,7 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .IMAD => none
   | .IMMA16816_S8 => some (.s8, 16 * 8 * 16 / 1)
   | .IMMA16832_S8 => some (.s8, 16 * 8 * 32 / 1)
+  | .LDS128 => none
   | .LDTM_16X128B_X8 => none
   | .LDTM_16X256B_X4 => none
   | .LDTM_16X64B_X16 => none
@@ -266,8 +282,16 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .LDTM_32X32B_X32 => none
   | .LDTM_32X32B_X4 => none
   | .LDTM_32X32B_X64 => none
+  | .NOROW => none
+  | .REDG32 => none
+  | .REDUX => none
   | .SHFL => none
+  | .STG128 => none
+  | .STG32 => none
+  | .STS128 => none
+  | .STS32 => none
   | .UNI => none
+  | .UNLISTED => none
   | .UTCHMMA_BF16_M128_N256 => some (.bf16, 128 * 256 * 16 / 1)
   | .UTCHMMA_F16_M128_N256 => some (.f16, 128 * 256 * 16 / 1)
   | .UTCHMMA_TF32_M128_N256 => some (.tf32, 128 * 256 * 8 / 1)
@@ -288,10 +312,13 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .UTCQMMA_E4M3_M128_N256 => some (.e4m3, 128 * 256 * 32 / 1)
   | .UTCQMMA_E5M2_M128_N256 => some (.e5m2, 128 * 256 * 32 / 1)
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => some (.e4m3, 128 * 256 * 32 / 1)
+  | .VIADD => none
 
 /-- The pipe each class issues to; `none` on the tensor pipe or issue only. -/
 def Kind.pipe : Kind → Option Pipe
   | .ALU => some .alu
+  | .ATOME32 => none
+  | .ATOMS32 => none
   | .DMMA16816 => none
   | .DMMA1684 => none
   | .DMMA1688 => none
@@ -300,6 +327,7 @@ def Kind.pipe : Kind → Option Pipe
   | .IMAD => some .imad
   | .IMMA16816_S8 => none
   | .IMMA16832_S8 => none
+  | .LDS128 => none
   | .LDTM_16X128B_X8 => none
   | .LDTM_16X256B_X4 => none
   | .LDTM_16X64B_X16 => none
@@ -309,8 +337,16 @@ def Kind.pipe : Kind → Option Pipe
   | .LDTM_32X32B_X32 => none
   | .LDTM_32X32B_X4 => none
   | .LDTM_32X32B_X64 => none
+  | .NOROW => none
+  | .REDG32 => none
+  | .REDUX => none
   | .SHFL => some .shfl
+  | .STG128 => none
+  | .STG32 => none
+  | .STS128 => none
+  | .STS32 => none
   | .UNI => some .uniform
+  | .UNLISTED => none
   | .UTCHMMA_BF16_M128_N256 => none
   | .UTCHMMA_F16_M128_N256 => none
   | .UTCHMMA_TF32_M128_N256 => none
@@ -331,6 +367,7 @@ def Kind.pipe : Kind → Option Pipe
   | .UTCQMMA_E4M3_M128_N256 => none
   | .UTCQMMA_E5M2_M128_N256 => none
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => none
+  | .VIADD => none
 
 /-- A6's ω for each tensor class (`SheetWords`, `accounting-sheet-words`): the 32-bit words a warp instruction's
 accumulator fragment takes, m · n elements over the warps that issue one MMA, an element one register and an f64 element
@@ -341,6 +378,8 @@ instruction), m16n8k16 the same, .f64 m8n8k4 two f64 a lane (four registers, 128
 thread's instruction writes. -/
 def Kind.omega : Kind → Option ℝ
   | .ALU => none
+  | .ATOME32 => none
+  | .ATOMS32 => none
   | .DMMA16816 => some (16 * 8 * 2 / 1)
   | .DMMA1684 => some (16 * 8 * 2 / 1)
   | .DMMA1688 => some (16 * 8 * 2 / 1)
@@ -349,6 +388,7 @@ def Kind.omega : Kind → Option ℝ
   | .IMAD => none
   | .IMMA16816_S8 => some (16 * 8 / 1)
   | .IMMA16832_S8 => some (16 * 8 / 1)
+  | .LDS128 => none
   | .LDTM_16X128B_X8 => none
   | .LDTM_16X256B_X4 => none
   | .LDTM_16X64B_X16 => none
@@ -358,8 +398,16 @@ def Kind.omega : Kind → Option ℝ
   | .LDTM_32X32B_X32 => none
   | .LDTM_32X32B_X4 => none
   | .LDTM_32X32B_X64 => none
+  | .NOROW => none
+  | .REDG32 => none
+  | .REDUX => none
   | .SHFL => none
+  | .STG128 => none
+  | .STG32 => none
+  | .STS128 => none
+  | .STS32 => none
   | .UNI => none
+  | .UNLISTED => none
   | .UTCHMMA_BF16_M128_N256 => some (128 * 256 / 1)
   | .UTCHMMA_F16_M128_N256 => some (128 * 256 / 1)
   | .UTCHMMA_TF32_M128_N256 => some (128 * 256 / 1)
@@ -380,9 +428,11 @@ def Kind.omega : Kind → Option ℝ
   | .UTCQMMA_E4M3_M128_N256 => some (128 * 256 / 1)
   | .UTCQMMA_E5M2_M128_N256 => some (128 * 256 / 1)
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => some (128 * 256 / 1)
+  | .VIADD => none
 
 /-- **The B200's data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the tensor pipe), its pipe,
-each pipe's width, and no shared-memory class (no LDS kind in the census, so A5 bounds nothing here). -/
+each pipe's width, and no class on the shared-memory row (the census's shared-memory classes, ATOMS32, LDS128, STS128,
+STS32, are issue only, so A5 bounds nothing here). -/
 def sheet : Sheet Kind Pipe where
   fmax := fmaxMHz * 10 ^ 6
   macs k := match k.form with
@@ -398,6 +448,8 @@ def sheet : Sheet Kind Pipe where
 /-- `census/DS-100.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def tensorLine : Kind → ℝ
   | .ALU => 0
+  | .ATOME32 => 0
+  | .ATOMS32 => 0
   | .DMMA16816 => 128
   | .DMMA1684 => 32
   | .DMMA1688 => 64
@@ -406,6 +458,7 @@ def tensorLine : Kind → ℝ
   | .IMAD => 0
   | .IMMA16816_S8 => 1
   | .IMMA16832_S8 => 2
+  | .LDS128 => 0
   | .LDTM_16X128B_X8 => 0
   | .LDTM_16X256B_X4 => 0
   | .LDTM_16X64B_X16 => 0
@@ -415,8 +468,16 @@ def tensorLine : Kind → ℝ
   | .LDTM_32X32B_X32 => 0
   | .LDTM_32X32B_X4 => 0
   | .LDTM_32X32B_X64 => 0
+  | .NOROW => 0
+  | .REDG32 => 0
+  | .REDUX => 0
   | .SHFL => 0
+  | .STG128 => 0
+  | .STG32 => 0
+  | .STS128 => 0
+  | .STS32 => 0
   | .UNI => 0
+  | .UNLISTED => 0
   | .UTCHMMA_BF16_M128_N256 => 512
   | .UTCHMMA_F16_M128_N256 => 512
   | .UTCHMMA_TF32_M128_N256 => 512
@@ -437,10 +498,13 @@ def tensorLine : Kind → ℝ
   | .UTCQMMA_E4M3_M128_N256 => 512
   | .UTCQMMA_E5M2_M128_N256 => 512
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => 512
+  | .VIADD => 0
 
 /-- `census/DS-100.csv`'s `DS_alu` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def aluLine : Kind → ℝ
   | .ALU => 2
+  | .ATOME32 => 0
+  | .ATOMS32 => 0
   | .DMMA16816 => 0
   | .DMMA1684 => 0
   | .DMMA1688 => 0
@@ -449,6 +513,7 @@ def aluLine : Kind → ℝ
   | .IMAD => 0
   | .IMMA16816_S8 => 0
   | .IMMA16832_S8 => 0
+  | .LDS128 => 0
   | .LDTM_16X128B_X8 => 0
   | .LDTM_16X256B_X4 => 0
   | .LDTM_16X64B_X16 => 0
@@ -458,8 +523,16 @@ def aluLine : Kind → ℝ
   | .LDTM_32X32B_X32 => 0
   | .LDTM_32X32B_X4 => 0
   | .LDTM_32X32B_X64 => 0
+  | .NOROW => 0
+  | .REDG32 => 0
+  | .REDUX => 0
   | .SHFL => 0
+  | .STG128 => 0
+  | .STG32 => 0
+  | .STS128 => 0
+  | .STS32 => 0
   | .UNI => 0
+  | .UNLISTED => 0
   | .UTCHMMA_BF16_M128_N256 => 0
   | .UTCHMMA_F16_M128_N256 => 0
   | .UTCHMMA_TF32_M128_N256 => 0
@@ -480,10 +553,13 @@ def aluLine : Kind → ℝ
   | .UTCQMMA_E4M3_M128_N256 => 0
   | .UTCQMMA_E5M2_M128_N256 => 0
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => 0
+  | .VIADD => 0
 
 /-- `census/DS-100.csv`'s `DS_imad` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def imadLine : Kind → ℝ
   | .ALU => 0
+  | .ATOME32 => 0
+  | .ATOMS32 => 0
   | .DMMA16816 => 0
   | .DMMA1684 => 0
   | .DMMA1688 => 0
@@ -492,6 +568,7 @@ def imadLine : Kind → ℝ
   | .IMAD => 2
   | .IMMA16816_S8 => 0
   | .IMMA16832_S8 => 0
+  | .LDS128 => 0
   | .LDTM_16X128B_X8 => 0
   | .LDTM_16X256B_X4 => 0
   | .LDTM_16X64B_X16 => 0
@@ -501,8 +578,16 @@ def imadLine : Kind → ℝ
   | .LDTM_32X32B_X32 => 0
   | .LDTM_32X32B_X4 => 0
   | .LDTM_32X32B_X64 => 0
+  | .NOROW => 0
+  | .REDG32 => 0
+  | .REDUX => 0
   | .SHFL => 0
+  | .STG128 => 0
+  | .STG32 => 0
+  | .STS128 => 0
+  | .STS32 => 0
   | .UNI => 0
+  | .UNLISTED => 0
   | .UTCHMMA_BF16_M128_N256 => 0
   | .UTCHMMA_F16_M128_N256 => 0
   | .UTCHMMA_TF32_M128_N256 => 0
@@ -523,10 +608,13 @@ def imadLine : Kind → ℝ
   | .UTCQMMA_E4M3_M128_N256 => 0
   | .UTCQMMA_E5M2_M128_N256 => 0
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => 0
+  | .VIADD => 0
 
 /-- `census/DS-100.csv`'s `DS_shfl` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def shflLine : Kind → ℝ
   | .ALU => 0
+  | .ATOME32 => 0
+  | .ATOMS32 => 0
   | .DMMA16816 => 0
   | .DMMA1684 => 0
   | .DMMA1688 => 0
@@ -535,6 +623,7 @@ def shflLine : Kind → ℝ
   | .IMAD => 0
   | .IMMA16816_S8 => 0
   | .IMMA16832_S8 => 0
+  | .LDS128 => 0
   | .LDTM_16X128B_X8 => 0
   | .LDTM_16X256B_X4 => 0
   | .LDTM_16X64B_X16 => 0
@@ -544,8 +633,16 @@ def shflLine : Kind → ℝ
   | .LDTM_32X32B_X32 => 0
   | .LDTM_32X32B_X4 => 0
   | .LDTM_32X32B_X64 => 0
+  | .NOROW => 0
+  | .REDG32 => 0
+  | .REDUX => 0
   | .SHFL => 4
+  | .STG128 => 0
+  | .STG32 => 0
+  | .STS128 => 0
+  | .STS32 => 0
   | .UNI => 0
+  | .UNLISTED => 0
   | .UTCHMMA_BF16_M128_N256 => 0
   | .UTCHMMA_F16_M128_N256 => 0
   | .UTCHMMA_TF32_M128_N256 => 0
@@ -566,10 +663,13 @@ def shflLine : Kind → ℝ
   | .UTCQMMA_E4M3_M128_N256 => 0
   | .UTCQMMA_E5M2_M128_N256 => 0
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => 0
+  | .VIADD => 0
 
 /-- `census/DS-100.csv`'s `DS_uniform` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def uniformLine : Kind → ℝ
   | .ALU => 0
+  | .ATOME32 => 0
+  | .ATOMS32 => 0
   | .DMMA16816 => 0
   | .DMMA1684 => 0
   | .DMMA1688 => 0
@@ -578,6 +678,7 @@ def uniformLine : Kind → ℝ
   | .IMAD => 0
   | .IMMA16816_S8 => 0
   | .IMMA16832_S8 => 0
+  | .LDS128 => 0
   | .LDTM_16X128B_X8 => 0
   | .LDTM_16X256B_X4 => 0
   | .LDTM_16X64B_X16 => 0
@@ -587,8 +688,16 @@ def uniformLine : Kind → ℝ
   | .LDTM_32X32B_X32 => 0
   | .LDTM_32X32B_X4 => 0
   | .LDTM_32X32B_X64 => 0
+  | .NOROW => 0
+  | .REDG32 => 0
+  | .REDUX => 0
   | .SHFL => 0
+  | .STG128 => 0
+  | .STG32 => 0
+  | .STS128 => 0
+  | .STS32 => 0
   | .UNI => 3914583 / 2000000
+  | .UNLISTED => 0
   | .UTCHMMA_BF16_M128_N256 => 0
   | .UTCHMMA_F16_M128_N256 => 0
   | .UTCHMMA_TF32_M128_N256 => 0
@@ -609,6 +718,7 @@ def uniformLine : Kind → ℝ
   | .UTCQMMA_E4M3_M128_N256 => 0
   | .UTCQMMA_E5M2_M128_N256 => 0
   | .UTCQMMA_MXF8F6F4_E4M3_M128_N256 => 0
+  | .VIADD => 0
 
 /-- **`DS-100`'s census** (`census/DS-100.csv`): SMSP-cycles a warp instruction of each class holds each row; every
 class holds issue for 1, and a class with no line on a row holds it not at all. -/
@@ -634,6 +744,8 @@ saturated lane stream (the census's UNI issue line, DC-100). -/
 theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
   simp [Sheet.machine, census]
 
+-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class count
+set_option maxHeartbeats 1000000 in
 /-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
 theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
   cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,

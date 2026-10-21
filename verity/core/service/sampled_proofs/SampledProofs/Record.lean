@@ -7,7 +7,7 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
   the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
   two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
-  roots' ports and registered values), as the service splits the sessions' roots between a boundary and its interiors;
+  roots' ports and registered values);
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
   the served draw's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from

@@ -68,7 +68,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -744,7 +743,9 @@ def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
     return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
 
 
-def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes] = os.urandom) -> Ch.LiveChallenger:
+def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
+    """A live epoch's challenger, its coins and hm96 salts drawn from `entropy`: a served one's is the Lean verifier of
+    record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
 
 

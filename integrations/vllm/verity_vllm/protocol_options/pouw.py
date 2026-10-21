@@ -57,6 +57,7 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
+from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
@@ -696,11 +697,13 @@ def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = F
 
 def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
-    (`verity.core.protocols.pouw.coins.Challenger`) when `enabled` (the protocol set) has PoUW, for a pipeline
-    that is its run's own auditor (it replays and judges what it served); a config's own ``coins`` is kept."""
+    (`verity.core.protocols.pouw.coins.Challenger`, its coins the Lean verifier of record's, `pouw.verifier.coins`) when
+    `enabled` (the protocol set) has PoUW, for a pipeline that is its run's own auditor (it replays and judges what it
+    served); a config's own ``coins`` is kept."""
     out = {k: dict(v) for k, v in settings.items()}
     if any(str(e).partition(":")[0] == NAME for e in (enabled or ())):
-        out.setdefault(NAME, {}).setdefault("coins", Challenger(epoch))
+        if "coins" not in out.get(NAME, {}):
+            out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
     return out
 
 

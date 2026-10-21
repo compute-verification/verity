@@ -93,6 +93,10 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **`trimCol` is one to one on table `j`'s full-width columns.** -/
 theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
     (hv : wideJ zk x j v) (h : trimCol u = trimCol v) : u = v := by
@@ -101,6 +105,17 @@ theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List �
   · simp only [hq] at hu
   · simp only [hq] at hu hv
     exact trimCol_inj (hu.trans hv.symm) h
+
+end Gen
+
+/-- **`trimCol` is one to one on table `j`'s full-width columns.** -/
+theorem wideJ_trimCol_inj (zk : Bool) (x : Claims.Msg) (j : ℕ) (u v : List 𝔽) (hu : wideJ zk x j u)
+    (hv : wideJ zk x j v) (h : trimCol u = trimCol v) : u = v :=
+  Gen.wideJ_trimCol_inj (S := S₀) (zk := zk) (x := x) (j := j) (u := u) (v := v) (hu := hu) (hv := hv) (h := h)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **`[]` is a trimmed full-width column of table `j`** where its word has a position: its zero column's trim. -/
 theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
@@ -112,6 +127,13 @@ theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ 
     exact absurd h (lt_irrefl 0)
   · simp only
     exact ⟨_, List.length_replicate, trimCol_replicate _⟩
+
+end Gen
+
+/-- **`[]` is a trimmed full-width column of table `j`** where its word has a position: its zero column's trim. -/
+theorem okThroughJ_nil (zk : Bool) (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ zk x j) :
+    Claims.Flock.OkThroughJ trimCol (wideJ zk) x j [] :=
+  Gen.okThroughJ_nil (S := S₀) (zk := zk) (x := x) (j := j) (h := h)
 
 /-- **Every masked table's bound counted per round at the trimmed record**, at its trimmed columns or `0`, from the
 bound at full-width tables at the untrimmed record: `0` is a trimmed full-width column at a position of table `j`'s
@@ -130,6 +152,34 @@ theorem zk_tableBoundJR_trim (rel : Readable.Parsed → Readable.Relation)
     exact okThroughJ_nil true x j (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt)
   · exact hp
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **Every masked table's bound counted per round at the trimmed record**, at its trimmed columns or `0`, from the
+bound at full-width tables at the untrimmed record: `0` is a trimmed full-width column at a position of table `j`'s
+word. -/
+theorem zk_tableBoundJR_trim (rel : Readable.Parsed → Readable.Relation)
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.TableBoundJR sha512 (deployZkTrim rel) (wordLenJ true)
+      (Claims.Flock.orZeroJ (Claims.Flock.OkThroughJ trimCol (wideJ true))) := by
+  have h := Claims.Flock.tableBoundJR_mapCols sha512 (deployZk rel) (wordLenJ true) trimCol rfl (wideJ true)
+    (zk_colsOkJ sha512 rel) (wideJ_trimCol_inj true) htab
+  intro x Ω _ _ P
+  obtain ⟨e, hfit, hb⟩ := h x Ω P
+  refine ⟨e, hfit, fun ω j hj C hC hg => hb ω j hj C (fun p => ?_) hg⟩
+  rcases hC p with h0 | hp
+  · rw [h0]
+    exact okThroughJ_nil true x j (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt)
+  · exact hp
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The masked relation splits by table at the trimmed record wherever some run accepts.** -/
 theorem zk_splits_trim (x : Claims.Msg) :
     Claims.Flock.Splits (deployZkTrim Readable.relation) x ∨
@@ -138,6 +188,18 @@ theorem zk_splits_trim (x : Claims.Msg) :
   · exact .inr hno
   · obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
     exact .inl (splits_of_inScope Claims.Flock.zkReadD (deployZkTrim Readable.relation) rfl rfl rfl hs hin)
+
+end Gen
+
+/-- **The masked relation splits by table at the trimmed record wherever some run accepts.** -/
+theorem zk_splits_trim (x : Claims.Msg) :
+    Claims.Flock.Splits (deployZkTrim Readable.relation) x ∨
+      Claims.Flock.NoAcc sha512 (deployZkTrim Readable.relation).V x :=
+  Gen.zk_splits_trim (S := S₀) (x := x)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 every table's bound counted per round over full-width tables at the untrimmed record. -/
@@ -155,11 +217,32 @@ theorem zk_KS_trim_of_tableBoundJR
       (Claims.Flock.conflictTiedJ_mapCols _ _ _ _ (zk_conflictTiedJ Readable.relation))
       (zk_tableBoundJR_trim Readable.relation htab))
 
+end Gen
+
+/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
+every table's bound counted per round over full-width tables at the untrimmed record. -/
+theorem zk_KS_trim_of_tableBoundJR
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_trim_of_tableBoundJR (S := S₀) (htab := htab)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the live sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`). -/
 theorem zk_KS_trim_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_trim_of_tableBoundJR (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x)
+
+end Gen
+
+/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
+the live sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`). -/
+theorem zk_KS_trim_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_trim_of_liveAccWJ (S := S₀) (hl := hl)
 
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the live sessions' bound at the deployed decoders off the table on a witness lane at the statements some run accepts
@@ -167,5 +250,19 @@ the live sessions' bound at the deployed decoders off the table on a witness lan
 theorem zk_KS_trim_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_trim_of_liveAccWJ fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
+the live sessions' bound at the deployed decoders off the table on a witness lane at the statements some run accepts
+(`ZkXferWJ`). -/
+theorem zk_KS_trim_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  zk_KS_trim_of_liveAccWJ fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)
+
+end Gen
 
 end FlockDeploy.KS

@@ -150,7 +150,9 @@ class StockProfArm:
         return self
 
     def ready(self, target: Any) -> None:
-        runner = target.engine._engine.runner
+        from verity_vllm.engine.engine_profile import get_model_runner
+
+        runner = get_model_runner(target.engine.vllm)
         _ranged(runner, "execute_model",
                 lambda a, k: f"exec:{getattr(a[0] if a else k.get('scheduler_output'), 'total_num_scheduled_tokens', -1)}")
         if hasattr(runner, "sample"):
@@ -256,9 +258,9 @@ class RowsRing8CapArm(RowsCapArm):
 
 
 class Rows4kArm(RowsArm):
-    """The rows arm at 4 KiB rows: one leaf per 4 KiB of a step's stream (the window's chunks 4 KiB), each the hm96 leaf over its
-    row's SHA-512 as at 256 B. Set for the life of the arm's engine process (one process per arm). Measurement only: no scheme pins
-    4 KiB rows, and the domain still names 256-byte rows, so its roots are no scheme's."""
+    """The rows arm with every chunk constant at 4 KiB: rows-sha512 commits 4 KiB rows itself (`step_rows.ROW_BYTES`), which this
+    sets again, and vllm-v1's 256 B chunk constant (`GPU_CHUNK_BYTES`) with it. Set for the life of the arm's engine process (one
+    process per arm). Measurement only."""
 
     row_bytes = 4096
 

@@ -31,9 +31,14 @@ A spec-level reference for network accounting's timing channel:
   end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
   reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
   signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
-  (`Proxy.committed(p, registration)`). A proxy back
-  from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
-  Program's at position p, and carries nothing from before: a window it was down for has no record.
+  (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the challenger's key
+  from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
+  for the certifier's key id and run (`Proxy.run_id`, 32 bytes drawn at construction) and answer an `active.Revealed`
+  the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
+  to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
+  once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
+  back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
+  the Program's at position p, and carries nothing from before: a window it was down for has no record.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
