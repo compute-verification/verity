@@ -194,21 +194,26 @@ def _registered_program(name: str, n: int, extra, registered) -> Program:
 
 class RegisteredSetup(Setup):
     """A verifier's program with root parameters to register: `values`, the `{parameter: words}` it may expect, each value
-    committed once at each of its words (`Registered.commit`, salts fixed), and its signature as `parameters` names it."""
+    committed once at each of its words (`Registered.commit`, salts fixed) in its row format (`formats`, `{parameter:
+    schema}`, `row/v1` where it names none), and its signature as `parameters` names it."""
 
-    def __init__(self, program, values):
+    def __init__(self, program, values, formats=None):
         super().__init__(program, P.template_instance_query(PAIR.id))
         self.signature = _json([[name, t.to_json()] for name, t in program.fn.signature()[0]])
         self.values = values
+        self.formats = dict(formats or {})
         self.committed = {}
         self._windowed = {}
         for v, w in {(v, w) for vs in values for v, w in vs.items()}:
             self.committed[v, w] = G.Registered.commit(self.sha512, v, *self._rows(v, w))
 
     def _rows(self, v: str, w: int) -> tuple:
+        """`Registered.commit`'s rows, salts, width and row format for `v` at `w` words."""
+        schema = self.formats.get(v, G.SCHEMA)
         n, bits = len(G.parameter_gates(self.program, v)), G.width(self.program, v)
-        rows = [[(i * 40503 + 7) % (1 << bits) for i in range(r * w, (r + 1) * w)] for r in range(n // w)]
-        return rows, [hashlib.shake_256(f"{v}/{w}/{r}".encode()).digest(192) for r in range(n // w)], bits
+        k = G.row_leaves(self.program, v, w, schema)
+        rows = [[(i * 40503 + 7) % (1 << bits) for i in range(r * w, (r + 1) * w)] for r in range(n // k)]
+        return rows, [hashlib.shake_256(f"{v}/{w}/{r}".encode()).digest(192) for r in range(n // k)], bits, schema
 
     def entries(self, values, window: str | None = None, fixed=()) -> list[dict]:
         """`values`' entries: each one's commitment, under `window`'s domain unless it is in `fixed`."""
@@ -240,15 +245,19 @@ class SuppliedSetup(RegisteredSetup):
 
 
 #: Programs whose root parameters a verifier may expect registered: 16-bit ones (`W`, and `D` of 12-bit leaves) and ones
-#: `registered_entries` refuses (`E` has no gates, `M` two widths, `V` is 40 bits), and 32-bit ones (`T`, and `U` of
-#: 20-bit leaves); `x`, bound per run, reads as a 16-bit value too.
+#: `registered_entries` refuses (`E` has no gates, `M` two widths, `V` is 40 bits), 32-bit ones (`T`, and `U` of
+#: 20-bit leaves), and bit rows (`A`, 8-bit leaves two to a u16 word in `row/v2` rows, as H1's A, and `B` in
+#: `row-seg/v1` rows); `x`, bound per run, reads as a 16-bit value too.
 REGISTERED_SETUPS = [
     RegisteredSetup(_registered_program("CoreSampledProofsRegistered16", 3, (
         ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
         ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
     RegisteredSetup(_registered_program("CoreSampledProofsRegistered32", 2, (
         ("T", Array(4, Value(32))), ("U", Record(("a", Array(3, Value(20))),))), ("T", "U")),
-        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}])]
+        [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}]),
+    RegisteredSetup(_registered_program("CoreSampledProofsRegisteredBits", 2, (
+        ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
+        [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}, {"A": 4, "x": 2}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
 #: Programs with a value the verifier fills itself, as PoUW's `pouw.roots`: `S`, each row a pair of digests of 32-bit
 #: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own).
 SUPPLIED_SETUPS = [
@@ -451,7 +460,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("window_root", "held") if isinstance(j, dict) and k in j}
+    keys = keys | {k for k in ("row_schemas", "window_root", "held") if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
@@ -504,6 +513,13 @@ def decode_params(j) -> dict:
             R._outputs(j["outputs"], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("pinned") or {})
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    if "row_schemas" in j:
+        if not isinstance(j["row_schemas"], dict):
+            raise D.Reject("row formats are not an object")
+        try:
+            R._schemas(j["row_schemas"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     if "binding" in j:
         if not isinstance(j["binding"], dict):
             raise D.Reject("the binding is not an object")
@@ -512,12 +528,15 @@ def decode_params(j) -> dict:
         except ValueError as e:
             raise D.Reject(str(e)) from None
     try:
-        R._window(j.get("window_root"), j.get("held"), j["registered"] or {}, {}, {}, {})
+        window, fixed = R._window(j.get("window_root"), j.get("held"), j["registered"] or {},
+                                  G.sources(j.get("supplied", {})), j.get("pinned") or {}, j.get("outputs") or {})
     except ValueError as e:
         raise D.Reject(str(e)) from None
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
+    if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
+        raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**j, "program": PROGRAMS[sha], "delta": delta}
 
 
@@ -553,7 +572,7 @@ def _registered_reads(verdicts: dict) -> None:
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
-                   p.get("binding"), p.get("outputs"), p.get("window_root"), p.get("held")).codes
+                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held")).codes
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
@@ -643,7 +662,7 @@ def registered(j):
     p = _params_of(_json(j))
     fixed = [*(p.get("held") or ()), *(p.get("pinned") or {}), *G.sources(p.get("supplied", {})), *(p.get("outputs") or {})]
     try:
-        return G.registered_entries(p["program"], p["registered"] or {}, window=p.get("window_root"), fixed=fixed)
+        return G.registered_entries(p["program"], p["registered"] or {}, p.get("row_schemas"), p.get("window_root"), fixed)
     except ValueError:
         return None
 
@@ -1186,6 +1205,9 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     log = []
     output = None
     earlier = draw(st.booleans())
+    if earlier and held and not windowed:
+        # without the window's root, a value the log registered is one the verifier holds across windows
+        keep = [v for v in held if v not in sup]
     if earlier and values and "W" in values and "W" not in sup and draw(st.booleans()):
         # W is an output of the earlier run: its port, of W's rows, under a root and domain of its own
         output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
@@ -1215,12 +1237,17 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
         params["outputs"] = {"W": {"port": EARLIER_OUT, "record": R.digest(log[-1])}}
     elif pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
+    if values and s.formats and draw(st.integers(0, 3)):
+        # without the formats, R7 counts a packed value's rows as row/v1 rows and refuses it
+        params["row_schemas"] = {v: f for v, f in s.formats.items() if v in values}
     if binding:
         params["binding"] = binding
     if windowed:
         params["window_root"] = WROOT
         if keep or draw(st.booleans()):
             params["held"] = keep
+    elif keep:
+        params["held"] = keep
     d = drawn(draw, mine, n)
     proved = DR.proved(d)
     verdicts = {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True}}
@@ -1455,6 +1482,11 @@ REGISTERED_PARAMS = [
         {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {}][x % 15]),
     lambda a, x: a["params"].pop("outputs"),
     _earlier_out,
+    _set("params", "row_schemas", lambda a, x: [
+        {"A": G.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
+        {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
+        {}][x % 15]),
+    lambda a, x: a["params"].pop("row_schemas", None),
 ]
 
 
@@ -2670,7 +2702,8 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier],
               "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
-              "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {})}
+              "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {}),
+              **({"row_schemas": {v: f for v, f in s.formats.items() if v in values}} if s.formats else {})}
     evidence = {"draw": {**law, "population": s.population, "units": [0]}, "instances": 1, "proved_units": [0],
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
@@ -2695,6 +2728,30 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):
+    """R7 counts a value's rows in the row format the verifier names for it: `A`'s 8-bit leaves, two to a u16 word in its
+    `row/v2` rows, and `B`'s `row-seg/v1` rows are accepted under their formats (or each other's, which count alike), and
+    without them `A` is counted as `row/v1` rows of one leaf a word, twice its rows under another domain (`R7-leaves`,
+    `R7-domain`), Lean and Python agreeing."""
+    s = next(s for s in REGISTERED_SETUPS if s.formats)
+    for values in s.values:
+        a = _v2_audit(s, values)
+
+        def codes(b):
+            kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+            return json.loads(out)["codes"] if kind == "output" else kind
+
+        assert codes(a) == [], values
+        swapped = copy.deepcopy(a)
+        swapped["params"]["row_schemas"] = {v: {G.SCHEMA_V2: G.SCHEMA_SEG, G.SCHEMA_SEG: G.SCHEMA_V2}[f]
+                                            for v, f in a["params"]["row_schemas"].items()}
+        assert codes(swapped) == [], values
+        for drop in (lambda b: b["params"].pop("row_schemas"), lambda b: b["params"].update(row_schemas={})):
+            b = copy.deepcopy(a)
+            drop(b)
+            assert codes(b) == (["R7-leaves", "R7-domain"] if "A" in values else []), values
 
 
 def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
@@ -2734,7 +2791,9 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     accepts a record whose D is a fresh commitment under its window's domain after a log that registered D under an
     earlier window's (`EARLIER_WROOT`) at another root, and W under the same root. The earlier window's D, replayed, is
     refused (`R7-domain`), and so is a W under another root (`R7-held`); a verifier that doesn't hold W takes it per
-    window (`R7-domain`), and one that names no window root takes D's domain as before (`R7-domain`)."""
+    window (`R7-domain`), and one that names no window root takes D's domain as before (`R7-domain`). Without the root a
+    verifier fails closed: a value the log registered under the domain it takes now that it doesn't hold (W, or a
+    fixed-name D) refuses its inputs (`OneStage.paramsOfJson`), whatever the record registers."""
     s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
     law = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
@@ -2761,7 +2820,19 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     moved["record"]["registered"][1] = {**moved["record"]["registered"][1], "root": "12" * 64}
     assert codes(moved) == ["R7-held"]
     assert codes({**a, "params": {**params, "held": []}}) == ["R7-domain"]
-    assert codes({**a, "params": {k: v for k, v in params.items() if k not in ("held", "window_root")}}) == ["R7-domain"]
+    unrooted = {k: v for k, v in params.items() if k != "window_root"}
+    assert codes({**a, "params": unrooted}) == ["R7-domain"]
+    # fail closed: with no window root, a log that registered W, which the verifier doesn't hold, refuses its inputs, and
+    # so does a fixed-name D the log registered under the domain it takes now, replayed or fresh
+    assert codes({**a, "params": {k: v for k, v in unrooted.items() if k != "held"}}) == "reject"
+    plain = R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
+    for again in (s.entries(values), rec["registered"]):
+        b = {"params": {**unrooted, "log": [plain]},
+             "record": {**_record_of(s, values, law, WINDOW, [plain], leaf_layer=LEAF, previous=R.digest(plain)),
+                        "registered": again}}
+        assert codes(b) == "reject"
+        assert codes({**b, "params": {**b["params"], "held": ["D", "W"]}}) == ([] if again == plain["registered"]
+                                                                                else ["R7-domain", "R7-held"])
 
 
 def test_a_root_with_a_trailing_newline_is_refused(pieces):

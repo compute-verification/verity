@@ -14,8 +14,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
   outputs of an earlier run (`{value: {"record", "port"}}`, each of a value it expects registered and neither fills nor
   pinned, `record` lowercase hex of 64 bytes and `port` a string), each refused with any other form or when it expects
-  none registered; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and
-  the identity it registered the prover under (lowercase hex of whole bytes), refused in any other form;
+  none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
+  expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
+  other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
+  identity it registered the prover under (lowercase hex of whole bytes), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
@@ -114,6 +116,7 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
   let keys := if (field? j "pinned").isSome then keys.push "pinned" else keys
   let keys := if (field? j "outputs").isSome then keys.push "outputs" else keys
+  let keys := if (field? j "row_schemas").isSome then keys.push "row_schemas" else keys
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
@@ -176,6 +179,15 @@ def paramsOfJson (j : Json) : V Params := do
         | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, p) else throw fail
         | _, _ => throw fail
     | some _ => throw "output values are not an object"
+  let schemas ← match field? j "row_schemas" with
+    | none => pure #[]
+    | some (.obj kvs) => do
+      if registered.isEmpty then throw "row formats are registered values' formats: the verifier expects none registered"
+      kvs.toArray.mapM fun (v, s) => match s with
+        | .str s => if registered.any (·.1 == v) && !supplied.any (·.1 == v) && Registered.SCHEMAS.contains s then
+            pure (v, s) else throw s!"row format of {v}: not a registered value it doesn't fill, in one of {Registered.SCHEMAS}"
+        | _ => throw s!"row format of {v}: not a string"
+    | some _ => throw "row formats are not an object"
   let binding ← match field? j "binding" with
     | none => pure none
     | some b => do
@@ -198,8 +210,15 @@ def paramsOfJson (j : Json) : V Params := do
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
-  return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered,
-                         params, supplied, pinned, outputs, binding, windowRoot, held }, delta }
+  let verifier : Registration.Verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log,
+    partition, registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held }
+  let again := Registration.unwindowed verifier
+  if !again.isEmpty then
+    throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
+      "take now, and the verifier names no window root: a value registered afresh each window under a fixed name takes " ++
+      "the window's open root (window_root, from the challenger's signed open of the window), and a value held across " ++
+      "windows is named in held (or pinned)")
+  return { verifier, delta }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b

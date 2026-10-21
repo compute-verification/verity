@@ -12,13 +12,17 @@ A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "l
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
 (`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
 before the salt), and each value an earlier record of the log registered under the domain it takes now to that record's
-root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered.
+root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered. Its entry for a value
+counts the value's rows in the row format the verifier holds for it (`schemas`; a bit row's `words` hold as many of its
+leaves as their bits do), and in `row/v1` rows when it names none.
 
 A verifier that names its window's open root R (`windowRoot`, which it reads from the challenger's signed open of the
 window, never from the record) takes every registered value's domain under R (`Registered.domainAt`) but the ones it
 holds across windows: `held` (the weights), and its pinned, supplied and output values (`fixedOf`). A window-independent
 program then registers each window's values under the same names: a per-window value is held to no earlier window's
-root, and a root registered in another window opens under no domain R7 takes. A value it fills itself (`supplied`,
+root, and a root registered in another window opens under no domain R7 takes. One that names no R is refused before the
+record is read when a value it doesn't hold across windows was registered by an earlier record under the domain it takes
+now (`unwindowed`, `OneStage.paramsOfJson`). A value it fills itself (`supplied`,
 `Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to its binding and the record's
 window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
 (`R7-supplied`), never to the log's.
@@ -90,6 +94,9 @@ structure Verifier where
   outputs : Array (String × String × String) := #[]
   /-- the stream and prover it registers the record for, `(stream, prover)`, each lowercase hex -/
   binding : Option (String × String) := none
+  /-- of `registered`, values it doesn't fill whose rows are not `row/v1` rows, `(value, schema)` each
+  (`Registered.SCHEMAS`): a bit row's leaves are counted in its format (`Registered.entries`) -/
+  schemas : Array (String × String) := #[]
   /-- the window's open root, lowercase hex of 64 bytes, from the challenger's signed open of the window -/
   windowRoot : Option String := none
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
@@ -106,7 +113,7 @@ def fixedOf (v : Verifier) : Array String :=
 /-- The verifier's own entries (`registration._check_registered`'s `registered_entries`): each value's domain under the
 window's open root, but `fixedOf`'s. -/
 def ownEntries (v : Verifier) : V (Array Registered.Entry) :=
-  Registered.entries v.program.desc v.params v.registered v.windowRoot (fixedOf v)
+  Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v)
 
 /-- `registration.held_roots`, read at the verifier's own entries (`mine`, none where they don't compute): `(value,
 root)` for each of its values an earlier record of the log registered under the domain `mine` gives it, the root of
@@ -119,6 +126,14 @@ def heldRoots (log : Array Json) (mine : V (Array Registered.Entry)) : Array (St
         if held.any (·.1 == v) || !mine.any (fun w => w.value == v && w.domain == d) then held else held.push (v, r)
       | _, _, _ => held) held
     | _ => held) #[]
+
+/-- `registration.unwindowed`: for a verifier that names no window root, its values it doesn't hold across windows
+(`fixedOf`) that an earlier record of the log registered under the domain it takes now, a window-independent program's
+fixed-name per-window values from its second window on; none with a window root, or where its entries don't compute. -/
+def unwindowed (v : Verifier) : Array String :=
+  if v.windowRoot.isSome then #[] else
+    let fixed := fixedOf v
+    ((heldRoots v.log (ownEntries v)).map (·.1)).filter (!fixed.contains ·)
 
 /-- `registration._output_port`: the `roots` entry for `port` of the log's first record with digest `record` (its last,
 as a dict reads it). -/

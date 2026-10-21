@@ -231,7 +231,10 @@ only inside a proof (`one_stage.registered`).
   weights), and its pinned, supplied and output values. So an honest second window's values are held to nothing the
   first registered, and a root of an earlier window opens under no domain R7 takes (`R7-domain` when the entry names
   the earlier domain; under the new domain no registered read of it opens). A verifier that names no R takes every
-  domain as before.
+  domain as before, and fails closed: it refuses its own inputs (ValueError, Lean `OneStage.paramsOfJson`, naming
+  `window_root` and `held`) when a value it doesn't hold across windows was registered by an earlier record under the
+  domain it takes now (`registration.unwindowed`), so a fixed-name Program's second window needs R, while a Program
+  whose per-window values take fresh names (the window-prefixed form) needs none.
 - Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
   itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K

@@ -44,7 +44,10 @@
   window, never from the record, and every registered value's domain binds R but the ones it holds across windows
   (`held`, the weights, and its pinned, supplied and output values), so a window's values are held to no earlier
   window's roots, and a root registered in another window opens under no domain R7 takes. A verifier that names no R
-  takes every domain as before.
+  takes every domain as before, which is sound only while each window's values take fresh names: it refuses its own
+  inputs (ValueError, naming the fix) when a value it doesn't hold across windows was registered by an earlier record
+  under the domain it takes now (`unwindowed`), a window-independent program's per-window value from its second
+  window on.
 * **Supplied values**: a registered value the verifier fills itself (`supplied`, `registered.supplied_root`: rows of the
   record's roots, positions after the log's, its coin bound to its binding and the record's window and its own bytes,
   under public salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the
@@ -147,15 +150,17 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None, window_root: str | None = None,
+          outputs: Mapping[str, Mapping[str, str]] | None = None,
+          schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
-    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); ValueError without
-    `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    ones that are outputs of an earlier run (`outputs`: `{parameter: {"record", "port"}}`); and of the ones it doesn't fill,
+    those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
+    that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
@@ -169,7 +174,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     record's window (never from the record), and which every registered value's domain binds but the ones it holds
     across windows: `held` (registered values, the weights, say), and its pinned, supplied and output values
     (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
-    another window's opens under no domain R7 takes.  R3 reads `ports` by name, so its codes come in the ports' sorted
+    another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
+    the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
     order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
     v2 = bool(registered)
@@ -178,8 +184,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins)
+    formats = _schemas(schemas, registered or {}, sup)
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
+    log = list(log)
+    refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -254,7 +263,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, window, fixed)
+        _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
+                          fixed)
     return c.verdict()
 
 
@@ -268,6 +278,32 @@ def _window(window_root: str | None, held: Sequence[str] | None, registered: Map
                                                                           for v in held)):
         raise ValueError(f"held values are a list of registered values: {held!r}")
     return G.window_root(window_root), (*(held or ()), *pinned, *supplied, *outputs)
+
+
+def unwindowed(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None, window: str | None,
+               fixed: Sequence[str], log: Iterable[Mapping[str, Any]]) -> list[str]:
+    """The values a verifier naming no window root can't take: each it expects registered and doesn't hold across
+    windows (`fixed`) that an earlier record of the log registered under the domain it takes now. A window-independent
+    program that registers its per-window values under fixed names reaches them from its second window on, and without
+    R every window's domain is the same, so an earlier window's roots would hold. None with a window root, and none for a
+    program whose per-window values take a fresh name each window."""
+    if window is not None or not values:
+        return []
+    try:
+        mine = G.registered_entries(program, values, schemas, fixed=fixed)
+    except ValueError:
+        return []
+    logged = held_roots(log)
+    return sorted(v for v, m in mine.items() if v not in fixed and (v, m["domain"]) in logged)
+
+
+def refuse_unwindowed(again: Sequence[str]) -> None:
+    """ValueError naming the fix when `unwindowed` found values; the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if again:
+        raise ValueError(f"registered values {list(again)} were registered by an earlier record of the log under the domains "
+                         "they take now, and the verifier names no window root: a value registered afresh each window under "
+                         "a fixed name takes the window's open root (`window_root`, from the challenger's signed open of "
+                         "the window), and a value held across windows is named in `held` (or pinned)")
 
 
 def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mapping[str, int], supplied: Mapping[str, Any],
@@ -288,6 +324,19 @@ def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mappin
                              f"record's digest and a port: {o!r}")
         out[v] = (o["record"], o["port"])
     return out
+
+
+def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
+    """The verifier's row formats, each of a value it expects registered and doesn't fill, one of `registered.SCHEMAS`;
+    ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    if schemas is None:
+        return {}
+    if not isinstance(schemas, Mapping) or not registered:
+        raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
+    for v, s in schemas.items():
+        if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
+    return dict(schemas)
 
 
 def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str) -> Mapping[str, Any] | None:
@@ -337,10 +386,11 @@ def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], pinned: Mapping[str, str],
                       rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
                       binding: Mapping[str, str] | None = None,
-                      outputs: Mapping[str, tuple[str, str]] | None = None, window: str | None = None,
+                      outputs: Mapping[str, tuple[str, str]] | None = None,
+                      schemas: Mapping[str, str] | None = None, window: str | None = None,
                       fixed: Sequence[str] = ()) -> None:
     try:
-        mine = G.registered_entries(program, values, window=window, fixed=fixed)
+        mine = G.registered_entries(program, values, schemas, window, fixed)
     except ValueError as e:
         c.fail("R7-registered", {"verifier": f"{dict(values)} does not apply: {e}"})
         return
@@ -415,4 +465,5 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "SERVED_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "registered_entries", "served_domain"]
+           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "served_domain",
+           "unwindowed"]

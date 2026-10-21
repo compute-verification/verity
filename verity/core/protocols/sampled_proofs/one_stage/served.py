@@ -11,7 +11,8 @@ the session's statement and coin (`RowsSession.ServedRegistered`), and verifies 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
 `leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the registration
 record as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
-verifier's own (`registration.check(..., registered=values, outputs=outputs, window_root=, held=)`), and the verifier's
+verifier's own (`registration.check(..., registered=values, outputs=outputs, schemas=schemas, window_root=, held=)`), and
+the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
 word_bits, domain, and the row each unit of the population reads, from the verifier's own program and query). Its domain
 is one of two, and no other:
@@ -24,10 +25,13 @@ is one of two, and no other:
   the log's record with that digest names the port, its root and its leaf count, and the tree is that port's.
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
-frame-v3-sha512 leaf schema its leaves were hashed under. Absent means `hm96-sha512/row/v1` (`registered.SCHEMA`), the one
-format the registered form reads today, so a v1 tree's entry and port name none, and its bytes are the ones
-`Registered.entry` and `reads_file` write. H1's and PoUW's served rows are `row/v2` and `row-seg/v1`: those are refused
-until R7 and the Lean form (`Flock.Registered.checkPort`) read them.
+frame-v3-sha512 leaf schema its leaves were hashed under, which must be the format of the circuit port that reads it
+(`Flock.Registered.checkPort`). Absent means `hm96-sha512/row/v1` (`registered.SCHEMA`), so a v1 tree's port names none.
+H1's and PoUW's served rows are `row/v2` and `row-seg/v1` bit rows: a row is exactly its `words` leaves of `word_bits`
+bits, as many of the parameter's own leaves as those bits hold (`registered.row_leaves`; H1's A, K int8 codes, is K/2
+u16 words), which sets the tree's rows and its domain. The record's `registered` entry names no format: R7 counts a
+row's leaves in the format the verifier holds for the value (`registration.check(..., schemas=)`, the returned
+`schemas`), and without it as `row/v1`, so it refuses a bit-row tree of leaves narrower than its words, such as H1's A.
 
 **The program and the partition.** The positions are the verifier's: `reads` derives each unit's row from the program and
 the query it is given, the path's own public Program and its `Q_template_instance` query, never the universal unit's. The
@@ -38,9 +42,12 @@ so the positions are a function of the unit index alone, and the layout is proto
 
 `register_served` refuses (ValueError) a served tree whose value is not a parameter the program reads in whole rows, a
 value twice, a root or domain that is not lowercase hex of 64 bytes, no rows or no leaves to a row, a width other than 16
-or 32, a row format other than v1, a domain that is neither of the two above, an output whose record or port the log does
+or 32, a row format not in `SCHEMAS`, a bit row whose `words * word_bits` bits are no whole number of the parameter's
+leaves or whose rows are not the parameter's, a domain that is neither of the two above, an output whose record or port the log does
 not hold or whose root, domain or rows are not the port's, a root other than the one an earlier record of the log
-registered under the same domain (R7-held), and a tree no unit of the population reads, which no proof would open.
+registered under the same domain (R7-held), without `window_root` a tree it doesn't hold that the log registered under
+the same domain (`registration.unwindowed`: a fixed name served again needs the window's root), and a tree no unit of the
+population reads, which no proof would open.
 """
 from __future__ import annotations
 
@@ -55,9 +62,8 @@ from verity.ml.circuits.program import Program
 from . import partition as P, registered as G, registration as R
 
 _HEX64 = re.compile(r"[0-9a-f]{128}")
-#: the row formats a served tree may name; the registered form reads `READ` alone
-SCHEMAS = (G.SCHEMA, "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1")
-READ = (G.SCHEMA,)
+#: the row formats a served tree may name, each one the registered form reads
+SCHEMAS = G.SCHEMAS
 
 
 @dataclass(frozen=True)
@@ -79,7 +85,7 @@ class ServedTree:
     def of(cls, reg: G.Registered) -> "ServedTree":
         """A tree serving committed as a registered value (`Registered.commit`), under its registered-value domain."""
         e = reg.entry()
-        return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits)
+        return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 
     def entry(self) -> dict[str, Any]:
         """The registration record's `registered` entry."""
@@ -92,8 +98,9 @@ class ServedRegistration:
     """What `register_served` returns. `registered`: the record's `registered` entries (`registration.record(...,
     registered=)`); `values`, `outputs`, `window_root` and `held`: R7's own copies (`registration.check(...,
     registered=values, outputs=outputs, window_root=window_root, held=held)`, `outputs` None when no tree is an earlier
-    output); `roots`: `{value: root}`; `file`: the `--registered` document, whose `ports` are the registered ports by
-    circuit port; `partition`: the verifier's partition object, its `--partition` file."""
+    output); `schemas`: R7's row formats, `{value: schema}` for each tree whose rows are not `row/v1` rows
+    (`registration.check(..., schemas=)`); `roots`: `{value: root}`; `file`: the `--registered` document, whose `ports` are
+    the registered ports by circuit port; `partition`: the verifier's partition object, its `--partition` file."""
 
     registered: list[dict[str, Any]]
     values: dict[str, int]
@@ -101,6 +108,7 @@ class ServedRegistration:
     roots: dict[str, str]
     file: dict[str, Any]
     partition: dict[str, Any]
+    schemas: dict[str, str]
     window_root: str | None = None
     held: list[str] | None = None
 
@@ -139,9 +147,6 @@ def _check_form(t: Any) -> None:
                          f"{' or '.join(map(str, G.WIDTHS))}")
     if t.row_schema not in SCHEMAS:
         raise ValueError(f"served tree {t.value!r}: rows of {t.row_schema!r}, not one of {SCHEMAS}")
-    if t.row_schema not in READ:
-        raise ValueError(f"served tree {t.value!r}: {t.row_schema} rows, and the registered form reads {' or '.join(READ)} rows "
-                         f"alone (R7 and Flock.Registered.checkPort)")
     o = t.output
     if o is not None and not (isinstance(o, tuple) and len(o) == 2 and isinstance(o[0], str) and _HEX64.fullmatch(o[0])
                               and isinstance(o[1], str) and o[1]):
@@ -167,9 +172,11 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
     if held is not None and not all(isinstance(v, str) and v in names for v in held):
         raise ValueError(f"held values are served trees' values: {held!r}")
     values = {t.value: t.words for t in served}
+    schemas = {t.value: t.row_schema for t in served if t.row_schema != G.SCHEMA}
     fixed = [*(held or ()), *(t.value for t in served if t.output is not None)]
-    mine = G.registered_entries(program, values, window=G.window_root(window_root), fixed=fixed)
+    mine = G.registered_entries(program, values, schemas, G.window_root(window_root), fixed)
     log = list(log)
+    again = R.unwindowed(program, values, schemas, window_root, fixed, log)
     logged = R.held_roots(log)
     outputs: dict[str, dict[str, str]] = {}
     domains: dict[str, str] = {}
@@ -182,6 +189,8 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
             if t.domain != want["domain"]:
                 raise ValueError(f"served tree {t.value!r}: domain {t.domain} is not {t.value!r}'s registered-value domain "
                                  f"{want['domain']}, and the tree names no earlier output whose domain it is")
+            if t.value in again:
+                R.refuse_unwindowed(again)
             if logged.get((t.value, t.domain), t.root) != t.root:
                 raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under this domain "
                                  f"with root {logged[(t.value, t.domain)][:16]}..., and a value is committed once a domain "
@@ -198,12 +207,13 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
         outputs[t.value] = {"record": record, "port": port}
         domains[t.value] = t.domain
     roots = {t.value: t.root for t in served}
-    file = G.reads_file(program, query, values, roots, ports=ports, domains=domains, window=window_root, fixed=fixed)
+    file = G.reads_file(program, query, values, roots, ports=ports, domains=domains, schemas=schemas, window=window_root,
+                        fixed=fixed)
     unread = sorted(set(values) - {e["value"] for e in file["ports"].values()})
     if unread:
         raise ValueError(f"served trees {unread}: no unit of the population reads them, so no proof would open them")
     return ServedRegistration([t.entry() for t in served], values, outputs or None, roots, file, P.partition(program, query),
-                              window_root, None if held is None else list(held))
+                              schemas, window_root, None if held is None else list(held))
 
 
-__all__ = ["READ", "SCHEMAS", "ServedRegistration", "ServedTree", "register_served"]
+__all__ = ["SCHEMAS", "ServedRegistration", "ServedTree", "register_served"]

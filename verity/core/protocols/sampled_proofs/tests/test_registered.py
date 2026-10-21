@@ -434,12 +434,13 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
 
 
 def test_a_value_is_committed_once_and_the_log_holds_its_root():
-    """R7 holds a later record's root to the one an earlier record of the log registered: the verifier holds no roots
-    beside its log, so no caller can leave them out."""
+    """R7 holds a later record's root of a value the verifier holds across windows (`held`) to the one an earlier record
+    of the log registered: the verifier holds no roots beside its log, so no caller can leave them out. A verifier that
+    names neither that nor the window's root refuses its own inputs, naming both."""
     prog = _program()
     reg = _registered(prog)
     rec, ports = _record(prog, reg)
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}}
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "held": ["W"]}
 
     def later(window, previous, entry):
         return R.record(prog, Q, LAW, SCHEME, rec["roots"], {**SERVED, "row": window}, previous=R.digest(previous),
@@ -450,6 +451,8 @@ def test_a_value_is_committed_once_and_the_log_holds_its_root():
     v1 = later(8, rec, None)
     assert R.held_roots([rec, v1]) == {("W", reg.entry()["domain"]): reg.root.hex()} and R.held_roots([v1]) == {}
     assert R.check(later(9, v1, _registered(prog).entry()), prog, Q, **kw, log=[rec, v1]).codes == ("R7-held",)
+    with pytest.raises(ValueError, match=r"registered values \['W'\].*`window_root`.*`held`"):
+        R.check(later(8, rec, reg.entry()), prog, Q, **{**kw, "held": None}, log=[rec])
 
 
 #: two windows' open roots, as the challenger's signed opens name them
@@ -470,16 +473,21 @@ def _windows(prog: Program, xs, w: G.Registered):
 
 def test_two_honest_windows_register_the_same_names_under_their_own_roots():
     """PRF-127 (a), (c): a window-independent program registers x afresh every window under the same name. Without the
-    window's open root R, x's domain is the same in both windows, so R7 holds the second window's x to the first's root
-    and refuses an honest second window (`R7-held`). With R (`window_root`, from the challenger's signed open), x's
-    domain binds its window and both windows are accepted, while W, which the verifier holds across windows (`held`),
-    keeps one window-independent domain and its first root."""
+    window's open root R, x's domain is the same in both windows, so R7 would hold the second window's x to the first's
+    root (`R7-held`, and a replay of the first window's root would pass): the verifier refuses its own inputs instead,
+    naming `window_root`, whether or not it holds W. With R (`window_root`, from the challenger's signed open), x's domain
+    binds its window and both windows are accepted, while W, which the verifier holds across windows (`held`), keeps one
+    window-independent domain and its first root."""
     prog = _program()
     d = P.program_digest(prog)
     w = _registered(prog)
     plain, kw = _windows(prog, [G.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
     assert R.check(plain[0], prog, Q, **kw).ok
-    assert R.check(plain[1], prog, Q, **kw, log=plain[:1]).codes == ("R7-held",)
+    for held in (None, ["W"]):
+        with pytest.raises(ValueError, match=r"registered values \[.*'x'\].*`window_root`"):
+            R.check(plain[1], prog, Q, **kw, log=plain[:1], held=held)
+        with pytest.raises(ValueError, match=r"`window_root`"):
+            R.check({**plain[1], "registered": plain[0]["registered"]}, prog, Q, **kw, log=plain[:1], held=held)
     xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
     recs, kw = _windows(prog, xs, w)
     for i, (r, rec) in enumerate(zip(WINDOWS, recs)):
@@ -739,9 +747,9 @@ def test_a_supplied_value_is_the_records_own_not_the_logs():
     roots = G.supplied_value(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], later, ["pouw.roots"])
     later["registered"] = [w.entry(), roots.entry()]
     assert later["registered"][1]["root"] != first["registered"][1]["root"]
-    assert R.check(later, **check, log=[first]).ok
+    assert R.check(later, **check, log=[first], held=["W"]).ok
     stale = {**later, "registered": first["registered"]}
-    assert R.check(stale, **check, log=[first]).codes == ("R7-supplied",)
+    assert R.check(stale, **check, log=[first], held=["W"]).codes == ("R7-supplied",)
 
 
 def test_supplied_values_are_a_v2_verifiers_in_one_form():
@@ -797,6 +805,7 @@ def test_a_position_follows_the_logs_units():
     assert R.check(first, **check).ok
     window = {**BOUND, "row": 8}
     later, check, again = _mixed_case(base, log=[first], window=window)
+    check["held"] = ["W"]
     salt = G.window_salt(bytes.fromhex(COIN), window, BINDING)
     assert [list(r) for r in again.rows] == [G.bytes_leaves(salt + _u64(6) * 8, 32), G.bytes_leaves(_u64(11) * 8 + salt, 32)]
     assert R.check(later, **check).ok
@@ -876,7 +885,7 @@ def test_r7_holds_a_pinned_value_to_its_pin():
     assert R.check(rec, **check, pinned={"W": w.root.hex()}).ok
     assert R.check(rec, **check, pinned={"W": "ee" * 64}).codes == ("R7-held",)
     later = {**rec, "window": {**SERVED, "row": 8}, "previous": R.digest(rec)}
-    assert R.check(later, **check, log=[rec]).ok
+    assert R.check(later, **check, log=[rec], held=["W"]).ok
     assert R.check(later, **check, log=[rec], pinned={"W": "ee" * 64}).codes == ("R7-held",)
     for bad in ({"V": "ee" * 64}, {"pouw.roots": "ee" * 64}, {"W": "EE" * 64}, {"W": "ee"}, {"W": 1}, ["W"]):
         with pytest.raises(ValueError):
@@ -907,7 +916,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
     out = {"W": {"record": R.digest(earlier), "port": "prev.out"}}
     assert R.check(rec, prog, Q, **kw, outputs=out).ok
-    assert R.check(rec, prog, Q, **kw).codes == ("R7-domain", "R7-held")
+    assert R.check(rec, prog, Q, **kw, held=["W"]).codes == ("R7-domain", "R7-held")
     assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out).codes == ("R7-held",)
     assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
     for bad in ({"record": "ee" * 64, "port": "prev.out"}, {"record": R.digest(earlier), "port": "nope"},
