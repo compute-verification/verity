@@ -14,18 +14,23 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.circuits.evaluation.reference import signature_of, statics_of
 from verity_vllm.program.kernels import dsv4_rows, rows
+from verity_vllm.program.kernels.dsa_norm_rows import block_rmsnorm_rows
 from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import dsv4_compressor, dsv4_decode_indices, dsv4_qnorm_insert, flashmla, flashmla_prefill, mhc
+from verity_vllm.program.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_moe, dsv4_qnorm_insert, flashmla,
+                                          flashmla_prefill, mhc)
 from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query.manifest import format as RM
 
 #: the families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on that this
 #: module evaluates
-DSV4_B1_FAMILIES = ("MhcPostPreTf32_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1", "Dsv4MlaCompressC4_v1", "MhcPreBroadcast_v1",
-                    "MhcResidualBroadcast_v1", "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1", "FlashMlaGatherRow_v1",
-                    "Dsv4QNormRopeKvInsert_v1", "FlashMlaPrefill_v1", "FlashMlaDecode_v1")
+DSV4_B1_FAMILIES = ("SiluMulClamp_v1", "TritonBlockRMSNorm_v1", "MhcPostPreTf32_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1",
+                    "MoeRouterSqrtSoftplus_v1", "FlashMlaPrefill_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1",
+                    "Dsv4MlaCompressC4_v1", "FlashMlaDecode_v1", "MoeRouterHash_v1", "MhcPreBroadcast_v1", "MhcResidualBroadcast_v1",
+                    "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1")
 
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
+TWO5 = f'{{"f64":"{float.hex(2.5)}"}}'
+TEN = f'{{"f64":"{float.hex(10.0)}"}}'
 FUSE = dict(REPEAT=2, EPS=1e-6, HC_EPS=1e-6)
 FUSE_TEXT = f"REPEAT=2,EPS={EPS},HC_EPS={EPS}"
 ATTN = dict(DOT=HopperBF16WgmmaDot16, SCALE=32 ** -0.5)
@@ -52,10 +57,18 @@ CASES = [
     ("FlashMlaGatherRow_v1{DN=32,DR=16,QT=16}", bind(flashmla_prefill.FlashMlaGatherRow, DN=32, DR=16, QT=16)),
     (f"Dsv4QNormRopeKvInsert_v1{{NH=2,NHP=4,DN=48,DR=16,QB=16,EPS={EPS}}}",
      bind(dsv4_qnorm_insert.Dsv4QNormRopeKvInsert, NH=2, NHP=4, DN=48, DR=16, QB=16, EPS=1e-6)),
+    (f"TritonBlockRMSNorm_v1{{N=136,BLOCK=256,WARPS=2,EPS={EPS}}}", bind(dsa_norm.TritonBlockRMSNorm, N=136, BLOCK=256, WARPS=2, EPS=1e-6)),
+    (f"TritonBlockRMSNorm_v1{{N=1536,BLOCK=2048,WARPS=8,EPS={EPS}}}",
+     bind(dsa_norm.TritonBlockRMSNorm, N=1536, BLOCK=2048, WARPS=8, EPS=1e-6)),
+    (f"MoeRouterSqrtSoftplus_v1{{E=16,SCALE={TWO5}}}", bind(dsv4_moe.MoeRouterSqrtSoftplus, E=16, SCALE=2.5)),
+    (f"MoeRouterHash_v1{{E=16,SCALE={TWO5}}}", bind(dsv4_moe.MoeRouterHash, E=16, SCALE=2.5)),
+    (f"SiluMulClamp_v1{{I=9,LIMIT={TEN}}}", bind(dsv4_moe.SiluMulClamp, I=9, LIMIT=10.0)),
 ]
 
-#: the families whose operands are drawn with their twin's sampler (indices, lengths and e4m3 / e8m0 bytes a uniform draw rarely makes live)
-DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1")
+#: the families whose operands are drawn with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
+#: rarely makes)
+DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
+         "MoeRouterHash_v1", "SiluMulClamp_v1")
 
 
 def _words(rng: np.random.Generator, pt) -> np.ndarray:
@@ -110,3 +123,38 @@ def test_a_flashmla_row_at_another_dot_step_is_declined(family):
     spec = next(s for s, _ in CASES if RM.spec_family(s) == family).replace(HopperBF16WgmmaDot16.id, "HopperBF16WgmmaDot8_v1")
     with pytest.raises(Declined, match="no twin for DOT"):
         rows.ROWS[family].fn(RM.spec_statics(spec), [])
+
+
+def test_the_block_norm_row_is_the_definitions_reduction_tree():
+    """A served q row (1536 of a 2048 block on 8 warps) rarely shows its reduction tree through the bf16 output, so the rows here are
+    ones of a seeded draw whose output differs between 8, 4 and 2 warps: the row kernel is the Definition on each, and the other trees
+    are not (which keeps the rows discriminating)."""
+    N, BLOCK, R, pick = 1536, 2048, 400, [166, 287, 347]
+    rng = np.random.default_rng(11)
+    x = ((rng.standard_normal((R, N)) * rng.choice([0.02, 1, 40], (R, 1))).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    w = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    d = bind(dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=8, EPS=1e-6)
+    want = np.asarray(evaluate_batch(d, x[pick], np.broadcast_to(w, (len(pick), N)).copy(), kernel="reference")).astype(np.uint16)
+    statics = RM.spec_statics(f"TritonBlockRMSNorm_v1{{N={N},BLOCK={BLOCK},WARPS=8,EPS={EPS}}}")
+    assert [rows.ROWS["TritonBlockRMSNorm_v1"].fn(statics, [x[i], w])["0"].tolist() for i in pick] == want.tolist()
+    for warps in (4, 2):
+        assert not np.array_equal(block_rmsnorm_rows(x[pick], w, 1e-6, BLOCK, warps)["out"].astype(np.uint16), want), warps
+
+
+def test_a_hash_id_outside_the_experts_reads_logit_zero():
+    """`MoeRouterPick_v1`'s select chain falls through to logits[0] for an id outside [0, E); the row kernel reads the same."""
+    d = bind(dsv4_moe.MoeRouterHash, E=16, SCALE=2.5)
+    logits = (np.random.default_rng(4).standard_normal(16) * 3).astype(np.float32).view(np.uint32)
+    ids = np.asarray([-1, 16, 17, -(1 << 31), (1 << 31) - 1, 3], dtype=np.int64).astype(np.uint32)
+    got = _row("MoeRouterHash_v1", RM.spec_statics(f"MoeRouterHash_v1{{E=16,SCALE={TWO5}}}"), [logits, ids])
+    assert got.tolist() == _reference(d, signature_of(d)[0], [logits, ids]).tolist()
+
+
+def test_the_clamp_row_on_non_finite_and_limit_words_is_the_definition():
+    """NaN and infinite gates and ups (which the self-check declines as non-finite bf16) and the limit's neighbours."""
+    d = bind(dsv4_moe.SiluMulClamp, I=9, LIMIT=10.0)
+    lim = dsv4_moe.limit_bits(10.0) >> 16
+    g = np.asarray([0x7FC0, 0xFFC0, 0x7F80, 0xFF80, lim + 1, lim | 0x8000, 0x7F81, 0x3F80, 0xC2C8], dtype=np.uint16)
+    gu = np.concatenate([g, g[::-1]])
+    got = _row("SiluMulClamp_v1", RM.spec_statics(f"SiluMulClamp_v1{{I=9,LIMIT={TEN}}}"), [gu])
+    assert got.tolist() == _reference(d, signature_of(d)[0], [gu]).tolist()
