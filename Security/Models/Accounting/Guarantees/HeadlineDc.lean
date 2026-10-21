@@ -82,7 +82,7 @@ Per device:
   carries SHFL's joint issue lines there; RT4-SHEET-9's unlisted instructions count in it. Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes all but 0.047% of the words on the IGMMA, those on the
   design's dp4a baseline, and `Sm90Measured.flat` is that floor, its shares exact (`B_♭` 191.31 a unit, binding on
-  `JPA90_0`; the machine model's reading is 1.820% at `q = ½`). It is over 1%;
+  `JPA90_0`; the machine model's reading is 1.833% at `q = ½`). It is over 1%;
   crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
   instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
   0.858% on DS-90, 0.605% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the
