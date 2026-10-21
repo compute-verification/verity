@@ -41,7 +41,8 @@ the auditor's signed ledger (the longest of the heads, each extending the others
 (`pouw_h1_challenger.Ledger.load`, core's check), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
 session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
 its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
-with the window accepted (`pouw_h1_challenger.period_reason`). The batch workload admits the first prompt alone after the
+with the window accepted and presented as its close's windows, its open committing ``draw_k``
+(`pouw_h1_challenger.period_reason`, core's `credit.period`). The batch workload admits the first prompt alone after the
 batch, so it admits per round; the fill workload admits in round 0 only.
 
 ``--served`` (fill) commits the 64's window's A codes and B rows as its window Program's registered values
@@ -583,8 +584,7 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 
 def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     """The window's served trees (`pouw_h1_served`): each committed value's entry, what `close` refused, and the outcome of
-    `pouw_h1_served.register` (``register_served`` reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up,
-    so it refuses the trees' v2 rows, ValueError, until then)."""
+    `pouw_h1_served.register`."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "ks": served.ks() if served.registered else [],
                            "committed": bool(served.registered) and not served.refused,
@@ -651,7 +651,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     the others extend (`Ledger.load`, core's check), the window held to the session it opened for its Commit's root
     (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within). The record is held to its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with `period` the ledger
-    must credit the lane's period with the window accepted (`pouw_h1_challenger.period_reason`)."""
+    must credit the lane's period with the window accepted and presented as its close's windows, its open committing
+    ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
@@ -683,7 +684,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             if key is None:
                 raise ValueError("no key the pin names, so the auditor's ledger is unread")
             newest = PHC.Ledger.load(ledger, key)
-            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, [sid] if doc["reason"] is None else [])}
+            root = (doc.get("window") or {}).get("root") or (rec["commitment"].get("session") or {}).get("root")
+            accepted = [sid] if doc["reason"] is None else []
+            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root])}
         except Exception as e:  # noqa: BLE001
             doc["period"] = {"name": period, "reasons": [f"{type(e).__name__}: {e}"]}
     for name in (remote.RECORD, remote.CLOSE):

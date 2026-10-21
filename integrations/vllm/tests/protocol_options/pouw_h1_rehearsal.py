@@ -5,7 +5,9 @@ fetched run on any CPU.
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
 `pouw_h1.FILL` over Llama-3.1-8B, no window's prefix; its descriptor's SHA-512 is its `program_digest`, the period's
 circuit), unless ``--program DIR`` names a ``--program-only`` run's. Then opens the lane's period (``period-open --name P
---cap 1 --circuit DIGEST``), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
+--cap 1 --circuit DIGEST --draw-k K``, K the proof service's committed draw K, `declared_draw_k`, which core's credit
+reads as the open's ``draw_k``; infra's ``auditor.py`` takes ``--draw-k`` with the sealed pins log, and until then its
+``period-open`` refuses the flag, so the rehearsal stops there), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --challenger AT --session RESERVE --gate GATE``, under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
@@ -19,8 +21,7 @@ ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the wi
 closes the period, takes the ledger (``GATE ledger``), the session's tree (``GATE fetch S``) and the key's pin (``GATE
 pubkey``), and runs the verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``,
-`pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome is in the serve record
-(its ``register_served`` reads row/v1 alone until proofs' REGV2 follow-up, so it refuses the v2 trees until then). Then
+`pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome is in the serve record. Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
 the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
@@ -106,8 +107,7 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     from verity_vllm.protocol_options import pouw_h1_served as SV
     from tests.protocol_options.pouw_h1_gpu import layout_of
     d.mkdir(parents=True, exist_ok=True)
-    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in LLAMA_8B]
-    shapes, modules = [(n, k) for _m, n, k in named], {w: m for w, (m, _n, _k) in enumerate(named)}
+    shapes, modules = declaration(layers)
     t0 = time.monotonic()
     prog = SV.declared(shapes, modules, PH.FILL.rows, PH.FILL.steps)
     t1 = time.monotonic()
@@ -125,6 +125,22 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
         raise ValueError(f"{PROGRAM}'s SHA-512 {meta['file_sha512'][:16]}... is not its program_digest {digest[:16]}...")
     (d / PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
     return meta
+
+
+def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]]:
+    """`pouw_h1.FILL`'s window over Llama-3.1-8B as `pouw_h1_served.declared` takes it: its linears' shapes and names."""
+    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in LLAMA_8B]
+    return [(n, k) for _m, n, k in named], {w: m for w, (m, _n, _k) in enumerate(named)}
+
+
+def declared_draw_k(layers: int = 32) -> int:
+    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof service's
+    selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    shapes, modules = declaration(layers)
+    return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
 
 
 class Gate:
@@ -297,8 +313,8 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
             reserved["session"])
 
 
-def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64
-             ) -> dict[str, Any]:
+def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64,
+             draw_k: int = 1) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), sessions forged through it."""
     from verity.core.protocols.pouw import salt as PS
@@ -335,7 +351,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
         forged_period = f"{period}-forged"
-        cases["forged_period_open"] = gate("period-open", "--name", forged_period, "--cap", "2", "--circuit", circuit)
+        cases["forged_period_open"] = gate("period-open", "--name", forged_period, "--cap", "2", "--circuit", circuit,
+                                          "--draw-k", str(draw_k))
         forged = {}
         for name, root in (("forged_bare_weights_root", bytes.fromhex(weights)), ("forged_other_window_root", bytes.fromhex(other))):
             try:
@@ -368,6 +385,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     pdir = Path(a.program) if a.program else out / "program"
     doc["program"] = (json.loads((pdir / PROGRAM_META).read_text()) if a.program else build_program(pdir))
     circuit = doc["program"]["program_digest"]
+    doc["draw_k"] = draw_k = declared_draw_k()
     if a.gate is None:
         gdir = Path(tempfile.mkdtemp(prefix="h1-gate-")) / "gate"
         gdir.mkdir()
@@ -388,7 +406,8 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
             doc["refused"] = "the gate's pubkey is not the pinned key (--key-sha512)"
             return doc
     doc["key_sha512"] = pin
-    doc["period_open"] = gate("period-open", "--name", a.period, "--cap", "1", "--circuit", circuit)
+    doc["period_open"] = gate("period-open", "--name", a.period, "--cap", "1", "--circuit", circuit, "--draw-k",
+                              str(draw_k))
     reserved = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.families(PH.FILL.steps),
                     "--minutes", str(a.minutes))
     doc["reserved"] = reserved
@@ -432,7 +451,8 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
             "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period),
             "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": record["commitment"]["session"]["root"]}),
         }
-        doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit)
+        doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
+                                   draw_k)
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
     cr = (v.get("trusted") or {}).get("credit") or {}

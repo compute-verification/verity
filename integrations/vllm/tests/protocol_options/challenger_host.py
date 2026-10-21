@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
@@ -93,9 +94,12 @@ class Gate:
         return e
 
     def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
-                    circuit: str | None = None, **override) -> dict:
+                    circuit: str | None = None, draw_k: int | None = None, **override) -> dict:
+        """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit`` and ``draw_k`` (the
+        proof service's committed draw K, `credit.K_FIELD`) when given."""
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
-                **({"circuit": circuit} if circuit is not None else {}), "pinned": "0" * 40, "key_sha512": self.pin,
+                **({"circuit": circuit} if circuit is not None else {}),
+                **({CR.K_FIELD: draw_k} if draw_k is not None else {}), "pinned": "0" * 40, "key_sha512": self.pin,
                 "opened_utc": "2026-10-20T11:00:00Z", **override}
         self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
         return self.append("period-open", None, body)
@@ -200,6 +204,10 @@ class Ledger:
         self.leaves = itertools.count() if leaves is None else leaves
         self.key_sha512 = hashlib.sha512((named or self.key).public).hexdigest()
         self._reserves: dict[str, int] = {}
+        self._period: str | None = None
+        self._windows: list[str] = []
+        self._roots: dict[str, str] = {}
+        self._complete: dict[str, bool] = {}
 
     def append(self, kind: str, session: str, body: dict, leaf: int | None = None) -> None:
         q = next(self.leaves) if leaf is None else leaf
@@ -207,8 +215,26 @@ class Ledger:
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
+    def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None,
+                    leaf: int | None = None) -> None:
+        """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
+        with ``draw_k`` (`credit.K_FIELD`) when given."""
+        self._period, self._windows = name, []
+        self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
+                                          **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
+                                          "key_sha512": self.key_sha512}, leaf)
+
+    def period_close(self, name: str, leaf: int | None = None) -> None:
+        """The close of period `name`, listing its windows as core's check counts them."""
+        ws = [{"root": self._roots.get(s), "session": s, "complete": self._complete.get(s, False)} for s in self._windows]
+        self.append("period-close", None, {"period": name, "lane": "vllm", "by": "vllm", "windows": ws,
+                                           "complete": bool(ws) and all(w["complete"] for w in ws)}, leaf)
+        self._period = None
+
     def reserve(self, session: str, leaf: int | None = None) -> None:
         self._reserves[session] = len(self.lines)
+        if self._period is not None:
+            self._windows.append(session)
         self.append("reserve", session, {"by": "vllm", "minutes": 10, "started_utc": "2026-10-20T11:08:00Z",
                                          "expires_utc": "2026-10-20T11:18:00Z", "key_sha512": self.key_sha512}, leaf)
 
@@ -217,10 +243,12 @@ class Ledger:
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
         self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
                                       "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
+        self._roots[session] = window.get("root")
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
         files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(directory.iterdir()) if p.is_file()}
         record = json.loads((directory / R.RECORD).read_text())
+        self._complete[session] = closed
         self.append("end", session, {"closed": closed, "files": files, "rc": 0 if closed else 1, "complete": closed,
                                      "record_leaf": int(record["signature"][:8], 16),
                                      "commitment": record["commitment"]["root"],
