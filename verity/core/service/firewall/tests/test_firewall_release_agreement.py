@@ -6,11 +6,12 @@ step's failure and fault, the challenger's verdict and the clock drawn, and the 
 the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). The records drawn, and the domain the Lean is
 held to, are `_release`'s.
 
-The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests' streams
-(`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and each event
-its `appended` op writes as the firewall writes it, which changes nothing Rust reads: an `open` without a null `budget`, a
-`stop` with a `why`, a `finish` of part `inner`; so the record stays the firewall's own), `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at
-seed 0, and `release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
+The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests'
+streams (`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and
+each event its `appended` op writes as the firewall writes it, which changes nothing Rust reads: an `open` without a
+null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the firewall's own),
+`release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at seed 0, and
+`release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
 
 from __future__ import annotations
 
