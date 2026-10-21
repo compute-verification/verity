@@ -5,6 +5,7 @@ accepted. The drawn units are the draw coin's over the window's own layout, whos
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import random
 import sys
@@ -17,6 +18,7 @@ import pytest
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import plan
+from verity.ml.circuits import codec
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
@@ -57,7 +59,12 @@ OUTCOME_EXPECT = {
 WINDOW_EXPECT = {
     "manifest-count": ("manifest", "each call of the window's Program is one manifest row"),
     "chosen": ("outcome", NOT_DRAWN), "failed": ("failed", "no partial credit"), "missing": ("missing", "no partial credit"),
-    "layout-form": ("layout", Cr.LAYOUT_FORM), "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
+    "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "descriptor-form": ("layout", Cr.DESCRIPTOR_FORM),
+    "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
+    "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
+    "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
+    "alt-layout": ("layout", Cr.BODY),
+    "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
@@ -73,6 +80,8 @@ PERIOD_EXPECT = {
     "no-circuit": ("circuit", "commits no cap or circuit"), "descriptor-form": ("circuit", Cr.DESCRIPTOR_HEX),
     "no-k": ("budget", NO_K), "k-form": ("budget", NO_K), "k-past-units": ("window", FEWER),
     "other-k": ("window", "so the period earns nothing"),
+    "alt-layout": ("circuit", "prove the period's declared circuit"),
+    "bad-circuit": ("window", "so the period earns nothing: layout: "),
 }
 UNTIED = "Register the A value whose rows each round's root committed"
 A_LINK_EXPECT = {
@@ -245,6 +254,57 @@ def test_the_strata_are_the_compiled_programs():
         assert all(s["floor"] == 1 for s in ss)
 
 
+def _compiled(linears, calls, m) -> bytes:
+    """The descriptor bytes of the compiled `h1window.program` over the test tile, as the period's ``circuit`` hashes
+    them (`codec.program_digest`'s)."""
+    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, unit=h1.unit))
+    return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
+
+
+COMPILED = ((h1.LINEARS, h1.CALLS, 8), (h1.LINEARS, h1.CALLS[::-1], 16),
+            ((("k_proj", 32, 16), ("q_proj", 32, 16)), (("k_proj", 0), ("q_proj", 0)), 8))
+
+
+def test_the_layout_is_the_committed_circuits():
+    """`credit.layout_of` reads the compiled `h1window.program`'s own arguments back from its descriptor, the bytes the
+    period's ``circuit`` is the SHA-512 of, and their strata are `partition.strata` of that Program under its query."""
+    for linears, calls, m in COMPILED:
+        lay, refused = Cr.layout_of(_compiled(linears, calls, m))
+        assert refused is None
+        assert lay == {"calls": [list(c) for c in calls], "linears": [list(x) for x in linears], "m": m,
+                       "tile": list(h1.TILE)}
+        prog = h1.HW.program(linears, calls, m, h1.TILE, unit=h1.unit)
+        q = h1.HW.query(prog)
+        ids = dict(zip(sorted({k for _n, k, _c in linears}), q["params"]["templates"]))
+        assert [(ids[int(s["template"][1:])], s["units"]) for s in Cr.strata(lay)[0]] == h1.P.strata(prog, q)
+
+
+def test_an_alternative_layout_with_the_same_descriptor_refuses():
+    """The layout is the committed circuit's, never the window's evidence: a window presenting a layout beside its
+    descriptor is not a window's evidence; a compiled descriptor whose record names another layout (another slot,
+    another n, the calls in another order) over the same body is refused (`credit.BODY`), so another layout can't bring
+    other strata or another drawn set; and the descriptor of the other layout is another circuit than the period's."""
+    linears, calls, m = COMPILED[0]
+    raw = _compiled(linears, calls, m)
+    lay, _ = Cr.layout_of(raw)
+    for alt in ({**lay, "m": 2 * m}, {**lay, "linears": [[lay["linears"][0][0], lay["linears"][0][1],
+                                                         lay["linears"][0][2] + h1.C],
+                                                         *lay["linears"][1:]]},
+                {**lay, "calls": lay["calls"][1:] + lay["calls"][:1]}):
+        assert Cr.strata(alt)[1] is None and Cr.strata(alt)[0] != Cr.strata(lay)[0]
+        desc = json.loads(raw)
+        tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
+        desc["program_fn"] = cases.record(tiles, alt)
+        assert Cr.layout_of(codec.canonical_json(desc)) == (None, ("layout", Cr.BODY))
+    for seed in SEEDS:
+        d = cases.period_instance(random.Random(f"honest/{seed}"))
+        d["windows"][0] = {**d["windows"][0], "layout": lay}
+        assert Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
+        for name, code in (("alt-layout", "circuit"), ("bad-circuit", "window")):
+            got, refused = _period(name, seed)
+            assert got is None and refused[0] == code, (name, refused)
+
+
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
@@ -298,7 +358,7 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
     grid = Fraction(1, 1 << Wd.EPS_BITS)
     for w, calls, eps in zip(d["windows"], got["windows"], got["eps"], strict=True):
-        lay = w["layout"]
+        lay, _ = Cr.layout_of(bytes.fromhex(w["descriptor"]))
         (r, c), ks = lay["tile"], {name: (k, n) for name, k, n in lay["linears"]}
         units = [((lay["m"] // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in lay["calls"]]
         total = _work(lay)
