@@ -9,7 +9,7 @@
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads
 #   5. run.py summarize: out/summary.json
-# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (384: the least the combine stages at)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (4: sessions at a time)
+# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448: the least both statements' rows fit)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  HZ_CACHE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
@@ -18,7 +18,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
-K=${H1L_K:-384} PAR=${H1L_PAR:-4} LPAR=${H1L_LPAR:-8}
+K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
@@ -33,7 +33,9 @@ cp "$WK/plan.json" "$WK/prepare.json" "$OUT/" 2>/dev/null
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/* "$OUT/verifier/"
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
-N=1 PROVE_GB=$(( PROVE_GB / PAR )) SERVE_GB=$(( SERVE_GB / PAR ))
+# A lane's serve outgrows its prove (15 GB was short at K = 384, its prove 7 GB), so a session's share is split evenly.
+share=$(( (PROVE_GB + SERVE_GB) / PAR / 2 ))
+N=1 PROVE_GB=$share SERVE_GB=$share
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
 while IFS=$'\t' read -r kind tag D; do
   [ "$kind" = S ] || continue

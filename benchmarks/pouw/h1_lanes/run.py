@@ -1,5 +1,6 @@
-"""run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 384, the least whose combine statement has a row of
-more than one SHA-512 block, which C-Flock's circuit needs) proved as its 32 lanes and its combine (PRF-134, option A:
+"""run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448, the least whose partial row both compresses
+before its last SHA-512 block, which C-Flock's circuit needs of a combine row, and ends in its last block with SHA-512's
+padding, which the Lean verifier's v2 rows need) proved as its 32 lanes and its combine (PRF-134, option A:
 `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
@@ -27,8 +28,13 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   the honest tree, lane 3 given row 4's leaf at position 3, which opens at no position but 4 (REJECT). ``other-leaf``: the
   combine with p5 another leaf's partial opened in that leaf's tree, whose domain binds that leaf's registration (REJECT).
   ``other-leaf-in-tree-lane5`` and ``other-leaf-in-tree``: the other leaf's partial committed at row 5 of this leaf's tree,
-  which opens, and lane 5's and the combine's ok are 0 (REJECT). ``receipt-mismatch``: a registered receipt one bit off
+  which opens, and lane 5's and the combine's ok are 0 (REJECT). ``lane5-partial-off-tree``: on that tree, lane 5 given
+  its honest partial, so its ok is 1, opened in the honest leaf's tree rather than the registered one: the partials are
+  registered reads of every statement, never free rows (RT4-LOGIC-29c), so it opens at no position (REJECT).
+  ``receipt-mismatch``: a registered receipt one bit off
   the lanes' XOR, the partials recommitted under its registration: the combine's ok is 0 (REJECT).
+  Every check states ok = 1 (``o0``'s known row), so a statement whose ok is 0 is refused at its session's parameters
+  (S2/R7: its instance's output commitment is not the verifier's).
 
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
 WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect`` a Lean check), WORK/plan.json
@@ -79,7 +85,7 @@ REGISTERED = (LL.A, LL.B, LL.ADMIT, LL.ZY, LL.RECEIPT)
 #: every negative check's expected verdict
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
-          "receipt-mismatch": "REJECT"}
+          "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT"}
 
 
 def tile(k: int):
@@ -372,6 +378,7 @@ def jobs(ctx) -> list[tuple]:
                      ("swap-combine", LL.COMBINE, None, "swap", None), ("lane3-reads-row4", LL.LANE, 3, "honest", "row4"),
                      ("other-leaf", LL.COMBINE, None, "honest", "p5"), ("other-leaf-in-tree-lane5", LL.LANE, 5, "mixed", None),
                      ("other-leaf-in-tree", LL.COMBINE, None, "mixed", None),
+                     ("lane5-partial-off-tree", LL.LANE, 5, "mixed", "off-tree"),
                      ("receipt-mismatch", LL.COMBINE, None, "receipt", None)]
 
 
@@ -381,7 +388,9 @@ def run_job(job: tuple) -> dict:
     w = ctx.worlds[wname]
     index = LL.statements(*RC).index((kind, ln))
     if kind == LL.LANE:
-        ins = lane_ins(ctx, w, ln, opening(w.tree, ln, row=4) if neg == "row4" else None)
+        partial = {"row4": lambda: opening(w.tree, ln, row=4),
+                   "off-tree": lambda: opening(ctx.worlds["honest"].tree, ln)}.get(neg, lambda: None)()
+        ins = lane_ins(ctx, w, ln, partial)
     else:
         ins = combine_ins(ctx, w, opening(ctx.worlds["other"].tree, 5) if neg == "p5" else None)
     return statement(ctx, kind, ln, tag, w, ins, index)
@@ -411,9 +420,10 @@ def prepare(args) -> None:
     ctx = Ctx(work, args.name, args.k, args.position)
     t = tile(args.k)
     ctx.wp = 2 * LL.words(args.k)
-    if 2 * ctx.wp + 17 <= 128:
-        raise SystemExit(f"K={args.k}: a partial row of {16 * ctx.wp} bits is one SHA-512 block, and every row of the combine's "
-                         f"statement is one, but C-Flock needs a row with a compression before its last block: K >= 384")
+    if 2 * ctx.wp < 128 or 2 * ctx.wp % 128 > 111:
+        raise SystemExit(f"K={args.k}: a partial row is {2 * ctx.wp} bytes, but C-Flock needs one of the combine's rows to "
+                         f"compress before its last block (at least 128 bytes) and the Lean verifier's v2 row ends, with "
+                         f"SHA-512's 17 bytes of padding, in its last block (bytes mod 128 at most 111): K = 448 is the least")
     ctx.lane, ctx.combine = bound("H1LanesLaneStatement", lane_word(Z.lane(t))), bound("H1LanesCombineStatement", Z.combine(t))
     ctx.reg = ctx.lane
     ctx.prog = P.program_digest(ctx.reg.program)
@@ -552,7 +562,7 @@ def main() -> None:
     ap.add_argument("cmd", choices=("prepare", "summarize", "cost"))
     ap.add_argument("--work")
     ap.add_argument("--out")
-    ap.add_argument("--k", type=int, default=384)
+    ap.add_argument("--k", type=int, default=448)
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--seed", type=int, default=20261021)
     ap.add_argument("--position", type=int, default=5)
