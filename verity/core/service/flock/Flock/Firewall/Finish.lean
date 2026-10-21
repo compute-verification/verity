@@ -16,13 +16,15 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   (`FlockComplete.zerocheckCut`, `lincheckCut` at `masked i = v_i + h_i`), `final_c`'s too: the inner proof holds the
   passed `final_c` to `P_c(ζ)` of the passed `round1_c` (`Zk.replay`'s constraint).
 * `switchVec`: claim `k`'s switched vector from the packed table's bits (`FlockComplete.switchVec` on the trace).
-* `repFw`: the rep (`FlockComplete.repPZk`'s order: the PIOP, the ring switch on `abcClaims ++ extras`, the masked
-  Ligerito, the verifier's own replay, the ring-switch and lane-phase constraints, the inner proof), its proof file
+* `repFw`: the rep (`FlockComplete.repPZk`'s order: the PIOP, `repPiop`; the ring switch on `abcClaims ++ extras` and the
+  masked Ligerito, `repOpening`; the verifier's own replay and the ring-switch and lane-phase constraints, `repCons`; the
+  inner proof), its proof file
   `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
 * `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the firewall as they come, each
-  waiting for the coins the stream answered it: the opening's, the rounds the Lean frame holds the device's opening rounds
-  to, and the inner proof's, the firewall's own (live PROTOCOL.md §10.1).
+  waiting for the coins the stream answered it: the opening's (`repPiop` and `repOpening` at zero values and pads), the
+  rounds the Lean frame holds the device's opening rounds to, and the inner proof's (`repCons` and `innerP`), the
+  firewall's own (live PROTOCOL.md §10.1). Only the `Asks` is live: the code that computes each round is `repFw`'s.
 
 * `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
   ≥ 1, which this code draws itself from the operating system at the rep's start and hands the prover (`salts`), and
@@ -163,23 +165,38 @@ def linAt (l : Zk.Lin) (h : Array F128) : F128 :=
 def failingOn (cons : Array (String × Zk.Lin)) (h : Array F128) : Array String :=
   (cons.filter fun c => linAt c.2 h != 0).map (·.1)
 
-/-- **The firewall's proof of one rep** of the packed table `g` committed as `cm0`, as rep `rep` of a stream whose
-transcript starts at `dom`: the passed values `vals` (by pad index) masked by the rep's pads `pads` committed as `ic`, the
-statement's extra claims `extras`, the table's extra lanes and paddings, levels ≥ 1 committed by `commit` under `salt`,
-every grinding nonce `0`. A constraint that fails on the pads stops the rep before its inner proof, and no file leaves
-(`zk_finish`'s `constraints_failing_on_pads`, which stops the session at its `Finish`). -/
-def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
+/-- **A rep's PIOP**: the masked zerocheck and lincheck sending `mk i` at pad index `i`, the pads committed under `root`;
+the claims they leave, `abcClaims ++ extras`, are their coins' alone. -/
+def repPiop (io : Asks M) (st : Setup) (lay : Zk.PadLayout) (cap root : ByteArray) (extras : Array Claim)
+    (mk : Nat → F128) : TMW M (ZerocheckProof × LincheckProof × Array Claim) := do
+  let (zp, zc) ← zerocheckFw io st.m st.digest cap root lay mk
+  let (lp, lc) ← lincheckFw io st.fold lay mk zc
+  return (zp, lp, abcClaims st.m st.kLog zc lc ++ extras)
+
+/-- **A rep's opening** after its PIOP: the ring switch on `claims` and the Ligerito opening of the packed table `g`
+committed as `cm0`, level 0 masked by the pads `h`, levels ≥ 1 committed by `commit` under `salt`, every grinding nonce
+`0`. -/
+def repOpening (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
+    (sch : Flock.Schedule) (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim)
+    (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    TMW M (Array (Array F128) × LigeritoProof × Zk.Level0Msgs × Zk.L0Rec) := do
+  let (ss, T, sws) ← ringSwitchP io (fun k => switchVec g claims[k]!) claims
+  let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T cm0 g (basisVals sws (st.m - 7)) lay h rep tPad extra
+    lanePad salt (fun _ _ => 0)
+  return (ss, lg, zl, rec)
+
+/-- **A rep up to its inner proof**, as rep `rep` of a stream whose transcript starts at `dom`: its PIOP on the passed
+values `vals` (by pad index) masked by the rep's pads `pads` committed as `ic`, its opening (`repOpening`) on the
+statement's extra claims `extras` and the table's extra lanes and paddings, then the verifier's own replay of them and the
+ring-switch and lane-phase constraints. Returns the proof, level 0's hiding messages and the constraints the inner proof
+batches. -/
+def repCons (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (vals : Array F128) (extra lanePad : Nat → Nat → F128)
-    (salt : Nat → Nat → ByteArray) : TMW M Zk.ZkProof := do
+    (salt : Nat → Nat → ByteArray) : TMW M (Proof × Zk.Level0Msgs × Array (String × Zk.Lin)) := do
   let lay := Zk.PadLayout.new st.m st.kLog sch.k0
-  let mk : Nat → F128 := fun i => vals[i]! + pads.h[i]!
-  let (zp, zc) ← zerocheckFw io st.m st.digest (flat cm0.cap) ic.root lay mk
-  let (lp, lc) ← lincheckFw io st.fold lay mk zc
-  let claims := abcClaims st.m st.kLog zc lc ++ extras
-  let (ss, T, sws) ← ringSwitchP io (fun k => switchVec g claims[k]!) claims
-  let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T cm0 g (basisVals sws (st.m - 7)) lay pads.h rep tPad extra
-    lanePad salt (fun _ _ => 0)
+  let (zp, lp, claims) ← repPiop io st lay (flat cm0.cap) ic.root extras fun i => vals[i]! + pads.h[i]!
+  let (ss, lg, zl, rec) ← repOpening io commit st sch lay tPad rep g cm0 claims pads.h extra lanePad salt
   let p : Proof := { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp,
                      ringSwitches := ss, ligerito := lg }
   let tr' ← get
@@ -188,10 +205,19 @@ def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat 
   let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
   let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
   let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
-  let cons := rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc
+  return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
+
+/-- **The firewall's proof of one rep**: `repCons`, then the inner proof on the rep's pads and the constraints it returns.
+A constraint that fails on the pads stops the rep before its inner proof, and no file leaves (`zk_finish`'s
+`constraints_failing_on_pads`, which stops the session at its `Finish`). -/
+def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
+    (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim)
+    (pads : PadsZk) (ic : InnerCommit) (vals : Array F128) (extra lanePad : Nat → Nat → F128)
+    (salt : Nat → Nat → ByteArray) : TMW M Zk.ZkProof := do
+  let (p, zl, cons) ← repCons io commit st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt
   let fails := failingOn cons pads.h
   if !fails.isEmpty then throw s!"{Frame.STOP}the constraints {", ".intercalate fails.toList} fail on the rep's pads"
-  let inner ← innerP io hs lay pads ic zp.finalC cons
+  let inner ← innerP io hs (Zk.PadLayout.new st.m st.kLog sch.k0) pads ic p.zerocheck.finalC cons
   return { proof := p, level0 := zl, inner }
 
 /-- **A rep's rounds answered by its coins**: round `k` (counted from `0` in the state) by `coins[k]`, which must hold the
@@ -362,66 +388,46 @@ its coefficients (a count and the words), every count a `u64le`. -/
 def consBytes (cons : Array (String × Zk.Lin)) : ByteArray :=
   cons.foldl (fun b (n, l) => b ++ wBytes n.toUTF8 ++ l.c.toBytes ++ wVec F128.toBytes l.a) (wLen cons.size)
 
-/-- **A rep's opening, live**: the rep's PIOP on its recorded coins `coins` (the algebraic phase's, every one of which it
-must take), then the ring switch on `abcClaims ++ extras` (the extra claims at `xs`) and the Ligerito opening
-(`ligeritoPZk`) with every pad zero, levels ≥ 1 under the rep's `hiSalts`, each round sent live (`liveAsks`): the device's
-opening, its level-0 values unmasked, which the Lean frame holds the device's rounds to and masks on release. Nothing it
-reads in the PIOP but the coins shapes a round it sends. -/
+/-- **A rep's opening, live**: `repFw`'s own PIOP (`repPiop`) on its recorded coins `coins` (the algebraic phase's, every
+one of which it must take) and its own opening (`repOpening`) on `abcClaims ++ extras` (the extra claims at `xs`) with every
+value and pad zero, levels ≥ 1 under the rep's `hiSalts`, each round sent live (`liveAsks`): the device's opening, its
+level-0 values unmasked, which the Lean frame holds the device's rounds to and masks on release. Nothing it reads in the
+PIOP but the coins shapes a round it sends. -/
 def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hiSalts : Array ByteArray) (coins : Array (Array F128)) : LiveM Unit := do
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
-  let zero : Nat → F128 := fun _ => 0
   let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (hiSalts.getD (l - 1) ByteArray.empty)
   let prog : TMW LiveM Unit := do
-    let (_, zc) ← zerocheckFw (liveAsks ch coins false) t.st.m t.st.digest (flat t.cm0.cap) ByteArray.empty lay zero
-    let (_, lc) ← lincheckFw (liveAsks ch coins false) t.st.fold lay zero zc
+    let (_, _, claims) ← repPiop (liveAsks ch coins false) t.st lay (flat t.cm0.cap) ByteArray.empty (claimsOf xs)
+      fun _ => 0
     let k := (← getThe (Array (Array F128))).size
     if k != coins.size then throwThe String s!"finish: the rep's PIOP took {k} of its {coins.size} rounds of coins"
-    let io := liveAsks ch coins true
-    let claims := abcClaims t.st.m t.st.kLog zc lc ++ claimsOf xs
-    let (_, T, sws) ← ringSwitchP io (fun k => switchVec t.g claims[k]!) claims
-    let _ ← ligeritoPZk io commit t.st.merkle t.sch T t.cm0 t.g (basisVals sws (t.st.m - 7)) lay
-      (Array.replicate lay.len 0) rep t.tPad t.extra t.lanePad salt (fun _ _ => 0)
+    let _ ← repOpening (liveAsks ch coins true) commit t.st t.sch lay t.tPad rep t.g t.cm0 claims
+      (Array.replicate lay.len 0) t.extra t.lanePad salt
   let _ ← prog.run (Transcript.init #[] dom)
 
-/-- **A rep's inner proof, live**: `repFw`'s rep on the request `q`, its PIOP and opening on `q`'s recorded coins (every one
-of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
-(`consBytes`), then the inner proof (`innerP`), each round sent live (`liveAsks`). It speaks on schedule: a constraint that
-fails on the pads stops nothing here (`proofFile` then refuses the rep's file). -/
+/-- **A rep's inner proof, live**: `repFw` on the request `q` but for its stop, its `repCons` on `q`'s recorded coins (every
+one of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
+(`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live (`liveAsks`). Where `repFw` stops on a
+constraint that fails on the pads, this speaks on schedule (`proofFile` then refuses the rep's file, and the session
+stops at its `Finish`). -/
 def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM Unit := do
-  let (st, sch) := (t.st, t.sch)
-  let lay := Zk.PadLayout.new st.m st.kLog sch.k0
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
-  let extras := claimsOf q.xs
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
   let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
-  let mk : Nat → F128 := fun i => q.vals[i]! + pads.h[i]!
-  let io := liveAsks ch q.coins false
   let prog : TMW LiveM Unit := do
-    let (zp, zc) ← zerocheckFw io st.m st.digest (flat t.cm0.cap) ic.root lay mk
-    let (lp, lc) ← lincheckFw io st.fold lay mk zc
-    let claims := abcClaims st.m st.kLog zc lc ++ extras
-    let (ss, T, sws) ← ringSwitchP io (fun k => switchVec t.g claims[k]!) claims
-    let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T t.cm0 t.g (basisVals sws (st.m - 7)) lay pads.h rep t.tPad
-      t.extra t.lanePad salt (fun _ _ => 0)
+    let (p, _, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
+      pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
     if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
-    let p : Proof := { cap := t.cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp,
-                       ringSwitches := ss, ligerito := lg }
-    let tr' ← get
-    let (rp, _) ← StateT.lift (monadLift ((Zk.replay st lay p ic.root).run (Transcript.init tr'.rounds dom)) :
-      LiveM (Zk.Replayed × Transcript))
-    let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
-    let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
-    let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : LiveM (Array (String × Zk.Lin)))
-    let cons := rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc
     let b := consBytes cons
     ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
     ch.flush
-    let _ ← innerP (liveAsks ch q.coins true) hs lay pads ic zp.finalC cons
+    let _ ← innerP (liveAsks ch q.coins true) hs (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC
+      cons
   let _ ← prog.run (Transcript.init #[] dom)
 
 /-- **A rep's opening request**, every byte little-endian: the extra claims (a count, then each as a count and its words)
