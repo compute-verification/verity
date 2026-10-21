@@ -256,7 +256,7 @@
   },
   "Accounting.Compose.LayerCommitted": {
    "owner": "@compute-accounting",
-   "digest": "0beabd6add4a19ce7d81eb8c0ac601c559f97e8ae11877336c54410bcb1984f5"
+   "digest": "9631e40676c8108f96425b1d7557958d12e19e7a302e1a994d2bc6e1142e0840"
   },
   "Accounting.Compose.ModelScope": {
    "owner": "@compute-accounting",
@@ -10261,7 +10261,7 @@
    ]
   },
   "Definitions.Accounting.Compose": {
-   "digest": "f42e5b720ca9be16aac1421c7043789241b3615231680396e192868985183d8e",
+   "digest": "feffb0c5a34be3526ae3f944c21609eee7bcee7be0f4bbd99f51b8718049d808",
    "definitions": {
     "Accounting.Compose.Certificate": "2be237058a4c505964aab774cfdf272a361b1d72721e5f0c0d2111e79bd2e1ac",
     "Accounting.Compose.Certificate.Holds": "3e92b034ff8ce9ebb63fb0b334e1d23d3f79ae9c3dd482a45baa64dc262d0d12",
@@ -10313,7 +10313,7 @@
     "Accounting.Compose.Kind.actB": "1a51d635a49a5a36f17308b6b54f295a6a083f29ab1a381e7ec25fe710f8b9be",
     "Accounting.Compose.Kind.casesOn": "e8498df9be87af22a5ddabfea8d4d3a120f634c84af1a7b54da1a06e8dddc479",
     "Accounting.Compose.Kind.rec": "a5c7929617b09acce53286f70c69348de8d492da70c07c63d2bf73d3f5a5ae04",
-    "Accounting.Compose.LayerCommitted": "0beabd6add4a19ce7d81eb8c0ac601c559f97e8ae11877336c54410bcb1984f5",
+    "Accounting.Compose.LayerCommitted": "9631e40676c8108f96425b1d7557958d12e19e7a302e1a994d2bc6e1142e0840",
     "Accounting.Compose.LuckForm": "0746d53685cf9cbc55c9882d5158c716e938a74a3835555ad467c69553318c57",
     "Accounting.Compose.LuckForm.casesOn": "b8097269b634324259a8e974b77559fe33583226cef4eff3a69fdd3ea3adbc5e",
     "Accounting.Compose.LuckForm.coins": "932ad352a9eb6be441328ec032e012c5e15e6cf4ef83da676d83c7d437756c52",
