@@ -25,7 +25,7 @@ handed `k` bits does about `k^1.5` products, provided its entries cost reads too
    `a = min(d − E, n)` under `ColumnsIncompressible`; `PartialSumKeyedCoverBound` is the cover bound resting on
    structure, `UpdateHardness` and `ColumnsIncompressible` only.
 
-Kimi K2 (`k = 2·10⁷`, `s = 4.52·10¹⁶`, `α₀ = 0.147`, `b = 2.5`, `aOut = 37248`, `d = n = 512`), with
+Kimi K2's forward products (`k = 2·10⁷`, `s = 4.52·10¹⁶`, `α₀ = 0.147`, `b = 2.5`, `aOut = 37248`, `d = n = 512`), with
 `ρ ≥ α₀ (s / k) · r / (r + 2)`: at `f = 1` and `a = 390` (`bcol = 1`, `E = 122`), `r = 9.6·10⁻⁵` (at `μ ≈ 0.97`) and
 `ρ ≈ 1.6·10⁴`, 1.8 times `FanOutCoverBound`'s 8,900; at `a = 464` (`E = 48`), `1.9·10⁴`. Under `ActivationReads` at
 `f = 4`, `6.1·10⁴` at `a = 390`. The gain grows with `a`: `r` saturates at `1.84 √(b f b_p / (2 k))` once
