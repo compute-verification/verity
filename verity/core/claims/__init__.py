@@ -434,6 +434,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
+    Entry("accounting-ts-ok-realizes", "assumption",
+          "The checked unit's C-Flock circuit is its declared unit's: on any wire assignment the key program's "
+          "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
+          "circuit makes of that unit holds (the Σ check and the dequant check). Nothing in Lean derives a C-Flock "
+          "circuit from a declared one or checks one against the other, and circuit-check binds the Definition to its "
+          "Boolean lowering, not to the declared circuit", "TS ok realizes", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
