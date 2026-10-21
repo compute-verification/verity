@@ -99,6 +99,7 @@ import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishPiop
 import Proofs.Flock.Claims.ZK.FinishInner
+import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -487,6 +488,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `InnerCommit.toC`), and its inner proof, which never checks the batched constraint, is `FlockComplete.innerP`'s
   wherever that constraint holds at every coin (**`innerP_eq`**), which it does at pads with `h_ab = h_a·h_b` and
   `w = x·y` where `repFw`'s stop does not fire (**`batched_of_failingOn`**: no constraint `failingOn` the pads).
+* `FinishLig`: the firewall's Ligerito prover is the masked prover's (`FlockComplete.ligeritoPZk`), its level loop
+  carried through `LigState.toC` (`ligConj`), wherever its commitment is `FlockComplete.commitP`'s
+  (**`Flock.Firewall.Finish.ligeritoPZk_eq`**), so at SHA-512 and `hm96-sha512/v1` with `commitFw`
+  (**`ligeritoPZk_fw`**).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
