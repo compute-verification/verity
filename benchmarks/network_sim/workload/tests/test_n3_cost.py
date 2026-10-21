@@ -46,23 +46,28 @@ def test_a_v4_window_composed_from_its_parts_is_its_traced_size():
 
 
 def test_the_served_templates_fit_the_served_format():
-    f = U.Format(C.SERVED["B"], 1, 1, 2, (1, 0, 0, 0), 6)
-    assert [V5.template(t, f)[:3] for t in C.SERVED_TEMPLATES.values()] == [(U.B64, 256, 4032), (U.RAW, 256, 4032)]
+    assert [V5.template(t, C.SERVED["B"])[:3] for t in C.SERVED_TEMPLATES.values()] == [(U.B64, 256, 4032),
+                                                                                          (U.RAW, 256, 4032)]
 
 
 @pytest.mark.slow
 def test_a_v5_window_composed_from_its_parts_is_its_traced_size():
     """`composed_v5` against `n3_v5.size` at v5's demo format, on v4's test's shapes (at N = 4 in R = 2 runs the demo's
-    v5 window), and on the canonical demo's two ports with their templates (N = 2 and 3). It is the one test of the
-    parts the levers' v5 costs are composed from. About 60 s alone, most of it tracing SHA-512's compression once."""
+    v5 window), and on the canonical demo's two ports with their templates (N = 2 and 3), on rows of B and on rows of
+    11 under frames of 16 (and a salted window on rows of 96 under frames of 128). It is the one test of the parts the
+    levers' v5 costs are composed from. About 60 s alone, most of it tracing SHA-512's compression once."""
     f, rec = V5.prepare(U.demo().setup).layout.fmt, U.Shape(4, 2, 2)
     memo: dict = {}
     rows = (C.checked(f, rec, [1, 2, 4], 2, False, memo, R=2, v5=()) + C.checked(f, rec, [3], 2, False, memo, R=1, v5=())
             + C.checked(f, rec, [1, 2], 1, False, memo, R=1, v5=())
             + C.checked(f._replace(B=128), rec, [2, 3], 2, True, memo, R=2, v5=()))
     c = V5.canonical_demo()
-    fc = V5.prepare(c.setup).layout.fmt
+    fc, narrow = V5.prepare(c.setup).layout.fmt, V5.prepare(c.setup, 11).layout.fmt
     for port in ("p0", "p1"):
         rows += C.checked(fc, rec, [2, 3], 2, False, memo, R=2, v5=c.templates[port])
+    for port in ("p0", "p1"):
+        rows += C.checked(narrow, rec, [2, 3], 2, False, memo, R=2, v5=c.templates[port], FB=fc.B)
+    rows += C.checked(f._replace(B=96, P=1, Q=1), rec, [3], 2, True, memo, R=2, v5=c.templates["p0"], FB=128)
     assert [r["ands"] for r in rows] == [4_682_146, 6_414_577, 9_153_174, 6_853_588, 3_400_517, 4_737_407, 5_153_557,
-                                         7_239_462, 6_074_576, 7_418_123, 6_074_962, 7_418_702]
+                                         7_239_462, 6_074_576, 7_418_123, 6_074_962, 7_418_702, 7_080_356, 8_760_324,
+                                         7_080_744, 8_760_906, 6_837_418]

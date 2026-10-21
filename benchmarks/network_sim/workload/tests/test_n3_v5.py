@@ -2,7 +2,7 @@
 once and two of them are v4's row; v5's reference accepts exactly where v4's does on the demo's, the simulator's and
 the lab's windows, honest and tampered, and on a segment across two rows tampered in either; a run witness that cheats
 (v4's cheats, a read in two runs, a wrong head) is refused; a template accepts the canonical demo's frames and refuses a
-frame off it; and the circuit equals its reference."""
+frame off it, on rows of B and on rows narrower than its frames; and the circuit equals its reference."""
 import copy
 import random
 
@@ -258,35 +258,61 @@ def test_a_template_refuses_a_frame_off_it_that_its_descriptor_holds():
     assert V5.reference(V5.instance(c.setup, p1, tpl=c.templates["p1"]))
 
 
-def place_cases(f: U.Format, tpl: tuple, seed: int) -> list[tuple[int, bytes, bytes, int]]:
-    """(r, stream, frame, want) for N3PlaceFixed: random streams at every r below 2^LB, each with its placement and
-    with a byte of it flipped."""
+def place_cases(f: U.Format, tpl: tuple, seed: int, FB: int) -> list[tuple[int, bytes, bytes, int]]:
+    """(r, stream, frame, want) for N3PlaceFixed: random streams at every r below 2^LB, each with its placement in a
+    frame of FB bytes and with a byte of it flipped."""
     rng = random.Random(seed)
     one = U.Segment(1, 0, 0, 0, f.B, 0)
     out = []
     for r in range(1 << f.LB):
         stream = rng.randbytes(f.B)
         desc = U.encode(f, U.Descriptor(0, 0, r, 0, b"", b"", (one,)))
-        frame = V5.assemble_fixed(f, tpl, desc, [stream + bytes(f.B)], 1)
-        out += [(r, stream, frame, 1), (r, stream, flip(frame, rng.randrange(f.B), 1 << rng.randrange(8)), 0)]
+        frame = V5.assemble_fixed(f, tpl, desc, [stream + bytes(f.B)], 1, FB)
+        out += [(r, stream, frame, 1), (r, stream, flip(frame, rng.randrange(FB), 1 << rng.randrange(8)), 0)]
     return out
 
 
+NARROW = 11
+"""Lever 4's rows in the canonical demo: 11 bytes under its frames of 16, p0's frame 2 reading u0's bytes 20 ... 22
+across rows 1 and 2 (the format's B is more than a header's 9 bytes, so 10 is the narrowest)."""
+
+
+def fmt_at(canonical, RB: int | None) -> U.Format:
+    return V5.prepare(canonical.setup, RB).layout.fmt
+
+
 @pytest.mark.parametrize("port", ["p0", "p1"])
-def test_n3placefixed_is_its_reference(canonical, port):
-    f, tpl = canonical.setup.layout.fmt, canonical.templates[port]
-    cases = place_cases(f, tpl, ord(port[1]))
+@pytest.mark.parametrize("RB", [None, NARROW, 10])
+def test_n3placefixed_is_its_reference(canonical, port, RB):
+    f, tpl, FB = fmt_at(canonical, RB), canonical.templates[port], canonical.setup.layout.fmt.B
+    cases = place_cases(f, tpl, ord(port[1]), FB)
     args = [[U._int_bits(r, f.LB) for r, *_ in cases], [bits(s, 8 * f.B) for _, s, _, _ in cases],
-            [bits(x, 8 * f.B) for _, _, x, _ in cases]]
-    out = evaluate_bits(bind(V5.N3PlaceFixed, FMT=tuple(f), TPL=tpl), *(np.asarray(a, dtype=np.uint8) for a in args))
+            [bits(x, 8 * FB) for _, _, x, _ in cases]]
+    out = evaluate_bits(bind(V5.N3PlaceFixed, FMT=tuple(f), TPL=tpl, FB=FB),
+                        *(np.asarray(a, dtype=np.uint8) for a in args))
     assert np.asarray(out).reshape(-1).tolist() == [w for *_, w in cases]
 
 
+def test_n3placefixed_on_a_stream_of_b_is_assembles_placement(canonical):
+    """With L = FB, `place_fixed` is `n3_unit.assemble`'s placement, so the reference at FB = B is v5's of rows of B."""
+    f, rng = canonical.setup.layout.fmt, random.Random(7)
+    one = U.Segment(1, 0, 0, 0, f.B, 0)
+    for port, tpl in canonical.templates.items():
+        mode, p, s, pre, suf = V5.template(tpl, f.B)
+        wide = f._replace(P=max(f.P, p, len(pre), 1), Q=max(f.Q, len(suf), 1))
+        for r in range(1 << f.LB):
+            stream = rng.randbytes(f.B)
+            desc = U.encode(wide, U.Descriptor(mode, p, r, s, pre, suf, (one,)))
+            assert V5.place_fixed(tpl, f.B, r, stream) == U.assemble(wide, desc, [stream + bytes(f.B)], 1), (port, r)
+
+
 @pytest.mark.parametrize("G", [1, 2])
-def test_n3framefixed_is_assemble_fixed(canonical, G):
+@pytest.mark.parametrize("RB", [None, NARROW])
+def test_n3framefixed_is_assemble_fixed(canonical, G, RB):
     """Random descriptors and rows under the RAW template: the frame the template puts on them, and that frame with a
     bit flipped, and a descriptor with a segment past G of kind 1."""
-    f, tpl, rng = canonical.setup.layout.fmt, canonical.templates["p0"], random.Random(G)
+    f, tpl, rng = fmt_at(canonical, RB), canonical.templates["p0"], random.Random(G)
+    FB = canonical.setup.layout.fmt.B
     cases = []
     for i in range(24):
         x = bytearray(rng.randbytes(-(-f.LW // 8)))
@@ -295,15 +321,88 @@ def test_n3framefixed_is_assemble_fixed(canonical, G):
                 x[(f.HW + g * f.SW) // 8] &= ~(1 << (f.HW + g * f.SW) % 8)
         x = bytes(x)
         rows = [rng.randbytes(2 * f.B) for _ in range(G)]
-        frame = V5.assemble_fixed(f, tpl, x, rows, G)
-        cases += [(x, rows, frame), (x, rows, flip(frame, rng.randrange(f.B), 1 << rng.randrange(8)))]
-    want = [int(not any(s.kind for s in U.fields(f, x).segs[G:]) and V5.assemble_fixed(f, tpl, x, rows, G) == frame)
+        frame = V5.assemble_fixed(f, tpl, x, rows, G, FB)
+        cases += [(x, rows, frame), (x, rows, flip(frame, rng.randrange(FB), 1 << rng.randrange(8)))]
+    want = [int(not any(s.kind for s in U.fields(f, x).segs[G:]) and V5.assemble_fixed(f, tpl, x, rows, G, FB) == frame)
             for x, rows, frame in cases]
     assert 0 in want and 1 in want
     args = [[bits(x, f.LW) for x, _, _ in cases], [[b for r in rr for b in bits(r, 16 * f.B)] for _, rr, _ in cases],
-            [bits(fr, 8 * f.B) for _, _, fr in cases]]
-    out = evaluate_bits(bind(V5.N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl), *(np.asarray(a, dtype=np.uint8) for a in args))
+            [bits(fr, 8 * FB) for _, _, fr in cases]]
+    out = evaluate_bits(bind(V5.N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl, FB=FB),
+                        *(np.asarray(a, dtype=np.uint8) for a in args))
     assert np.asarray(out).reshape(-1).tolist() == want
+
+
+# --- rows narrower than frames ----------------------------------------------------------------------------------------
+
+def test_a_descriptor_on_narrower_rows_is_its_segments_bytes_from_those_rows(canonical):
+    prep, units = V5.prepare(canonical.setup, NARROW), canonical.setup.units
+    f, L = prep.layout.fmt, prep.layout
+    assert (f.B, f.P, f.Q, f.G) == (NARROW, 1, 1, 2)
+    assert [[(s.u, s.q, s.o, s.n, s.d) for s in d.segs] for d in L.descriptors["p0"]] == [
+        [(0, 1, 3, 5, 0)], [(0, 3, 0, 3, 0)], [(1, 0, 0, 2, 0), (0, 1, 9, 3, 2)]]
+    for u, name in enumerate(units.names):
+        assert b"".join(prep.units.trees[name].reg.rows).rstrip(b"\0") == units.data[name].rstrip(b"\0")
+    for p, ds in L.descriptors.items():
+        for d, old in zip(ds, canonical.setup.layout.descriptors[p]):
+            got = b"".join(b"".join(prep.units.trees[units.names[s.u]].reg.rows)[NARROW * s.q + s.o:][:s.n]
+                           for s in d.segs)
+            want = b"".join(units.data[units.names[s.u]][16 * s.q + s.o:][:s.n] for s in old.segs if s.kind)
+            assert d.r == old.r and got == want
+
+
+def test_rows_narrower_than_a_frames_data_or_with_no_template_are_refused(canonical):
+    with pytest.raises(ValueError, match="doesn't fit rows of 4"):
+        V5.resplit(U.Descriptor(r=5, segs=(U.Segment(1, 0, 0, 3, 5, 0),)), 16, 4)
+    with pytest.raises(ValueError, match="take a template"):
+        V5.reference(V5.instance(canonical.setup, canonical.windows[0], RB=NARROW))
+
+
+@pytest.fixture(scope="module")
+def narrow_cases(canonical_cases) -> list[tuple[str, U.Setup, U.Window, bool]]:
+    """The canonical cases, and p0's frame 2 with its byte from each row of its crossing segment flipped (frame bytes
+    11 and 13: u0's bytes 20 and 22, row 1's last byte and row 2's first on rows of 11)."""
+    out = list(canonical_cases)
+    for name, at in (("row-1-of-the-crossing", 11), ("row-2-of-the-crossing", 13)):
+        c = V5.canonical_demo(flipped=("p0", 2, at))
+        out.append((f"p0-{name}", c.setup, c.windows[0], False))
+    return out
+
+
+def test_narrow_rows_accept_exactly_where_rows_of_b_do_on_canonical_frames(canonical, narrow_cases):
+    for name, s, w, ok in narrow_cases:
+        tpl = canonical.templates[w.port]
+        got = (V4.reference(V4.instance(s, w)), V5.reference(V5.instance(s, w, tpl=tpl)),
+               *(V5.reference(V5.instance(s, w, tpl=tpl, RB=rb)) for rb in (NARROW, 10, 12)))
+        assert got == (ok,) * 5, name
+
+
+def test_narrow_rows_refuse_a_frame_off_the_template():
+    c = V5.canonical_demo(off_template=True)
+    p0, p1 = c.windows
+    assert not V5.reference(V5.instance(c.setup, p0, tpl=c.templates["p0"], RB=NARROW))
+    assert V5.reference(V5.instance(c.setup, p1, tpl=c.templates["p1"], RB=NARROW))
+
+
+def narrow_cheats(canonical) -> dict[str, tuple[U.Instance, bool]]:
+    """p0's window on rows of 11 and witnesses a prover could give: honest; read 5's row (row 2 of u0, which the
+    crossing segment ends in) with the byte it reads flipped; and run 0's head (u0's row 1) another row."""
+    w, tpl = canonical.windows[0], canonical.templates["p0"]
+    prep = V5.prepare(canonical.setup, NARROW)
+    honest = V5.instance(canonical.setup, w, tpl=tpl, RB=NARROW)
+    u0 = prep.units.trees["u0"].reg.rows
+    assert honest.args["run_units"][0] == 0 and honest.args["run_starts"][0] == 1
+
+    def case(**kw):
+        return V5.convert(w.instance, prep, honest.R, tpl, G=honest.G, **kw)
+
+    return {"honest": (case(), True), "the-crossings-second-row": (case(rows={5: flip(u0[2], 0)}), False),
+            "a-wrong-head": (case(heads={0: u0[2]}), False)}
+
+
+def test_a_narrow_row_witness_that_cheats_is_refused(canonical):
+    cases = narrow_cheats(canonical)
+    assert {k: V5.reference(x) for k, (x, _) in cases.items()} == {k: want for k, (_, want) in cases.items()}
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------
@@ -336,6 +435,22 @@ def test_a_salted_window_is_its_reference(salted_lab):
     cases = [honest, wrong, moved]
     assert honest.salted and honest.R == 1
     assert V5.evaluate(*cases) == [int(V5.reference(x)) for x in cases] == [1, 0, 0]
+
+
+@pytest.mark.slow
+def test_the_canonical_windows_on_narrow_rows_are_their_reference(canonical, narrow_cases):
+    """The canonical windows on rows of 11 under frames of 16, honest, tampered and with the witnesses that cheat: the
+    one test of the window with frames wider than its rows (`N3FrameFixed` and the frames root at FB). About 40 s
+    after the demo window's test."""
+    for port in ("p0", "p1"):
+        insts = [V5.instance(s, w, tpl=canonical.templates[port], RB=NARROW) for _, s, w, _ in narrow_cases
+                 if w.port == port]
+        want = [int(ok) for _, _, w, ok in narrow_cases if w.port == port]
+        if port == "p0":
+            got = narrow_cheats(canonical)
+            insts += [x for x, _ in got.values()]
+            want += [int(ok) for _, ok in got.values()]
+        assert V5.evaluate(*insts) == [int(V5.reference(x)) for x in insts] == want
 
 
 @pytest.mark.slow

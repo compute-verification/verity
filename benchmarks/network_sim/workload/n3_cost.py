@@ -60,17 +60,18 @@ def nodes(N: int, D: int) -> int:
     return total
 
 
-def composed(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, memo: dict) -> dict:
-    """`size` of `unit(f, N, G, salted, rec)`, by part, from the parts its body calls."""
+def composed(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, memo: dict, FB: int | None = None) -> dict:
+    """`size` of `unit(f, N, G, salted, rec)`, by part, from the parts its body calls; with frames of FB bytes, the
+    salt and the frames root at FB (the parts of v5's units on narrower rows that read the frames whole)."""
     def a(d) -> int:
         return U._ands(d, memo)
 
-    n = N - salted
+    n, FB = N - salted, f.B if FB is None else FB
     out = dict.fromkeys(("row_reads", "descriptor_reads", "record_opening", "segments", "frames", "frames_root",
                          "other"), 0)
     if salted:
-        out["other"] += (a(bind(U.N3Slot, N=N)) + N * a(bind(U.N3Gate, W=8 * f.B)) + a(bind(U.N3SaltEq, B=f.B))
-                         + n * a(bind(U.N3Mux, W=8 * f.B)))
+        out["other"] += (a(bind(U.N3Slot, N=N)) + N * a(bind(U.N3Gate, W=8 * FB)) + a(bind(U.N3SaltEq, B=FB))
+                         + n * a(bind(U.N3Mux, W=8 * FB)))
     if n:
         frame = bind(U.N3Frame, FMT=tuple(f), G=G)
         seg = sum(U._times(x) * a(x.fn) for x in frame.body.nodes if getattr(x.fn, "name", "") == "N3Seg")
@@ -78,20 +79,21 @@ def composed(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, memo: dict
         out["descriptor_reads"] = n * a(bind(U.N3HidingRead, N_BITS=f.LW, D=f.DL))
         out["row_reads"] = n * G * a(bind(U.N3RowRead, DEPTHS=f.DEPTHS, N_BITS=16 * f.B))
         out["segments"], out["frames"] = n * seg, n * (a(frame) - seg)
-    out["frames_root"] = a(bind(Sha512Compress)) * (leaf_blocks(f.B) * N + 2 * nodes(N, rec.D))
+    out["frames_root"] = a(bind(Sha512Compress)) * (leaf_blocks(FB) * N + 2 * nodes(N, rec.D))
     out["record_opening"] = a(bind(U.N3IsZero, W=8)) + a(bind(U.N3HidingRead, N_BITS=8 * (rec.HL + 64), D=2))
     out["other"] += salted + (2 + G) * n + 2 - 1
     out["ands"] = sum(out.values())
     return out
 
 
-def composed_v4(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict) -> dict:
+def composed_v4(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict,
+                FB: int | None = None) -> dict:
     """`n3_v4.size` of `n3_v4.unit(f, N, G, salted, rec, R)`, by part, from the parts its body calls: v3's, but for the
     descriptors' one run and the rows' R runs, and the ok bits the final AND joins."""
     def a(d) -> int:
         return U._ands(d, memo)
 
-    out = composed(f, N, G, salted, rec, memo)
+    out = composed(f, N, G, salted, rec, memo, FB)
     n = N - salted
     out["other"] -= salted + (2 + G) * n + 2 - 1
     T, Sr, zw = n * G, min(n * G, 1 << f.DB), max(1, (n * G).bit_length())
@@ -110,25 +112,28 @@ def composed_v4(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int,
     return out
 
 
-def templated(out: dict, f: U.Format, N: int, G: int, salted: bool, tpl: tuple, memo: dict) -> dict:
-    """A composition with its frames placed by the template (`n3_v5.N3FrameFixed`) instead of their descriptors: v4's
-    or v5's with lever 2, whose other parts don't read the placement."""
+def templated(out: dict, f: U.Format, N: int, G: int, salted: bool, tpl: tuple, memo: dict,
+              FB: int | None = None) -> dict:
+    """A composition with its frames (of FB bytes, B unless given) placed by the template (`n3_v5.N3FrameFixed`)
+    instead of their descriptors: v4's or v5's with lever 2, whose other parts don't read the placement."""
     n = N - salted
     if n:
-        frame = bind(V5.N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl)
+        frame = bind(V5.N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl, FB=f.B if FB is None else FB)
         seg = sum(U._times(x) * U._ands(x.fn, memo) for x in frame.body.nodes if getattr(x.fn, "name", "") == "N3Seg")
         out = dict(out, frames=n * (U._ands(frame, memo) - seg))
         out["ands"] = sum(v for k, v in out.items() if k != "ands")
     return out
 
 
-def composed_v5(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict, tpl: tuple = ()) -> dict:
-    """`n3_v5.size` of `n3_v5.unit(f, N, G, salted, rec, R, tpl)`, by part, from the parts its body calls: v4's, but
-    for the rows' runs, each read hashing one B-byte row and each run its head, and with a template its frames'."""
+def composed_v5(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict, tpl: tuple = (),
+                FB: int | None = None) -> dict:
+    """`n3_v5.size` of `n3_v5.unit(f, N, G, salted, rec, R, tpl, FB)`, by part, from the parts its body calls: v4's,
+    but for the rows' runs, each read hashing one B-byte row and each run its head, and with a template its frames'
+    (of FB bytes)."""
     def a(d) -> int:
         return U._ands(d, memo)
 
-    out = composed_v4(f, N, G, salted, rec, R, memo)
+    out = composed_v4(f, N, G, salted, rec, R, memo, FB)
     n = N - salted
     T, W = n * G, 8 * f.B
     Sr, zw = min(T + 1, 1 << f.DB), max(1, (T + 1).bit_length())
@@ -143,13 +148,13 @@ def composed_v5(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int,
                    + a(bind(V4.N3RunRoot, DEPTHS=f.DEPTHS)) + a(bind(V4.N3RunFits, DEPTHS=f.DEPTHS, T=T + 1, S=Sr)))
         out["row_reads"] = T * per_read + R * per_run
         out["ands"] = sum(v for k, v in out.items() if k != "ands")
-    return templated(out, f, N, G, salted, tpl, memo) if tpl != () else out
+    return templated(out, f, N, G, salted, tpl, memo, FB) if tpl != () else out
 
 
 def checked(f: U.Format, rec: U.Shape, ladder: list[int], G: int, salted: bool, memo: dict,
-            R: int | None = None, v5: tuple | None = None) -> list[dict]:
+            R: int | None = None, v5: tuple | None = None, FB: int | None = None) -> list[dict]:
     """`composed` beside `size` at each N of the ladder (v4's with R runs, given R; v5's with R runs and the template
-    `v5`, given it); raises where they differ."""
+    `v5`, given it, and frames of FB bytes); raises where they differ."""
     out = []
     for N in ladder:
         t0 = time.perf_counter()
@@ -159,12 +164,13 @@ def checked(f: U.Format, rec: U.Shape, ladder: list[int], G: int, salted: bool, 
             whole = V4.size(V4.unit(f, N, G, salted, rec, R), memo)
             parts = composed_v4(f, N, G, salted, rec, R, memo)
         else:
-            whole = V5.size(V5.unit(f, N, G, salted, rec, R, v5), memo)
-            parts = composed_v5(f, N, G, salted, rec, R, memo, v5)
+            whole = V5.size(V5.unit(f, N, G, salted, rec, R, v5, FB), memo)
+            parts = composed_v5(f, N, G, salted, rec, R, memo, v5, FB)
         if whole != parts:
             raise AssertionError(f"N = {N}: the window traces to {whole}, its parts to {parts}")
         out.append({"N": N, "G": G, "salted": salted, **({} if R is None else {"R": R}),
-                    **({} if v5 is None else {"template": v5 != ()}), "ands": whole["ands"],
+                    **({} if v5 is None else {"template": v5 != ()}), **({} if FB is None else {"FB": FB}),
+                    "ands": whole["ands"],
                     "seconds": round(time.perf_counter() - t0, 1)})
         print("check", json.dumps(out[-1]), flush=True)
     return out
@@ -288,7 +294,7 @@ def canonical_geometry(f: U.Format, N: int, salted: bool, rec: U.Shape, tpl: tup
     def a(d) -> int:
         return U._ands(d, memo)
 
-    mode, p, s, _, _ = V5.template(tpl, f)
+    mode, p, s, _, _ = V5.template(tpl, f.B)
     C = (s - p) * 3 // 4 if mode == U.B64 else s - p
     n = N - salted
     out = composed(f, N, 1, salted, rec, memo)
@@ -297,19 +303,28 @@ def canonical_geometry(f: U.Format, N: int, salted: bool, rec: U.Shape, tpl: tup
         out["other"] = (a(bind(U.N3Slot, N=N)) + N * a(bind(U.N3Gate, W=8 * f.B)) + a(bind(U.N3SaltEq, B=f.B))
                         + n * a(bind(U.N3Mux, W=8 * f.B)))
     out["row_reads"] = n * a(bind(V4.N3HidingLeaf, N_BITS=8 * C, D=f.DB)) + a(bind(V4.N3Range, S=n, D=f.DB))
-    out["frames"] = n * a(bind(V5.N3PlaceFixed, FMT=tuple(f), TPL=tpl))
+    out["frames"] = n * a(bind(V5.N3PlaceFixed, FMT=tuple(f), TPL=tpl, FB=f.B))
     out["other"] += salted + n + 3 - 1
     out["ands"] = sum(out.values())
     return out
 
 
-def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] = (1, 2)) -> dict:
+EGRESS_ROWS = (64, 16, 256)
+"""Lever 4's egress outbox rows, in bytes (the first; the others its sensitivity): a served egress frame is one token's
+event (`network_traces/record.py`), so its data is one token's text, and rows that hold one are enough. Ingress frames
+are a prompt's bytes packed whole, and keep rows of B."""
+
+
+def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] = (1, 2),
+           egress_rows: tuple[int, ...] = EGRESS_ROWS) -> dict:
     """NET-52's levers on served rows' busy link-windows, at one busy window's depths and a day's (`served`'s formats):
     v4; lever 1, v5's rows of B bytes; lever 2, the frames' placement a template's (`SERVED_TEMPLATES`, the descriptor
-    then only r and the segments, P = Q = 1), on v4 and on v5; and lever 3's estimate on v5 with lever 2. Each lever's
-    delta and the cumulative total are against the floor, N2's frames root of the link-window's frames, which every
-    variant computes as v3 does. `check_v5` holds `composed_v5` to v5's trace at one window's depths, with and without
-    the egress template."""
+    then only r and the segments, P = Q = 1), on v4 and on v5; lever 4 on both, egress rows of `egress_rows[0]` bytes
+    under frames of B (the rest of `egress_rows` beside it); and lever 3's estimate on v5 with lever 2, and with 2
+    and 4.
+    Each lever's delta and the cumulative total are against the floor, N2's frames root of the link-window's frames,
+    which every variant computes as v3 does. `check_v5` holds `composed_v5` to v5's trace at one window's depths,
+    without the template, with it, and with it on lever 4's rows."""
     S = SERVED
     rec = U.Shape(S["L"], S["T"], S["R"])
     base = lab_fmt or U.Format(S["B"], 30, 2, 2, (1, 0, 0, 0), 6)
@@ -326,11 +341,13 @@ def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] 
             run["check_v5"] = (checked(f, rec, check_v5, 1, False, memo, runs[0], ())
                                + checked(f, rec, check_v5, 2, True, memo, runs[1], ())
                                + checked(ft, rec, check_v5, 1, False, memo, runs[0], SERVED_TEMPLATES["egress"])
-                               + checked(ft, rec, check_v5, 2, True, memo, runs[1], SERVED_TEMPLATES["ingress"]))
+                               + checked(ft, rec, check_v5, 2, True, memo, runs[1], SERVED_TEMPLATES["ingress"])
+                               + checked(ft._replace(B=egress_rows[0]), rec, check_v5, 1, False, memo, runs[0],
+                                         SERVED_TEMPLATES["egress"], f.B))
         for n_out in S["egress_frames"]:
             n_in = max(2, round(S["ingress_share"] * n_out))
             sides = (("egress", n_out, 1, False, runs[0]), ("ingress", n_in, 2, True, runs[1]))
-            row: dict = {"egress_frames": n_out, "ingress_frames": n_in, "variants": {}}
+            row: dict = {"egress_frames": n_out, "ingress_frames": n_in, "variants": {}, "egress_rows": {}}
             for key, N, G, salted, R in sides:
                 t0 = time.perf_counter()
                 tpl = SERVED_TEMPLATES[key]
@@ -338,11 +355,18 @@ def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] 
                      "lever_1": composed_v5(f, N, G, salted, rec, R, memo),
                      "lever_2": templated(composed_v4(ft, N, G, salted, rec, R, memo), ft, N, G, salted, tpl, memo),
                      "levers_1_2": composed_v5(ft, N, G, salted, rec, R, memo, tpl)}
-                v["levers_1_2_3"] = dict(v["levers_1_2"])
-                for g, saved in shared_first_blocks(ft, N, G, salted, R, memo).items():
-                    v["levers_1_2_3"][g] -= saved
-                v["levers_1_2_3"]["ands"] = sum(x for k, x in v["levers_1_2_3"].items() if k != "ands")
+                fr = ft._replace(B=egress_rows[0]) if key == "egress" else ft
+                v["levers_1_2_4"] = composed_v5(fr, N, G, salted, rec, R, memo, tpl, f.B)
+                for k, of, fk in (("levers_1_2_3", "levers_1_2", ft), ("levers_1_2_3_4", "levers_1_2_4", fr)):
+                    v[k] = dict(v[of])
+                    for g, saved in shared_first_blocks(fk, N, G, salted, R, memo).items():
+                        v[k][g] -= saved
+                    v[k]["ands"] = sum(x for g, x in v[k].items() if g != "ands")
                 v["geometry_estimate"] = canonical_geometry(ft, N, salted, rec, tpl, memo)
+                for RB in egress_rows[1:]:
+                    e = composed_v5(ft._replace(B=RB), N, G, salted, rec, R, memo, tpl, f.B) if key == "egress" else (
+                        v["levers_1_2"])
+                    row["egress_rows"].setdefault(RB, {})[key] = e["ands"]
                 for k, parts in v.items():
                     row["variants"].setdefault(k, {})[key] = parts
                 print(name, key, N, json.dumps({k: x["ands"] for k, x in v.items()}),
@@ -354,6 +378,9 @@ def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] 
                 if any(parts[s]["frames_root"] != row["variants"]["v4"][s]["frames_root"] for s in ("egress", "ingress")):
                     raise AssertionError(f"{k}'s frames root isn't v4's")
                 row[k] = {"ands": total, "x_floor": round(total / floor, 3), "a_day": total * S["windows_a_day"]}
+            for RB, sides_ands in row["egress_rows"].items():
+                total = sum(sides_ands.values())
+                row["egress_rows"][RB] = {"ands": total, "x_floor": round(total / floor, 3)}
             v4 = row["v4"]["ands"]
             row["deltas"] = {k: v4 - row[k]["ands"] for k in row["variants"] if k != "v4"}
             run["busy_link_windows"].append(row)

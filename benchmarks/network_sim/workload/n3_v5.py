@@ -2,10 +2,10 @@
 fixed. It accepts exactly where v4 does on every window the tests cover, and each read hashes one B-byte row where v4's
 hashes a 2B-byte one.
 
-    N3Window_v5{FMT, N, G, SALTED, REC, R, TPL}
+    N3Window_v5{FMT, N, G, SALTED, REC, R, TPL, FB}
         (layout, layout_domain: Digest, at: Array<DL>, record, record_domain: Digest, direction: Array<1>,
          roots, domains: Array<U, Digest>, [salt: Array<72, Byte>],
-         frames: Array<N, Array<B, Byte>>,
+         frames: Array<N, Array<FB, Byte>>,
          descriptors: Array<n, Array<LW>>, descriptor_salts: Array<n, Salt>,
          descriptor_left, descriptor_right: Array<DL, Digest>,
          rows: Array<n, G, Raw>, row_salts: Array<n, G, Salt>,
@@ -36,6 +36,10 @@ v4's statics, inputs and checks, except the outbox's rows, how a read reaches it
   suffix << 8s, the text the stream's first min(r, B) bytes (RAW) or their base64 (BASE64), r the descriptor's
   (`N3FrameFixed`, `N3PlaceFixed`). The descriptor's mode, p, s, prefix and suffix are not read, so a layout for such
   windows needs only r and the segments (P = Q = 1).
+- **Frames wider than rows** (FB, B unless given): with a template, a frame may be FB > B bytes, its text from a
+  stream of B (base64 of it cut at `b64_chars`); the salt and N2's frames root are over frames of FB. Rows then hold
+  what a frame carries rather than what it could: `prepare(setup, RB)` opens the outboxes in rows of RB and `resplit`s
+  each descriptor's segments onto them (a frame's data at most RB bytes).
 
 v5's runs are v4's (`n3_v4.partition`, `runs_of`), and so is R. Its witness rows are the halves of v3's (`convert`):
 read t's is the second half of v3's row t, and a run's head the first half of its first member's.
@@ -45,12 +49,14 @@ read t's is the second half of v3's row t, and a run's head the first half of it
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -97,28 +103,57 @@ class Prepared:
     layout: U.Layout
 
 
-def prepare(setup: U.Setup) -> Prepared:
-    """v5's units and layout for a setup, built once: each unit's outbox in rows of B, and the same descriptors, in
-    the format whose depths are those trees', registered under the layout's binding and seed."""
-    got = setup.__dict__.get("_v5")
+def resplit(d: U.Descriptor, B: int, RB: int) -> U.Descriptor:
+    """A descriptor of rows of B bytes on rows of RB: each segment's bytes in pieces of at most RB from their RB-byte
+    row, only r and the segments kept (a template places the frame); refuses a frame whose stream doesn't fit RB."""
+    if d.r > RB:
+        raise ValueError(f"a frame of {d.r} data bytes doesn't fit rows of {RB}")
+    segs = []
+    for s in d.segs:
+        if not s.kind:
+            continue
+        at, dst, left = s.q * B + s.o, s.d, s.n
+        while left:
+            k = min(left, RB)
+            segs.append(U.Segment(1, s.u, at // RB, at % RB, k, dst))
+            at, dst, left = at + k, dst + k, left - k
+        if dst > RB:
+            raise ValueError(f"a frame's stream to byte {dst} doesn't fit rows of {RB}")
+    return U.Descriptor(r=d.r, segs=tuple(segs))
+
+
+def prepare(setup: U.Setup, RB: int | None = None) -> Prepared:
+    """v5's units and layout for a setup, built once for each row size: each unit's outbox in rows of RB (B unless
+    given), and the descriptors in the format whose depths are those trees' (on rows of RB < B, `resplit`'s, in the
+    narrowest format that holds them), registered under the layout's binding and seed."""
+    L = setup.layout
+    B = L.fmt.B
+    RB = B if RB is None else RB
+    got = setup.__dict__.get(("_v5", RB))
     if got is None:
-        old, L = setup.units, setup.layout
-        B = L.fmt.B
-        trees = {u: register_outbox(old.program, u, x, B, old.seed) for u, x in old.data.items()}
+        if not 1 <= RB <= B:
+            raise ValueError(f"rows are 1 ... B = {B} bytes, not {RB}")
+        old = setup.units
+        trees = {u: register_outbox(old.program, u, x, RB, old.seed) for u, x in old.data.items()}
         units = U.UnitTable(list(trees), tuple(t.depth for t in trees.values()), [t.root for t in trees.values()],
                             [t.domain_id for t in trees.values()], trees, dict(old.data), old.program, old.seed)
-        fmt = L.fmt._replace(DEPTHS=units.depths)
-        rows = [U.encode(fmt, L.descriptor(p, j)) for p in L.ports for j in range(L.cap)]
+        if RB == B:
+            fmt, descs = L.fmt._replace(DEPTHS=units.depths), L.descriptors
+        else:
+            descs = {p: [resplit(d, B, RB) for d in ds] for p, ds in L.descriptors.items()}
+            fmt = U.fit([d for ds in descs.values() for d in ds], RB, units.depths, L.fmt.DL)
+        rows = [U.encode(fmt, descs[p][j] if j < len(descs.get(p, [])) else U.NONE) for p in L.ports
+                for j in range(L.cap)]
         tree = U.register(rows, fmt.LW, L.tree.reg.binding, setup.seed + b"/layout")
-        got = setup.__dict__["_v5"] = Prepared(units, U.Layout(fmt, L.ports, L.cap, L.descriptors, tree))
+        got = setup.__dict__[("_v5", RB)] = Prepared(units, U.Layout(fmt, L.ports, L.cap, descs, tree))
     return got
 
 
 # --- templates --------------------------------------------------------------------------------------------------------
 
-def template(tpl, f: U.Format) -> tuple[int, int, int, bytes, bytes] | None:
-    """A template static as (mode, p, s, prefix, suffix), or None for (); refuses one that isn't a placement of B
-    bytes."""
+def template(tpl, FB: int) -> tuple[int, int, int, bytes, bytes] | None:
+    """A template static as (mode, p, s, prefix, suffix), or None for (); refuses one that isn't a placement in a
+    frame of FB bytes."""
     if tpl == ():
         return None
     try:
@@ -127,7 +162,7 @@ def template(tpl, f: U.Format) -> tuple[int, int, int, bytes, bytes] | None:
     except (TypeError, ValueError):
         raise ValueError(f"TPL is () or (mode, p, s, prefix hex, suffix hex), not {tpl!r}") from None
     if (mode not in (U.RAW, U.B64) or not all(isinstance(x, int) and not isinstance(x, bool) for x in (p, s))
-            or not 0 <= p <= f.B or not 0 <= s <= f.B or len(pre) > f.B or s + len(suf) > f.B):
+            or not 0 <= p <= FB or not 0 <= s <= FB or len(pre) > FB or s + len(suf) > FB):
         raise ValueError(f"a template is RAW or BASE64 with 0 <= p, s <= B and its prefix and suffix in the frame, "
                          f"not {tpl!r}")
     return mode, p, s, pre, suf
@@ -137,13 +172,45 @@ def tpl_of(mode: int, p: int, s: int, prefix: bytes, suffix: bytes) -> tuple:
     return (mode, p, s, prefix.hex(), suffix.hex())
 
 
-def assemble_fixed(f: U.Format, tpl, row: bytes, rows: Sequence[bytes], G: int) -> bytes:
-    """The frame the template puts on the descriptor's r and segments' rows: `N3FrameFixed`'s reference, less its
-    check that the segments from G on are of kind 0."""
-    mode, p, s, pre, suf = template(tpl, f)  # type: ignore[misc]
+def b64_chars(FB: int, p: int, L: int) -> int:
+    """The base64 characters a template at p writes in a frame of FB bytes from a stream of L bytes: whole groups up
+    to the frame's, cut at its end, and no more than L bytes encode to."""
+    return min(FB - p, 4 * (FB // 4), 4 * -(-L // 3))
+
+
+def place_fixed(tpl, FB: int, r: int, stream: bytes) -> bytes:
+    """The frame of FB bytes the template puts on a stream of L bytes and r: the prefix, the stream's first min(r, L)
+    bytes (RAW) or the base64 of its first r, zero past L, (BASE64, `b64_chars` of it) at p, and the suffix at s.
+    With L = FB, `n3_unit.assemble`'s placement."""
+    mode, p, s, pre, suf = template(tpl, FB)  # type: ignore[misc]
+    L = len(stream)
+    data = (int.from_bytes(stream, "little") & ((1 << 8 * min(r, L)) - 1)).to_bytes(L, "little")
+    if mode == U.RAW:
+        text = data[:FB - p]
+    else:
+        chars = b64_chars(FB, p, L)
+        enc = base64.b64encode(data.ljust(3 * -(-chars // 4), b"\0")[:3 * -(-chars // 4)])
+        out = bytearray(chars)
+        for j in range(chars):
+            if r >= 3 * j // 4 + 1:
+                out[j] = enc[j]
+            elif r >= 3 * (j // 4) + 1:
+                out[j] = ord("=")
+        text = bytes(out)
+    x = int.from_bytes(pre, "little") ^ (int.from_bytes(text, "little") << 8 * p) ^ (int.from_bytes(suf, "little")
+                                                                                     << 8 * s)
+    return (x & ((1 << 8 * FB) - 1)).to_bytes(FB, "little")
+
+
+def assemble_fixed(f: U.Format, tpl, row: bytes, rows: Sequence[bytes], G: int, FB: int | None = None) -> bytes:
+    """The frame of FB bytes (B unless given) the template puts on the descriptor's r and segments' rows:
+    `N3FrameFixed`'s reference, less its check that the segments from G on are of kind 0."""
     x = U.fields(f, row)
-    wide = f._replace(P=max(f.P, p, len(pre), 1), Q=max(f.Q, len(suf), 1))
-    return U.assemble(wide, U.encode(wide, U.Descriptor(mode, p, x.r, s, pre, suf, x.segs)), rows, G)
+    stream = 0
+    for g in range(G):
+        src = rows[g] if g < len(rows) else bytes(2 * f.B)
+        stream ^= int.from_bytes(U.segment(f.B, x.segs[g], src), "little")
+    return place_fixed(tpl, f.B if FB is None else FB, x.r, stream.to_bytes(f.B, "little"))
 
 
 # --- parts ------------------------------------------------------------------------------------------------------------
@@ -180,27 +247,37 @@ N3Advance = U._part(
     _build_advance, "a run's two rows after a read: (b, x) if it is a fresh member, else (a, b)")
 
 
+def _frame_bytes(S, f: U.Format) -> int:
+    FB = S.FB
+    if not isinstance(FB, int) or isinstance(FB, bool) or FB < f.B:
+        raise ValueError(f"FB is a frame's bytes, at least the rows' B = {f.B}, not {FB!r}")
+    return FB
+
+
 def _sig_place_fixed(S):
     f = U._format(S.FMT)
-    template(S.TPL, f)
+    FB = _frame_bytes(S, f)
+    template(S.TPL, FB)
     if S.TPL == ():
         raise ValueError("N3PlaceFixed takes a template")
-    return (("r", Array(f.LB, BIT)), ("stream", Array(8 * f.B, BIT)), ("frame", Array(f.B, BYTE))), BIT
+    return (("r", Array(f.LB, BIT)), ("stream", Array(8 * f.B, BIT)), ("frame", Array(FB, BYTE))), BIT
 
 
 def _build_place_fixed(C, S, r, stream, *frame):
     f = U._format(S.FMT)
-    mode, p, s, pre, suf = template(S.TPL, f)
-    nb, room = 8 * f.B, f.B - p
+    FB = S.FB
+    mode, p, s, pre, suf = template(S.TPL, FB)
+    nb, room = 8 * FB, FB - p
     ge = U._thresholds(C, r)
     if mode == U.RAW:
-        text = [C.AND(stream[k], ge(k // 8 + 1)) for k in range(8 * room)]
+        text = [C.AND(stream[k], ge(k // 8 + 1)) for k in range(8 * min(room, f.B))]
     else:
-        chars, g = 4 * (f.B // 4), -(-min(room, 4 * (f.B // 4)) // 4)
-        data = [C.AND(stream[k], ge(k // 8 + 1)) for k in range(8 * 3 * g)]
-        enc = U.b64(C, data, 3 * g)
+        chars = b64_chars(FB, p, f.B)
+        g = -(-chars // 4)
+        data = [C.AND(stream[k], ge(k // 8 + 1)) for k in range(min(8 * 3 * g, 8 * f.B))]
+        enc = U.b64(C, data + [ZERO] * (8 * 3 * g - len(data)), 3 * g)
         text = []
-        for j in range(min(room, chars)):
+        for j in range(chars):
             real = ge(3 * j // 4 + 1)
             pad = ge(3 * (j // 4) + 1) ^ real
             text += [C.AND(real, enc[8 * j + t]) ^ (pad if ord("=") >> t & 1 else ZERO) for t in range(8)]
@@ -213,9 +290,9 @@ def _build_place_fixed(C, S, r, stream, *frame):
 
 
 N3PlaceFixed = U._part(
-    "N3PlaceFixed", ("FMT", "TPL"), _sig_place_fixed, _build_place_fixed,
-    "1 iff the frame is the template's prefix XOR text << 8p XOR suffix << 8s, the text the stream's first min(r, B) "
-    "bytes (RAW) or their base64 (BASE64)")
+    "N3PlaceFixed", ("FMT", "TPL", "FB"), _sig_place_fixed, _build_place_fixed,
+    "1 iff the FB-byte frame is the template's prefix XOR text << 8p XOR suffix << 8s, the text the B-byte stream's "
+    "first min(r, B) bytes (RAW) or the base64 of its first r, zero past B (BASE64)")
 
 
 def _sig_frame_fixed(S):
@@ -223,7 +300,7 @@ def _sig_frame_fixed(S):
     if not isinstance(S.G, int) or not 1 <= S.G <= f.G:
         raise ValueError(f"G is 1 ... the format's {f.G} segments, not {S.G!r}")
     return (("descriptor", Array(f.LW, BIT)), ("rows", Array(S.G, Array(16 * f.B, BIT))),
-            ("frame", Array(f.B, BYTE))), BIT
+            ("frame", Array(_frame_bytes(S, f), BYTE))), BIT
 
 
 def _body_frame_fixed(B, S, desc, rows, frame):
@@ -237,8 +314,8 @@ def _body_frame_fixed(B, S, desc, rows, frame):
     segs = B.batch(bind(U.N3Seg, B=f.B), rows, each(f.IDW, f.OB), each(f.IDW + f.OB, f.LB),
                    each(f.IDW + f.OB + f.LB, f.LB), axes=(0, 0, 0, 0))
     stream = B.call(bind(U.N3Xor, N=S.G, W=nb), segs) if S.G > 1 else segs[0]
-    ok = B.call(bind(N3PlaceFixed, FMT=S.FMT, TPL=S.TPL), Coll(Array(f.LB, BIT), d.slice(f.R_OFF, f.R_OFF + f.LB)),
-                stream, frame)
+    ok = B.call(bind(N3PlaceFixed, FMT=S.FMT, TPL=S.TPL, FB=S.FB),
+                Coll(Array(f.LB, BIT), d.slice(f.R_OFF, f.R_OFF + f.LB)), stream, frame)
     if S.G == f.G:
         return ok
     kinds = U._coll(Array(f.G - S.G, BIT), [d[f.HW + g * f.SW] for g in range(S.G, f.G)])
@@ -246,10 +323,10 @@ def _body_frame_fixed(B, S, desc, rows, frame):
 
 
 N3FrameFixed = CompositeDefinition(
-    "N3FrameFixed", 1, ("FMT", "G", "TPL"), _sig_frame_fixed, _body_frame_fixed, conformance="exact-model-tested",
-    register=False,
-    doc="1 iff the frame is what the template puts on the descriptor's r and its first G segments' rows: the "
-        "segments' streams (N3Seg) XORed, placed by N3PlaceFixed; and every segment from G on is of kind 0")
+    "N3FrameFixed", 1, ("FMT", "G", "TPL", "FB"), _sig_frame_fixed, _body_frame_fixed,
+    conformance="exact-model-tested", register=False,
+    doc="1 iff the FB-byte frame is what the template puts on the descriptor's r and its first G segments' rows of B "
+        "bytes: the segments' streams (N3Seg) XORed, placed by N3PlaceFixed; and every segment from G on is of kind 0")
 
 
 # --- the window -------------------------------------------------------------------------------------------------------
@@ -262,17 +339,22 @@ def _sizes(S) -> tuple:
 
 
 def _window_params(S) -> list[tuple[str, object]]:
-    base = U._window_params(S)
     f, n, T, Sr, _ = _sizes(S)
+    FB = _frame_bytes(S, f)
+    if FB != f.B and S.TPL == ():
+        raise ValueError(f"frames of FB = {FB} bytes on rows of B = {f.B} take a template")
+    base = U._window_params(SimpleNamespace(FMT=tuple(f._replace(B=FB)), REC=S.REC, SALTED=S.SALTED, N=S.N, G=S.G))
     if not isinstance(S.R, int) or isinstance(S.R, bool) or S.R < 1:
         raise ValueError(f"N3Window_v5 takes R >= 1 runs, not {S.R!r}")
     if n > 1 << f.DL:
         raise ValueError(f"{n} descriptors don't fit a layout of 2^{f.DL} positions")
-    template(S.TPL, f)
+    template(S.TPL, FB)
     raw = Array(8 * f.B, BIT)
     params = []
     for k, t in base:
-        if k == "descriptor_paths":
+        if k == "descriptors":
+            params.append((k, Array(n, Array(f.LW, BIT))))
+        elif k == "descriptor_paths":
             params += [("descriptor_left", Array(f.DL, DIGEST)), ("descriptor_right", Array(f.DL, DIGEST))]
         elif k == "rows":
             params.append(("rows", Array(n, Array(S.G, raw))))
@@ -293,21 +375,21 @@ def _sig_window(S):
 
 def _body_window(B, S, *args):
     f, n, T, Sr, ZW = _sizes(S)
-    N, G, W = S.N, S.G, 8 * f.B
+    N, G, W, FB = S.N, S.G, 8 * f.B, S.FB
     a = dict(zip([k for k, _ in _window_params(S)], args))
     K = U._Consts(B)
     oks: list[Coll] = []
     frames = a["frames"]
     data = frames
     if S.SALTED:
-        flat = frames.reshape(Array(N, Array(8 * f.B, BIT)))
+        flat = frames.reshape(Array(N, Array(8 * FB, BIT)))
         slot = B.call(bind(U.N3Slot, N=N), a["slot"])
-        picked = B.batch(bind(U.N3Gate, W=8 * f.B), flat, slot[N:2 * N], axes=(0, 0))
-        chosen = B.call(bind(U.N3Xor, N=N, W=8 * f.B), picked) if N > 1 else picked[0]
-        oks.append(B.call(bind(U.N3SaltEq, B=f.B), chosen, a["salt"]))
+        picked = B.batch(bind(U.N3Gate, W=8 * FB), flat, slot[N:2 * N], axes=(0, 0))
+        chosen = B.call(bind(U.N3Xor, N=N, W=8 * FB), picked) if N > 1 else picked[0]
+        oks.append(B.call(bind(U.N3SaltEq, B=FB), chosen, a["salt"]))
         if n:
-            routed = B.batch(bind(U.N3Mux, W=8 * f.B), flat[0:n], flat[1:N], slot[0:n], axes=(0, 0, 0))
-            data = routed.reshape(Array(n, Array(f.B, BYTE)))
+            routed = B.batch(bind(U.N3Mux, W=8 * FB), flat[0:n], flat[1:N], slot[0:n], axes=(0, 0, 0))
+            data = routed.reshape(Array(n, Array(FB, BYTE)))
     if n:
         d = a["descriptors"]
         pos = B.call(bind(U.N3Positions, DL=f.DL, N=n), a["at"])
@@ -385,9 +467,9 @@ def _body_window(B, S, *args):
         if S.TPL == ():
             oks.append(B.batch(bind(U.N3Frame, FMT=S.FMT, G=G), d, win, data, axes=(0, 0, 0)))
         else:
-            oks.append(B.batch(bind(N3FrameFixed, FMT=S.FMT, G=G, TPL=S.TPL), d, win, data, axes=(0, 0, 0)))
+            oks.append(B.batch(bind(N3FrameFixed, FMT=S.FMT, G=G, TPL=S.TPL, FB=FB), d, win, data, axes=(0, 0, 0)))
     rec = U._shape(S.REC)
-    root = B.call(bind(U.N3FramesRoot, B=f.B, N=N, D=rec.D), frames)
+    root = B.call(bind(U.N3FramesRoot, B=FB, N=N, D=rec.D), frames)
     hb = U._refs(a["head"])
     oks.append(B.call(bind(U.N3IsZero, W=8), U._coll(Array(8, BIT), hb[8 * rec.ST:8 * rec.ST + 8])))
     nh = 8 * (rec.HL + 64)
@@ -400,61 +482,82 @@ def _body_window(B, S, *args):
 
 
 N3Window = CompositeDefinition(
-    "N3Window", 5, ("FMT", "N", "G", "SALTED", "REC", "R", "TPL"), _sig_window, _body_window,
+    "N3Window", 5, ("FMT", "N", "G", "SALTED", "REC", "R", "TPL", "FB"), _sig_window, _body_window,
     conformance="exact-model-tested", register=False,
     doc="N3Window_v4's ok bit over outbox rows of B bytes: each read hashes the one row it adds to its run's two, its "
         "window those two; each run's head row opens before its fresh rows; with a template, every frame's placement "
-        "is the template's and its descriptor gives only r and the segments")
+        "is the template's and its descriptor gives only r and the segments, and frames may be FB > B bytes")
 
 
-def unit(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, tpl: tuple = ()):
-    return bind(N3Window, FMT=tuple(f), N=N, G=G, SALTED=int(salted), REC=tuple(rec), R=R, TPL=tuple(tpl))
+def unit(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, tpl: tuple = (), FB: int | None = None):
+    return bind(N3Window, FMT=tuple(f), N=N, G=G, SALTED=int(salted), REC=tuple(rec), R=R, TPL=tuple(tpl),
+                FB=f.B if FB is None else FB)
 
 
 # --- instances and the reference --------------------------------------------------------------------------------------
 
-def instance(setup: U.Setup, w: U.Window, R: int | None = None, tpl: tuple = ()) -> U.Instance:
-    """The window's v5 instance from its v3 one, against the setup's v5 units and layout (`prepare`)."""
+def instance(setup: U.Setup, w: U.Window, R: int | None = None, tpl: tuple = (), RB: int | None = None) -> U.Instance:
+    """The window's v5 instance from its v3 one, against the setup's v5 units and layout on rows of RB (`prepare`; B
+    unless given, and then a template's), with the port's G and runs on those rows."""
     v3 = w.instance
     if v3 is None:
         raise ValueError(f"{w.port}[{w.window}] runs no unit: {w.why}")
-    return convert(v3, prepare(setup), V4.runs_of(setup.layout, w.port) if R is None else R, tpl)
+    prep = prepare(setup, RB)
+    narrow = prep.layout.fmt.B != setup.layout.fmt.B
+    layout = prep.layout if narrow else setup.layout
+    return convert(v3, prep, V4.runs_of(layout, w.port) if R is None else R, tpl,
+                   G=layout.segments(w.port) if narrow else None)
 
 
 def convert(v3: U.Instance, prep: Prepared, R: int, tpl: tuple = (), runs: Sequence[Sequence[int]] | None = None,
             fresh: Sequence[int] | None = None, starts: dict[int, int] | None = None,
             run_units: dict[int, int] | None = None, heads: dict[int, bytes] | None = None,
-            rows: dict[int, bytes] | None = None) -> U.Instance:
+            rows: dict[int, bytes] | None = None, G: int | None = None) -> U.Instance:
     """The v5 instance of a v3 one, its witness edits kept: the descriptors re-encoded in v5's format; read t's row the
     second half of v3's row t (row q + 1) unless `rows` gives it, with its salt at q + 1; v4's runs and fresh bits
     unless given; each run's unit and start its first member's unless given, its head the first half of that member's
     v3 row (row start of an empty run) unless `heads` gives it; and the fill and siblings of the unit's tree at the
-    start."""
-    f, n, G = prep.layout.fmt, v3.N - v3.salted, v3.G
-    B = f.B
+    start. On rows narrower than v3's frames (`prepare` with RB < B) the descriptors are `resplit`'s, G segments a
+    frame (the most they need unless given), and each row and head the unit's own row in its tree, as v3 has none of
+    that width."""
+    f, n, FB = prep.layout.fmt, v3.N - v3.salted, v3.fmt.B
+    B, narrow = f.B, f.B != v3.fmt.B
+    descs = [U.decode(v3.fmt, x) for x in v3.args.get("descriptors", [])]
+    if narrow:
+        descs = [resplit(d, FB, B) for d in descs]
+        G = max([1] + [len(d.segs) for d in descs]) if G is None else G
+    else:
+        G = v3.G
     units = prep.units
     args = {k: v for k, v in v3.args.items() if k not in ("descriptor_paths", "row_paths", "row_salts")}
     args.update(layout=prep.layout.tree.root, layout_domain=prep.layout.tree.domain_id, roots=list(units.roots),
                 domains=list(units.domains))
     inst = U.Instance(f, v3.N, G, v3.salted, v3.rec, args)
-    inst.R, inst.TPL = R, tuple(tpl)  # type: ignore[attr-defined]
+    inst.R, inst.TPL, inst.FB = R, tuple(tpl), FB  # type: ignore[attr-defined]
     if not n:
         args.pop("rows", None)
         return inst
     at = args["at"]
-    args["descriptors"] = [U.encode(f, U.decode(v3.fmt, x)) for x in v3.args["descriptors"]]
+    args["descriptors"] = [U.encode(f, d) for d in descs]
     args["descriptor_left"], args["descriptor_right"] = V4.siblings(prep.layout.tree.levels, at, n, f.DL)
     rs = V4.reads(f, args["descriptors"], G)
     T = len(rs)
-    old = [r for per in v3.args["rows"] for r in per]
 
     def tree_of(u: int) -> U.Tree | None:
         return units.trees[units.names[u]] if u < len(units.names) else None
+
+    def own(u: int, q: int) -> bytes:
+        t = tree_of(u)
+        return t.reg.rows[q] if t is not None and q < len(t.reg.rows) else bytes(B)
 
     def salt(u: int, q: int) -> bytes:
         t = tree_of(u)
         return t.reg.salts[q] if t is not None and q < len(t.reg.salts) else NO_SALT
 
+    if narrow:
+        old = [own(s.u, s.q) + own(s.u, s.q + 1) if s.kind else bytes(2 * B) for s in rs]
+    else:
+        old = [r for per in v3.args["rows"] for r in per]
     flat = [(rows or {}).get(t, old[t][B:]) for t in range(T)]
     salts = [salt(s.u, s.q + 1) if s.kind else NO_SALT for s in rs]
     args["rows"] = [flat[i * G:(i + 1) * G] for i in range(n)]
@@ -492,20 +595,22 @@ def convert(v3: U.Instance, prep: Prepared, R: int, tpl: tuple = (), runs: Seque
     return inst
 
 
-def _assemble(f: U.Format, tpl: tuple, desc: bytes, rows: Sequence[bytes], G: int) -> bytes:
-    return U.assemble(f, desc, rows, G) if tpl == () else assemble_fixed(f, tpl, desc, rows, G)
+def _assemble(f: U.Format, tpl: tuple, desc: bytes, rows: Sequence[bytes], G: int, FB: int) -> bytes:
+    return U.assemble(f, desc, rows, G) if tpl == () else assemble_fixed(f, tpl, desc, rows, G, FB)
 
 
 def reference(inst: U.Instance) -> bool:
-    """`N3Window_v5`'s output on the instance, computed from its arguments as the circuit does."""
+    """`N3Window_v5`'s output on the instance, computed from its arguments as the circuit does; refuses a size class
+    the unit refuses."""
     f, a, N, G, R = inst.fmt, inst.args, inst.N, inst.G, inst.R  # type: ignore[attr-defined]
-    tpl = inst.TPL  # type: ignore[attr-defined]
+    tpl, FB = inst.TPL, inst.FB  # type: ignore[attr-defined]
+    unit_of(inst).signature()
     n, B = N - inst.salted, f.B
     frames = list(a["frames"])
     if inst.salted:
         slot = a["slot"]
         head = U.HEADER.pack(U.SALT, U.SALT_STREAM, U.SALT_PAYLOAD)
-        if slot >= N or frames[slot] != (head + a["salt"]).ljust(f.B, b"\0"):
+        if slot >= N or frames[slot] != (head + a["salt"]).ljust(FB, b"\0"):
             return False
         frames = frames[:slot] + frames[slot + 1:]
     descs = a.get("descriptors", [])
@@ -554,10 +659,10 @@ def reference(inst: U.Instance) -> bool:
     for i, x in enumerate(U.fields(f, d) for d in descs):
         mode_ok = x.mode in (U.RAW, U.B64) or tpl != ()
         if any(s.kind for s in x.segs[G:]) or not mode_ok or _assemble(f, tpl, descs[i], windows[i * G:(i + 1) * G],
-                                                                       G) != frames[i]:
+                                                                       G, FB) != frames[i]:
             return False
     rec = inst.rec
-    head = a["head"] + U.CT.frames_root(a["frames"], U.GridParams(rec.T, rec.R, f.B))
+    head = a["head"] + U.CT.frames_root(a["frames"], U.GridParams(rec.T, rec.R, FB))
     if head[rec.ST]:
         return False
     value = U.hiding_value(head, 8 * len(head), a["record_salt"])
@@ -572,7 +677,7 @@ def arguments(inst: U.Instance) -> list[np.ndarray]:
         "layout": digest(a["layout"]), "layout_domain": digest(a["layout_domain"]), "at": U._int_bits(a["at"], f.DL),
         "record": digest(a["record"]), "record_domain": digest(a["record_domain"]), "direction": [a["direction"]],
         "roots": [b for r in a["roots"] for b in digest(r)], "domains": [b for r in a["domains"] for b in digest(r)],
-        "frames": [b for fr in a["frames"] for b in U._bytes_bits(fr, 8 * f.B)],
+        "frames": [b for fr in a["frames"] for b in U._bytes_bits(fr, 8 * inst.FB)],  # type: ignore[attr-defined]
         "head": U._bytes_bits(a["head"], 8 * inst.rec.HL), "record_salt": digest(a["record_salt"]),
         "record_path": [b for s in a["record_path"] for b in digest(s)],
     }
@@ -605,12 +710,13 @@ def arguments(inst: U.Instance) -> list[np.ndarray]:
 
 
 def unit_of(inst: U.Instance):
-    return unit(inst.fmt, inst.N, inst.G, inst.salted, inst.rec, inst.R, inst.TPL)  # type: ignore[attr-defined]
+    return unit(inst.fmt, inst.N, inst.G, inst.salted, inst.rec, inst.R,  # type: ignore[attr-defined]
+                inst.TPL, inst.FB)  # type: ignore[attr-defined]
 
 
 def evaluate(*insts: U.Instance) -> list[int]:
     """The unit's output on each instance, all of one unit, in one evaluation."""
-    if len({(i.key, i.R, i.TPL) for i in insts}) != 1:  # type: ignore[attr-defined]
+    if len({(i.key, i.R, i.TPL, i.FB) for i in insts}) != 1:  # type: ignore[attr-defined]
         raise ValueError("the instances are of one unit")
     args = [np.concatenate(x) for x in zip(*(arguments(i) for i in insts))]
     return [int(b) for b in np.asarray(U.evaluate_bits(unit_of(insts[0]), *args)).reshape(-1)]
@@ -648,7 +754,8 @@ def parts(inst: U.Instance) -> list[tuple[object, bool]]:
     """v5's new parts at the statics of the instance's window, each with whether circuit-check lowers it whole: the
     SHA-free ones whole, the B-byte row's leaf and the run's range by their parts. With a template, its placement and
     frame."""
-    f, n, G, R, tpl = inst.fmt, inst.N - inst.salted, inst.G, inst.R, inst.TPL  # type: ignore[attr-defined]
+    f, n, G, R = inst.fmt, inst.N - inst.salted, inst.G, inst.R  # type: ignore[attr-defined]
+    tpl, FB = inst.TPL, inst.FB  # type: ignore[attr-defined]
     T = n * G
     Sr = min(T + 1, 1 << f.DB)
     whole = [bind(N3Next, D=f.DB), bind(N3RunsOne, R=R), bind(N3Advance, W=8 * f.B),
@@ -656,21 +763,22 @@ def parts(inst: U.Instance) -> list[tuple[object, bool]]:
     if any(V4.sel_js(Sr, f.DB, k) for k in range(f.DB)):
         whole.append(bind(V4.N3RangeSel, S=Sr, D=f.DB))
     if tpl != ():
-        whole += [bind(N3PlaceFixed, FMT=tuple(f), TPL=tpl), bind(N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl)]
+        whole += [bind(N3PlaceFixed, FMT=tuple(f), TPL=tpl, FB=FB),
+                  bind(N3FrameFixed, FMT=tuple(f), G=G, TPL=tpl, FB=FB)]
     hashed = [bind(V4.N3HidingLeaf, N_BITS=8 * f.B, D=f.DB), bind(V4.N3Range, S=Sr, D=f.DB)]
     return [(d, True) for d in whole] + [(d, False) for d in hashed]
 
 
 def circuit_check(window: bool) -> dict:
     """circuit-check's checks on v5's new parts at the demo window's statics and at the canonical demo's (its
-    templates' placement and frame) and, with `window`, on the demo's whole v5 window (lowered by its parts and not as
-    a Call, as `n3_unit`'s command checks v3's)."""
+    templates' placement and frame, on rows of B and on rows of 11 under frames of 16) and, with `window`, on the
+    demo's whole v5 window (lowered by its parts and not as a Call, as `n3_unit`'s command checks v3's)."""
     from circuit_check import checks as CK
 
     d = U.demo()
     inst = instance(d.setup, d.window)
     c = canonical_demo()
-    templated = [instance(c.setup, w, tpl=c.templates[w.port]) for w in c.windows]
+    templated = [instance(c.setup, w, tpl=c.templates[w.port], RB=RB) for RB in (None, 11) for w in c.windows]
     opts = CK.Options()
     entries = []
     targets = parts(inst) + [p for x in templated for p in parts(x) if p[0].name in ("N3PlaceFixed", "N3FrameFixed")]
