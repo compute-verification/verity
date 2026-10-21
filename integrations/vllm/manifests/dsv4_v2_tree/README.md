@@ -20,6 +20,8 @@ this order:
 | #2765 (`cursor/dsv4-land-21f3`) | dec1238773 | DeepSeek-V4-Pro's Definitions, frontend and row. Already in the base through #2729, so it has no merge commit of its own (`git merge-base --is-ancestor dec1238773 HEAD`) |
 | #2845 (`cursor/land-dsv4-aot-21f3`) | 67916f1be5 | the row switched to the AOT Build (`aot`: comparison r20261018-222738-a095, trace art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4); `test_predict`'s mHC step pins read from `records.json`. One commit on dec1238773; merged clean |
 | `cursor/glm-v2-21f3` | 5a31cfd737 | V2PREP's runbook since the base: window B on a preemptible node, any vy-glm53-* GPU node |
+| #3020 (`cursor/verity-circuits-6f04`) | a371c5a7f1 | the binding map's leaf unit. Cherry-picked from `cursor/glm-v2-21f3`'s 15ea726d5b, not merged (a merge would bring main), and allowed by blob (COMMIT_FIXES) |
+| #3028 (`cursor/moe-align-schedule-replay-6f04`) | a521e5ed60 | the Commit replays the Match capture's MoE align schedule. Cherry-picked, not merged, and allowed by blob (COMMIT_FIXES) |
 
 This tree's own commits change `../glm_v2_tree/jobs/`, this directory, and `verity_vllm/pipeline/memory_map.py`'s
 `census_entry` (with its test), which is none of `build.py`'s construction sources, so no Program digest or artifact
@@ -156,6 +158,35 @@ Then:
        Marlin path), so the claimed call boundaries are unbound too.
      - `identity coverage: N of M required identities have no binding` or `identity check: ... step(s) differ`, first naming
        a `model.layers.K.ffn.experts/` Value: the source committed the block, but not at the ports the gate's claim assumes.
+
+   Attempt 2, r20261021-041858-f624 (inner r20261021-041907-b7a8, verdict
+   art:01daa488cb9b35fc400c983a2db7ae5d4155e06f8de2b91c6143e02df6a260f6), ran at 47ddb6246e against the Match
+   r20261021-010646-2249.
+   - `moe_block_stream` was harmless on all 8 ranks: `bound-as-leaf`, 23,616 tensors, `at_calls` true and `hash_layers`
+     [0, 1, 2].
+   - It failed on two bugs, both fixed here by blob (`../glm_v2_tree/jobs/tree_guard.sh` COMMIT_FIXES, which `copy_rowdir.sh` reads too):
+     - The sampled openings raised IndexError in `identity_of`: the binding map's leaves were in 256 B units under rows-sha512's
+       4 KiB rows. Fixed by #3020 (a371c5a7f1, cherry-picked from 15ea726d5b).
+     - The match oracle failed on every rank: 5,697 of 5,920 committed tensors differ from the capture's.
+       `moe_align_block_size` hands out each expert's slots in atomicAdd order, and a pair's block decides the Marlin expert
+       GEMM's split-K cuts. So the low bits differ from layer 1 at step 0 and drift, until the learned routing from layer 10
+       on differs too. Fixed by #3028 (a521e5ed60): the capture records each align call's schedule
+       (`match/capture/align_schedule.rank<r>.pt`), and the Commit replays it.
+   - The CPU experiment r20261021-061937-9868 evaluated layer 1's MoE rows (after r20261021-055246-b82b) on ranks 2, 4 and 5,
+     whose partials differ:
+     - The routing is equal. Under its committed schedule, every committed word reproduces.
+     - The capture's differing row (one per rank) reproduces bit for bit with its one expert-365 pair in another of the
+       expert's blocks, and the committed block does not.
+
+   Attempt 3 needs a new capture, since the old one has no schedule file and so is not replayed. At this tree's head:
+   1. move the attempt's `match/` aside (`mv $D/match $D/match.attempt2-r20261021-010646-2249`: a rename, not a delete, since
+      `match_gpu.sh` refuses a `match/` whose legs ended);
+   2. run window A's `match_gpu.sh` and the CPU phase's `match_cpu.sh` (steps 1 and 2);
+   3. run window B's `commit.sh`.
+
+   In the Commit's `commit/summary.json`, each rank's `match_oracle.<r>.schedule_replay` must be non-null, with `missing` 0,
+   and the oracle must PASS. A null means no schedule was replayed. A nonzero `routing_differs` means a call routed otherwise
+   than the capture's, and its first [step, module] is named in `routing_differs_first`.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
