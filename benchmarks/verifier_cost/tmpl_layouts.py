@@ -14,6 +14,8 @@ as JSON lines (PRF-133).
   the copy bits, but the high bits are then the Definition's columns plus an offset that needn't be aligned, so its
   fold is redone per call (``call_paths``: the calls and own references of the call tree with each run counted once);
   ``strict`` aligns to 2^m times the Definition's size rounded up to a power of two, so each Definition folds once.
+  Fallback ``interleave`` interleaves chained runs too: committed positions apart from the evaluation order, which
+  stays the flat unit's, so its ``--flat`` late references are reported, not refused.
 
 Every layout keeps the unit's input rows at their columns and each output group's width, at a start aligned to its
 words, as `tmpl.align` does. Per layout: the unit's rows and its slot's log (`circuit._slot_log`; compose refuses a
@@ -105,13 +107,16 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                 a = T._pow2(size[e]) if strict else align[e]
                 kind, S, nb = "contig", size[e], T._up(pos, a)
                 al = max(al, a)
-            elif mode == "interleaved" and not _chained(c, Le, D, alias[d]):
+            elif mode == "interleaved" and (fallback == "interleave" or not _chained(c, Le, D, alias[d])):
                 M = 1 << _log(c.count)
                 a = M * (T._pow2(size[e]) if strict else align[e])
                 kind, S, nb = "lanes", M, T._up(pos, a)
                 al = max(al, a)
                 st["lanes_runs"] += 1
                 st["rows_lanes"] += c.count * urows[e]
+                if fallback == "interleave" and _chained(c, Le, D, alias[d]):
+                    st["chained_runs"] += 1
+                    st["rows_chained"] += c.count * urows[e]
             else:
                 if mode == "pow2" or fallback == "pow2":
                     S = T._pow2(size[e])
@@ -398,7 +403,8 @@ def main(argv: list[str]) -> int:
     flat = T.read_flat(a.flat)[0] if a.flat else None
     ok = True
     for mode, fb, strict in (("today", None, False), ("pow2", None, False), ("interleaved", "contiguous", False),
-                             ("interleaved", "pow2", False), ("interleaved", "contiguous", True)):
+                             ("interleaved", "pow2", False), ("interleaved", "contiguous", True),
+                             ("interleaved", "interleave", False), ("interleaved", "interleave", True)):
         t1 = time.time()
         phi, r = layout(t, mode, fb or "contiguous", strict)
         if mode == "today":
@@ -407,7 +413,7 @@ def main(argv: list[str]) -> int:
         if flat is not None and mode != "today":
             r["order"] = order(phi, flat)
             r["order"]["late_paths"] = [(path(t, a), path(t, b)) for a, b in r["order"]["late"][:3]]
-            ok &= r["order"]["distinct"] and r["order"]["late_refs"] == 0
+            ok &= r["order"]["distinct"] and (fb == "interleave" or r["order"]["late_refs"] == 0)
         r |= {"seconds": round(time.time() - t1, 1),
               "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         print("LAYOUT " + json.dumps(r), flush=True)
