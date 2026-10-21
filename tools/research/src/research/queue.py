@@ -808,11 +808,16 @@ class Queue:
             self.save_state(state)
         return members, entries
 
-    def eject(self, pr: int, reason: str, by: str) -> PR:
+    def eject(self, pr: int, reason: str, by: str, sha: str | None = None) -> PR:
+        """Withdraw ``pr``'s mark and keep it off the queue's branch; with ``sha``, only while that is still its head (CI-134: an
+        eject that waited for drive's tick withdrew the mark of a head its owner had pushed meanwhile, 18 and 21 Oct)."""
         self._clone()
         prs = {p.number: p for p in self.github.open_prs()}
         if pr not in prs:
             raise QueueError(f"#{pr} isn't an open PR")
+        if sha and not prs[pr].head.startswith(sha):
+            raise QueueError(f"#{pr} is at {prs[pr].head[:12]} now, not {sha[:12]}: its owner pushed since, so nothing is ejected; "
+                             f"the new head is checked on its own")
         state = self.load_state()
         state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         if self.store is not None and not self.shadow:
@@ -2043,7 +2048,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
-                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely)")
+                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
+                                  "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
+                                  "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
@@ -2172,7 +2179,7 @@ def main(argv: list[str]) -> int:
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by), a.reason, a.by)
+        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         q.sync()
         return told
     except QueueError as e:
