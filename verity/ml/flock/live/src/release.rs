@@ -1723,7 +1723,7 @@ mod tests {
             let lines: Vec<&[u8]> = data.split_inclusive(|&b| b == b'\n').collect();
             assert_eq!(rec.failures("s").unwrap(), 1);
             let k = lines.iter().position(|l| l.starts_with(b"{\"event\": \"stop\"")).unwrap();
-            let edited = [lines[..k].concat(), waits(&lines[k..k + 1], &sid).concat(), lines[k + 1..].concat()].concat();
+            let edited = [lines[..k].concat(), waits(&lines[..k + 1], k, &sid).concat(), lines[k + 1..].concat()].concat();
             assert_eq!(edited.len(), data.len());
             assert!(!replaced || lines[k + 1..].concat().len() > LAST);
             if replaced {
@@ -1757,11 +1757,13 @@ mod tests {
         }
     }
 
-    /// Each line rewritten in place as a `wait` of its length, where one fits.
-    fn waits(lines: &[impl AsRef<[u8]>], sid: &str) -> Vec<Vec<u8>> {
-        lines.iter().enumerate().map(|(k, line)| {
+    /// Each of `lines[from..]` rewritten in place as a `wait` of its length, where one fits, numbered as the event it
+    /// replaces (blank lines hold no event).
+    fn waits(lines: &[impl AsRef<[u8]>], from: usize, sid: &str) -> Vec<Vec<u8>> {
+        let first = lines[..from].iter().filter(|l| l.as_ref().iter().any(|&b| b != b'\n')).count();
+        lines[from..].iter().enumerate().map(|(k, line)| {
             let line = line.as_ref();
-            let wait = |pad: usize| json!({"event": "wait", "part": "x".repeat(pad), "seq": k, "session": sid});
+            let wait = |pad: usize| json!({"event": "wait", "part": "x".repeat(pad), "seq": first + k, "session": sid});
             let pad = (line.len() - 1).checked_sub(py_json(&wait(0)).len());
             pad.map_or(line.to_vec(), |p| format!("{}\n", py_json(&wait(p))).into_bytes())
         }).collect()
@@ -1802,7 +1804,7 @@ mod tests {
                 let mut lines: Vec<Vec<u8>> = data.split_inclusive(|&b| b == b'\n').map(<[u8]>::to_vec).collect();
                 if kind == "swap" {
                     if let Some(k) = lines.iter().position(|l| l.windows(15).any(|w| w == br#""event": "open""#)) {
-                        lines[k] = waits(&lines[k..k + 1], sid).remove(0);
+                        lines[k] = waits(&lines[..k + 1], k, sid).remove(0);
                     }
                 }
                 std::fs::write(state.join("record.tmp"), lines.concat()).unwrap();
@@ -1813,7 +1815,7 @@ mod tests {
                 let lines: Vec<&[u8]> = data.split_inclusive(|&b| b == b'\n').collect();
                 let mut kept = lines[..if kind == "halve" { lines.len() / 2 } else { lines.len() - 3 }].concat();
                 if kind == "edit" {
-                    kept.extend(waits(&lines[lines.len() - 3..], sid).concat());
+                    kept.extend(waits(&lines, lines.len() - 3, sid).concat());
                 }
                 std::fs::write(&log, kept).unwrap();
             }
