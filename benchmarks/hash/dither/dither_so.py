@@ -209,12 +209,12 @@ class SoWindow(DO.Window):
         units_wait = self.ev_w[0].elapsed_time(self.ev_w[1]) if waited else None
         self.phase("coin_wait")
         ju = s + 1 - d
-        t_coin = t_disp = time.perf_counter()
+        t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
             self.stashed.discard(ju)
             opening = self.pipe.opening(ju + 1)
             t_coin = time.perf_counter()
-            self.coin_waits.append(1e3 * (t_coin - t_sent))
+            self.coin_waits.append(1e3 * (t_coin - t_wait))
             name = self.cap_of.get(ju)
             if name == "fault_rearly":
                 held = self.pipe.opening(ju)
@@ -231,7 +231,8 @@ class SoWindow(DO.Window):
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
-              "record_host_ms": 1e3 * (t_sent - t_root), "coin_wait_ms": 1e3 * (t_coin - t_sent),
+              "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
+              "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd)}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
