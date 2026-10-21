@@ -311,7 +311,7 @@ def _segs(r0: list[int], step: list[int], cols: int) -> tuple:
 
 def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) -> list[T.Call]:
     """Consecutive copies of one specialization, side by side, whose input references step by one fixed vector per copy,
-    as one call each."""
+    each staying among the caller's own columns or past them, as one call each."""
     calls = []
     i = 0
     while i < len(blocks):
@@ -321,7 +321,7 @@ def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) ->
         step = None
         while j < len(blocks):
             b, k2, rj = blocks[j]
-            if k2 != key or b != base + (j - i) * sp.cols:
+            if k2 != key or b != base + (j - i) * sp.cols or any((x < cols) != (y < cols) for x, y in zip(rj, r0)):
                 break
             d = [x - y for x, y in zip(rj, r0)]
             if step is None:
