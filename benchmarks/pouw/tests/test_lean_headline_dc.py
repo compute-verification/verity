@@ -96,13 +96,14 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
 
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
-    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds by CP_ATS8
-    and the generic CP_RED8 (ATOME32 at the issue row alone, RT4-SHEET-12) and heads under 0.1% of the words on dp4a,
-    the rest on the IGMMA, so the measured file states its own word production; the reading is over 1%
-    (RT-HB-HEAD-1)."""
+    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads every
+    word on the IGMMA, as the sheet's does, and folds by the generic CP_RED2 and CP_RED8 alone: ATOME32 and REDUX carry
+    the joint-issue lines their runs measured (r20261021-070616-d06c, r20261021-074303-da7f), so the uniform and
+    shared-memory checkpoints no longer undercut them. The reading is over 1% (RT-HB-HEAD-1)."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound
     assert H.reading(H.SM90, "DC-90-ri", full=True).bound > 0.1
-    dp4a = re.search(r"\(dp4a\) on (\d\.\d+)", r.data.words_mix)
-    assert dp4a and 0 < float(dp4a[1]) < 0.001 and "def flatWords" in H.render_measured(H.SM90, r, s)
+    assert r.data.words_mix == s.data.words_mix and "def flatWords" not in H.render_measured(H.SM90, r, s)
+    assert re.fullmatch(r"the fold routes' cheapest mix, by share of the words: cp-red2-generic 0\.\d+, "
+                        r"cp-red8-generic 0\.\d+", r.data.fold_mix), r.data.fold_mix

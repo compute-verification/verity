@@ -554,7 +554,8 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
 def test_census_prices_a_memory_lane_and_keeps_the_issue_only_classes(tmp_path):
     """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
     scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write keeps the issue lines of the
-    classes no run prices, and gives NOROW, which carries the scalar coefficient, the new hull's joint issue lines."""
+    classes no run prices (STS32, STG32), and gives the classes that carry the scalar coefficient without a lane in this
+    run (NOROW, and ATOMS32 from r20261021-070616-d06c) the new hull's joint issue lines."""
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"
@@ -566,9 +567,10 @@ def test_census_prices_a_memory_lane_and_keeps_the_issue_only_classes(tmp_path):
     with open(dev / "census.csv", newline="") as f:
         after = {(ln["kind"], ln["row"]): ln["cycles"] for ln in csv.DictReader(f) if ln["kind"] != "UNI"}
     ji = [r for k, r in after if k == "FFMA" and census.JI_ROW.fullmatch(r)]
-    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] for r in ji)
-    assert {("UNLISTED", "issue"), ("ATOMS32", "issue"), ("STS32", "issue"), ("NOROW", "issue")} <= set(after)
-    assert not any(k in ("ATOMS32", "STS32") and census.JI_ROW.fullmatch(r) for k, r in after)
+    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] == after["ATOMS32", r] for r in ji)
+    assert {("UNLISTED", "issue"), ("ATOMS32", "issue"), ("STS32", "issue"), ("STG32", "issue"),
+            ("NOROW", "issue")} <= set(after)
+    assert not any(k in ("STS32", "STG32") and census.JI_ROW.fullmatch(r) for k, r in after)
     assert census.analyze.lane_of("wgU_lds128_r32") == "lds128" and census.analyze.lane_of("wgmix_atome_r16") == "atome"
 
 
