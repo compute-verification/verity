@@ -2,7 +2,7 @@
 A `--zk` proof file (live PROTOCOL.md, `flock-circuit --zk`): `bincode 1.3` of `(Commitment, R1csProofLigerito, InnerProof)`.
 The pair is §8's with three differences: `matrix_evals` is empty, every level-0 row carries four more lanes (the extra lanes,
 a pair per rep), and the Ligerito proof ends with level 0's hiding messages (`zk_level0`, an `Option`). The inner proof
-follows the pair. Bytes after it are ignored, as after §8's pair.
+follows the pair. A byte after it is refused, as after §8's pair (`Reader.runAll`).
 -/
 import Flock.Proof
 
@@ -141,8 +141,6 @@ def reader (sh : Shape) : M ZkProof := do
                       ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ },
            level0, inner }
 
-def decode (sh : Shape) (bytes : ByteArray) : V ZkProof := do
-  let (p, _) ← (reader sh).run ⟨bytes, 0⟩
-  return p
+def decode (sh : Shape) (bytes : ByteArray) : V ZkProof := runAll (reader sh) bytes "zk proof"
 
 end Flock.Zk

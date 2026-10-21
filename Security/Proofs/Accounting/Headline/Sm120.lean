@@ -307,17 +307,28 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at `π*` (`isCert_piStar`), `p = 7/8`, `p₀ = ½`,
-`Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
-(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
-`Whole.moved_le_sqrt`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
+/-- sm_120's headline at the data sheet with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces
+take: `Whole.sheetDIdealFloor_whole` at `π*` (`isCert_piStar`), `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`,
+`S = 48,000` and `δ = 2^-40`, (I7) from the receipt split (`luck_of_receipt_half`), (I8) from its pieces
+(`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
 branch by `sm120_eps_le`, the unfolded one by `sm120_unfolded`. -/
-theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
-  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
-  set δbind := Real.sqrt δfork
+theorem sm120SheetHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty)
+    (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
+    (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ)
+    (hδ : (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41) (hSplit : ∀ x, (Pl.run x).Split)
+    (h1 : ∀ x, SheetClock Sm120.sheet (Pl.run x).run) (h2 : ∀ x, SheetDispatch (Pl.run x).run)
+    (h3 : ∀ x, SheetTensor Sm120.sheet (Pl.run x).run) (h4 : ∀ x, SheetPipe Sm120.sheet (Pl.run x).run)
+    (h5 : ∀ x, SheetSmem Sm120.sheet (Pl.run x).run) (h6 : ∀ x, SheetWords Sm120.model (Pl.run x))
+    (h7 : ∀ x, SheetSemantics Sm120.model (Pl.run x))
+    (hF : ∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
+      Sm120.piStar)
+    (hG : Pl.game = G.game) (hPinG : G.Pinned) (hOp : OperandHMu (3 / 4) G) (hRL : ReceiptLuckAt (1 / 2) G)
+    (hWL : WholeLuckAt (1 / 2) G Uf) (hOf : pf.Of Pl) (hB : pf.BindingAt δbind) (hZK : ProofSoundAt pf δzk)
+    (hPin : ProofsPin pf) (hRF : RightFixed Pl pf Sm120.model.Nw) :
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
+      (1 / 2) ^ 40 := by
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
-  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf
-    (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
+  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf hB hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
@@ -339,5 +350,12 @@ theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
   exact ⟨ha, lt_of_lt_of_le hlt (Whole.headline_of_branches Sm120.model Sm120.flat Sm120.piStar
     isCert_piStar sm120_wf Sm120.checks sm120_S _ hδlo _ (le_trans (by norm_num) (sm120_eps_le _ hδlo))
     sm120_unfolded)⟩
+
+/-- sm_120's headline at the data sheet: `sm120SheetHeadline_bind` at binding `√δ_fork`, from the fork form by
+`Whole.moved_le_sqrt` (`BindingOfFork`). -/
+theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
+  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  exact sm120SheetHeadline_bind Pl G Uf pf (Real.sqrt δfork) δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL
+    hWL hOf (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
 
 end Accounting.SecurityProofs.TS

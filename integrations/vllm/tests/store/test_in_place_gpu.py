@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not (torch.cuda.is_available() and SESSION_SO an
                                 reason="a GPU, VERITY_SESSION_SO (session.cu) and VERITY_KV_SO (kv.cu at p1024, masked)")
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec  # noqa: E402
-from verity_vllm.store import int8_kv, remote  # noqa: E402
+from verity_vllm.store import int8_kv, memory_map as store_map, remote  # noqa: E402
 from verity_vllm.store.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.store.in_place import InPlaceBackend  # noqa: E402
 from verity_vllm.store.interface import IDENTITY, Append, PageLayout  # noqa: E402
@@ -218,7 +218,7 @@ def test_an_honest_in_place_session_is_accepted_reading_rewritten_blocks_from_th
     st = p["device"]
     assert st["in_place"] and st["passes"] > 10 and st["pass_ms"]["max"] is not None
     assert st["pass_patched"] > 0 and st["open_patched"] > 0 and st["encoded_appends"] > 4
-    agree = remote.agreement(b)
+    agree = store_map.agreement(b)
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
 
 

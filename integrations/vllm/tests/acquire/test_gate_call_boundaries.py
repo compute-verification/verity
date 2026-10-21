@@ -116,3 +116,45 @@ def test_a_sparse_mla_call_boundary_without_an_attached_attention_source_stops_t
         rec = G.call_boundaries(man, str(tmp_path))
         assert rec["pass"] is False and rec["unattached"] == rec["identities"] == len(man["identities"])
         assert rec["named"]["unattached"][0].endswith("claimed by attention, a source the Commit does not attach")
+
+
+#: DeepSeek-V4-Pro's Marlin block as its TP manifest of record spells it: (fx node, Definition, port) of each call boundary of a layer
+MARLIN_BLOCK = (("marlin_moe_mxfp4_gemm", "MarlinMoeExpertGemm_v1", "out"), ("silu_and_mul_with_clamp_1", "SiluMulClamp_v1", "out"),
+                ("marlin_moe_mxfp4_gemm_1", "MarlinMoeExpertGemmW_v1", "out"), ("moe_sum", "MoeSum_v1", "out"),
+                ("triton_launch", "MoeRouterSqrtSoftplus_v1", "0"), ("triton_launch", "MoeRouterSqrtSoftplus_v1", "1"))
+
+
+def _marlin_moe_manifest(ranks=8, planes=False):
+    """A hash layer (its router `MoeRouterHash_v1`) and a scored one (`dsv4_topk`, two ports) of the Marlin block per (rank, engine
+    step), and no `moe_block_stream` plane unless `planes`."""
+    layers = {0: (("topk_softplus_sqrt", "MoeRouterHash_v1", "out"), *MARLIN_BLOCK[:4]), 3: MARLIN_BLOCK}
+    ids = [{"family": CB.FAMILY, "request_id": "r0", "step": s, "engine_step": s, "invocation": 0, "rank": k, "dtype": "bf16",
+            "op_path": f"model.layers.{lay}.ffn.experts/{node}", "output_member": port, "port": port, "spec": spec, "element_range": [0, 8]}
+           for k in range(ranks) for s in range(2) for lay, calls in layers.items() for node, spec, port in calls]
+    return {"ranks": ranks, "identities": ids + ([{"family": "moe_block_stream"}] if planes else [])}
+
+
+def test_the_moe_source_claims_every_marlin_block_call_boundary_of_dsv4_tp8(tmp_path):
+    man = _marlin_moe_manifest()
+    assert "moe" in taps.attached(man)
+    rec = G.call_boundaries(man, str(tmp_path))
+    n = len(man["identities"])
+    assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, 0)
+    assert rec["sources"] == ["moe"]
+
+
+def test_a_marlin_block_call_boundary_the_moe_source_binds_no_label_of_is_not_its(tmp_path):
+    man = _marlin_moe_manifest()
+    man["identities"][0] = {**man["identities"][0], "port": "1", "output_member": "1"}
+    assert CB.claimed(man["identities"][0]) is None
+    rec = G.call_boundaries(man, str(tmp_path))
+    assert rec["pass"] is False and rec["claimed"] == rec["identities"] - 1 and rec["uncovered"] == 1
+
+
+def test_a_marlin_block_call_boundary_without_the_moe_source_at_calls_stops_the_row(tmp_path):
+    for man in (_marlin_moe_manifest(planes=True), _marlin_moe_manifest(ranks=1)):
+        assert "moe" not in taps.attached(man)
+        rec = G.call_boundaries(man, str(tmp_path))
+        n = sum(1 for r in man["identities"] if r["family"] == CB.FAMILY)
+        assert rec["pass"] is False and rec["unattached"] == rec["identities"] == n
+        assert rec["named"]["unattached"][0].endswith("claimed by moe, a source the Commit does not attach")

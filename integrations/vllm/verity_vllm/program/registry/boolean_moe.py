@@ -3,6 +3,7 @@ bits (I32 = F32 = Array<32, Value<1>>, BF16 = Array<16, Value<1>>).
 
     MoeSumCoordinate_v2{TOPK}             (col: Array<TOPK, BF16>) -> BF16                    word view: MoeSumCoordinate_v1{TOPK}
     MoeSum_v2{TOPK,H}                     (y: Array<TOPK, Array<H, BF16>>) -> Array<H, BF16>   word view: MoeSum_v1{TOPK,H}
+    MoeSum_v3{TOPK,H}                     (y: Array<TOPK, Array<H, BF16>>) -> Array<H, BF16>   word view: MoeSum_v1{TOPK,H}
     NvExpf_v2                             (x: F32) -> F32                                      word view: NvExpf_v1
     MoeRouterProbs_v2{E,VPT}              (logits: Array<E, BF16>) -> Array<E, F32>            word view: MoeRouterProbs_v1{E,VPT}
     MoeRouterTopKOrdered_v2{E,TOPK,VPT}   (logits: Array<E, BF16>) -> (Array<TOPK, F32>, Array<TOPK, I32>)
@@ -16,7 +17,9 @@ bits (I32 = F32 = Array<32, Value<1>>, BF16 = Array<16, Value<1>>).
 ...)`` through `verity.ml.circuits.silicon.fp`, the first add written as what it does (``+0 + x`` is x but for -0, which becomes +0). Its
 adds make the canonical NaN where `F32Add_v1` keeps an operand's payload; both are NaN on the same inputs, and the cast ends every
 NaN in F2FP's 0x7FFF, so the word is `MoeSumCoordinate_v1`'s. `MoeSum_v2` is `MoeSum_v1`'s body on bits: one coordinate per column of the
-TOPK expert outputs.
+TOPK expert outputs. `MoeSum_v3` is the same function as a batch of `MoeSum_v2{TOPK,64}` over 64-column chunks (the last H mod 64
+columns one more Call), so each member's row is past one SHA-512 block; the newest version, it is what `program.boolean`'s lift
+binds for `MoeSum_v1`.
 
 The router reads each value in one traced circuit, so that no value is computed twice (`Q_word`'s no-recompute rule): the
 word body's rounds each re-read the probabilities, which on bits would decode each probability once per round. Its Calls are
@@ -52,6 +55,7 @@ from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.silicon import fp
@@ -63,8 +67,8 @@ from verity_vllm.program.registry import prims as P
 
 __all__ = ["MoeRouterBiasTopK", "MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterSigmoidBias",
            "MoeRouterSigmoidIn", "MoeRouterSigmoidMid", "MoeRouterSigmoidOut", "MoeRouterSigmoidScore", "MoeRouterTopKOrdered", "MoeSum",
-           "MoeSumCoordinate", "NvExpf", "NvExpfIn", "NvExpfOut", "jb_low_byte", "moe_sum", "nv_expf_in", "nv_expf_out",
-           "router_bias_topk", "router_sigmoid_in", "router_sigmoid_mid", "router_sigmoid_out"]
+           "MoeSumCoordinate", "MoeSumV3", "NvExpf", "NvExpfIn", "NvExpfOut", "SUM_CHUNK", "jb_low_byte", "moe_sum", "nv_expf_in",
+           "nv_expf_out", "router_bias_topk", "router_sigmoid_in", "router_sigmoid_mid", "router_sigmoid_out"]
 
 BF16 = Array(16, BL.BIT)
 F32 = I32 = Array(32, BL.BIT)
@@ -94,8 +98,33 @@ def _moe_sum(B, S, y):
     return B.batch(bind(MoeSumCoordinate, TOPK=S.TOPK), y, axes=(1,))
 
 
-MoeSum = EW.on_bits("MoeSum", 2, ("TOPK", "H"), lambda S: ((("y", Array(S.TOPK, Array(S.H, BF16))),), Array(S.H, BF16)),
-                    _moe_sum, M.MoeSum)
+def _moe_sum_sig(S):
+    return (("y", Array(S.TOPK, Array(S.H, BF16))),), Array(S.H, BF16)
+
+
+MoeSum = EW.on_bits("MoeSum", 2, ("TOPK", "H"), _moe_sum_sig, _moe_sum, M.MoeSum)
+
+#: the columns of one `MoeSum_v3` member
+SUM_CHUNK = 64
+
+
+def _moe_sum_chunks(B, S, y):
+    """`MoeSum_v1{TOPK,H}` on bits as a batch over its columns in chunks of `SUM_CHUNK`: member j is `MoeSum_v2{TOPK,64}` on
+    columns [64j, 64j + 64) of the TOPK rows, and the last H mod 64 columns one `MoeSum_v2{TOPK,H mod 64}`. Each member reads a
+    TOPK x 1024-bit row, past one SHA-512 block (C-Flock's M0 refuses a unit whose rows all fit in one, as the coordinate's
+    TOPK x 16 bits do), and both nodes read only the parameter and are returned whole, so the cut takes each member on its own
+    (`verity.ml.circuits.cut.separable`)."""
+    n, r = divmod(S.H, SUM_CHUNK)
+    outs = []
+    if n:
+        chunks = array_of([array_of([y[k][j * SUM_CHUNK:(j + 1) * SUM_CHUNK] for k in range(S.TOPK)]) for j in range(n)])
+        outs.append(B.batch(bind(MoeSum, TOPK=S.TOPK, H=SUM_CHUNK), chunks, axes=(0,)))
+    if r:
+        outs.append(B.call(bind(MoeSum, TOPK=S.TOPK, H=r), array_of([y[k][n * SUM_CHUNK:S.H] for k in range(S.TOPK)])))
+    return Coll(Array(S.H, BF16), concat([o.refs for o in outs]))
+
+
+MoeSumV3 = EW.on_bits("MoeSum", 3, ("TOPK", "H"), _moe_sum_sig, _moe_sum_chunks, M.MoeSum)
 
 
 # --- the router's exponential --------------------------------------------------------------------------------------------------

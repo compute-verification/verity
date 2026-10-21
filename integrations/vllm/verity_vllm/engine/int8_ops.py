@@ -10,6 +10,8 @@ product, and each request's int8 attention as two, its KV quantization and its r
 
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
+On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
+serve every other device and stay the reference.
     verity_int8::kv_quant(Tensor key_cache, Tensor value_cache, Tensor blocks, int s, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         one request's first s tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row `blocks`, with the
@@ -60,6 +62,18 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
 @scaled_mm.register_fake
 def _scaled_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
+
+
+@row_quant.register_kernel("cuda")
+def _row_quant_cuda(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    from verity_vllm.engine import int8_fused
+    return int8_fused.row_quant(x)
+
+
+@scaled_mm.register_kernel("cuda")
+def _scaled_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
+    from verity_vllm.engine import int8_fused
+    return int8_fused.product(xq, s_a, w, s_w)
 
 
 def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
