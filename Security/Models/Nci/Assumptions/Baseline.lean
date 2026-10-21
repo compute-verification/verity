@@ -23,12 +23,15 @@ gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input
 only when it is in `c`'s baseline. A dark value, or a novel input of `c`, that `d` listed in `θ` would be read for free,
 and an IU could then thread `c`'s counted multiplications on it without paying for the read.
 
-The NCI check does not enforce the rule: it takes `θ` from the instance and checks only that each entry is an input gate,
-with no duplicates. Commitments are hiding, so it cannot tell a registered value from one computed beforehand on
-unmonitored hardware (gradients, partial sums, updated weights). Until it checks each entry's provenance, this is a
-premise of every guarantee through a containment: a partial one, or a total one `M : Containment c.D d.D` as the partial
-containment with no dark gates, `PartialContainment.ofContainment M`, for which it says that no novel input of `c` that
-`c` reads is in `d`'s baseline. -/
+The NCI check (`NciCheck.Baseline`) enforces the provenance form: each `θ` entry cites a record of the service's
+registration log and the root that record registers the value under (`theta-record-unknown`, `theta-root`), of the
+`registered` kind only (`theta-provenance`), in a record registered before the run's own (`theta-not-earlier`), and the
+run's own record holds the entry's parameter to that root (`theta-unbound`). What stays a premise is what a check can't
+see, since commitments are hiding: that the registered data was public, and not computed off the books before its
+registration (gradients, partial sums, updated weights on unmonitored hardware). So this is a premise of every guarantee
+through a containment: a partial one, or a total one `M : Containment c.D d.D` as the partial containment with no dark
+gates, `PartialContainment.ofContainment M`, for which it says that no novel input of `c` that `c` reads is in `d`'s
+baseline. -/
 def BaselineRegistered (c d : Declaration) (M : PartialContainment c d) : Prop :=
   ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 
