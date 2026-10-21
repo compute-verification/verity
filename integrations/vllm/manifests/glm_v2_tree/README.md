@@ -193,6 +193,19 @@ the Commit's `_rowmeta` brings the row records. `COMMIT_RUN` is the Commit's job
 the `vllm.commit` Attempt stores no run record. `BF16_ART` is T1R's bf16 v6 capture r20261021-014319-7d3f
 (art:414f78ffe20a6cb27b61e33fc144f11ebf5680cb1007557802d0a532bbb59afc, `glm53_bf16_gemm_capture`).
 
+DeepSeek-V4-Pro B1's replay runs on vy-glm53-eu, which holds everything it reads: the verified checkpoint
+(`/workspace/cp/dsv4-ckpt`), the Build of record, the Match and the Commit's 8 bundles in place. vy-glm53-cpu-3 does not
+exist and vy-glm53-cpu-2 holds B8 greedy's Match CPU phase. Two jobs side by side, `RANKS=0,1,2,3` r20261021-114850-5bfd and
+`RANKS=4,5,6,7` r20261021-114900-5d55, at `--mem-gb 150` each (B1 GLM-5.3's replay peaks at 111 GiB a rank, and a DeepSeek-V4-Pro
+rank's share of the checkpoint is about 14% larger), so 450 (7676) + 300 is the 750 for CPU work on eu. Its Commit job was
+still preserving the 150 GiB `_rowmeta` (544,396 distinct blobs at about 38 a second, to about 14:50Z), so the replay did not
+wait for its `bundles.json`: the bundle lines the job had written, with `_rowmeta` art:22da9ae9481be9867f0d81f7a77a92bb75b16bb91b5d0b0cc22ff2181cd8969e,
+the manifest the put had written to eu's store. The row dir is that `_rowmeta`'s source (hard links): its 145 records match the
+manifest by sha256 and all 1,343,205 of attempt 2's files are there, so `.rowmeta-<hex>` was set in the row dir and both jobs
+printed "already in" and every bundle "in place", with no 150 GiB fetch. Two earlier launches (r20261021-114748-d947,
+r20261021-114800-b5cd) exited 2 at the input check, before anything ran: the file was sent under another name than `bundles.json`.
+The publish job (no `RANKS`) runs once both end and the Commit's job has its run record.
+
 DeepSeek-V4-Pro B1's attempt 2 failed twice over, both read from `commit.log` and `commit/finalize_pair0.json`:
 
 - The `moe_block_stream` watch item (`../dsv4_v2_tree/README.md` window B step 3) is the harmless pattern: the MoE block source
