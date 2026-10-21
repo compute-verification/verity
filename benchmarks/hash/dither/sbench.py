@@ -108,10 +108,11 @@ arm's step by part, its between-step phases by their NVTX ranges).  nsys's captu
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
-(DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F}}``,
-each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION and
-$POUW_CHALLENGER_SECRET_FILE), one session a window, opened at the window's build and closed at the arm's stop; without
-one they are in-process, and the arm's stats say ``coins: in-process (not certified)``.
+(DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
+"commitment": HEX}}``, each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
+$POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
+hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
+``coins: in-process (not certified)``.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -409,9 +410,9 @@ def pick_of(arm: str) -> str | None:
     only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
     return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F}}: each dither arm's window its own challenger session off
-# the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION and POUW_CHALLENGER_SECRET_FILE), since every arm's engine, and so
-# its window, lives through the whole run
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}: each dither arm's window its own
+# challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
+# POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -432,6 +433,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         os.environ["POUW_CHALLENGER"], os.environ["POUW_CHALLENGER_SESSION"] = at["address"], at["session"]
         if at.get("secret_file"):
             os.environ["POUW_CHALLENGER_SECRET_FILE"] = at["secret_file"]
+        if at.get("commitment"):
+            os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
