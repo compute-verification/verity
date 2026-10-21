@@ -568,7 +568,10 @@ GB_PER_JOB = 160
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's session
-    scope and the user slice on a VM; a pod's /proc/meminfo is the host's)."""
+    scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's inactive_file (its memory.stat) is in
+    its memory.current but the kernel reclaims it at the limit, so it counts as left: on vy-nebius-cpu-3 a user slice at 462 of
+    its 463 GiB, 278 GiB of it page cache, left a budget of ~0 and the targets ran one at a time, 0.06 a second
+    (r20261021-101535-85fb)."""
     def read(p: Path) -> str:
         try:
             return p.read_text().strip()
@@ -582,7 +585,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             d = top / line[3:].strip("/")
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 if (m := read(c / "memory.max")).isdigit():
-                    left.append(int(m) - int(read(c / "memory.current") or 0))
+                    stat = dict(f[:2] for ln in read(c / "memory.stat").splitlines() if len(f := ln.split()) >= 2)
+                    cache = int(v) if (v := stat.get("inactive_file", "")).isdigit() else 0
+                    left.append(int(m) - max(0, int(read(c / "memory.current") or 0) - cache))
     return max(0, min(left)) >> 30 if left else 0
 
 
