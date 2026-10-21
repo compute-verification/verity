@@ -78,7 +78,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-                        --challenger-period P [--challenger-minutes M]]
+                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -1437,6 +1437,10 @@ def main() -> int:
     ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
     ap.add_argument("--challenger-period", metavar="P",
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-main", type=Path, metavar="FILE",
+                    help="gate: the verifier's own copy of main's first-parent history, a commit a line (`git rev-list "
+                         "--first-parent origin/main` in the auditor's checkout): a session counts only when its host "
+                         "ran one of these commits")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
     ap.add_argument("--appends", type=int, default=coins.APPENDS,
@@ -1480,7 +1484,7 @@ def main() -> int:
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
-                                    period=a.challenger_period, minutes=a.challenger_minutes)
+                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     save_registry(a.registry, registry)

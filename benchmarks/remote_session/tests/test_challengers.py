@@ -2,8 +2,9 @@
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
-held to the ledger; a challenger key other than the pinned one, a reserve outside the audit's period, a second session
-for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves."""
+held to the ledger, and refused when the verifier has no copy of main's first-parent history or the host's pinned tree
+isn't in it; a challenger key other than the pinned one, a reserve outside the audit's period, a second session for the
+same window and a challenger whose commitment isn't the open's are each refused before a coin leaves."""
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +28,7 @@ import auditor as A  # noqa: E402
 import challengers  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import CoinError  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, CoinError  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -53,6 +54,8 @@ class Host:
             {"W": P.W, "H": P.H, "public": public.hex(), "public_sha512": self.pin}))
         self.tokens = (f"{i:04x}" for i in itertools.count())
         self.runs: dict[str, threading.Thread] = {}
+        self.main = root / "main.txt"
+        self.main.write_text(f"{'0f' * 20}\n{PIN}\n")
 
     def call(self, words: list[str]) -> tuple[int, bytes]:
         host, signer = self.host, self.signer
@@ -90,9 +93,10 @@ class Host:
         for t in self.runs.values():
             t.join()
 
-    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", call=None) -> challengers.Gate:
-        return challengers.Gate(out, call or self.call, "vy-nebius-1", pin or self.pin, period, address=self.address,
-                                pause=self.pause, polls=3)
+    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", call=None,
+             main: Path | None = None) -> challengers.Gate:
+        return challengers.Gate(out, call or self.call, "vy-nebius-1", pin or self.pin, period, main or self.main,
+                                address=self.address, pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1") -> None:
         rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", CIRCUIT])
@@ -136,9 +140,25 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
     assert not (tmp_path / "out" / sid / "secret").exists()
     key = gate.key()
     heads = [tmp_path / "out" / f"{sid}.ledger.jsonl"]
-    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, challengers.lms_verify, "p-2") == (
+    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, [PIN], challengers.lms_verify, "p-2") == (
         "the challenger's session for this session's window is not trusted: the auditor's ledger holds the session's "
         "window in period p-1, not the audit's period p-2")
+
+
+def test_a_session_is_refused_without_the_verifiers_copy_of_main_or_when_its_host_ran_a_commit_outside_it(
+        store, host, tmp_path):
+    host.period()
+    gate = host.gate(tmp_path / "out", main=tmp_path / "none.txt")
+    s, verdicts = session(store, gate)
+    assert all(v.accepted for v in verdicts)
+    doc = gate.finish(s)
+    assert doc["reason"] == f"{NO_MAIN} (none at {tmp_path / 'none.txt'})"
+    out, heads = tmp_path / "out" / doc["session"] / "out", [tmp_path / "out" / f"{doc['session']}.ledger.jsonl"]
+    assert s.trusted_reason(out, heads, gate.key(), ["0f" * 20], challengers.lms_verify, "p-1") == (
+        f"the challenger's session for this session's window is not trusted: the auditor's ledger's reserve entry 1 "
+        f"was written by the host's tree at {PIN}, which is not a commit of main's first-parent history: repin the "
+        "host to a main commit")
+    assert s.trusted_reason(out, heads, gate.key(), [PIN], challengers.lms_verify, "p-1") is None
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
