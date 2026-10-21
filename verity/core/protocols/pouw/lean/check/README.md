@@ -24,9 +24,10 @@ Python reference held to it.
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
 | `PouwCheck.Rounds` | `rounds`: a live window's round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`, over the proof service's challenger, `SampledProofs.Challenger`) |
-| `PouwCheck.Credit` | `credit.py`'s `credited`, `outcome` and `a_link`: a served window's credit bits fixed before its draw coin, no partial credit over its drawn units, and its A trees tied to its round roots (RT4-INT-32, RT4-INT-34) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`, `credit`, `outcome`, `a-link`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
+| `PouwCheck.Credit` | `credit.py`'s `credited`, `outcome` and `a_link`: a served window's credit bits fixed before its draw coin, no partial credit over its drawn units, and its A trees tied to its round roots (RT4-INT-32, RT4-INT-34) |
+| `PouwCheck.CreditDifftest` | the difftest's `credit`, `outcome` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under

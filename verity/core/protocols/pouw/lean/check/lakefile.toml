@@ -22,7 +22,7 @@ path = "../window"
 
 [[lean_lib]]
 name = "PouwCheck"
-roots = ["PouwCheck", "PouwCheck.Difftest"]
+roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest"]
 
 [[lean_exe]]
 name = "pouw-check"

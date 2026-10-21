@@ -16,14 +16,14 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
-Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
-round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
-ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
-
 Its `credit`, `outcome` and `a-link` against `credit.credited`, `credit.outcome` and `credit.a_link`: one `Port` each,
 over the cases `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the
 manifest's credit bits, a draw's units each proved, a window's A trees under its round roots, then one mutation each aimed
 at every refusal), compared output for output: the credited calls or null, or the same refusal.
+
+Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
+round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
+ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 """
 from __future__ import annotations
 
@@ -224,47 +224,6 @@ def test_pass_and_draw(pass_server):
         D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
 
 
-ROUNDED: Counter[str] = Counter()
-
-
-def rounds(case: dict) -> dict | None:
-    refused = CC.rounds(*rounds_cases.rounds_args(case))
-    ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
-    return None if refused is None else {"refused": list(refused)}
-
-
-ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
-                inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
-                                 st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
-                                                 + rounds_cases.ROUNDS_NAMES)))
-
-
-def test_rounds(pass_server):
-    """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
-    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
-    ROUNDED.clear()
-    stats = D.run(ROUNDS, examples=600, server=pass_server)
-    swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
-                    for name in ["honest", *rounds_cases.ROUNDS_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
-          f"{dict(sorted(ROUNDED.items()))}")
-    assert "accept" in ROUNDED
-    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
-                 ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
-                 "the round roots are not", "the round coins are not a list", ": a live coin opening is",
-                 "the coin commitment's ", "not trusted: no challenger close record",
-                 "not trusted: the challenger record's signature does not verify",
-                 "not trusted: the challenger's release log is not the one its close record signs",
-                 ": a second open for root ", ", not the window's pinned key",
-                 "not trusted: the auditor's ledger has no end for session",
-                 "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
-                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
-                 "not trusted: the challenger's record is signed at leaf ",
-                 "not trusted: the challenger's refused hellos are not the ",
-                 "the challenger's log shows it received"):
-        assert any(part in k for k in ROUNDED), part
-
-
 CREDITED: Counter[str] = Counter()
 
 
@@ -325,3 +284,44 @@ def test_credit(pass_server):
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
                  "a-link a-link: the window registers no A value", "which is no registered A value"):
         assert any(part in k for k in CREDITED), part
+
+
+ROUNDED: Counter[str] = Counter()
+
+
+def rounds(case: dict) -> dict | None:
+    refused = CC.rounds(*rounds_cases.rounds_args(case))
+    ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+                inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
+                                 st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
+                                                 + rounds_cases.ROUNDS_NAMES)))
+
+
+def test_rounds(pass_server):
+    """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
+    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    ROUNDED.clear()
+    stats = D.run(ROUNDS, examples=600, server=pass_server)
+    swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *rounds_cases.ROUNDS_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(ROUNDED.items()))}")
+    assert "accept" in ROUNDED
+    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
+                 ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
+                 "the round roots are not", "the round coins are not a list", ": a live coin opening is",
+                 "the coin commitment's ", "not trusted: no challenger close record",
+                 "not trusted: the challenger record's signature does not verify",
+                 "not trusted: the challenger's release log is not the one its close record signs",
+                 ": a second open for root ", ", not the window's pinned key",
+                 "not trusted: the auditor's ledger has no end for session",
+                 "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
+                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
+                 "not trusted: the challenger's record is signed at leaf ",
+                 "not trusted: the challenger's refused hellos are not the ",
+                 "the challenger's log shows it received"):
+        assert any(part in k for k in ROUNDED), part
