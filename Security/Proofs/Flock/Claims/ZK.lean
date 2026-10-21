@@ -542,8 +542,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (**`Claims.ZKServer.zerocheckCut_proof`**, **`Claims.ZKServer.lincheckCut_proof`**).
 * `FinishTau`: those two met at the firewall's own run. Where the firewall's rep under `asksCut` passes, its coins are
   the tape's (`RankAt.cut_coins`, through the ring switch and the opening by `RankAt.ringSwitchCut_grows` and
-  `RankAt.ligeritoPZk_grows`), and at the model's coins and switched vectors its first five constraints are `rowsOf`'s
-  (**`Composed.tauFw`**).
+  `RankAt.ligeritoPZk_grows`), and at the model's coins, switched vectors and a level 0 read at the view
+  (`Masked.LaneAt`) its seven constraints are `rowsOf`'s first seven (**`Composed.tauFw`**).
 * `FinishLane`: level 0's two lane rows on a view's masked values, constants included. Where level 0's proof reads the
   view's masked values, its target is the opening's `T` and its restart is `T'`, `ligeritoConstraints`' two rows are
   `rowsOf`'s rows 5 and 6 as whole forms (**`Masked.lanesR`**, by `Masked.laneRowR`).

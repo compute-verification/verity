@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.FinishRows
+import Proofs.Flock.Claims.ZK.FinishLane
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
@@ -8,22 +9,23 @@ import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 
 /-!
-# The firewall's first five rows at a worker's values
+# The firewall's seven rows at a worker's values
 
 `FinishStopAt.rowsAt_of_cons` asks that the firewall's constraints be the first seven rows on the view's masked values,
-constants included. Here are the first five, at the firewall's own run (`repFwC` answered by `asksCut` from a log `l`
+constants included. Here they are at the firewall's own run (`repFwC` answered by `asksCut` from a log `l`
 and no rounds): its zerocheck and lincheck send the masked values `vals + h` and leave rounds answered by the coins at
 their sends, which the rounds after them keep (`growS`), so the replay reads its masked proof as the view's
-(`FinishZc`, `FinishRows`' `zcOf_eq`, …) under the coins `coin (l.size + j)`, and `FinishRows.replay_rows` applies.
+(`FinishZc`, `FinishRows`' `zcOf_eq`, …) under the coins `coin (l.size + j)`, and `FinishRows.replay_rows` applies; its
+level 0's two lane rows are `FinishLane.lanesAt`'s where its Ligerito proof is read at the view (`LaneAt`).
 
 * **The rounds after the lincheck** (`ringSwitchCut_grows`, `ligeritoPZk_grows`): the ring switch and Ligerito only add
   rounds, each answered by its send's coin, as the zerocheck and lincheck do (`FinishRank`).
 * **`cut_coins`**: from no rounds, the zerocheck and lincheck leave `m + k_log − 6` rounds, round `j` answered by
   `coin (l.size + j)`, round `1` with `m − 13` coins.
 * **`lincheckCut_fold`**: a lincheck that returns had its circuit's fold defined at its `α`.
-* **`tauFw`**: where `repFwC` returns, its constraints pass on the pads and their first five are `rowsOf`'s, at
-  coins that are the model's (`hz`, …, `hr'`), masked values that are the view's below `h_ab` (`hmk`), folds that
-  realize the statement (`hfold`) and switched vectors that are the view's `ŝ` (`hsw`).
+* **`tauFw`**: where `repFwC` returns, its constraints pass on the pads and are `rowsOf`'s first seven, at coins that
+  are the model's (`hz`, …, `hr'`), masked values that are the view's below `h_ab` (`hmk`), folds that realize the
+  statement (`hfold`), switched vectors that are the view's `ŝ` (`hsw`) and a level 0 read at the view (`hlane`).
 -/
 
 namespace FlockComplete.RankAt
@@ -168,11 +170,12 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The firewall's first five rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no
-rounds, returns, its constraints pass on the pads, and the replay's three and the two ring-switch rows are `rowsOf`'s
-first five, constants included, wherever the coins from `l.size` on are the model's (`hz`, …, `hr'`), the masked values
-`vals + h` are the view's below `h_ab` (`hmk`), the fold folds as the model's (`hfold`) and the ring switch's
-vectors at the `ab` and `c` claims are the view's `ŝ` (`hsw`). -/
+/-- **The firewall's seven rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no rounds,
+returns, its constraints pass on the pads, and the replay's three, the two ring-switch rows and level 0's two lane rows
+are `rowsOf`'s first seven, constants included, wherever the coins from `l.size` on are the model's (`hz`, …, `hr'`),
+the masked values `vals + h` are the view's below `h_ab` (`hmk`), the fold folds as the model's (`hfold`), the ring
+switch's vectors at the `ab` and `c` claims are the view's `ŝ` (`hsw`) and the Ligerito run's proof, record and
+messages are read at the view (`hlane`, `LaneAt`). -/
 theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
@@ -202,13 +205,28 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
           (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = shArr sh (2 * r.val) ∧ ss[1]! = shArr sh (2 * r.val + 1))
+    (hlen : (layOf Tz stm).len = nE + 4)
+    (hlane : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄,
+      ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest (FlockComplete.flat cm0.cap) ic.root
+          (Zk.PadLayout.new st.m st.kLog sch.k0) fun i => vals[i]! + pads.h[i]!).run t₀).go l =
+        (.ok ((zp, zc), t₁), l₁) →
+      ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
+          (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
+      ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
+          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
+      ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
+          Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
+          (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt (fun _ _ => 0)).run t₃).go l₃ =
+        (.ok ((lg, zl, rec), t₄), l₄) →
+      _root_.Claims.ZKMal.Masked.LaneAt Tz stm c r v sh T' lg rec zl)
     {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Claims.Msg}
     (h : ((Flock.Firewall.Finish.repFwC (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash) st sch
       tPad rep dom g cm0 extras pads ic vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ (rp : Zk.Replayed) (ss : Array (Array Flock.F128)) (lgc : Array (String × Zk.Lin)),
       Flock.Firewall.Finish.failingOn (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) pads.h = #[] ∧
-      ∀ k (hk : k < 5), (ofZk (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
+      ∀ k (hk : k < 7), (ofZk (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!.2 :
           ZkSession.Lin 𝔽 (nE + 4)) = rowsOf Tz stm c r v sh T' ρσ (Fin.castAdd 3 ⟨k, by omega⟩) := by
   dsimp only [Flock.Firewall.Finish.repFwC] at h
@@ -231,7 +249,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
   subst t₆ l₆
   try dsimp only at hr₆
   obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := Flock.Firewall.Finish.run_bind_ok hr₆
-  obtain ⟨-, ht₇, hl₇⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨hlgc, ht₇, hl₇⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hc
   split at hc
@@ -313,7 +331,18 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
         ligerito := lg } ic.root (Flock.Transcript.init t₄.rounds dom) = .ok (rp, tt) := by
     rw [hlay]
     exact hrp
-  exact replay_rows Tz stm c r v sh T' ρσ st _ ic.root hm hSm hSk hrp' hzc hrd hzp' ez er eρ eρ' eα eβ eτ er' hfold
-    ss hs0 hs1 lgc k hk
+  by_cases hk5 : k < 5
+  · exact replay_rows Tz stm c r v sh T' ρσ st _ ic.root hm hSm hSk hrp' hzc hrd hzp' ez er eρ eρ' eα eβ eτ er'
+      hfold ss hs0 hs1 lgc k hk5
+  obtain ⟨k', rfl⟩ : ∃ k' : Fin 2, k = 5 + k'.val := ⟨⟨k - 5, by omega⟩, by simp only; omega⟩
+  have hL := hlane zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄ h₁ h₂ h₃ h₄
+  have hlgc' : Zk.ligeritoConstraints (layOf Tz stm) rec lg zl = .ok lgc := by
+    rw [hlay]
+    exact hlgc
+  obtain ⟨hsz2, hrow⟩ := _root_.Claims.ZKMal.Masked.lanesAt Tz stm c r v sh T' hlen lg rec zl hL hlgc'
+  have h3 := ZkExec.replay_cons_size _ _ _ _ hrp'
+  rw [ZkExec.append_get!_right _ _ (j := k'.val) (by rw [Array.size_append, h3]; rfl) (by rw [hsz2]; exact k'.isLt),
+    hrow k']
+  fin_cases k' <;> rfl
 
 end FlockSoundness.Discharge.Composed

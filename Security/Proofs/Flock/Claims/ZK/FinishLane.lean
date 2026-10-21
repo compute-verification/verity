@@ -221,6 +221,37 @@ theorem lanesR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 
   · exact ofZk_of_linRel h0
   · exact ofZk_of_linRel h1
 
+/-- **Level 0's proof read at the view** (`lanesR`'s premises): its record's target is the opening's `T`, its coins are
+the model's, its out-of-domain value, lane messages and pair's sums are the view's masked values, and its restart is
+`T'`. -/
+structure LaneAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂) (lg : _root_.Flock.LigeritoProof)
+    (rec : _root_.Flock.Zk.L0Rec) (zl : _root_.Flock.Zk.Level0Msgs) : Prop where
+  target : fOf rec.target = Composed.openT Tz st c r sh
+  ood : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i)
+  lane : ∀ j (hj : j < Tz.sch.k0), rec.challenges[j]! = c.rest.lane r ⟨j, hj⟩
+  rho : rec.rho = c.rho r
+  oodVal : fOf lg.oodValues[0]! = Composed.msgAt v ((Composed.layOf Tz st).lgOod 0)
+  msg : ∀ j < Tz.sch.k0,
+    gOf lg.messages[j]!.1 = execArith.ofLimbs (Composed.msgAt v ((Composed.layOf Tz st).lgMsg j 0))
+      (Composed.msgAt v ((Composed.layOf Tz st).lgMsg j 1)) ∧
+    gOf lg.messages[j]!.2 = execArith.ofLimbs (Composed.msgAt v ((Composed.layOf Tz st).lgMsg j 2))
+      (Composed.msgAt v ((Composed.layOf Tz st).lgMsg j 3))
+  e0 : gOf zl.e0 = execArith.ofLimbs (Composed.msgAt v ((Composed.layOf Tz st).lgE 0 0))
+    (Composed.msgAt v ((Composed.layOf Tz st).lgE 0 1))
+  e1 : gOf zl.e1 = execArith.ofLimbs (Composed.msgAt v ((Composed.layOf Tz st).lgE 1 0))
+    (Composed.msgAt v ((Composed.layOf Tz st).lgE 1 1))
+  tPrime : gOf zl.tPrime = T'
+
+/-- `lanesR` at `LaneAt`. -/
+theorem lanesAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' : 𝕂)
+    (hlen : (Composed.layOf Tz st).len = nE + 4) (lg : _root_.Flock.LigeritoProof) (rec : _root_.Flock.Zk.L0Rec)
+    (zl : _root_.Flock.Zk.Level0Msgs) (hL : LaneAt Tz st c r v sh T' lg rec zl)
+    {lgc : Array (String × _root_.Flock.Zk.Lin)}
+    (hlgc : _root_.Flock.Zk.ligeritoConstraints (Composed.layOf Tz st) rec lg zl = .ok lgc) :
+    lgc.size = 2 ∧ ∀ k : Fin 2, (Composed.ofZk (lgc[k.val]!).2 : ZkSession.Lin FlockLevel3.GF128 (nE + 4)) =
+      ZkSession.limbRows execArith (Composed.laneRow Tz st c r v sh T') k :=
+  lanesR Tz st c r v sh T' hlen lg rec zl hL.target hL.ood hL.lane hL.rho hL.oodVal hL.msg hL.e0 hL.e1 hL.tPrime hlgc
+
 end Lane
 
 end Masked
