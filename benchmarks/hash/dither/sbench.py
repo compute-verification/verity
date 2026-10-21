@@ -84,7 +84,7 @@ Arms:
                  -ov last (-ov1: a ring of one step; -ovp: the engine on a stream above the trees' and the units'
                  priority), round s's trees build beside step s + 1's forward from ring copies
                  of what forward s wrote and step s's units go out as soon as coin s is back; its gate adds that round s
-                 covers forward s's values while built beside forward s + 1, and fault_ring
+                 covers forward s's values while built once forward s + 1 had started, and fault_ring
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
