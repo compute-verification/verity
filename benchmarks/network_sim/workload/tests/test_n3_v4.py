@@ -261,7 +261,8 @@ def test_n3range_is_its_reference(S):
     """`N3Range{S, 3}` against `range_levels` at every start of a depth-3 tree, runs past its end included, with honest
     and random siblings: every level's first node, the garbage past the tree too. It is the one test of the range's
     wiring (the alignment, the right sibling's place, the nodes' indices), which the window tests reach only at the
-    demo's starts. About 15 s, most of it tracing the node's SHA-512 compressions once."""
+    demo's starts. About 25 s for the first S, nearly all of it tracing the node's SHA-512 compression once; under a
+    second for each after."""
     D, rng = 3, random.Random(S)
     levels = tree(D, S)
     cases = []
@@ -284,7 +285,7 @@ def test_the_demo_window_is_its_reference(demo, demo_cases):
     """The whole v4 window at the demo's format: test_n3_unit's thirteen instances with R = 2, then the run witnesses
     above with R = 3. It is the one test of v4's wiring, which the reference tests can't catch: the descriptors' run,
     each read's runs and carry, the compaction of fresh leaves onto the slots, and each run's range, root and fit.
-    About 3 minutes, most of it tracing the openings' SHA-512 compressions."""
+    About 70 s after the range's test, most of it tracing and evaluating the two windows' SHA-512 compressions."""
     insts = [y for _, y in demo_cases.values()]
     assert V.evaluate(*insts) == [int(V.reference(x)) for x in insts] == [int(U.reference(x)) for x, _ in
                                                                            demo_cases.values()]
@@ -295,7 +296,8 @@ def test_the_demo_window_is_its_reference(demo, demo_cases):
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
     """The salted lab window (B = 96) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
-    It is the one test of v4 with the salt path, one segment and one run. About 2 minutes."""
+    It is the one test of v4 with the salt path, one segment and one run. About 7 s after the demo window's test, whose
+    traced parts it shares in the suite's one process."""
     salts = payloads(salted_lab)
     setup, windows = lab_windows(salted_lab, salts=salts)
     w = next(w for w in windows if w.port == INGRESS and w.window == 0)

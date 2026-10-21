@@ -32,9 +32,15 @@ v3's statics, inputs and checks, except how descriptors and outbox rows open:
 
 R is the size class's: the most runs the port's declared reads need (`runs_of`, a property of the layout as G is). On
 the windows the tests build, R is 1, and 2 for the demo's two units.
+
+    python -m workload.n3_v4 circuit-check --out FILE [--window]   circuit-check on v4's new parts [and the demo's window]
 """
 from __future__ import annotations
 
+import argparse
+import json
+import time
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -671,3 +677,59 @@ def size(target, memo: dict | None = None) -> dict:
         out[group] += ands
     out["ands"] = sum(out.values())
     return out
+
+
+# --- circuit-check ----------------------------------------------------------------------------------------------------
+
+def parts(inst: U.Instance) -> list[tuple[object, bool]]:
+    """v4's new parts at the statics of the instance's window, each with whether circuit-check lowers it whole: the
+    SHA-free ones whole, the openings by their parts (they call SHA-512's compression, as v3's window does)."""
+    f, n, G, R = inst.fmt, inst.N - inst.salted, inst.G, inst.R  # type: ignore[attr-defined]
+    T = n * G
+    Sr, zw = min(T, 1 << f.DB), _zw(T)
+    whole = [bind(N3RangeSel, S=n, D=f.DL), bind(N3RangeSel, S=Sr, D=f.DB), bind(N3Fits, D=f.DL, N=n),
+             bind(N3Skip, W=zw), bind(N3Carry), *(bind(N3CompactStep, W=1 + zw + 512, Z=b) for b in range((T - 1).bit_length())),
+             bind(N3Runs, R=R), bind(N3RunFits, DEPTHS=f.DEPTHS, T=T, S=Sr), bind(N3RunRoot, DEPTHS=f.DEPTHS)]
+    hashed = [bind(N3Range, S=n, D=f.DL), bind(N3Range, S=Sr, D=f.DB), bind(N3HidingLeaf, N_BITS=16 * f.B, D=f.DB)]
+    return [(d, True) for d in whole] + [(d, False) for d in hashed]
+
+
+def circuit_check(window: bool) -> dict:
+    """circuit-check's checks on v4's new parts at the demo window's statics and, with `window`, on its whole v4 window
+    (lowered by its parts and not as a Call, as `n3_unit`'s command checks v3's)."""
+    from circuit_check import checks as CK
+
+    d = U.demo()
+    inst = instance(d.setup, d.window)
+    opts = CK.Options()
+    entries = []
+    for target, whole in parts(inst) + ([(unit_of(inst), False)] if window else []):
+        t0 = time.time()
+        try:
+            r = CK.check_definition(target, opts, lower_whole=whole, as_call=False)
+        except Exception as e:  # noqa: BLE001  (a target the checks can't run on is a failure by name, as the CLI's)
+            r = {"definition": target.id, "failures": [{"name": f"error/raised {target.id}: {type(e).__name__}: {e}"}],
+                 "warnings": []}
+        entries.append({**r, "kind": "definition", "target": target.id, "seconds": round(time.time() - t0, 3)})
+        print(target.id, len(r.get("failures", [])), "failures", round(time.time() - t0, 1), "s", flush=True)
+    rep = CK.report(entries, opts)
+    rep["size"] = size(inst)
+    rep["format"] = inst.fmt._asdict()
+    return rep
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub_ = ap.add_subparsers(dest="cmd", required=True)
+    c = sub_.add_parser("circuit-check", help="circuit-check's checks on v4's new parts and, with --window, its window")
+    c.add_argument("--window", action="store_true", help="the demo's whole v4 window too")
+    c.add_argument("--out", type=Path, required=True)
+    args = ap.parse_args(argv)
+    rep = circuit_check(args.window)
+    args.out.write_text(json.dumps(rep, indent=1))
+    print(json.dumps(rep["summary"], indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
