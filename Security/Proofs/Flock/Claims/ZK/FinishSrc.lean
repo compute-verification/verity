@@ -237,22 +237,26 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
   try dsimp only at h
   obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
   try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, h⟩ := run_bind_ok h
+  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := run_bind_ok h
   rw [get_run_go] at h₅
-  cases h₅
-  try dsimp only at h
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, h⟩ := run_bind_ok h
-  obtain ⟨hrp, rfl, rfl⟩ := liftV_run_ok h₆
-  try dsimp only at h
-  obtain ⟨lgc, t₇, l₇, h₇, h⟩ := run_bind_ok h
-  obtain ⟨hlgc, rfl, rfl⟩ := liftV_run_ok h₇
-  try dsimp only at h
-  split at h
-  · obtain ⟨_, _, _, h', _⟩ := run_bind_ok h
+  simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
+  obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
+  subst tr' t₅ l₅
+  try dsimp only at hg
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr⟩ := run_bind_ok hg
+  obtain ⟨hrp, ht₆, hl₆⟩ := liftV_run_ok h₆
+  subst t₆ l₆
+  try dsimp only at hr
+  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := run_bind_ok hr
+  obtain ⟨hlgc, ht₇, hl₇⟩ := liftV_run_ok h₇
+  subst t₇ l₇
+  try dsimp only at hc
+  split at hc
+  · obtain ⟨_, _, _, h', _⟩ := run_bind_ok hc
     rw [throw_run_go] at h'
     cases h'
-  obtain ⟨inner, t₈, l₈, h₈, h⟩ := run_bind_ok h
-  cases h
+  obtain ⟨inner, t₈, l₈, h₈, hf⟩ := run_bind_ok hc
+  cases hf
   have hP : ((piopFw (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) g
       (fun i => vals[i]! + pads.h[i]!) (FlockComplete.flat cm0.cap) ic.root extras).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃) := by
