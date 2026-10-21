@@ -94,9 +94,8 @@ def v4(setup: U.Setup, inst: U.Instance, R: int | None = None, **kw) -> U.Instan
     return V.convert(inst, setup.layout.tree, setup.units, V.runs_of(setup.layout, "p0") if R is None else R, **kw)
 
 
-@pytest.fixture(scope="module")
-def demo_cases(demo):
-    """test_n3_unit's demo cases, honest and with one witness or public input changed, as v3 and v4 instances."""
+def v3_cases(demo) -> dict[str, U.Instance]:
+    """test_n3_unit's demo cases, honest and with one witness or public input changed, as v3 instances."""
     inst = demo.window.instance
     a = inst.args
 
@@ -115,7 +114,7 @@ def demo_cases(demo):
     overflow = dataclasses.replace(demo.window, reason=Reason.OVERFLOW.value, instance=None)
     rc = s.certifier.commit("demo", 0, [s.head("p0", 0, overflow), s.head("p1", 0, None)], s.grids["p0"],
                             s.grids["p1"], s.sync_set)
-    v3 = {
+    return {
         "honest": inst,
         "frame-bit": edit(frames=[fr[0], flip(fr[1], 9), fr[2], fr[3]]),
         "suffix-bit": edit(frames=[fr[0], fr[1], flip(fr[2], 14), fr[3]]),
@@ -130,7 +129,12 @@ def demo_cases(demo):
         "incomplete": edit(record=rc.root, head=rc.head(0), record_salt=rc.opening.salts[U.N2.HEADS],
                            record_path=rc.path(U.N2.HEADS)),
     }
-    return {k: (x, v4(demo.setup, x)) for k, x in v3.items()}
+
+
+@pytest.fixture(scope="module")
+def demo_cases(demo):
+    """`v3_cases` as v3 and v4 instances."""
+    return {k: (x, v4(demo.setup, x)) for k, x in v3_cases(demo).items()}
 
 
 def test_the_demos_reads_are_two_runs(demo):
