@@ -80,7 +80,7 @@ theorem mem_heldSet {K : Keyed M Tok Val d aOut c V} {I : Finset (Fin C.N)} {v :
 end
 
 theorem walk : FanOutPlan.Walk := by
-  intro C J L Tok Val _ M d aOut c V K I hI
+  intro C J L Tok Val _ M d aOut c V K I
   suffices H : ∀ n : ℕ, ∀ v ∈ K.vals, ∀ h ∈ C.exits (K.gates v), h ∈ I → h.val < n →
       ∃ u ∈ K.vals, K.tok u = K.tok v ∧ Follows K.key (K.stops ∪ K.readSet I) v u ∧
         (u ∈ K.readSet I ∨ (u ∈ K.stops ∩ K.heldSet I ∧ ∃ g ∈ C.exits (K.gates u) ∩ C.computed I, g ≤ h)) from
@@ -103,9 +103,9 @@ theorem walk : FanOutPlan.Walk := by
     obtain ⟨h', hh', x, hx, hh'x, π, hπ, hπv⟩ := hlink h hh
     have hxc : x ∈ C.computed I := by
       by_contra hxc
-      obtain ⟨g, hg, hgI⟩ := Entry C I π x h hI hπ hhI hxc
+      obtain ⟨g, hg, hgI⟩ := Entry C I π x h hπ hhI hxc
       exact hnr ⟨g, Finset.mem_inter.2 ⟨hπv g hg, hgI⟩⟩
-    have hh'I : h' ∈ I := pred_subset_of_mem_computed hI hxc hh'x
+    have hh'I : h' ∈ I := pred_subset_of_mem_computed hxc hh'x
     have hlt : h' < h := lt_of_lt_of_le (C.pred_lt x h' hh'x) (isPath_le hπ)
     obtain ⟨u, hu, hut, hfu, hend⟩ :=
       ih κ hκ h' hh' hh'I (Nat.lt_of_lt_of_le hlt (Nat.le_of_lt_succ hn))
@@ -131,8 +131,8 @@ theorem readSet_card_le : FanOutPlan.ReadSetCardLe := by
 
 theorem lookupCost : FanOutPlan.LookupCost := by
   intro C J L Tok Val _ _ M d aOut c V K s k E bcol hCI hk I hI Y hY htok
-  have hcols := hCI I hI.1 hI.2.1.le Y hY htok
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+  have hcols := hCI I hI.1.le Y hY htok
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hsum : (Y.biUnion K.col).card = ∑ v ∈ Y, (K.col v).card := by
     refine Finset.card_biUnion fun v hv v' hv' hne => ?_
     exact K.col_disjoint v (Finset.mem_inter.1 (hY hv)).1 v' (Finset.mem_inter.1 (hY hv')).1 hne
@@ -156,15 +156,15 @@ theorem lookupCost : FanOutPlan.LookupCost := by
     nlinarith
 
 theorem charge : FanOutPlan.Charge := by
-  intro C J L Tok Val _ _ M d aOut c V K I hI i hnoroot B hB htokB
+  intro C J L Tok Val _ _ M d aOut c V K I i hnoroot B hB htokB
   classical
   have hpick : ∀ p ∈ B, ∃ u, (K.Spent I u ∧ K.tok u = i) ∧ Follows K.key (K.roots ∪ K.lookups) (K.act p) u := by
     intro p hp
     have hpw := hB hp
     obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hpw
     obtain ⟨h, hh, x, hx, hhx, -⟩ := K.act_link p hpP
-    have hhI : h ∈ I := pred_subset_of_mem_computed hI (hpI hx) hhx
-    obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I hI (K.act p) (K.act_mem p hpP) h hh hhI
+    have hhI : h ∈ I := pred_subset_of_mem_computed (hpI hx) hhx
+    obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I (K.act p) (K.act_mem p hpP) h hh hhI
     have hfu' : Follows K.key (K.roots ∪ K.lookups) (K.act p) u := hfu.mono Finset.subset_union_left
     rcases hend with hur | ⟨hus, -⟩
     · exact ⟨u, ⟨⟨hur, K.act p, Or.inl ⟨p, hpw, rfl⟩, hfu⟩, hut.trans (htokB p hp)⟩, hfu'⟩

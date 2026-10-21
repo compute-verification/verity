@@ -14,7 +14,7 @@ are statements about the training circuit `C`, its products and a keyed token st
 namespace Nci.Cover.Assumptions
 
 /-- NEW PREMISE. **Lookup columns are incompressible** ([COLUMNS-INCOMPRESSIBLE]) at block size `s`, `bcol` bits per
-column parameter: a subcircuit `S` of at most `s` gates that holds lookups of one token (computes an exit of each without
+column parameter: a set `S` of at most `s` gates that holds lookups of one token (computes an exit of each without
 being handed any of its gates) is handed `bcol` bits, besides the registered parameters, for each parameter in their
 columns: `bcol · #(⋃ columns) ≤ #(inputs S \ θ)`.
 
@@ -36,11 +36,11 @@ Kimi K2 (`V = 163840`, `k = 2·10⁷`): `bcol = 1` gives `E = 122` lookups per t
 far less, 0.41 bit per entry for `FanOutIntensity` and 0.27 for `FanOutReadIntensity`. -/
 def ColumnsIncompressible {C : Circuit} {J L Tok Val : Type*} [DecidableEq L] [DecidableEq Val]
     {M : MulBlocks C J L} {d aOut c V : ℕ} (K : Keyed M Tok Val d aOut c V) (s : ℕ) (bcol : ℝ) : Prop :=
-  ∀ S, C.Subcircuit S → S.card ≤ s → ∀ X ⊆ K.lookups ∩ K.heldSet S, (∀ v ∈ X, ∀ v' ∈ X, K.tok v = K.tok v') →
+  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ X ⊆ K.lookups ∩ K.heldSet S, (∀ v ∈ X, ∀ v' ∈ X, K.tok v = K.tok v') →
     bcol * (X.biUnion K.col).card ≤ (C.inputs S \ C.θ).card
 
-/-- NEW PREMISE. **A token value read costs `f` bits** ([VALUE-READ-HARDNESS]), A1's (H′) at block size `s`: a subcircuit
-`S` of at most `s` gates that spends the values `X` (`Keyed.Spent`) and computes whole counted products over `w`
+/-- NEW PREMISE. **A token value read costs `f` bits** ([VALUE-READ-HARDNESS]), A1's (H′) at block size `s`: a set `S`
+of at most `s` gates that spends the values `X` (`Keyed.Spent`) and computes whole counted products over `w`
 distinct updated parameters is handed `f` bits for each value and `b` for each parameter, besides the registered
 parameters, the two added: `f · #X + b · w ≤ #(inputs S \ θ)`.
 
@@ -72,7 +72,7 @@ Kimi K2 (`f = 4`, `b = 2.5`): with `ColumnsIncompressible` at 1 bit per entry, a
 four times `FanOutCoverBound`'s 8,900. -/
 def ValueReadHardness {C : Circuit} {J L Tok Val : Type*} [DecidableEq J] [DecidableEq L] [DecidableEq Val]
     {M : MulBlocks C J L} {d aOut c V : ℕ} (K : Keyed M Tok Val d aOut c V) (s f : ℕ) (b : ℝ) : Prop :=
-  ∀ S, C.Subcircuit S → S.card ≤ s → ∀ X : Finset Val, (∀ u ∈ X, K.Spent S u) →
+  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ X : Finset Val, (∀ u ∈ X, K.Spent S u) →
     f * X.card + b * ((M.whole S).image Prod.snd).card ≤ (C.inputs S \ C.θ).card
 
 end Nci.Cover.Assumptions

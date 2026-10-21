@@ -34,13 +34,13 @@ theorem fanOut_split {C : Circuit} {J L Tok Val : Type} [DecidableEq J] [Decidab
     intro i
     by_cases hi : i ∈ Th
     · obtain ⟨r, hr, rfl⟩ := Finset.mem_image.1 hi
-      obtain ⟨X, Y, hXs, hYs, hd⟩ := rootCost C M d aOut c V K I hI.1 r hr
+      obtain ⟨X, Y, hXs, hYs, hd⟩ := rootCost C M d aOut c V K I r hr
       have hY := lookupCost C M d aOut c V K s k E bcol hCI hk I hI Y (fun u hu => (hYs u hu).1)
         fun u hu u' hu' => (hYs u hu).2.trans (hYs u' hu').2.symm
       exact ⟨X, hXs, fun _ => by omega, fun h => absurd hi h⟩
     · have hnr : ∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ i := fun r hr hri =>
         hi (hri ▸ Finset.mem_image_of_mem _ hr)
-      obtain ⟨X, hXs, hcard⟩ := charge C M d aOut c V K I hI.1 i hnr (W.filter fun p => K.tok (K.act p) = i)
+      obtain ⟨X, hXs, hcard⟩ := charge C M d aOut c V K I i hnr (W.filter fun p => K.tok (K.act p) = i)
         (Finset.filter_subset _ _) fun p hp => (Finset.mem_filter.1 hp).2
       exact ⟨X, hXs, fun h => absurd h hi, fun _ => hcard⟩
   choose Xt hXt using hX
@@ -88,17 +88,17 @@ theorem fanOut_split {C : Circuit} {J L Tok Val : Type} [DecidableEq J] [Decidab
 theorem FanOutIntensity : Guarantees.FanOutIntensity := by
   intro C J L Tok Val _ _ _ M d aOut c V K s k E b bcol hb hH hCI hk hE I hI
   obtain ⟨X, hXs, x, y, h, hxy, hy, hW⟩ := fanOut_split K hCI hk hI
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hXk : (x : ℝ) + y ≤ k := by
     have h1 := (Finset.card_le_card fun u hu => (hXs u hu).1).trans
-      ((readSet_card_le C M d aOut c V K I).trans hI.2.2)
+      ((readSet_card_le C M d aOut c V K I).trans hI.2)
     rw [← hxy] at h1
     exact_mod_cast h1
   have hL : b * ((M.whole I).image Prod.snd).card ≤ k :=
-    (hH I hI.1 hI.2.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
+    (hH I hI.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
       fun p hp => (Finset.mem_filter.1 hp).2).trans hcap
   have hrest : ((M.finished I \ M.whole I).card : ℝ) ≤ k := by
-    exact_mod_cast (finished_sdiff_whole_card_le M hI.1).trans hI.2.2
+    exact_mod_cast (finished_sdiff_whole_card_le M).trans hI.2
   have hfin : ((M.finished I).card : ℝ) ≤ (M.finished I \ M.whole I).card + (M.whole I).card := by
     exact_mod_cast Finset.card_le_card_sdiff_add_card
   have hW' : ((M.whole I).card : ℝ) ≤ aOut * x + c * h * ((M.whole I).image Prod.snd).card := by
@@ -129,11 +129,11 @@ theorem FanOutCoverBound : Guarantees.FanOutCoverBound := by
 theorem FanOutReadIntensity : Guarantees.FanOutReadIntensity := by
   intro C J L Tok Val _ _ _ M d aOut c V K s k E f b bcol hb hVR hCI hk hE I hI
   obtain ⟨X, hXs, x, y, h, hxy, hy, hW⟩ := fanOut_split K hCI hk hI
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
-  have hpay := (hVR I hI.1 hI.2.1.le X hXs).trans hcap
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
+  have hpay := (hVR I hI.1.le X hXs).trans hcap
   rw [← hxy, Nat.cast_add] at hpay
   have hrest : ((M.finished I \ M.whole I).card : ℝ) ≤ k := by
-    exact_mod_cast (finished_sdiff_whole_card_le M hI.1).trans hI.2.2
+    exact_mod_cast (finished_sdiff_whole_card_le M).trans hI.2
   have hfin : ((M.finished I).card : ℝ) ≤ (M.finished I \ M.whole I).card + (M.whole I).card := by
     exact_mod_cast Finset.card_le_card_sdiff_add_card
   have hW' : ((M.whole I).card : ℝ) ≤ aOut * x + c * h * ((M.whole I).image Prod.snd).card := by

@@ -12,24 +12,24 @@ lemmas, not guarantees, stated here so that each is proved against a fixed state
 
 namespace Nci.Cover.FanOutPlan
 
-/-- **Walk** (A1's Lemma 1): if a subcircuit `I` holds an exit `h` of a value `v`, following keys from `v` reaches,
+/-- **Walk** (A1's Lemma 1): if a set `I` of gates holds an exit `h` of a value `v`, following keys from `v` reaches,
 before any other value `I` reads, a value `I` reads, or a stop `I` holds at a computed exit no later than `h`.
 Induction on `h`, with `Entry` on each link. -/
 def Walk : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq Val] (M : MulBlocks C J L) (d aOut c V : ℕ)
-    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)), C.Subcircuit I →
+    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)),
     ∀ v ∈ K.vals, ∀ h ∈ C.exits (K.gates v), h ∈ I →
       ∃ u ∈ K.vals, K.tok u = K.tok v ∧ Follows K.key (K.stops ∪ K.readSet I) v u ∧
         (u ∈ K.readSet I ∨ (u ∈ K.stops ∩ K.heldSet I ∧ ∃ g ∈ C.exits (K.gates u) ∩ C.computed I, g ≤ h))
 
-/-- **A root costs `d`** (A1's Lemma 2): a subcircuit that holds a root spends values of its token, and holds lookups
+/-- **A root costs `d`** (A1's Lemma 2): a set of gates that holds a root spends values of its token, and holds lookups
 of it, `d` in all. Strong induction on a bound `n` for a computed exit `g < n` of the held root: each leg's link puts the
 leg's exit `h < g` in `I` (`Entry` on the link's path inside the root), `Walk` takes it to a spent value, a held lookup
 or a held root with a computed exit at most `h` (then the induction), and the legs' disjoint key paths make the ends
 distinct (`Follows` with the larger stop set `stops ∪ readSet I` is `Follows` with `roots ∪ lookups`). -/
 def RootCost : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq Val] (M : MulBlocks C J L) (d aOut c V : ℕ)
-    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)), C.Subcircuit I →
+    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)),
     ∀ r ∈ K.roots ∩ K.heldSet I, ∃ X Y : Finset Val,
       (∀ u ∈ X, K.Spent I u ∧ K.tok u = K.tok r) ∧
       (∀ u ∈ Y, u ∈ K.lookups ∩ K.heldSet I ∧ K.tok u = K.tok r) ∧
@@ -44,12 +44,12 @@ def LookupCost : Prop :=
     ∀ I, C.InferenceBlock s k I → ∀ Y ⊆ K.lookups ∩ K.heldSet I, (∀ v ∈ Y, ∀ v' ∈ Y, K.tok v = K.tok v') →
       Y.card ≤ E
 
-/-- **Charge** (A1's low-token case): if a subcircuit holds no root of token `i`, the counted products of token `i` it
+/-- **Charge** (A1's low-token case): if a set of gates holds no root of token `i`, the counted products of token `i` it
 computes whole number at most `aOut` per value of token `i` it spends. Each is charged to the value `Walk` reaches from
 its activation's exit; a held stop there would be a lookup (excluded by `reach_lookups`) or a root (none held). -/
 def Charge : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq Val] (M : MulBlocks C J L) (d aOut c V : ℕ)
-    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)), C.Subcircuit I → ∀ i : Tok,
+    (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)) (i : Tok),
     (∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ i) →
     ∀ B ⊆ M.whole I, (∀ p ∈ B, K.tok (K.act p) = i) →
       ∃ X : Finset Val, (∀ u ∈ X, K.Spent I u ∧ K.tok u = i) ∧ B.card ≤ aOut * X.card
