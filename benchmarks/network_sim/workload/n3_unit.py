@@ -96,7 +96,7 @@ import numpy as np
 from verity.core.protocols.certifier import certificate as CT
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import service as N2
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, LENGTH, encode_frame
+from verity.core.protocols.certifier.active import DATA, HEADER, LENGTH, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.circuits import boolean as BL
@@ -1811,16 +1811,16 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
 # --- the demo ---------------------------------------------------------------------------------------------------------
 
 DEMO_FRAMES = [
-    [const(encode_frame(LAST, 0, F.HELLO.pack(0, 1), 16))],
+    [const(encode_frame(2, 0, F.HELLO.pack(0, 1), 16))],
     [const(HEADER.pack(DATA, 1, 5)), ("r", ("u0",), 8 * 14, 8 * 5), zeros(2)],
     [const(HEADER.pack(DATA, 1, 6)), ("b", (("r", ("u1",), 0, 8), ("r", ("u0",), 8 * 20, 8)), 2), const(b"\n\n"),
      zeros(1)],
     [const(HEADER.pack(DATA, 2, 6)), ("r", ("u0",), 8 * 33, 8 * 2), zeros(1), ("r", ("u0",), 8 * 36, 8 * 3),
      zeros(1)],
 ]
-"""Four frames of every kind, B = 16, on port p0: a HELLO-like constant frame, a frame of u0's bytes 14 ... 18 across
-its rows 0 and 1, an event-like frame of base64 over two units' bytes, and a frame of two runs of u0's row 2 around a
-zero byte."""
+"""Four frames of every kind, B = 16, on port p0: a constant frame (of kind 2, which no sender uses), a frame of u0's
+bytes 14 ... 18 across its rows 0 and 1, an event-like frame of base64 over two units' bytes, and a frame of two runs of
+u0's row 2 around a zero byte."""
 
 
 @dataclass

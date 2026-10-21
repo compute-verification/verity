@@ -164,7 +164,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
 HEADER = struct.Struct(">BII")
-PAD, DATA, LAST, SALT = 0, 1, 2, 3
+PAD, DATA, SALT = 0, 1, 3
 EVENT_END = b"\n\n"
 CANONICAL_STREAM = 0
 TOKEN_BYTES = 64
