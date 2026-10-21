@@ -154,9 +154,7 @@ theorem folded_of_lower_at {K R T L U F X : Type} [Fintype K] [Fintype R] [Finty
       ((1 - 0 - 0) * Z.Nw * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam) -
         Z.Nw * Z.wStar lam * t := by
     rw [hμF, hμX]
-    first
-      | linarith
-      | nlinarith
+    linarith
   have hkey : (Z.Nw * w * (1 - t) + Z.Nw * φ) / Z.bnd Fl ≤
       ((1 - 0 - 0) * Z.Nw * Z.wStar lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam) /
           Z.bnd Fl -
