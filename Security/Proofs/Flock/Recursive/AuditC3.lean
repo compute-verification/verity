@@ -758,7 +758,7 @@ each stream round's coins read off the history's prefix at the last round it tak
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
 below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates
 to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet
-established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it.
+established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
 -/
 def RecursiveAuditC3 : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate

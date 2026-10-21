@@ -2,10 +2,12 @@
 coin opens, answers each root with that family's next coin and logs the release before the coin leaves; it refuses
 every malformed or out-of-order frame and ends the session there, and however the session ends it signs its release log
 (the close record).  The client (`RemoteChallenger`) is `LiveRecord`'s challenger as it is, and refuses a coin that
-doesn't open.  The verifier, reading the challenger's directory and the auditor's signed ledger, trusts only the one
-session the ledger opens for the window under the pinned key, ended closed, its commitment and the roots its signed log
-shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or presents an unsigned log, an
-unclosed session, a second session, a ledger signed under its own key or one older than the session's end is refused."""
+doesn't open; it asks for several coins in one round trip (`open_many`), the release log the same as one at a time, and
+a batch with any bad answer raises whole.  The verifier, reading the challenger's directory and the auditor's signed
+ledger, trusts only the one session the ledger opens for the window under the pinned key, ended closed, its commitment
+and the roots its signed log shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or
+presents an unsigned log, an unclosed session, a second session, a ledger signed under its own key or one older than the
+session's end is refused."""
 
 from __future__ import annotations
 
@@ -21,6 +23,11 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.types import Array, Value
 from verity.ml.crypto import lms
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
@@ -441,6 +448,123 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
     liar.join()
     with pytest.raises(C.CoinError, match="session ended"):
         client.open("positions", 1, root(1))
+
+
+BATCH = [("positions", 0, root(0)), ("replay", 0, root(0)), ("positions", 1, root(1))]
+
+
+def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
+    """`ask(client)` against a challenger served on one end of a socketpair (`serve`, on a clock that counts), the
+    client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
+    directory.mkdir()
+    session = R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), pinned_key(), HOST, signer,
+                             directory, "s-1")
+    a, b = socket.socketpair()
+    ended: list[str | None] = []
+    t = threading.Thread(target=lambda: ended.append(R.serve(a, session, itertools.count().__next__)))
+    t.start()
+    client = R.RemoteChallenger(b)
+    try:
+        got = ask(client)
+    finally:
+        if client._ended is None:
+            client.close()
+        t.join()
+        a.close()
+    return (directory / R.RELEASES).read_bytes(), got, ended[0]
+
+
+def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_does(tmp_path, signer):
+    """One round trip for three coins (two of them after one root, as a paced window's openings coin and the challenge
+    after it are): the same openings, the release log byte for byte, and the in-process challenger's `open_many` the
+    same coins again."""
+    one, sequential, why = _served(tmp_path / "one", signer, lambda c: [c.open(*r) for r in BATCH])
+    many, batched, why_many = _served(tmp_path / "many", signer, lambda c: c.open_many(BATCH))
+    assert (why, why_many) == (None, None)
+    assert batched == sequential and many == one
+    events = [json.loads(line)["event"] for line in many.decode().splitlines()]
+    assert events == ["commitment"] + ["root", "release"] * 3
+    assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def _scripted(n: int, answer):
+    """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
+    then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
+    wrote them back to back before reading a reply."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        with a:
+            reply(a)
+            a.sendall(frame({"type": "commitment", "commitment": ch.commitment.to_json()}))
+            heads = [reply(a) for _ in range(n)]
+            a.sendall(b"".join(answer([ch.open(h["label"], h["index"], bytes.fromhex(h["after"])) for h in heads])))
+            try:
+                while a.recv(1 << 16):
+                    pass
+            except ConnectionResetError:
+                pass  # the client hung up on a reply it refused, with the batch's later replies unread
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _opening(o: C.LiveOpening) -> bytes:
+    return frame({"type": "opening", "opening": o.to_json()})
+
+
+@pytest.mark.parametrize("bad, why", [(_other_coin, "replay coin 0: coin does not open"),
+                                      (_other_root, "replay coin 0: coin was not opened after")])
+def test_a_batch_one_of_whose_coins_fails_live_reason_raises_whole_and_ends_the_session(bad, why):
+    """No partial credit: the coins either side of the bad one are good, and none is returned."""
+    client, t = _scripted(3, lambda ops: [_opening(ops[0]), bad(ops[1]), _opening(ops[2])])
+    with pytest.raises(C.CoinError, match=why):
+        client.open_many(BATCH)
+    t.join()
+    for again in (lambda: client.open("positions", 2, root(2)), lambda: client.open_many(BATCH)):
+        with pytest.raises(C.CoinError, match=r"session ended \(.*replay coin 0.*\): a retry never redraws"):
+            again()
+
+
+def test_a_batch_answered_out_of_order_is_refused():
+    client, t = _scripted(2, lambda ops: [_opening(ops[1]), _opening(ops[0])])
+    with pytest.raises(C.CoinError, match="positions coin 0: coin is the epoch's replay coin 0, not its positions coin"):
+        client.open_many(BATCH[:2])
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open(*BATCH[0])
+
+
+def test_a_batch_the_challenger_refuses_midway_raises_and_releases_only_the_coins_before_it(tmp_path, signer):
+    """`serve` releases the batch's coins before the refused one, logs them and signs the session's close with the
+    refusal; the client returns none of them, the one after is never opened, and every later coin is refused."""
+    batch = [BATCH[0], ("positions", 5, root(1)), BATCH[1]]
+    held: list[R.RemoteChallenger] = []
+
+    def ask(client):
+        held.append(client)
+        with pytest.raises(C.CoinError, match="refused: the next positions coin is 1, not 5"):
+            client.open_many(batch)
+        with pytest.raises(C.CoinError, match="session ended"):
+            client.open(*BATCH[2])
+
+    log, _, why = _served(tmp_path / "s", signer, ask)
+    assert why == "the next positions coin is 1, not 5"
+    assert [json.loads(line).get("label") for line in log.decode().splitlines()] == [None, "positions", "positions"]
+    close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
+    assert (close["ended"], close["lines"]) == (why, 3)
+
+
+def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, signer):
+    def ask(client):
+        with pytest.raises(ValueError, match=f"at most {R.MAX_BATCH} coins"):
+            client.open_many([BATCH[0]] * (R.MAX_BATCH + 1))
+        return client.open_many(BATCH[:1])
+
+    _, got, why = _served(tmp_path / "s", signer, ask)
+    assert why is None and [(o.label, o.index) for o in got] == [("positions", 0)]
 
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):
@@ -1008,6 +1132,77 @@ def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(t
     _period_open(named, circuit="verity/pouw/h1@v1")
     with pytest.raises(C.CoinError, match="entry 0: period p-0's cap is a positive integer and its circuit a SHA-512"):
         C.audited_session(named.lines, WINDOW, pinned_key(), lms_verify)
+
+
+XOR8 = PrimitiveDefinition("RemoteTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+                           register=False)
+
+
+def _declared(steps: int, annotate: bool = False) -> tuple[bytes, str]:
+    """A static window's declared Program of `steps` calls, as vllm's rehearsal writes it before it serves
+    (`pouw_h1_rehearsal.build_program`): its descriptor's canonical JSON without annotations, and its `program_digest`,
+    the period's ``--circuit`` (with `annotate`, a descriptor that names its window in its annotations)."""
+    def sig(S):
+        return (("x", Array(steps, Value(8))), ("w", Array(steps, Value(8)))), Array(steps, Value(8))
+
+    prog = Program(bind(CompositeDefinition(
+        "RemoteTestWindow", 0, (), sig,
+        lambda B, S, x, w: coll_concat(sig(S)[1], [B.call(XOR8, x[i], w[i]) for i in range(steps)]), register=False)))
+    desc = encode_program(prog)
+    if annotate:
+        desc["annotations"] = {"window": WINDOW["root"][:32]}
+    return canonical_json({k: v for k, v in desc.items() if k != "annotations"}), program_digest(desc)
+
+
+def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
+    """vllm's served H1 rehearsal's ledger (r20261021-024645-c83a): lane vllm's period opened with cap 1 and `circuit`,
+    its one window reserved, opened, served and ended complete, then the period closed (no period with `period` false)."""
+    tmp_path.mkdir()
+    ledger = Ledger(tmp_path / "windows.jsonl", signer)
+    if period:
+        _period_open(ledger, lane="vllm", by="vllm", cap=1, circuit=circuit)
+    ledger.reserve(RESERVED_SESSION, by="vllm")
+    host = Host(tmp_path, signer, RESERVED_SESSION, ledger=ledger)
+    honest(host)
+    if period:
+        _period_close(ledger, [{"root": WINDOW["root"], "session": RESERVED_SESSION, "complete": True}], True, lane="vllm")
+    return host
+
+
+def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
+    """PRF-126: the period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    window only when the descriptor of the circuit its sessions prove hashes to it. vllm's rehearsal shape is credited;
+    a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
+    isn't bytes, and a window in no period count toward none, each naming the fix."""
+    descriptor, digest = _declared(4)
+    assert hashlib.sha512(descriptor).hexdigest() == digest == _declared(4, annotate=True)[1]
+    host = _rehearsal(tmp_path / "honest", signer, digest)
+    lines = R.ledger_lines(host.ledger.path)
+    audited = C.credited_session(lines, WINDOW, pinned_key(), descriptor, lms_verify)
+    assert (audited.session, audited.prover, audited.period, audited.cap, audited.circuit) == (
+        RESERVED_SESSION, "vllm", "p-0", 1, digest)
+    assert C.circuit_reason("p-0", digest, descriptor) is None
+    other, other_digest = _declared(5)
+    assert other_digest != digest
+    for wrong in (other, json.dumps(json.loads(descriptor), indent=1).encode(), descriptor + b"\n"):
+        got = hashlib.sha512(wrong).hexdigest()
+        with pytest.raises(C.CoinError, match=re.escape(
+                f"the circuit the window's sessions prove (descriptor SHA-512 {got[:16]}...) is not {digest[:16]}..., "
+                "the one period p-0 committed: prove the period's declared circuit, or open a period whose --circuit "
+                "is this descriptor's SHA-512")):
+            C.credited_session(lines, WINDOW, pinned_key(), wrong, lms_verify)
+    for bad in (descriptor.decode(), json.loads(descriptor), bytearray(descriptor), None):
+        with pytest.raises(C.CoinError, match=re.escape(C.DESCRIPTOR_FORM)):
+            C.credited_session(lines, WINDOW, pinned_key(), bad, lms_verify)
+    assert C.circuit_reason("p-0", None, descriptor) == (
+        "period p-0 commits no circuit, so no window counts toward it: open a period whose --circuit is the declared "
+        "circuit's SHA-512")
+    loose = _rehearsal(tmp_path / "loose", signer, digest, period=False)
+    assert C.audited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), lms_verify).period is None
+    with pytest.raises(C.CoinError, match=re.escape("holds the window's session in no period, so it counts toward none")):
+        C.credited_session(R.ledger_lines(loose.ledger.path), WINDOW, pinned_key(), descriptor, lms_verify)
+    with pytest.raises(C.CoinError, match="the auditor's ledger opens no challenger session for this window"):
+        C.credited_session(lines, {"root": "22" * 64}, pinned_key(), descriptor, lms_verify)
 
 
 def test_the_ledger_is_the_longest_of_infras_heads_when_each_extends_the_others(tmp_path, signer):

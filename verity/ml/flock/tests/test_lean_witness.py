@@ -78,10 +78,12 @@ F1 = HERE / "fixtures" / "f1-gate"
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
 #: V*'s statements at the gate, each staged under `v/` with its outer session under `v-sess/`, in `RecVStar.statements`' order
-F1_PARTS = ("L0", "L1", "L2", "L3", "alg/p0", "alg/p1", "cap")
-#: `RecVStar.statements` at the inner shape, each with its population
+F1_PARTS = ("L0", "L1", "L2", "L3", "alg/p0", "alg/p1", "cap/L1", "cap/L2", "cap/L3", "cap")
+#: `RecVStar.statements` at the inner shape, each with its population: a later level's RecCap holds both reps' tops, 64,
+#: 64 and 32 nodes each at levels 1 to 3
 F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/l16-h5", 142), ("rec-open/l16-h4", 106),
-                 ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2), ("rec-cap/n128", 128))
+                 ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2), ("rec-cap/n128-l1", 128),
+                 ("rec-cap/n128-l2", 128), ("rec-cap/n64-l3", 64), ("rec-cap/n128", 128))
 #: a standalone program of one call, to evaluate the inner unit's Definition with the IR oracle
 _ROOT = CompositeDefinition("Standalone", 1, ("FN",), lambda D: D.FN.signature(), lambda B, D, *args: B.call(D.FN, *args),
                             doc="root wrapper: one call of FN over Input gates", register=False)
@@ -317,8 +319,9 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
+        tops = [g / "v" / p for p in F1_PARTS if not p.startswith("alg/")]
         (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / p for p in F1_PARTS if p.startswith("alg/")], (),
-                                                              [g / "v" / "L0", g / "v" / "cap"])))
+                                                              tops)))
         _f1_cheat(g, d)
         for part in F1_PARTS:
             v = g / "v" / part
@@ -357,7 +360,8 @@ def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_pr
 def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
     """`outerStatementsAt st`: the inner shape `innerAt` reads (m, k_log, 2 + points·regions claims, regions; `rec-inner`'s),
     `outerParts` over it (the exe's copy, `outerPartsOf`, is it by `rfl`) and `RecVStar.statements` there, which are the
-    units of the gate's seven staged statements, the last RecCap over level 0's 128 nodes, which `outerParts` counts."""
+    units of the gate's ten staged statements, the last four RecCaps over levels 1 to 3's tops and level 0's 128 nodes,
+    which `outerParts` counts (levels + groups + levels)."""
     c = f1_inner["accepts_stmt"]
     assert c["shape"] == {"format": "verity/rec-inner/v1", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
     assert c["outer_parts"] == len(c["statements"]) == len(F1_PARTS)

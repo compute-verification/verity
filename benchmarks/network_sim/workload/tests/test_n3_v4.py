@@ -10,7 +10,7 @@ import random
 import numpy as np
 import pytest
 
-from test_n3_unit import (BLOCK, INGRESS, OTHER, SALTED_B, TAMPERS, data_end, flip, lab_setup, lab_windows, payloads,
+from test_n3_unit import (BLOCK, INGRESS, LAB_B, OTHER, SALTED_B, TAMPERS, data_end, flip, lab_setup, lab_windows, payloads,
                           sim_run)
 from verity.core.protocols.certifier.grid import Reason
 from verity.ml.circuits.defs import bind
@@ -94,9 +94,8 @@ def v4(setup: U.Setup, inst: U.Instance, R: int | None = None, **kw) -> U.Instan
     return V.convert(inst, setup.layout.tree, setup.units, V.runs_of(setup.layout, "p0") if R is None else R, **kw)
 
 
-@pytest.fixture(scope="module")
-def demo_cases(demo):
-    """test_n3_unit's demo cases, honest and with one witness or public input changed, as v3 and v4 instances."""
+def v3_cases(demo) -> dict[str, U.Instance]:
+    """test_n3_unit's demo cases, honest and with one witness or public input changed, as v3 instances."""
     inst = demo.window.instance
     a = inst.args
 
@@ -115,7 +114,7 @@ def demo_cases(demo):
     overflow = dataclasses.replace(demo.window, reason=Reason.OVERFLOW.value, instance=None)
     rc = s.certifier.commit("demo", 0, [s.head("p0", 0, overflow), s.head("p1", 0, None)], s.grids["p0"],
                             s.grids["p1"], s.sync_set)
-    v3 = {
+    return {
         "honest": inst,
         "frame-bit": edit(frames=[fr[0], flip(fr[1], 9), fr[2], fr[3]]),
         "suffix-bit": edit(frames=[fr[0], fr[1], flip(fr[2], 14), fr[3]]),
@@ -130,7 +129,12 @@ def demo_cases(demo):
         "incomplete": edit(record=rc.root, head=rc.head(0), record_salt=rc.opening.salts[U.N2.HEADS],
                            record_path=rc.path(U.N2.HEADS)),
     }
-    return {k: (x, v4(demo.setup, x)) for k, x in v3.items()}
+
+
+@pytest.fixture(scope="module")
+def demo_cases(demo):
+    """`v3_cases` as v3 and v4 instances."""
+    return {k: (x, v4(demo.setup, x)) for k, x in v3_cases(demo).items()}
 
 
 def test_the_demos_reads_are_two_runs(demo):
@@ -221,7 +225,7 @@ def test_v4_accepts_exactly_where_v3_does_on_the_simulators_windows():
 
 @pytest.fixture(scope="module")
 def lab():
-    return lab_setup(54)
+    return lab_setup(LAB_B)
 
 
 @pytest.mark.parametrize("edit", [
@@ -251,10 +255,11 @@ def test_v4_accepts_exactly_where_v3_does_on_salted_lab_windows(salted_lab):
 
 @pytest.mark.slow
 def test_v4_accepts_exactly_where_v3_does_on_a_lab_whose_outboxes_are_two_rows_deep():
-    """At the lab's MLP width every outbox is one row, so its runs open only slot 0 of a depth-0 tree. At width 32 each
-    unit's outbox is two rows, and later windows' runs start at row 1: the one test of whole windows whose runs open
-    at a private start past 0 in a tree with levels. About 80 s, most of it committing the wider MLP."""
-    lab = lab_setup(54, d=32)
+    """At the lab's MLP width every outbox is one row, so its runs open only slot 0 of a depth-0 tree. At width 8 over
+    32 requests each unit's outbox is two rows, and later windows' runs start at row 1: the one test of whole windows
+    whose runs open at a private start past 0 in a tree with levels. About 80 s, most of it committing the larger
+    MLP."""
+    lab = lab_setup(LAB_B, d=8, requests=32)
     for edit, ok in ((None, True), (lambda e, i: ([flip(e[0], data_end(e[0]))] + e[1:], i), False)):
         setup, windows = lab_windows(lab, edit)
         assert all(x >= 1 for x in setup.layout.fmt.DEPTHS)
@@ -309,8 +314,9 @@ def test_the_demo_window_is_its_reference(demo, demo_cases):
 
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
-    """The salted lab window (B = 96) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
-    It is the one test of v4 with the salt path, one segment and one run. About 7 s after the demo window's test, whose
+    """The salted lab window (B = 240) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
+    It is the one test of v4 with the salt path, two segments and two runs (a request's frame reads the
+    outside host's length and head, then the message). About 7 s after the demo window's test, whose
     traced parts it shares in the suite's one process."""
     salts = payloads(salted_lab)
     setup, windows = lab_windows(salted_lab, salts=salts)
@@ -321,5 +327,5 @@ def test_a_salted_window_is_its_reference(salted_lab):
     moved = copy.deepcopy(honest)
     moved.args["slot"] = 1
     cases = [honest, wrong, moved]
-    assert honest.salted and honest.R == 1
+    assert honest.salted and honest.R == 2
     assert V.evaluate(*cases) == [int(V.reference(x)) for x in cases] == [1, 0, 0]

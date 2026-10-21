@@ -29,9 +29,10 @@ level's `out` reads R's tops `rec-top-stacked-L<l>` at each opening's node above
 RecSparse's refusals that read only the points' sizes are checked on the inner statement itself at every candidate-3
 session's setup, whatever its unit (`checkAtC3`, `checkInnerRange`).
 
-RecCap (`rec-cap/n<N>`) registers no value from the coins: its `top` reads the table's level-0 cap `rec-top-L0` at row `i`
-in instance `i`, every node of it, and its `out` is V*'s zero rows `rec-cap-zero` (`checkCap`); its rows are held to the
-coin server's `root_B` (`checkLink`, `RecVStar.checkTopRows`).
+RecCap (`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level `l`) registers no value from the coins: its `top`
+reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of them, and its `out` is V*'s zero rows
+`rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
+(`checkLink`, `RecVStar.checkTopRows`).
 -/
 import Flock.Keccak
 import Flock.Registered
@@ -623,21 +624,22 @@ def checkAtC3 (inner : Option RecVStar.Inner) (src : Option Source) : V Unit := 
         "--rec-inner-partition, --rec-inner-session): its sparse range is checked on it")
   checkInnerRange i (← f.stmt "the inner session").2
 
-/-! ### The table's level-0 cap: RecCap -/
+/-! ### Each level's committed tops: RecCap -/
 
 def CAP_ZERO_VALUE : String := "rec-cap-zero"
 
-/-- **RecCap holds every node of the table's level-0 cap at a fixed row** (`rec-cap/n<N>`, `VStar.capUnit`): the reads
-file's `top` reads `rec-top-L0`, a registration of `N` rows of `VStar.CAP_TOP_WORDS` words, instance `i` reading row `i`
-whatever the coins draw, and its `out` is V*'s `N` zero rows of `VStar.CAP_OUT_WORDS` words under `zeroSalt` (`checkRows`
-at `rec-cap-zero`), so every held row's words past its node are zero. `RecVStar.checkTopRows` holds each table row of
-`top` to its node of `root_B`, and `RecVStar.checkShared` holds `top` and level 0's `out` to one registration. -/
-def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (N : Nat) : V Unit := do
+/-- **RecCap holds every node of level `l`'s committed tops at a fixed row** (`VStar.capName l N`, `VStar.capUnit`): the
+reads file's `top` reads `rec-top-L<l>`, a registration of `N` rows of `VStar.CAP_TOP_WORDS` words, instance `i` reading
+row `i` whatever the coins draw, and its `out` is V*'s `N` zero rows of `VStar.CAP_OUT_WORDS` words under `zeroSalt`
+(`checkRows` at `rec-cap-zero`), so every held row's words past its node are zero. `RecVStar.checkTopRows` holds each
+table row of `top` to its node of `root_B` or of the reps' level-`l` tops (`RecVStar.topRow`), and `RecVStar.checkShared`
+holds `top` and level `l`'s `out` to one registration. -/
+def checkCap (c : Circuit) (pub : Public) (own : Array Registered.Port) (l N : Nat) : V Unit := do
   let unit := c.unit.name
   let some reg := own.find? (·.name == "top")
     | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port top: the cap's rows would be the prover's"
-  if reg.value != "rec-top-L0" then
-    throw s!"rec-coins: {unit}: port top reads {reg.value}, not the table's level-0 cap rec-top-L0"
+  if reg.value != s!"rec-top-L{l}" then
+    throw s!"rec-coins: {unit}: port top reads {reg.value}, not level {l}'s tops rec-top-L{l}"
   if reg.leaves != N || reg.words != some VStar.CAP_TOP_WORDS || reg.wordBits != 16 then
     throw (s!"rec-coins: {unit}: {reg.value}: {reg.leaves} rows of {reg.words.getD 0} words registered, the cap's " ++
       s!"{N} of {VStar.CAP_TOP_WORDS}")
@@ -678,7 +680,7 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Sou
   | some (LANES, H), _ => checkOpen inn st.c st.pub own LANES H
   | _, some (m, k, cl, j) => checkResiduals inn st.c st.pub own m k cl j
   | none, none => match cap with
-    | some N => checkCap st.c st.pub own N
+    | some (l, N) => checkCap st.c st.pub own l N
     | none => pure ()
 
 /-- A circuit-table level `l`'s `out` port in the reads file: level `l`'s tops `rec-top-L<l>` (`rec_outer.TopValue`),
@@ -724,8 +726,8 @@ def checkOpenTops (inn : Inner) (c : Circuit) (own : Array Registered.Port) (lk 
 `rec-sparse/…` statement, whose check 5 takes the extra claims at the inner session's record's link points, is refused
 unless the verifier holds the inner transcript (`link`, `RecVStar.innerLink`, which holds those points to the ones the
 coin server drew); and at a circuit-table level its `out` reads the tops the coin server recorded (`checkOpenTops`). A
-`rec-cap/n<N>` statement is refused without the inner transcript, whose `root_B` its rows are held to
-(`RecVStar.checkTopRows`), and unless that `root_B` has its `N` nodes. Any other unit passes. -/
+RecCap statement is refused without the inner transcript, whose `root_B` (level 0) or both reps' level-`l` tops (a later
+level) its rows are held to (`RecVStar.checkTopRows`), and unless those have its `N` nodes. Any other unit passes. -/
 def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source)
     (link : Option RecVStar.InnerLink) : V Unit := do
   let unit := st.c.unit.name
@@ -735,9 +737,16 @@ def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option
   let some lk := link
     | throw (s!"rec-coins: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with " ++
         "--rec-inner-session): check 5's link points and the tops its levels climb to would be the prover's")
-  if let some N := cap then
-    if lk.root.size != N then
-      throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the coin server's {lk.table} root_B has {lk.root.size}"
+  if let some (l, N) := cap then
+    if l == 0 then
+      if lk.root.size != N then
+        throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the coin server's {lk.table} root_B has {lk.root.size}"
+    else
+      match lk.tops[0]?.bind (·[l - 1]?), lk.tops[1]?.bind (·[l - 1]?) with
+      | some (_, t0), some (_, t1) =>
+        if t0.size + t1.size != N then
+          throw s!"rec-coins: {unit}: holds {N} nodes of level {l}'s tops, and the coin server's reps' level {l} tops have {t0.size + t1.size}"
+      | _, _ => throw s!"rec-coins: {unit}: the coin server's record has no level {l} top of both reps"
     return
   let some (LANES, H) := o | return
   let some own := own

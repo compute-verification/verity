@@ -9,6 +9,7 @@ And the JSON the two verifiers are compared in: each event as the Lean reads it 
 back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
+import collections
 import fcntl
 import functools
 import hashlib
@@ -55,44 +56,82 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 class Lean:
-    """One `remote-audit-verifier` process: `call` sends a request and returns its answer (`LeanError` for an error),
+    """One `remote-audit-verifier` process, its requests taken in the order they are made and written on a thread of
+    their own, so that whoever makes one never waits on the pipe: `send` hands a request over and has `answered` called
+    with its answer on the reader's thread, and `call` waits for the answer and returns it (`LeanError` for an error).
     `done({"done": id, "accepted": bool})` is called on the reader's thread as each window's check ends, and
-    `done({"done": None, ...})` once if the process ends: every check still running has no verdict."""
+    `done({"done": None, ...})` once if the process ends: every check still running has no verdict, and every request
+    not yet answered is answered with the error."""
 
     def __init__(self, exe: Path, done: Callable[[dict], None]) -> None:
         self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        self.done, self.answers, self.lock = done, queue.Queue(), threading.Lock()
+        self.done, self.requests, self.lock = done, queue.SimpleQueue(), threading.Lock()
+        self.pending: collections.deque[Callable[[dict], None] | None] = collections.deque()
         self.ended: str | None = None
+        threading.Thread(target=self._write, daemon=True).start()
         threading.Thread(target=self._read, daemon=True).start()
+
+    def _end(self, why: str) -> None:
+        with self.lock:
+            self.ended = self.ended or why
+            pending, self.pending = list(self.pending), collections.deque()
+        for answered in pending:
+            if answered is not None:
+                answered({"error": self.ended})
+
+    def _write(self) -> None:
+        while (item := self.requests.get()) is not None:
+            data, answered = item
+            with self.lock:
+                ended = self.ended
+                if ended is None:
+                    self.pending.append(answered)
+            if ended is not None:
+                if answered is not None:
+                    answered({"error": ended})
+                continue
+            try:
+                self.proc.stdin.write(data)
+                self.proc.stdin.flush()
+            except (BrokenPipeError, ValueError, OSError) as e:
+                self._end(f"the process is gone: {e}")
+        try:
+            self.proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
 
     def _read(self) -> None:
         for line in self.proc.stdout:
             msg = json.loads(line)
             if "done" in msg:
                 self.done(msg)
-            else:
-                self.answers.put(msg)
-        self.ended = f"the process ended ({self.proc.wait()})"
+                continue
+            with self.lock:
+                answered = self.pending.popleft() if self.pending else None
+            if answered is not None:
+                answered(msg)
+        self._end(f"the process ended ({self.proc.wait()})")
         self.done({"done": None, "accepted": False})
-        self.answers.put({"error": self.ended})
+
+    def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:
+        self.requests.put((json.dumps(request, separators=(",", ":")).encode() + b"\n" + body, answered))
+
+    def send(self, request: dict, body: bytes = b"", answered: Callable[[Any], None] | None = None) -> None:
+        """`request` (with `body` after its line) to the process behind every request made before it; `answered`, if
+        given, called on the reader's thread with its answer, or `{"error": why}` where `call` would raise."""
+        self._put(request, body, None if answered is None else
+                  lambda msg: answered(msg["answer"] if "answer" in msg else {"error": msg["error"]}))
 
     def call(self, request: dict, body: bytes = b"") -> Any:
-        with self.lock:
-            if self.ended is not None:
-                raise LeanError(self.ended)
-            try:
-                self.proc.stdin.write(json.dumps(request, separators=(",", ":")).encode() + b"\n" + body)
-                self.proc.stdin.flush()
-            except (BrokenPipeError, ValueError) as e:
-                raise LeanError(f"the process is gone: {e}") from None
-            msg = self.answers.get()
+        box: queue.SimpleQueue = queue.SimpleQueue()
+        self._put(request, body, box.put)
+        msg = box.get()
         if "error" in msg:
             raise LeanError(msg["error"])
         return msg["answer"]
 
     def close(self) -> None:
-        if self.proc.stdin and not self.proc.stdin.closed:
-            self.proc.stdin.close()
+        self.requests.put(None)
         self.proc.wait()
 
 
@@ -223,10 +262,13 @@ class Transcript:
     a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
     (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
     openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
-    verifier answers reads the commitment."""
+    verifier answers reads the commitment. Openings are decoded and written only once the session's passes are over
+    (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of JSON, and decoding them beside a timed pass
+    would take the verifier's process from the loop whose stamps the memory line reads."""
 
     def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
+        self.passes = threading.Event()
         head = {"registration": registration_json(registration), "params": params_json(params),
                 "not_before_ns": not_before_ns}
         self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
@@ -238,7 +280,12 @@ class Transcript:
     def verify(self, t: int, frames: list[bytes]) -> None:
         self.items.put(("verify", t, frames))
 
+    def passes_ended(self) -> None:
+        """The session's passes are over: openings held back until now may be written."""
+        self.passes.set()
+
     def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+        self.passes.set()
         self.items.put(("close", released))
         self.thread.join()
         return self.result
@@ -268,6 +315,7 @@ class Transcript:
                     if item[0] == "event":
                         put(item[1])
                         continue
+                    self.passes.wait()
                     put(f'{{"kind":"verify","t":{item[1]},"openings":[')
                     first = True
                     for body in item[2]:
