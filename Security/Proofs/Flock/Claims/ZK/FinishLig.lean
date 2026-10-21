@@ -215,7 +215,7 @@ theorem ligConj_queryP (io : Asks M) (nonce : ℕ → ℕ → UInt64) (ms : Merk
 /-- **The firewall's masked Ligerito is the analysis's** where its levels ≥ 1 commit as `FlockComplete.commitP hs ms`
 does. -/
 theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ → ByteArray) → M Commit) (hs : Hashes M)
-    (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout)
+    (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout)
     (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (hc : ∀ lv g s, Commit.toC <$> commit lv g s = FlockComplete.commitP hs ms lv g s) :
     ligeritoPZk io commit ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce =
@@ -227,15 +227,15 @@ theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ →
   rw [e0, run_toC]
   simp only [ligConj_bind, ligConj_modify, ligConj_get, ligConj_sendMsg, ligConj_powP, ligConj_oodIntroP,
     ligConj_queryP, ligConj_ite, ligConj_pure, ligConj_lift, bind_assoc, pure_bind, FlockComplete.liftT, lift_map,
-    bind_map_left, Commit.toC_cap, ligConj_forIn_cm, map_bind, map_pure, stepMap, cmOfC_toC]
+    bind_map_left, Commit.toC_cap, ligConj_forIn_cm, map_bind, map_pure, stepMap]
   simp only [ligConj_bind, ligConj_modify, ligConj_get, ligConj_sendMsg, ligConj_challengeP, ligConj_ite,
-    ligConj_throw, ligConj_pure, ligConj_map, ligConj_lift, bind_assoc, pure_bind, lift_map, bind_map_left,
-    ligConj_forIn_range, ligConj_forIn_array, map_bind, map_pure, stepMap, cmOfC_toC, map_ite']
+    ligConj_throw, ligConj_pure, ligConj_lift, bind_assoc, pure_bind, ligConj_forIn_range, ligConj_forIn_array,
+    map_bind, map_pure, stepMap, cmOfC_toC, map_ite']
   rfl
 
 /-- **As `flock-firewall finish` runs it**: levels ≥ 1 committed by the FFT (`commitFw`) at SHA-512 and
 `hm96-sha512/v1`. -/
-theorem ligeritoPZk_fw (io : Asks M) (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128)
+theorem ligeritoPZk_fw (io : Asks M) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128)
     (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) :
     ligeritoPZk io (fun lv g s => pure (commitFw lv g s)) MerkleScheme.hm96Sha512 sch T cm0 t b lay h rep tPad extra
