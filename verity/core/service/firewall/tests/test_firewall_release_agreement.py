@@ -7,8 +7,9 @@ the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). T
 held to, are `_release`'s.
 
 The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests' streams
-(`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, so the record
-stays the firewall's own), `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at
+(`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and each `open`
+its `appended` op writes without a null `budget`, which Rust reads as the absent budget it is, so the record stays the
+firewall's own), `release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at
 seed 0, and `release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
 
 from __future__ import annotations
@@ -119,9 +120,9 @@ def _apply(text: str, edit: list) -> str:
     return (b[:at] + put.encode() + b[at + cut:]).decode()
 
 
-#: why the Lean refuses a record holding a line the firewall doesn't write (`Record.read`), and the one such line Rust's
-#: `foreign` damage writes
-FOREIGN = re.compile(r"the record's line \d+ is not (an event of firewall/v0|the firewall's own)")
+#: why the Lean refuses a record holding a line the firewall doesn't write (`Record.read`), with the line's number, and the
+#: one such line Rust's `foreign` damage writes
+FOREIGN = re.compile(r"the record's line (\d+) is not (an event of firewall/v0|the firewall's own)")
 FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
 
 
@@ -146,8 +147,9 @@ def test_the_lean_runs_rusts_index_cases(lean):
         kind, out = lean.call("op", {"op": step["op"], "record": before})
         if "reject" in step:
             assert kind == "reject", (n, step, out)
-        elif kind == "reject" and FOREIGN.match(out):
-            assert FOREIGN_LINE in before, (n, step, out)
+        elif kind == "reject" and (m := FOREIGN.match(out)):
+            lines = [x + "\n" for x in before.split("\n") if x]
+            assert lines[int(m.group(1)) - 1] == FOREIGN_LINE, (n, step, out)
             tally["outside"] += 1
             continue
         else:
