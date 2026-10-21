@@ -16,8 +16,8 @@ and appended to node 1's `quota-changes.log` beside infra's own lines; a Cluster
 first read with no saved baseline records it and posts nothing; a failed kubectl keeps the baseline and compares nothing.
 
 The posts go in #agent-coordination, where they ring the owners' doorbells (#agent-alerts rings none). Infra, their author, can't
-be woken by its own post, so its share also goes in its inbox thread. Node 1 holds no Slack credential, so this runs where
-`research msg` works (infra's VM, tmux `n1-alerts`) and stops when that VM is suspended.
+be woken by its own post, so its share also goes in its inbox thread. Node 1 holds no Slack credential, so this runs on the control
+pod, as the watchers' `n1-alerts` loop (infra/control/watchers.toml).
 
   python3 n1_alerts.py [--node n1] [--every 60] [--state PATH] [--once] [--dry-run]   (research importable)
 """
