@@ -31,7 +31,8 @@ s - 1's (they read the slots step s + 1 overwrites).  What is committed, before 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
 the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this lane's rendering of CA's form (a z
-table in AROW's row-table format, a root per step before the coin); the kind, fields and labels are CA's to fix.
+table in AROW's row-table format, a root per step before the coin); the kind, fields and labels are CA's to fix.  Its
+stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
 """
 from __future__ import annotations
 
@@ -53,6 +54,7 @@ for p in (ROOT / "benchmarks" / "pouw" / "served_h1", HERE):
 import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
+import forms as F  # noqa: E402
 import serve as SV  # noqa: E402
 from h1c import H1C, Dom, Tab, unwords, words  # noqa: E402
 from h1r import H1R, Call  # noqa: E402
@@ -376,8 +378,8 @@ class Window:
         med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
-        return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s, "coins": self.coins.label,
-                "phases_by_m": med}
+        return {**F.form_of("dither-fused"), "steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s,
+                "coins": self.coins.label, "phases_by_m": med}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
@@ -482,7 +484,8 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
-    doc: dict = {"which": which, "complete": True, "s": s, "m": m, "t": t, "poison": f"{POISON:#04x}"}
+    doc: dict = {"which": which, **F.form_of("dither-fused"), "complete": True, "s": s, "m": m, "t": t,
+                 "poison": f"{POISON:#04x}"}
     z_bad, y_bad, zero_bad = [], [], []
     for w in range(L):
         a, sa, z = g["a"][w], g["sa"][w], g["z"][w]
@@ -580,6 +583,7 @@ def gate_verdict(gate: dict, control: dict) -> dict:
     """The poisoned gate passes and its no-write control, complete, is refused on z and on the receipts."""
     refused = (control.get("complete") and not control.get("ok") and bool(control.get("z_vs_int_mm_bad"))
                and bool(control.get("receipts_vs_h1r_bad")))
-    return {"ok": bool(gate.get("ok")) and bool(refused), "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
+    return {"ok": bool(gate.get("ok")) and bool(refused), **F.form_of("dither-fused"), "gate_ok": bool(gate.get("ok")),
+            "control_refused": bool(refused),
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_scaled_mm_bad", "empty_rows_bad",
                                                                     "receipts_vs_h1r_bad", "z_roots_bad")}}

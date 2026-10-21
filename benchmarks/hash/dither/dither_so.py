@@ -1,7 +1,8 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we|-wea]`, labelled by their z commitment as every
-dither-a arm (`dither_a.form`, RT4-INT-39 as narrowed 14:44Z): all -zy in the -so order, so form=ASK-71 A (provisional),
-since the served epilogue commits #3018's per-unit z/y records under round s's root before coin s.
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we|-wea]`, labelled as every arm by
+`forms.form_of` (`SoSide.label`): -aom/-aomn without -ov form=ASK-71 A (provisional), since the served epilogue commits
+#3018's per-unit z/y records under round s's root before coin s; -ab/-abn and -ov (-ov1, -ovp) form=beside (unadopted
+arm), neither ruled in (`SoSide.unadopted`).
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
@@ -717,6 +718,9 @@ class SoSide(DA.Side):
 
     in_order = True
 
+    def unadopted(self) -> tuple[str, ...]:
+        return tuple(x for x, on in (("ab", self.a_once), ("ov", self.ov is not None)) if on)
+
     def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
         if unit not in DA.KONE or ao not in AO:
             raise ValueError(f"dither-a-so's unit: one of {DA.KONE}, not {unit!r}; its A tables: one of {tuple(AO)}, not {ao!r}")
@@ -1372,7 +1376,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
 
 def stats(win: SoWindow):
     def doc() -> dict:
-        return {**win.stats(), "dither_a": DA.SIDE[0].info() if DA.SIDE else None}
+        return {**win.stats(), **DA.arm_label(), "dither_a": DA.SIDE[0].info() if DA.SIDE else None}
     return doc
 
 

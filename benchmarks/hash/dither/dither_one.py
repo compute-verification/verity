@@ -36,7 +36,7 @@ the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is t
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
 engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
-lane's rendering of CA's forms.
+lane's rendering of CA's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
 """
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ import numpy as np
 import torch
 
 import dither_fused as DF
+import forms as F
 from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
@@ -450,7 +451,8 @@ class Window:
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
-        return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
+        return {**F.form_of("dither-1s"), "steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s,
+                "epsilon": "seeded",
                 "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
                 "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
@@ -743,7 +745,8 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
-    doc: dict = {"which": which, "complete": True, "s": s, "m": m, "t": t, "poison": f"{DF.POISON:#04x}", "epsilon": "seeded"}
+    doc: dict = {"which": which, **F.form_of("dither-1s"), "complete": True, "s": s, "m": m, "t": t,
+                 "poison": f"{DF.POISON:#04x}", "epsilon": "seeded"}
     key, W = win.key, win.window
     # commitments against commit.py
     bits = np.arange(t) < m
@@ -954,7 +957,7 @@ def gate_verdict(gate: dict, control: dict, fault: dict, fault_wb: dict, fault_x
     xa_ok = bool(fault_xa.get("conforming")) if fault_xa is not None else not gate.get("peel")
     ok = (bool(gate.get("ok")) and bool(refused) and bool(fault.get("conforming")) and bool(fault_wb.get("conforming"))
           and xa_ok)
-    return {"ok": ok, "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
+    return {"ok": ok, **F.form_of("dither-1s"), "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
             "fault_conforming": bool(fault.get("conforming")), "fault_wb_conforming": bool(fault_wb.get("conforming")),
             "fault_xa_conforming": None if fault_xa is None else bool(fault_xa.get("conforming")),
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_ref_bad", "y_vs_dequant_z_bad", "receipts_vs_h1r_bad",
