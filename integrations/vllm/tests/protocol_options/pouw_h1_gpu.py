@@ -530,6 +530,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "ledger": ledger, "window_file": window_file,
                            "coin_source": rec["commitment"].get("coin_source")}
+    key = None
     try:
         key = PHC.pinned_key(d / remote.KEY, public_sha512)
         doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
@@ -544,6 +545,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc["manifest"] = PHC.manifest_reason(rec)
     if period is not None:
         try:
+            if key is None:
+                raise ValueError("no key the pin names, so the auditor's ledger is unread")
             newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)
             doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, [sid] if doc["reason"] is None else [])}
         except Exception as e:  # noqa: BLE001

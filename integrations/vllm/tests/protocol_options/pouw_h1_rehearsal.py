@@ -20,7 +20,7 @@ against the ledger's newest head, `trusted_rounds_reason` on the session's ``out
 (its ``register_served`` reads row/v1 alone until proofs' REGV2 follow-up, so it refuses the v2 trees until then). Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
-the session's end entry, a call's table root changed; and with the local gate, sessions forged through the gate itself
+the session's end entry, a call's table root changed, a pin that isn't the gate key's; and with the local gate, sessions forged through the gate itself
 (a period of their own), opened on the bare weights' root and on another window's root with the window's other coins
 after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, its served layout is the
@@ -37,8 +37,9 @@ whose serve.py ends a session with its record leaf and refused hellos and seals 
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit 882770e6009e73bdf015f4069fa77ef698d7f326'
 
 **The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (INF-170, on
-vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program a ``--program-only`` run built (its
-``window-program.meta.json`` sent), and no ``--tree``:
+vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program's ``window-program.meta.json`` sent (a
+``--program-only`` run's, or a rehearsal's ``out/program/``, as rehearsal r20261021-024645-c83a's, digest b9f82db9…),
+and no ``--tree``:
 
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
@@ -259,6 +260,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("ledger_cut_before_end", record_path, led=[cut])
     first = next(i for i, x in enumerate(record["calls"]) if x.get("tables"))
     case("table_root_changed", _edited(record, lambda d: d["calls"][first]["tables"].update(a="00" * 64), rt / "table.json"))
+    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period)
+    cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
         forged_period = f"{period}-forged"
         cases["forged_period_open"] = gate("period-open", "--name", forged_period, "--cap", "2", "--circuit", circuit)
@@ -281,7 +284,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s)
         case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
-    must = [k for k in cases if k.startswith(("r_", "ledger_", "table_", "forged_b", "forged_o"))]
+    must = [k for k in cases if k.startswith(("r_", "ledger_", "table_", "other_pin", "forged_b", "forged_o"))]
     return {"cases": cases, "all_refused": all(cases[k].get("refused") for k in must), "must_refuse": must}
 
 
