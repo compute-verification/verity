@@ -69,7 +69,7 @@ def test_a_registration_ends_only_when_closed_with_every_session_counted() -> No
     registry = audit.Registry()
     st = registered_in(registry)
     runs = [accepted(st, registry), rejected(st, registry), unended(st, registry)]
-    assert [r.s.commitment.session for r in runs] == [0, 1, 2]
+    assert [r.s.commitment.epoch for r in runs] == [0, 1, 2]
     assert [r.s.outcome for r in runs] == ["accepted", "step", None]
     with pytest.raises(audit.RegistryError):
         registered_in(registry, bytes(range(32)))
@@ -85,7 +85,7 @@ def test_a_registration_ends_only_when_closed_with_every_session_counted() -> No
     again = registered_in(registry, bytes(range(32)))
     assert again.registration.codec_seed != st.registration.codec_seed and registry.drawn(NODE) == 2
     assert registry.live(NODE) == again.registration.digest
-    assert accepted(again, registry).s.commitment.session == 0
+    assert accepted(again, registry).s.commitment.epoch == 0
 
 
 def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_registry() -> None:
