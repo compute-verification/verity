@@ -1439,6 +1439,17 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 
 
 @contextlib.contextmanager
+def worktrees_locked(repo: Path):
+    """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
+    and train.sh never add, remove or prune a worktree beside another (21 Oct: two touched-suites worktrees failed with "Could
+    not write new index file")."""
+    common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    with open(common / "train.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+@contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
     """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
     whatever happens; one a dead process left is swept first."""
@@ -1448,16 +1459,18 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
         pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
         if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
             shutil.rmtree(d, ignore_errors=True)
-    _git(repo, "worktree", "prune", check=False)
     tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
     wt = tmp / "tree"
     try:
-        _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "prune", check=False)
+            _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
         yield wt
     finally:
-        _git(repo, "worktree", "remove", "--force", str(wt), check=False)
-        shutil.rmtree(tmp, ignore_errors=True)
-        _git(repo, "worktree", "prune", check=False)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "remove", "--force", str(wt), check=False)
+            shutil.rmtree(tmp, ignore_errors=True)
+            _git(repo, "worktree", "prune", check=False)
 
 
 @dataclass
