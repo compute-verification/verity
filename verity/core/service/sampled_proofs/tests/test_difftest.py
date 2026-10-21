@@ -1460,12 +1460,22 @@ def _earlier(a: dict) -> str:
     return R.digest(a["params"]["log"][-1]) if a["params"]["log"] else "ee" * 64
 
 
+def _registered(value):
+    """The verifier's registered values changed, its held values the ones still among them (a held value it doesn't expect
+    registered is a malformed parameter, which `registration._window` refuses whatever else changed)."""
+    def change(a, x):
+        r = a["params"]["registered"] = value(a, x)
+        if "held" in a["params"]:
+            a["params"]["held"] = [v for v in a["params"]["held"] if isinstance(r, dict) and v in r]
+    return change
+
+
 REGISTERED_PARAMS = [
-    _set("params", "registered", lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
-                                               {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}][x % 15]),
-    _set("params", "registered", lambda a, x: {**a["params"]["registered"],
-                                               **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}][x % 6]}),
-    lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None)),
+    _registered(lambda a, x: [{"W": 4}, {"W": 0}, {"E": 1}, {"M": 1}, {"V": 1}, {"nope": 1}, {"T": 3},
+                              {"U": 2}, {"W": -1}, {"W": True}, {"W": "2"}, [], "W", {}, {"T": 2}][x % 15]),
+    _registered(lambda a, x: {**a["params"]["registered"],
+                              **[{"D": 1}, {"x": 1}, {"T": 4}, {"U": 3}, {"W": 6}, {"x": 3}][x % 6]}),
+    lambda a, x: (a["params"].pop("parameters"), a["params"].update(registered=None), a["params"].pop("held", None)),
     lambda a, x: a["params"].pop("parameters"),
     _set("params", "parameters", lambda a, x: _signature(a["params"]["parameters"], x)),
     _set("params", "log", lambda a, x: [{**a["record"], "registered": [
@@ -2694,13 +2704,13 @@ R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R
 
 def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     """One valid v2 audit of `s` expecting `values` registered, the log's earlier record registering them under the same
-    roots, by a verifier bound to `BINDING`."""
+    roots, by a verifier bound to `BINDING` that holds the values it doesn't fill across windows (`held`)."""
     law = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     earlier = R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
     rec = _record_of(s, values, law, {**WINDOW, **BINDING}, [earlier], BINDING, leaf_layer=LEAF, previous=R.digest(earlier))
     params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [earlier],
-              "parameters": s.signature,
+              "held": sorted(set(values) - set(s.supplied(values) or {})), "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
               "scheme": SCHEME, "work_table": None, **({"supplied": s.supplied(values)} if s.supplied(values) else {}),
               **({"row_schemas": {v: f for v, f in s.formats.items() if v in values}} if s.formats else {})}

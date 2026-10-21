@@ -210,15 +210,16 @@ def paramsOfJson (j : Json) : V Params := do
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
-  let verifier : Registration.Verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log,
-    partition, registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held }
-  let again := Registration.unwindowed verifier
+  let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
+                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held },
+                      delta }
+  let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
       "take now, and the verifier names no window root: a value registered afresh each window under a fixed name takes " ++
       "the window's open root (window_root, from the challenger's signed open of the window), and a value held across " ++
       "windows is named in held (or pinned)")
-  return { verifier, delta }
+  pure p
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
