@@ -35,9 +35,16 @@ derives the window's units from its own copy of the Program under the `Q_templat
   into every tile, and a unit that returns no sink is refused.
 * **Names.** Every parameter is named ``prefix`` and its role (`roles`), so a served path can name each after the
   registered value its tree commits.
+* **Tables.** A served round commits each of its calls' A rows and records before the round's coin, as the call's own
+  tables (`TABLES`, `table`): its A table, the M rows of its A block (each its codes and s_a), and its z table, one record
+  a unit of the call in its tile order. A unit's A rows and record open at its call's tables (`table_reads`), its B rows at
+  the weights' ``b/<K>``, so a statement holds one call's units, one root a port (`table_reads_file`). The window-wide
+  ``a/<K>`` and ``zy`` are the Program's parameters: trees of them registered at the window's close would be committed
+  after their readers' coins.
 """
 from __future__ import annotations
 
+import bisect
 import weakref
 from typing import Any, Callable, Iterable, Sequence
 
@@ -51,6 +58,7 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 #: the tile unit's parameters, in order: its R A rows, its C B rows, its z/y record, the salt, its position, the roots
 TILE_PARAMS = ("a", "b", "zy", "salt", "position", "roots")
@@ -314,3 +322,89 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
             out[key] = (param, lo // w)
     prefix = program.fn.bindings["PREFIX"]
     return {**out, **{field: (prefix + field, u) for field in OUTPUTS}}
+
+
+#: the tables a call commits under its round's root before the round's coin (#3053's ``tables``): ``a``, its A table, and
+#: ``zy``, its z table
+TABLES = ("a", "zy")
+
+
+def call_units(program: Program) -> list[tuple[int, int]]:
+    """Each call's units of the window ``program``, in call order: its first unit and how many (its tiles)."""
+    out, at = [], 0
+    for n in _tiles(program.fn.S()):
+        out.append((at, n))
+        at += n
+    return out
+
+
+def call_of(program: Program, u: int) -> tuple[int, int]:
+    """Unit ``u``'s call and its tile in it (row block major): its row of its call's z table."""
+    units = call_units(program)
+    c = bisect.bisect_right([u0 for u0, _n in units], u) - 1
+    if u < 0 or c < 0 or u >= units[c][0] + units[c][1]:
+        raise ValueError(f"unit {u} is no unit of the window's {sum(n for _u0, n in units)}")
+    return c, u - units[c][0]
+
+
+def table(program: Program, name: str, call: int) -> str:
+    """The registered value of call ``call``'s table ``name`` (`TABLES`): ``<prefix>a/<K>@<call>``, its A table (the M rows
+    of its A block, each its K codes and s_a), or ``<prefix>zy@<call>``, its z table (one record a unit of the call, in its
+    tile order)."""
+    S = program.fn.S()
+    if name not in TABLES or not 0 <= call < len(S.CALLS):
+        raise ValueError(f"a call's tables are {TABLES} of calls 0 .. {len(S.CALLS) - 1}, not {name!r} of call {call}")
+    return f"{S.PREFIX}a/{_k(S)[S.CALLS[call][0]]}@{call}" if name == "a" else f"{S.PREFIX}zy@{call}"
+
+
+def table_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
+    """`unit_reads` at the tables the unit's rows are committed in before its round's coin: unit ``u``, tile t of call c,
+    reads A row ``a_k<K>[i]`` (row M blk + R ti + i of ``a/<K>``) at row R ti + i of call c's A table and its record
+    ``zy`` at row t of call c's z table (`table`); its B rows, the weights' registration, and the rest where `unit_reads`
+    has them. The window-wide ``a/<K>`` and ``zy`` trees a served path registers at close come after their readers'
+    coins, so a unit's A rows and record open only here."""
+    S = program.fn.S()
+    c, t = call_of(program, u)
+    a_of, zy, base = f"{S.PREFIX}a/", f"{S.PREFIX}zy", S.CALLS[c][1] * S.M
+    out = {}
+    for key, (param, row) in unit_reads(program, tp, u).items():
+        if param == zy:
+            out[key] = (table(program, "zy", c), t)
+        elif param.startswith(a_of) and "/" not in param[len(a_of):]:
+            out[key] = (table(program, "a", c), row - base)
+        else:
+            out[key] = (param, row)
+    return out
+
+
+def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
+                     prog: str | None = None) -> dict[str, Any]:
+    """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
+    each A row and record at the call's tables (`table_reads`), each B row at the weights' ``b/<K>``. ``roots`` ``{value:
+    root}`` holds the call's two tables' roots, as its round's record names them before that round's coin, and the
+    weights'; ``ports`` names a key's circuit port when they differ (`window_ports`); ``prog`` the Program's digest when the
+    caller holds it. Every table is a ``row/v2`` value of 16-bit leaves under `registered.domain` of its own name, rows and
+    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. A unit of another call
+    reads none of them (None), so the file holds a statement to one call's units."""
+    S, sig = program.fn.S(), dict(program.fn.signature()[0])
+    k = _k(S)[S.CALLS[call][0]]
+    u0, n = call_units(program)[call]
+    a, zy, b = table(program, "a", call), table(program, "zy", call), f"{S.PREFIX}b/{k}"
+    shape = {a: (S.M, sig[f"{S.PREFIX}a/{k}"].elem.leaves // 16), zy: (n, sig[f"{S.PREFIX}zy"].elem.leaves // 16),
+             b: (sig[b].n, sig[b].elem.leaves // 16)}
+    if missing := sorted(set(shape) - set(roots)):
+        raise ValueError(f"call {call}'s statement reads {missing}, whose roots the verifier does not hold")
+    reads: dict[str, dict[str, Any]] = {}
+    for u in range(u0, u0 + n):
+        for key, (value, row) in table_reads(program, tp, u).items():
+            if value in shape:
+                reads.setdefault(key, {"value": value, "rows": [None] * tp.population})["rows"][u] = row
+    prog = prog or P.program_digest(program)
+    out = {}
+    for key, r in reads.items():
+        leaves, words = shape[r["value"]]
+        out[(ports or {}).get(key, key)] = {
+            "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
+            "domain": G.domain(prog, r["value"], words, leaves).domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+            "reads": r["rows"]}
+    return {"format": G.READS, "ports": out}

@@ -6,7 +6,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 * **The record** of a unit is its exact s32 z_u = A_u B_uᵀ over the whole K, its cells row-major, then
   y_u = dq(z_u, s_a, s_w) in bf16, row-major, little-endian (`int8_exact.zy_records`; 6,144 bytes at the served 32 × 32).
   As the unit's ``zy`` it is one bit row of 48 R C bits, `RECORD`'s leaves: z's R C words, then y's. It is a run input,
-  committed in its call's z table under round s's root before round s's coin, not a registered value
+  committed in its call's z table under round s's root before round s's coin (`h1window.table`), not a registered value
   in the declared circuit's sense, which is committed before coin 0.
 * **Types.** A record's z words are s32 (`S32`, two's complement, [-2^31, 2^31 - 1]) and a row's codes s8 (`S8`): an
   extractor that read z as u32 would see z mod 2^32, and the product of a negative dot would fail. The circuit's types are
