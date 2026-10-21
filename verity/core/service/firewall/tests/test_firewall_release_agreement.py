@@ -127,11 +127,11 @@ FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
 
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
-    limit), 1500 steps each, the record damaged (torn, cut, halved, edited, rewritten, a line foreign to it), repaired and
-    appended to between ops. Each op's result, or its rejection where Rust's was an error, and the record it leaves are
-    Rust's. A record holding a line the firewall doesn't write (`foreign`) is outside the domain: Rust read past the line,
-    and the Lean refuses the record (`test_the_lean_reads_only_the_firewalls_lines`), at each of the 387 steps Rust answered
-    on one. A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
+    limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
+    repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
+    and at 2830 of them the Lean's result and the record it leaves are Rust's byte for byte. The other 387 are outside the
+    domain: their record holds a line the firewall doesn't write (`foreign`), which Rust read past and the Lean refuses the
+    record for (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
     at byte AT replaced by PUT), its `out` the record it leaves as an edit of the one before it, and `after` that record's
     SHA-256."""
     tally: Counter = Counter()
@@ -158,7 +158,7 @@ def test_the_lean_runs_rusts_index_cases(lean):
     print(dict(sorted(tally.items())))
     assert tally["outside"] == 387, tally
     assert sum(v for k, v in tally.items() if k != "outside" and not k.endswith(":reject")) == 2830, tally
-    assert sum(v for k, v in tally.items() if k.endswith(":reject")) >= 500, tally
+    assert sum(v for k, v in tally.items() if k.endswith(":reject")) == 762, tally
     assert {k.split(":")[0] for k in tally} - {"outside"} == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
     for k in ("open:ok", "admit:ok", "admit:refused"):
         assert tally[k] >= 10, (k, tally)
