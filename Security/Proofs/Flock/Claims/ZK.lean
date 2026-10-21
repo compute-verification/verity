@@ -511,7 +511,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
   returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
   same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
-  are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
+  below `h_ab` are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
   and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
   firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
