@@ -504,10 +504,16 @@ def _xor_words(ws: Sequence[int]) -> int:
 
 
 def lane_partials(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
-                  roots: tuple[bytes, bytes]) -> list[list[int]]:
+                  roots: tuple[bytes, bytes], gated: Sequence[int] | None = None) -> list[list[int]]:
     """Each lane's partial (`fold`) of the unit's receipt on words, lane by lane, for A's r rows and B's c rows: the words
-    whose XOR is `reference`'s receipt, as a lane sub-statement returns them (`h1zy.PouwH1LaneZy`)."""
+    whose XOR is `reference`'s receipt, the rows a lane sub-statement checks (`h1zy.PouwH1LaneZy`). `gated`: the tile's r
+    admit bits (v4's): a dead tile's partials, every bit 0, are zero words, whose XOR is its zero receipt."""
     lay = Layout(len(a), len(b), len(a[0]))
+    if gated is not None:
+        if isinstance(gated, (bool, int)) or len(gated) != lay.r:
+            raise ValueError(f"gated is the tile's {lay.r} admit bits, not {gated!r}")
+        if not any(g & 1 for g in gated):
+            return [[0] * (2 * lay.sets) for _ in range(lay.lanes)]
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     return [fold(keys[ln], lane_sets(a, b, rows, cols, lay, ln)) for ln in range(lay.lanes)]

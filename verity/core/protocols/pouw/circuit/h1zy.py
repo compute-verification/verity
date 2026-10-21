@@ -33,9 +33,28 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`), so a proof the
   verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
   accepted proof.
+* **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a drawn leaf is proved as its 32
+  lanes and their combine). CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The
+  partials are values: the prover commits them after the draw under hiding leaves, one row per lane (``partials``, row l
+  lane l; proofs' service piece), and the 33 statements open that one commitment. A partial is 2 (KS + m) u32 (8,320 bits
+  at K = 4096), so it is an input, never an output. `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
+  by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
+  row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
+  (`h1tile.Layout`) and its keys block l of σ_R's, so its chain's words are the lane's partial as the served receipt XORs
+  them (kernels' ``lane_partials``, #3095), each masked by v4's gate, the admit bits' OR (`PouwOrBit`, `PouwMask32`): a
+  dead leaf's partials are zero. ok is 1 exactly when its partials row is those words and its 32 cells of the record
+  (`lane_cells`: by row slot, then column slot) pass `PouwZyCheck_v1{4, 8}` at its rows' z (TILE's v1 or v3 form) and
+  scales, a dead leaf's cells too (z = 0, y = dq(0, +0, s_w)). The index l is a public input of `lane_bits` bits: each
+  noise block's counter and each of the lane's cells is picked from the leaf's by a `PouwMuxBit` tree over its bits, so
+  one Definition at each K is every lane of a leaf. ok is a sink (`Out(sink=True)`): a Definition with a coin and a
+  position port that returns no sink is a seed, whose body no port rule follows (`ports._coin_role`), and the lane, a
+  unit, would be one. `PouwH1Combine_v1{TILE}` reads the 32 ``partials`` rows and the leaf's committed ``receipt`` and
+  returns ok, 1 exactly when the rows' XOR is the receipt word by word, so the 33 oks hold the receipt as the tile unit's
+  receipt output does.
 
-`records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), and `reference` the unit on
-words, ``(receipt, ok)``.
+`records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
+``(receipt, ok)``, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
+combine's ok.
 """
 from __future__ import annotations
 
@@ -243,12 +262,17 @@ def _lane_layout(S: Any) -> H.Layout:
     return H.Layout(r, c, k)
 
 
+def _words(lay: H.Layout) -> Array:
+    """A lane's partial, or the leaf's receipt: 2 (KS + m) u32."""
+    return Array(2 * lay.sets, H.U32)
+
+
 def _lane_signature(S: Any) -> tuple:
     lay = _lane_layout(S)
     params, _ret = S.TILE.signature()
-    return ((("a", Array(4, ROW(lay.k))), ("b", Array(8, ROW(lay.k))), ("zy", RECORD(lay.r, lay.c)), *params[2:],
-             ("lane", Array(lane_bits(lay.r, lay.c), BIT))),
-            Record(("partial", Array(2 * lay.sets, H.U32)), ("ok", BIT)))
+    return ((("a", Array(4, ROW(lay.k))), ("b", Array(8, ROW(lay.k))), ("admit", Array(lay.r, BIT)),
+             ("zy", RECORD(lay.r, lay.c)), ("partials", _words(lay)), *params[2:],
+             ("lane", Array(lane_bits(lay.r, lay.c), BIT))), Record(("ok", BIT)))
 
 
 def _pick(B: Any, sel: list, cands: list) -> Coll:
@@ -267,7 +291,8 @@ def _noise(B: Any, seed: Coll, sel: list, firsts: list[int], n: int, const: Any)
     return Coll(Array(n, BIT), concat([blk.refs for blk in blocks]).slice(0, n))
 
 
-def _lane_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position: Coll, roots: Coll, lane: Coll) -> Coll:
+def _lane_body(B: Any, S: Any, a: Coll, b: Coll, admit: Coll, zy: Coll, partials: Coll, salt: Coll, position: Coll,
+               roots: Coll, lane: Coll) -> Coll:
     lay = _lane_layout(S)
     G, Q = lay.r // 4, lay.c // 8
     sel = [lane[t] for t in range(lane_bits(lay.r, lay.c))]
@@ -314,41 +339,49 @@ def _lane_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, salt: Coll, position:
     rec = Coll(RECORD(4, 8), concat([p[0:32].refs for p in picked] + [p[32:48].refs for p in picked]))
     ok = B.call(bind(PouwZyCheck, R=4, C=8), rec, Coll(Array(32, S32), concat(z)), _rows(a, 4, "scale"),
                 _rows(b, 8, "scale"))
-    return Coll(_lane_signature(S)[1], concat([w.refs for pair in cp for w in pair] + [ok.refs]))
+    live = [admit[i] for i in range(lay.r)]
+    while len(live) > 1:
+        live = [B.call(H.PouwOrBit, live[i], live[i + 1]) if i + 1 < len(live) else live[i] for i in range(0, len(live), 2)]
+    chain = B.batch(H.PouwMask32, Coll(_words(lay), concat([w.refs for pair in cp for w in pair])), live[0], axes=(0, None))
+    eq = B.batch(H.SG.PouwEq32, partials, chain, axes=(0, 0))
+    return Coll(_lane_signature(S)[1], _and_all(B, [ok] + [eq[w] for w in range(2 * lay.sets)]).refs)
 
 
 def _lane_ports(S: Any) -> Any:
     return _ports.Ports(params={"salt": _ports.In(kind="coin"), "position": _ports.In(kind="position")},
-                        ret={"partial": _ports.Out(sink=True)})
+                        ret={"ok": _ports.Out(sink=True)})
 
 
 PouwH1LaneZy = CompositeDefinition(
     "PouwH1LaneZy", 1, ("TILE",), _lane_signature, _lane_body, conformance="protocol-defined", refuse=_refuse_lane,
     register=H.SG is not None, ports=_lane_ports,
     doc="One lane of TILE's R × C leaf (`circuit.h1zy`): the lane's 4 A rows and 8 B rows (by row and column slot), the "
-        "leaf's whole z/y record, its salt, position and roots, and the public lane index. Its noise is the leaf's seed_j "
-        "stream at its rows' and columns' blocks and its keys block lane of σ_R's, so it returns its partial, the "
-        "lane's 2 (KS + m) receipt words before the lanes' XOR, and ok, 1 exactly when its 32 cells of the record are its "
-        "rows' product z (TILE's v1 or v3 form) and PouwZyDequant_v2 of z at each cell's row and column scale.")
+        "leaf's R admit bits, its whole z/y record, the lane's committed partial, the leaf's salt, position and roots, and "
+        "the public lane index. Its noise is the leaf's seed_j stream at its rows' and columns' blocks and its keys block "
+        "lane of σ_R's, so its chain's 2 (KS + m) words are the lane's part of the receipt, each AND the admit bits' OR. "
+        "ok is 1 exactly when the partial is those words and its 32 cells of the record are its rows' product z (TILE's "
+        "v1 or v3 form) and PouwZyDequant_v2 of z at each cell's row and column scale.")
 
 
 def _combine_signature(S: Any) -> tuple:
     lay = _lane_layout(S)
-    words = Array(2 * lay.sets, H.U32)
-    return (("partials", Array(lay.lanes, words)),), Record(("receipt", words))
+    return (("partials", Array(lay.lanes, _words(lay))), ("receipt", _words(lay))), Record(("ok", BIT))
 
 
-def _combine_body(B: Any, S: Any, partials: Coll) -> Coll:
+def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
     lay = _lane_layout(S)
-    rc = [H._xor(B, [partials[ln][w] for ln in range(lay.lanes)]).refs for w in range(2 * lay.sets)]
-    return Coll(_combine_signature(S)[1], concat(rc))
+    xor = Coll(_words(lay), concat([H._xor(B, [partials[ln][w] for ln in range(lay.lanes)]).refs
+                                    for w in range(2 * lay.sets)]))
+    eq = B.batch(H.SG.PouwEq32, xor, receipt, axes=(0, 0))
+    return Coll(_combine_signature(S)[1], _and_all(B, [eq[w] for w in range(2 * lay.sets)]).refs)
 
 
 PouwH1Combine = CompositeDefinition(
     "PouwH1Combine", 1, ("TILE",), _combine_signature, _combine_body, conformance="protocol-defined", refuse=_refuse_lane,
-    register=H.SG is not None, ports=lambda S: _ports.Ports(ret={"receipt": _ports.Out(sink=True)}),
-    doc="The receipt of TILE's leaf from its lanes' partials (`circuit.h1zy`): word w the XOR over the lanes, in lane "
-        "order, of each partial's word w (PouwXor32_v2), CP-W's receipt.")
+    register=H.SG is not None,
+    doc="The receipt check of TILE's leaf over its lanes' committed partials (`circuit.h1zy`): ok is 1 exactly when, word "
+        "by word, the XOR over the lanes in lane order of each partial's word (PouwXor32_v2) is the leaf's committed "
+        "receipt's.")
 
 
 def lane(tile: Any) -> Any:
@@ -393,13 +426,15 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequen
     return receipt, check(zy[0], zy[1], z, sa, sw)
 
 
-def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
-                   zy: tuple[Sequence[int], Sequence[int]], salt: bytes, position: int, roots: tuple[bytes, bytes], lane: int,
-                   tile: tuple[int, int]) -> tuple[list[int], int]:
-    """`PouwH1LaneZy` on words: (partial, ok) of lane ``lane`` of an R × C ``tile``'s leaf, from the lane's 4 A rows and 8 B
-    rows by slot (s8 encodings) and their scales, the leaf's record ``zy`` (all R C cells), its salt, position and roots.
-    The partial is `h1tile.lane_partials`' for the lane and ok `check` of its cells of the record."""
+def lane_partial(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], admit: Sequence[int], salt: bytes, position: int,
+                 roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int]) -> list[int]:
+    """Lane ``lane``'s honest partial on words, the row the prover commits for it, from its 4 A rows and 8 B rows by slot
+    (s8 encodings) and the leaf's R admit bits: `h1tile.lane_partials`' for the lane, zero words for a dead leaf."""
     lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
+    if isinstance(admit, (bool, int)) or len(admit) != lay.r:
+        raise ValueError(f"admit is the leaf's {lay.r} admit bits, not {admit!r}")
+    if not any(g & 1 for g in admit):
+        return [0] * (2 * lay.sets)
     rows, cols = H.noise(SD.seed(salt, position, *roots), lay)
     af: list = [None] * lay.r
     bf: list = [None] * lay.c
@@ -408,21 +443,32 @@ def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: S
     for t, j in enumerate(lay.cols(lane)):
         bf[j] = b[t]
     keys = H.fold_keys(SD.receipt_seed(salt, position, *roots), lay)
-    partial = H.fold(keys[lane], H.lane_sets(af, bf, rows, cols, lay, lane))
+    return H.fold(keys[lane], H.lane_sets(af, bf, rows, cols, lay, lane))
+
+
+def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
+                   admit: Sequence[int], zy: tuple[Sequence[int], Sequence[int]], partial: Sequence[int], salt: bytes,
+                   position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int]) -> int:
+    """`PouwH1LaneZy` on words: ok of lane ``lane`` of an R × C ``tile``'s leaf, from the lane's 4 A rows and 8 B rows by
+    slot (s8 encodings) and their scales, the leaf's R admit bits, its record ``zy`` (all R C cells), the lane's committed
+    ``partial``, and the leaf's salt, position and roots: 1 exactly when the partial is `lane_partial`'s and the lane's
+    cells of the record pass `check`."""
+    lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
+    want = lane_partial(a, b, admit, salt, position, roots, lane, tile)
     z = [H.SG.seg_dot(0, a[s], b[t]) for s in range(4) for t in range(8)]
     cells = lane_cells(lay, lane)
-    return partial, check([zy[0][u] for u in cells], [zy[1][u] for u in cells], z, sa, sw)
+    return int([v & M32 for v in partial] == want and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], z, sa, sw))
 
 
-def combine_reference(partials: Sequence[Sequence[int]]) -> list[int]:
-    """`PouwH1Combine` on words: the lanes' partials XORed word by word."""
-    out = [0] * len(partials[0])
+def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int]) -> int:
+    """`PouwH1Combine` on words: 1 exactly when the lanes' partials XORed word by word are ``receipt``."""
+    out = [0] * len(receipt)
     for p in partials:
         out = [x ^ (v & M32) for x, v in zip(out, p, strict=True)]
-    return out
+    return int(out == [v & M32 for v in receipt])
 
 
 __all__ = ["BF16", "F32", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1TileZy", "PouwMuxBit",
            "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check", "combine",
-           "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_reference", "records", "reference", "unit",
-           "zy_cell"]
+           "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference", "records",
+           "reference", "unit", "zy_cell"]

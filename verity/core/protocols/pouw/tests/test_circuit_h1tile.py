@@ -172,6 +172,34 @@ def test_reference_follows_the_seed():
         assert other[0] == z and all(x != y for x, y in zip(other[1], rc))
 
 
+def _xor_rows(parts):
+    xor = [0] * len(parts[0])
+    for p in parts:
+        xor = [x ^ v for x, v in zip(xor, p)]
+    return xor
+
+
+@pytest.mark.parametrize("r,c", [(8, 16), (32, 32)])
+def test_the_receipt_is_the_lanes_partials_xored(r, c):
+    """Each lane's partial (`lane_partials`, `fold`) is its 2 (KS + m) words before the XOR across lanes, so the receipt is
+    the partials XORed word by word, and no two lanes' partials are equal. Gated by v4's admit bits, a live tile's are the
+    ungated ones and a dead tile's are zero words, whose XOR is v4's zero receipt."""
+    rng = random.Random(5)
+    a, b = _rows(rng, r, 64, -127, 127), _rows(rng, c, 64, -127, 127)
+    lay = H.Layout(r, c, 64)
+    parts = H.lane_partials(a, b, SALT, 3, ROOTS)
+    rc = H.reference(a, b, SALT, 3, ROOTS)[1]
+    assert len(parts) == lay.lanes and {len(p) for p in parts} == {2 * lay.sets}
+    assert _xor_rows(parts) == rc and len({tuple(p) for p in parts}) == lay.lanes
+    one = [int(i == r - 1) for i in range(r)]
+    assert H.lane_partials(a, b, SALT, 3, ROOTS, gated=one) == parts
+    dead = H.lane_partials(a, b, SALT, 3, ROOTS, gated=[0] * r)
+    assert dead == [[0] * (2 * lay.sets)] * lay.lanes
+    assert _xor_rows(dead) == H.reference(a, b, SALT, 3, ROOTS, stream=True, gated=[0] * r)[1]
+    with pytest.raises(ValueError, match="admit bits"):
+        H.lane_partials(a, b, SALT, 3, ROOTS, gated=[1] * (r - 1))
+
+
 @compiles
 @pytest.mark.slow
 def test_h1_tile_is_its_reference():
