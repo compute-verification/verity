@@ -227,8 +227,8 @@ def check(rec: Any, registration: str, draw: str, mine: Mapping[str, Mapping[str
     if not all(isinstance(v, str) for v in names) or len(set(names)) != len(names) or set(names) != set(mine):
         add("P-values")
     by = {e["value"]: e for e in got if isinstance(e["value"], str)}
-    for v, want in mine.items():
-        e = by.get(v)
+    for v in sorted(mine):
+        want, e = mine[v], by.get(v)
         if e is None:
             continue
         if not _hex64(e["root"]):

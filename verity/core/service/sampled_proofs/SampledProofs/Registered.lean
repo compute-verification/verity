@@ -151,19 +151,23 @@ def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray 
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
 
+/-- `domain` with `(key, hex)` beside its binding's keys: a per-window value's `"window"`, a produced value's
+`"produced"` (`SampledProofs.Produced`). -/
+def domainBound (program value : String) (words leaves wordBits : Nat) (key r : String) : V ByteArray := do
+  if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
+  let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
+    ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
+    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ [(key, Json.str r)])
+  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
+    (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
+  return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
+
 /-- `registered.domain(program, value, words, leaves, word_bits, window).domain_id`: `domain`, and for a per-window value
 (`some r`, `r` the window's open root) the same with `"window": r` in the binding. -/
 def domainAt (program value : String) (words leaves wordBits : Nat) : Option String → V ByteArray
   | none => domain program value words leaves wordBits
-  | some r => do
-    if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
-    let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str SCHEMA),
-      ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
-      (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ [(WINDOW_KEY, Json.str r)])
-    let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
-    let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
-      (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
-    return Flock.FV3.hash "domain" [binding, Flock.FV3.uint 0, positions, Flock.FV3.uint leaves] Flock.Sha512.hash
+  | some r => domainBound program value words leaves wordBits WINDOW_KEY r
 
 /-- The verifier's own entry for one registered value: its rows (`leaves`), their `words`, `word_bits` and domain (hex). -/
 structure Entry where
