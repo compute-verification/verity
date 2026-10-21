@@ -314,12 +314,12 @@ def _vector_op(fw: FW.Firewall, op: list):
     return getattr(fw, k)(*op[1:])
 
 
-def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
+def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
     recursive session released whole, statements that can't be one's), the budget, the schedule, and strings Python
-    escapes. ``flock_live::release``'s ``the_shared_vectors_hold`` runs the same file, so the two firewalls read and write
-    one record."""
+    escapes. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two firewalls
+    read and write one record."""
     v = json.loads(VECTORS.read_text())
     assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
     for c in v["cases"]:
