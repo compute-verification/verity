@@ -6,8 +6,9 @@ import Proofs.Nci.Cover.Width
 
 `WidthOfCut`: a block handed the set `X` of gates of `A j`, fewer than `f`, is handed no gate of `A j \ X`, so it computes
 every gate that reaches the product's activation inside `A j \ X` (`BackwardClosure`, from the activation gate, which
-the block holds since a gate it computes reads it). The cut width gives upstream products over `D` parameters among
-them, and `UpdateHardness` charges `b D > k` bits. `CutOfDisjointUpstreams` is pigeonhole: fewer than `f` gates miss one of
+the block holds since a gate it computes reads it). The cut width gives upstream products over `D` parameters whose
+output gates do, and each of their gates reaches its output inside the product (`reachesIn_output`), within `A j \ X`,
+so the block computes them whole and `UpdateHardness` charges `b D > k` bits. `CutOfDisjointUpstreams` is pigeonhole: fewer than `f` gates miss one of
 `f` disjoint parts (`exists_disjoint_of_card_lt`). `cutWidth_le_reads` is the cap: the cut width is at most the number of
 activation gates the product reads, since a set holding all of them leaves nothing connected.
 -/
@@ -44,10 +45,12 @@ theorem WidthOfCut : Guarantees.WidthOfCut := by
     tauto
   have hUc : ∀ q ∈ U, M.m q ⊆ C.computed I := by
     intro q hq x hx
-    obtain ⟨g, hg, a, ha, hxa⟩ := hreach q hq x hx
-    exact BackwardClosure C I _ a x hI.1 (pred_subset_of_mem_computed hI.1 (hpI hg) ha) hR hxa
-  have hpay := hH I hI.1 hI.2.1.le U hUP hUc
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+    obtain ⟨hqA, g, hg, a, ha, hoa⟩ := hreach q hq
+    have hoI := BackwardClosure C I _ a (M.o q) (pred_subset_of_mem_computed (hpI hg) ha) hR hoa
+    exact BackwardClosure C I _ (M.o q) x (computed_subset C I hoI) hR
+      (reachesIn_mono hqA (reachesIn_output C (M.m q) (M.o q) (M.m_outputs q (hUP hq)) x hx))
+  have hpay := hH I hI.1.le U hUP hUc
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hD : (D : ℝ) ≤ (U.image Prod.snd).card := by exact_mod_cast hDU
   have := mul_le_mul_of_nonneg_left hD hb.le
   linarith
@@ -57,8 +60,8 @@ theorem CutOfDisjointUpstreams : Guarantees.CutOfDisjointUpstreams := by
   obtain ⟨B, hBdisj, hB⟩ := hT p hp
   obtain ⟨i, hi⟩ := exists_disjoint_of_card_lt hBdisj hX
   obtain ⟨hBA, U, hUP, hDU, g, hg, a, ha, hreach⟩ := hB i
-  refine ⟨U, hUP, hDU, fun q hq x hx => ⟨g, hg, a, ha, ?_⟩⟩
-  exact reachesIn_mono (fun v hv => Finset.mem_sdiff.2 ⟨hBA hv, Finset.disjoint_left.1 hi hv⟩) (hreach q hq x hx)
+  have hBX : B i ⊆ A p.1 \ X := fun v hv => Finset.mem_sdiff.2 ⟨hBA hv, Finset.disjoint_left.1 hi hv⟩
+  exact ⟨U, hUP, hDU, fun q hq => ⟨(hreach q hq).1.trans hBX, g, hg, a, ha, reachesIn_mono hBX (hreach q hq).2⟩⟩
 
 /-- **The cap**: at a positive depth, the cut width is at most the number of gates of `A j` that a counted product of
 use `j` reads. -/
@@ -70,7 +73,7 @@ theorem cutWidth_le_reads {C : Circuit} {J L : Type} [DecidableEq L] (M : MulBlo
   obtain ⟨U, hUP, hDU, hreach⟩ := hW p hp _ hlt
   obtain ⟨l, hl⟩ : (U.image Prod.snd).Nonempty := Finset.card_pos.1 (lt_of_lt_of_le hD hDU)
   obtain ⟨q, hq, -⟩ := Finset.mem_image.1 hl
-  obtain ⟨g, hg, a, ha, π, ⟨-, hlast, -⟩, hπ⟩ := hreach q hq (M.o q) (o_mem M (hUP hq))
+  obtain ⟨-, g, hg, a, ha, π, ⟨-, hlast, -⟩, hπ⟩ := hreach q hq
   obtain ⟨haA, haX⟩ := Finset.mem_sdiff.1 (hπ a (List.mem_of_getLast? hlast))
   exact haX (Finset.mem_inter.2 ⟨Finset.mem_biUnion.2 ⟨g, hg, ha⟩, haA⟩)
 

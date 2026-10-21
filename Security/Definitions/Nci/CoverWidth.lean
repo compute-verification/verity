@@ -13,7 +13,7 @@ block computing a counted product whole is handed at least `f` gates of its acti
   least `f` gates.
 * `MulBlocks.DisjointUpstreams`: `f` pairwise disjoint sub-regions of the activation region, each holding an upstream
   certificate of its own at depth `D`. It implies `CutWidth`, and it is a certificate a checker verifies in time linear
-  in the regions: disjointness, and one path per gate of each upstream product.
+  in the regions: disjointness, and one path per upstream product.
 
 A block that is handed the gates `X` of the region, and no others, computes everything that reaches the product's
 activation inside the region minus `X` (`BackwardClosure`), so it is not enough that `f` paths enter the activation
@@ -30,25 +30,29 @@ variable {C : Circuit} {J L : Type*}
 
 /-- **The cut width** `f` at depth `D`, for the activation regions `A`: for every counted product `p` of use `j` and
 every set `X` of fewer than `f` gates, some upstream products `U ⊆ Pall` over at least `D` distinct updated parameters
-have every gate reaching, inside `A j \ X`, an activation gate that a gate of `p` reads.
+lie in `A j \ X`, and the output gate of each reaches, inside `A j \ X`, an activation gate that a gate of `p` reads.
 
-At `X = ∅` it is the reach clause of the upstream certificate (`Upstream`). With `k < b D`, a block handed fewer than
-`f` gates of `A j` would compute all of `U` (`BackwardClosure` on `A j \ X`), which `UpdateHardness` prices above `k`.
+At `X = ∅` it is the reach clause of the upstream certificate (`Upstream`), with each product free to reach its own
+activation gate. With `k < b D`, a block handed fewer than `f` gates of `A j` would compute all of `U` (`BackwardClosure`
+on `A j \ X`), which `UpdateHardness` prices above `k`.
 
 It caps `f` at the number of activation gates a product reads, since `X` may be all of them: at FP4, `f ≤ 4` when the
 product's output reads all four bits of its activation, and `f ≤ 2` for an output that reads only two. It holds at
-`f = 4` when the four bits are free (paper argument, not in Lean, which has no gate semantics): if, for every set `R` of
-upstream products over fewer than `D` parameters, fixing every value entering `A j` except the parameters of the products
-outside `R` still leaves the activation taking more than `8` of its `16` values, no three gates `X` can cut it, since the
-activation would then be a function of `X`'s three bits. Kimi K2: `D = k / b + 1 ≈ 8·10⁶`, two percent of one layer's
-`4·10⁸` active weights. -/
+`f = 4` when the four bits are free (paper argument, not in Lean, which has no gate semantics). Say no gate outside `A j`'s
+products reads a product's gates other than its output, nor, inside `A j`, its parameter. If, for every set `R` of
+upstream products over fewer than `D + 3` parameters, fixing every value entering `A j` except the parameters of the
+products outside `R` still leaves the activation taking more than `8` of its `16` values, then no three gates `X` cut
+it. The gates inside `A j \ X` that reach the activation read only each other, `X`, and values entering `A j` from
+products that are connected or that `X` falls in. So the activation would be a function of `X`'s three bits. Kimi K2:
+`D = k / b + 1 ≈ 8·10⁶`, two percent of one layer's `4·10⁸` active weights. -/
 def CutWidth [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (D f : ℕ) : Prop :=
   ∀ p ∈ M.P, ∀ X : Finset (Fin C.N), X.card < f → ∃ U ⊆ M.Pall, D ≤ (U.image Prod.snd).card ∧
-    ∀ q ∈ U, ∀ x ∈ M.m q, ∃ g ∈ M.m p, ∃ a ∈ C.pred g, C.ReachesIn (A p.1 \ X) x a
+    ∀ q ∈ U, M.m q ⊆ A p.1 \ X ∧ ∃ g ∈ M.m p, ∃ a ∈ C.pred g, C.ReachesIn (A p.1 \ X) (M.o q) a
 
 /-- **Disjoint upstreams** `f` at depth `D`, for the activation regions `A`: each counted product `p` of use `j` has `f`
 pairwise disjoint sub-regions `B i ⊆ A j`, each with upstream products `U ⊆ Pall` over at least `D` distinct updated
-parameters, every gate of which reaches, inside `B i`, one activation gate that a gate of `p` reads.
+parameters, all of whose gates lie in `B i` and whose output gates reach, inside `B i`, one activation gate that a gate of
+`p` reads.
 
 It is the upstream certificate (`Upstream`) `f` times over, in disjoint parts of the region, and implies `CutWidth`: fewer
 than `f` gates miss one of the parts. In a transformer the parts are groups of a layer's hidden units with their partial
@@ -57,7 +61,7 @@ through the final reduction, the normalization and the quantizer is a flow quest
 def DisjointUpstreams [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (D f : ℕ) : Prop :=
   ∀ p ∈ M.P, ∃ B : Fin f → Finset (Fin C.N), (∀ i i', i ≠ i' → Disjoint (B i) (B i')) ∧
     ∀ i, B i ⊆ A p.1 ∧ ∃ U ⊆ M.Pall, D ≤ (U.image Prod.snd).card ∧
-      ∃ g ∈ M.m p, ∃ a ∈ C.pred g, ∀ q ∈ U, ∀ x ∈ M.m q, C.ReachesIn (B i) x a
+      ∃ g ∈ M.m p, ∃ a ∈ C.pred g, ∀ q ∈ U, M.m q ⊆ B i ∧ C.ReachesIn (B i) (M.o q) a
 
 end MulBlocks
 

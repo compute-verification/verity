@@ -11,8 +11,8 @@ verifies in linear time, `f` disjoint upstream certificates (`MulBlocks.Disjoint
 `CutWidthCoverBound` are the width bounds (`WidthIntensity`, `WidthCoverBound`) with the named premise `Width` replaced
 by the cut width.
 
-What is derived is narrower than `Width`, and has to be: `Width` asks it of every subcircuit of at most `s` gates,
-whatever it is handed, and a block handed many updated parameters can compute most of an activation's upstream itself and
+What is derived is narrower than `Width`, and has to be: `Width` asks it of every set of at most `s` gates, whatever
+it is handed, and a block handed many updated parameters can compute most of an activation's upstream itself and
 be handed one gate of the region. The derivation covers blocks handed at most `k < b D` bits outside `θ`, the inference
 blocks, which is all that the width bounds read.
 -/

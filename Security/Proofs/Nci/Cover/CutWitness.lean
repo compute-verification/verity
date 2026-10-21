@@ -31,12 +31,9 @@ one activation gate, at depth `D = 4`: a block handed one gate of the region lea
 
 namespace Nci.Cover.SecurityProofs
 
-local instance cutDecSubcircuit (C : Circuit) (I : Finset (Fin C.N)) : Decidable (C.Subcircuit I) :=
-  inferInstanceAs (Decidable (I.Nonempty ∧ ∀ g ∈ I, C.pred g ⊆ I ∨ Disjoint (C.pred g) I))
-
 local instance cutDecInferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) :
     Decidable (C.InferenceBlock s k I) :=
-  inferInstanceAs (Decidable (C.Subcircuit I ∧ I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
+  inferInstanceAs (Decidable (I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
 
 local instance cutDecCovers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Decidable (C.Covers 𝓘) :=
   inferInstanceAs (Decidable (∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I))
@@ -85,7 +82,7 @@ abbrev tM : MulBlocks tC ℕ ℕ where
   P := {(1, 9)}
   P_subset := by decide
   m := tm
-  m_subcircuit := by decide
+  m_nonempty := by decide
   m_computed := by decide
   m_disjoint := by
     have h : ∀ p ∈ ({(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8), (1, 9)} : Finset (ℕ × ℕ)),
@@ -141,25 +138,21 @@ theorem tM_disjointUpstreams : tM.DisjointUpstreams tA 4 2 := by
   refine ⟨tB, by decide, fun i => ?_⟩
   fin_cases i
   · refine ⟨by decide, {(0, 1), (0, 2), (0, 3), (0, 4)}, by decide, by decide, 26, by decide, 24, by decide, ?_⟩
-    have hU : ∀ q ∈ ({(0, 1), (0, 2), (0, 3), (0, 4)} : Finset (ℕ × ℕ)), tM.m q ⊆ {10, 11, 12, 13} := by decide
-    intro q hq x hx
-    have hx' := hU q hq hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx'
-    rcases hx' with rfl | rfl | rfl | rfl
-    · exact ⟨[10, 18, 22, 24], path4 (by decide), by decide⟩
-    · exact ⟨[11, 18, 22, 24], path4 (by decide), by decide⟩
-    · exact ⟨[12, 19, 22, 24], path4 (by decide), by decide⟩
-    · exact ⟨[13, 19, 22, 24], path4 (by decide), by decide⟩
+    intro q hq
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hq
+    rcases hq with rfl | rfl | rfl | rfl
+    · exact ⟨by decide, [10, 18, 22, 24], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [11, 18, 22, 24], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [12, 19, 22, 24], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [13, 19, 22, 24], path4 (by decide), by decide⟩
   · refine ⟨by decide, {(0, 5), (0, 6), (0, 7), (0, 8)}, by decide, by decide, 26, by decide, 25, by decide, ?_⟩
-    have hU : ∀ q ∈ ({(0, 5), (0, 6), (0, 7), (0, 8)} : Finset (ℕ × ℕ)), tM.m q ⊆ {14, 15, 16, 17} := by decide
-    intro q hq x hx
-    have hx' := hU q hq hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx'
-    rcases hx' with rfl | rfl | rfl | rfl
-    · exact ⟨[14, 20, 23, 25], path4 (by decide), by decide⟩
-    · exact ⟨[15, 20, 23, 25], path4 (by decide), by decide⟩
-    · exact ⟨[16, 21, 23, 25], path4 (by decide), by decide⟩
-    · exact ⟨[17, 21, 23, 25], path4 (by decide), by decide⟩
+    intro q hq
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hq
+    rcases hq with rfl | rfl | rfl | rfl
+    · exact ⟨by decide, [14, 20, 23, 25], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [15, 20, 23, 25], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [16, 21, 23, 25], path4 (by decide), by decide⟩
+    · exact ⟨by decide, [17, 21, 23, 25], path4 (by decide), by decide⟩
 
 theorem tM_cutWidth : tM.CutWidth tA 4 2 := CutOfDisjointUpstreams tC tM tA 4 2 tM_disjointUpstreams
 
@@ -178,12 +171,9 @@ theorem tM_upstream : tM.Upstream tA 8 where
     intro p hp _
     obtain rfl : p = (1, 9) := Finset.mem_singleton.1 hp
     refine ⟨26, by decide, 24, by decide, ?_⟩
-    have hU : ∀ q ∈ ({(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8)} : Finset (ℕ × ℕ)),
-        tM.m q ⊆ {10, 11, 12, 13, 14, 15, 16, 17} := by decide
-    intro q hq x hx
-    have hx' := hU q hq hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx'
-    rcases hx' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    intro q hq
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hq
+    rcases hq with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
     · exact ⟨[10, 18, 22, 24], path4 (by decide), by decide⟩
     · exact ⟨[11, 18, 22, 24], path4 (by decide), by decide⟩
     · exact ⟨[12, 19, 22, 24], path4 (by decide), by decide⟩
@@ -243,7 +233,7 @@ region and six bits outside `θ` in all, computes the counted product whole whil
 the wiring gives is the width of blocks handed fewer than `b D` bits outside `θ` (`cut_witness_width`), not `Width`. -/
 theorem width_unbounded_fails : ¬ Assumptions.Width tM tA 17 2 := by
   intro hW
-  have h := hW tS (by decide) (by decide) (1, 9) (by decide) (by decide) (by decide)
+  have h := hW tS (by decide) (1, 9) (by decide) (by decide) (by decide)
   have h1 : (tC.inputs tS ∩ tA (1, 9).1).card = 1 := by decide
   omega
 
@@ -281,7 +271,7 @@ abbrev sM : MulBlocks sC ℕ ℕ where
   P := {(1, 5)}
   P_subset := by decide
   m := sm
-  m_subcircuit := by decide
+  m_nonempty := by decide
   m_computed := by decide
   m_disjoint := by
     have h : ∀ p ∈ ({(0, 1), (0, 2), (0, 3), (0, 4), (1, 5)} : Finset (ℕ × ℕ)),
@@ -344,7 +334,9 @@ theorem sM_upstream : sM.Upstream sA 4 where
     refine ⟨{(0, 1), (0, 2), (0, 3), (0, 4)}, by decide, by decide, by decide, ?_⟩
     intro p hp _
     obtain rfl : p = (1, 5) := Finset.mem_singleton.1 hp
-    exact ⟨13, by decide, 11, by decide, sM_reach 11 (Or.inl rfl) _ (by decide)⟩
+    have hUP : ({(0, 1), (0, 2), (0, 3), (0, 4)} : Finset (ℕ × ℕ)) ⊆ sM.Pall := by decide
+    exact ⟨13, by decide, 11, by decide, fun q hq =>
+      sM_reach 11 (Or.inl rfl) _ (by decide) q hq (sM.o q) (o_mem sM (hUP hq))⟩
 
 /-- The block handed gate 10 and the counted product's parameter: it computes both activation gates and the product. -/
 def sS : Finset (Fin 14) := {5, 10, 11, 12, 13}
