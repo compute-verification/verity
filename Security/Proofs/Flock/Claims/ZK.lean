@@ -105,6 +105,12 @@ import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
+import Proofs.Flock.Claims.ZK.FinishLive
+import Proofs.Flock.Claims.ZK.FinishStop
+import Proofs.Flock.Claims.ZK.FinishStopAt
+import Proofs.Flock.Claims.ZK.FinishSwSrc
+import Proofs.Flock.Claims.ZK.FinishRows
+import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -452,12 +458,15 @@ import Proofs.Flock.Claims.ZK.SessionLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq` and `ProgReads` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
+  `FinalRoundEq` is a fact about the proof files the session's Lean finish computes (`Flock.Firewall.Finish`), which
+  `flock-circuit` sends, `ProgReads` one about what Rust hands the frame (`LeanFrame`), `LinkRoundEq` one
   about what the transport hands `Flock.Firewall.Link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`;
   `HelloEq` follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and
   `CoinsRead`) and the `Finish`'s round facts about the session loop
   (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
-  (`LeanRelease.checkIs_coinLayer`).
+  (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
+  `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
+  proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
@@ -511,8 +520,13 @@ import Proofs.Flock.Claims.ZK.SessionLean
   a log of `base + k` sends, and every prover the rep calls is walked once, generic in its `Sim`, so a `repFw` run that
   returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
   same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
+* `FinishLive`: the served rep's live rounds as `repFw`'s. Answered by `liveAsks` at recorded coins `C`, a rep's
+  rounds within `C` do no channel IO and are the rounds under `asksOf C` (`liveSim`, `liveAsks_rel`), so `repCons`
+  run live is `repFw`'s `repCons` with the same result, transcript and coins (`repCons_live`); where `repFw` returns,
+  its `repCons` used exactly the recorded coins and no constraint failed on the pads (`repFw_parts`), and `innerLive`
+  continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.Firewall.Finish.innerProg_run`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
-  are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
+  below `h_ab` are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
   and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
   firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
@@ -520,6 +534,23 @@ import Proofs.Flock.Claims.ZK.SessionLean
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
   table admits the opened coins no refusal shows, so table `j`'s rep `r`'s check passes at coins that are the opened
   ones through it (**`Claims.ZKMal.Masked.rank_at_admits`**).
+* `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
+  the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
+  (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
+  reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
+* `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
+  seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
+  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
+* `FinishSwSrc`: the switched prover's rep source, `tabSrcCut` of the switched cut at the workers' values
+  (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
+  `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
+  (**`Masked.swCutE_masked_of_rowsAt`**).
+* `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
+  the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
+  rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
+* `FinishZc`: the masked zerocheck's and lincheck's proofs. Answered by `asksCut` with room for their asks, the cut's
+  zerocheck and lincheck return the masked values `mk` at the layout's indices as their proofs
+  (**`Claims.ZKServer.zerocheckCut_proof`**, **`Claims.ZKServer.lincheckCut_proof`**).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,

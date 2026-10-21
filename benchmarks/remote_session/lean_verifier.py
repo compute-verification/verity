@@ -262,10 +262,13 @@ class Transcript:
     a window's openings (`verify`, the wire's frames) where its verdict was set, and the coins the challenger released
     (`close`, `released_coins`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
     openings. Every released coin is kept, never its salt: the case replays each under a zero salt, and nothing a
-    verifier answers reads the commitment."""
+    verifier answers reads the commitment. Openings are decoded and written only once the session's passes are over
+    (`passes_ended`, or the close): a 60 s window's are about 0.6 GB of JSON, and decoding them beside a timed pass
+    would take the verifier's process from the loop whose stamps the memory line reads."""
 
     def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, not_before_ns: int) -> None:
         self.path, self.items, self.result = path, queue.Queue(), None
+        self.passes = threading.Event()
         head = {"registration": registration_json(registration), "params": params_json(params),
                 "not_before_ns": not_before_ns}
         self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
@@ -277,7 +280,12 @@ class Transcript:
     def verify(self, t: int, frames: list[bytes]) -> None:
         self.items.put(("verify", t, frames))
 
+    def passes_ended(self) -> None:
+        """The session's passes are over: openings held back until now may be written."""
+        self.passes.set()
+
     def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+        self.passes.set()
         self.items.put(("close", released))
         self.thread.join()
         return self.result
@@ -307,6 +315,7 @@ class Transcript:
                     if item[0] == "event":
                         put(item[1])
                         continue
+                    self.passes.wait()
                     put(f'{{"kind":"verify","t":{item[1]},"openings":[')
                     first = True
                     for body in item[2]:

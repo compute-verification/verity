@@ -32,6 +32,7 @@ import hashlib
 import itertools
 import json
 import random
+from collections.abc import Callable
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
@@ -75,10 +76,11 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
-    salt coin opened after root `salt` (none when None), then round coins after `roots`."""
+    salt coin opened after root `salt` (none when None), then round coins after `roots`, then its draw coin after the
+    root `draw` makes of the round coins' record (none when None)."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger, roots: list[bytes], salt: bytes | None, seed: int = 0,
-                 sid: str = "s-1") -> None:
+                 sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None) -> None:
         self.ch, self.k, self.sid = ch, _key(seed), sid
         self.pub = lms.public_key(self.k)
         ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, RECORD_LEAF, m).encode())
@@ -90,6 +92,9 @@ class Session:
         for r in roots:
             self.rounds.record(r)
         records += [] if self.rounds is None else [self.rounds]
+        draws = [] if draw is None else [Ch.LiveRecord(ch, Wd.DRAW, clock)]
+        self.draw = [rec.record(draw(self.rounds)) for rec in draws]
+        records += draws
         self.lines += [canonical_json_text(e) for rec in records for e in rec.log]
         self.sealed, self.hellos, self.sealed_hellos = self.lines, [], []
         self.close = self.signed()
