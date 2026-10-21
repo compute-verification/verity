@@ -371,7 +371,7 @@ def _body_window(B, S, *args):
             data = routed.reshape(Array(n, Array(f.B, BYTE)))
     if n:
         d = a["descriptors"]
-        pos = B.call(bind(U.N3Positions, DL=f.DL, N=n), a["at"], name="descriptors")
+        pos = B.call(bind(U.N3Positions, DL=f.DL, N=n), a["at"])
         leaves = B.batch(bind(N3HidingLeaf, N_BITS=f.LW, D=f.DL), d, a["descriptor_salts"], a["layout_domain"], pos,
                          axes=(0, 0, None, 0), name="descriptors")
         lev = B.call(bind(N3Range, S=n, D=f.DL), a["at"], leaves, a["layout_domain"], a["descriptor_left"],
@@ -497,7 +497,12 @@ def instance(setup: U.Setup, w: U.Window, R: int | None = None) -> U.Instance:
     return convert(v3, setup.layout.tree, setup.units, runs_of(setup.layout, w.port) if R is None else R)
 
 
-def convert(v3: U.Instance, layout: U.Tree, units: U.UnitTable, R: int) -> U.Instance:
+def convert(v3: U.Instance, layout: U.Tree, units: U.UnitTable, R: int, runs: Sequence[Sequence[int]] | None = None,
+            fresh: Sequence[int] | None = None, starts: dict[int, int] | None = None,
+            run_units: dict[int, int] | None = None) -> U.Instance:
+    """The v4 instance of a v3 one: its runs `partition`'s unless given (each read's membership of each run, and
+    whether it is fresh), each run's unit and start its first member's unless given, and the siblings and fill each
+    run's unit's tree gives at its start, past its fresh members."""
     f, n, G = v3.fmt, v3.N - v3.salted, v3.G
     args = {k: v for k, v in v3.args.items() if k not in ("descriptor_paths", "row_paths")}
     inst = U.Instance(f, v3.N, G, v3.salted, v3.rec, args)
@@ -507,26 +512,26 @@ def convert(v3: U.Instance, layout: U.Tree, units: U.UnitTable, R: int) -> U.Ins
     at = args["at"]
     args["descriptor_left"], args["descriptor_right"] = siblings(layout.levels, at, n, f.DL)
     rs = reads(f, args["descriptors"], G)
-    of, fresh = partition(rs)
-    T = len(rs)
-    Sr = min(T, 1 << f.DB)
-    args["runs"] = [[int(o == r) for r in range(R)] for o in of]
-    args["fresh"] = [int(x) for x in fresh]
-    units_, starts, fills, lefts, rights = [], [], [], [], []
+    if runs is None:
+        of, new = partition(rs)
+        runs, fresh = [[int(o == r) for r in range(R)] for o in of], [int(x) for x in new]
+    T, Sr = len(rs), min(len(rs), 1 << f.DB)
+    args["runs"], args["fresh"] = [list(x) for x in runs], list(fresh)  # type: ignore[arg-type]
+    units_, starts_, fills, lefts, rights = [], [], [], [], []
     for r in range(R):
-        members = [s for s, o in zip(rs, of) if o == r]
-        u, q0 = (members[0].u, members[0].q) if members else (0, 0)
-        tree = units.trees[units.names[u]] if u < len(units.names) else None
-        levels = tree.levels if tree is not None else ()
-        count = len({s.q for s in members})
+        members = [t for t in range(T) if rs[t].kind and runs[t][r]]
+        u = (run_units or {}).get(r, rs[members[0]].u if members else 0)
+        q0 = (starts or {}).get(r, rs[members[0]].q if members else 0)
+        levels = units.trees[units.names[u]].levels if u < len(units.names) else ()
+        count = sum(fresh[t] for t in members)  # type: ignore[index]
         leaves0 = levels[0] if levels else ()
         fills.append([leaves0[q0 + j] if count <= j and q0 + j < len(leaves0) else ZD for j in range(Sr)])
         left, right = siblings(levels, q0, Sr, f.DB)
         units_.append(u)
-        starts.append(q0)
+        starts_.append(q0)
         lefts.append(left)
         rights.append(right)
-    args.update(run_units=units_, run_starts=starts, run_fill=fills, run_left=lefts, run_right=rights)
+    args.update(run_units=units_, run_starts=starts_, run_fill=fills, run_left=lefts, run_right=rights)
     return inst
 
 

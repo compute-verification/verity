@@ -1,5 +1,5 @@
 """N3Window_v3's ANDs on every link-window, beside N2's head checks: the simulator's and the lab's link-windows as built,
-and served rows' busy link-windows at their shape.
+and served rows' busy link-windows at their shape, as v3 and as `n3_v4`'s N3Window_v4, lever by lever.
 
 A link-window is its two port-windows, egress and ingress, and N3 runs one unit on each port-window that recorded frames
 (`n3_unit.Setup.attach`). `n3_unit.size` counts a unit's ANDs by tracing it whole. At a served window's 35,000 frames of
@@ -7,9 +7,11 @@ A link-window is its two port-windows, egress and ingress, and N3 runs one unit 
 list of every frame bit. `composed` counts the same window from its parts instead, as `N3Window_v3`'s body calls them:
 each part traced at the window's statics, the per-frame parts times the frames, the frames root as `leaf_blocks(B)`
 compressions a frame and 2 a node of its depth-D tree (`nodes`), and the XOR as none, since it is XORs alone.
-`checked` requires `composed` to equal `size`, which traces both, at every N of a ladder.
+`checked` requires `composed` to equal `size`, which traces both, at every N of a ladder. `composed_v4` and
+`n3_v4.size` are the same for v4.
 
-    python -m workload.n3_cost --out FILE [--lab RUN_DIR] [--sim] [--check N ...] [--served N ...]
+    python -m workload.n3_cost --out FILE [--lab RUN_DIR] [--sim] [--check N ...] [--check-v4 N ...]
+        [--runs EGRESS INGRESS] [--served N ...]
 """
 from __future__ import annotations
 
@@ -21,10 +23,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from verity.ml.circuits.defs import bind
-from verity.ml.commitments.gates.lms import Sha512Compress
+from verity.ml.commitments.gates.frame_v3 import FrameV3Leaf, FrameV3Node, index_bytes
+from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
+from verity.ml.commitments.gates.lms import LmsEqual, Sha512Compress
 from verity.ml.commitments.gates.sha512 import pad_tail
 
 from . import n3_unit as U
+from . import n3_v4 as V4
 
 N2_LINK_WINDOW = 2 * (1_876_070 + 807 + 19_199 + 2)
 """N2's two head checks a link-window at T = 600 buckets and a link name of 9 bytes, 3,792,156 ANDs: each head's
@@ -77,15 +82,46 @@ def composed(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, memo: dict
     return out
 
 
-def checked(f: U.Format, rec: U.Shape, ladder: list[int], G: int, salted: bool, memo: dict) -> list[dict]:
-    """`composed` beside `size` at each N of the ladder; raises where they differ."""
+def composed_v4(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict) -> dict:
+    """`n3_v4.size` of `n3_v4.unit(f, N, G, salted, rec, R)`, by part, from the parts its body calls: v3's, but for the
+    descriptors' one run and the rows' R runs, and the ok bits the final AND joins."""
+    def a(d) -> int:
+        return U._ands(d, memo)
+
+    out = composed(f, N, G, salted, rec, memo)
+    n = N - salted
+    out["other"] -= salted + (2 + G) * n + 2 - 1
+    T, Sr, zw = n * G, min(n * G, 1 << f.DB), max(1, (n * G).bit_length())
+    if n:
+        out["descriptor_reads"] = (n * a(bind(V4.N3HidingLeaf, N_BITS=f.LW, D=f.DL)) + a(bind(V4.N3Range, S=n, D=f.DL))
+                                   + a(bind(LmsEqual, N=64)) + a(bind(V4.N3Fits, D=f.DL, N=n)))
+        per_read = (a(bind(U.N3Pick, U=f.U)) + a(bind(V4.N3HidingLeaf, N_BITS=16 * f.B, D=f.DB))
+                    + a(bind(U.N3IsZero, W=16 * f.B)) + a(bind(V4.N3Runs, R=R)))
+        W = 1 + zw + 512
+        per_run = (T * (a(V4.N3Carry) + a(bind(V4.N3Skip, W=zw)))
+                   + T * sum(a(bind(V4.N3CompactStep, W=W, Z=b)) for b in range((T - 1).bit_length()))
+                   + Sr * a(bind(U.N3Mux, W=512)) + a(bind(U.N3Pick, U=f.U)) + a(bind(V4.N3Range, S=Sr, D=f.DB))
+                   + a(bind(V4.N3RunRoot, DEPTHS=f.DEPTHS)) + a(bind(V4.N3RunFits, DEPTHS=f.DEPTHS, T=T, S=Sr)))
+        out["row_reads"] = T * per_read + R * per_run
+    out["other"] += salted + (2 + T + R * (T + 2) + n if n else 0) + 2 - 1
+    out["ands"] = sum(v for k, v in out.items() if k != "ands")
+    return out
+
+
+def checked(f: U.Format, rec: U.Shape, ladder: list[int], G: int, salted: bool, memo: dict,
+            R: int | None = None) -> list[dict]:
+    """`composed` beside `size` at each N of the ladder (v4's with R runs, given R); raises where they differ."""
     out = []
     for N in ladder:
         t0 = time.perf_counter()
-        whole, parts = U.size(U.unit(f, N, G, salted, rec), memo), composed(f, N, G, salted, rec, memo)
+        if R is None:
+            whole, parts = U.size(U.unit(f, N, G, salted, rec), memo), composed(f, N, G, salted, rec, memo)
+        else:
+            whole = V4.size(V4.unit(f, N, G, salted, rec, R), memo)
+            parts = composed_v4(f, N, G, salted, rec, R, memo)
         if whole != parts:
             raise AssertionError(f"N = {N}: the window traces to {whole}, its parts to {parts}")
-        out.append({"N": N, "G": G, "salted": salted, "ands": whole["ands"],
+        out.append({"N": N, "G": G, "salted": salted, **({} if R is None else {"R": R}), "ands": whole["ands"],
                     "seconds": round(time.perf_counter() - t0, 1)})
         print("check", json.dumps(out[-1]), flush=True)
     return out
@@ -101,43 +137,103 @@ def fit(rows: list[dict]) -> dict:
             "max_relative_residual": max(abs(y - (a + b * x)) / y for x, y in zip(xs, ys))}
 
 
-def served(lab_fmt: U.Format | None, ladder: list[int], check: list[int]) -> dict:
-    """Served rows' port-windows at their shape, and their busy link-windows. The format is the lab's at B = 4,096 with
-    a prefix of 256 bytes and a suffix of 64 (a guess at a served event's JSON around its crossing text; the lab's
-    are 30 and 2), in two sizes of run: the lab's depths, and a day's (every outbox 2^26 rows, the layout two ports of
-    2^26 positions). Egress port-windows read one segment and are unsalted, ingress ones two and salted, as the lab's
-    are."""
+LEVERS = (("descriptors", "descriptor_reads"), ("rows", "row_reads"), ("other", "other"))
+"""v4's changes, one at a time: its part group against v3's, the rest of the window v3's. The groups are disjoint and
+every other group is the same in both, so v3 less the three deltas is v4."""
+
+
+def served(lab_fmt: U.Format | None, ladder: list[int], check: list[int], check_v4: list[int] = (),
+           runs: tuple[int, int] = (1, 2)) -> dict:
+    """Served rows' port-windows at their shape, and their busy link-windows, as v3 and as v4. The format is the lab's
+    at B = 4,096 with a prefix of 256 bytes and a suffix of 64 (a guess at a served event's JSON around its crossing
+    text; the lab's are 30 and 2), in three sizes of run: the lab's depths, one busy window's (every outbox 2^16 rows
+    and the layout two ports of 2^16 positions, the least that hold 35,386 frames' reads), and a day's (2^26 and two
+    ports of 2^26). Egress port-windows read one segment and are unsalted, ingress ones two and salted, as the lab's
+    are; v4 opens egress reads as runs[0] runs and ingress ones as runs[1]. At the lab's depths v4 has no unit: a
+    window's n descriptors are one run, which a layout of 2^6 positions doesn't hold. `check` holds v3's `composed` to
+    the trace at the lab's depths, and `check_v4` v4's at one window's."""
     S = SERVED
     rec = U.Shape(S["L"], S["T"], S["R"])
     base = lab_fmt or U.Format(S["B"], 30, 2, 2, (1, 0, 0, 0), 6)
     fmts = {"lab": base._replace(P=256, Q=64),
+            "window": base._replace(P=256, Q=64, DEPTHS=(16,) * len(base.DEPTHS), DL=17),
             "day": base._replace(P=256, Q=64, DEPTHS=(26,) * len(base.DEPTHS), DL=27)}
-    out: dict = {"shape": {"T": rec.T, "R": rec.R, "B": S["B"], "L": rec.L, "D": rec.D}, "runs": {}}
+    out: dict = {"shape": {"T": rec.T, "R": rec.R, "B": S["B"], "L": rec.L, "D": rec.D}, "v4_runs": list(runs),
+                 "runs": {}}
     egress = sorted(set(ladder) | set(S["egress_frames"]))
     ingress = sorted({max(2, round(S["ingress_share"] * n)) for n in S["egress_frames"]} | set(ladder))
+    sides = (("egress", egress, 1, False, runs[0]), ("ingress", ingress, 2, True, runs[1]))
     for name, f in fmts.items():
         memo: dict = {}
-        run = {"format": f._asdict(), "check": [], "egress": [], "ingress": []}
+        run: dict = {"format": f._asdict(), "check": [], "check_v4": [], "egress": [], "ingress": [],
+                     "v4": {"egress": [], "ingress": []}}
         if name == "lab":
             run["check"] = checked(f, rec, check, 1, False, memo) + checked(f, rec, check, 2, True, memo)
-        for key, ns, G, salted in (("egress", egress, 1, False), ("ingress", ingress, 2, True)):
+        if name == "window":
+            run["check_v4"] = (checked(f, rec, check_v4, 1, False, memo, runs[0])
+                               + checked(f, rec, check_v4, 2, True, memo, runs[1]))
+        for key, ns, G, salted, R in sides:
             for N in ns:
                 t0 = time.perf_counter()
                 run[key].append({"N": N, "G": G, "salted": salted, **composed(f, N, G, salted, rec, memo),
                                  "seconds": round(time.perf_counter() - t0, 1)})
                 print(name, json.dumps(run[key][-1]), flush=True)
+                if N - salted <= 1 << f.DL:
+                    t0 = time.perf_counter()
+                    run["v4"][key].append({"N": N, "G": G, "salted": salted, "R": R,
+                                           **composed_v4(f, N, G, salted, rec, R, memo),
+                                           "seconds": round(time.perf_counter() - t0, 1)})
+                    print(name, "v4", json.dumps(run["v4"][key][-1]), flush=True)
         run["egress_fit"], run["ingress_fit"] = fit(run["egress"]), fit(run["ingress"])
+        run["parts"] = part_ands(f, memo)
+        if run["v4"]["egress"]:
+            run["v4"]["egress_fit"], run["v4"]["ingress_fit"] = fit(run["v4"]["egress"]), fit(run["v4"]["ingress"])
+            n_out = max(S["egress_frames"])
+            run["v4"]["run_cost"] = {"egress": run_cost(f, n_out, 1, False, rec, runs[0], memo),
+                                     "ingress": run_cost(f, max(2, round(S["ingress_share"] * n_out)), 2, True, rec,
+                                                         runs[1], memo)}
         busy = []
         for n_out in S["egress_frames"]:
             n_in = max(2, round(S["ingress_share"] * n_out))
-            e = next(r["ands"] for r in run["egress"] if r["N"] == n_out)
-            i = next(r["ands"] for r in run["ingress"] if r["N"] == n_in)
-            busy.append({"egress_frames": n_out, "ingress_frames": n_in, "egress": e, "ingress": i, "n3": e + i,
-                         "n3_a_day": (e + i) * S["windows_a_day"], "n2": N2_LINK_WINDOW,
-                         "n2_a_day": N2_LINK_WINDOW * S["windows_a_day"]})
+            e = next(r for r in run["egress"] if r["N"] == n_out)
+            i = next(r for r in run["ingress"] if r["N"] == n_in)
+            row = {"egress_frames": n_out, "ingress_frames": n_in, "egress": e["ands"], "ingress": i["ands"],
+                   "n3": e["ands"] + i["ands"], "n3_a_day": (e["ands"] + i["ands"]) * S["windows_a_day"],
+                   "n2": N2_LINK_WINDOW, "n2_a_day": N2_LINK_WINDOW * S["windows_a_day"],
+                   "floor": e["frames_root"] + i["frames_root"]}
+            e4 = next((r for r in run["v4"]["egress"] if r["N"] == n_out), None)
+            i4 = next((r for r in run["v4"]["ingress"] if r["N"] == n_in), None)
+            if e4 and i4:
+                row["v4"] = e4["ands"] + i4["ands"]
+                row["v4_floor"] = e4["frames_root"] + i4["frames_root"]
+                row["levers"] = {lever: (e[g] + i[g]) - (e4[g] + i4[g]) for lever, g in LEVERS}
+                row["parts"] = {g: (e[g] + i[g], e4[g] + i4[g]) for g in e if g not in ("N", "G", "salted",
+                                                                                        "seconds")}
+            busy.append(row)
         run["busy_link_windows"] = busy
         out["runs"][name] = run
     return out
+
+
+def part_ands(f: U.Format, memo: dict) -> dict:
+    """The parts a frame's cost is made of, at the format: what lever 3's estimates are composed from."""
+    def a(d) -> int:
+        return U._ands(d, memo)
+
+    frame = bind(U.N3Frame, FMT=tuple(f), G=1)
+    seg = a(bind(U.N3Seg, B=f.B))
+    return {"sha512_compress": a(bind(Sha512Compress)), "row_digest": a(bind(U.N3RowDigest, N_BITS=16 * f.B)),
+            "half_row_digest": a(bind(U.N3RowDigest, N_BITS=8 * f.B)),
+            "descriptor_digest": a(bind(U.N3RowDigest, N_BITS=f.LW)), "hm96_leaf": a(bind(Hm96Sha512Leaf)),
+            "frame_v3_leaf": a(bind(FrameV3Leaf, B=index_bytes(f.DB), SCHEMA=U.SCHEMA)),
+            "frame_v3_node": a(bind(FrameV3Node, B=index_bytes(f.DB - 1))), "row_is_zero": a(bind(U.N3IsZero, W=16 * f.B)),
+            "segment": seg, "frame_less_segment": a(frame) - seg,
+            "frames_root_a_frame": a(bind(Sha512Compress)) * (leaf_blocks(f.B) + 2)}
+
+
+def run_cost(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int, memo: dict) -> int:
+    """What one more of v4's runs adds to a window."""
+    return composed_v4(f, N, G, salted, rec, R + 1, memo)["ands"] - composed_v4(f, N, G, salted, rec, R, memo)["ands"]
 
 
 def link_windows(sized: list[dict], link_of) -> list[dict]:
@@ -199,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sim", action="store_true", help="the simulator's honest run, 64-byte frames, 4 buckets a window")
     ap.add_argument("--check", type=int, nargs="*", default=[2, 3, 64, 257, 1024],
                     help="the N at which `composed` must equal `size`, at the served shape")
+    ap.add_argument("--check-v4", type=int, nargs="*", default=[2, 3, 64],
+                    help="the N at which `composed_v4` must equal `n3_v4.size`, at one busy window's depths")
+    ap.add_argument("--runs", type=int, nargs=2, default=[1, 2], metavar=("EGRESS", "INGRESS"),
+                    help="v4's runs a port-window, egress and ingress")
     ap.add_argument("--served", type=int, nargs="*", default=[2, 16, 256, 4096, 16384],
                     help="the N of the served ladder, beside the busy windows' own")
     args = ap.parse_args(argv)
@@ -210,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.lab:
         out["lab"], fmt = lab(args.lab)
         args.out.write_text(json.dumps(out, indent=1))
-    out["served"] = served(fmt, args.served, args.check)
+    out["served"] = served(fmt, args.served, args.check, args.check_v4, tuple(args.runs))
     args.out.write_text(json.dumps(out, indent=1))
     print(json.dumps({k: v["busy_link_windows"] for k, v in out["served"]["runs"].items()}, indent=1))
     return 0
