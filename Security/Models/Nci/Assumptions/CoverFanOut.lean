@@ -78,7 +78,7 @@ Scope:
   of another (`Keyed.spent_eq_of_follows`).
 
 Kimi K2 (`f = 4`, `b = 2.5`): with `ColumnsIncompressible` at 1 bit per entry, about 3.6·10⁴ (`FanOutReadCoverBound`),
-four times `FanOutCoverBound`'s 8,900. -/
+four times `FanOutCoverBound`'s 8,900. With Dgrad on the forward's tokens (`c = 2`), 7.3·10⁴ against 1.66·10⁴. -/
 def ValueReadHardness {C : Circuit} {J L Tok Val : Type*} [DecidableEq J] [DecidableEq L] [DecidableEq Val]
     {M : MulBlocks C J L} {d aOut c V f : ℕ} (K : Keyed M Tok Val d aOut c V f) (s : ℕ) (b : ℝ) : Prop :=
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ X : Finset Val, (∀ u ∈ X, K.Spent S u) →

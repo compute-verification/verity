@@ -14,8 +14,9 @@ A block that computes a product whole without being handed `f` gates of its acti
 but `g − 1` of the legs of the root that path ends at (`PerValueCut`), and pays for them as a block that holds the root
 does: the token is *heavy*, at `d − E − (g − 1)` reads. Otherwise the first value it reads on the key path is spent at
 `f` gates of that value's own key path, and no other spent value's key path meets it (`Keyed`'s (I) and (F)). Heavy
-tokens' reads are paid at one gate each, not `f`, so the `c k` term carries no `1 / f`; Kimi K2's bound is set by
-fan-out, where the two agree.
+tokens' reads are paid at one gate each, not `f`, so the `c k` term carries no `1 / f`. Kimi K2's forward bound is set
+by fan-out, where the two agree; with Dgrad counted (`c = 2`) the `c k` term sets it, a little below
+`FanOutReadIntensity`'s.
 
 `ValueReadHardness` itself doesn't follow from the wiring: a block that holds a root and cuts the word of a value keyed
 to it, reading one of its gates, spends that value at one gate.
@@ -34,9 +35,16 @@ tokens' and `P` on parameters, it computes at most `aOut X / f + c (P / b) (Y / 
 this by `k` times the larger endpoint.
 
 Kimi K2 (`FanOutReadIntensity`'s numbers, `f = 4`, `E = 122`): `k · aOut / f`, a slowdown of about 3.6·10⁴, as long as
-`δ ≥ c f k / (4 b aOut) ≈ 215`, so for `g` up to 176. Scope: `FanOutReadIntensity`'s. `ConditionalUpdateHardness`
-here says the values a block is handed, the partial sums of a root among them, don't help it rebuild updated
-parameters. -/
+`δ ≥ c f k / (4 b aOut) ≈ 215`, so for `g` up to 176. With Dgrad on the forward's tokens (`c = 2`, `α₀ = 0.301`,
+position 0's dq_rope cut), the threshold is 430, above `d − E = 390`, so the `c k` term sets the bound for every `g`:
+about 6.6·10⁴ at `g` near `f`, against `FanOutReadIntensity`'s 7.3·10⁴; at `aOut = 49152` instead of the cut,
+5.5·10⁴ for `g ≤ 65`. Scope: `FanOutReadIntensity`'s.
+
+It assumes `ConditionalUpdateHardness` with every value's gates as the region, roots' partial sums included: the values
+a block is handed, a partial sum `Σ x_i w_i` of updated parameters among them, don't help it rebuild those parameters.
+That is stronger than `FanOutIntensity`'s `UpdateHardness`, and than the additive bound's reading over activation
+regions. Under plain `UpdateHardness` the reads and the parameters' bits needn't be disjoint inputs, so the `c k` term
+loses AM–GM's 4 and becomes `c k / (δ b)`: Kimi K2 gets about 1.6·10⁴, forward only or with Dgrad on shared tokens. -/
 def FanOutReadIntensityStructural : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
     (d aOut c V f : ℕ) (K : Keyed M Tok Val d aOut c V f) (s k E g : ℕ) (b bcol : ℝ),
@@ -48,8 +56,8 @@ def FanOutReadIntensityStructural : Prop :=
 
 /-- **Fan-out cover bound, `f` bits per value, from wiring**: under `FanOutReadIntensityStructural`'s premises, a
 cover of `C` by inference blocks has `#𝓘 ≥ #P / (k · max(aOut / f, c k / (4 δ b)) + k)` blocks, `δ = d − E − (g − 1)`:
-`4 δ f b · #P ≤ #𝓘 · (k · max(4 δ b aOut, c f k) + 4 δ f b k)`. Kimi K2: a slowdown of about 3.6·10⁴ for `g ≤ 176`,
-with `FanOutReadIntensity`'s scope. -/
+`4 δ f b · #P ≤ #𝓘 · (k · max(4 δ b aOut, c f k) + 4 δ f b k)`. Kimi K2: a slowdown of about 3.6·10⁴ for `g ≤ 176`
+(6.6·10⁴ at `g` near `f` with Dgrad on the forward's tokens), with `FanOutReadIntensity`'s scope. -/
 def FanOutReadCoverBoundStructural : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
     (d aOut c V f : ℕ) (K : Keyed M Tok Val d aOut c V f) (s k E g : ℕ) (b bcol : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
