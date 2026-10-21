@@ -154,10 +154,11 @@ def _reads(c: T.Call, D: T.Def, al: dict[int, set[int]]):
             v = at + j * sp + np.arange(ln, dtype=np.int64)[None, :]
             jj, qq = np.nonzero(v < D.cols)
             parts = [(jj, qq, v[jj, qq])]
-            for p, cols in al.items():
-                pj, pq = np.nonzero(v == D.cols + p)
-                for col in cols:
-                    parts.append((pj, pq, np.full(len(pj), col, np.int64)))
+            if al:
+                pj, pq = np.nonzero(np.isin(v - D.cols, np.fromiter(al, np.int64, len(al))))
+                hits = [(a, b, x) for a, b in zip(pj.tolist(), pq.tolist()) for x in al[int(v[a, b]) - D.cols]]
+                if hits:
+                    parts.append(tuple(np.array(h, np.int64) for h in zip(*hits)))
             yield q0, tuple(np.concatenate(x) for x in zip(*parts))
         q0 += ln
 
