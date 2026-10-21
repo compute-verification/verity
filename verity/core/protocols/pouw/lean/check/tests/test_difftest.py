@@ -16,10 +16,12 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
-Its `credit`, `outcome` and `a-link` against `credit.credited`, `credit.outcome` and `credit.a_link`: one `Port` each,
-over the cases `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the
-manifest's credit bits, a draw's units each proved, a window's A trees under its round roots, then one mutation each aimed
-at every refusal), compared output for output: the credited calls or null, or the same refusal.
+Its `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` against `credit.credited`, `credit.drawn`,
+`credit.outcome`, `credit.window`, `credit.period_credit` and `credit.a_link`: one `Port` each, over the cases
+`pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
+the units a draw coin draws from a window's layout and each of them proved, a served window whole, a period of the
+auditor's ledger and its windows, a window's A trees under its round roots, then one mutation each aimed at every
+refusal), compared output for output: the credited calls, the drawn units or null, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
@@ -241,10 +243,28 @@ def credit(case: dict) -> dict:
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
+def drawn(case: dict) -> dict:
+    got, refused = Cr.drawn(*(case[k] for k in credit_cases.DRAWN_KEYS))
+    _counted(refused, "drawn")
+    return {"drawn": got} if refused is None else {"refused": list(refused)}
+
+
 def outcome(case: dict) -> dict | None:
-    refused = Cr.outcome(case["drawn"], case["proofs"])
+    refused = Cr.outcome(*(case[k] for k in credit_cases.OUTCOME_KEYS))
     _counted(refused, "outcome")
     return None if refused is None else {"refused": list(refused)}
+
+
+def window(case: dict) -> dict:
+    got, refused = Cr.window(*credit_cases.window_args(case))
+    _counted(refused, "window")
+    return {"credited": got} if refused is None else {"refused": list(refused)}
+
+
+def period(case: dict) -> dict:
+    got, refused = Cr.period_credit(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
+    _counted(refused, "period")
+    return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
 def a_link(case: dict) -> dict | None:
@@ -260,30 +280,49 @@ def _port(name: str, fn, instance, names: list[str]) -> D.Port:
 
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
+DRAWN = _port("drawn", drawn, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
+WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
+PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
 
 
 def test_credit(pass_server):
-    """Generated served windows' credited sets, drawn units' outcomes and A rows, then each mutation over a few seeds
-    (`replay`): a credit bit flipped after the draw coin, a drawn unit failed or missing, an A tree the round roots
-    didn't commit, and every other refusal of `credit.credited`, `credit.outcome` and `credit.a_link`."""
+    """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
+    then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
+    drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
+    didn't commit, and every other refusal of `credit.credited`, `credit.drawn`, `credit.outcome`, `credit.window`,
+    `credit.period_credit` and `credit.a_link`."""
     CREDITED.clear()
-    stats = {p.fn: D.run(p, examples=n, server=pass_server) for p, n in ((CREDIT, 300), (OUTCOME, 400), (A_LINK, 400))}
+    stats = {p.fn: D.run(p, examples=n, server=pass_server)
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
+                                  (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
+                                  (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
+                                  (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
                                   (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)):
         swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "outcome accept", "a-link accept"} <= set(CREDITED)
+    assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
+            "a-link accept"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
                  "credit coin: the challenger's session is not trusted", "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
+                 "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
+                 "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
+                 "period period: period ", "period missing: window #", "period order: window #",
+                 "period period: the windows presented run past", "period period: window ", "period window: window #",
+                 "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
+                 "drawn budget: the draw's K is not",
+                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
+                 "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
                  "a-link a-link: the window registers no A value", "which is no registered A value"):
