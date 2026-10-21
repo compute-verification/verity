@@ -72,6 +72,11 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
 #guard (repRounds 25 22 8).map topSizes == some [64, 64, 32]
 #guard topsListed inner later == none
 #guard topsListed { inner with holo := true } later == none
+-- At every fast100 shape (m 22 to 35), dense and holo, the later levels' caps are the ones the reps' schedule commits.
+#guard [22, 25, 27, 28, 29, 32, 35].all fun m => [false, true].all fun holo =>
+  match VStar.levelCapStatements { m, kLog := 22, claims := 8 } with
+  | .ok caps => topsListed { inner with m, holo } caps == none
+  | .error _ => false
 #guard topsListed inner #[.cap 1 128, .cap 2 128] ==
   some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
 #guard match statements inner with

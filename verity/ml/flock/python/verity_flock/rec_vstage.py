@@ -337,19 +337,19 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     return {"format": "verity/registered-reads/v0", "ports": ports}
 
 
-def stage_cap(inner: Path, out: Path, evaluate: bool = True) -> dict:
-    """RecCap alone at every level over the inner session ``inner`` (`rec_cap.stage`: level 0 under ``out``, a later level
-    ``l`` under ``out/L<l>``): each level's tops rebuilt from the recorded ``b || c`` and the salts the firewall committed
-    them under, at `rec_outer.session_program` of ``public.json``, as `stage` builds them. Returns each level's result by
-    ``L<l>``."""
+def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] | None = None) -> dict:
+    """RecCap alone at every level (or at ``levels``) over the inner session ``inner`` (`rec_cap.stage`: level 0 under
+    ``out``, a later level ``l`` under ``out/L<l>``): each level's tops rebuilt from the recorded ``b || c`` and the salts
+    the firewall committed them under, at `rec_outer.session_program` of ``public.json``, as `stage` builds them. Returns
+    each level's result by ``L<l>``."""
     inner = Path(inner)
     public_b = (inner / "public.json").read_bytes()
     public, private, proofs = V.load(inner, TABLE)
     program = O.session_program(public_b)
     ts = {rep: V.tops(public, private, f"{TABLE}/rep{rep}", TABLE) for rep in sorted(proofs)}
-    levels = min(len(t_) for t_ in ts.values())
+    every = range(min(len(t_) for t_ in ts.values()))
     return {f"L{l}": RC.stage(O.TopValue.build(program, l, {rep: t_[l] for rep, t_ in ts.items()}),
-                              Path(out) / (f"L{l}" if l else ""), evaluate) for l in range(levels)}
+                              Path(out) / (f"L{l}" if l else ""), evaluate) for l in (every if levels is None else levels)}
 
 
 def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
