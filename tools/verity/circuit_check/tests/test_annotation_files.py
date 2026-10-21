@@ -36,11 +36,12 @@ def _stem(key: str) -> str | None:
 
 @pytest.fixture(scope="module")
 def families(catalog) -> dict[str, list]:
-    """Each family the circuit-check catalog reaches, its `PER_FAMILY` smallest specializations."""
+    """Each family the circuit-check catalog reaches, its `PER_FAMILY` smallest specializations (ties by id, so the catalog's
+    records and a whole build give the same ones)."""
     by: dict[str, list[tuple[int, str]]] = {}
     for fid, (fam, gates) in catalog.reached.items():
         by.setdefault(fam, []).append((gates, fid))
-    return {k: [catalog.make(fid) for _gates, fid in sorted(v, key=lambda x: x[0])[:PER_FAMILY]] for k, v in by.items()}
+    return {k: [catalog.make(fid) for _gates, fid in sorted(v)[:PER_FAMILY]] for k, v in by.items()}
 
 
 def _signature(fn):
