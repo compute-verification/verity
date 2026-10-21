@@ -103,6 +103,11 @@ theorem capAt_readX {x : Msg} {r : XR} (h : readX x = some r) :
 
 /-! ## The layout -/
 
+/-- The last round's pieces, `fin`'s, and none at any other round. -/
+def lastPieces (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (i : ℕ) :
+    List (ℕ × List (Msg × List HmNets.Lin)) :=
+  if i + 1 = layoutOf.rounds x then fin x else []
+
 /-- **V\*'s bound layout with round 0 at RecCap**: `layoutBDeployed`'s rounds, held rows and calls, with round 0 held by
 RecCap's part (`capHold`, its calls `capCalls`), each stream round that commits tops held as `topsAt` says, and the last
 round assembled from `fin`'s pieces. A stream round with no tops is fixed to the empty message where it absorbs none
@@ -123,7 +128,7 @@ def layoutBCap (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNet
   fixedAt x i := match i with
     | 0 => none
     | j + 1 => (streamRound x j).bind fun sr => if sr.2.1.isEmpty && !sr.2.2.2 then some [] else none
-  pieceAt x i := if i + 1 = layoutOf.rounds x then fin x else []
+  pieceAt x i := lastPieces fin x i
 
 section Layout
 
@@ -135,8 +140,7 @@ theorem layoutBCap_msgAt_zero (x : Msg) (s : ℕ) :
 
 theorem layoutBCap_fixedAt_zero (x : Msg) : (layoutBCap topsAt fin).fixedAt x 0 = none := rfl
 
-theorem layoutBCap_pieceAt (x : Msg) (i : ℕ) :
-    (layoutBCap topsAt fin).pieceAt x i = if i + 1 = layoutOf.rounds x then fin x else [] := rfl
+theorem layoutBCap_pieceAt (x : Msg) (i : ℕ) : (layoutBCap topsAt fin).pieceAt x i = lastPieces fin x i := rfl
 
 end Layout
 
@@ -218,22 +222,24 @@ theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg �
           have hc : ¬ (j + 1 + 1 = layoutOf.rounds x) := by
             rw [hL]
             omega
-          rw [layoutBCap_pieceAt, if_neg hc]
+          rw [layoutBCap_pieceAt, lastPieces, if_neg hc]
         refine ⟨?_, fun _ => hpc⟩
         cases ht : sr.2.1.isEmpty with
         | false =>
+          have ht' : ¬ sr.2.1 = #[] := by simpa using ht
           right; left
           obtain ⟨s, hs', hsome⟩ := hT x st hst hf j sr hs ht
           refine ⟨s, hs', ?_⟩
           have hm : (layoutBCap topsAt fin).msgAt x s (j + 1) = topsAt x s (j + 1) := by
-            simp [layoutBCap, hs, ht]
+            simp [layoutBCap, hs, ht']
           rw [hm]
           exact hsome
         | true =>
+          have ht' : sr.2.1 = #[] := by simpa using ht
           cases ha : sr.2.2.2 with
           | false =>
             left
-            simp [layoutBCap, hs, ht, ha]
+            simp [layoutBCap, hs, ht', ha]
           | true =>
             right; left
             obtain ⟨s, hs', h', hmem, hj'⟩ := hR x st hst hf r j sr hr hs ht ha
@@ -241,12 +247,12 @@ theorem heldB_layoutBCap {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg �
             refine ⟨s, hs', ?_⟩
             cases hfind : (heldRows r s).find? (·.1 == j) with
             | none => exact absurd (List.find?_eq_none.1 hfind _ hmem) (by simp [hj'])
-            | some p => simp [layoutBCap, hs, ht, ha, hr, hc, hfind]
+            | some p => simp [layoutBCap, hs, ht', ha, hr, hc, hfind]
       · refine ⟨Or.inr (Or.inr ?_), fun h0 => ?_⟩
         · have hc : 2 * rs.size + 1 + 1 = layoutOf.rounds x := by
             rw [hL]
             omega
-          rw [layoutBCap_pieceAt, if_pos hc]
+          rw [layoutBCap_pieceAt, lastPieces, if_pos hc]
           exact hF x st hst hf
         · exfalso
           simp [layoutBCap, hsr'] at h0
@@ -268,19 +274,20 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
   have hj : j < 2 * rs.size := by
     by_contra hj
     simp [streamRound, hr, hrs, hj] at hs
+  have ht' : ¬ sr.2.1 = #[] := by simpa using ht
   obtain ⟨-, hcl, -⟩ := hH x st hst hf
   have hkx : I.V.k (Claims.Recursion.xI (deployRec IV ivScope b) x) = 2 + 2 * rs.size := by
     rw [hk]
     exact hK
   rcases (hcl (j + 1) (by rw [hkx]; omega)).1 with h0 | ⟨s, -, h0⟩ | ⟨h0, -⟩
-  · simp [layoutBCap, hs, ht] at h0
-  · simp [layoutBCap, hs, ht] at h0
+  · simp [layoutBCap, hs, ht'] at h0
+  · simp [layoutBCap, hs, ht'] at h0
   · apply h0
     have hc : ¬ (j + 1 + 1 = layoutOf.rounds x) := by
       show ¬ (j + 1 + 1 = (FlockDeploy.V false).k (xIOf x))
       rw [hK]
       omega
-    rw [layoutBCap_pieceAt, if_neg hc]
+    rw [layoutBCap_pieceAt, lastPieces, if_neg hc]
 
 /-! ## `KSLin2` at `layoutBCap` -/
 
