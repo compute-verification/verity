@@ -223,7 +223,11 @@ def round (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry) (sid i r : Nat)
     | .error e => return .error e
   p := p'
   match Frame.step p.cfg p.st (.round n c place) with
-  | (.round out _, st') =>
+  | (.round out v, st') =>
+    if let (none, some (q, w, k)) := (p.st.m.rank, st'.m.rank) then
+      IO.eprintln s!"FRAMERANK\t\{\"points\": {q}, \"mask_words\": {w}, \"rank\": {k}}"
+    if v.startsWith " fail" then
+      IO.eprintln s!"frames: session {sid} table {i} rep {r} round {p.coins.size} stops the rep:{v.drop 5}"
     reg.modify (·.put { p with st := st' })
     return .ok (if first then dom ++ out else out)
   | (a, st') =>
