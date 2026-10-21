@@ -1447,13 +1447,13 @@ fn flip_first(content: &mut [u8], op: u8) -> bool {
 }
 
 impl Firewall {
-    /// Installs the table's salt context (level 0's salts, then the draws [`FirewallDraws`] routes) and recomputes the level-0
-    /// commitment from the host witness `z` and the table's level-0 hiding `l0`, timed. The root of record is the Lean
-    /// session loop's (`lean_root`, its `Flock.Firewall.Level0`, which drew `l0` and the salts), else the Lean link's
-    /// (`flock-firewall link`, [`flock_live::firewall::lean_link`]). Rust's `commit_zk` and the session's Lean finish's
-    /// table `table` (which keeps the table for its reps' proof files: under the loop, the loop's level 0 of that root,
-    /// [`flock_live::firewall::LeanFinish::level0`]) run beside it, and their roots must be the same: a table whose roots
-    /// differ is refused.
+    /// Installs the table's salt context (level 0's salts, then the draws [`FirewallDraws`] routes) and recomputes the
+    /// level-0 commitment from the host witness `z` and the table's level-0 hiding `l0`, timed. The root of record is
+    /// the Lean session loop's (`lean_root`, its `Flock.Firewall.Level0`, which drew `l0` and the salts), else the
+    /// session's Lean finish's of its table `table` ([`flock_live::firewall::LeanFinish::table`],
+    /// `Flock.Firewall.Link`'s commitment). The finish keeps the table for its reps' proof files (under the loop, the
+    /// loop's level 0 of that root, [`flock_live::firewall::LeanFinish::level0`]). Rust's `commit_zk` runs beside it
+    /// for the shadow opening's prover data, and its root must be the same: a table whose roots differ is refused.
     #[allow(clippy::too_many_arguments)]
     fn new(st: &Arc<Stmt>, z: Vec<F128>, lig: LigeritoProfile, l0: &flock_core::pcs::ligerito::zk::Level0Zk,
            salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool, table: usize,
@@ -1500,21 +1500,12 @@ impl Firewall {
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()));
         let pool = Arc::new(rayon::ThreadPoolBuilder::new().num_threads(threads).thread_name(|i| format!("firewall-{i}"))
             .start_handler(|_| IN_FIREWALL.with(|g| g.set(true))).build().expect("the firewall's thread pool"));
-        let (exe, m) = (flock_live::firewall::lean_frame_exe(), st.m);
         let body = flock_live::firewall::link_body(&z, &l0.extra, &l0.pads, &link_salts);
-        let loop_root = lean_root.clone();
-        let ((cm, pd, t_recheck, cpu_recheck), (lean, t_lean), (fin, t_fin)) = std::thread::scope(|s| {
-            let lean = s.spawn(|| match lean_root {
-                Some(r) => (Ok(r), 0.0),
-                None => {
-                    let t = Instant::now();
-                    (flock_live::firewall::lean_link(&exe, m, &z, &l0.extra, &l0.pads, &link_salts), t.elapsed().as_secs_f64())
-                }
-            });
+        let ((cm, pd, t_recheck, cpu_recheck), (fin, t_fin)) = std::thread::scope(|s| {
             let fin = s.spawn(|| {
                 let t = Instant::now();
                 let mut f = finish.lock().unwrap_or_else(PoisonError::into_inner);
-                let r = match loop_root.as_ref().filter(|_| f.in_loop()) {
+                let r = match lean_root.as_ref().filter(|_| f.in_loop()) {
                     Some(root) => f.level0(table, root),
                     None => f.table(table, &body),
                 };
@@ -1522,20 +1513,19 @@ impl Firewall {
             });
             let (t0, c0) = (Instant::now(), flock_live::firewall::cpu_seconds());
             let (cm, pd) = pool.install(|| flock_core::pcs::commit::commit_zk(&z, &pcs, l0));
-            ((cm, pd, t0.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - c0), lean.join().expect("the Lean link's thread"),
-             fin.join().expect("the Lean finish's thread"))
+            ((cm, pd, t0.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - c0), fin.join().expect("the Lean finish's thread"))
         });
         let rust_root = merkle_digest_bytes(&cm.cap).to_vec();
-        let root = lean?;
         let fin_root = fin?;
+        let root = lean_root.unwrap_or_else(|| fin_root.clone());
         let short = |r: &[u8]| hex(&r[..r.len().min(8)]);
         eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "rust_root_agrees": root == rust_root, "m": st.m, "t.firewall_recheck": t_recheck,
-                                         "cpu.firewall_recheck": cpu_recheck, "t.lean_link": t_lean, "t.lean_finish_table": t_fin, "threads": threads}));
-        if root != rust_root {
-            return Err(flock_live::firewall::refused(format!("level-0 recheck: the Lean link's root {} is not commit_zk's {}", short(&root), short(&rust_root))));
-        }
+                                         "cpu.firewall_recheck": cpu_recheck, "t.lean_finish_table": t_fin, "threads": threads}));
         if fin_root != root {
-            return Err(flock_live::firewall::refused(format!("level-0 recheck: the Lean finish's root {} is not the Lean link's {}", short(&fin_root), short(&root))));
+            return Err(flock_live::firewall::refused(format!("level-0 recheck: the Lean finish's root {} is not the loop's {}", short(&fin_root), short(&root))));
+        }
+        if root != rust_root {
+            return Err(flock_live::firewall::refused(format!("level-0 recheck: the Lean root {} is not commit_zk's {}", short(&root), short(&rust_root))));
         }
         let lean_hi = {
             let mut f = finish.lock().unwrap_or_else(PoisonError::into_inner);

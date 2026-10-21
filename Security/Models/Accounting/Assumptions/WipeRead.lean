@@ -38,8 +38,9 @@ cheating server can break by cheating keeps that cheat out of the theorem instea
   to `Y` (`Accounting.Placed.LatencyAtMost`, the listed claim `latency-ceiling`) each such answer left `X` during the
   deadline, so one label sent before the arrival, or relayed from outside `X`, binds no verdict.
 * `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks, given the
-  devices' coins `ζ`. A model: the deployed labels are a PRF of a 32-byte key (PR #2726), for which it is false, and
-  the step to them is the PRF's advantage, outside this.
+  devices' coins `ζ`. A model: the deployed labels are a PRF of the challenger's secret (PR #2726), for which it is
+  false. `Accounting.Guarantees.Actual.WipeReadHeldPrf` takes the step to them, as the PRF's advantage, and doesn't
+  take this.
 
 `QuietReads`, `LateAnswers` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
 `acc` read off the coins; once the challenger has a Lean function they are its refusals, proved of it, and the world
@@ -112,8 +113,9 @@ open Classical in
 `z` of the auditor's devices' own coins `ζ`, the labels of `A` at read `j` are `v` on at most a `2^{-|A| b}` share of
 the `ω₀` with `ζ ω₀ = z`: uniform, and independent of the devices' jitter. With `ζ` constant it is the labels' marginal.
 The deployed labels are SHA-512 of a 32-byte key and the index (PR #2726), on which one label fixes the rest; this is
-their ideal, and the step to them is the PRF's advantage, which a distinguisher decides by running the system once on
-`Accounting.Guarantees.Actual.WipeReadHeld`'s event. -/
+their ideal, and the step to them is the PRF's advantage against the distinguisher that runs the system once and
+outputs `Accounting.Guarantees.Actual.WipeReadHeld`'s event. `Accounting.Guarantees.Actual.WipeReadHeldPrf` states
+that step, and its ideal world, a uniform label table, meets this. -/
 def UniformLabels {Ω₀ B Z : Type*} [Fintype Ω₀] {n : ℕ} (lab : Ω₀ → Fin n → B → ℕ) (b : ℕ) (ζ : Ω₀ → Z) : Prop :=
   ∀ (j : Fin n) (A : Finset B) (v : B → ℕ) (z : Z),
     ((univ.filter fun ω => ζ ω = z ∧ ∀ i ∈ A, lab ω j i = v i).card : ℝ) * 2 ^ (A.card * b) ≤
