@@ -1,0 +1,100 @@
+import Models.Nci.Assumptions.Cover
+import Models.Nci.Assumptions.CoverFanOut
+
+/-!
+# The cover theorem's fan-in/fan-out tightening: the guarantees
+
+The area bounds (`Models.Nci.Guarantees.Cover`) charge a block one input gate per use of the products it computes
+whole. Fan-in and fan-out charge it per value it reads. A block that reads a value of a token finishes, through it, only
+the counted products whose activations key back to that value: at most `aOut` (Kimi K2: 37,248, the MoE input). To do
+more of a token's work without reading more of it, the block must hold one of the token's accumulation chains whole,
+which costs `d − E` reads: the chain's `d` legs, less the `E` embedding lookups it can afford.
+
+* `FanOutIntensity`, `FanOutCoverBound`: under `UpdateHardness`, `ColumnsIncompressible` and `Keyed`, a block finishes
+  at most `k · max(aOut, c k / ((d − E) b)) + k` counted products (Kimi K2: a slowdown of about 8,900).
+* `FanOutReadIntensity`, `FanOutReadCoverBound`: under `ValueReadHardness` (each spent value costs `f` bits, from the
+  same bits as the parameters) in place of `UpdateHardness`, at most `k · max(aOut / f, c k / (4 (d − E) f b)) + k`
+  (Kimi K2 at `f = 4`: about 3.6·10⁴).
+
+The statements are division-free, as the area bounds' are. The comparison with the area bounds (41, 166 and 660 for
+Kimi K2) is of numbers, not theorems: the premises differ (`Keyed` in place of `MulBlocks.Upstream`, and
+`ColumnsIncompressible` added; `FanOutIntensity` beats `WidthIntensity` at width `f` when `4 b f aOut ≤ k` and
+`4 f c ≤ d − E`, and `FanOutReadIntensity` beats it when `4 b aOut ≤ k` and `c ≤ d − E`, which Kimi K2 meets with
+margin), and `Keyed`'s
+counted products leave out the LM head's forward products, which the area bounds may count but `α₀` leaves out.
+-/
+
+namespace Nci.Cover.Guarantees
+
+/-- **Fan-out intensity**: under `UpdateHardness`, `ColumnsIncompressible` and a keyed token structure (`Keyed`) whose
+roots have `d` legs, with `k < bcol · V · (E + 1)` and `E < d`, an inference block finishes at most
+`k · max(aOut, c k / ((d − E) b)) + k` counted products: `(d − E) b · #(finished) ≤ k · max((d − E) b aOut, c k) +
+(d − E) b k`.
+
+A block reads at most `k` values, at least one input gate each, and holds at most `E` lookups of a token. A token with
+fewer than `d − E` spent values has no held root, so each of its products the block computes whole is charged to the
+first value it reads on its activation's key path: at most `aOut` per value. Each token whose root the block holds
+spends at least `d − E` values, so there are at most `k / (d − E)` of them, each with at most `c` products per
+parameter, over at most `k / b` parameters. Products the block finishes without computing them whole are at most `k`,
+as in `Intensity`.
+
+Kimi K2 (`d = 512`, `aOut = 37248`, `c = 1`, `V = 163840`, `b = 2.5`, `bcol = 1`, so `E = 122`; `k = 2·10⁷`,
+`s = 4.52·10¹⁶`, `α₀ = 0.147`): `7.45·10¹¹` products per block, a slowdown of about 8,900. Scope: the LM head's
+forward products and layer 0's gather-keyed products are not counted (`Keyed`); `UpdateHardness` needs drift and fails
+under LoRA. -/
+def FanOutIntensity : Prop :=
+  ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
+    (d aOut c V : ℕ) (K : Keyed M Tok Val d aOut c V) (s k E : ℕ) (b bcol : ℝ),
+    0 < b → Assumptions.UpdateHardness M s b → Assumptions.ColumnsIncompressible K s bcol →
+    (k : ℝ) < bcol * V * (E + 1) → E < d →
+    ∀ I, C.InferenceBlock s k I →
+      (d - E : ℕ) * b * (M.finished I).card ≤ k * max ((d - E : ℕ) * b * aOut) ((c : ℝ) * k) + (d - E : ℕ) * b * k
+
+/-- **Fan-out cover bound**: under `FanOutIntensity`'s premises, a cover of `C` by inference blocks has
+`#𝓘 ≥ #P / (k · max(aOut, c k / ((d − E) b)) + k)` blocks:
+`(d − E) b · #P ≤ #𝓘 · (k · max((d − E) b aOut, c k) + (d − E) b k)`. Kimi K2: a slowdown of about 8,900
+(`FanOutIntensity`). -/
+def FanOutCoverBound : Prop :=
+  ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
+    (d aOut c V : ℕ) (K : Keyed M Tok Val d aOut c V) (s k E : ℕ) (b bcol : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
+    0 < b → Assumptions.UpdateHardness M s b → Assumptions.ColumnsIncompressible K s bcol →
+    (k : ℝ) < bcol * V * (E + 1) → E < d →
+    (∀ I ∈ 𝓘, C.InferenceBlock s k I) → C.Covers 𝓘 →
+    (d - E : ℕ) * b * M.P.card ≤ 𝓘.card * (k * max ((d - E : ℕ) * b * aOut) ((c : ℝ) * k) + (d - E : ℕ) * b * k)
+
+/-- **Fan-out intensity, `f` bits per value**: under `ValueReadHardness` (which implies `UpdateHardness` for counted
+products), `ColumnsIncompressible` and `Keyed`, with `k < bcol · V · (E + 1)` and `E < d`, an inference block finishes
+at most `k · max(aOut / f, c k / (4 (d − E) f b)) + k` counted products:
+`4 (d − E) f b · #(finished) ≤ k · max(4 (d − E) b aOut, c k) + 4 (d − E) f b k`.
+
+The argument is `FanOutIntensity`'s, with the values paid `f` bits each from the same `k` as the parameters. Spending
+`X` bits on low tokens' values and `Y` on high tokens', with `P` on parameters and `X + Y + P ≤ k`, the block computes
+at most `(aOut / f) X + c (P / b) (Y / (f (d − E)))` products whole. AM–GM bounds this by `k` times the larger of its
+endpoints.
+
+Kimi K2 (`FanOutIntensity`'s numbers, `f = 4`): `1.86·10¹¹` products per block, a slowdown of about 3.6·10⁴. It
+reaches `k · aOut / f` once `d − E ≥ c k / (4 aOut b) ≈ 54`. Kimi K2 has 390, so the bound is set by fan-out alone, and
+A2 built a block reaching 98.5% of it. -/
+def FanOutReadIntensity : Prop :=
+  ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
+    (d aOut c V : ℕ) (K : Keyed M Tok Val d aOut c V) (s k E f : ℕ) (b bcol : ℝ),
+    0 < b → Assumptions.ValueReadHardness K s f b → Assumptions.ColumnsIncompressible K s bcol →
+    (k : ℝ) < bcol * V * (E + 1) → E < d →
+    ∀ I, C.InferenceBlock s k I →
+      4 * (d - E : ℕ) * f * b * (M.finished I).card ≤
+        k * max (4 * (d - E : ℕ) * b * aOut) ((c : ℝ) * k) + 4 * (d - E : ℕ) * f * b * k
+
+/-- **Fan-out cover bound, `f` bits per value**: under `FanOutReadIntensity`'s premises, a cover of `C` by inference
+blocks has `#𝓘 ≥ #P / (k · max(aOut / f, c k / (4 (d − E) f b)) + k)` blocks:
+`4 (d − E) f b · #P ≤ #𝓘 · (k · max(4 (d − E) b aOut, c k) + 4 (d − E) f b k)`. Kimi K2: a slowdown of about
+3.6·10⁴. -/
+def FanOutReadCoverBound : Prop :=
+  ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
+    (d aOut c V : ℕ) (K : Keyed M Tok Val d aOut c V) (s k E f : ℕ) (b bcol : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
+    0 < b → Assumptions.ValueReadHardness K s f b → Assumptions.ColumnsIncompressible K s bcol →
+    (k : ℝ) < bcol * V * (E + 1) → E < d →
+    (∀ I ∈ 𝓘, C.InferenceBlock s k I) → C.Covers 𝓘 →
+    4 * (d - E : ℕ) * f * b * M.P.card ≤
+      𝓘.card * (k * max (4 * (d - E : ℕ) * b * aOut) ((c : ℝ) * k) + 4 * (d - E : ℕ) * f * b * k)
+
+end Nci.Cover.Guarantees
