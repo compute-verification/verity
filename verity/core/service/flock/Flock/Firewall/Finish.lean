@@ -326,7 +326,8 @@ def saltsBytes (s : Array ByteArray) : ByteArray :=
 
 /-! ## The live rep -/
 
-instance : MonadLift V (ExceptT String IO) := ⟨fun x => ExceptT.mk (pure x)⟩
+/-- A refusal of the finish's pure code, as the live rep's. -/
+instance liftV : MonadLift V (ExceptT String IO) := ⟨fun x => ExceptT.mk (pure x)⟩
 
 /-- What a live rep runs in: the coins of every round it has taken, over `IO`, with its refusals. -/
 abbrev LiveM := StateT (Array (Array F128)) (ExceptT String IO)
