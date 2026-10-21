@@ -6,7 +6,11 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
-* `domain`: a registered value's commitment domain;
+* `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
+* `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers of record
+  opened them against, and the rows they opened against its openings and the verifier's own ports' (`Produced.check`,
+  `Produced.opened`, `Produced.shared`);
+* `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
@@ -30,9 +34,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
-  `challenger_credited`: the challenger's session (`ChallengerSession`): its close as `from_json` reads it, with
-  `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger; `ledger_head`, infra's
-  published heads; `trusted_session_of`; and `credited_session`, a window counted toward its period's circuit.
+  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
+  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
+  `ledger_head`, infra's published heads; `trusted_session_of`; `credited_session`, a window counted toward its period's
+  circuit; and `pinned_session`, a session from a tree the host's pins log records as main's.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -48,6 +53,7 @@ import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import SampledProofs.Produced
 
 namespace SampledProofs.Pieces
 
@@ -106,11 +112,70 @@ def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
   let (some words, some leaves, some b) := (nat? (getD j "words"), nat? (getD j "leaves"), nat? (getD j "word_bits"))
     | throw "words, leaves or word_bits is not a natural number"
-  let window ← match field? j "window" with
+  let hex? := fun (k : String) => match field? j k with
     | none => pure none
-    | some (.str r) => if r.length == 128 && isHex r then pure (some r) else throw "the window is not 64 bytes of hex"
-    | some _ => throw "the window is not 64 bytes of hex"
-  return Json.str (Flock.hexOf (← Registered.domainAt program value words leaves b window))
+    | some (.str r) => if Produced.hex64 r then pure (some r) else throw s!"the {k} is not 64 bytes of hex"
+    | some _ => throw s!"the {k} is not 64 bytes of hex"
+  let window ← hex? "window"
+  match ← hex? "produced" with
+  | none => return Json.str (Flock.hexOf (← Registered.domainAt program value words leaves b window))
+  | some d =>
+    if window.isSome then throw "a produced value's domain binds its registration, which binds the window: not both"
+    return Json.str (Flock.hexOf (← Produced.domain program value words leaves b d))
+
+/-- `known` (`{value: [[position, b ‖ c] ...]}`, natural positions distinct within a value and string openings), null as
+none. -/
+def knownOpenings (j : Json) : V (Array (String × Array (Nat × String))) := do
+  match j with
+  | .null => pure #[]
+  | .obj _ => (entries j).mapM fun (v, rows) => do
+      let .arr rs := rows | throw s!"known: {v} is not a list of openings"
+      let ps ← rs.mapM fun r => match r with
+        | .arr #[p, .str bc] => match nat? p with
+          | some n => pure (n, bc)
+          | none => throw s!"known: {v}'s position is not a natural number"
+        | _ => throw s!"known: {v}'s opening is not [position, b ‖ c]"
+      if (ps.toList.map (·.1)).eraseDups.length != ps.size then throw s!"known: {v} opens a position twice"
+      pure (v, ps)
+  | _ => throw "known is not an object"
+
+/-- `{"record", "registration", "draw", "mine", "opened", "known", "verdicts"}` to `{"codes": produced.check's, "opened":
+produced.opened's codes, "shared": produced.shared's over produced.wanted's, both null unless the record holds}`: the
+registration and draw strings, `mine` the verifier's own entries (`{value: {"leaves", "words", "word_bits", "domain"}}`,
+three natural numbers and a string each), `opened` null or `{value: root}`, `known` null or the verifier's own ports'
+openings (`knownOpenings`) and `verdicts` null or an object; refused otherwise. -/
+def produced (j : Json) : V Json := do
+  let (.str registration, .str draw) := (getD j "registration", getD j "draw")
+    | throw "registration or draw is not a string"
+  let .obj _ := getD j "mine" | throw "mine is not an object"
+  let mine ← (entries (getD j "mine")).mapM fun (value, e) =>
+    match nat? (getD e "leaves"), nat? (getD e "words"), nat? (getD e "word_bits"), getD e "domain" with
+    | some leaves, some words, some wordBits, .str domain => pure ({ value, leaves, words, wordBits, domain } : Produced.Mine)
+    | _, _, _, _ => throw s!"mine: {value} is not leaves, words and word_bits and a string domain"
+  let opened ← match getD j "opened" with
+    | .null => pure none
+    | o@(.obj _) => pure (some (entries o))
+    | _ => throw "opened is not an object"
+  let known ← knownOpenings (getD j "known")
+  let verdicts := getD j "verdicts"
+  if !(verdicts matches .null | .obj _) then throw "verdicts is not an object"
+  let rec_ := getD j "record"
+  let cs := Produced.check rec_ registration draw (mine.qsort (·.value < ·.value))
+  let codes (xs : Array String) := if cs.isEmpty then Json.arr (xs.map Json.str) else Json.null
+  return Json.mkObj [("codes", Json.arr (cs.map Json.str)), ("opened", codes (Produced.opened rec_ opened)),
+    ("shared", codes (Produced.shared (Produced.wanted rec_ known) (entries verdicts)))]
+
+/-- `{"program", "value", "row", "salt", "registration", "word_bits"}` to `{"root", "bc"}` in hex, `produced.known_port`'s
+root and opening: four strings (the salt lowercase hex), a list of natural numbers and one; refused where it raises. -/
+def knownPort (j : Json) : V Json := do
+  let (.str program, .str value, .str salt, .str registration) :=
+      (getD j "program", getD j "value", getD j "salt", getD j "registration")
+    | throw "program, value, salt or registration is not a string"
+  let .arr row := getD j "row" | throw "row is not a list"
+  let some row := row.mapM nat? | throw "row is not natural numbers"
+  let some wb := nat? (getD j "word_bits") | throw "word_bits is not a natural number"
+  let (root, bc) ← Produced.known program value row (← Flock.unhex salt) registration wb
+  return Json.mkObj [("root", Json.str (Flock.hexOf root)), ("bc", Json.str (Flock.hexOf bc))]
 
 /-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
@@ -359,7 +424,7 @@ def run (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
-   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
@@ -371,7 +436,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
-   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece)]
+   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
+   ("challenger_pinned", Challenger.pinnedPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

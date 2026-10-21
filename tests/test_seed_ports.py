@@ -29,6 +29,12 @@ SEEDS = {
 }
 UNITS = {
     "verity/core/protocols/pouw/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
+    "verity/core/protocols/pouw/circuit/h1zy.py::_unit_ports":
+        "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
+    "verity/core/protocols/pouw/circuit/h1zy.py::_lane_ports":
+        "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
+    "verity/core/protocols/pouw/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
+        "the lane's stand-in statement template, a position beside its ok sink",
     "verity/core/protocols/pouw/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
     "verity/core/protocols/pouw/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
     "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",

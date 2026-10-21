@@ -1,0 +1,10 @@
+[Unit]
+Description=cap the Lean check cache (lean_audit.py --prune: the records trees, replays, builds, deps and artifacts its caps keep)
+
+[Service]
+Type=oneshot
+User=research
+TimeoutStartSec=30min
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py --prune

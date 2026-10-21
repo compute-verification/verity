@@ -84,6 +84,14 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
       ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
   | .error _ => false
 
+-- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
+-- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
+-- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
+#guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
+  | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
+  | .ok () => false
+#guard roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 7 && !roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 6
+
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 128) (reads : Array (Option Nat) := #[some 0]) :
     Registered.Port :=
   { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, reads }

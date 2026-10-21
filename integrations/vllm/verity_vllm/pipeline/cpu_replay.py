@@ -61,7 +61,7 @@ ATTESTS = ("every weight field the replay consumed, composed from the checkpoint
            "and the tensor roots fold to the committed weights root")
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
-         "uint8": (8, np.uint8), "int8": (8, np.uint8)}
+         "uint8": (8, np.uint8), "int8": (8, np.uint8), "int32": (32, np.uint32)}
 SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 SLIM_DOC = "slim.json"
 PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
@@ -145,11 +145,14 @@ def tensor_root(raw: np.ndarray, chunk: int) -> bytes:
     return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
 
 
-def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None
-              ) -> tuple[str, np.ndarray | None, str | None, bool]:
+def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None,
+              roles: dict[str, dict[str, Any]] | None = None) -> tuple[str, np.ndarray | None, str | None, bool]:
     """(source, the tensor's bytes when they open against its tensor root, why not, whether the bytes were read at all).  ``tp``
     ({"world", "rank"}): a TP rank's registered tensors are its shards, composed by `weights_of_record.compose`'s shard rule.  ``rw``
-    (`fp8_ue8m0.Rewrites` over the registered names): the fields vLLM rewrites at load, composed as it rewrites them."""
+    (`fp8_ue8m0.Rewrites` over the registered names): the fields vLLM rewrites at load, composed as it rewrites them.  ``roles`` (the
+    Build's, by registered name): a field vLLM makes at load by more than a copy, composed by its role's rule (`derived_weights`), as
+    the weights of record are."""
+    from verity_vllm.check import derived_weights
     from verity_vllm.check import weights_of_record as WR
 
     name, dt, shape, nb = tree["names"][i]
@@ -160,10 +163,12 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
         if ck is None:
             return src, None, "no checkpoint given", False
         try:
+            world, rank = (int(tp["world"]), int(tp["rank"])) if tp else (1, 0)
             if rw is not None and rw.covers(name):
                 words, _note = rw.compose(name, list(shape))
             else:
-                words, _note = WR.compose(name, list(shape), WORDS[dt][0], ck, **({"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}))
+                words, _note = (derived_weights.compose(name, list(shape), WORDS[dt][0], (roles or {}).get(name), ck, world, rank)
+                                or WR.compose(name, list(shape), WORDS[dt][0], ck, world=world, rank=rank))
         except (KeyError, ValueError) as e:
             return src, None, f"not composed from the checkpoint: {e}"[:200], False
         raw = np.ascontiguousarray(words).reshape(-1).view(np.uint8)
@@ -189,8 +194,9 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
                  tp: dict[str, int] | None = None, roles: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     """The registered tensors in the widths the replay reads, each opened against the committed weights root, and the weights check;
     ``tp``: those of a TP rank (`_open_one`).  ``roles``: the Build's `weight_roles` by registered name (`fp8_ue8m0.build_roles`): the
-    DeepGEMM linears and MLA's absorbed kv_b they name are composed as vLLM rewrites them at load (`fp8_ue8m0.Rewrites`), as the
-    weights of record are, since the checkpoint's own words are not the served ones."""
+    DeepGEMM linears and MLA's absorbed kv_b they name are composed as vLLM rewrites them at load (`fp8_ue8m0.Rewrites`), and the
+    fields it makes by more than a copy (DeepSeek-V4's padded attn_sink, layer 0's hc_attn_fn_broadcast) by their rule
+    (`derived_weights`), as the weights of record are, since the checkpoint's own words are not the served ones."""
     from verity_vllm.check import fp8_ue8m0
     from verity_vllm.check import weights_of_record as WR
 
@@ -205,7 +211,7 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
         at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
         rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, tp, rw)), servable))
+        opened = list(pool.map(lambda i: (i, *_open_one(bundle, tree, i, ck, tp, rw, roles)), servable))
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:

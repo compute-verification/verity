@@ -86,6 +86,7 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   obtain ⟨n, rfl⟩ := capStatement_ok hK0
   obtain ⟨u, hu, h⟩ := eok_bind h
   obtain ⟨u', -, h⟩ := eok_bind h
+  obtain ⟨u'', -, h⟩ := eok_bind h
   cases h
   rw [Array.append_assoc] at hu
   exact ⟨_, A, C, K, n, hA, hC, hK, ht, hK0, Array.append_assoc, hu⟩
