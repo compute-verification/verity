@@ -34,15 +34,16 @@ def knownLeaves (reg : Port) (ks : Array (Array Nat × ByteArray)) : Array ByteA
 /-- **A port the verifier registers at known content `ks` commits it**: its rows are `hm96-sha512/row/v2` rows of 16-bit
 leaves, as many as its leaves, each of the port's `words` u16 words under a 192-byte salt, and its registered root is
 the frame-v3-sha512 root of their leaves (`knownLeaves`). -/
-def checkKnown (reg : Port) (ks : Array (Array Nat × ByteArray)) : V Unit := do
+def checkKnown (reg : Port) (ks : Array (Array Nat × ByteArray)) : V Unit :=
   if reg.schema != HmRow.ROW_SCHEMA_V2 || reg.wordBits != 16 then
     throw s!"registered reads: port {reg.name}: known content is of {HmRow.ROW_SCHEMA_V2} rows of 16-bit leaves, and {reg.value}'s are {reg.schema} rows of {reg.wordBits}-bit leaves"
-  if ks.size != reg.leaves then
+  else if ks.size != reg.leaves then
     throw s!"registered reads: port {reg.name}: {ks.size} known rows of {reg.value}'s {reg.leaves}"
-  if ks.any fun (r, s) => some r.size != reg.words || r.any (· ≥ 2 ^ 16) || s.size != HmRow.SALT_BYTES then
+  else if ks.any fun (r, s) => some r.size != reg.words || r.any (· ≥ 2 ^ 16) || s.size != HmRow.SALT_BYTES then
     throw s!"registered reads: port {reg.name}: a known row is not {reg.words.getD 0} u16 words under a {HmRow.SALT_BYTES}-byte salt"
-  if FV3.root reg.domain (knownLeaves reg ks) Sha512.hash != reg.root then
+  else if FV3.root reg.domain (knownLeaves reg ks) Sha512.hash != reg.root then
     throw s!"registered reads: port {reg.name}: {reg.value}'s registered root is not the root of its {ks.size} known rows"
+  else pure ()
 
 /-- One port entry's known content (`KNOWN_KEY`): one salt a row. -/
 def knownOfEntry (e : Json) (ctx : String) : V (Array (Array Nat × ByteArray)) := do
