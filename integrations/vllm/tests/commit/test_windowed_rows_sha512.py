@@ -3,8 +3,9 @@ does, on the real collector, window ring and kernels: each step's root is ``step
 stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (each window hashed to
 its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
 (hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
-Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as the
-replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
+Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's leaves) the trees are the same
+as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as
+the replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
 vllm-v1's roots, unchanged.
 """
 from __future__ import annotations
@@ -84,6 +85,45 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
         com.close()
 
 
+H_WINDOW = 64 * int(float(WR.WINDOW_MB) * (1 << 20)) // R.ROW_BYTES     # a full window's h, and its leaves: 64 B a row (two rows here)
+
+
+@pytest.mark.parametrize("retain_levels", [True, False], ids=["levels", "no-levels"])
+@pytest.mark.parametrize("hold", [0, 3 * H_WINDOW], ids=["hold-0", "hold-3-windows"])
+def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_levels, hold):
+    """`rows_hold_bytes` bounds what a step holds on the device whatever its length (each step here is about seven windows): a learning
+    step keeps its windows' h until the next would pass the hold, and re-hashes that window and the rest from host; a step that keeps
+    no levels folds its held leaves into their windows' top nodes whenever the next window's would pass it.  Each run, learning then
+    hit, commits the trees the default hold commits with the same keys (a replay that took them): the roots, and with the levels kept
+    every level, leaves included."""
+    com = committer(monkeypatch, retain_levels=retain_levels)
+    ref = committer(monkeypatch, retain_levels=retain_levels)
+    com.rows_hold_bytes = hold
+    assert ref.rows_hold_bytes == NC.ROWS_HOLD_BYTES
+    try:
+        for run in ("learn", "hit"):
+            rc = WR.run(com, SCHED)
+            ref.replay_row_keys = dict(com.row_keys)
+            want = WR.run(ref, SCHED)
+            check_run(rc, com.row_keys)
+            assert [s.root for s in rc.steps] == [s.root for s in want.steps] and rc.run_root == want.run_root
+            assert sorted(com._gpu_levels) == sorted(ref._gpu_levels) == (list(range(len(SCHED))) if retain_levels else [])
+            for s in com._gpu_levels:
+                got, ref_lv = com._gpu_levels[s], ref._gpu_levels[s]
+                assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (run, s)
+            w, wr = rc.extra["windows"], want.extra["windows"]
+            assert w["rows_hold_bytes"] == hold and wr["leaf_folds"] == 0
+            assert (w["leaf_folds"] > 0) is not retain_levels, "a levelless step folds its held leaves past the hold"
+            if run == "learn":
+                assert w["hfirst_steps"] == (len(SCHED) if hold else 0) and wr["hfirst_steps"] == len(SCHED)
+                assert w["reupload_bytes"] > 0 and wr["reupload_bytes"] == 0, "the windows past the hold re-hash from host"
+            else:
+                assert w["hfirst_steps"] == w["reupload_bytes"] == 0, "the hit run follows the learning run's plans (in place)"
+    finally:
+        com.close()
+        ref.close()
+
+
 class _SlotRunner(WR._Runner):
     """A replayed graph's step: the per-token tensors land in persistent slots (the captured copies) and are staged from them in one
     `stage_slot_plan` call and flushed (the source's drain); the rest are acquired one by one, as the logits and the sampled tokens are."""
@@ -159,18 +199,27 @@ def test_capped_runs_commit_step_rows_roots(monkeypatch):
         com.close()
 
 
-def test_bounded_record_run_commits_step_rows_roots(monkeypatch):
+@pytest.mark.parametrize("hold", [NC.ROWS_HOLD_BYTES, H_WINDOW], ids=["within-hold", "past-hold"])
+def test_bounded_record_run_commits_step_rows_roots(monkeypatch, hold):
+    """Bounded staging, a 16 KiB transient budget under every step: within `rows_hold_bytes` a learning step that keeps no bytes copies
+    nothing to host, so the warm-up commits it; past it (one window's h here) its later windows are copied to transient blocks, so the
+    warm-up discards it (learned only) and the record run, hashing in place to the plans it learned, commits it."""
     com = committer(monkeypatch, retain_levels=False, bounded=True)
+    com.rows_hold_bytes = hold
     try:
         com.learn_only = True
         warm = WR.run(com, SCHED)
-        assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
-            "learning steps that keep no bytes copy nothing to host, so even over the budget they are committed, not discarded"
-        check_run(warm, com.row_keys)
+        if hold == NC.ROWS_HOLD_BYTES:
+            assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
+                "learning steps that keep no bytes copy nothing to host within rows_hold_bytes, so over the budget they are committed"
+            check_run(warm, com.row_keys)
+        else:
+            assert warm.extra["bounded_staging"]["learned_only_steps"] == list(range(len(SCHED)))
         com.learn_only = False
         rec = WR.run(com, SCHED)
         bs = rec.extra["bounded_staging"]
         assert not bs["learned_only_steps"] and bs["plan_mismatches"] == 0 and bs["transient_peak_bytes"] == 0, bs
+        assert (rec.extra["windows"]["leaf_folds"] > 0) is (hold != NC.ROWS_HOLD_BYTES)
         check_run(rec, com.row_keys)
     finally:
         com.close()
