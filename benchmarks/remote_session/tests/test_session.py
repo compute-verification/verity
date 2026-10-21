@@ -737,6 +737,60 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
+    """A paced window takes at most k roots, so its k-th makes them final (`audit.Session.close`): each group's draws
+    go out as that root arrives, the last group's too, so the openings coin's request on the challenger's log names the
+    group's last root when it came, not one root or a deadline later."""
+    (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
+    assert r["accepted"]
+    assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
+
+
+def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
+    """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
+    on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
+    shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
+    request naming that root, σ_(g+2)'s at k = 1, is the one read."""
+    import json
+
+    import auditor_line as al
+
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    seen = r["windows_seen"]
+    n, R, A = len(seen), [w["released_ns"] for w in seen], [w["arrivals_ns"][-1] for w in seen]
+
+    def log(late: int, named: bool) -> list[str]:
+        lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
+        for g in range(n):
+            for label, after, at in (("challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
+                                     ("openings", f"{g:0128x}", A[g] + late)):
+                lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
+                                         "received_at": at + 100}))
+                lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
+                                         "released_at": at + 101}))
+        return lines
+
+    def lmax(s: dict) -> list[int]:
+        return [x["l_max_ns"] for x in verifier.recorded_paced(s, got["reg"], host_bytes=0)["stretches"]]
+
+    shifted, how = al.auditor_seen(log(0, False), seen)
+    assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
+    assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
+    assert how == {"last_root_first_named_by": {"openings": n}}
+    assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
+    late, _ = al.auditor_seen(log(3, False), seen)
+    assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
+    named, how = al.auditor_seen(log(3, True), seen)
+    assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
+                                                 + [[A[g] + 103] for g in (n - 2, n - 1)])
+    assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
+    with pytest.raises(ValueError, match="not one of each for each of"):
+        al.auditor_seen(log(0, False)[:-4], seen)
+
+
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
     """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
