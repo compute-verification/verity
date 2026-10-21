@@ -100,6 +100,8 @@ struct Kept {
     /// a fork was taken: each tree's first draw waits here for the other side's, by tree id and leaf count
     paired: bool,
     waiting: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
+    /// trees whose salts were drawn elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first draw
+    preset: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
 }
 
 /// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
@@ -178,6 +180,24 @@ impl LeafSalts {
         Ok(())
     }
 
+    /// The salts of the next trees from here, drawn elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
+    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first draw of each such tree at that
+    /// size takes them in place of its own read (and under a fork keeps them for the other side, as any first draw).
+    pub fn preset(&self, trees: Vec<Vec<u8>>) -> Result<(), String> {
+        let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (j, s) in trees.into_iter().enumerate() {
+            if s.is_empty() || s.len() % SALT_BYTES != 0 {
+                return Err(format!("preset salts of {} bytes for a tree, not whole {SALT_BYTES}-byte leaves", s.len()));
+            }
+            let id = self.next + j as u64;
+            if k.waiting.keys().any(|(i, _)| *i == id) {
+                return Err(format!("tree {id}'s salts were drawn before the preset ones came"));
+            }
+            k.preset.insert((id, s.len() / SALT_BYTES), ZeroOnDrop(s));
+        }
+        Ok(())
+    }
+
     /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s). Under a fork, the first of the two draws of a
     /// tree reads them and the second takes the same bytes; otherwise every call reads a tree's salts afresh. The two draws pair
     /// by id and size: a device that draws a tree at another size than the shadow's gets salts of its own, its tree is not the
@@ -190,7 +210,10 @@ impl LeafSalts {
         if let Some(mut w) = k.waiting.remove(&(id, leaves)) {
             return std::mem::take(&mut w.0);
         }
-        let b = self.draw(id, leaves);
+        let b = match k.preset.remove(&(id, leaves)) {
+            Some(mut p) => std::mem::take(&mut p.0),
+            None => self.draw(id, leaves),
+        };
         if k.paired {
             k.waiting.insert((id, leaves), ZeroOnDrop(b.clone()));
         }
@@ -483,6 +506,29 @@ mod tests {
         assert_eq!(own.len(), 9 * SALT_BYTES);
         assert!(own.chunks(SALT_BYTES).all(|c| !other.chunks(SALT_BYTES).any(|o| o == c)), "a tree drawn at another size shares no salt");
         assert_eq!(a.expand(dev, 9), own, "the device's draw at the shadow's size is the shadow's tree");
+    }
+
+    /// Salts drawn elsewhere for the next trees ([`LeafSalts::preset`], the Lean finish's): the first draw of each, on
+    /// either side of a fork, takes them and keeps them for the other side; a draw at another size reads its own.
+    #[test]
+    fn preset_salts_are_the_next_trees_on_both_sides() {
+        let mut a = LeafSalts::for_seed(&ProverSeed::from_os());
+        let mut f = a.fork();
+        let trees: Vec<Vec<u8>> = vec![vec![1; 4 * SALT_BYTES], vec![2; 2 * SALT_BYTES]];
+        f.preset(trees.clone()).unwrap();
+        let (dev, shadow) = (a.next_id(), f.next_id());
+        assert_eq!(f.expand(shadow, 4), trees[0], "the shadow's first tree is the preset one");
+        assert_eq!(a.expand(dev, 4), trees[0], "and the device's draw of it too");
+        let (dev, shadow) = (a.next_id(), f.next_id());
+        assert_eq!(a.expand(dev, 2), trees[1], "the device's first draw takes the preset salts too");
+        assert_eq!(f.expand(shadow, 2), trees[1]);
+        let (_, shadow) = (a.next_id(), f.next_id());
+        assert_ne!(f.expand(shadow, 2), trees[1], "a tree past the preset ones reads afresh");
+        assert!(f.preset(vec![vec![0; 5]]).is_err(), "a preset tree is whole leaves");
+        let g = a.fork();
+        let id = a.next_id();
+        let _ = a.expand(id, 3);
+        assert!(g.preset(vec![vec![3; 3 * SALT_BYTES]]).is_err(), "a tree drawn before its preset salts came is refused");
     }
 
     /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with

@@ -7,8 +7,7 @@ proxy (`verity_flock.rec_live`, §10.3).
 
 The release side of record is Lean's: ``flock-circuit prove --firewall-state DIR --session ID --part NAME`` runs each outer
 session through ``core-firewall session`` (``Core.Firewall.Loop`` around the Lean session loop), which keeps the same record,
-byte for byte, and the rules below. ``flock_live::release`` is the Rust reference those rules are held to
-(``live/src/firewall_record_vectors.json``, which every side's tests run). This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
+byte for byte, and the rules below (``live/src/firewall_record_vectors.json``, which both sides' tests run). This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
 here) and the tests' relay.
 
 Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
@@ -44,8 +43,8 @@ can't hold up another session's.
 
 What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
 finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
-was appended to the record since the index last read it, by whichever process. The Rust reference keeps its own, in
-``index/``; the Lean firewall keeps none and reads the record whole. The index is rebuilt from the record's start when
+was appended to the record since the index last read it, by whichever process. The Lean firewall keeps none and reads
+the record whole. The index is rebuilt from the record's start when
 the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted since
 the index was written, when a writer of it ended mid-write, or when a file of it won't read; an edit further back that
 leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the firewall
@@ -331,7 +330,7 @@ def _orphan(ev: list[dict]) -> dict | None:
 
 #: the encoding `Path.read_text` reads the record in
 _ENCODING = locale.getpreferredencoding(False)
-#: the index's directory in the state directory (the Rust reference's is ``index/``)
+#: the index's directory in the state directory
 _INDEX = "index-py"
 #: the longest session or stream name the index keeps, in bytes (its files are named by it); a record holding a longer
 #: one is read whole
