@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_circuit_check import PINS, REPO, SUITE, TEMPLATES
+from test_circuit_check import PINS, REPO, TEMPLATES
 
 SNAPSHOT = json.loads((Path(__file__).parent / "fixtures" / "attention_split_facts.json").read_text())
 PKG = "verity_vllm.program.registry"
@@ -88,14 +88,14 @@ def _served_bindings() -> dict[str, object]:
 
 
 @pytest.fixture(scope="module")
-def now():
+def now(suite):
     """The family's Definitions with each one's id and digest at every circuit-check binding, pin and served binding."""
     from circuit_check import targets as TG
     from verity.ml.circuits.codec import descriptor_id
 
     TG.load_registries()
     fam = _family()
-    bound = {fid: fn for fid, fn in SUITE.items() if (getattr(fn, "base_id", None) or fn.id) in fam}
+    bound = {fid: fn for fid, fn in suite.items() if (getattr(fn, "base_id", None) or fn.id) in fam}
     pinned = {}
     for key, pin in PINS.get("definitions", {}).items():
         if key.split("{")[0] in fam:
@@ -128,7 +128,8 @@ def test_the_served_bindings_are_unchanged(now):
     assert {k: now["served"].get(k) for k in SNAPSHOT["served"]} == SNAPSHOT["served"]
 
 
-def test_circuit_check_keeps_every_task():
-    assert sorted(set(SNAPSHOT["tasks"]["definitions"]) - set(SUITE)) == []
+@pytest.mark.slow
+def test_circuit_check_keeps_every_task(suite):
+    assert sorted(set(SNAPSHOT["tasks"]["definitions"]) - set(suite)) == []
     templates = {label: json.loads(json.dumps(sts)) for label, (_sub, sts) in TEMPLATES.items()}
     assert {label: templates.get(label) for label, _ in SNAPSHOT["tasks"]["templates"]} == dict(SNAPSHOT["tasks"]["templates"])

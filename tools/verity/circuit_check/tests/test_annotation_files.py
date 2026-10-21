@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from circuit_check import targets as T
 from verity.ml.circuits import annotations as A
 from verity.ml.circuits import codec
 from verity.ml.circuits import partition_object as PO
@@ -36,11 +35,12 @@ def _stem(key: str) -> str | None:
 
 
 @pytest.fixture(scope="module")
-def families() -> dict[str, list]:
-    by: dict[str, list] = {}
-    for fn in T.reachable(T.catalog()).values():
-        by.setdefault(T.family(fn), []).append(fn)
-    return {k: sorted(v, key=lambda f: getattr(f, "gates", 0))[:PER_FAMILY] for k, v in by.items()}
+def families(catalog) -> dict[str, list]:
+    """Each family the circuit-check catalog reaches, its `PER_FAMILY` smallest specializations."""
+    by: dict[str, list[tuple[int, str]]] = {}
+    for fid, (fam, gates) in catalog.reached.items():
+        by.setdefault(fam, []).append((gates, fid))
+    return {k: [catalog.make(fid) for _gates, fid in sorted(v, key=lambda x: x[0])[:PER_FAMILY]] for k, v in by.items()}
 
 
 def _signature(fn):
@@ -68,6 +68,7 @@ def _files():
     return [pytest.param(owner, path, id=str(path.relative_to(ROOT))) for owner, path in FILES.items() if path.exists()]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("owner,path", _files())
 def test_annotation_file(owner, path, families):
     ann = json.loads(path.read_text())
