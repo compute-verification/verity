@@ -12,7 +12,11 @@
 # legs run at once, as many as the run's --mem-gb holds at GM_GB a rank beside FOLD_WORKERS folds at 40 GB], [GM_GB: a GM-01 leg's
 # peak, by batch: B8 370 (339 GiB, WSBSTOCH's r20261019-162751-9b01), B1 60 and B32 1500 scaled from it, unmeasured],
 # [FOLD_TIMEOUT=86400 a leg: row_tp's default 7200 s bounds the whole fold Match at 8 h, and a B8 row's takes about 17 h one GM-01
-# at a time], [BUDGET_GB=150].
+# at a time], [BUDGET_GB=150], [RANKS].
+# Split across two nodes: RANKS=4,5,6,7 on the second, over the Build of record and the legs with only those ranks' observer logs
+# (the fold Match folds every rank whose log it finds; its cross-rank leg fails there by design), is judged on those ranks' fold,
+# compare and GM-01 and hashes their documents into $OUT/match_ranks.sha256.  copy_rowdir.sh puts them in the first node's
+# match/fold_match, and that node's full run with MATCH_REUSE=legs keeps them and runs the other ranks and the cross-rank leg.
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${RESEARCH_RUN_MEM_GB:?research run --mem-gb sizes the fold Match}"
 case $ROW in *__b1__*) gm=60 ;; *__b32__*) gm=1500 ;; *) gm=370 ;; esac
@@ -29,6 +33,17 @@ D=$SW/$ROW
 if [ -s "$RESEARCH_RUN_DIR/inputs/match.sha256" ]; then
   grep -vF "  $ROW.tree" "$RESEARCH_RUN_DIR/inputs/match.sha256" | (cd "$SW" && sha256sum --quiet -c -) ||
     { echo "the GPU legs in $D/match are not the ones match_gpu.sh hashed"; exit 3; }
+fi
+if [ -n "${RANKS:-}" ]; then
+  tp=${ROW#*__tp} tp=${tp%%__*}
+  [[ $RANKS =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "RANKS=$RANKS: rank numbers separated by commas"; exit 3; }
+  for r in $(seq 0 $((tp - 1))); do
+    case ",$RANKS," in
+      *",$r,"*) [ -f "$D/match/capture/log.rank$r.jsonl.gz" ] || { echo "RANKS=$RANKS without rank $r's observer log"; exit 3; } ;;
+      *) [ ! -e "$D/match/capture/log.rank$r.jsonl.gz" ] ||
+        { echo "RANKS=$RANKS beside rank $r's observer log: the fold Match folds every rank whose log it finds"; exit 3; } ;;
+    esac
+  done
 fi
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || exit 2
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
@@ -53,8 +68,23 @@ $PY -m verity_vllm.pipeline.cli row chain --stages match --build-run "$BUILD_RUN
   "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$SW" --build-ram-budget-gb "${BUDGET_GB:-150}" >"$OUT/chain.out" 2>&1
 rc=$?
 for f in row.json stages.txt row.log match/tp2_match.json; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-(cd "$SW" && find "$ROW" -type f -newer "$M0" -print0 | xargs -0 -r -P 16 -n 256 sha256sum) | sort -k2 >"$OUT/match_cpu.sha256"
+(cd "$SW" && find "$ROW" -type f \( -newer "$M0" -o -path "$ROW/match/fold_match/*" \) -print0 | xargs -0 -r -P 16 -n 256 sha256sum) |
+  sort -k2 >"$OUT/match_cpu.sha256"
 echo "match_cpu.sha256: $(wc -l <"$OUT/match_cpu.sha256") files"
 tail -30 "$OUT/chain.out"
 grep -E '^match ' "$D/stages.txt" | tail -1
-exit $rc
+[ -n "${RANKS:-}" ] || exit $rc
+(cd "$SW" && for r in ${RANKS//,/ }; do find "$ROW/match/fold_match/rank$r" -type f -print0; done | xargs -0 -r -P 16 -n 256 sha256sum) |
+  sort -k2 >"$OUT/match_ranks.sha256"
+echo "match_ranks.sha256: $(wc -l <"$OUT/match_ranks.sha256") files"
+"$PY" - "$D/match/fold_match/tp2_fold_match.json" "$RANKS" <<'EOF'
+import json, sys
+per_rank, bad = json.load(open(sys.argv[1]))["per_rank"], []
+for r in sys.argv[2].split(","):
+    p = per_rank.get(r) or {}
+    legs = {"fold": (p.get("fold") or {}).get("ok") is True, "compare": (p.get("compare") or {}).get("verdict") == "PASS",
+            "GM-01": (p.get("global_match") or {}).get("ok") is True}
+    print(f"rank {r}: " + ", ".join(f"{k} {'PASS' if v else 'FAIL'}" for k, v in legs.items()))
+    bad += [f"rank {r}'s {k}" for k, v in legs.items() if not v]
+sys.exit(f"RANKS={sys.argv[2]}: {', '.join(bad)} failed" if bad else 0)
+EOF
