@@ -10,6 +10,9 @@ first five as whole forms (`InnerTauRep.tauRep` identifies their coefficients on
 the firewall's stop, `rowsAt_of_cons`, reads their constants too).
 
 * **`replay_rows`**: the five rows, whatever the Ligerito constraints after them.
+* **`zcOf_eq`**, **`lcRoundsOf_eq`**, **`zPartialOf_eq`**: the view's masked proof is the one the cut's zerocheck and
+  lincheck return (`Claims.ZKServer.zerocheckCut_proof`, `lincheckCut_proof`) at masked values that are the view's below
+  `h_ab`.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -69,5 +72,64 @@ theorem replay_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK
     rfl
   · rw [ZkExec.append_get!_right _ _ (j := 1) (by rw [h3]) (by simp), hcv, hc1, hs1]
     rfl
+
+section ViewProof
+
+variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (v : Fin nE → 𝔽) (g : ℕ → F128)
+
+theorem hab_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).hab := by
+  simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
+
+/-- **`zcOf` is the proof the cut's zerocheck returns** (`Claims.ZKServer.zerocheckCut_proof`) at masked values `g`
+that are the view's below `h_ab`. -/
+theorem zcOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+    zcOf Tz st v = ⟨(Array.range 64).map fun i => g ((layOf Tz st).r1ab i),
+      (Array.range 64).map fun i => g ((layOf Tz st).r1c i),
+      FlockComplete.Replay.pushes (fun j => (g ((layOf Tz st).ml j 0), g ((layOf Tz st).ml j 1))) (st.m - 6),
+      g (layOf Tz st).fa, g (layOf Tz st).fb, g (layOf Tz st).fc⟩ := by
+  have hfa := hab_gt_fa Tz st
+  have hml : ∀ j < st.m - 6, ∀ t < 2, (layOf Tz st).ml j t < (layOf Tz st).hab := fun j hj t ht => by
+    simp only [Zk.PadLayout.ml, Zk.PadLayout.fa, layOf, Zk.PadLayout.new] at hfa ⊢; omega
+  unfold zcOf
+  congr 1
+  · exact Array.map_congr_left fun i hi => hg _ (by
+      rw [Array.mem_range] at hi
+      simp only [Zk.PadLayout.r1ab, Zk.PadLayout.fa] at hfa ⊢; omega)
+  · exact Array.map_congr_left fun i hi => hg _ (by
+      rw [Array.mem_range] at hi
+      simp only [Zk.PadLayout.r1c, Zk.PadLayout.fa] at hfa ⊢; omega)
+  · refine Array.ext (by simp [FlockComplete.Replay.pushes_size]) fun j h1 h2 => ?_
+    have hj : j < st.m - 6 := by simpa using h1
+    rw [← getElem!_pos (FlockComplete.Replay.pushes _ (st.m - 6)) j h2, FlockComplete.Replay.pushes_get _ _ j hj]
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [hg _ (hml j hj 0 (by omega)), hg _ (hml j hj 1 (by omega))]
+  · exact hg _ (by omega)
+  · exact hg _ (by simp only [Zk.PadLayout.fb]; omega)
+  · exact hg _ (by simp only [Zk.PadLayout.fc]; omega)
+
+/-- **`lcRoundsOf` is the rounds the cut's lincheck returns** (`Claims.ZKServer.lincheckCut_proof`) at masked values
+`g` that are the view's below `h_ab`. -/
+theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+    lcRoundsOf Tz st v =
+      FlockComplete.Replay.pushes (fun j => (g ((layOf Tz st).lc j 0), g ((layOf Tz st).lc j 1))) (st.c.kLog - 6) := by
+  have hlc : ∀ j < st.c.kLog - 6, ∀ t < 2, (layOf Tz st).lc j t < (layOf Tz st).hab := fun j hj t ht => by
+    simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, layOf, Zk.PadLayout.new]; omega
+  unfold lcRoundsOf
+  refine Array.ext (by simp [FlockComplete.Replay.pushes_size]) fun j h1 h2 => ?_
+  have hj : j < st.c.kLog - 6 := by simpa using h1
+  rw [← getElem!_pos (FlockComplete.Replay.pushes _ (st.c.kLog - 6)) j h2, FlockComplete.Replay.pushes_get _ _ j hj]
+  simp only [Array.getElem_map, Array.getElem_range]
+  rw [hg _ (hlc j hj 0 (by omega)), hg _ (hlc j hj 1 (by omega))]
+
+/-- **`zPartialOf` is the `z_partial` the cut's lincheck returns** at masked values `g` that are the view's below
+`h_ab`. -/
+theorem zPartialOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+    zPartialOf Tz st v = (Array.range 64).map fun i => g ((layOf Tz st).zp i) := by
+  unfold zPartialOf
+  exact Array.map_congr_left fun i hi => hg _ (by
+    rw [Array.mem_range] at hi
+    simp only [Zk.PadLayout.zp, Zk.PadLayout.hab]; omega)
+
+end ViewProof
 
 end FlockSoundness.Discharge.Composed
