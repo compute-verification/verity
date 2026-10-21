@@ -88,7 +88,7 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   obtain ⟨u', -, h⟩ := eok_bind h
   cases h
   rw [Array.append_assoc] at hu
-  exact ⟨_, A, C, K, n, hA, hC, hK, ht, hK0, Array.append_assoc _ _ _, hu⟩
+  exact ⟨_, A, C, K, n, hA, hC, hK, ht, hK0, Array.append_assoc, hu⟩
 
 /-- **The verifier's list at a private inner shape**: V*'s holo statements (`statementsHolo`, the parts of
 `specHolo`), then candidate 3's, then the caps. -/

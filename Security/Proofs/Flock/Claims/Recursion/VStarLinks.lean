@@ -432,7 +432,7 @@ theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     {K : (ℕ → Bool) → Prop} (hK : UnitOuts p.sts[t].c K) {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog))
     (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) : K (copyOf p t htl w o g u) := by
   obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
-  rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩ | ⟨N, -, rfl⟩
+  rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩ | ⟨l, N, -, rfl⟩
   · exact ⟨climbAt_of_check h hx ht hpi htl hp ho hg hu Flock.MerkleScheme.hm96Sha512 (fun _ _ => rfl)
       (openIns_reads _ LANES H), levelCalls_of_check h hx ht hpi htl hp ho hg hu⟩
   · rcases hpart with ⟨m, k, cl, j, sh, holo, hp, hsh, hh, hpart⟩ | ⟨m, cl, j, sh, hp, hsh, hpart⟩
