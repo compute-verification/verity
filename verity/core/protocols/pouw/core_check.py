@@ -81,9 +81,11 @@ VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: one-stage's served domain (`registration.served_domain`), the window root's
 SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
-#: a tile proof's first two rows, in its header's key order: its A row and its B row, each side's fp8-p row schema
+#: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
+#: the ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s ``in_rows``)
+PC8_PORTS = ("a0", "b0")
 SALT_BYTES = 192
 BC_BYTES = 128
 ROW_V2 = "hm96-sha512/row/v2"
@@ -681,6 +683,12 @@ def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
     return None
 
 
+def _ports(lay: Salted | None) -> list[str]:
+    """The side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. C-Flock reads
+    port k's b ‖ c at the body's k-th place, in the order of the circuit's ports, not of the header's keys."""
+    return list(PC8_PORTS) if lay is None else [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)]
+
+
 def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
     """A salted unit's n rows of one side, ``[{"index", "path"}, …]``, or None."""
     if not (isinstance(o, list) and len(o) == n and all(isinstance(x, dict) for x in o)):
@@ -695,8 +703,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     not (`served_commit.check`).  `units` is the draw's (None for a unit opened undrawn, the filler's); `op` the prover's
     opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
     its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
-    first two rows, in its header's key order (serde's, as C-Flock reads it), are its A row and its B row, and its body
-    starts with their b ‖ c.
+    A row and B row are its circuit's first two ports, ``a0`` and ``b0`` (`PC8_PORTS`), whose schemas the header names,
+    and its body starts with their b ‖ c.  The header's keys, in its key order (serde's), list the opened side rows
+    first and in port order (`_ports`): a header that orders them otherwise is refused, never read in its own order.
 
     `salt` is a certified window's salt (`certified_salt`), and a certified window opens only a salted template's units
     (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
@@ -762,17 +771,20 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
+    ports = _ports(lay)
     if lay is None:
-        if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
+        if not isinstance(s, dict) or [s.get(x) for x in ports] != [schema for _, schema in OPENED]:
             return "the proof's first rows are not an A row and a B row of the registered schemas"
         if len(body) < 2 * BC_BYTES:
             return "the proof's body holds no A row and B row"
     else:
-        names = [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)] + ["pub"]
+        names = ports + ["pub"]
         if not isinstance(s, dict) or any(s.get(x) != ROW_V2 for x in names):
             return f"the proof's rows {', '.join(names)} are not {ROW_V2} rows"
         if len(body) < (lay.r + lay.c + 1) * BC_BYTES:
             return "the proof's body holds no A rows, B rows and public row"
+    if sorted(s)[:len(ports)] != ports:
+        return f"the proof's header does not list its rows {', '.join(ports)} first, in its circuit's port order"
     k = 0
     for side, schema in OPENED:
         sdom = Wd.side_domain(dom.domain_id, side)
