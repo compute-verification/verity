@@ -142,12 +142,12 @@ theorem topsBefore_lt {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.
 theorem rowPiece_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)} (hp : p ∈ rowPiece r j) :
     p.1 < r.w.parts.length := by
   unfold rowPiece at hp
-  simp only [Option.mem_toList, Option.mem_def] at hp
+  simp only [Option.mem_toList] at hp
   obtain ⟨a, ha, hfa⟩ := List.exists_of_findSome?_eq_some hp
-  dsimp only at hfa
   rw [Option.bind_eq_some_iff] at hfa
   obtain ⟨h, -, hfa⟩ := hfa
-  obtain ⟨c, -, rfl⟩ := Option.map_eq_some_iff.1 hfa
+  rw [Option.map_eq_some_iff] at hfa
+  obtain ⟨c, -, rfl⟩ := hfa
   exact List.mem_range.1 ha
 
 /-- A round with no tops has no pieces of its own. -/
@@ -169,7 +169,7 @@ theorem topsPiecesAt_held {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (h
   have he : topsPiecesAt r rs j =
       (List.range ((rs.getD (j % rs.size) default).2.1).size).map (capPieceAt r rs j) ++ rowPiece r j := by
     unfold topsPiecesAt
-    rw [if_neg (ne_true_of_eq_false ht)]
+    rw [if_neg (Bool.ne_true_of_eq_false ht)]
   rw [he]
   refine ⟨fun h => ?_, fun p hp => ?_⟩
   · have := congrArg List.length h
@@ -260,6 +260,7 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
             rw [← hnS] at hh
             exact hh
           · exfalso
+            simp only [Array.getD_eq_getD_getElem?] at ht'
             simp [layoutBTops, hs, ht'] at h0
         | true =>
           have ht' : (rs.getD (j % rs.size) default).2.1 = #[] := by simpa using ht
@@ -267,6 +268,7 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
           cases ha : (rs.getD (j % rs.size) default).2.2.2 with
           | false =>
             left
+            simp only [Array.getD_eq_getD_getElem?] at ht' ha
             simp [layoutBTops, hs, ht', ha]
           | true =>
             right; left
@@ -275,7 +277,9 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
             refine ⟨s, hs', ?_⟩
             cases hfind : (heldRows r s).find? (·.1 == j) with
             | none => exact absurd (List.find?_eq_none.1 hfind _ hmem) (by simp [hj'])
-            | some p => simp [layoutBTops, hs, ht', ha, hr, hc, hfind]
+            | some p =>
+              simp only [Array.getD_eq_getD_getElem?] at ht' ha
+              simp [layoutBTops, hs, ht', ha, hr, hc, hfind]
       · refine ⟨Or.inr (Or.inr ?_), fun h0 => ?_⟩
         · have hc : 2 * rs.size + 1 + 1 = layoutOf.rounds x := by
             rw [hL]
