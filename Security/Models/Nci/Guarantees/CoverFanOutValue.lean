@@ -34,11 +34,12 @@ and `b` per parameter outside the values' gates, `k` in all. With `X` spent on l
 tokens' and `P` on parameters, it computes at most `aOut X / f + c (P / b) (Y / δ)` products whole, and AM–GM bounds
 this by `k` times the larger endpoint.
 
-Kimi K2 (`FanOutReadIntensity`'s numbers, `f = 4`, `E = 122`): `k · aOut / f`, a slowdown of about 3.6·10⁴, as long as
-`δ ≥ c f k / (4 b aOut) ≈ 215`, so for `g` up to 176. With Dgrad on the forward's tokens (`c = 2`, `α₀ = 0.301`,
-position 0's dq_rope cut), the threshold is 430, above `d − E = 390`, so the `c k` term sets the bound for every `g`:
-about 6.6·10⁴ at `g` near `f`, against `FanOutReadIntensity`'s 7.3·10⁴; at `aOut = 49152` instead of the cut,
-5.5·10⁴ for `g ≤ 65`. Scope: `FanOutReadIntensity`'s.
+Kimi K2 (`FanOutReadIntensity`'s numbers, `f = 4`, `E = 122`) meets `PerValueCut` at `g = 1` (its docstring), so
+`δ = d − E = 390`: `k · aOut / f`, a slowdown of about 3.6·10⁴, which holds as long as `δ ≥ c f k / (4 b aOut) ≈ 215`,
+for any `g` up to 176. With Dgrad on the forward's tokens (`c = 2`, `α₀ = 0.301`, position 0's dq_rope cut), the
+threshold is 430, above `d − E = 390`, so the `c k` term sets the bound for every `g`: about 6.6·10⁴ at `g = 1`,
+against `FanOutReadIntensity`'s 7.3·10⁴; at `aOut = 49152` instead of the cut, 5.5·10⁴ for `g ≤ 65`. Scope:
+`FanOutReadIntensity`'s.
 
 It assumes `ConditionalUpdateHardness` with every value's gates as the region, roots' partial sums included: the values
 a block is handed, a partial sum `Σ x_i w_i` of updated parameters among them, don't help it rebuild those parameters.
@@ -56,8 +57,8 @@ def FanOutReadIntensityStructural : Prop :=
 
 /-- **Fan-out cover bound, `f` bits per value, from wiring**: under `FanOutReadIntensityStructural`'s premises, a
 cover of `C` by inference blocks has `#𝓘 ≥ #P / (k · max(aOut / f, c k / (4 δ b)) + k)` blocks, `δ = d − E − (g − 1)`:
-`4 δ f b · #P ≤ #𝓘 · (k · max(4 δ b aOut, c f k) + 4 δ f b k)`. Kimi K2: a slowdown of about 3.6·10⁴ for `g ≤ 176`
-(6.6·10⁴ at `g` near `f` with Dgrad on the forward's tokens), with `FanOutReadIntensity`'s scope. -/
+`4 δ f b · #P ≤ #𝓘 · (k · max(4 δ b aOut, c f k) + 4 δ f b k)`. Kimi K2 (`g = 1`): a slowdown of about 3.6·10⁴, as
+for any `g ≤ 176` (6.6·10⁴ with Dgrad on the forward's tokens), with `FanOutReadIntensity`'s scope. -/
 def FanOutReadCoverBoundStructural : Prop :=
   ∀ (C : Circuit) {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val] (M : MulBlocks C J L)
     (d aOut c V f : ℕ) (K : Keyed M Tok Val d aOut c V f) (s k E g : ℕ) (b bcol : ℝ) (𝓘 : Finset (Finset (Fin C.N))),

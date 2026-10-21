@@ -31,6 +31,14 @@ Kimi K2's forward products (`k = 2·10⁷`, `s = 4.52·10¹⁶`, `α₀ = 0.147`
 `f = 4`, `6.1·10⁴` at `a = 390`. The gain grows with `a`: `r` saturates at `1.84 √(b f b_p / (2 k))` once
 `a ≳ 0.82 √(2 k b_p / (b f))` (about 2,700 at `f = 1`), which needs entries wider than kv_b's 512 (B2, blue1).
 
+The red team's figures for this tier assume `ConditionalUpdateHardness` over `Keyed`'s value gates in place of
+`UpdateHardness`, which no guarantee here states. The weights' bits are then paid outside the values' gates, the read
+pool is `k`, and `ρ ≥ α₀ (s / k) · r / (r + 1)` with `r = psRate b f a aOut k μ`. At `f = 1` that is about 6.3·10⁴ at
+`a = 390`, 7.4·10⁴ at `a = 464` (`E = 48`, at `bcol = 2.5`) and 8.1·10⁴ at `a = 512` (`E` deducted only where root walks
+reach lookups). Under `ActivationReads` at `f = 4` it is 2.3·10⁵, 2.6·10⁵ and 2.8·10⁵ at those `a`. Each figure needs
+every partial sum on the books: dark reads of about `3·10⁻⁴` of the baseline halve the gain over fan-out, and at `10⁻³`
+only the fan-out faces remain, 8,900 at `f = 1` and 3.6·10⁴ at `f = 4` (red5).
+
 Scope. These are counts in the cover model's units: Boolean gates, with `s` and `α₀` counted in them too (red2: the
 brief's FLOP-based `s` and `α₀` scale every tier by `R = g_serve / g_train`). The accumulations must be in the covered
 circuit: adders a cover leaves out (dark gates) lose the crossings' charge, and a dark fraction of about `10⁻⁴` to

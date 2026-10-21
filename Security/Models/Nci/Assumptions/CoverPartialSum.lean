@@ -24,8 +24,9 @@ holding a root costs `d − E` reads (the fan-out branch's `rootCost`); and an e
 activations.
 
 Rationale for `f > 1`: an activation is a word, and a product's output reads `f` of its bits (A2's cap: `f` is at most
-the activation bits a product's output gate reads). A block handed fewer of them computes the rest from upstream, which
-means holding the activation's root, and its token costs `d − E` reads (blue3's PerValueCut, unproved).
+the activation bits a product's output gate reads). A block handed fewer of them computes the rest from upstream: under
+`Keyed.PerValueCut g` it holds an exit of all but `g − 1` of the root's legs, and its token costs `d − E − (g − 1)`
+reads (Kimi K2: `g = 1` at `f = 4`). No guarantee here derives `ActivationReads` at `f > 1` from it.
 
 It fails, beside where `Keyed`'s (I) fails (grouped-query attention, copies kept as values of their own), when an
 activation's bits are cheap functions of fewer handed gates: a block handed one bit of each of many activations, which

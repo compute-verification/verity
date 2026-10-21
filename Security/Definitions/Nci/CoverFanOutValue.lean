@@ -34,12 +34,17 @@ any set of the key path's gates that cuts every path from `g` of the root's legs
 the key path's gates and the product's, has at least `f` gates. A block handed fewer than `f` gates of the key path
 therefore holds an exit of all but `g − 1` of the root's legs, and pays for them as a block that holds the root does.
 
-It is the set-cut form of the red team's per-value width, a max-flow problem per root on the named circuit. The form
-with `f` disjoint paths from each single leg fails for `f ≥ 3` in `silicon/fp4.py`: a product's output bit
-`p[j]^s` feeds one Wallace full adder, whose two outputs cut it. A compressor's two outputs cut at most three products,
-so fewer than `f` gates cut off only a few legs; the red team puts `g` near `f`. It costs the bound `g − 1` of a root's
-`d` legs. Kimi K2 at NVFP4 (`f = 4`): every word on a key path is at least 4 gates wide (FP32 partial sums, the BF16
-residual, the 4-bit code). -/
+It is the set-cut form of the red team's per-value width, a max-flow problem per root on the named circuit. It costs the
+bound `g − 1` of a root's `d` legs. At `g = 1` it is the single-leg form: `f` paths from each leg to the product's
+output gate, disjoint on the key path's gates. That form holds at `f = 4` for legs that are 4-bit codes. It fails only
+if the product's own gates may be cut, since one gate of the product carries every path, and the cut here lies in the
+key path.
+
+Kimi K2 at NVFP4 (`f = 4`) meets it at `g = 1`. An exact vertex max-flow on the repository's gate-level silicon (kv_b's
+root, its 512 legs the E2M1 activation codes, to one o_proj product's output gate, through the attention or an
+RMSNorm-shaped key path) finds exactly 4 disjoint paths from every leg. The cut that binds is the activation's 4-bit
+code, so at `f = 5` no `g` works: `f` is at most the activation's code width. Every word on a key path is at least 4
+gates wide (FP32 partial sums, the BF16 residual, the 4-bit code). -/
 def PerValueCut (K : Keyed M Tok Val d aOut c V f) (g : ℕ) : Prop :=
   ∀ p ∈ M.P, ∃ r ∈ K.roots, Follows K.key K.stops (K.act p) r ∧
     ∀ G ⊆ K.legs r, g ≤ G.card → ∀ Z ⊆ K.pathGates (K.act p),
