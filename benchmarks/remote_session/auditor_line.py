@@ -20,10 +20,12 @@ cross-check the challenger's: each coin interval on both clocks, their rates, an
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
-after R_k, and each coin released after its root's receipt. A session served by `--challenger serve` (the verifier's
-machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not the auditor's.
+after R_k, and each coin released after its root's receipt; every entry the session's read takes written by the host
+at one commit of main's first-parent history as the auditor's own copy (`--main FILE`) lists it. A session served by
+`--challenger serve` (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`)
+and its line is not the auditor's.
 
-    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P] [--ledger HEAD ...] [--ingress B/S ...]
+    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --main FILE] [--ledger HEAD ...] [--ingress B/S ...]
 """
 from __future__ import annotations
 
@@ -184,16 +186,16 @@ def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, peri
     return chk
 
 
-def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.ChallengerKey | None,
+def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.ChallengerKey | None, main: list[str] | None,
                  period: str | None) -> tuple[list[str], dict]:
     """The release log's lines from the session's directory `d`, each line the one the challenger's close signs, read
-    through the ledger (`trusted_session`, a gate's session) or under the key the run wrote (`session_of`, a served
-    one)."""
+    through the ledger (`trusted_session`, a gate's session, its host at a commit of `main`) or under the key the run
+    wrote (`session_of`, a served one)."""
     files = remote.session_files(d)
     if kind == "gate":
-        remote.trusted_session(d, heads, {"root": R}, key, CH.lms_verify)
+        remote.trusted_session(d, heads, {"root": R}, key, main, CH.lms_verify)
         got = Ch.audited_session(Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, CH.lms_verify),
-                                 {"root": R}, key, CH.lms_verify)
+                                 {"root": R}, key, main, CH.lms_verify)
         if got.period != period:
             raise Ch.CoinError(f"the ledger holds the session's window in period {got.period}, not {period}")
         trust = {"read": "trusted_session", "period": got.period, "cap": got.cap, "circuit": got.circuit}
@@ -209,18 +211,23 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
-            lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS) -> dict:
+            main: Path | None = None, lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS) -> dict:
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
     ch_dir = out / "challenger"
     kinds = {(s.get("challenger") or {}).get("challenger") for s in v["sessions"]}
-    key = windows = periods = None
+    key = windows = periods = commits = None
     doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "ingress": list(ingress),
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
     if "gate" in kinds:
-        if pin is None or period is None:
-            raise SystemExit("auditor_line: a gate run's line needs --pin and --period")
+        if pin is None or period is None or main is None:
+            raise SystemExit("auditor_line: a gate run's line needs --pin, --period and --main FILE (`git rev-list "
+                             "--first-parent origin/main` in the auditor's own checkout)")
+        try:
+            commits = remote.main_lines(main)
+        except Ch.CoinError as e:
+            raise SystemExit(f"auditor_line: {e}")
         heads = [*(heads or []), *sorted(ch_dir.glob("*.ledger.jsonl"))]
         key = next((k for k in (Ch.ChallengerKey.from_json(json.loads(p.read_text()))
                                 for p in sorted(ch_dir.glob("*/out/key.json")))
@@ -245,7 +252,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             rows.append({**row, "skipped": "no challenger log: coins drawn in the verifier's process"})
             continue
         try:
-            lines, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
+            lines, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, commits, period)
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
             rows.append({**row, "refused": f"the challenger's session is not readable as signed: {e}"})
             continue
@@ -282,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--host-bytes", type=int, required=True, help="the node's host DRAM, bytes (verifier.py's)")
     ap.add_argument("--pin", help="SHA-512 of the challenger's public key (a gate run)")
     ap.add_argument("--period", help="the audit's period on the ledger (a gate run)")
+    ap.add_argument("--main", type=Path, metavar="FILE",
+                    help="the auditor's own copy of main's first-parent history, a commit a line (a gate run)")
     ap.add_argument("--ledger", type=Path, action="append",
                     help="a published head of the auditor's ledger, read with each session's (challenger/*.ledger.jsonl): "
                          "all are checked to extend one another, and the longest is read")
@@ -289,8 +298,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", default=PEER)
     ap.add_argument("--ingress", type=float, nargs="+", default=list(INGRESS), metavar="B/S")
     a = ap.parse_args(argv)
-    doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress))
+    doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, main=a.main, lane=a.lane,
+                  peer=a.peer, ingress=tuple(a.ingress))
     print(json.dumps(doc, indent=1, default=str))
     return 0
 
