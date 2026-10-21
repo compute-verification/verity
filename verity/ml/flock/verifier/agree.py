@@ -8,7 +8,7 @@
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
-`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1: D1–D4): upstream must then return that verdict instead
+`upstream_accepted` for an intended divergence (PROTOCOL.md §17.1's D list): upstream must then return that verdict instead
 of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a draw law no soundness claim draws by, which the Lean
 verifier refuses at setup: it must reject every session whose record carries a unit draw, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
@@ -86,7 +86,8 @@ def chunks(xs, k):
 
 def lean_cmd(a, public, registered=None):
     """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
-    run's archive, by SHA-512."""
+    run's archive, by SHA-512. An upstream binary's plain sessions are upstream's form (`--upstream-plain`: no zk patch,
+    so no `zk_level0` tag after the pair, PROTOCOL.md §8.1); `--zk` sessions are the zk patch's."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -102,6 +103,8 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--registered", archived(a, registered)]
     if a.coins:
         cmd += ["--coins", a.coins]
+    if a.upstream != LIVE and not getattr(a, "zk", False):
+        cmd += ["--upstream-plain"]
     return cmd + modes(a) + ["--session"]
 
 

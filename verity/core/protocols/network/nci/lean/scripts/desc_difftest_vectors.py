@@ -14,7 +14,8 @@ Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.pr
 across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
-(`decoys`), which is no input node, then `difftest_vectors.pinned()`'s two (θ every
+(`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
+`NciCheck.Desc.walkBound`'s limit, then `difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
@@ -192,11 +193,47 @@ def decoys() -> list[dict]:
     return out
 
 
+def walk(n: int) -> str:
+    """A declaration whose one gate reads the carry of a scan of `n` iterations, each a scan of `n` identity steps: no
+    other gate, and about `n²` activations, so as many steps to locate the gate's operand. At `n = 2^32` that is past
+    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`walkBound`)."""
+    w = 8
+    op = vectors.prim((w,), w)
+    ret = Tuple(Value(w), Tuple())
+    Step = bind(CompositeDefinition(f"NciWalkStep{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                    lambda B, S, c: tuple_of(c, tuple_of()), register=False))
+    Mid = bind(CompositeDefinition(f"NciWalkMid{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                   lambda B, S, c: tuple_of(B.scan(Step, c, n=n)[0], tuple_of()), register=False))
+    fn = bind(CompositeDefinition(f"NciWalk{n}", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
+                                  lambda B, S, x: B.call(op, B.scan(Mid, x, n=n)[0]), register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+WALKS = (3, 2 ** 32)
+
+
+def walks() -> list[dict]:
+    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `NciCheck.Desc`
+    gives a verdict on, and one past `walkBound`'s limit, which it refuses."""
+    out = []
+    for n in WALKS:
+        text = walk(n)
+        inp, reg, spans = reference.root_nodes(text)
+        out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k] and reg[k]],
+                    "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],
+                    "alpha": [16, 1]})
+    return out
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
+    first_walk = first_decoy + len(decoys())
+    if seed >= first_walk:
+        return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed >= first_decoy:
         return {"instance": decoys()[seed - first_decoy], "shape": "decoy", "theta_kind": None, "division": None,
                 "malformed": None}
@@ -288,9 +325,9 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones, every fixture's, the decoys and
-    `difftest_vectors.pinned()`'s."""
-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned())
+    """How many instances the audit's data has: the random ones, every fixture's, the decoys,
+    `difftest_vectors.pinned()`'s and the walks."""
+    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

@@ -1,7 +1,8 @@
 {
   "display_information": {
     "name": "Agents",
-    "description": "Verity's coordinators post, read and route their asks, announcements and doorbells through it (research msg)."
+    "description": "Verity's coordinators post, read and route their asks, announcements and doorbells through it (research msg).",
+    "background_color": "#2C2D30"
   },
   "features": {
     "bot_user": {
@@ -40,6 +41,18 @@
   "settings": {
     "org_deploy_enabled": false,
     "socket_mode_enabled": false,
-    "token_rotation_enabled": false
+    "token_rotation_enabled": false,
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://website-docs-sage.vercel.app/api/slack/interactivity"
+    },
+    "event_subscriptions": {
+      "request_url": "https://website-docs-sage.vercel.app/api/slack/events",
+      "bot_events": [
+        "message.channels",
+        "message.groups",
+        "team_join"
+      ]
+    }
   }
 }

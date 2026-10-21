@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VStar
+import Flock.HmNets
 
 /-!
 # V*'s parts at the representation V* binds (option (d)): the layout and part facts, restated
@@ -43,7 +44,11 @@ So the restated facts constrain every round:
 views that differ only there collide among `IVStar`'s calls.
 
 `LayoutB` is its own record here, the deployed layout's fields with the pieces added (segments of constant bytes and
-hidden values, the statement's fixed rounds), so the statement builds on `VStar.Layout` as it stands.
+hidden values, the statement's fixed rounds), so the statement builds on `VStar.Layout` as it stands. It reads each
+message, piece and call at affine (XOR) forms over the hidden values (`readForms`), not at positions: V*'s commit
+strings `b ‖ c` and its gadgets' digests are XOR sums of committed columns (`b = d ⊕ Φy`, a compression's feed-forward
+sum), and a climb's input above the leaf is `a ⊕ t`. A position is the one-wire form (`readForms_pos`), so a layout
+at positions is one at forms (`segsAt`, `readSegs_segsAt`).
 
 Statements only. The proofs that V*'s parts meet them, and the route from them to `KSBound`, are to come.
 -/
@@ -53,26 +58,54 @@ namespace Claims.Recursion.VStarB
 open Claims
 open Claims.Recursion.VStar (readAt)
 
-/-- A message off a witness from its segments: each segment's constant bytes, then the bytes at its hidden values. -/
-def readSegs (w : Flock.Wit) (segs : List (Msg × List ℕ)) : Msg := segs.flatMap fun p => p.1 ++ readAt w p.2
+/-- An affine form's bit off a witness: the XOR of the hidden values at its wires, and its constant (`Hm.ev` at the
+witness's hidden values). -/
+def formBit (w : Flock.Wit) (f : _root_.Flock.HmNets.Lin) : Bool := f.s.foldr (fun q b => w.hid.getD q false ^^ b) f.c
 
-/-- A piece's byte length: each segment's constant bytes, then its hidden values' bytes, eight bits a byte. -/
-def pieceLen (segs : List (Msg × List ℕ)) : ℕ := (segs.map fun p => p.1.length + (p.2.length + 7) / 8).sum
+/-- The bytes affine forms over the hidden values read off a witness, eight bits a byte, the low bit first. -/
+def readForms (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) : Msg := VStar.bytesOf (fs.map (formBit w))
+
+/-- A position as the one-wire form. -/
+theorem readForms_pos (w : Flock.Wit) (ps : List ℕ) :
+    readForms w (ps.map _root_.Flock.HmNets.Lin.var) = readAt w ps := by
+  unfold readForms readAt
+  congr 1
+  simp [List.map_map, Function.comp_def, formBit, _root_.Flock.HmNets.Lin.var]
+
+/-- A message off a witness from its segments: each segment's constant bytes, then the bytes its forms read. -/
+def readSegs (w : Flock.Wit) (segs : List (Msg × List _root_.Flock.HmNets.Lin)) : Msg :=
+  segs.flatMap fun p => p.1 ++ readForms w p.2
+
+/-- A piece's byte length: each segment's constant bytes, then its forms' bytes, eight bits a byte. -/
+def pieceLen (segs : List (Msg × List _root_.Flock.HmNets.Lin)) : ℕ :=
+  (segs.map fun p => p.1.length + (p.2.length + 7) / 8).sum
+
+/-- Segments at hidden-value positions (`VStar.Layout`'s) as segments at forms, each position its one-wire form. -/
+def segsAt (segs : List (Msg × List ℕ)) : List (Msg × List _root_.Flock.HmNets.Lin) :=
+  segs.map fun p => (p.1, p.2.map _root_.Flock.HmNets.Lin.var)
+
+theorem readSegs_segsAt (w : Flock.Wit) (segs : List (Msg × List ℕ)) :
+    readSegs w (segsAt segs) = VStar.readSegs w segs := by
+  unfold readSegs segsAt VStar.readSegs
+  induction segs with
+  | nil => rfl
+  | cons p segs ih => simp only [List.map_cons, List.flatMap_cons, ih, readForms_pos]
 
 /-- **Where V\*'s parts hold the bound view** (option (d)), fixed by the compiled statement `x`: the inner rounds' count
 (`rounds x`); where part `s` holds inner round `i`'s message whole (`msgAt x s i`, `none` where it holds none), as
-segments, each constant bytes the statement fixes then the hidden values of the next bits, in order; each SHA-512
-evaluation part `s` computes (`shaAt x s`): its input's constant prefix, then the hidden values of the rest of its
-input's bits, and those of its output's; the rounds whose message the statement fixes (`fixedAt x i`), which no part
-holds; and each round that no part holds whole, assembled from pieces (`pieceAt x i`, empty at a round held whole or
-fixed), each a part and its segments, in order. A piece's bytes have the length its segments fix (`pieceLen`), so each
-piece sits at an offset the statement fixes. -/
+segments, each constant bytes the statement fixes then affine forms over the hidden values for the next bits, in
+order; each SHA-512 evaluation part `s` computes (`shaAt x s`): its input's constant prefix, then the forms of the
+rest of its input's bits, and those of its output's; the rounds whose message the statement fixes (`fixedAt x i`),
+which no part holds; and each round that no part holds whole, assembled from pieces (`pieceAt x i`, empty at a round
+held whole or fixed), each a part and its segments, in order. A piece's bytes have the length its segments fix
+(`pieceLen`), so each piece sits at an offset the statement fixes. A bit at a position is the one-wire form
+(`segsAt`). -/
 structure LayoutB where
   rounds : Msg → ℕ
-  msgAt : Msg → ℕ → ℕ → Option (List (Msg × List ℕ))
-  shaAt : Msg → ℕ → List (Msg × List ℕ × List ℕ)
+  msgAt : Msg → ℕ → ℕ → Option (List (Msg × List _root_.Flock.HmNets.Lin))
+  shaAt : Msg → ℕ → List (Msg × List _root_.Flock.HmNets.Lin × List _root_.Flock.HmNets.Lin)
   fixedAt : Msg → ℕ → Option Msg := fun _ _ => none
-  pieceAt : Msg → ℕ → List (ℕ × List (Msg × List ℕ)) := fun _ _ => []
+  pieceAt : Msg → ℕ → List (ℕ × List (Msg × List _root_.Flock.HmNets.Lin)) := fun _ _ => []
 
 /-- Inner round `i`'s message as part `s` holds it whole, off its witness `w`: none at a round the statement fixes. -/
 def LayoutB.held (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : Option Msg :=
@@ -98,13 +131,35 @@ def LayoutB.msgs (L : LayoutB) (x : Msg) (ws : List Flock.Wit) : List Msg :=
   (List.range (L.rounds x)).map (L.msg x ws)
 
 /-- **The bound readers' calls**: part `s`'s SHA-512 evaluations off its witness `w`, each its input (its constant
-prefix, then the bytes at its hidden values) and its output read at their hidden values. -/
+prefix, then the bytes its forms read) and its output, read at their forms. -/
 def LayoutB.calls (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) : List (Msg × Msg) :=
-  (L.shaAt x s).map fun p => (p.1 ++ readAt w p.2.1, readAt w p.2.2)
+  (L.shaAt x s).map fun p => (p.1 ++ readForms w p.2.1, readForms w p.2.2)
 
 /-- Every part's recorded calls, off the witnesses `ws`, part by part. -/
 def LayoutB.allCalls (L : LayoutB) (x : Msg) (ws : List Flock.Wit) : List (Msg × Msg) :=
   (ws.mapIdx fun s w => L.calls x s w).flatten
+
+/-- **A layout at hidden-value positions as a bound layout**: its rounds, holdings and fixed rounds, every position its
+one-wire form (`segsAt`), with no pieces. It holds and records what the layout does (`held_ofLayout`,
+`calls_ofLayout`). -/
+def LayoutB.ofLayout (L : VStar.Layout) : LayoutB where
+  rounds := L.rounds
+  msgAt x s i := (L.msgAt x s i).map segsAt
+  shaAt x s := (L.shaAt x s).map fun p =>
+    (p.1, p.2.1.map _root_.Flock.HmNets.Lin.var, p.2.2.map _root_.Flock.HmNets.Lin.var)
+  fixedAt := L.fixedAt
+
+theorem LayoutB.held_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) :
+    (LayoutB.ofLayout L).held x s w i = L.held x s w i := by
+  have hm : (LayoutB.ofLayout L).msgAt x s i = (L.msgAt x s i).map segsAt := rfl
+  have hf : (LayoutB.ofLayout L).fixedAt x i = L.fixedAt x i := rfl
+  have he : (readSegs w ∘ segsAt) = VStar.readSegs w := funext fun segs => readSegs_segsAt w segs
+  unfold LayoutB.held VStar.Layout.held
+  rw [hm, hf, Option.map_map, he]
+
+theorem LayoutB.calls_ofLayout (L : VStar.Layout) (x : Msg) (s : ℕ) (w : Flock.Wit) :
+    (LayoutB.ofLayout L).calls x s w = L.calls x s w := by
+  simp [LayoutB.calls, VStar.Layout.calls, LayoutB.ofLayout, readForms_pos]
 
 /-- **Part `s`'s pieces of round `i`**, off its witness: each piece it holds, with its byte offset in the round. -/
 def LayoutB.piecesOf (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ) : List (ℕ × Msg) :=

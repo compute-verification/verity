@@ -5,8 +5,9 @@
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+                     proof units otherwise); the word Definition a Boolean Definition names
+                     (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
+                     (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
@@ -42,6 +43,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
@@ -357,8 +359,9 @@ def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], a
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`), through the word view
-    (`verity.ml.circuits.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    the definition: on the word Definition's edge and random vectors, the word Definition must equal the Boolean gates through the
+    word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
     from verity.ml.circuits.evaluation import evaluate_batch
@@ -371,21 +374,26 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         return None
     pw, rw = signature_of(word)
     arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
-    n = arrays[0].shape[0]
+    n = arrays[0].shape[0] if arrays else 1
     pb, rb = signature_of(t)
     single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
-    if single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
-        got = _wide_words(t, pw, rw, pb, arrays, n)
+    if not pw:
+        # a batch evaluator sizes its batch by its arguments, so one without any (a constant) is evaluated as its one instance
+        bits, at = evaluate(t), np.cumsum([0, *rw.leaf_widths()])
+        boolean = np.array([[sum(int(b) << j for j, b in enumerate(bits[a:z])) for a, z in pairwise(at)]], dtype=object)
+        got = np.asarray([evaluate(word)], dtype=object)
+    elif single_bits or max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
+        boolean = _wide_words(t, pw, rw, pb, arrays, n)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
     else:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
-        got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
-    bad = np.flatnonzero((got != want).any(axis=1)).tolist()
+        boolean = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+    bad = np.flatnonzero((got != boolean).any(axis=1)).tolist()
     if bad:
-        F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",
-               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "boolean": _short(got[i].tolist()),
-                          "word": _short(want[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word-view:{word.id}", "compared": n, "mismatches": len(bad)}
+        F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
+               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
+                          "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
+    return {"via": f"word:{word.id}", "compared": n, "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -560,7 +568,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         C.output(f"out{k}", o)
     counts = C.counts()
     rows = [i for i, r in enumerate(ref) if r is not None]
-    fin = flat(arrays)[rows]
+    fin = (flat(arrays) if arrays else np.zeros((len(ref), 0), np.uint64))[rows]
     T = len(rows)
     rec: dict[str, Any] = {"lowered": True, "via": "c-flock:ir_lower", "ands": counts["ands"], "compared": T}
     if T:

@@ -19,6 +19,8 @@ zero `out`, their message rows and their row ports, and every session's `rec-acc
 rows (`--rec-rows`), and their rows of the chain; and check 5 on `rec-coins`' record of the inner session in place of its
 statement (`--rec-inner-coins`).
 A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape.
+RecCap, staged over the honest inner session, passes setup at the shared rows registering level 0's cap and is refused
+without them, at another registration, at a transcript whose `root_B` differs at a node, and without its reads.
 At candidate 3's inner shape, each session's setup first holds the inner statement to check 5's sparse refusals
 (`RecCoins.checkAtC3`), and refuses a session without the inner statement's files."""
 from __future__ import annotations
@@ -414,6 +416,70 @@ def test_a_parts_out_registered_under_another_zero_salt_is_refused_at_its_zero_r
                    "rec-residuals-zero row 0"), why
 
 
+#: RecCap at the fixture's inner shape (m 27, cap₀ 7): V*'s last statement, over the 128 nodes of level 0's cap
+CAP = "rec-cap/n128"
+
+
+@pytest.fixture(scope="module")
+def cap(built, once) -> Path:
+    """RecCap staged over the honest inner session (`rec_vstage.stage_cap`): instance `i` reads node `i` of `rec-top-L0`."""
+    def make(d):
+        res = S.stage_cap(SET / "inner-honest", d / "cap")
+        assert res["instances"] == 128 and res["unit_agrees"] == [True] * 128, res
+
+    return once("rec-coins-cap", make, _KEY) / "cap"
+
+
+def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(cap, shape, undrawn, tmp_path):
+    """`RecCoins.checkCap`, `RecVStar.checkTopRows` and `checkShared` on RecCap: at the shared rows that register `rec-top-L0`
+    as RecCap reads it (`rec_vstage.shared_rows`' tops, as level 0's `out` and RecCap's `top` register it) the honest
+    statement passes setup (`undrawn`'s session is refused after it). Without that entry it is refused, since then nothing
+    ties its rows to the ones level 0's openings read; at an entry of another root (level 0's queries reading another
+    registration of the cap than RecCap holds) it is refused by the root; and at an inner transcript whose `root_B` differs
+    at node 5 it is refused at the row reading that node, so every node RecCap holds is the coin server's. Each verify sets
+    RecCap up over its 128 instances; they run at once."""
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
+    top = json.loads((cap / "registered.json").read_text())["ports"]["top"]
+    assert (top["value"], top["leaves"], top["reads"]) == ("rec-top-L0", 128, list(range(128)))
+    flipped = top["root"][:-1] + ("1" if top["root"][-1] == "0" else "0")
+    other = tmp_path / "other.json"
+    other.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"rec-top-L0": {**top, "root": flipped}}}))
+    t = json.loads((SET / "inner-honest" / "public.json").read_text())
+    root = t["link"]["roots"]["circuit"]
+    assert len(root) == 128
+    root[5] = f"{int(root[5][:2], 16) ^ 1:02x}" + root[5][2:]
+    (tmp_path / "transcript.json").write_text(json.dumps(t))
+    run = lambda shared, *x: _verify(cap, cap / "pub.bin", cap / "registered.json", shape, "inner-honest", *x,  # noqa: E731
+                                     session=undrawn, rows=shared)["why"]
+    with cf.ThreadPoolExecutor(max_workers=4) as ex:
+        honest, bare, off, forged = [ex.submit(run, *a) for a in (
+            (rows,), (None,), (other,), (rows, "--rec-inner-transcript", str(tmp_path / "transcript.json")))]
+    assert honest.result() == S2_R7, honest.result()
+    assert bare.result() == (f"setup: {CAP}: its port top reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the "
+                             "verifier's shared rows (--rec-rows F), which register it"), bare.result()
+    assert off.result() == (f"setup: {CAP}: its port top reads rec-top-L0, which the verifier's shared rows (--rec-rows) "
+                            f"register as rec-top-L0: root {top['root']}, against {flipped}"), off.result()
+    assert re.fullmatch(rf"setup: rec-tops: {re.escape(CAP)}: port top's table row \d+ is not node 5 of circuit's root_B, "
+                        "which the coin server committed", forged.result()), forged.result()
+
+
+def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):
+    """`RecCoins.checkCap`'s reads: RecCap with `top` committed afresh (gone from its reads file and `pub.bin`'s registered
+    rows) is refused, since its rows would then be the prover's alone; with its zero outputs `out` gone, likewise.
+    `Flock.Test.RecCap` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
+    why = {}
+    for port in ("top", "out"):
+        d = _unregistered(cap, tmp_path / f"no-{port}", port)
+        why[port] = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", session=undrawn, rows=rows)["why"]
+    assert why["top"] == (f"setup: rec-coins: {CAP}: the verifier's registered reads hold no port top: the cap's rows would be "
+                          "the prover's"), why["top"]
+    assert why["out"] == (f"setup: rec-coins: {CAP}: the verifier's registered reads hold no port out: its rec-cap-zero would be "
+                          "the prover's"), why["out"]
+
+
 #: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
 OPENING_ZERO_ROOT = ("af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7"
                      "bad14ce4f03dc487265b9")
@@ -676,8 +742,8 @@ def test_the_honest_level_is_refused_with_a_lookup_table_held(forged, shape, tmp
 def bit_rows(built, once) -> Path:
     """Level 3 staged with every row a `sha512/row/v2` bit row of its words' 16 bits (`compose`'s `port_bits`, META
     `row_schemas`), which `ProvedScope.scopeOkH` admits under hidden outputs (`bitRows`) and V*'s `scopeOk` does not. Its
-    rows read no registered value: a bit row's registered reads are refused by `Registered` (registered rows are
-    `sha512/row/v1` rows), so the verifier holds none (no `--registered`), and `scopeOk` alone stands between it and V*."""
+    rows read no registered value: V*'s registered rows are `sha512/row/v1` rows (`RecCoins.checkRows`), so the verifier
+    holds none (no `--registered`), and `scopeOk` alone stands between it and V*."""
     from verity_flock import circuit as FC
 
     compose, write = FC.compose, FC.write

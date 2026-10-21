@@ -34,6 +34,16 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "fails": "escape: Control.spin (opaque"
  },
+ "escape_implemented_by": {
+  "write": {"Control/Bad.lean": "namespace Control\n\ndef slowImpl (n : Nat) : Nat := n\n\n@[implemented_by slowImpl] def slowF (n : Nat) : Nat := n\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "escape: Control.slowF (implemented_by"
+ },
+ "escape_extern": {
+  "write": {"Control/Bad.lean": "namespace Control\n\n@[extern \"c_id\"] def cId (n : Nat) : Nat := n\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "escape: Control.cId (extern"
+ },
  "orphan": {
   "write": {"Control/Unused.lean": "theorem Control.unused : True := trivial\n"},
   "fails": "orphan: Control/Unused.lean"
@@ -82,7 +92,7 @@
   "policy": {"compile_time": {"Control.Bad": {"why": "the kernel control: its #eval adds the declaration",
    "digest": "4da2bab2648e444f57947d9604d9d9a74ae39700cffb41af077108b8bc006bd7"}}},
   "replay_only": true,
-  "fails": "replay: the kernel rejected a declaration under Control"
+  "fails": "replay: the kernel rejected a declaration under Control, in Control.Bad (exit 1)"
  },
  "initializer": {
   "write": {"Control/Bad.lean": "initialize\n  try IO.FS.writeFile \"FORGED\" \"{\\\"offenders\\\": []}\" catch _ => pure ()\n\ntheorem Control.bad : 1 = 2 := by sorry\n"},
@@ -97,6 +107,21 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "not_written": ["TREE_WRITTEN"],
   "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (run_cmd)"
+ },
+ "compile_time_macro": {
+  "write": {"Control/Bad.lean": "import Lean\n\nmacro \"ctrivial\" : term => `(trivial)\n\ntheorem Control.byMacro : True := ctrivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (macro)"
+ },
+ "compile_time_syntax": {
+  "write": {"Control/Bad.lean": "import Lean\n\nsyntax (name := ctrlStx) \"ctrlStx\" : command\n\ntheorem Control.okStx : True := trivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (syntax)"
+ },
+ "lakefile_lean": {
+  "write": {"lakefile.lean": "import Lake\nopen Lake DSL\n\npackage control\n\n@[default_target]\nlean_lib Control\n"},
+  "delete": ["lakefile.toml"],
+  "fails": "compile-time: lakefile.lean runs code"
  },
  "docstring": {
   "replace": {"Control/Thms.lean": ["theorem helper", "/-- Prose may name debug.skipKernelTC and `run_cmd`:\n#eval and initialize here are words, not commands. -/\ntheorem helper"]},
@@ -117,6 +142,15 @@
               "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
               "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
   "passes": true
+ },
+ "closure_dependency": {
+  "write": {".lake/packages/dep/lakefile.toml": "name = \"dep\"\n\n[[lean_lib]]\nname = \"Dep\"\n",
+            ".lake/packages/dep/Dep.lean": "import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Dep.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
+  "replace": {"lakefile.toml": ["[[lean_lib]]", "[[require]]\nname = \"dep\"\npath = \".lake/packages/dep\"\n\n[[lean_lib]]"],
+              "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
+              "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
+  "closure_only": true,
+  "fails": "replay: the kernel rejected a declaration in the import closure of Control, in Dep (exit 1)"
  },
  "missing_policy": {
   "delete": ["lean-audit.json"],

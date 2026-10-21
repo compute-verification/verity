@@ -38,9 +38,11 @@ bits costs at least `(2x/b)·c_root`. A completion measured below that, by a fac
 `θ·c_root` (in a unit fine enough to make it a whole number), and every guarantee taking it holds there, its rebuild
 term divided by `θ`.
 
-**The stated instance is `k = 3`** (`WorkHardness b 3 c_root cost`: `x` bits at `(3x/b)·c_root`), pending Daniel's card
-for the codec: two rounds at 512 bits rest on the reduction's operation-count floor below, which is an estimate, not a
-measurement. The guarantees hold at every `rounds`; `k = 3` is the one they are read at.
+**The stated instance is the deployed codec's**, Sloth over `p = 2^1024 − 105`, masked, at `k = 3` (`codec.DEFAULT`
+of `verity/core/protocols/remote_bandwidth/codec.py`, Daniel's ruling, #1884, 12 Oct; `k = 2` at the same width the
+fallback): `WorkHardness 1024 3 c_root cost`, `x` of a word's 1,024 bits at `(3x/b)·c_root`. The `Prop` reads the codec
+only through `b`, `rounds` and `c_root`, so the mask changes no statement, only what the price rests on. The
+guarantees hold at every `rounds`; `k = 3` is the one they are read at.
 
 **Where it stands** (red team, `ra-rate-redteam`, 12 Oct 18:00Z). At `k = 2` the adversary keeps a word's top `b − x`
 bits and completes the rest from the known payload by a 4-dimensional lattice, up to `x ≈ b/10` at every width
@@ -48,14 +50,14 @@ bits and completes the rest from the known payload by a 4-dimensional lattice, u
 reducers, costs 2.07 roots there, 12.3× the claim (r20261012-164518-ccba); Howgrave-Graham's larger lattices are 2–5×
 worse per bit (r20261012-170857-6e04). At the reduction's operation-count floor (r20261012-170958-f49a, estimated from
 operation counts, not measured) the margin is about 1.2× on the GPU (range 0.75–2.7×) and 1.6× on the host
-(0.99–3.6×): on that estimate 512 bits is the widest word `k = 2` protects, 640 bits is at parity and 768 is broken. The
-residual conjecture at `p = 2^512 − 569`, `k = 2` is `WorkHardness 512 2 c_root cost`: no 4D reduction at 512 bits
-completes a dropped tail below `2x/b` of a root.
+(0.99–3.6×): on that estimate 512 bits is the widest word unmasked `k = 2` protects, 640 bits is at parity and 768 is
+broken. For the upgrade path, `p = 2^512 − 569` unmasked at `k = 2`, the residual conjecture is
+`WorkHardness 512 2 c_root cost`: no 4D reduction at 512 bits completes a dropped tail below `2x/b` of a root.
 
-**A masked codec** (lane ra-codec-mix, draft verity#1894; not adopted, Daniel's call). A public XOR `σ_K` between
-rounds defeats the red team's 4D completion (none of 200 masked words completed, against all 200 plain ones, at every
-width), and the price's justification becomes that no completion skips the inner root. Such a codec would be another
-instance of this `Prop`, at its own `rounds` and `c_root`; nothing here assumes it.
+**The masked codec** (lane ra-codec-mix, verity#1894), the deployed one. A public XOR `σ_K` between rounds defeats the
+red team's 4D completion (none of 200 masked words completed, against all 200 plain ones, at every width), and the
+price's justification becomes that no completion skips the inner root. Its residual conjecture is the stated instance,
+`WorkHardness 1024 3 c_root cost`.
 
 **At `k = 1` it is false at every width** (F27). A word's dropped bottom third completes by a 2-dimensional lattice
 whose floor is half a GMP extended GCD: 0.025 of a root at 512 bits, 0.019 at 640, 0.015 at 768, 0.009 at 1,024,

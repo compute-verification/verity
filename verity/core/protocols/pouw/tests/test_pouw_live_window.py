@@ -7,7 +7,10 @@ the window's mode, and a seeded window is as it was."""
 from __future__ import annotations
 
 import dataclasses
+import importlib.util
+import json
 import random
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +18,11 @@ from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
+
+_spec = importlib.util.spec_from_file_location(
+    "pouw_rounds_cases", Path(__file__).resolve().parents[1] / "lean/check/tests/pouw_rounds_cases.py")
+rounds_cases = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rounds_cases)
 
 
 def entropy(seed: str):
@@ -84,13 +92,27 @@ def test_the_round_key_is_its_own_coin_and_root():
     assert Wd.round_key(other.commitment, ops[0].coin, 0, roots[0]).value != keys[0]
 
 
-def test_core_checks_rounds_reads_the_challengers_json():
-    ch, roots, ops = window()
-    args = ch.commitment.to_json(), [r.hex() for r in roots], [o.to_json() for o in ops]
-    assert CC.rounds(*args) is None
-    seeded = Co.Challenger(7, entropy("s")).commitment.to_json()
-    assert CC.rounds(seeded, *args[1:]) == ("coin", f"the verifier's coins are malformed: {Ch.COMMITMENT_FORM}")
-    assert CC.rounds(args[0], ["AB" * 64] + args[1][1:], args[2]) == \
+def test_core_checks_rounds_reads_the_challengers_own_session():
+    """The round rule of record reads the challenger's coins only through the session the auditor's signed ledger opens
+    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger drew, whose
+    log no one signed, or whose ledger is cut before the session's end, is refused however honest its coins."""
+    d, s = rounds_cases.honest_rounds(random.Random("a"))
+    d = rounds_cases.with_ledger(d, s, random.Random("l"))
+    assert CC.rounds(*rounds_cases.rounds_args(d)) is None
+    prover = Wd.live_challenger(s.ch.commitment.epoch, s.ch.commitment.family(Wd.ROUND), entropy("p"))
+    in_process = rounds_cases.Session(random.Random("p"), prover, [bytes.fromhex(r) for r in d["roots"]], None, seed=1)
+    ops = [o.to_json() for o in in_process.rounds.openings]
+    assert CC.rounds(*rounds_cases.rounds_args({**d, "session": in_process.files(), "openings": ops})) == \
+        ("coin", "the challenger's session is not trusted: the challenger record's signature does not verify under the "
+                 "verifier's challenger key")
+    assert CC.rounds(*rounds_cases.rounds_args({**d, "session": {**d["session"], "close": None}})) == \
+        ("coin", f"the challenger's session is not trusted: {Ch.NO_CLOSE}")
+    end = next(i for i, line in enumerate(d["ledger"]) if json.loads(line)["kind"] == "end"
+               and json.loads(line)["session"] == s.sid)
+    assert CC.rounds(*rounds_cases.rounds_args({**d, "ledger": d["ledger"][:end]})) == \
+        ("coin", f"the challenger's session is not trusted: the auditor's ledger has no end for session {s.sid}: the "
+                 "session never ended, or the ledger is older than its end")
+    assert CC.rounds(*rounds_cases.rounds_args({**d, "roots": ["AB" * 64] + d["roots"][1:]})) == \
         ("rounds", "the round roots are not a list of SHA-512 digests")
 
 

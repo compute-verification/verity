@@ -45,7 +45,7 @@ done < "$keys"
 visudo -cqf "$LIB/10-vy-admin" || die "visudo -cf refuses $LIB/10-vy-admin"
 
 if ! id "$NAME" > /dev/null 2>&1; then
-  useradd --create-home --user-group --shell /bin/bash --comment "admin: root through logged sudo" "$NAME"
+  useradd --create-home --user-group --shell /bin/bash --comment "admin, root through logged sudo" "$NAME"
   echo "created $NAME"
 fi
 passwd -l "$NAME" > /dev/null

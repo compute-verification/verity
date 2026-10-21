@@ -1,7 +1,8 @@
-"""The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`
-and `verity.ml.crypto.lms`: the coins and their tree, the round records' root, the header and the signed message, the
-block digest, and LMS signing at a leaf and verification, each on drawn inputs that include what both sides must
-refuse (`test_verdict.py` holds the verdict)."""
+"""The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
+`streamed_wipe.py` and `verity.ml.crypto.lms`: the coins and their tree, the round records' root, the header and the
+signed message, the block digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
+egress count, each on drawn inputs that include what both sides must refuse (`test_verdict.py` and
+`test_wipe_verdict.py` hold the verdicts)."""
 
 from __future__ import annotations
 
@@ -15,7 +16,9 @@ from hypothesis import strategies as st
 
 import mc_cases as M
 import verity_difftest as D
+import wipe_cases as W
 from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -244,3 +247,43 @@ def lms_verify_inputs(draw) -> dict:
 def test_lms_verify(server):
     stats = D.run(port("lms_verify", lms_verify, with_malformed(lms_verify_inputs())), examples=200, server=server)
     assert stats.outputs > 80, stats
+
+
+WIPE_PARAMS = st.builds(
+    lambda labels, k, b, limit, names, cuts: sw.WipeParams(labels, k, 1 + b % k, limit, W.tiers_of(labels, cuts, names)),
+    st.integers(1, 2 ** 40), st.integers(1, 2 ** 32 - 1), st.integers(0, 2 ** 32), st.integers(1, 2 ** 64),
+    st.permutations(W.TIER_NAMES), st.lists(st.integers(1, 2 ** 40), max_size=2))
+WIPE_COMMITMENT = st.builds(lambda server, session, p: sw.WipeCommitment(server, session, p).to_json(),
+                            st.binary(min_size=1, max_size=12), st.binary(max_size=40), WIPE_PARAMS)
+#: An integer of either sign, mostly within a record field's width.
+SIGNED = mostly(st.integers(0, 2 ** 32 - 1), st.integers(-2 ** 70, 2 ** 70), 4)
+WIPE_BATCH = st.fixed_dictionaries({"b": SIGNED, "first": SIGNED, "count": SIGNED, "send_ns": SIGNED, "receipt_ns": SIGNED,
+                                    "wrong": SIGNED, "digest": hexed(st.binary(max_size=70))})
+WIPE_BATCHES = st.lists(mostly(WIPE_BATCH, malformed(WIPE_BATCH), 15), max_size=5)
+
+
+def wipe_message(v) -> str:
+    return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), W.int_(v, "fill_start_ns"),
+                      W.int_(v, "fill_end_ns"), [W.batch_of(r) for r in M.list_(v, "batches")],
+                      W.int_(v, "egress_bits")).hex()
+
+
+def test_wipe_message(server):
+    """The signed message over drawn commitments (tier names past ASCII among them), batch records of either sign and
+    width, and fill times and egress of either sign; commitments `WipeParams` refuses and records past a field's width
+    refused by both."""
+    commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "fill_start_ns": SIGNED,
+                                                   "fill_end_ns": SIGNED, "batches": WIPE_BATCHES, "egress_bits": SIGNED}))
+    stats = D.run(port("wipe_message", wipe_message, inputs), examples=300, server=server)
+    assert stats.outputs > 100 and stats.rejects > 30, stats
+
+
+def test_wipe_egress_units(server):
+    """Whole MiB rounded up, negative counts as Python's floor division rounds them, and the 15-bit saturation."""
+    edges = [0, 1, -1, W.U - 1, W.U, W.U + 1, -W.U, -W.U - 1, sw.EGRESS_MAX_UNITS * W.U, sw.EGRESS_MAX_UNITS * W.U + 1]
+    bits = st.one_of(st.sampled_from(edges), st.integers(-2 ** 70, 2 ** 70), st.integers(-4 * W.U, 4 * W.U))
+    inputs = with_malformed(st.fixed_dictionaries({"egress_bits": bits}))
+    stats = D.run(port("wipe_egress_units", lambda v: sw.egress_units(W.int_(v, "egress_bits")), inputs), examples=300,
+                  server=server)
+    assert stats.outputs > 150 and stats.rejects > 30, stats

@@ -149,7 +149,7 @@ class TpRow(Row):
             raise Stop(3)
         self.tl("precheck", "end", ("rc", 0))
         self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)", quiet=True)
-        rc, line = self.target_family(out=f"{self.d}/target_family.json")
+        rc, line = self.target_family(*([] if self.reads_device() else ["--no-device"]), out=f"{self.d}/target_family.json")
         if rc != 0:
             self.verdict("precheck-target", "FAIL", line)
             raise Stop(3)
@@ -172,6 +172,13 @@ class TpRow(Row):
         if not os.path.isdir(self.ck):
             self.verdict("build", "FAIL", f"no local checkpoint dir for {self.repo} @ {self.rev} (checkpoints.json local_path / HF snapshot absent; HF_HUB_OFFLINE=1)")
             raise Stop(10)
+
+    def reads_device(self) -> bool:
+        """Whether a stage of this run reads this host's GPU, so the target-family precheck reads it too: the Commit, the Match's GPU
+        legs, a Build whose target is the device.  ``--match-phase cpu`` reads only legs whose device the GPU half's precheck read, and a
+        declared-target Build derives for its declaration, so a CPU host runs those stages."""
+        return (stage_on(self.stages, "commit") or (stage_on(self.stages, "match") and self.cm.match_phase != "cpu")
+                or (stage_on(self.stages, "build") and not R.declared_target(self.path(self.wl), row=self.row)))
 
     def p2p_env(self) -> str | None:
         """The stages' NCCL_P2P_DISABLE: the row's ``engine.env`` value, else unset (one the caller's environment has is dropped)."""
@@ -278,10 +285,11 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
-        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
-        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
-                              budget_gb=self.cb.build_ram_budget_gb)
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.compose_bytes` a compose
+        (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        layers = R.model_layers(self.ck)
+        n = R.build_jobs_auto(self.shapes, layers, derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO, budget_gb=self.cb.build_ram_budget_gb,
+                              job_bytes=R.compose_bytes(self.shapes, layers) if self.shapes and layers else None)
         self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
         with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:
@@ -329,7 +337,10 @@ class TpRow(Row):
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
-        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
+        kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
+        if kept:
+            self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
+        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step") and r not in kept])
         ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
         if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)
@@ -437,7 +448,7 @@ class TpRow(Row):
             rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
                                            "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", str(cm.fold_rank_workers),
-                                           "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
+                                           "--fold-workers", str(cm.fold_workers), "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
             fold = f"fold_match rc={rc_fold} {R.tp_fold_line(M)}"
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0

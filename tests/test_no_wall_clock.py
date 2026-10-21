@@ -40,9 +40,14 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
+    "integrations/vllm/tests/engine/int8_decode_split_gpu.py":
+        "a GPU probe script (not collected) that measures the int8 LM head's share of decode time; no test reads it",
     "integrations/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
     "integrations/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
     "integrations/vllm/tests/program/padded_commit_tiny.py": "records build/commit timings in its row; test_padded_commit_tiny asserts none of them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/test_no_wall_clock.py::test_the_scan_sees_each_form": "the scan's own fixture: source it must flag, held in a string",

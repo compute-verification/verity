@@ -102,7 +102,8 @@ research status RUN  # check back on a run (`research run` returns once it start
 
 ## Design rules
 
-Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
+Daniel's, current. Their dates and history are in his decisions log in Notion; `.agents/skills/friction/SKILL.md` has
+the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
@@ -113,7 +114,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
+  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
+  provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -134,7 +137,8 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    window's live salt (`pouw.salt`, one per PoUW window from the certifier's draw, #2637) and the operands' committed
+    roots, which a drawn unit's proof derives along with its own noise.
     Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
     μ^m a try (Daniel, 18 Oct).
 
@@ -175,7 +179,8 @@ out-of-memory kill takes all of them down. Locally, run only git (`git merge-tre
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
 remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots, or in vy-nebius-cpu-1's `research`
+pool when it starts sooner there (`research/auto.py`): every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
@@ -317,11 +322,13 @@ keys, and what a guarantee says or rests on, go to Daniel through your coordinat
 still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
+`.agents/skills/friction/SKILL.md`, has the standing rulings this file doesn't state and the friction note format.
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-`budgets.toml`), and runs preserve their results from the pod.
+`budgets.toml`), and runs preserve their results from the pod. The lane whose budget line pays for a machine owns its
+use, and stops it when its work there ends; `research run --on` starts it again, and infra's idle stop is only a backstop
+(Daniel, 19 Oct).
 
 Never print a secret's value.
 
@@ -355,6 +362,9 @@ Never print a secret's value.
   - `research notes sync --path lanes/<lane>` publishes notes from any VM with `RESEARCH_NOTES_TOKEN` set.
   - A Cursor agent store is its agent's scratch: nothing another agent or a person needs lives only there, and nothing
     cites a `store:` path.
+- **Writing for a person** (an explanation, a one-pager, an answer in someone's chat) is a Notion page, or cites only
+  what they can open: PRs, repository files, run ids and Notion pages. The notes repo is private, so a `note:` id is for
+  agents (Daniel, 19 Oct).
 - **Evidence and generated output** (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports)
   go in the evidence store only, never Git: neither this repo nor the notes.
   - `research run` publishes every run, completed or failed, as an Attempt with its outputs. The contract is
@@ -452,10 +462,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
 - When Daniel or a lead asks for a smell check, before you call something served, end to end, proved or credited, and when
-  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`, with the catalogue of smells found so far.
+  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`. The catalogue of smells found so far is the
+  notes' `kb/smell-catalogue.md`.
 - Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
   `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
-- Creating or modifying a skill: `.agents/skills/authoring-skills/SKILL.md`.
+- Creating or modifying a skill (at most 16 KB: current rules, not their history): `.agents/skills/authoring-skills/SKILL.md`.

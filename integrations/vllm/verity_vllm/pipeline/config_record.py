@@ -36,7 +36,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowConfig, RowId, UsageError
+from verity_vllm.config import RECORDS, WORKLOADS, RowConfig, RowId, UsageError, done_source_refusal
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 
@@ -45,7 +45,7 @@ NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
-INDEX = MANIFESTS / "records.json"
+INDEX = RECORDS
 INDEX_SCHEMA = "verity-vllm/records-index/v1"
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
@@ -117,6 +117,14 @@ def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
         profile = module_name(cfg.case, int(config_of(row).get("tp") or 1))
     return {"file": f"workloads/{row}.json", "sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "profile": profile,
             "config": {k: v for k, v in cfg.to_json().items() if k != "requests"}}
+
+
+def index_refusal(row: str) -> str | None:
+    """Why `INDEX` may not list `row`: a row it lists is a row of record, so its file must be done only at its public cap
+    (`config.done_source_refusal`, with `of_record`); None when it is.  `records publish`, `pull` and `switch` refuse with it before
+    they touch the index, and `row chain` before any stage when it would publish."""
+    p = WORKLOADS / f"{row}.json"
+    return done_source_refusal(json.loads(p.read_text()) if p.is_file() else {"sweep": {"row_id": row}}, of_record=True)
 
 
 def match_part(d: Path, world: int) -> dict[str, Any] | None:
