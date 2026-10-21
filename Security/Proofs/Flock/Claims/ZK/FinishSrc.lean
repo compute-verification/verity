@@ -87,8 +87,9 @@ theorem zerocheckCut_mk (io : FlockComplete.Asks M) (m : ℕ) (digest cap root :
         simp only [Zk.PadLayout.r1c, Zk.PadLayout.fa] at hfa ⊢; omega),
     h lay.fa (by omega), h lay.fb (by simp only [Zk.PadLayout.fb]; omega),
     h lay.fc (by simp only [Zk.PadLayout.fc]; omega)]
-  repeat (refine bind_congr fun _ => ?_)
-  refine congrArg (· >>= _) (forIn_range_congr _ _ fun i hi b => ?_)
+  iterate 11 refine bind_congr fun _ => ?_
+  congr 1
+  refine forIn_range_congr _ _ fun i hi b => ?_
   have hml : ∀ t < 2, lay.ml i t < lay.hab := fun t ht => by
     simp only [Zk.PadLayout.ml, Zk.PadLayout.fa] at hfa ⊢; omega
   rw [h _ (hml 0 (by omega)), h _ (hml 1 (by omega))]
@@ -103,8 +104,9 @@ theorem lincheckCut_mk (io : FlockComplete.Asks M) (c : CircuitFold) (m : ℕ) (
       fun i hi => h _ (by
         rw [Array.mem_range] at hi
         simp only [Zk.PadLayout.zp, Zk.PadLayout.hab]; omega)]
-  repeat (refine bind_congr fun _ => ?_)
-  refine congrArg (· >>= _) (forIn_range_congr _ _ fun j hj b => ?_)
+  iterate 4 refine bind_congr fun _ => ?_
+  congr 1
+  refine forIn_range_congr _ _ fun j hj b => ?_
   have hlc : ∀ t < 2, lay.lc j t < lay.hab := fun t ht => by
     simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc]; omega
   rw [h _ (hlc 0 (by omega)), h _ (hlc 1 (by omega))]
