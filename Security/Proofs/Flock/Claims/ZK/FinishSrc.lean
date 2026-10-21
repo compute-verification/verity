@@ -230,23 +230,23 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
       FlockComplete.eraseZ p' = FlockComplete.eraseZ p := by
   dsimp only [repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := run_bind_ok h
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := run_bind_ok h
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := run_bind_ok h
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨tr', t₅, l₅, h₅, h⟩ := run_bind_ok h
   rw [get_run_go] at h₅
   cases h₅
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, h⟩ := run_bind_ok h
   obtain ⟨hrp, rfl, rfl⟩ := liftV_run_ok h₆
-  dsimp only at h
+  try dsimp only at h
   obtain ⟨lgc, t₇, l₇, h₇, h⟩ := run_bind_ok h
   obtain ⟨hlgc, rfl, rfl⟩ := liftV_run_ok h₇
-  dsimp only at h
+  try dsimp only at h
   split at h
   · obtain ⟨_, _, _, h', _⟩ := run_bind_ok h
     rw [throw_run_go] at h'
@@ -258,9 +258,9 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
       (.ok ((zp, lp, ss, T, sws), t₃), l₃) := by
     unfold piopFw
     rw [FlockComplete.Replay.bind_go h₁]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go h₂]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go h₃]
     rfl
   have hPC := piopCut_fw coin n st _ g _ src _ _ extras prior words hmk hpiop hP
@@ -287,7 +287,7 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
     (fun i i' e => by simp only [e]) hsrc
   rw [FlockComplete.Replay.bind_go h₈] at hI
   obtain ⟨inner', t₉, l₉, h₉, hI⟩ := run_bind_ok hI
-  dsimp only at hI
+  try dsimp only at hI
   rw [FlockComplete.Replay.pure_go] at hI
   simp only [Prod.mk.injEq, Except.ok.injEq] at hI
   obtain ⟨⟨hie, rfl⟩, rfl⟩ := hI
@@ -296,15 +296,15 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
     ?_, ?_⟩
   · dsimp only [FlockComplete.repCut]
     rw [eraseC_cap', FlockComplete.Replay.bind_go hPC]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go hL]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go (get_run_go _ _)]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go (liftV_run_go hrp' _ _)]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go (liftV_run_go hlgc' _ _)]
-    dsimp only
+    try dsimp only
     rw [FlockComplete.Replay.bind_go h₉]
     rfl
   · simp only [FlockComplete.eraseZ, eraseL_eraseL', hie]
