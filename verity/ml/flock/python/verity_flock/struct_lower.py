@@ -1,18 +1,28 @@
-"""A structural lowering's counts (PRF-133): each specialized Definition lowered once, its calls, batch members and scan
-iterations kept as calls, instead of :func:`ir_lower.lower`'s one walk over the unrolled gates.
+"""A structural lowering (PRF-133): each specialized Definition lowered once per pattern of its arguments, its calls,
+batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v1`` (:mod:`verity_flock.tmpl`) instead of
+:func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: nothing else calls it, and no existing
+circuit's lowering or digest changes.
 
-A specialization is lowered once per pattern of its argument bits: which are constants (and their values), and which
-are one caller form or its complement (an alias), so the constant folding and ``x·x`` folding the unrolled lowering does
-across a call boundary are kept. Every other argument bit is one of the callee's input columns, and a caller form that is
-not a single committed bit is committed first (one row of the caller); a returned form that is not a single committed bit,
-a constant or an argument is committed by the callee. Primitive gates are lowered by :data:`ir_lower.PIECES` and a Boolean
-Definition by its builder, as :func:`ir_lower.lower_gates` lowers them, so a template made this way is O(its
-Definitions) and differs from the unrolled unit only by those commits and the folds a pattern doesn't carry.
+A Definition's argument bit is a constant or a linear form over the caller's committed bits, as the unrolled lowering
+carries it. The callee is lowered once per *pattern* of its argument bits: each constant and its value, and each form as
+the set of distinct caller bits (the callee's inputs, numbered by first appearance) it sums plus its constant, so the
+constant folding and the free XORs the unrolled lowering does across a call boundary are kept. A form over more than
+``support`` bits is committed by the callee (one row, ``A = form, B = 1``); a returned bit is a constant, or a form over
+the callee's inputs and its own columns, committed by the callee past ``support`` too. Primitive gates are lowered by
+:data:`ir_lower.PIECES` and a Boolean Definition by its builder, as :func:`ir_lower.lower_gates` lowers them; the members
+of a batched primitive node are calls too. So a Definition's template rows are its own gates, never its callees', and
+consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line.
 
-:func:`count` returns the unrolled totals (multiplied through the calls, not unrolled) and the template's size: its
-Definitions and their own rows and references.
+What the unit loses against the unrolled lowering is counted, not hidden: the commits, and the gates of a callee's
+returns that no caller reads (a callee is lowered without its callers' liveness). :func:`unrolled_rows` gives the
+template's rows unrolled (``tmpl.unroll``) and :func:`evaluate` evaluates them, which :func:`check` holds to the unrolled
+lowering's evaluation on random inputs.
 
-    python -m verity_flock.struct_lower K [R C] [--flat]   # the H1 tile unit (benchmarks/pouw/h1_prove/h1unit.Shape)
+    python -m verity_flock.struct_lower K [R C] [--support S] [--out UNIT.tmpl] [--flat | --check]
+
+the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
+through the calls, and the template's size) and writes the template; ``--flat`` counts the unrolled lowering instead, and
+``--check`` runs :func:`check`.
 """
 from __future__ import annotations
 
@@ -22,63 +32,82 @@ import time
 from dataclasses import dataclass, field
 from functools import partial
 
+import numpy as np
+
 from verity.ml.circuits.boolean.forms import ONE, Circuit, L
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.layout import FunctionCall, Region
 
 from . import ir_lower as IL
+from . import tmpl as T
+from .fp import ceil_pow2
+
+SUPPORT = 8
 
 
 @dataclass
 class Spec:
-    """One lowered specialization: its own rows (ANDs, commits, lookup bits) and references, its returns as
-    ``("c", v)`` | ``("a", label, c)`` | ``("col",)``, and its calls' keys."""
+    """One lowered specialization: its inputs, own columns, rows ``(col, A, B)`` and calls (``tmpl.Call``) in template
+    references; per returned bit ``("c", v)`` or ``("f", c, terms)`` with each term ``("l", input)`` or ``("v", column)``;
+    and its placed copies' keys, for the unrolled totals."""
 
     key: tuple
-    rows: int = 0
-    commits: int = 0
-    lookups: int = 0
-    asserts: int = 0
-    refs: int = 0
-    rets: list = field(default_factory=list)
+    ins: int = 0
+    cols: int = 0
+    rows: list = field(default_factory=list)
     calls: list = field(default_factory=list)
+    rets: list = field(default_factory=list)
+    commits: int = 0
+    refs: int = 0
+    copies: list = field(default_factory=list)
+    index: int = -1
 
 
-def _pattern(words: list[list[L]]) -> tuple[tuple, list[L]]:
-    """The argument bits' pattern and, per label, the caller's form it stands for."""
-    labels: dict[frozenset, int] = {}
-    forms: list[L] = []
+@dataclass
+class _Block:
+    pos: int
+    key: tuple
+    labels: list
+    base: int = 0
+
+
+def _pattern(words: list[list[L]]) -> tuple[tuple, list[int]]:
+    """The argument bits' pattern and the caller bits its inputs stand for, numbered by first appearance."""
+    labels: dict[int, int] = {}
     pat = []
     for w in words:
         for b in w:
             if b.is_const():
                 pat.append(("c", b.c))
-            else:
-                i = labels.get(b.s)
+                continue
+            ls = []
+            for v in sorted(b.s):
+                i = labels.get(v)
                 if i is None:
-                    i = labels[b.s] = len(forms)
-                    forms.append(L(b.s, 0))
-                pat.append((i, b.c))
-    return tuple(pat), forms
+                    i = labels[v] = len(labels)
+                ls.append(i)
+            pat.append((tuple(ls), b.c))
+    return tuple(pat), list(labels)
 
 
 class _Lowerer:
-    def __init__(self, circuit):
+    def __init__(self, circuit, support: int = SUPPORT):
         self.circuit = circuit
+        self.support = support
         self.specs: dict[tuple, Spec] = {}
+        self.order: list[Spec] = []
         self.totals: dict[tuple, dict] = {}
 
-    def call(self, C: Circuit, fc: FunctionCall, wires: dict) -> None:
-        """Lower call ``fc`` of the Definition being lowered on C: commit its arguments' forms, lower its specialization
-        (once per pattern), and set its returns' words."""
-        for a in dict.fromkeys(fc.args):
-            w = wires[a]
-            if any(not b.is_const() and not (len(b.s) == 1 and b.c == 0) for b in w):
-                wires[a] = C.commit(w)
-        words = [wires[a] for a in fc.args]
-        pat, forms = _pattern(words)
-        key = (fc.fn.id, pat)
-        sp = self.specs.get(key) or self.lower(fc, key, pat)
+    def call(self, C: Circuit, fc: FunctionCall, wires: dict) -> tuple:
+        """Lower call ``fc`` of the Definition being lowered on C: its specialization once per pattern, one placed copy,
+        its returns' words set."""
+        words = [wires[a] for a in dict.fromkeys(fc.args)]
+        pat, label_vars = _pattern(words)
+        key = (fc.fn.id, len(fc.args), pat)
+        sp = self.specs.get(key) or self._lower(fc, key, pat, len(label_vars))
+        blk = _Block(len(C.kind), key, label_vars)
+        C.blocks.append(blk)
+        col_var: dict[int, L] = {}
         bits = iter(sp.rets)
         for r in fc.returns:
             if r in wires and not (fc.lo <= r < fc.hi):
@@ -88,135 +117,303 @@ class _Lowerer:
             out = []
             for _ in range(IL._width(self.circuit.gate(r).prim)):
                 t = next(bits)
-                out.append(L(frozenset(), t[1]) if t[0] == "c" else (forms[t[1]].inv() if t[2] else forms[t[1]]) if t[0] == "a"
-                           else C._new("call", None))
+                if t[0] == "c":
+                    out.append(L(frozenset(), t[1]))
+                    continue
+                s: frozenset = frozenset()
+                for kind, x in t[2]:
+                    if kind == "l":
+                        s = s ^ frozenset((label_vars[x],))
+                    else:
+                        if x not in col_var:
+                            col_var[x] = C._new("call", (len(C.blocks) - 1, x))
+                        s = s ^ col_var[x].s
+                out.append(L(s, t[1]))
             wires.setdefault(r, out)
-        C.used.extend(b for w in words for b in w)
-        self.last = key
+        C.used.extend(L(frozenset((v,)), 0) for v in label_vars)
+        return key
 
-    def lower(self, fc: FunctionCall, key: tuple, pat: tuple) -> Spec:
+    def _lower(self, fc: FunctionCall, key: tuple, pat: tuple, ins: int) -> Spec:
         C = Circuit()
-        C.used = []
-        fresh: dict[int, L] = {}
-        sc = fc.scope()
+        C.used, C.blocks = [], []
+        fresh = [C._new("arg", i) for i in range(ins)]
         it = iter(pat)
         wires: dict[int, list] = {}
-        for a in fc.args:
-            if a in wires:
-                for _ in wires[a]:
-                    next(it)
-                continue
+        for a in dict.fromkeys(fc.args):
             w = []
-            for _ in range(len(self._arg_width(sc, a))):
-                t = next(it)
-                if t[0] == "c":
-                    w.append(L(frozenset(), t[1]))
-                else:
-                    if t[0] not in fresh:
-                        fresh[t[0]] = C._new("arg", t[0])
-                    w.append(fresh[t[0]].inv() if t[1] else fresh[t[0]])
-            wires[a] = w
-        d = getattr(sc.spec, "defn", sc.spec)
-        build = getattr(d, "build", None)
-        sp = Spec(key)
-        if callable(build):
-            if getattr(d, "statics", ()):
-                build = partial(lambda S, C, *e: d.build(C, S, *e), sc.spec.S())
-            if not IL._lower_activation(C, sc, build, wires, IL.PIECES):
-                raise KeyError(f"{fc.id}: a parameter leaf has no wire")
-        else:
-            body = sc.spec.body
-            for k, node in enumerate(body.nodes):
-                lo = sc.offset + body.offsets[k]
-                if isinstance(node.fn, PrimitiveDefinition):
-                    IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
+            for _ in range(IL._width(self.circuit.gate(a).prim)):
+                p = next(it)
+                if p[0] == "c":
+                    w.append(L(frozenset(), p[1]))
                     continue
-                for m in range(1 if node.form == "call" else node.n):
-                    ch = FunctionCall(self.circuit, sc, k, m)
-                    self.call(C, ch, wires)
-                    sp.calls.append(self.last)
+                f = L(frozenset(), p[1])
+                for i in p[0]:
+                    f = f ^ fresh[i]
+                w.append(C.commit([f])[0] if len(f.s) > self.support else f)
+            wires[a] = w
+        if fc.is_primitive:
+            args = [wires[a] for a in fc.args]
+            got = IL.lower_gates(C, [IL._PrimGate(fc.fn, len(args))], {-(i + 1): list(w) for i, w in enumerate(args)})
+            wires[fc.lo] = got[0]
+        else:
+            sc = fc.scope()
+            d = getattr(sc.spec, "defn", sc.spec)
+            build = getattr(d, "build", None)
+            if callable(build):
+                if getattr(d, "statics", ()):
+                    build = partial(lambda S, C, *e: d.build(C, S, *e), sc.spec.S())
+                if not IL._lower_activation(C, sc, build, wires, IL.PIECES):
+                    raise KeyError(f"{fc.id}: a parameter leaf has no wire")
+            else:
+                body = sc.spec.body
+                for k, node in enumerate(body.nodes):
+                    if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
+                        lo = sc.offset + body.offsets[k]
+                        IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
+                        continue
+                    for m in range(1 if node.form == "call" else node.n):
+                        self.call(C, FunctionCall(self.circuit, sc, k, m), wires)
+        if C.asserts or C.lookups:
+            raise NotImplementedError(f"{fc.id}: assertions and table reads are not laid out by the structural lowering yet")
         rets = []
-        argbit = {f.s: i for i, f in fresh.items()}
         for r in fc.returns:
-            w = wires[r]
-            for b in w:
+            for b in wires[r]:
                 if b.is_const():
                     rets.append(("c", b.c))
-                elif b.s in argbit:
-                    rets.append(("a", argbit[b.s], b.c))
-                elif len(b.s) == 1 and b.c == 0:
-                    rets.append(("col",))
-                    C.used.append(b)
-                else:
-                    C.used.extend(C.commit([b]))
-                    rets.append(("col",))
-        C.output("used", C.used)
-        live = C.live()
-        for v in live:
-            kind = C.kind[v]
-            if kind == "and":
-                a, b = C.data[v]
-                sp.rows += 1
-                sp.refs += len(a.s) + len(b.s)
-                sp.commits += b is ONE
-            elif kind == "lookup":
-                sp.lookups += 1
-        sp.asserts = len(C.asserts)
-        sp.rets = rets
+                    continue
+                if len(b.s) > self.support:
+                    b = C.commit([b])[0]
+                rets.append(("f", b.c, b.s))
+                C.used.append(L(b.s, 0))
+        sp = self._finish(C, key, ins, rets)
         self.specs[key] = sp
+        sp.index = len(self.order)
+        self.order.append(sp)
         return sp
 
-    def _arg_width(self, sc, a: int) -> range:
-        return range(IL._width(self.circuit.gate(a).prim))
+    def _finish(self, C: Circuit, key: tuple, ins: int, rets: list) -> Spec:
+        """Lay out a lowered specialization: its live ANDs and its copies in creation order, then its rows and its copies'
+        runs in template references."""
+        C.output("used", C.used)
+        live = C.live()
+        sp = Spec(key, ins)
+        col: dict[int, int] = {}
+        blocks = [b for b in C.blocks if self.specs[b.key].cols]
+        bi, n = 0, 0
+        for v in range(len(C.kind)):
+            while bi < len(blocks) and blocks[bi].pos <= v:
+                blocks[bi].base = n
+                n += self.specs[blocks[bi].key].cols
+                bi += 1
+            if C.kind[v] == "and" and v in live:
+                col[v] = n
+                n += 1
+        for b in blocks[bi:]:
+            b.base = n
+            n += self.specs[b.key].cols
+        sp.cols = n
+        for v in range(len(C.kind)):
+            if C.kind[v] == "call":
+                blk, x = C.data[v]
+                b = C.blocks[blk]
+                col[v] = b.base + x
+        K = sp.cols + ins
+
+        def ref(v: int) -> int:
+            return sp.cols + C.data[v] if C.kind[v] == "arg" else col[v]
+
+        def refs(f: L) -> tuple:
+            return tuple(sorted(map(ref, f.s))) + ((K,) if f.c else ())
+
+        for v in sorted(col):
+            if C.kind[v] != "and":
+                continue
+            a, b = C.data[v]
+            sp.rows.append((col[v], refs(a), refs(b)))
+            sp.refs += len(a.s) + a.c + len(b.s) + b.c
+            sp.commits += b is ONE
+        sp.rets = [t if t[0] == "c" else ("f", t[1], tuple(("l", C.data[v]) if C.kind[v] == "arg" else ("v", col[v])
+                                                                for v in sorted(t[2]))) for t in rets]
+        sp.copies = [b.key for b in C.blocks]
+        sp.calls = _runs([(b.base, b.key, [ref(v) for v in b.labels]) for b in blocks], self.specs, sp.cols)
+        return sp
 
     def total(self, key: tuple) -> dict:
         t = self.totals.get(key)
         if t is None:
             sp = self.specs[key]
-            t = {"rows": sp.rows, "commits": sp.commits, "lookups": sp.lookups, "asserts": sp.asserts, "refs": sp.refs}
-            for c in sp.calls:
-                ct = self.total(c)
-                for x in t:
-                    t[x] += ct[x]
+            t = {"rows": len(sp.rows), "commits": sp.commits, "refs": sp.refs, "copies": len(sp.copies)}
+            for c in sp.copies:
+                for x, y in self.total(c).items():
+                    t[x] += y
             self.totals[key] = t
         return t
 
 
-def count(target) -> dict:
-    """The structural lowering of ``target`` (a bound composite): the unrolled totals and the template's size."""
+def _segs(r0: list[int], step: list[int], cols: int) -> tuple:
+    """A copy's input references ``r0`` stepping by ``step`` per copy as segments ``(len, at, step)``: runs of consecutive
+    references with one step, each wholly among the caller's own columns or wholly past them."""
+    out: list[list[int]] = []
+    for t, (r, s) in enumerate(zip(r0, step)):
+        if out and r == out[-1][1] + out[-1][0] and s == out[-1][2] and (r < cols) == (out[-1][1] < cols):
+            out[-1][0] += 1
+        else:
+            out.append([1, r, s])
+    return tuple(map(tuple, out))
+
+
+def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) -> list[T.Call]:
+    """Consecutive copies of one specialization, side by side, whose input references step by one fixed vector per copy,
+    as one call each."""
+    calls = []
+    i = 0
+    while i < len(blocks):
+        base, key, r0 = blocks[i]
+        sp = specs[key]
+        j = i + 1
+        step = None
+        while j < len(blocks):
+            b, k2, rj = blocks[j]
+            if k2 != key or b != base + (j - i) * sp.cols:
+                break
+            d = [x - y for x, y in zip(rj, r0)]
+            if step is None:
+                if any(x < 0 for x in d):
+                    break
+                step = d
+            elif any(x != (j - i) * s for x, s in zip(d, step)):
+                break
+            j += 1
+        calls.append(T.Call(sp.index, j - i, base, sp.cols, _segs(r0, step or [0] * len(r0), cols)))
+        i = j
+    return calls
+
+
+def lower(target, support: int = SUPPORT, name: str = "unit") -> tuple[T.Tmpl, _Lowerer, Spec]:
+    """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
+    output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit)
+    lw = _Lowerer(root.circuit, support)
+    args = list(dict.fromkeys(root.args))
+    widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
-    C.used = []
-    wires = {a: C.input(f"in{a}", IL._width(root.circuit.gate(a).prim)) for a in dict.fromkeys(root.args)}
-    lw.call(C, root, wires)
-    top = lw.last
-    tot = lw.total(top)
-    own = {"rows": sum(s.rows for s in lw.specs.values()), "lookups": sum(s.lookups for s in lw.specs.values()),
-           "refs": sum(s.refs for s in lw.specs.values()), "calls": sum(len(s.calls) for s in lw.specs.values())}
+    C.used, C.blocks = [], []
+    wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
+    top = lw.call(C, root, wires)
+    sp = lw.specs[top]
+    outs = [b for r in root.returns for b in wires[r]]
+    nin = sum(widths)
+    in_words = ceil_pow2(max(1, -(-nin // IL.WORD)))
+    in_cols = in_words * IL.WORD
+    base = in_cols
+    col_of_call = {}
+    for v in range(len(C.kind)):
+        if C.kind[v] == "call":
+            col_of_call[v] = base + C.data[v][1]
+    end = base + sp.cols
+    out_word = -(-end // IL.WORD)
+    out_words = ceil_pow2(max(1, -(-len(outs) // IL.WORD)))
+    out_word = -(-out_word // out_words) * out_words
+    out_at = out_word * IL.WORD
+    const = (out_word + out_words) * IL.WORD
+    cols = const + 1
+
+    def ref(v):
+        return v if C.kind[v] == "in" else col_of_call[v]
+
+    rows = [(i, (i,), (i,)) for i in range(nin)]
+    for j, b in enumerate(outs):
+        rows.append((out_at + j, tuple(sorted(map(ref, b.s))) + ((cols,) if b.c else ()), (cols,)))
+    blk = C.blocks[0]
+    calls = [T.Call(sp.index, 1, base, sp.cols, _segs([ref(v) for v in blk.labels], [0] * len(blk.labels), cols))] if sp.cols else []
+    groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, 1, len(outs))]
+    defs = [T.Def(s.cols, s.ins, tuple(s.rows), tuple(s.calls)) for s in lw.order]
+    defs.append(T.Def(cols, 0, tuple(rows), tuple(calls)))
+    return T.Tmpl(name, len(defs) - 1, groups, defs), lw, sp
+
+
+def evaluate(flat: T.Flat, inputs: list[int], nin: int) -> list[int]:
+    """The unrolled unit's column values, each a T-lane int: input column ``i`` is ``inputs[i]``, each later row
+    ``(A·z)(B·z)``, in column order; the constant's lanes all one."""
+    k = flat.const
+    n = len(flat.na)
+    mask = (1 << 64) - 1
+    z = [0] * n
+    z[k] = mask
+    for i in range(nin):
+        z[i] = inputs[i]
+    for i in range(nin, n):
+        if i == k:
+            continue
+        a, b = flat.row(i)
+        if not a and not b:
+            continue
+        assert all(c < i or c == k for c in a + b), f"row {i} reads a later column"
+        x = y = 0
+        for c in a:
+            x ^= z[c]
+        for c in b:
+            y ^= z[c]
+        z[i] = x & y
+    return z
+
+
+def check(target, support: int = SUPPORT, seed: int = 0) -> dict:
+    """The templated unit unrolled and evaluated on 64 random inputs, against the unrolled lowering's outputs."""
+    t, _lw, _sp = lower(target, support)
+    flat = T.unroll(t)
+    _prog, root = IL.standalone(target)
+    args = list(dict.fromkeys(root.args))
+    widths = [IL._width(root.circuit.gate(a).prim) for a in args]
+    rng = np.random.default_rng(seed)
+    lanes = [int(x) for x in rng.integers(0, 1 << 64, size=sum(widths), dtype=np.uint64)]
+    z = evaluate(flat, lanes, sum(widths))
+    g = t.groups
+    nin_groups = int(g[0])
+    at = 1 + nin_groups * 3 + sum(int(g[1 + 3 * i + 2]) for i in range(nin_groups))
+    out_col = int(g[at + 1]) * IL.WORD
+    C = Circuit()
+    ins, at_bit = {}, 0
+    for a, w in zip(args, widths):
+        ins[f"in{a}"] = lanes[at_bit:at_bit + w]
+        at_bit += w
+    words = IL.lower(C, target, [C.input(f"in{a}", w) for a, w in zip(args, widths)])
+    for j, w in enumerate(words):
+        C.output(f"o{j}", w)
+    want, _fail = C.evaluate(ins, 64)
+    want = [x for j in range(len(words)) for x in want[f"o{j}"]]
+    got = z[out_col:out_col + len(want)]
+    return {"outputs": len(want), "mismatched_bits": sum(x != y for x, y in zip(got, want)), "rows": len(flat.na)}
+
+
+def stats(t: T.Tmpl, lw: _Lowerer, top: Spec, text_bytes: int | None = None) -> dict:
+    tot = lw.total(top.key)
     by_fn: dict[str, int] = {}
     for k in lw.specs:
         by_fn[k[0]] = by_fn.get(k[0], 0) + 1
-    return {"unrolled": tot, "template": own | {"specializations": len(lw.specs), "definitions": len(by_fn),
-                                                "patterns_max": max(by_fn.values())},
+    rows = sum(len(d.rows) for d in t.defs)
+    return {"unrolled": tot, "template": {"defs": len(t.defs), "definitions": len(by_fn), "rows": rows,
+                                          "refs": sum(len(a) + len(b) for d in t.defs for _, a, b in d.rows),
+                                          "calls": sum(len(d.calls) for d in t.defs),
+                                          "segs": sum(len(c.segs) for d in t.defs for c in d.calls),
+                                          "copies": sum(len(s.copies) for s in lw.order), "bytes": text_bytes,
+                                          "root_cols": t.defs[t.root].cols},
             "patterns": {f: n for f, n in sorted(by_fn.items(), key=lambda kv: -kv[1])[:8]}}
 
 
 def flat(target) -> dict:
-    """``target``'s unrolled lowering (:func:`ir_lower.lower`), counted as :func:`count` counts a specialization, its
-    returns committed as :func:`count` commits the root's."""
+    """``target``'s unrolled lowering (:func:`ir_lower.lower`), counted as :func:`stats` counts the template's rows."""
     _prog, root = IL.standalone(target)
     C = Circuit()
-    outs = IL.lower(C, target, [C.input(f"in{a}", IL._width(root.circuit.gate(a).prim)) for a in root.args])
-    used = [b if b.is_const() or (len(b.s) == 1 and b.c == 0) else C.commit([b])[0] for w in outs for b in w]
-    C.output("used", used)
-    t = {"rows": 0, "commits": 0, "lookups": 0, "asserts": len(C.asserts), "refs": 0}
+    outs = IL.lower(C, target, [C.input(f"in{a}", IL._width(root.circuit.gate(a).prim)) for a in dict.fromkeys(root.args)])
+    C.output("used", [b for w in outs for b in w])
+    t = {"rows": 0, "commits": 0, "refs": 0, "lookups": 0, "asserts": len(C.asserts)}
     for v in C.live():
         if C.kind[v] == "and":
             a, b = C.data[v]
             t["rows"] += 1
-            t["refs"] += len(a.s) + len(b.s)
+            t["refs"] += len(a.s) + a.c + len(b.s) + b.c
             t["commits"] += b is ONE
         elif C.kind[v] == "lookup":
             t["lookups"] += 1
@@ -224,20 +421,36 @@ def flat(target) -> dict:
 
 
 def main(argv: list[str]) -> int:
+    import argparse
     import resource
     from pathlib import Path
 
+    ap = argparse.ArgumentParser(prog="struct_lower")
+    ap.add_argument("shape", nargs="+", type=int)
+    ap.add_argument("--support", type=int, default=SUPPORT)
+    ap.add_argument("--out")
+    ap.add_argument("--flat", action="store_true")
+    ap.add_argument("--check", action="store_true")
+    a = ap.parse_args(argv)
     h1 = Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "h1_prove"
     sys.path[:0] = [str(h1), str(h1.parent / "hidden_zk")]
     import h1unit as U
 
-    mode = flat if "--flat" in argv else count
-    argv = [a for a in argv if a != "--flat"]
-    k = int(argv[0])
-    shape = U.Shape(k, *map(int, argv[1:3])) if len(argv) >= 3 else U.Shape(k)
+    shape = U.Shape(*a.shape)
     t0 = time.time()
-    out = mode(shape.unit())
-    out |= {"k": k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
+    if a.flat:
+        out = flat(shape.unit())
+    elif a.check:
+        out = {"check": check(shape.unit(), a.support)}
+    else:
+        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}")
+        size = None
+        if a.out:
+            text = T.write(t)
+            Path(a.out).write_text(text)
+            size = len(text)
+        out = stats(t, lw, top, size) | {"support": a.support}
+    out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
     return 0
