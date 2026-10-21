@@ -25,7 +25,7 @@ RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))
 T = 64
-NK = [(64, 512), (32, 1024)]
+NK = [(64, 256), (32, 512)]
 STEPS = {3: 35, 4: 32, 5: 39}   # row block 1: rows 0..2 admitted, dead, rows 0..6 admitted
 
 
@@ -94,7 +94,7 @@ def test_a_mismatch_names_its_leaf_lane_and_word(monkeypatch):
 
 def _gate_capture():
     """A capture shaped as dither_one's gate's: the calls' receipts flat in plan order."""
-    nk = [(64, 512), (32, 1024), (32, 512), (64, 512)]  # the partly steps' calls: 0, 2, the widest K's first (1), the last
+    nk = [(64, 128), (32, 256), (32, 128), (64, 128)]  # the partly steps' calls: 0, 2, the widest K's first (1), the last
     win = _window(nk, {7: 32})
     st = win.steps[7]
     units = [(T // 32) * (n // 32) for n, _ in nk]
