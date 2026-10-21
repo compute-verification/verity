@@ -81,7 +81,8 @@ Arms:
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
                  beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
-                 -ov last (-ov1: a ring of one step), round s's trees build beside step s + 1's forward from ring copies
+                 -ov last (-ov1: a ring of one step; -ovp: the engine on a stream above the trees' and the units'
+                 priority), round s's trees build beside step s + 1's forward from ring copies
                  of what forward s wrote and step s's units go out as soon as coin s is back; its gate adds that round s
                  covers forward s's values while built beside forward s + 1, and fault_ring
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
@@ -360,10 +361,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         import dither_so as SO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
-        unit, ao, pt, depth, ov = DITHER_SO[arm]
+        unit, ao, pt, depth, ov, serve_prio = DITHER_SO[arm]
         a = engine_args(gpu_mem)
         SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
-                 h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth, ov=ov)
+                 h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth, ov=ov,
+                 serve_prio=serve_prio)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -378,10 +380,12 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"), ("-aomn", "mn"))
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
-# -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1)
-DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}": (unit, ao, pt, d, r)
+# -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
+# engine serving on a stream above the trees' and the units' priority
+DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}": (unit, ao, pt, d, r, sp)
              for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
-             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9) for v, r in (("", 0), ("-ov", 2), ("-ov1", 1))}
+             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
+             for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",

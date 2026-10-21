@@ -1,5 +1,6 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1]`, labelled form=ASK-71 A (provisional) as every dither-a arm.
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp]`, labelled form=ASK-71 A (provisional) as every
+dither-a arm.
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
@@ -37,7 +38,8 @@ itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).
 
--ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1) moves round s and step s's units off the steps' path, every value committed
+-ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
+units' priority) moves round s and step s's units off the steps' path, every value committed
 under round s as without it.  Step s + 1's forward reads nothing of round s, so the engine's step s + 1 starts once forward
 s (its served y among it) is done: on the serving stream after forward s, before forward s + 1 can write them, step s's
 z/y and served-y records, admit rows, step and A roots are copied into round-ring slot s mod R (and its A slots into the
@@ -379,7 +381,8 @@ class SoWindow(DO.Window):
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest()}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
-                                    "units_dispatched": ov.dispatched_upto + 1}
+                                    "units_dispatched": ov.dispatched_upto + 1,
+                                    "serving_stream_priority": torch.cuda.current_stream().priority}
         return doc
 
 
@@ -858,19 +861,24 @@ def side() -> SoSide:
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
-          ov: int = 0) -> None:
+          ov: int = 0, serve_prio: bool = False) -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
-    calls this module's Side (before the engine is built)."""
+    calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
+    priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire)."""
     global CAPTURES
     if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0:
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov)
+    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     if ov:
         CAPTURES = CAPTURES_OV
+    if serve_prio:
+        # vLLM serves (captures and replays its graphs) on the stream its patched set_stream last recorded
+        from vllm.utils import torch_utils  # noqa: F401
+        torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
     DO.Window = SoWindow
     DA.side = side
 
