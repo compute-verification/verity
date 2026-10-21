@@ -571,10 +571,6 @@ class TP2CaptureWorkerExtension:
             res["moe_source"] = {"error": repr(e)[:200]}
         if tap_sources is not None:                   # the taps the row's manifest names: `acquire.sources.taps.for_ranks`, bound by the TP driver
             res["tap_sources"] = tap_sources(com, model, required_manifest, rank)
-        if match_capture_dir:                         # the match oracle's capture: its MoE align schedule, replayed (`moe_align_source.arm_replay`)
-            from verity_vllm.acquire.sources.moe_align_source import arm_replay
-
-            res["schedule_replay"] = arm_replay(getattr(com, "sources", ()), match_capture_dir, rank)
         if tp_partials_omit_rank is not None and int(tp_partials_omit_rank) == rank:
             tp_partials = False          # NEGATIVE (R15 TP-04): THIS rank binds collective outputs only; its manifest partials must go unbound
         if tp_partials:
@@ -788,9 +784,13 @@ class TP2CaptureWorkerExtension:
     def tp2_commit_install(self) -> dict[str, Any]:
         st = self._tp2_commit
         st["com"].reset()
+        if st.get("match_capture_dir") and "schedule_replay" not in st:   # once: the match oracle's capture's MoE align schedule, replayed
+            from verity_vllm.acquire.sources.moe_align_source import arm_replay
+
+            st["schedule_replay"] = arm_replay(getattr(st["com"], "sources", ()), st["match_capture_dir"], st["rank"])
         st["com"].install()
         st["rc"] = None
-        return {"rank": st["rank"], "installed": True}
+        return {"rank": st["rank"], "installed": True, "schedule_replay": st.get("schedule_replay")}
 
     def tp2_commit_finalize(self, checks: bool = True, defer: dict[str, Any] | None = None) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), leaf counts, coverage declaration; a warm-up (`pipeline.tp.warmup`)
@@ -824,7 +824,7 @@ class TP2CaptureWorkerExtension:
         if match_oracle is not None:
             from verity_vllm.acquire.sources.moe_align_source import replay_stats
 
-            match_oracle["schedule_replay"] = replay_stats(getattr(com, "sources", ()))
+            match_oracle["schedule_replay"] = replay_stats(getattr(com, "sources", ())) or st.get("schedule_replay")
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):

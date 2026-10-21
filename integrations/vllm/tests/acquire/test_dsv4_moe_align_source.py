@@ -423,3 +423,30 @@ def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatc
     got = MA.arm_replay([fresh], tmp_path / "none", 0)
     assert got is not None and got["armed"] is False and "predates the schedule record" in got["why"]
     assert fresh.replay is None and MA.replay_stats([fresh]) is None and MA.arm_replay([], tmp_path, 0) is None
+
+
+def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monkeypatch, tmp_path) -> None:
+    """`tp2_commit_install` arms the rank's align source with the capture's schedule before its committer installs: once, at the
+    warm-up's install, and the record's install reuses it.  A Commit without a capture arms nothing."""
+    from verity_vllm.engine import rank_worker as RW
+
+    _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
+    events: list = []
+    arm = MA.MoeAlignSource.arm
+    monkeypatch.setattr(MA.MoeAlignSource, "arm", lambda self, calls: (events.append(("arm", len(calls))), arm(self, calls))[1])
+
+    def worker(capture_dir: str | None) -> tuple[object, MA.MoeAlignSource]:
+        src = MA.MoeAlignSource(Committer(), model_of([ids_of(1), ids_of(2)]))
+        com = types.SimpleNamespace(sources=[object(), src], reset=lambda: None,
+                                    install=lambda: events.append(("install", src.replay is not None)))
+        ext = object.__new__(RW.TP2CaptureWorkerExtension)
+        ext._tp2_commit = {"com": com, "match_capture_dir": capture_dir, "rank": 0}
+        return ext, src
+
+    ext, _src = worker(str(tmp_path))
+    want = {"armed": True, "file": str(tmp_path / OW.schedule_file(0)), "calls": 4}
+    assert [ext.tp2_commit_install()["schedule_replay"] for _ in range(2)] == [want, want]
+    assert events == [("arm", 4), ("install", True), ("install", True)]
+    events.clear()
+    ext, src = worker(None)
+    assert ext.tp2_commit_install()["schedule_replay"] is None and src.replay is None and events == [("install", False)]
