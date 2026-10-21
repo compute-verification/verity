@@ -34,9 +34,9 @@ def text (s : String) (name : String) : E ByteArray := do
   let b := s.toUTF8
   pure ((← uBE 2 b.size s!"len({name})") ++ b)
 
-def frameTag : ByteArray := "verity-network-certifier/frame/v2\x00".toUTF8
-def emptyTag : ByteArray := "verity-network-certifier/empty/v2\x00".toUTF8
-def nodeTag : ByteArray := "verity-network-certifier/node/v2\x00".toUTF8
+def frameTag : ByteArray := "verity-network-certifier/frame/v2".toUTF8.push 0
+def emptyTag : ByteArray := "verity-network-certifier/empty/v2".toUTF8.push 0
+def nodeTag : ByteArray := "verity-network-certifier/node/v2".toUTF8.push 0
 def recordTag : String := "verity-network-certifier/record/v2"
 def parametersTag : String := "verity-network-certifier/parameters/v1"
 def digestBytes : Nat := 64
