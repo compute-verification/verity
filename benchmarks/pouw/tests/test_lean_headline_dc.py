@@ -76,7 +76,9 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     address (ATOM.E, bit-exact on the H200 and the B200, r20261020-031119-3113 and r20261020-031119-013a), and π*
     prices each class each of them issues
     above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each reading's catch-all is priced at
-    its issue slot alone: the sheet's at DS_issue, the measured reading's on the measured issue row (DC-CENSUS-13)."""
+    its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row (DC-CENSUS-13) and,
+    once a run has timed its instructions beside the tensor, the joint-issue lines every timed scalar class carries
+    (DC-90-ri: LD.E and IMAD.WIDE, r20261021-070616-d06c)."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             x = H.reading(fam, v).data
@@ -85,8 +87,11 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
             assert not free, (fam.ns, v, free)
         k = H.CATCH_ALL[fam.key]
         assert H.reading(fam, fam.sheet).data.c[k] == {"DS_issue": 1}, (fam.ns, k)
-        k = H.CATCH_ALL[fam.measured]
-        assert H.reading(fam, fam.measured).data.c[k] == {"issue": 1}, (fam.ns, k)
+        k, c = H.CATCH_ALL[fam.measured], H.reading(fam, fam.measured).data.c
+        joint = {r: v for r, v in c[H.SCALAR_REF].items() if H.JOINT_ISSUE.fullmatch(r)}
+        assert c[k] in ({"issue": 1}, {"issue": 1, **joint}), (fam.ns, k)
+        if fam.measured == "DC-90-ri":
+            assert joint and all(c[x] == {"issue": 1, **joint} for x in (k, "ATOME32")), (fam.ns, c[k], c["ATOME32"])
 
 
 def test_the_h200_measured_menu_is_honests_form():

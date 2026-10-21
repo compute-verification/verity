@@ -140,6 +140,9 @@ FAMILIES = (SM90, SM100)
 # A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row
 # alone): NOROW is a class on the measured vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
 CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-100-ri": "UNLISTED"}
+# A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200, r20261021-070616-d06c)
+# gives it the census's joint-issue lines, which every timed scalar class carries at one coefficient a row
+SCALAR_REF, JOINT_ISSUE = "FFMA", re.compile(r"JI\d+_\d+")
 
 
 def shape(k: str, h: E.Honest) -> tuple[int, int] | None:
@@ -360,9 +363,11 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         raise SystemExit(f"{vector}: no measured issue row to read {untimed} at")
     lists = _sheet_check(fam, pi, c) if sheet else {}
     k = CATCH_ALL.get(vector)
-    if not sheet and k is not None and c.get(k) != {"issue": 1}:
-        raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot alone: "
-                         f"give it one issue line in {fam.key}'s census.csv and none on another of {vector}'s rows")
+    joint = {r: v for r, v in c.get(SCALAR_REF, {}).items() if JOINT_ISSUE.fullmatch(r)}
+    if not sheet and k is not None and c.get(k) not in ({"issue": 1}, {"issue": 1, **joint}):
+        raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot, alone or with "
+                         f"the joint-issue lines {SCALAR_REF} carries ({joint}): give it one issue line in {fam.key}'s "
+                         f"census.csv, and the census's JI lines only from a run that times its instructions beside the tensor")
     load = lambda r, n: sum((c[k].get(r, Fraction(0)) * v for k, v in n.items()), Fraction(0))
     per_mma = Fraction(h.words * h.depth, d.L)
     if per_mma.denominator != 1:
