@@ -632,6 +632,78 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert refused(coins={**m["coins"], "commitment": alone.commitment.to_json()}) == {"commitment"}
 
 
+def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_path):
+    """`coins.RoundPipe` over the challenger off the node: every round's root goes out before any coin is read back, and
+    each coin comes back opened after its own root, round by round in the challenger's own release log and under
+    `order_reason`; closing waits for the coins still out, then closes the session.  In process the same roots open at
+    once, and a root past the epoch's rounds is refused before it is sent."""
+    from verity.core.protocols.sampled_proofs import remote as R
+    host = _Host(tmp_path, rounds=4)
+    cs = CO.open_coins(host.session, EPOCH, 4)
+    roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
+    first = cs.rounds.record(roots[0])
+    pipe = CO.RoundPipe(cs)
+    assert [pipe.send(r) for r in roots[1:]] == [1, 2, 3]
+    got = [pipe.opening(i) for i in (3, 1, 2)]
+    assert [o.index for o in got] == [3, 1, 2] and all(o.after == roots[o.index] for o in got)
+    assert pipe.opening(0) == first and pipe.reason() is None and pipe.roots == roots
+    with pytest.raises(CO.Ch.CoinError, match=f"every {CO.Wd.ROUND} coin of the epoch is open"):
+        pipe.send(roots[0])
+    pipe.close()
+    assert host.ended() is None
+    log = [json.loads(x) for x in (host.directory / R.RELEASES).read_text().splitlines()]
+    rounds = [(e["event"], e["index"], e.get("root") or e.get("after")) for e in log if e.get("label") == CO.Wd.ROUND]
+    assert rounds == [(ev, i, r.hex()) for i, r in enumerate(roots) for ev in ("root", "release")]
+    alone = CO.open_coins(None, EPOCH, 4, random.Random("prover").randbytes)
+    alone.rounds.record(roots[0])
+    local = CO.RoundPipe(alone)
+    assert [local.send(r) for r in roots[1:]] == [1, 2, 3]
+    assert [local.opening(i, wait=False).after for i in range(4)] == roots and local.reason() is None
+    local.close()
+
+
+def _pipe_server(sock, challenger, answers: list[str]) -> None:
+    """The challenger's side of a `RoundPipe` stream for its refusals: the hello's commitment, then each open frame's
+    reply as `answers` names it in turn ("ok" its coin, "refuse" a refusal, "other" the next coin's opening)."""
+    from verity.core.protocols.sampled_proofs import remote as R
+    w = R._Wire(sock)
+    w.recv()
+    w.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
+    for a in answers:
+        head = w.recv()
+        if a == "refuse":
+            w.send({"type": "refused", "reason": "not this session's"})
+            continue
+        o = challenger.open(head["label"], head["index"] + (a == "other"), bytes.fromhex(head["after"]))
+        w.send({"type": "opening", "opening": o.to_json()})
+
+
+@pytest.mark.parametrize("answer,why", [("refuse", "the challenger refused: not this session's"),
+                                        ("other", "pouw/round coin 2, not its pouw/round coin 1")])
+def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad_opening(answer, why):
+    """A `RoundPipe` whose challenger refuses round 1's open, or answers it with another coin's opening, ends the session:
+    round 1's coin and every later one are refused, round 0's (back before) is kept, and no root is sent after."""
+    from verity.core.protocols.sampled_proofs import remote as R
+    lay = CO.layout(EPOCH, 4)
+    ch = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=_pipe_server, args=(b, ch, ["ok", answer]))
+    t.start()
+    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.Session("s", "127.0.0.1:1"))
+    pipe = CO.RoundPipe(cs)
+    roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(3)]
+    assert [pipe.send(r) for r in roots[:2]] == [0, 1]
+    assert pipe.opening(0).after == roots[0]
+    with pytest.raises(CO.Ch.CoinError, match=why):
+        pipe.opening(1)
+    with pytest.raises(CO.Ch.CoinError, match="a retry never redraws"):
+        pipe.send(roots[2])
+    assert pipe.roots == roots[:2] and len(pipe.openings) == 1
+    pipe.close()
+    t.join()
+    b.close()
+
+
 def _gate(sent: list, *replies: dict, rc: int = 0):
     """A fake ``ssh GATE ...``: each call's shell words (the gate's remote shlex) into `sent`, its replies in turn."""
     import shlex
