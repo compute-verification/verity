@@ -3,8 +3,8 @@ PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). This is the Pytho
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
-step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, the draw and
-`_outcome`'s rule. `period_credit` runs `window` on each window of a closed, complete period. The steps are internal, so
+step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, the draw,
+`_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window of a closed, complete period. The steps are internal, so
 no caller credits a window with a step skipped: `_credited` returns the credit bits whatever the proofs' outcome, and
 `_a_link` trusts the round log's roots, which only `core_check.rounds` holds to the ones the challenger received before
 each coin.
@@ -54,6 +54,16 @@ each coin.
   the serving process's own round root (``inner``) and those segments. The verifier recomputes each value's root from
   the segments and its domain's pads. So the rows a unit reads are the ones fixed before each round's coin. The z and y
   records are not yet bound to the round roots.
+* **The proofs are the window's registration's** (`_registration`): each drawn unit's proof outcome is the verifier of
+  record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
+  (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
+  and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
+  other value's a proof opened, is `domain_of` the window's open root (``window.root``, the root the auditor's ledger
+  opens its session for, which a per-window value's domain binds since PRF-127) and the committed descriptor's SHA-512.
+  Each proof was verified against that descriptor, opened only values the window registers once, each at its registered
+  root, and opened its unit's K's A value. So the A rows `_a_link` ties to the round roots are the ones each drawn
+  unit's proof opened, under this window's registration: entries of another window or circuit, a proof verified
+  against another registration, and an entry whose root is not the one its sessions opened are refused.
 
 `calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
@@ -70,6 +80,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
@@ -142,7 +153,12 @@ NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is
 BODY = ("the window's circuit's units are not its record's tiles: its root's nodes other than its inputs are not, in "
         "order, each of its CALLS' (M/R)·(n/C) instances of K's template, each node a call of it or a batch of at least "
         "one (h1window.program's body)")
-PROOFS_FORM = "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
+#: a drawn unit's proof outcome: the verifier of record's verdict for the session that proved it
+PROOF_KEYS = ("program", "registered", "unit", "verdict")
+PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier "
+               "of record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
+               "circuit's descriptor it verified the session against, and registered its finding, each registered port's "
+               "{value, root}, port and value printable ASCII and root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>), so nothing ties its units' A rows to the round roots: register the "
@@ -539,14 +555,29 @@ def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[d
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
 
+def _finding(x: Any) -> list[tuple[str, str, str]] | None:
+    """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
+    value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
+    if not isinstance(x, dict):
+        return None
+    out = []
+    for port in sorted(x):
+        e = x[port]
+        if not (_printable(port) and isinstance(e, dict) and sorted(e) == ["root", "value"] and _printable(e["value"])
+                and _digest(e["root"]) is not None):
+            return None
+        out.append((port, e["value"], e["root"]))
+    return out
+
+
 def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
     if not isinstance(proofs, list):
         return "outcome", PROOFS_FORM
     seen: dict[int, str] = {}
     picked = set(drawn)
     for p in proofs:
-        if not (isinstance(p, dict) and sorted(p) == ["unit", "verdict"] and _nat(p["unit"])
-                and p["verdict"] in VERDICTS):
+        if not (isinstance(p, dict) and sorted(p) == list(PROOF_KEYS) and _nat(p["unit"]) and p["verdict"] in VERDICTS
+                and _digest(p["program"]) is not None and _finding(p["registered"]) is not None):
             return "outcome", PROOFS_FORM
         u = p["unit"]
         if u in seen:
@@ -583,12 +614,90 @@ def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, 
 def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any, proofs: Any
             ) -> tuple[str, str] | None:
     """None when every unit the draw coin draws from the window (`drawn`, never a list the prover hands in) has exactly
-    one outcome in `proofs` (each ``{unit, verdict}``, verdict ``accept`` or ``reject``) and it is ``accept``, and no
+    one outcome in `proofs` (each of `PROOF_KEYS`, verdict ``accept`` or ``reject``) and it is ``accept``, and no
     other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit. `window`'s rule on the draw coin it read, the units
     drawn under the served window's arguments."""
     got, why = drawn(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
+
+
+def _entry(e: Any) -> bool:
+    """A registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with ``word_bits`` only
+    when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows and words from 1 to `MAX_ROWS`."""
+    bits = e.get(G.WIDTH_KEY, G.WORD_BITS) if isinstance(e, dict) else None
+    return (isinstance(e, dict) and set(G.ENTRY_KEYS) <= set(e) <= {*G.ENTRY_KEYS, G.WIDTH_KEY}
+            and _printable(e["value"]) and _digest(e["root"]) is not None and type(e["domain"]) is str
+            and all(_nat(e[k]) and 1 <= e[k] <= MAX_ROWS for k in ("leaves", "words"))
+            and type(bits) is int and bits in G.WIDTHS and e.get(G.WIDTH_KEY) != G.WORD_BITS)
+
+
+def domain_of(program: str, window: str, e: dict) -> str:
+    """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
+    open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): an A value's
+    binds the window's open root, its rows being the window's own (PRF-127); any other value a drawn unit reads, the
+    window's weights, is held across windows and binds none."""
+    return G.domain(program, e["value"], e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
+                    window if is_a(e["value"]) else None).domain_id.hex()
+
+
+def other_registration(v: str) -> str:
+    return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
+            f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for an "
+            "A value, the window's open root, the root the auditor's ledger opened its session for): the entry is another "
+            "registration's, another window's or another circuit's")
+
+
+def _registration(window: str, program: str, entries: list, ss: list[dict], proofs: list) -> tuple[str, str] | None:
+    """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
+    accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
+    (``registration``, and why). Each A value's domain, and each other value's a proof opened, is `domain_of` the window's
+    open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
+    registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
+    value's registered root; and it opened its unit's K's A value (``…/a/<K>``, the unit's stratum `ss`'s). A step of
+    `window`, after `_a_link` has held each A value's root to the segments the round roots commit."""
+    def held(v: str, e: dict) -> str | None:
+        if not _entry(e):
+            return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
+                    f"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
+        return None if e["domain"] == domain_of(program, window, e) else other_registration(v)
+
+    for e in entries:
+        if is_a(e.get("value")):
+            why = held(e["value"], e)
+            if why is not None:
+                return "registration", why
+    names = [e.get("value") for e in entries]
+    checked: set[str] = set()
+    for p in sorted(proofs, key=lambda p: p["unit"]):
+        u = p["unit"]
+        k = next(s["template"][1:] for s in ss if any(lo <= u < hi for lo, hi in s["units"]))
+        if p["program"] != program:
+            return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
+                                    "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
+                                    "verify every drawn unit's session against the window's committed circuit")
+        opened = False
+        for port, v, root in _finding(p["registered"]):
+            if names.count(v) != 1:
+                return "registration", (f"drawn unit {u}'s proof opened port {port} against {v}, which the window "
+                                        f"registers {'twice' if v in names else 'not'}: its session was verified against "
+                                        "another registration than the window's")
+            e = entries[names.index(v)]
+            if v not in checked and not is_a(v):
+                why = held(v, e)
+                if why is not None:
+                    return "registration", why
+            checked.add(v)
+            if root != e["root"]:
+                return "registration", (f"drawn unit {u}'s proof opened port {port}'s rows of {v} against another root "
+                                        f"than the one the window registered for {v}: its session was verified against "
+                                        "another registration, or the window's entry is not the root its sessions opened")
+            opened = opened or (is_a(v) and v.rsplit("/", 1)[1] == k)
+        if not opened:
+            return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} of the window, so nothing ties the "
+                                    "A rows it proved to the ones the round roots committed: verify each drawn unit's "
+                                    "session with the window's A value registered")
+    return None
 
 
 def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any,
@@ -616,6 +725,8 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
                         {"receipts": draw["receipts"]}, ss, k)
     if why is None:
         why = _proved(units, proofs)
+    if why is None:
+        why = _registration(window["root"], hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), entries, ss, proofs)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -635,7 +746,11 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
     5. `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
        for), the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
-       ``{"receipts": draw.receipts}``, the last round's receipts.
+       ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier of record's verdict
+       for a drawn unit's session (`PROOF_KEYS`);
+    6. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
+       (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
+       that descriptor and opened its registered values at their registered roots, its K's A value among them.
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     got, why = _window(key, ledger, window, session, salt, calls, served, rounds, draw, descriptor, entries, proofs, k,
@@ -884,6 +999,7 @@ def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
 
 
 __all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
-           "PERIOD_KEYS", "RECORD", "ROUND_TAG", "SCHEMA", "TILE_FN", "VERDICTS", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "committed_k", "cover", "draw_root", "drawn", "established", "is_a", "law",
+           "PERIOD_KEYS", "PROOF_KEYS", "RECORD", "ROUND_TAG", "SCHEMA", "TILE_FN", "VERDICTS", "WINDOW_FN",
+           "WINDOW_KEYS", "call_work", "calls_root", "committed_k", "cover", "domain_of", "draw_root", "drawn",
+           "established", "is_a", "law",
            "layout_of", "merkle_depth", "period", "period_credit", "round_root", "strata", "tree_root", "window"]

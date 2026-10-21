@@ -37,7 +37,7 @@ CREDIT_EXPECT = {
     "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
-    "served-form": ("manifest", Cr.SERVED_FORM), "rounds-form": ("rounds", "round "), "draw-form": ("draw", Cr.DRAW_FORM),
+    "served-form": ("manifest", Cr.SERVED_FORM), "rounds-form": ("rounds", ""), "draw-form": ("draw", Cr.DRAW_FORM),
     "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
@@ -47,6 +47,8 @@ UNTIED = "Register the A value whose rows each round's root committed"
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
 FEWER = "units are fewer than K = "
 NO_K = "commits no draw K (draw_k"
+OTHER_REGISTRATION = "'s domain is not the one the window's registration gives it"
+OTHER_ROOT = "against another root than the one the window registered for"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -72,6 +74,13 @@ WINDOW_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
     "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
+    "other-registration": ("registration", OTHER_REGISTRATION), "proof-other-registration": ("registration", OTHER_ROOT),
+    "entry-root": ("registration", OTHER_ROOT),
+    "proof-other-circuit": ("registration", "was verified against another circuit than the window's"),
+    "proof-no-a": ("registration", "opened no A value …/a/"),
+    "proof-unregistered": ("registration", "which the window registers not"),
+    "entry-twice": ("registration", "which the window registers twice"),
+    "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -88,6 +97,7 @@ PERIOD_EXPECT = {
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
+    "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -312,9 +322,45 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
 
 def test_window_and_period_credit_are_the_only_entries():
     """A caller can't credit a window with a step skipped: the steps `window` composes are internal."""
-    for step in ("credited", "outcome", "a_link"):
+    for step in ("credited", "outcome", "a_link", "registration"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
-    assert {"window", "period_credit"} <= set(Cr.__all__) and not {"_credited", "_outcome", "_a_link"} & set(Cr.__all__)
+    assert {"window", "period_credit"} <= set(Cr.__all__)
+    assert not {"_credited", "_outcome", "_a_link", "_registration"} & set(Cr.__all__)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_entries_of_another_registration_refuse(seed):
+    """Entries from another registration: A values registered under another window's open root or another circuit,
+    their trees under those domains, so the round roots commit them (`_a_link` accepts) and the drawn units' proofs
+    opened them at those roots. Their domains are not the ones the window's registration gives them, so the window is
+    refused."""
+    d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
+    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    got, refused = Cr.window(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_proof_verified_against_another_registration_refuses(seed):
+    """A drawn unit's proof is accepted, of a drawn unit, but its session opened a value against another registration's
+    root: the window, and its period, earn nothing."""
+    d = cases.window_instance(random.Random(f"proof-other-registration/{seed}"), "proof-other-registration")
+    assert Cr._outcome(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+                       {"receipts": d["draw"]["receipts"]}, Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], d["k"],
+                       d["proofs"]) is None
+    got, refused = Cr.window(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
+    got, refused = _period("proof-other-registration", seed)
+    assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
+    """An entry whose registered root differs from the one the drawn units' sessions opened is refused: the entries are
+    held to the verified sessions, never taken from the evidence as presented."""
+    d = cases.window_instance(random.Random(f"entry-root/{seed}"), "entry-root")
+    got, refused = Cr.window(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)

@@ -5,7 +5,8 @@ steps they run, each held to the Lean on its own: `credit._credited`, `credit.dr
 A `credited` case is an honest served window read through its challenger's session (`pouw_rounds_cases.Session`): its
 manifest rows (the serving process's call rows, each with its credit bit, a credited one with its z table's root), the
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
-the window's registered entries, and the draw: `credit.draw_root` over them, recorded by the
+the window's registered entries (each K's A and B values, their domains one-stage's registration's under the window's
+open root and its circuit, `registered.domain`), and the draw: `credit.draw_root` over them, recorded by the
 challenger, then its draw coin opened after it; the auditor's ledger opens and ends the session for the window. Then one
 mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit flipped after the draw coin with the draw root recomputed
 (``changed``, RT4-INT-32's withdrawn verdict), a row changed likewise, a missing or malformed bit, a credited row with no
@@ -24,25 +25,33 @@ coin the prover chose (``chosen``), and break the forms.
 
 A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
 as `credit.layout_of` reads it, each call's tiles a call node each or one batch), a committed K, one call per manifest
-row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments; its mutations add
+row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments, as the verifier of
+record gives it for the unit's session (`_window_proofs`: verified against the descriptor, its registered finding its
+tile's A and B ports at its K's values and their registered roots); its mutations add
 a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form
 or give one past the window's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
 form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, or a record
 naming another layout over the same nodes (``alt-layout``). Its mutations of the composed check present a round log the
 challenger never received (``never-received``, its coins carried as if opened after its roots and its draw root over
 it, so only `core_check.rounds` refuses it), a round coin opened after another root, an A tree the round roots didn't
-commit, and no A value.
+commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
+window's open root or another circuit, their trees under those domains so `_a_link` accepts them
+(``other-registration``), give one proof's session another registration's root for a value it opened
+(``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
+the sessions opened), verify one proof against another circuit, drop a proof's A ports, open an unregistered value or
+one registered twice, and break an opened entry's form.
 
 A `period` case is one to three such windows of one circuit in one period of the auditor's ledger (`period-open`
 committing the SHA-512 of the circuit's descriptor and the K every window is drawn at, `credit.K_FIELD`, each window's
 session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
 descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a
 window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
-never opened or no period, forge the ledger, refuse one window, give one window another circuit's descriptor
-(``other-circuit``, or the descriptor of another layout, ``alt-layout``) or open the period committing no circuit or
-one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
+never opened or no period, forge the ledger, refuse one window, make one window wholly another circuit's (its
+descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone credits it), give one the descriptor
+of another layout (``alt-layout``), open the period committing no circuit or one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
 units, prove one window's draw at another K (``other-k``), present one window's round log the challenger never received
-(``never-received``), and break the forms.
+(``never-received``), give one window's proof another registration's root (``proof-other-registration``), and break
+the forms.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -64,6 +73,7 @@ import random
 import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 
@@ -91,34 +101,48 @@ def _draw_root(d: dict) -> str:
     return Cr.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
 
 
-def _a_log(rng: random.Random, steps: int) -> tuple[list[dict], list[dict]]:
-    """A window's registered entries, one or two A values (``…/a/<K>``) of `steps` equal blocks among them, and its round
-    log over them (`_log`), its coins not yet opened."""
-    window = f"h1/w-{rng.randrange(100)}"
+def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str, other: str | None = None
+           ) -> tuple[list[dict], list[dict]]:
+    """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
+    window's open root `window`), and its round log over its A values (`_log`), its coins not yet opened. Each K of `ks`
+    registers its A value (``…/a/<K>``, `steps` equal blocks of K/2 words, its domain binding the window's open root, its
+    tree under that domain) and its B value (``…/b/<K>``, held across windows, at random 32-bit), and at random a z value.
+    ``other`` registers the A values under another window's open root (``window``) or another circuit (``program``)."""
+    prefix = f"h1/w-{rng.randrange(100)}"
     values, entries = {}, []
-    for k in rng.sample([64, 4096, 14336], rng.randint(1, 2)):
+    for k in ks:
         per = rng.choice([1, 2, 3, 4])
-        domain, levels = _tree(rng, steps * per)
-        values[f"{window}/a/{k}"] = (steps * per, levels)
-        entries.append({"value": f"{window}/a/{k}", "root": levels[-1][0].hex(), "leaves": steps * per, "words": 96,
-                        "domain": domain})
+        v, leaves = f"{prefix}/a/{k}", steps * per
+        dom = G.domain(_hex(rng) if other == "program" else program, v, k // 2, leaves,
+                       window=_hex(rng) if other == "window" else window)
+        levels = _tree(rng, leaves, dom)[1]
+        values[v] = (leaves, levels)
+        entries.append({"value": v, "root": levels[-1][0].hex(), "leaves": leaves, "words": k // 2,
+                        "domain": dom.domain_id.hex()})
+        b = {"value": f"{prefix}/b/{k}", "root": _hex(rng), "leaves": rng.randint(1, 64), "words": k // 2,
+             **({G.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
+        entries.append({**b, "domain": Cr.domain_of(program, window, b)})
     if rng.random() < 0.5:
-        entries.append({"value": f"{window}/z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3,
+        entries.append({"value": f"{prefix}/z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3,
                         "domain": _hex(rng)})
     rng.shuffle(entries)
     return entries, _log(steps, values, [_hex(rng) for _ in range(steps)])
 
 
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
-                  leaf: int = rc.RECORD_LEAF) -> tuple[dict, rc.Session]:
+                  leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
+                  other: str | None = None) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None) whose draw coin opened after its draw root
-    (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log is `_a_log`'s, each round's
-    root the one the challenger received and its coin the one opened after it; under ``never-received`` the challenger
-    received other roots, and the log carries their coins as if opened after its own, its draw root over it (the
-    composed check's counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
+    (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
+    the contractions `ks` under the circuit `program` (random ones when None) and `other`, each round's root the one the
+    challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
+    roots, and the log carries their coins as if opened after its own, its draw root over it (the composed check's
+    counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
     rounds = rng.choice([1, 2, 3])
     ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
-    entries, log = _a_log(rng, rounds)
+    window = rc._window(rng)
+    ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
+    entries, log = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, window["root"], other)
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
          "served": rng.choice([None, _hex(rng)]), "draw": {"receipts": _hex(rng)}, "entries": entries}
     received = [bytes.fromhex(x["root"]) for x in log]
@@ -137,7 +161,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         d["draw"]["coin"] = ch.open(Wd.DRAW, 0, draw_after(s.rounds)).to_json()
     else:
         d["draw"]["coin"] = s.draw[0].to_json()
-    return {"key": s.key(), "window": rc._window(rng), "session": s.files(), **d}, s
+    return {"key": s.key(), "window": window, "session": s.files(), **d}, s
 
 
 def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
@@ -501,9 +525,49 @@ DRAWN_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
 
 
 def _proofs(rng: random.Random, units: list[int]) -> list[dict]:
-    proofs = [{"unit": u, "verdict": "accept"} for u in units]
+    """An accepted outcome of each of `units`, as the verifier of record gives it (`credit.PROOF_KEYS`), of a random
+    circuit and registration: `_outcome` reads only its unit and verdict."""
+    program = _hex(rng)
+    proofs = [{"unit": u, "verdict": "accept", "program": program,
+               "registered": {"a0": {"value": "h1/a/64", "root": _hex(rng)}}} for u in units]
     rng.shuffle(proofs)
     return proofs
+
+
+def _window_proofs(rng: random.Random, d: dict, units: list[int]) -> list[dict]:
+    """Each of `units`' outcome as the verifier of record gives it for its session, verified against the window's
+    descriptor: accepted, its program the descriptor's SHA-512, and its session's registered finding each of its tile's
+    A ports (``a<i>``, up to two) at its K's A value and each B port (``b<j>``) at its K's B value, each at the root the
+    window's entry registers."""
+    ss, _ = Cr.strata(d["layout"])
+    r, c = d["layout"]["tile"]
+    program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+    roots = {e["value"]: e["root"] for e in d["entries"]}
+    out = []
+    for u in units:
+        k = next(s["template"][1:] for s in ss if any(lo <= u < hi for lo, hi in s["units"]))
+        a, b = (next(v for v in roots if v.endswith(f"/{x}/{k}")) for x in "ab")
+        reg = {**{f"a{i}": {"value": a, "root": roots[a]} for i in range(min(r, 2))},
+               **{f"b{j}": {"value": b, "root": roots[b]} for j in range(min(c, 2))}}
+        out.append({"unit": u, "verdict": "accept", "program": program, "registered": reg})
+    rng.shuffle(out)
+    return out
+
+
+def _opened(rng: random.Random, d: dict, kind: str) -> str:
+    """A value of `kind` (``a`` or ``b``) some drawn unit's proof opened."""
+    return rng.choice(sorted({x["value"] for p in d["proofs"] for x in p["registered"].values()
+                              if x["value"].split("/")[-2] == kind}))
+
+
+def _other_root(rng: random.Random, proofs: list[dict]) -> None:
+    """One proof's session opened one of its values against another root than the window's: another registration's."""
+    p = rng.choice(proofs)
+    v = rng.choice(sorted({x["value"] for x in p["registered"].values()}))
+    root = _hex(rng)
+    for x in p["registered"].values():
+        if x["value"] == v:
+            x["root"] = root
 
 
 def _mutate_proofs(proofs: list[dict], rng: random.Random, name: str, units: list[int]) -> list[dict]:
@@ -518,11 +582,15 @@ def _mutate_proofs(proofs: list[dict], rng: random.Random, name: str, units: lis
         case "undrawn":
             picked = set(units)
             u = next(u for u in itertools.count(rng.randrange(1 << 20)) if u not in picked)
-            proofs.insert(rng.randrange(len(proofs) + 1), {"unit": u, "verdict": "accept"})
+            proofs.insert(rng.randrange(len(proofs) + 1), {**proofs[j], "unit": u})
         case "proofs-form":
-            proofs = rng.choice([None, "x", proofs + [5], proofs[:j] + [{**proofs[j], "verdict": "maybe"}] + proofs[j + 1:],
-                                 proofs[:j] + [{**proofs[j], "why": "x"}] + proofs[j + 1:],
-                                 proofs[:j] + [{**proofs[j], "unit": -1}] + proofs[j + 1:]])
+            p, x = proofs[j], next(iter(proofs[j]["registered"].values()))
+            bad = rng.choice([{**p, "verdict": "maybe"}, {**p, "why": "x"}, {**p, "unit": -1}, {**p, "program": "zz"},
+                              {**p, "program": None}, {k: v for k, v in p.items() if k != "registered"},
+                              {**p, "registered": [x]}, {**p, "registered": {"a0": {**x, "root": "zz"}}},
+                              {**p, "registered": {"a0": {**x, "extra": 1}}}, {**p, "registered": {"a0": {**x, "value": 5}}},
+                              {**p, "registered": {"a\n": x}}, {**p, "registered": {"a0": {**x, "value": "é"}}}])
+            proofs = rng.choice([None, "x", proofs + [5], proofs[:j] + [bad] + proofs[j + 1:]])
         case _:
             raise ValueError(name)
     return proofs
@@ -572,11 +640,13 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     when None), a K it can be drawn at, one call per manifest row, and an accepted proof of each unit its draw coin
     draws at that K. ``layout`` is the layout, which the verifier reads from the descriptor."""
     lay = layout(rng) if lay is None else lay
+    desc = descriptor(rng, lay) if desc is None else desc
+    other = rng.choice(["window", "program"]) if name == "other-registration" else None
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
-                         sid=sid, leaf=leaf)
-    d["layout"], d["k"] = lay, _k(rng, lay)
-    d["descriptor"] = descriptor(rng, lay) if desc is None else desc
-    d["proofs"] = _proofs(rng, _served_units(d))
+                         sid=sid, leaf=leaf, ks=sorted({k for _n, k, _c in lay["linears"]}),
+                         program=hashlib.sha512(bytes.fromhex(desc)).hexdigest(), other=other)
+    d["layout"], d["k"], d["descriptor"] = lay, _k(rng, lay), desc
+    d["proofs"] = _window_proofs(rng, d, _served_units(d))
     return d, s
 
 
@@ -598,7 +668,7 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
                 if chosen != sorted(p["unit"] for p in d["proofs"]):
                     break
                 d, s = honest_window(rng)
-            d["proofs"] = _proofs(rng, chosen)
+            d["proofs"] = _window_proofs(rng, d, chosen)
         case "failed" | "missing":
             d["proofs"] = _mutate_proofs(d["proofs"], rng, name, [])
         case "descriptor-hex":
@@ -620,6 +690,31 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
             e["root"] = _tree(rng, e["leaves"])[1][-1][0].hex()
         case "no-a":
             d["entries"] = [e for e in d["entries"] if not Cr.is_a(e["value"])]
+        case "other-registration":
+            pass
+        case "proof-other-registration":
+            _other_root(rng, d["proofs"])
+        case "entry-root":
+            v = _opened(rng, d, "b")
+            next(e for e in d["entries"] if e["value"] == v)["root"] = _hex(rng)
+        case "proof-other-circuit":
+            rng.choice(d["proofs"])["program"] = _hex(rng)
+        case "proof-no-a":
+            p = rng.choice(d["proofs"])
+            p["registered"] = {port: x for port, x in p["registered"].items() if not port.startswith("a")}
+        case "proof-unregistered":
+            p = rng.choice(d["proofs"])
+            p["registered"]["c0"] = {"value": "h1/c/" + str(rng.randrange(100)), "root": _hex(rng)}
+        case "entry-twice":
+            v = _opened(rng, d, "b")
+            d["entries"].append(dict(next(e for e in d["entries"] if e["value"] == v)))
+        case "entry-form":
+            v = _opened(rng, d, rng.choice("ab"))
+            e = next(e for e in d["entries"] if e["value"] == v)
+            k, bad = rng.choice([("words", 0), ("words", None), ("words", True), ("words", Cr.MAX_ROWS + 1),
+                                 (G.WIDTH_KEY, 16), (G.WIDTH_KEY, 8), (G.WIDTH_KEY, "32"), ("extra", 1)]
+                                + [("leaves", Cr.MAX_ROWS + 1), ("root", "zz"), ("domain", None)] * (e["value"].split("/")[-2] == "b"))
+            e[k] = bad
         case _ if credit in CREDIT_NAMES:
             _mutate_credit(d, s, credit, rng)
         case _:
@@ -629,9 +724,12 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
     return {k: d[k] for k in WINDOW_KEYS}
 
 
+#: each way a window's entries or its drawn units' proofs are not its registration's
+REGISTRATION_NAMES = ["other-registration", "proof-other-registration", "entry-root", "proof-other-circuit", "proof-no-a",
+                      "proof-unregistered", "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "k-form", "k-past-units", "never-received",
-                "round-coin", "a-untied", "no-a"]
+                "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES]
 WINDOW_KEYS = ("key", "ledger", *Cr.WINDOW_KEYS, "k")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "descriptor",
@@ -655,16 +753,17 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
     desc = descriptor(rng, lay) if name != "bad-circuit" else _break_desc(rng, lay, rng.choice(DESC_NAMES))
-    bad = rng.randrange(n) if name == "never-received" else None
-    wins = [honest_window(rng, "never-received" if i == bad else "honest", sid=f"s-{i + 1}", leaf=4 * i + 2, lay=lay,
-                          desc=desc) for i in range(n)]
+    bad = rng.randrange(n) if name in ("never-received", "other-circuit") else None
+    odd = descriptor(rng, lay, prefix=f"other-{rng.randrange(1 << 20)}/") if name == "other-circuit" else desc
+    wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
+                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc) for i in range(n)]
     foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
     big_k = rng.choice([1, least, rng.randint(1, least)])
     for d, _s in wins + [foreign]:
-        d["proofs"] = _proofs(rng, _served_units(d, k=big_k))
+        d["proofs"] = _window_proofs(rng, d, _served_units(d, k=big_k))
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
@@ -680,7 +779,7 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
             committed[Cr.K_FIELD] = past = min(units_of(d["layout"]) for d, _s in wins) + rng.randint(1, 5)
             for d, _s in wins:
                 if units_of(d["layout"]) >= past:
-                    d["proofs"] = _proofs(rng, _served_units(d, k=past))
+                    d["proofs"] = _window_proofs(rng, d, _served_units(d, k=past))
     events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
                                      "key_sha512": hashlib.sha512(pub).hexdigest()})]
     for (d, s), end in zip(wins, ends):
@@ -700,7 +799,7 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     i = rng.randrange(n)
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
-              | "bad-circuit" | "never-received"):
+              | "bad-circuit" | "never-received" | "other-circuit"):
             pass
         case "other-k":
             d = wins[i][0]
@@ -711,7 +810,7 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
             if other is None:
                 windows[i]["proofs"] = windows[i]["proofs"][1:]
             else:
-                windows[i]["proofs"] = _proofs(rng, _served_units(d, k=other))
+                windows[i]["proofs"] = _window_proofs(rng, d, _served_units(d, k=other))
         case "missing":
             del windows[i]
         case "order":
@@ -721,8 +820,6 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
             windows.append(_evidence(fd) if rng.random() < 0.5 else dict(windows[i]))
         case "foreign":
             windows.insert(rng.randrange(n), _evidence(fd))
-        case "other-circuit":
-            windows[i]["descriptor"] = descriptor(rng, lay, prefix=f"other-{rng.randrange(1 << 20)}/")
         case "alt-layout":
             windows[i]["descriptor"] = descriptor(rng, _alt_layout(rng, lay))
         case "descriptor-form":
@@ -734,6 +831,8 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
             out["name"] = rng.choice([None, 5, [pname]])
         case "window-refused":
             windows[i]["proofs"] = _mutate_proofs(windows[i]["proofs"], rng, rng.choice(["failed", "missing"]), [])
+        case "proof-other-registration":
+            _other_root(rng, windows[i]["proofs"])
         case "windows-form":
             drop = rng.choice(["proofs", "descriptor"])
             windows = rng.choice([None, {"0": windows[0]}, windows[:i] + [5] + windows[i + 1:],
@@ -748,13 +847,16 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
 
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
-                "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received"]
+                "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
+                "proof-other-registration"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 
-def _tree(rng: random.Random, count: int) -> tuple[str, list[tuple[bytes, ...]]]:
-    """A frame-v3 SHA-512 tree over `count` leaf digests: its domain id and levels."""
-    dom = CommitmentDomain(rng.randbytes(64), rng.randrange(-2, 4), RangeIndexedDomain(0, count), "sha512")
+def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
+    """A frame-v3 SHA-512 tree over `count` leaf digests under `dom` (a random domain when None): its domain id and
+    levels."""
+    if dom is None:
+        dom = CommitmentDomain(rng.randbytes(64), rng.randrange(-2, 4), RangeIndexedDomain(0, count), "sha512")
     return dom.domain_id.hex(), tree_levels(dom, [rng.randbytes(64) for _ in range(count)])
 
 
