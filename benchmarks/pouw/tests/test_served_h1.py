@@ -542,9 +542,11 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert CO.main(["check", "--challenger-out", str(session), "--ledger", str(early), "--ledger", str(host.ledger),
                     "--manifest", str(tmp_path / "manifest.json"), "--key-record", str(tmp_path / "key-record.json"),
                     "--period", PERIOD, "--root", ROOT.hex()]) == 0
-    (tmp_path / "bad-record.json").write_text(json.dumps({**record, "pubkey_sha512": "00" * 64}))
-    with pytest.raises(ValueError, match="not its pubkey_sha512"):
-        CO.key_record(tmp_path / "bad-record.json")
+    for bad, why in (({"pubkey_sha512": "00" * 64}, "not the one whose SHA-512 it names"),
+                     ({"schema": "challenger-key/v2"}, "a challenger key record is challenger-key/v1")):
+        (tmp_path / "bad-record.json").write_text(json.dumps({**record, **bad}))
+        with pytest.raises(CO.Ch.CoinError, match=why):
+            CO.key_record(tmp_path / "bad-record.json")
     e = SV.coins_expect(m)
     got = CO.check(session, m["coins"], heads, **e, key=key, period=PERIOD, root=ROOT)
     assert got["ok"] and got["coins"] == f"off-node vy-challenger-1.{SID} (checked)"
