@@ -5,6 +5,7 @@ accepted. The drawn units are the draw coin's over the window's own layout, whos
 from __future__ import annotations
 
 import importlib.util
+import math
 import random
 import sys
 from pathlib import Path
@@ -288,9 +289,9 @@ def _work(layout: dict) -> int:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
-    `DELTA`, `window.k_prime` inverted at each window's inputs (its credited calls' work, its units, the most work a
-    unit does): K′ at that ε is at most K, and at the next grid point down more than K, and a window whose draw
-    establishes no ε <= 1 reports none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
+    `DELTA` over each window's credited work C, `window.k_prime` inverted at (C, W, 1), W the window's work: K′ at that
+    ε is at most K, and at the next grid point down more than K, and a window whose draw establishes no ε <= 1 reports
+    none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
@@ -300,16 +301,16 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
         lay = w["layout"]
         (r, c), ks = lay["tile"], {name: (k, n) for name, k, n in lay["linears"]}
         units = [((lay["m"] // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in lay["calls"]]
-        assert sum(s * u for s, u in units) == _work(lay)
+        total = _work(lay)
+        assert sum(s * u for s, u in units) == total
         credited = sum(units[i][0] * units[i][1] for i in calls)
-        n, w_max = sum(s for s, _u in units), max(u for _s, u in units)
-        if not credited or Wd.k_prime(Fraction(1), Cr.DELTA, credited, n, w_max) > big_k:
+        if not credited or Wd.k_prime(Fraction(1), Cr.DELTA, credited, total, 1) > big_k:
             assert eps is None
             continue
         eps = Fraction(eps)
-        assert eps == Wd.eps_at(big_k, Cr.DELTA, credited, n, w_max)
-        assert Wd.k_prime(eps, Cr.DELTA, credited, n, w_max) <= big_k
-        assert eps == grid or Wd.k_prime(eps - grid, Cr.DELTA, credited, n, w_max) > big_k
+        assert eps == Wd.eps_at(big_k, Cr.DELTA, credited, total, 1)
+        assert Wd.k_prime(eps, Cr.DELTA, credited, total, 1) <= big_k
+        assert eps == grid or Wd.k_prime(eps - grid, Cr.DELTA, credited, total, 1) > big_k
     at_record = Cr.established({"calls": [["w", 0]], "linears": [["w", 64, 1 << 20]], "m": 1, "tile": [1, 1]}, [0],
                                plan.RECORD_K)
     assert at_record <= Fraction(1, 1000)
@@ -318,15 +319,55 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
 
 def test_the_reported_eps_is_of_the_credited_work():
     """ε is a share of the credited work, not of the window's: with 8 of 9 equal calls credited (u = 8/9) the K′ of
-    ε = 0.1% at `DELTA` is 31,178, and its ε is at most 0.1%, where taking credited = n would report 8/9 of that, too
+    ε = 0.1% at `DELTA` is 31,178, and its ε is at most 0.1%, where taking credited = W would report 8/9 of that, too
     optimistic by 9/8. A window credited nothing establishes no ε."""
     lay = {"calls": [["w", 0]] * 9, "linears": [["w", 4096, 1 << 20]], "m": 16, "tile": [16, 16]}
     size, work = Cr.call_work(lay)[0]
-    k = Wd.k_prime(Fraction(1, 1000), Cr.DELTA, 8 * size * work, 9 * size, work)
+    total = 9 * size * work
+    k = Wd.k_prime(Fraction(1, 1000), Cr.DELTA, 8 * size * work, total, 1)
     eps = Cr.established(lay, list(range(8)), k)
     assert k == 31_178 and Fraction(9999, 10_000_000) < eps <= Fraction(1, 1000)
-    assert Fraction(9, 8) * Wd.eps_at(k, Cr.DELTA, 9 * size, 9 * size, 1) == pytest.approx(eps, rel=1e-5)
+    assert eps == Wd.eps_at(k, Cr.DELTA, 8 * size * work, total, 1)
+    assert Fraction(9, 8) * Wd.eps_at(k, Cr.DELTA, total, total, 1) == pytest.approx(eps, rel=1e-5)
     assert Cr.established(lay, [], k) is None
+
+
+def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -> Fraction:
+    """The largest probability that the work law's draw (each stratum (n_s, w_s, k_s) drawn k_s of its n_s units
+    without replacement) misses a set holding at least a share `eps` of the work `total`, over two strata: for each
+    count b_1 of the second stratum's units in the set, the fewest of the first's that reach the share (a set's miss
+    only falls as it grows)."""
+    (n0, w0, k0), (n1, w1, k1) = strata
+
+    def miss(n: int, k: int, b: int) -> Fraction:
+        return Fraction(math.comb(n - b, k), math.comb(n, k))
+
+    worst = Fraction(0)
+    for b1 in range(n1 + 1):
+        b0 = max(0, -(-(eps * total - b1 * w1) // w0))
+        if b0 <= n0:
+            worst = max(worst, miss(n0, k0, b0) * miss(n1, k1, b1))
+    return worst
+
+
+def test_the_eps_holds_at_the_work_laws_cap():
+    """At K = n the work law draws a stratum of little work only in part, so the cap is K >= W, not the unit count:
+    1,000 units of work 1 and 1,000 of work 1,000, all credited, drawn at K = n = 2,000. The reported ε, `eps_at` at
+    (C, W, 1), about 1.38%, holds: every set holding that share of the work is missed with probability at most δ. The
+    unit-count form `eps_at(K, δ, C, n, w_max)` would report 2^-32, yet a set of 500 work-1 units, 0.05% of the work,
+    is missed with probability about 1/4."""
+    lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", 1, 1000], ["b", 1000, 1000]], "m": 1, "tile": [1, 1]}
+    ss, why = Cr.strata(lay)
+    assert why is None and Cr.law(ss, 2000) is None
+    total = sum(s["work"] * (s["units"][0][1] - s["units"][0][0]) for s in ss)
+    drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
+    assert total == 1_001_000 and drawn == [(1000, 1, 2), (1000, 1000, 1000)]
+    eps = Cr.established(lay, [0, 1], 2000)
+    assert eps == Wd.eps_at(2000, Cr.DELTA, total, total, 1) and Fraction(137, 10_000) < eps < Fraction(138, 10_000)
+    assert _worst_miss(drawn, eps, total) <= Cr.DELTA
+    by_units = Wd.eps_at(2000, Cr.DELTA, total, 2000, 1000)
+    assert by_units == Fraction(1, 1 << Wd.EPS_BITS)
+    assert _worst_miss(drawn, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
 
 
 @pytest.mark.parametrize("seed", SEEDS)

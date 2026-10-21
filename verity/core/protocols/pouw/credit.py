@@ -21,8 +21,7 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
   draw would not be K's. PoUW carries no ε target: `period_credit` reports the ε each window's draw of K established at
-  `DELTA`, `window.eps_at` (`window.k_prime` inverted) at the window's inputs: its credited calls' work, its units and
-  the most work a unit does.
+  `DELTA` over its credited work C, `window.eps_at(K, δ, C, W, 1)` (`window.k_prime` inverted), W the window's work.
 * **No partial credit** (`outcome`): the window is accepted only when every unit the draw coin draws has exactly one
   proof outcome and it is an accept. A drawn unit whose proof failed or is missing refuses the whole window, not only
   its call. A unit with two outcomes is refused, since a retry never reproves, and so is an outcome for a unit the draw
@@ -323,14 +322,15 @@ def call_work(layout: dict) -> list[tuple[int, int]]:
 def established(layout: dict, credited_calls: list[int], k: int) -> Fraction | None:
     """The ε a draw of K = `k` under the work law over the window `layout` (one `strata` accepted) establishes at
     `DELTA` for its credited calls `credited_calls`: a wrong set holding a share ε of the credited work C goes undrawn
-    with probability at most δ; None when it establishes no ε <= 1 (C = 0, or K too small for C's share). `window.eps_at`
-    at the window's inputs as `window.k_prime` takes them: credited = C, the sum of the credited calls' units' work, n
-    the window's units and w_max the most work a unit does. The miss bound it rests on, that the work law's draw of K
-    misses a set of work εC with probability at most (1 − εC/(n·w_max))^K, is not proved in Lean yet."""
+    with probability at most δ; None when it establishes no ε <= 1 (C = 0, or K too small for C's share). It is
+    `window.eps_at(K, δ, C, W, 1)`, C the credited calls' units' work and W the window's: the work law's draw of K misses
+    a set of work εC with probability at most (1 − εC/W)^K, each stratum drawing K·W_s/W of its units rounded up. Its
+    cap is K >= W, where every stratum is drawn whole; never the unit count n, since a draw of K = n draws a stratum of
+    little work only in part."""
     cw, picked = call_work(layout), set(credited_calls)
     credited = sum(size * work for i, (size, work) in enumerate(cw) if i in picked)
     try:
-        return Wd.eps_at(k, DELTA, credited, sum(size for size, _w in cw), max(w for _s, w in cw))
+        return Wd.eps_at(k, DELTA, credited, sum(size * work for size, work in cw), 1)
     except ValueError:
         return None
 

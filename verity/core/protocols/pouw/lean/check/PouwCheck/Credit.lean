@@ -283,15 +283,15 @@ def callWork (layout : Json) : List (Nat × Nat) := Id.run do
     | _ => none)
 
 /-- `credit.established`: the ε a draw of K = `k` under the work law over the window `layout` establishes at `DELTA`
-for its credited calls `got`, `PouwWindow.epsAt` at the window's inputs as `kPrime` takes them: credited the credited
-calls' units' work, n the window's units, `w_max` the most work a unit does; none when it establishes no ε ≤ 1. -/
+for its credited calls `got`: `PouwWindow.epsAt K δ C W 1`, `C` the credited calls' units' work and `W` the window's
+(the work law misses a set of work `εC` with probability at most `(1 − εC/W)^K`, its cap `K ≥ W`); none when it
+establishes no ε ≤ 1. -/
 def established (layout : Json) (got : List Nat) (k : Nat) : Option Rat :=
   let cw := callWork layout
   let credited := ((List.range cw.length).zip cw).foldl
     (fun a (i, s, w) => if got.contains i then a + s * w else a) 0
-  let n := cw.foldl (fun a (s, _) => a + s) 0
-  let wMax := cw.foldl (fun a (_, w) => max a w) 0
-  (PouwWindow.epsAt k DELTA credited n wMax).toOption
+  let total := cw.foldl (fun a (s, w) => a + s * w) 0
+  (PouwWindow.epsAt k DELTA credited total 1).toOption
 
 /-- `credit._drawn`: the units the draw coin `coin` draws over `ss` (`workUnits`), else the refusal. -/
 def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array Flock.Draw.WorkStratum) (k : Json) :

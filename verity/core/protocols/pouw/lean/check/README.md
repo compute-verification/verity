@@ -80,8 +80,8 @@ under the law `work:k` (`workUnits`), over the window's layout (`h1window.progra
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
 the K its period's open committed (`law`; `committedK` reads `draw_k`, and a window with fewer units than K is refused).
 `established`: the ε that draw established at δ = 2⁻⁴⁰ over the window's credited work, `PouwWindow.epsAt` (`k_prime`
-inverted) at the window's inputs as `k_prime` takes them (the credited calls' work, the units, the most work a unit
-does; `callWork`), which `periodCredit` reports, null when it establishes no ε ≤ 1; PoUW has no ε target. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
+inverted) as `epsAt K δ C W 1`, C the credited calls' work and W the window's (`callWork`), which `periodCredit`
+reports, null when it establishes no ε ≤ 1; PoUW has no ε target. `outcome`: the window is accepted only when every unit `drawn` draws has exactly one
 proof outcome and it is an accept; a failed or missing one refuses the whole window. `window` is both on one served
 window, the stream its root, the registration its draw root and the receipt `{"receipts": …}`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
