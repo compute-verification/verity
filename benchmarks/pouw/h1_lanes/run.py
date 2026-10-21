@@ -302,16 +302,15 @@ def expected(kind: str, ln: int | None, w: World, ins: dict) -> list[int]:
 
 def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, index: int) -> dict:
     """Stage one statement and write the verifier's files: ``ins`` each port's opening (`opening`) or known row (`known`);
-    the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows."""
+    the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows. The lowered ok is held to the
+    word reference (`expected`) in place of `UnitStager.reference_check`, as h1_prove's stage does."""
     st = ctx.stagers[kind]
     ent, roots = entries(ctx, w)
     reads = LL.registered_file(LL.reads(*RC, kind, ln), ent, roots, {v: V2 for v in ent})
     want = expected(kind, ln, w, ins)
     outs = ok_out(ctx, index)
-    ir = type(st).reference_check.__get__(st)
 
-    def check(rows_, got):
-        ir(rows_, got)
+    def check(_rows, got):
         if not np.array_equal(np.asarray(got["o0"][0], np.uint16), np.asarray(want, np.uint16)):
             raise AssertionError(f"{tag}: the lowered circuit's ok is not the word reference's")
 
