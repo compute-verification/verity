@@ -70,6 +70,12 @@ Scope:
   computes the rest from the one value's bits, about 1 bit per value. Kimi K2's backward has 9 such codes per
   coordinate (the router-scaled MoE-output gradients the routed experts read, and the shared expert's), and its
   forward 8 dispatch slots per coordinate. `Keyed`'s (I) rules them out: each is a gate of its source value.
+* A block may cut a value's word: a gate with a predecessor outside the block is one of its inputs, so the block reads
+  the value at one bit and computes the rest, which come from what it is handed for other values. `Spent` charges only
+  the first read on a key path, and with (I) the values beyond it are on no other spent value's key path. A path's start
+  is the exception `Keyed`'s (F) rules out: a value keyed to an activation `κ` (a re-quantization of an `f`-bit `κ`)
+  would be spent beside `κ` at one bit, `f + 1` bits for two values. With (I) and (F), no spent value is a key ancestor
+  of another (`Keyed.spent_eq_of_follows`).
 
 Kimi K2 (`f = 4`, `b = 2.5`): with `ColumnsIncompressible` at 1 bit per entry, about 3.6·10⁴ (`FanOutReadCoverBound`),
 four times `FanOutCoverBound`'s 8,900. -/

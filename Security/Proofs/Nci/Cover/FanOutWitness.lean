@@ -15,7 +15,7 @@ and gate 7 the product's updated parameter. The lookups are gates 8–9, each re
 reading the token and column 4–6. The root is gates 12–13, each reading both lookups, its two legs (`d = 2`). The
 counted product is gate 14, reading the root, its activation, and gate 7.
 
-`Keyed`'s rules hold with no keys, so (I) holds vacuously. Gate 14 reads both of the root's exits (W, `f = 2`).
+`Keyed`'s rules hold with no keys, so (I) and (F) hold vacuously. Gate 14 reads both of the root's exits (W, `f = 2`).
 Each lookup is exactly its gather's cone: its gates are the ones after an entry of its column, outside `θ`, on a path
 to one of its exits (L).
 
@@ -200,6 +200,9 @@ def fK : Keyed fM Unit (Fin 3) 2 1 1 3 2 where
     exact absurd (show v ∈ ({2} : Finset (Fin 3)) ∪ {0, 1} by revert v; decide) hv
   key_inj := by
     intro _ _ _ _ _ h
+    simp at h
+  key_fresh := by
+    intro _ _ _ h
     simp at h
   legs := fun _ => {0, 1}
   legs_mem := by decide

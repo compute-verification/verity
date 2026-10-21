@@ -50,7 +50,8 @@ Each token's gates are cut into *values*: words such as an activation, a residua
 pairwise disjoint and holding no registered parameter. Every value is a *stop* or has a *key*, a value of its token from
 which a link enters it at each of its exits (K). No two values share a key (I), so a copy, a capacity slot, or a
 router-scaled or re-quantized version of a value is a gate of the value, not a value keyed to it, and the values keyed
-back from any one form a single chain. The stops are:
+back from any one form a single chain. No value is keyed to a counted product's activation or to a root's leg (F): a
+version of one is part of it. The stops are:
 
 * *roots*, whole accumulation chains (a dot product's products and partial sums), entered at each exit by a link from
   each of at least `d` *legs* whose key paths are disjoint (R). A link's gates after its first lie in the root, so the
@@ -68,8 +69,9 @@ any one value, and none reaches a lookup (A).
 
 Kimi K2, forward products (`c = 1`, `f = 4`). A token is one position at one step. Keys run from a residual to its
 branch, from a norm past its shared scale, from an attention output through its diagonal `v`, and from an MoE output to
-its shared expert. A dispatch copy belongs to its routed token's MoE-input value (I). The roots are the weight
-products' accumulation chains, the narrowest kv_b's over the 512-wide kv latent (`d = 512`). The lookups are the trained
+its shared expert. A dispatch copy belongs to its routed token's MoE-input value (I), and so does the NVFP4 code the
+routed experts read, since the router's products read the BF16 word it codes (F). The roots are the weight products'
+accumulation chains, the narrowest kv_b's over the 512-wide kv latent (`d = 512`). The lookups are the trained
 embedding's gathers (`V = 163840`). The value reaching the most products is the MoE input: the router's 384 products
 plus 9 × (gate + up) × 2048, so `aOut = 37248`. Merging a version into its value doesn't change this, since the
 products whose key paths reach the version already reach the value. The backward's Dgrad products are counted as
@@ -130,6 +132,8 @@ structure Keyed {C : Circuit} {J L : Type*} (M : MulBlocks C J L) (Tok Val : Typ
   /-- (R): the legs' key paths are disjoint. -/
   legs_disjoint : ∀ r ∈ roots, ∀ q ∈ legs r, ∀ q' ∈ legs r, q ≠ q' → ∀ u,
     Follows key (roots ∪ lookups) q u → ¬ Follows key (roots ∪ lookups) q' u
+  /-- (F): no value is keyed to a counted product's activation or to a root's leg. -/
+  key_fresh : ∀ v ∈ vals, ∀ κ, key v = some κ → (∀ p ∈ M.P, act p ≠ κ) ∧ ∀ r ∈ roots, κ ∉ legs r
   /-- The column of a lookup: the updated parameters it selects from. -/
   col : Val → Finset L
   /-- (L): at least `V` parameters per column. -/
