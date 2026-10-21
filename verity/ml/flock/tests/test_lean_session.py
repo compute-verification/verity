@@ -424,6 +424,70 @@ def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
     S.lp.close()
 
 
+def test_the_loops_finish_needs_a_statement(loop):
+    """A finish on the loop's frames port sets the session's statement up at its draw first: one the setup refuses ends
+    it."""
+    _, lp = loop
+    f = TcpFrame(lp)
+    got = f.ask("finish 4", b"null")
+    assert isinstance(got, str) and got.startswith("err setup: "), got
+    f.close()
+
+
+@pytest.mark.slow
+def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
+    """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop drew
+    at the table's `m`, for a session it still serves; its answer is that root. Each rep's salts for levels ≥ 1 it draws
+    itself, once: whole 192-byte leaves a level, fresh for each rep, and a rep asked again, or a rep's request before its
+    salts, is refused. Once the session that drew the level 0 ends, the loop has freed it, and finish refuses its root."""
+    S = Sessions(_args(zk, "pub-16.bin"))
+    s, name = S.session()
+    lp = S.lp
+
+    def finish():
+        f = TcpFrame(lp)
+        assert f.ask("finish 4", b"null") == ("ok 0", b"")
+        return f
+
+    f = finish()
+    assert f.ask("level0 0 64", b"\x01" * 64) == "err finish: table 0's root is no level 0's the session loop drew"
+    f.close()
+    other = 25
+    _, _, r0 = level0(lp, other, _zeros(other), name)
+    f = finish()
+    got = f.ask(f"level0 0 {len(r0)}", r0)
+    f.close()
+    if isinstance(got, str):
+        m = int(re.fullmatch(rf"err finish: a level 0 drawn at m = {other} for a table at m = (\d+)", got)[1])
+        _, _, r0 = level0(lp, m, _zeros(m), name)
+    f = finish()
+    assert f.ask(f"level0 0 {len(r0)}", r0) == (f"ok {len(r0)}", r0)
+    assert f.ask("rep 0 0 0") == "err table 0 rep 0 before its salts for levels ≥ 1"
+    f.close()
+    f = finish()
+    f.ask(f"level0 0 {len(r0)}", r0)
+    reps = []
+    for r in (0, 1):
+        line, b = f.ask(f"salts 0 {r} 0")
+        (n,) = struct.unpack_from("<Q", b)
+        levels, o = [], 8
+        for _ in range(n):
+            (k,) = struct.unpack_from("<Q", b, o)
+            levels.append(b[o + 8:o + 8 + k])
+            o += 8 + k
+        assert o == len(b) and n >= 1 and all(len(x) and len(x) % 192 == 0 for x in levels), (line, n)
+        reps.append(levels)
+    assert [len(x) for x in reps[0]] == [len(x) for x in reps[1]] and reps[0] != reps[1]
+    assert f.ask("salts 0 0 0") == "err table 0 rep 0's salts for levels ≥ 1 were drawn already"
+    f.close()
+    s.close()
+    assert S.ended().startswith("level 0: session 0 ended; ")
+    f = finish()
+    assert f.ask(f"level0 0 {len(r0)}", r0) == "err finish: table 0's root is no level 0's the session loop drew"
+    f.close()
+    lp.close()
+
+
 @pytest.mark.slow
 def test_a_round_before_the_commitment_never_leaves(zk):
     """Past `Hello`'s answer the first opening is the session stream's, at `Commit`: a `Round` in its place is refused
