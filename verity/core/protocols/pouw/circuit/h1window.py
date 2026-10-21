@@ -378,14 +378,16 @@ def table_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]
 
 
 def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
-                     prog: str | None = None) -> dict[str, Any]:
+                     prog: str | None = None, window: str | None = None) -> dict[str, Any]:
     """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
     each A row and record at the call's tables (`table_reads`), each B row at the weights' ``b/<K>``. ``roots`` ``{value:
     root}`` holds the call's two tables' roots, as its round's record names them before that round's coin, and the
     weights'; ``ports`` names a key's circuit port when they differ (`window_ports`); ``prog`` the Program's digest when the
     caller holds it. Every table is a ``row/v2`` value of 16-bit leaves under `registered.domain` of its own name, rows and
-    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. A unit of another call
-    reads none of them (None), so the file holds a statement to one call's units."""
+    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. ``window``, a served
+    window's open root, binds the call's two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and
+    never the weights', which are held across windows. A unit of another call reads none of them (None), so the file
+    holds a statement to one call's units."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     k = _k(S)[S.CALLS[call][0]]
     u0, n = call_units(program)[call]
@@ -405,6 +407,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         leaves, words = shape[r["value"]]
         out[(ports or {}).get(key, key)] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-            "domain": G.domain(prog, r["value"], words, leaves).domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+            "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
+            **G.schema_entry(G.SCHEMA_V2),
             "reads": r["rows"]}
     return {"format": G.READS, "ports": out}

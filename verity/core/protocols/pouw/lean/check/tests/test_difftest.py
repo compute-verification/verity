@@ -271,7 +271,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
