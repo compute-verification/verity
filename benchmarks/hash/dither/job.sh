@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The dither-hb benches. Libraries are built on a CPU node and shipped to the dc node, so nothing but the bench runs on
 # vy-dc-h200 / vy-dc-b200 (no CPU phase there):
-#   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
+#   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref,h1c}.so and the
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
@@ -24,6 +24,10 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
+#   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
+#            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
+#            commit.py and the base's every word, then each set's h1c_build timed)
+#   zprof    the same builds under ncu (--set full; kernels h1c_*): zbench.py --profile, then the text pages
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -37,7 +41,7 @@
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -71,8 +75,10 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    builds=(kb h1noise h1u h1zref)
+    builds=(kb h1noise h1u h1zref h1c)
     [ "$arch" = sm_100a ] && builds+=(kb_pg)
+    # h1c.cu's variants in $H1C_VARIANTS (NAME=FLAGS: h1c_NAME.so), for z|zprof
+    for v in ${H1C_VARIANTS:-}; do builds+=("h1c_${v%%=*}:h1c:${v#*=}"); done
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
     # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,
     # H1U_SPLIT (h1p: a pair of warps a unit), H1U_KSPLIT (h1k: the one-stream unit's K split, 2 or 4 producer warps, for
@@ -157,6 +163,21 @@ for b in ${BENCH//,/ }; do
         NCU=${NCU:-$(dirname "$NVCC")/ncu}
         CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
+      fi ;;
+    z|zprof)
+      # h1c.so (today's libh1c.so) as the base, then every h1c_*.so shipped
+      zl=""
+      for f in "$LIBS"/h1c.so "$LIBS"/h1c_*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); zl+=" --lib ${v#h1c_}=$f"
+      done
+      [ -f "$LIBS/h1c.so" ] || { echo "job.sh: $b needs $LIBS/h1c.so, the base" >&2; exit 2; }
+      if [ "$b" = z ]; then
+        CMDS+=("$PY $HERE/zbench.py$zl --out $OUT ${BENCH_ARGS:-}")
+      else
+        NCU=${NCU:-$(dirname "$NVCC")/ncu}
+        CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1c_ -f -o $OUT/zprof $PY $HERE/zbench.py$zl --profile --out $OUT ${BENCH_ARGS:-}")
+        CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/zprof.ncu-rep --ncu $NCU --out $OUT")
       fi ;;
     prof)
       plibs=""
