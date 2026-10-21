@@ -29,6 +29,14 @@ namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
 open FlockSoundness.Discharge
 open CoinLayer
+
+/-- The switched cut's masked values are `Table.swPre`'s at the base. -/
+theorem swCutAt_masked {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J) :
+    (swCutAt C cz wt v ω lv j).masked =
+      (((C j).T (cz j)).tab.swPre (wt j) (v j) (((C j).T (cz j)).randOf (ω j) 0)).masked := rfl
+
 namespace Masked
 
 /-- **The switched prover's cut at the opened coins `c`**, on `w`'s table witnesses, the workers' values `v` and the
@@ -53,7 +61,9 @@ theorem swCutE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
     (swCutE x c w v τ j).masked =
       (((tabC PE x j).T (czExe PE x c j)).tab.swPre (wtOf PE x w j) (v j)
-        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0)).masked := rfl
+        (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0)).masked := by
+  unfold swCutE
+  exact swCutAt_masked _ _ _ _ _ _ j
 
 /-- **Where table `j`'s rows hold at its base, the switched cut's masked values are the worker's view's.** -/
 theorem swCutE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
