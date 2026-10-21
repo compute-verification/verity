@@ -8,8 +8,9 @@ import Mathlib.Data.Finset.Union
 `UpdateHardness` is the cover theorem's one assumption about the world: a block that computes whole products must be
 handed `b` bits for each distinct updated parameter they use. The variants rest on stronger premises, each its own named
 `Prop`, so that what each factor costs is visible: `ConditionalUpdateHardness` (the additive bound) pays those bits
-outside the activation regions, and `Width` (the width bound) says that a block cutting into an activation region cuts
-it in at least `f` gates. All three are statements about the training circuit `C` and its products, at block size `s`.
+outside the activation regions, and `Width` (the width bound) says that an inference block cutting into an activation
+region cuts it in at least `f` gates. All three are statements about the training circuit `C` and its products, at
+block size `s`.
 -/
 
 namespace Nci.Cover.Assumptions
@@ -47,21 +48,27 @@ def ConditionalUpdateHardness {C : Circuit} {J L : Type*} [DecidableEq J] [Decid
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
     b * (B.image Prod.snd).card ≤ (C.inputs S \ (C.θ ∪ M.uses.biUnion A)).card
 
-/-- **Activation width** ([ACTIVATION-WIDTH]) `f` at block size `s`, for the activation regions `A`: every set `S` of
-at most `s` gates that computes all of a counted product of use `j`, and is handed some gate of `A j`, is handed at
-least `f` of them: `f ≤ #(inputs S ∩ A j)`.
+/-- **Activation width** ([ACTIVATION-WIDTH]) `f` on inference blocks of size `s` and read cap `k`, for the activation
+regions `A`: every inference block `I` that computes all of a counted product of use `j`, and is handed some gate of
+`A j`, is handed at least `f` of them: `f ≤ #(inputs I ∩ A j)`.
 
-Rationale: the activation a product reads is many bits wide and is computed from its upstream products along many paths
-inside `A j`, so a block handed part of it is handed several of its gates. The intended derivation is from `f` pairwise
-vertex-disjoint paths inside `A j` into the activation (Menger); it is not done, so the width is a named premise for
-now, a property of the circuit's wiring that the derivation would replace.
+It is stated for inference blocks only, which is all the width bounds read. Over every set of at most `s` gates it fails
+at `f ≥ 2` for every real training circuit: a set that computes a product together with its whole upstream, plus one
+gate of the region with a predecessor outside the set, is handed exactly that gate. Such a set is handed the upstream's
+updated parameters, more than `k` bits besides `θ`, so it is no inference block.
 
-It holds when the output cone of each counted product reads at least `f` bits of its activation (red team, 21 Oct): at
-FP4, a product gate whose cone reads all 4 activation bits gives `f = 4`, while a product whose output is its top
-exponent bit reads only 2. -/
-def Width {C : Circuit} {J L : Type*} [DecidableEq J] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (s f : ℕ) :
+Rationale: a block handed fewer than `f` gates of `A j` computes, behind them, the upstream of the activation that they
+do not cut off, and `UpdateHardness` prices that above `k` when it spans `D` updated parameters with `k < b D`.
+`WidthOfCut` derives the width this way from the activation's cut width (`MulBlocks.CutWidth`), a property of the
+circuit's wiring, so the width bound rests on the wiring (`CutWidthCoverBound`).
+
+The cut width, and so `f`, is at most the number of gates of `A j` that a counted product reads. At FP4, `f = 4` needs
+each counted product's designated output gate `o p` to read all four bits of its activation through its gates `m p`:
+the output `p[j] ⊕ s` with `j ≥ 1`, XOR counted as a gate. With any other designation, such as `p[0] ⊕ s` or a
+multiplier bit alone, the product reads at most three of them, and `f ≤ 3`. -/
+def Width {C : Circuit} {J L : Type*} [DecidableEq J] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (s k f : ℕ) :
     Prop :=
-  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ p ∈ M.P, M.m p ⊆ C.computed S → (C.inputs S ∩ A p.1).Nonempty →
-    f ≤ (C.inputs S ∩ A p.1).card
+  ∀ I, C.InferenceBlock s k I → ∀ p ∈ M.P, M.m p ⊆ C.computed I → (C.inputs I ∩ A p.1).Nonempty →
+    f ≤ (C.inputs I ∩ A p.1).card
 
 end Nci.Cover.Assumptions

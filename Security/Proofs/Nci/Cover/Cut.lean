@@ -4,13 +4,16 @@ import Proofs.Nci.Cover.Width
 /-!
 # The cover theorem: the width bound from the wiring
 
-`WidthOfCut`: a block handed the set `X` of gates of `A j`, fewer than `f`, is handed no gate of `A j \ X`, so it computes
-every gate that reaches the product's activation inside `A j \ X` (`BackwardClosure`, from the activation gate, which
-the block holds since a gate it computes reads it). The cut width gives upstream products over `D` parameters whose
-output gates do, and each of their gates reaches its output inside the product (`reachesIn_output`), within `A j \ X`,
-so the block computes them whole and `UpdateHardness` charges `b D > k` bits. `CutOfDisjointUpstreams` is pigeonhole: fewer than `f` gates miss one of
-`f` disjoint parts (`exists_disjoint_of_card_lt`). `cutWidth_le_reads` is the cap: the cut width is at most the number of
-activation gates the product reads, since a set holding all of them leaves nothing connected.
+`WidthOfCut`: a block handed the set `X` of gates of `A j`, fewer than `f`, is handed no gate of `A j \ X`, so it
+computes every gate that reaches the product's activation inside `A j \ X` (`BackwardClosure`, from the activation gate,
+which the block holds since a gate it computes reads it). The cut width gives upstream products over `D` parameters
+whose output gates do, and each of their gates reaches its output inside the product (`reachesIn_output`), within
+`A j \ X`, so the block computes them whole and `UpdateHardness` charges `b D > k` bits. `CutOfDisjointUpstreams` is
+pigeonhole: fewer than `f` gates miss one of `f` disjoint parts (`exists_disjoint_of_card_lt`). `cutWidth_le_reads` is
+the cap: the cut width is at most the number of activation gates the product reads, since a set holding all of them
+leaves nothing connected. `width_of_cutWidth` is `WidthOfCut` as `Assumptions.Width`. `CutWidthCoverBound` is the
+width bound's count (`finished_le_of_charge`, summed by `cover_sum`) with the width given by `WidthOfCut`, which needs
+no gate of the region handed, so the certificate is read only for its regions.
 -/
 
 namespace Nci.Cover.SecurityProofs
@@ -77,16 +80,18 @@ theorem cutWidth_le_reads {C : Circuit} {J L : Type} [DecidableEq L] (M : MulBlo
   obtain ⟨haA, haX⟩ := Finset.mem_sdiff.1 (hπ a (List.mem_of_getLast? hlast))
   exact haX (Finset.mem_inter.2 ⟨Finset.mem_biUnion.2 ⟨g, hg, ha⟩, haA⟩)
 
-theorem CutWidthIntensity : Guarantees.CutWidthIntensity := by
-  intro C J L _ _ M A s k D D₀ f b hb hCH hW hU hk I hI
-  refine finished_le_of_charge M A (c := f) hb (Nat.cast_nonneg f) hCH hU hI fun j hj => ?_
-  obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hj
-  obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hp
-  exact_mod_cast WidthOfCut C M A s k D f b hb (updateHardness_of_conditional M A hCH) hW hk I hI p hpP hpI
+/-- `WidthOfCut` gives the width premise as `Assumptions` states it. -/
+theorem width_of_cutWidth {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
+    (A : J → Finset (Fin C.N)) {s k D f : ℕ} {b : ℝ} (hb : 0 < b) (hH : Assumptions.UpdateHardness M s b)
+    (hW : M.CutWidth A D f) (hk : (k : ℝ) < b * D) : Assumptions.Width M A s k f :=
+  fun I hI p hp hpI _ => WidthOfCut C M A s k D f b hb hH hW hk I hI p hp hpI
 
 theorem CutWidthCoverBound : Guarantees.CutWidthCoverBound := by
   intro C J L _ _ M A s k D D₀ f b 𝓘 hb hCH hW hU hk h𝓘 hcov
-  exact cover_sum M hcov (by positivity) fun I hI =>
-    CutWidthIntensity C M A s k D D₀ f b hb hCH hW hU hk I (h𝓘 I hI)
+  refine cover_sum M hcov (by positivity) fun I hI =>
+    finished_le_of_charge M A (c := f) hb (Nat.cast_nonneg f) hCH hU (h𝓘 I hI) fun j hj => ?_
+  obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hj
+  obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hp
+  exact_mod_cast WidthOfCut C M A s k D f b hb (updateHardness_of_conditional M A hCH) hW hk I (h𝓘 I hI) p hpP hpI
 
 end Nci.Cover.SecurityProofs

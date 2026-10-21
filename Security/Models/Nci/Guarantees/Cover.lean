@@ -17,8 +17,9 @@ steps, and nothing in it assumes its conclusion:
    times a baseline in which the counted products are a fraction `α₀` (`Slowdown`).
 
 Under stronger named premises the factor grows, each variant its own guarantee: `ConditionalUpdateHardness` gives
-`4 b #P ≤ #𝓘 (k² + 4 b k)` (`AdditiveCoverBound`), and with `Width f` as well, `4 b f #P ≤ #𝓘 (k² + 4 b f k)`
-(`WidthCoverBound`).
+`4 b #P ≤ #𝓘 (k² + 4 b k)` (`AdditiveCoverBound`), and with `Width f` on inference blocks as well,
+`4 b f #P ≤ #𝓘 (k² + 4 b f k)` (`WidthCoverBound`), which also holds with `Width` derived from the wiring
+(`Models.Nci.Guarantees.CoverWidth`).
 
 Kimi K2, at `k = 2·10⁷` bits, `s = 4.52·10¹⁶` gates, `α₀ = 0.147` and `b = 2.5`: the area factor `α₀ s b / k²` is about
 41, the additive one about 166, and the width one at `f = 4` about 660. The certificate holds with `D` about one layer's
@@ -120,25 +121,26 @@ def AdditiveCoverBound : Prop :=
     (∀ I ∈ 𝓘, C.InferenceBlock s k I) → C.Covers 𝓘 →
     4 * b * M.P.card ≤ 𝓘.card * (k * k + 4 * b * k)
 
-/-- **Intensity, width `f`**: under `ConditionalUpdateHardness`, `Width f` and the upstream certificate with `k < b D`,
-an inference block finishes at most `k² / (4 b f) + k` counted products: `4 b f · #(finished) ≤ k² + 4 b f k`.
+/-- **Intensity, width `f`**: under `ConditionalUpdateHardness`, `Width f` on inference blocks and the upstream
+certificate with `k < b D`, an inference block finishes at most `k² / (4 b f) + k` counted products:
+`4 b f · #(finished) ≤ k² + 4 b f k`.
 
 Each use of the products it computes whole now costs `f` gates of its region, so `f #J + b #L ≤ k`, and AM–GM gives
 `4 b f #J #L ≤ k²`. The rest are at most `k`, as in `Intensity`. -/
 def WidthIntensity : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D f : ℕ) (b : ℝ),
-    0 < b → Assumptions.ConditionalUpdateHardness M A s b → Assumptions.Width M A s f → M.Upstream A D →
+    0 < b → Assumptions.ConditionalUpdateHardness M A s b → Assumptions.Width M A s k f → M.Upstream A D →
     (k : ℝ) < b * D →
     ∀ I, C.InferenceBlock s k I → 4 * b * f * (M.finished I).card ≤ k * k + 4 * b * f * k
 
-/-- **Cover bound, width `f`**: under `ConditionalUpdateHardness`, `Width f` and the upstream certificate with
-`k < b D`, a cover of `C` by inference blocks has `4 b f · #P ≤ #𝓘 · (k² + 4 b f k)` (Kimi K2 at `f = 4`: about 660).
-`Width` is a named premise until it is derived from `f` disjoint paths into each activation. -/
+/-- **Cover bound, width `f`**: under `ConditionalUpdateHardness`, `Width f` on inference blocks and the upstream
+certificate with `k < b D`, a cover of `C` by inference blocks has `4 b f · #P ≤ #𝓘 · (k² + 4 b f k)` (Kimi K2 at
+`f = 4`: about 660). `CutWidthCoverBound` is this bound with `Width` derived from the activation's cut width. -/
 def WidthCoverBound : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D f : ℕ) (b : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
-    0 < b → Assumptions.ConditionalUpdateHardness M A s b → Assumptions.Width M A s f → M.Upstream A D →
+    0 < b → Assumptions.ConditionalUpdateHardness M A s b → Assumptions.Width M A s k f → M.Upstream A D →
     (k : ℝ) < b * D →
     (∀ I ∈ 𝓘, C.InferenceBlock s k I) → C.Covers 𝓘 →
     4 * b * f * M.P.card ≤ 𝓘.card * (k * k + 4 * b * f * k)

@@ -16,7 +16,7 @@ theorem WidthIntensity : Guarantees.WidthIntensity := by
   obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hp
   have hne := whole_use_entry M A hb (updateHardness_of_conditional M A hCH) hU hk hI p.1
     (Finset.mem_image_of_mem _ hp)
-  exact_mod_cast hW I hI.1.le p hpP hpI hne
+  exact_mod_cast hW I hI p hpP hpI hne
 
 theorem WidthCoverBound : Guarantees.WidthCoverBound := by
   intro C J L _ _ M A s k D f b 𝓘 hb hCH hW hU hk h𝓘 hcov

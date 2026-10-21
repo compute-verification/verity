@@ -3,9 +3,9 @@ import Definitions.Nci.Cover
 /-!
 # The cover theorem: the activation's cut width
 
-The structural premise that replaces the width assumption (`Assumptions.Width`): a statement about the wiring of the
-training circuit inside each activation region, checkable on a named circuit, that with `UpdateHardness` implies that a
-block computing a counted product whole is handed at least `f` gates of its activation region.
+The structural premise from which the width premise (`Assumptions.Width`) follows: a statement about the wiring of the
+training circuit inside each activation region, checkable on a named circuit, that with `UpdateHardness` implies that an
+inference block computing a counted product whole is handed at least `f` gates of its activation region.
 
 * `MulBlocks.CutWidth`: every set of fewer than `f` gates leaves, for each counted product, upstream products over at
   least `D` distinct updated parameters connected to the product's activation gates inside the region. A cut of the
@@ -33,13 +33,14 @@ every set `X` of fewer than `f` gates, some upstream products `U ⊆ Pall` over 
 lie in `A j \ X`, and the output gate of each reaches, inside `A j \ X`, an activation gate that a gate of `p` reads.
 
 At `X = ∅` it is the reach clause of the upstream certificate (`Upstream`), with each product free to reach its own
-activation gate. With `k < b D`, a block handed fewer than `f` gates of `A j` would compute all of `U` (`BackwardClosure`
-on `A j \ X`), which `UpdateHardness` prices above `k`.
+activation gate. With `k < b D`, a block handed fewer than `f` gates of `A j` would compute all of `U`
+(`BackwardClosure` on `A j \ X`), which `UpdateHardness` prices above `k`.
 
-It caps `f` at the number of activation gates a product reads, since `X` may be all of them: at FP4, `f ≤ 4` when the
-product's output reads all four bits of its activation, and `f ≤ 2` for an output that reads only two. It holds at
-`f = 4` when the four bits are free (paper argument, not in Lean, which has no gate semantics). Say no gate outside `A j`'s
-products reads a product's gates other than its output, nor, inside `A j`, its parameter. If, for every set `R` of
+It caps `f` at the number of activation gates a product reads, since `X` may be all of them: at FP4, `f ≤ 4`, reached
+only when each counted product's designated output `o p` reads all four bits of its activation (`p[j] ⊕ s` with
+`j ≥ 1`, XOR counted as a gate); any other designation reads at most three, so `f ≤ 3`. It holds at `f = 4` when the
+four bits are free (paper argument, not in Lean, which has no gate semantics). Say no gate outside `A j`'s products
+reads a product's gates other than its output, nor, inside `A j`, its parameter. If, for every set `R` of
 upstream products over fewer than `D + 3` parameters, fixing every value entering `A j` except the parameters of the
 products outside `R` still leaves the activation taking more than `8` of its `16` values, then no three gates `X` cut
 it. The gates inside `A j \ X` that reach the activation read only each other, `X`, and values entering `A j` from
@@ -51,13 +52,14 @@ def CutWidth [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) 
 
 /-- **Disjoint upstreams** `f` at depth `D`, for the activation regions `A`: each counted product `p` of use `j` has `f`
 pairwise disjoint sub-regions `B i ⊆ A j`, each with upstream products `U ⊆ Pall` over at least `D` distinct updated
-parameters, all of whose gates lie in `B i` and whose output gates reach, inside `B i`, one activation gate that a gate of
-`p` reads.
+parameters, all of whose gates lie in `B i` and whose output gates reach, inside `B i`, one activation gate that a gate
+of `p` reads.
 
-It is the upstream certificate (`Upstream`) `f` times over, in disjoint parts of the region, and implies `CutWidth`: fewer
-than `f` gates miss one of the parts. In a transformer the parts are groups of a layer's hidden units with their partial
-sums, each routed to its own bit of the activation along paths disjoint from the others; whether the routing exists
-through the final reduction, the normalization and the quantizer is a flow question on the circuit's last stages. -/
+It is the upstream certificate (`Upstream`) `f` times over, in disjoint parts of the region, and implies `CutWidth`:
+fewer than `f` gates miss one of the parts. In a transformer the parts are groups of a layer's hidden units with their
+partial sums, each routed to its own bit of the activation along paths disjoint from the others; whether the routing
+exists through the final reduction, the normalization and the quantizer is a flow question on the circuit's last
+stages. -/
 def DisjointUpstreams [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (D f : ℕ) : Prop :=
   ∀ p ∈ M.P, ∃ B : Fin f → Finset (Fin C.N), (∀ i i', i ≠ i' → Disjoint (B i) (B i')) ∧
     ∀ i, B i ⊆ A p.1 ∧ ∃ U ⊆ M.Pall, D ≤ (U.image Prod.snd).card ∧

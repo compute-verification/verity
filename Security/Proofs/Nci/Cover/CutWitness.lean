@@ -12,19 +12,19 @@ import Mathlib.Tactic.NormNum
 `cut_witness_width`: there every inference block of every size that computes the counted product whole is handed at
 least two gates of its activation region, and `cut_witness_tight` shows one handed exactly two.
 
-Two limits. `width_unbounded_fails`: on the same circuit `Width` as `Assumptions` states it fails at `s = 17`, since a
-block handed six bits outside `θ` computes half of the upstream and is handed one gate of the region; only blocks
-handed fewer than `b D` bits outside `θ`, what `WidthOfCut` covers, pay the width. `shared_upstream`: a circuit in which
-two activation gates the product reads are each reached, avoiding the other, from upstream products over `D`
-parameters (so two vertex-disjoint paths enter the activation, each from a gate with a deep upstream of its own), yet an
-inference block computing the product whole is handed one gate of the region: both bits are computed from one gate
-`h`, and the block is handed `h`. The cut width and disjoint upstreams fail there (`shared_upstream_not_cutWidth`), as
-`WidthOfCut` says they must.
+Two limits. `width_unbounded_fails`: on the same circuit `Width` fails at `s = 17` once the read cap reaches
+`k = 6 ≥ b D`, since a block handed six bits outside `θ` computes half of the upstream and is handed one gate of the
+region; only blocks handed fewer than `b D` bits outside `θ`, what `WidthOfCut` covers, pay the width.
+`shared_upstream`: a circuit in which two activation gates the product reads are each reached, avoiding the other, from
+upstream products over `D` parameters (so two vertex-disjoint paths enter the activation, each from a gate with a deep
+upstream of its own), yet an inference block computing the product whole is handed one gate of the region: both bits
+are computed from one gate `h`, and the block is handed `h`. The cut width and disjoint upstreams fail there
+(`shared_upstream_not_cutWidth`), as `WidthOfCut` says they must.
 
 The circuit (`CutWitness.tC`, 27 gates, `θ = {0}`): gate 0 is the registered token and gates 1–9 the updated
 parameters' bits; the upstream products `(0, l)`, `l = 1, …, 8`, are gates `9 + l`, each the token times parameter `l`;
-gates 18–21 add them in pairs and 22, 23 add those in pairs, two partial sums of four products each; the activation gates
-24 and 25 each read both partial sums; the counted product `(1, 9)` is gate 26, reading both activation gates and
+gates 18–21 add them in pairs and 22, 23 add those in pairs, two partial sums of four products each; the activation
+gates 24 and 25 each read both partial sums; the counted product `(1, 9)` is gate 26, reading both activation gates and
 parameter 9. Use 1's region is gates 10–25. The two disjoint upstreams are the two halves, each partial sum's tree with
 one activation gate, at depth `D = 4`: a block handed one gate of the region leaves one half whole behind it.
 -/
@@ -228,10 +228,11 @@ theorem cut_witness_tight :
   omega
 
 open CutWitness in
-/-- **`Width` for unbounded blocks fails on the witness**: at `s = 17`, the block `CutWitness.tS`, handed gate 22 of the
-region and six bits outside `θ` in all, computes the counted product whole while handed one gate of the region. What
-the wiring gives is the width of blocks handed fewer than `b D` bits outside `θ` (`cut_witness_width`), not `Width`. -/
-theorem width_unbounded_fails : ¬ Assumptions.Width tM tA 17 2 := by
+/-- **`Width` for blocks handed `b D` bits or more fails on the witness**: at `s = 17` and read cap `k = 6`, the block
+`CutWitness.tS`, handed gate 22 of the region and six bits outside `θ` in all, computes the counted product whole while
+handed one gate of the region. What the wiring gives is the width of blocks handed fewer than `b D = 4` bits outside
+`θ` (`cut_witness_width`), and so `Width` at those read caps only. -/
+theorem width_unbounded_fails : ¬ Assumptions.Width tM tA 17 6 2 := by
   intro hW
   have h := hW tS (by decide) (1, 9) (by decide) (by decide) (by decide)
   have h1 : (tC.inputs tS ∩ tA (1, 9).1).card = 1 := by decide

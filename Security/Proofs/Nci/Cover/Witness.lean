@@ -19,9 +19,8 @@ and parameter 5. The activation region of use 1 is gates 6–12. Every product r
 outside `θ` and the region, so `ConditionalUpdateHardness` holds at every block size with `b = 1`
 (`conditionalUpdateHardness_of_feeds`);
 the certificate holds at depth `D = 4`, so `k = 3 < b D`; and seven blocks of `s = 4` gates, each handed at most three
-bits outside `θ`, cover the circuit. The one set of at most four gates that computes gate 13 is gates
-5, 11, 12 and 13, handed both activation gates, so `Width` holds at `f = 2` (at `f = 1` it is implied by its own
-hypothesis).
+bits outside `θ`, cover the circuit. The one inference block of four gates that computes gate 13 is gates 5, 11, 12
+and 13, handed both activation gates, so `Width` holds at `f = 2` (at `f = 1` it is implied by its own hypothesis).
 -/
 
 namespace Nci.Cover.SecurityProofs
@@ -141,8 +140,8 @@ theorem wM_conditional (s : ℕ) : Assumptions.ConditionalUpdateHardness wM wA s
   refine conditionalUpdateHardness_of_feeds wM wA wF s (by decide) (by decide) (by decide) fun p hp => ?_
   rw [hcard p hp, Nat.cast_one]
 
-theorem wM_width : Assumptions.Width wM wA 4 2 := by
-  intro S hs p hp hpS _
+theorem wM_width : Assumptions.Width wM wA 4 3 2 := by
+  intro S ⟨hs, _⟩ p hp hpS _
   obtain rfl : p = (1, 5) := Finset.mem_singleton.1 hp
   have h13 : (13 : Fin 14) ∈ wC.computed S := hpS (by decide)
   have hsub : ({5, 11, 12, 13} : Finset (Fin 14)) ⊆ S := by
@@ -154,7 +153,7 @@ theorem wM_width : Assumptions.Width wM wA 4 2 := by
     · exact hpred (by decide)
     · exact hpred (by decide)
     · exact (Finset.mem_sdiff.1 h13).1
-  obtain rfl := Finset.eq_of_subset_of_card_le hsub (hs.trans (by decide))
+  obtain rfl := Finset.eq_of_subset_of_card_le hsub (hs.le.trans (by decide))
   decide
 
 theorem wM_upstream : wM.Upstream wA 4 where
@@ -205,7 +204,7 @@ at `f = 2` and the upstream certificate with `k < b D`, and has a cover by infer
 theorem witness_variants :
     ∃ (C : Circuit) (M : MulBlocks C ℕ ℕ) (A : ℕ → Finset (Fin C.N)) (s k D f : ℕ) (b : ℝ)
       (𝓘 : Finset (Finset (Fin C.N))),
-      M.P.Nonempty ∧ 0 < b ∧ 2 ≤ f ∧ Assumptions.ConditionalUpdateHardness M A s b ∧ Assumptions.Width M A s f ∧
+      M.P.Nonempty ∧ 0 < b ∧ 2 ≤ f ∧ Assumptions.ConditionalUpdateHardness M A s b ∧ Assumptions.Width M A s k f ∧
       M.Upstream A D ∧ (k : ℝ) < b * D ∧ (∀ I ∈ 𝓘, C.InferenceBlock s k I) ∧ C.Covers 𝓘 :=
   ⟨wC, wM, wA, 4, 3, 4, 2, 1, wI, wM_P_nonempty, one_pos, le_rfl, wM_conditional 4, wM_width, wM_upstream,
     by norm_num, wI_blocks, wI_covers⟩
