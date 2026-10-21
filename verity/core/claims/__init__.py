@@ -296,7 +296,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "twin headline on DC-90-ri (Sm90MeasuredI3Headline) takes it at q = q_T = ¾, beside the proved ½ floor "
           "(Sm90MeasuredHeadline), not in its place: ClassPSlots counts a slot a word but takes a writer's slot as "
           "writing nothing else, which a 64-bit head writing two words a lane (IMAD.WIDE, DFMA) breaks. Cite it with "
-          "its premise: DC-90-ri 0.805% under (I3) at ¾; 1.53% at the proved ½ floor",
+          "its premise: DC-90-ri 0.807% under (I3) at ¾; 1.133% at the proved ½ floor",
           "SCALAR-ROUTE", "conjectured"),
     Entry("accounting-ts-side-units", "assumption",
           "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),

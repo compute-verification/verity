@@ -109,7 +109,7 @@ def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
     proved ½ floor beside it."""
     scalar = get("accounting-ts-scalar-route").name
     assert all(s in scalar for s in ("Sm90MeasuredI3Headline", "Sm90MeasuredHeadline", "q = q_T = ¾", "9/8",
-                                     "DC-90-ri 0.805% under (I3) at ¾; 1.53% at the proved ½ floor"))
+                                     "DC-90-ri 0.807% under (I3) at ¾; 1.133% at the proved ½ floor"))
 
 
 def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
