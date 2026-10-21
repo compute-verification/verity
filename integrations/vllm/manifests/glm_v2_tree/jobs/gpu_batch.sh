@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The v2 rows' GPU work on an 8x H200 node, submitted from a VM at a pushed commit of this tree (README "GPU batch"): window B
-# from the rows' tree (`$SW/<row>.tree`; a worktree at it once the branch has moved).  Each job waits for its GPUs on the node
+# from the rows' tree (`$SW/<row>.tree`) or a head tree_guard.sh accepts for it (pins, the runbook and its COMMIT_FIXES since;
+# else a worktree at the row's tree).  Each job waits for its GPUs on the node
 # (gpu-lease, first come first served, never preempting), so the jobs of a window run back to back, in the rows' value order
 # (B1 greedy, B8 greedy, B8 stochastic, B32) whatever order ROWS.env lists them in, so that a short window lands the most.
 # NODE is any vy-glm53-* GPU node (vy-glm53-eu, the default; vy-glm53-h8, preemptible; a RunPod node registered as vy-glm53-rp1).

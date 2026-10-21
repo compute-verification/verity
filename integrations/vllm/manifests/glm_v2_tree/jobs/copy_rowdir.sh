@@ -4,7 +4,8 @@
 # checked against the list on the destination.  /workspace/fs is not shared between vy-glm53-eu and the CPU nodes.
 # A row's `<row>.tree` is not copied as a file: the Build of record and the Match GPU legs are each their node's first job, so the
 # two nodes' trees may differ.  The destination ends with the older of the two, which must be one tree or the other's ancestor
-# changing only pins and this runbook (tree_guard.sh's PINS_ONLY); otherwise nothing is copied (exit 2).
+# changing only pins, this runbook and its named Commit-only fixes (tree_guard.sh's PINS_ONLY and COMMIT_FIXES); otherwise nothing
+# is copied (exit 2).
 #   bash integrations/vllm/manifests/glm_v2_tree/jobs/copy_rowdir.sh SRC_NODE DST_NODE LIST.sha256 [SW]
 # env: [STREAMS=8], [RESEARCH="uv run --frozen --no-sync research"].
 set -euo pipefail
@@ -13,9 +14,10 @@ read -r -a R <<<"${RESEARCH:-uv run --frozen --no-sync research}"
 N=${STREAMS:-8} TREE=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-pins_only() {  # pins_only OLD NEW: NEW descends from OLD and changes only pins and this runbook since
+pins_only() {  # pins_only OLD NEW: NEW descends from OLD and changes only pins, this runbook and COMMIT_FIXES since
   git -C "$TREE" merge-base --is-ancestor "$1" "$2" 2>/dev/null &&
-    [ -z "$(git -C "$TREE" diff --name-only "$1" "$2" | grep -vE "$PINS_ONLY" || true)" ]
+    [ -z "$(git -C "$TREE" diff --name-only "$1" "$2" | { grep -vE "$PINS_ONLY" || true; } |
+      while read -r p; do commit_fix "$1" "$2" "$p" || echo "$p"; done)" ]
 }
 awk 'substr($0, 67) !~ /\.tree$/' "$LIST" >"$T/list"
 : >"$T/trees"
@@ -28,11 +30,11 @@ for t in $(cut -c67- "$LIST" | grep -E '\.tree$' || true); do
       git -C "$TREE" cat-file -e "$x^{commit}" 2>/dev/null || git -C "$TREE" fetch -q origin "${s%@*}" || true
     done
     if [ "${d%@*}" = "${s%@*}" ] && pins_only "${d##*@}" "${s##*@}"; then
-      echo "$t: $DST keeps $d ($SRC's $s changes only pins and this runbook since)"; continue
+      echo "$t: $DST keeps $d ($SRC's $s changes only pins, this runbook and COMMIT_FIXES since)"; continue
     fi
     [ "${d%@*}" = "${s%@*}" ] && pins_only "${s##*@}" "${d##*@}" ||
       { echo "$t: $DST is at $d and $SRC at $s, neither the other's pins-only descendant: a row's jobs run at one tree"; exit 2; }
-    echo "$t: $SRC's $s replaces $DST's $d (which changes only pins and this runbook since)"
+    echo "$t: $SRC's $s replaces $DST's $d (which changes only pins, this runbook and COMMIT_FIXES since)"
   fi
   echo "$t $s" >>"$T/trees"
 done
