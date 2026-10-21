@@ -10,7 +10,6 @@ worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`
 
 * `failingOn_eq_empty_iff`: no constraint fails on the pads exactly where each vanishes there (`linAt`).
 * `rowsOf_castAdd`: the first seven of rep `r`'s rows read no triple input `(ρ, σ)`.
-* `hab_onVals`: a `--zk` table's exposed pads end where the layout's `h_ab` sits.
 * **`rowsAt_of_rows`**: where the first seven rows vanish at a worker's clear values at zero pads, for both reps, at the
   mask slot `u` and the extra lanes `R`, its rows hold there at every pad: the residual at every draw through `(u, R)`
   is the rows' batch at the clear values (`resid_padFree`), and the triple's rows vanish at zero pads (`triple_zero`).
@@ -62,7 +61,10 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
   have key : ∀ k : Fin 7, (rowsOf Tz st c r v sh T' (0, 0) (Fin.castAdd 3 k)).eval 0 =
       fOf (Flock.Firewall.Finish.linAt cons[k.val]!.2 (arrOf (padsAt hs hp))) := fun k => by
     have hk : k.val < cons.size := by omega
-    have hl := hlen _ (by rw [getElem!_pos cons k.val hk]; exact Array.getElem_mem hk)
+    have hmem : cons[k.val]! ∈ cons := by
+      rw [getElem!_pos cons k.val hk]
+      exact Array.getElem_mem hk
+    have hl := hlen cons[k.val]! hmem
     rw [Flock.Firewall.Finish.linAt_eq, ← linVal_eq_evalL _ _ hl, ← ofZk_eval hs, hform k,
       rowsOf_castAdd Tz st c r v' sh T' (0, 0)
         (innerEps Tz st c r * hp (ix nE (layOf Tz st).fa) + hp (ix nE (layOf Tz st).tx),
@@ -72,7 +74,10 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
   constructor
   · intro hf k
     have hk : k.val < cons.size := by omega
-    rw [key k, hf _ (by rw [getElem!_pos cons k.val hk]; exact Array.getElem_mem hk), fOf_zero]
+    have hmem : cons[k.val]! ∈ cons := by
+      rw [getElem!_pos cons k.val hk]
+      exact Array.getElem_mem hk
+    rw [key k, hf cons[k.val]! hmem, fOf_zero]
   · intro hr q hq
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hq
     have e := key ⟨i, by omega⟩
@@ -80,13 +85,6 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
     exact fOf_injective (e.symm.trans fOf_zero.symm)
 
 variable (P : LigProver) {mPts : ℕ}
-
-/-- A `--zk` table's exposed pads end where the layout's `h_ab` sits. -/
-theorem hab_onVals (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) :
-    (layOf Tz st).hab = ((coinedOf P Tz st).T c).tab.onVals.nE := by
-  show _ = padLenOf _ _ - 4
-  simp only [padLenOf, layOf, Zk.PadLayout.len, Zk.PadLayout.tw]
-  omega
 
 /-- **A worker's rows hold where they vanish at its clear values**: where the first seven of each rep's rows vanish on
 the worker's clear values at the mask slot `u` and the extra lanes `R`, at zero pads, the rows hold at `(u, R)` at every
@@ -104,7 +102,7 @@ theorem rowsAt_of_rows (Tz : TabZK 𝔽 mPts) (st : Stmt) :
   refine sub_eq_zero.mp (e.trans (Finset.sum_eq_zero fun k _ => ?_))
   refine Fin.addCases (fun k => ?_) (fun k => ?_) k
   · rw [h r k, mul_zero]
-  · rw [rowsOf, Fin.append_right]
+  · simp only [rowsOf, Fin.append_right]
     exact (congrArg (_ * ·) (triple_zero _ _ k)).trans (mul_zero _)
 
 end FlockSoundness.Discharge.Composed
