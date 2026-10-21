@@ -23,7 +23,9 @@
 // block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them,
 // H1C_MK = 1 a leaf's M_key y from M_key's columns, a block's stage of them in shared memory, not 192 byte-table rows, and
 // H1C_MID = 1 (with H1C_MK) a leaf's x, c, h and frame hashes from the block's snapshots of their messages' constant
-// heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block.
+// heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block, and H1C_LVB = 1
+// (with H1C_MK) levels 0 to 6 in the leaves' launch, each block the subtree over its 128 leaves after them, so only
+// the levels from 7 up are launches of their own.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -42,8 +44,12 @@
 #ifndef H1C_MID
 #define H1C_MID 0
 #endif
+#ifndef H1C_LVB
+#define H1C_LVB 0
+#endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
+static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -927,6 +933,12 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
   hb_final(s, out);
 }
 
+__device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx);
+
+// H1C_LVB: the levels a leaves block's 128 leaves complete
+constexpr int LVB = 7;
+static_assert(HT == 1 << LVB, "a leaves block is a subtree of LVB levels");
+
 extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
                                                            const int* __restrict__ step, const u64* __restrict__ btab) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
@@ -956,10 +968,14 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
       leaf_out(T, i, b, x, y, mk, out, snp);
     }
   }
-  if (i >= width || (i < T.count && !T.data)) return;
-  if (i >= T.count) {
+  const bool mine = i < width && (i >= T.count || T.data);
+#if !H1C_LVB
+  if (!mine) return;
+#endif
+  if (mine && i >= T.count) {
 #else
   if (i >= width) return;
+  constexpr bool mine = true;
   if (i >= T.count) {
 #endif
     Hb s;
@@ -995,11 +1011,23 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restr
     leaf_out(T, i, b, x, y, mk, out);
 #endif
   }
+  if (mine) {
 #pragma unroll
-  for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
-  if (width == 1)
+    for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
+    if (width == 1)
 #pragma unroll
-    for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+      for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+  }
+#if H1C_LVB
+  // a table's given leaves are in level 0 before this launch; the barrier publishes the block's own
+  __syncthreads();
+  const int top = min(T.depth, LVB);
+  for (int lv = 0; lv < top; ++lv) {
+    const long long n = HT >> (lv + 1), idx = (long long)blockIdx.x * n + threadIdx.x;
+    if (threadIdx.x < n && idx < (width >> (lv + 1))) hb_node(T, b, lv, idx);
+    __syncthreads();
+  }
+#endif
 }
 
 __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx) {
@@ -1828,8 +1856,13 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
   if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
 #endif
   h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
-  const int lvf = H1C_LVF < 0 ? max_depth : min(H1C_LVF, max_depth);
-  for (int lv = 0; lv < lvf; ++lv) {
+#if H1C_LVB
+  const int lv0 = min(LVB, max_depth);
+#else
+  const int lv0 = 0;
+#endif
+  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+  for (int lv = lv0; lv < lvf; ++lv) {
     const long long nodes = max_width >> (lv + 1);
     h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
   }
