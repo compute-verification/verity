@@ -271,6 +271,15 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
   · rw [hb] at hn
     cases hn
 
+/-- `Tie.commit` from its cases: `decide` finds no `Decidable` instance for its five premises within the default
+`synthInstance.maxSize`, and finds one for three premises and a disjunction. -/
+theorem tie_commit {ι : Type} {L : Layout} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls}
+    (h : ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin → cls i ≠ .receipt →
+      cls i = .check ∨ cls i = .pub ∨ Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i))) :
+    ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin → cls i ≠ .receipt → cls i ≠ .check → cls i ≠ .pub →
+      Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i)) :=
+  fun i hi h1 h2 h3 h4 h5 => ((h i hi h1 h2 h3).resolve_left h4).resolve_left h5
+
 /-! ## A tied circuit with gates -/
 
 /-- One step of one linear call, one 4 × 8 unit. -/
@@ -329,7 +338,7 @@ theorem witTie : Tie witLayout .beside witCircuit witCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => trivial
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -387,7 +396,7 @@ theorem witTieCall : Tie witLayout .perCall witCircuitCall witClsCall where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨2, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -660,7 +669,7 @@ theorem witTieZ : Tie witLayout .zTree witZ witZCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -840,7 +849,7 @@ theorem witTieP : Tie witLayout .perCall witP witPCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨103, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1056,7 +1065,7 @@ theorem witTieTwice2 : Tie witLayout2 .zTree witTwice witTwiceCls where
       with rfl | rfl
     · exact ⟨68, by decide +kernel, by decide +kernel, by decide +kernel⟩
     · exact ⟨104, by decide +kernel, by decide +kernel, by decide +kernel⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := by unfold Declared.Reads; decide +kernel
@@ -1122,7 +1131,7 @@ theorem witTieWS : Tie witLayout .zTree witWS witZCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1188,7 +1197,7 @@ theorem witTieRaw : Tie witLayout .zTree witRaw witRawCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1228,6 +1237,12 @@ theorem witRaw_notCreditTie : ¬ CreditTie witLayout .zTree witDq witRaw witRawC
 /-- The honest check over `[z_rec, Σ, y_rec, dq, A_1]`: `1` exactly when the record's `z` is the unit's dot and its `y`
 the unit's `dq` of it (`PouwH1TileZy_v1`'s `ok`). -/
 def witOk (v : List ℤ) : ℤ := if v.getD 0 0 = v.getD 1 0 ∧ v.getD 2 0 = v.getD 3 0 then 1 else 0
+
+theorem witOk_eq {z s y d a : ℤ} (h : witOk [z, s, y, d, a] = 1) : z = s ∧ y = d := by
+  unfold witOk at h
+  split at h
+  · assumption
+  · exact absurd h (by decide)
 
 /-- A constant check, `1` on every record. -/
 def witOkConst (_ : List ℤ) : ℤ := 1
@@ -1315,7 +1330,7 @@ theorem witTieC : Tie witLayout .zTree (witC witOk) witCCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1433,10 +1448,7 @@ theorem witC_ok (x : ℕ → ℤ) (h : Accounting.Gates.val (witC witOk).dag x 7
   change witOk [Accounting.Gates.val (witC witOk).dag x 69, Accounting.Gates.val (witC witOk).dag x 71,
     Accounting.Gates.val (witC witOk).dag x 70, Accounting.Gates.val (witC witOk).dag x 72,
     Accounting.Gates.val (witC witOk).dag x 1] = 1 at h
-  unfold witOk at h
-  split at h
-  · assumption
-  · exact absurd h (by decide)
+  exact witOk_eq h
 
 /-- `witC witOk`'s one `outZ` word is its record's `z`, and its one check word gate 73. -/
 theorem witC_outZ : ∀ z, z < (witC witOk).dag.length → witCCls z = .outZ → z = 69 := by
@@ -1489,7 +1501,7 @@ theorem witC_slot {i s : ℕ} {g : Accounting.Gates.Gate ℕ} {b : Accounting.Ga
   have hs : ((witC witOk).dag[i]?).bind (fun g => slotOf g.op) = some s := by
     rw [hg]
     show slotOf g.op = some s
-    rw [hop] <;> rfl
+    rw [hop]; rfl
   rcases witC_slots i hi with h | h <;> rw [hs] at h
   · cases h
   · exact Option.some.inj h
@@ -1517,7 +1529,7 @@ theorem witCFix_ne (x : ℕ → ℤ) {s : ℕ} (h1 : s ≠ 69) (h2 : s ≠ 70) :
 theorem witCFix_typed (x : ℕ → ℤ) (hx : Accounting.Gates.Typed (witC witOk).dag x) :
     Accounting.Gates.Typed (witC witOk).dag (witCFix x) := by
   intro g hg b s hop
-  have hsl : slotOf g.op = some s := by rw [hop] <;> rfl
+  have hsl : slotOf g.op = some s := by rw [hop]; rfl
   obtain ⟨h69, h70⟩ := witC_bounds g hg
   by_cases e69 : s = 69
   · subst e69
@@ -1648,7 +1660,7 @@ theorem witTieCConst : Tie witLayout .zTree (witC witOkConst) witCCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1685,7 +1697,7 @@ theorem witTieCHatch : Tie witLayout .zTree (witC witOkHatch) witCCls where
   noised := by decide +kernel
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := fun _ _ _ _ _ _ => rfl
@@ -1820,7 +1832,7 @@ theorem witTieRing : Tie witLayout8 .zTree witRing witRingCls where
   forms := by decide +kernel
   linked := fun i hi hr =>
     ⟨i - 1, (witRing_links i hi hr).1, Or.inl (witRing_links i hi hr).2.1, (witRing_links i hi hr).2.2⟩
-  commit := by decide +kernel
+  commit := tie_commit (by decide +kernel)
   receipt := by decide +kernel
   checked := by decide +kernel
   readers := by unfold Declared.Reads; decide +kernel
