@@ -29,7 +29,12 @@ probability at most `δs + δ`.
 
 Under a sampled draw `ServedChecksHold` holds only for a relation that reads the drawn units alone, so there this
 bounds the drawn units' unsoundness; the bound on every unit (ε at δ) is the sampled-proofs statement's, not this
-one's. Under full checking (`kd = n`) the relation may read every unit. -/
+one's. Under full checking (`kd = n`) the relation may read every unit.
+
+Every served path today verifies with plain `flock-verify --zk` and binds its served values through the public file
+(served_zk's Lean checks, `served_commit`'s verdict, `h1_prove`); of the audit's runners only `one_stage/a0.py` passes
+`--registered`. So no served path meets `AcceptedLive` until the served trees are registered as ports of `own`
+(`RowsSession.ServedRegistered`), or a bridge for public-file binding is stated. -/
 def SessionSoundAt : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V)
     (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
