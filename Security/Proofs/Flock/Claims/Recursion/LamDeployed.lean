@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Proofs.Flock.Claims.KS.PlainCapsDep
+import Proofs.Flock.Soundness.Refine.Seam
 import Definitions.Claims.RecursionLin
 
 /-!
@@ -12,7 +14,8 @@ record `bdDeployed`, over the bound record's inner Flock (`Bound.deploy`, the de
 **`lamLin2_deployed_ge`**: `λ₂(x) ≥ 100` at every statement `x` whose inner statement is in the plain scope
 (`FlockDeploy.PlainIn`: up to `200` tables, each at an `m` the plain verifier serves and of a planned shape) and each of
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
-(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions. Each of `λ₂`'s
+(`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions; the deployed
+caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at them with no width premise. Each of `λ₂`'s
 six terms is at least `103 > 100 + log₂ 6`, from bounds that are exact rational and real inequalities:
 
 * the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
@@ -376,5 +379,83 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     exact numsOf_γ_le hp
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
     exact numsOf_k_le hp
+
+/-! ## At the deployed caps -/
+
+/-- Every `fast100` schedule has at most `7` levels, each of codeword length at most `2^56`. -/
+theorem fast100_small {m : ℕ} {sch : FlockSoundness.Accounting.Schedule}
+    (h : FlockSoundness.Accounting.fast100 m = some sch) :
+    sch.levels.length ≤ 7 ∧ ∀ l ∈ sch.levels, l.logLen ≤ 56 := by
+  have hm : 22 ≤ m ∧ m ≤ 35 := by
+    by_contra hc
+    have : FlockSoundness.Accounting.fast100 m = none := by unfold FlockSoundness.Accounting.fast100; split <;> simp_all
+    simp [this] at h
+  obtain ⟨h1, h2⟩ := hm
+  have key : (decide (sch.levels.length ≤ 7) && sch.levels.all fun l => decide (l.logLen ≤ 56)) = true := by
+    interval_cases m <;> (simp only [FlockSoundness.Accounting.fast100, Option.some.injEq] at h; subst h; decide +kernel)
+  simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at key
+  exact key
+
+/-- The deployed plain record's schedule, where it has one, is a small `fast100` schedule. -/
+theorem depSetup_small {x : Msg} {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt}
+    {sch : _root_.Flock.Schedule} (hd : FlockDeploy.KS.depSetup x = some (spec, st, sch)) :
+    sch.levels.size ≤ 7 ∧ ∀ l ∈ (FlockSoundness.Refine.schedOf sch).levels, l.logLen ≤ 56 := by
+  obtain ⟨-, -, -, -, hF⟩ := FlockDeploy.KS.depSetup_some hd
+  have hA : FlockSoundness.Accounting.fast100 st.m = some (FlockSoundness.Refine.schedOf sch) := by
+    have e := FlockSoundness.Refine.fast100_schedOf st.m
+    rw [hF] at e
+    exact e.symm
+  obtain ⟨h7, hall⟩ := fast100_small hA
+  refine ⟨?_, hall⟩
+  simpa only [FlockSoundness.Refine.schedOf, List.length_map, Array.length_toList] using h7
+
+/-- **The deployed caps have at most `2^64` positions**: two reps, at most `7` levels, each of at most `2^56`
+positions. -/
+theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
+  have hL : FlockDeploy.KS.depL x ≤ 7 := by
+    unfold FlockDeploy.KS.depL
+    rcases hd : FlockDeploy.KS.depSetup x with _ | ⟨spec, st, sch⟩
+    · exact Nat.zero_le _
+    · show sch.levels.size - 1 ≤ 7
+      exact (Nat.sub_le _ _).trans (depSetup_small hd).1
+  have hg : ∀ ℓ, FlockDeploy.KS.depLogLen x ℓ ≤ 56 := by
+    intro ℓ
+    unfold FlockDeploy.KS.depLogLen
+    rcases hd : FlockDeploy.KS.depSetup x with _ | ⟨spec, st, sch⟩
+    · exact Nat.zero_le _
+    · show ((FlockSoundness.Refine.schedOf sch).levels.getD ℓ default).logLen ≤ 56
+      rw [List.getD_eq_getElem?_getD]
+      cases hl : (FlockSoundness.Refine.schedOf sch).levels[ℓ]? with
+      | none => exact Nat.zero_le _
+      | some l => exact (depSetup_small hd).2 l (List.mem_of_getElem? hl)
+  show Fintype.card (FlockDeploy.KS.DepIdx x) ≤ 2 ^ 64
+  rw [Fintype.card_sigma]
+  simp only [Fintype.card_sigma, Fintype.card_fin]
+  calc ∑ _r : Fin 2, ∑ ℓ : Fin (FlockDeploy.KS.depL x), 2 ^ FlockDeploy.KS.depLogLen x (ℓ.val + 1)
+      ≤ ∑ _r : Fin 2, ∑ _ℓ : Fin (FlockDeploy.KS.depL x), 2 ^ 56 :=
+        Finset.sum_le_sum fun _ _ => Finset.sum_le_sum fun ℓ _ => Nat.pow_le_pow_right (by norm_num) (hg _)
+    _ = 2 * (FlockDeploy.KS.depL x * 2 ^ 56) := by
+        rw [Finset.sum_const, Finset.sum_const, Finset.card_univ, Finset.card_univ, Fintype.card_fin, Fintype.card_fin,
+          smul_eq_mul, smul_eq_mul]
+    _ ≤ 2 * (7 * 2 ^ 56) := by gcongr
+    _ ≤ 2 ^ 64 := by norm_num
+
+/-- **Route 2C's bits are at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the caps
+`ksLin2_deployed_plain` proves `KSLin2` at, whose width bound is `CpDep_width_le`. -/
+theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
+    (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
+    {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
+    (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts')
+    (hn : nS x ≤ 2 ^ 16) :
+    100 ≤ Claims.Recursion.lamLin2
+      ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
+      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
+      FlockDeploy.KS.CpDep x :=
+  lamLin2_deployed_ge rel b L nextE colsE wE join rowIn final w decI FlockDeploy.KS.CpDep hin hO hn
+    (CpDep_width_le (xIOf x))
 
 end RecDeploy

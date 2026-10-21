@@ -70,8 +70,8 @@ eight items:
    (`RecDeploy.ksBoundRoute_cover`). That route's level (`lam`) is about 65 bits per SHA-512 call at the deployed
    shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor (ASK-73). **The recursion's
    security level** is route 2C's level (`KSLin2`, with the inner Flock's roots linear, `RecursionLin.lean`): its bits
-   `lamLin2` are at least 100 per SHA-512 call at the deployed records (`RecDeploy.lamLin2_deployed_ge`, at a statement
-   in the deployed range with at most `2^16` V* sessions and `2^64` inner cap positions), and `KSLin2` holds there from
+   `lamLin2` are at least 100 per SHA-512 call at the deployed records and caps (`RecDeploy.lamLin2_deployed_ge_dep`, at
+   a statement in the deployed range with at most `2^16` V* sessions), and `KSLin2` holds there from
    its named premises (`RecDeploy.ksLin2_deployed_plain`: `CanonicalProofFiles`, `PlainCallsBindOrSlack`, V*'s staging
    and parts premises and the readers'). `BitsLin2` is not yet derived from `KSLin2`.
 

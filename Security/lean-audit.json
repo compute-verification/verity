@@ -8808,6 +8808,9 @@
    "assumptions": [],
    "type_hash": "546ccd629ce2e7bcfaa89bc1e67ffc82ee88b8a66514d06777ea133da444b27f"
   },
+  "RecDeploy.lamLin2_deployed_ge_dep": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
@@ -9171,6 +9174,7 @@
    "FlockSoundness.table_sound": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.table_sound_fast100": "lemma: leaves the list under the 5:11 PM ruling",
    "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bits at the deployed records are at least 100, an inequality of reals at the deployed numbers, not a property of a Lean function",
+   "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bits at the deployed records and caps are at least 100, an inequality of reals at the deployed numbers, not a property of a Lean function",
    "FlockSoundness.table_sound_fast100_34_35": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockVBridge.chainAcc_level": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockVBridge.chainAcc_sum": "lemma: leaves the list under the 5:11 PM ruling",
