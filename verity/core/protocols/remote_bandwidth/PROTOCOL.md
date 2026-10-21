@@ -719,7 +719,8 @@ before it.)
 ## 6. Openings and the accept rule
 
 Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed, or, in a paced
-session (§7, "Pacing"), once it holds its \(k\) roots, past which it takes none: so the challenger's signed log, where
+session (§7, "Pacing"), once it holds its \(k\) roots, past which it takes none, and its boundary has left (so \(D_t\) is
+set): so the challenger's signed log, where
 the openings coin's request names the window's last root, fixes a paced window's end at that root. A window with
 fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger releases the window's openings coin
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it

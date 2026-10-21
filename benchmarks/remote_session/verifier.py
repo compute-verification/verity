@@ -1064,6 +1064,9 @@ class Verifier:
             if item is None:
                 if sent < W:
                     bound()
+                    while failure is None and K is not None and drawn < sent and len(session.windows[drawn].roots) >= K:
+                        close(drawn)
+                        drawn += 1
                 else:
                     close(drawn)
                     drawn += 1
@@ -1087,7 +1090,7 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
                     break
                 arrivals[t].append(stamp)
-                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K)):
+                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
                     close(drawn)
                     drawn += 1
             elif kind == "append":

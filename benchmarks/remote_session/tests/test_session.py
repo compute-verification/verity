@@ -739,9 +739,10 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
-    """A paced window takes at most k roots, so its k-th makes them final (`audit.Session.close`): each group's draws
-    go out as that root arrives, the last group's too, so the openings coin's request on the challenger's log names the
-    group's last root when it came, not one root or a deadline later."""
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
+    (`audit.Session.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
+    last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
+    not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
     assert r["accepted"]
     assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]

@@ -870,8 +870,9 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
 
 
 def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
-    """A paced window takes at most k roots, so its k-th makes them final: it is drawn then, with no wait for the next
-    window's first root or its deadline, and the openings coin's request names that root on the challenger's log."""
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left: it is drawn then,
+    with no wait for the next window's first root or its deadline, and the openings coin's request names that root on
+    the challenger's log."""
     clock = Clock()
     p = params(pace=audit.Pace(2))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
@@ -881,9 +882,13 @@ def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
         s.close(0)
     last = hashlib.sha512(b"window 0's last root").digest()
     assert s.receive(0, 1, last, step=1) is None
-    assert s.deadline(0) is None
+    with pytest.raises(SessionError, match="not final"):
+        s.close(0)
+    clock.now = 1000
+    s.boundary()
     assert isinstance(s.close(0), tuple)
     assert s.coins.afters(coins.OPENINGS) == (last,)
+    assert s.deadline(0) == 1000 + A
     assert s.receive(0, 2, bytes(64), step=2) == audit.Verdict(0, False, "order")
 
 

@@ -5,7 +5,7 @@ auditor's host signed rather than from the verifier's stamps.
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming that root (`auditor_seen`). Openings coin g's request
 names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
-k-th root, so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. Both
+k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. Both
 times are the challenger's monotonic clock in its release log, whose lines its close signs (`challenger.session_of`),
 and whose close, record and refused hellos the auditor's ledger sealed at the session's end (`remote.trusted_session`).
 So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed

@@ -1027,18 +1027,21 @@ def honest_paced(r: Run) -> None:
 
 
 def honest_paced_drawn_at_k(r: Run) -> None:
-    """A paced session (k = 2) drawn as each window's k-th root arrives: a draw after one root is refused, window 0
-    is drawn before window 1's first root, and the last window before its boundary is sent."""
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
+    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    window before its deadline."""
     r.start()
     r.run()
     r.close(0)
     r.run()
-    r.close(0)
-    r.verify(0)
+    r.close(0, at=r.clock.now + 1)
     r.boundary()
+    r.close(0, at=r.clock.now + 1)
+    r.verify(0)
     r.run()
     r.run(Plan(((1, 3), (0, 1)), r.store.extent))
-    r.close(1)
+    r.boundary()
+    r.close(1, at=r.clock.now + 1)
     r.verify(1)
 
 
