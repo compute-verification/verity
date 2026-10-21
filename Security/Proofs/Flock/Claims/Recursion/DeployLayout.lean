@@ -57,11 +57,6 @@ the earlier reps', at its `k`-th round that absorbs a message (`RecVStar.commitR
 def msgRound (rs : Array RecVStar.SchedRound) (r k : ℕ) : Option ℕ :=
   ((RecVStar.commitRounds rs)[k]?).map (r * rs.size + ·)
 
-/-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
-def partCircuit (p : PartX) : Option Circuit := do
-  let ins ← p.base.ins.toOption
-  (ProvedScope.circuitOf ins.read.tags p.base.circuit p.base.tables).toOption
-
 /-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf that
 reads the port's word `i / 16` (`leavesIn`), the ports' words in order. -/
 def portCol (c : Circuit) (u q i : ℕ) : Option ℕ := do

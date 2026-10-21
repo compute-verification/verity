@@ -84,6 +84,20 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
       ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
   | .error _ => false
 
+-- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
+-- the list passes it at fast100 shapes, dense and holo, and a list without the parts is refused at round 0.
+def roundsListed (i : Inner) : Bool :=
+  match statements i with
+  | .ok ss => (checkRoundsListed i ss).toBool
+  | .error e => !e.startsWith "V*'s list: a rep's message round"
+#guard [22, 27, 35].all fun m => roundsListed { inner with m }
+#guard [25, 27].all fun m => roundsListed { inner with m, holo := true }
+#guard (statements { inner with m := 27 }).toBool
+#guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
+  | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
+  | .ok () => false
+#guard roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 7 && !roundListed #[.sparse ⟨1, 6, 0, 0⟩ 7] 6
+
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 128) (reads : Array (Option Nat) := #[some 0]) :
     Registered.Port :=
   { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[7]⟩, reads }
