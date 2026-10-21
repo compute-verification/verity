@@ -108,7 +108,10 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
         case "index":
             calls[j]["index"] = rng.choice([j + 1, str(j), None, True if j == 1 else -1])
         case "row-form":
-            calls[j] = rng.choice([[1], "row", None, {**calls[j], "bound": 1.5}])
+            deep = 0
+            for _ in range(Cr.DEPTH):
+                deep = [deep]
+            calls[j] = rng.choice([[1], "row", None, {**calls[j], "bound": deep}])
         case "calls-form":
             d["calls"] = rng.choice([None, {"0": calls}, "x"])
         case "salt-form":
@@ -178,7 +181,7 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
         case "undrawn":
             proofs.insert(rng.randrange(len(proofs) + 1), {"unit": 64 + rng.randrange(8), "verdict": "accept"})
         case "drawn-form":
-            drawn = rng.choice([[], None, drawn + drawn[:1], drawn + [-1], drawn + [True], drawn + [1.5], {"0": 1}])
+            drawn = rng.choice([[], None, drawn + drawn[:1], drawn + [-1], drawn + [True], drawn + ["1"], {"0": 1}])
         case "proofs-form":
             proofs = rng.choice([None, "x", proofs + [5], proofs[:j] + [{**proofs[j], "verdict": "maybe"}] + proofs[j + 1:],
                                  proofs[:j] + [{**proofs[j], "why": "x"}] + proofs[j + 1:],
