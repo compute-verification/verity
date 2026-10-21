@@ -143,7 +143,13 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
 
 def _chained(c: T.Call, Le: int) -> bool:
     lo, hi = c.base, c.base + c.count * Le
-    return any(ln and at < hi and at + (c.count - 1) * sp + ln > lo for ln, at, sp in c.segs)
+    j = np.arange(c.count, dtype=np.int64)[:, None]
+    for ln, at, sp in c.segs:
+        if ln:
+            v = at + j * sp + np.arange(ln, dtype=np.int64)[None, :]
+            if ((v >= lo) & (v < hi)).any():
+                return True
+    return False
 
 
 def _bindings(defs, maps, size, kinds, urows) -> dict:
