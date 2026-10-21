@@ -50,7 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit import hiding, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -743,8 +743,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`)."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
+                 commit_scheme: str | None = None) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
+        `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
+        commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -814,6 +817,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
         self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
+        if commit_scheme not in (None, scheme.NAME):
+            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
+                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
+                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
+            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
+            self.name = f"{self.name}+{step_rows.NAME}"
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
@@ -1397,26 +1406,33 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (CMT-2 header), the
         same production fold, the same retention policy (`retain`), the same per-step state the worker leaves behind, so `open()`,
-        `release_staging()`, `verify()` and `finalize()` run unchanged on the result."""
+        `release_staging()`, `verify()` and `finalize()` run unchanged on the result.  Under rows-sha512, `step_rows`'s tree over the
+        block's rows, salted from a fresh step key (`row_keys`), as the windowed worker commits it."""
         chunk = self.chunk
         used = len(stream)
         padded = -(-used // chunk) * chunk
         buf = bytes(stream) + b"\0" * (padded - used)
-        layout = self._gpu_layout(step, padded // 4)
-        leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-        lv_bytes = scheme.fold_levels(leaves)
-        levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+        n = padded // chunk
+        if self.rows:
+            dom = self._row_domain(step, n)
+            lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
+        else:
+            layout = self._gpu_layout(step, padded // 4)
+            leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(n)]
+            lv_bytes = scheme.fold_levels(leaves)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0]
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
             keep = keep.cuda()
             levels = [lv.cuda() for lv in levels]
         for m in metas:
             m.stream_off = m.dev_off
-        mr = lv_bytes[-1][0]
-        n = len(leaves)
         nbytes = sum(m.nbytes for m in metas)
         layout_dig = self.layout_digest(metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        root = (step_rows if self.rows else scheme).step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
         self._gpu_levels[step] = levels
         self._gpu_blocks[step] = (keep, used)
         self._layouts[step] = metas
@@ -2341,15 +2357,13 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
     def _level_path(self, levels: list, index: int) -> tuple:
         """Leaf `index`'s sibling path in a GPU-tree step's levels."""
-        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index))
-
-    def _gpu_salt(self, step: int, index: int) -> bytes:
-        """The salt a GPU-tree step's opening carries (none under vllm-v1 chunk leaves)."""
-        return b""
+        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None and not self.rows else open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
         step root's membership in the run root."""
+        if self.rows:
+            return self._verify_rows(run, opening)
         try:
             sc = run.steps[opening.step]
         except IndexError:
@@ -2391,6 +2405,15 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if root != sc.root:
             return False
         return len(run.run_root) == 32 and self._run_root(run) == run.run_root
+
+    def _refuse_padding(self, padding: list) -> None:
+        if padding and self.rows:
+            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
+        super()._refuse_padding(padding)
+
+    def _leaf_record(self, steps: list) -> dict:
+        rec = super()._leaf_record(steps)
+        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
 
     # ------------------------------------------------------------------ coverage
 

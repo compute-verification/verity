@@ -20,6 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
+├── auto.py         --on auto: node 2's queue or cpu-1's research pool, whichever is sooner
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -256,10 +257,7 @@ launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
 `run.remote.source_transport`). A machine without git, or any failure of that
 path, prints one line and ships the archive stream as above; nothing is ever
-marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. Measured
-from a cloud VM to the control pod: first ship 30 s, a one-commit delta 1.9 s
-of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
-stream. The shipped tree is the runner's source root, not
+marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
@@ -272,16 +270,16 @@ records it (`run.remote.pythonpath`). `research env --source TREE` prints the
 same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
-`pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
+`pkill -f` aimed at the workload matches it too: it logs SIGTERM/SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
 (status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
 recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
-`scope_end`; so does a stage timeout (`telemetry.scope`). Never SIGKILL the runner: one killed during
-its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
-any launch refuses if an exclusive holder is live.
-Cancelling a run still in `disk-hold` or `cpu-hold` ends the hold; refused.json records fault `Withdrawn`
-(`research.withdraw`).
+`scope_end`; so does a stage timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
+cancel does. A run still in `disk-hold` or `cpu-hold` is withdrawn: its hold ends as a manual cancel and
+refused.json says `Withdrawn` (`withdraw.py`). Never SIGKILL the runner: one killed during
+its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses while any run is live, and
+any launch while an exclusive holder is.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
@@ -295,7 +293,8 @@ share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
 host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus
 what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
-`ramlock = DIR` overrides it), is at least N. A reservation is live unless its
+`ramlock = DIR` overrides it), is at least N. They count against the machine's
+outermost limited cgroup (a node's user slice), not the run's. A reservation is live unless its
 pid is gone or its run is terminal. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
@@ -431,7 +430,7 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
   the shipped source tree; a `git archive` has no `.git`, so the control side
-  sends the commit/tree it knew as `--source-identity`. The machine publishes
+  sends the commit it shipped (clean) as `--source-identity`. The machine publishes
   to its own `<root>/store`; `research data pull --from MACHINE RUN --project P`
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...

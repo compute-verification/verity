@@ -40,13 +40,14 @@ process that ended early stays live, refusing the node, until `--close NODE` clo
 the one in flight unended.
 
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
-`--verdict lean` or `both` (the default, `VERDICT`): it holds the registry and every session, and each registration,
-session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). `audit.Session`
-keeps the driver's books (its coins, its plans, the record the ledger reads), and an event, a window's verdict or a
-record on which the two differ refuses the session at that window as `disagreement`. Under `both` `audit.Session`
-checks every window's openings too, beside the Lean, and a window's two verdicts are set on the two sessions at once;
-under `lean` it checks none and takes the Lean's verdict. Under `python` there is no Lean process and `audit.Session`
-decides. `--close` closes a registration in both registries alike.
+`--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
+session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). An accepted
+session's record is the Lean's (`Pair.record`), and its ledger reads that record. `audit.Session` keeps the driver's
+books (its coins, its plans, when the next boundary leaves) and is the reference: an event, a window's verdict or a
+record field on which the two differ refuses the session at that window as `disagreement`. Under `lean` it checks no
+openings and takes the Lean's window verdicts; under `both` it checks every window's openings too, beside the Lean,
+and a window's two verdicts are set on the two sessions at once. Under `python` there is no Lean process and
+`audit.Session` decides. `--close` closes a registration in both registries alike.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -58,9 +59,9 @@ keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill):
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json] [--verdict both|lean|python] [--lean-exe PATH]
+                       [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict both|lean|python]
+    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
@@ -87,7 +88,7 @@ import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
 
-VERDICT = "both"
+VERDICT = "lean"
 """Who decides the verdicts (module docstring): `lean`, `both` or `python`."""
 VERDICTS = ("lean", "both", "python")
 CHECK_BATCH = 1024
@@ -501,7 +502,7 @@ class Pair:
 
     def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
-        self.node, self.disagreement = s.registration.node.hex(), None
+        self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
@@ -646,12 +647,13 @@ class Pair:
 
     def end(self, failure: dict | None) -> None:
         """The session ended with the driver's `failure` where neither verifier gives it one (a message it couldn't
-        read): set on both. And an accepted session's record held to the Lean's: one that differs is `disagreement`."""
+        read): set on both. And an accepted session's record, the Lean's (`record`), held to the books': one that
+        differs in any field is `disagreement`."""
         if self.lean is None:
             if failure is not None and self.s.outcome is None:
                 self._fail_books(failure)
             return
-        got = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
         if failure is not None:
             if self.s.outcome is None:
                 self._fail_books(failure)
@@ -662,6 +664,14 @@ class Pair:
                 else None}
         if got != mine and self.disagreement is None:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
+
+    def record(self) -> audit.Record:
+        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it), or under
+        `python` the books'."""
+        if self.lean is None:
+            return self.s.record()
+        return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
+                            self.s.params.delta)
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
@@ -765,8 +775,9 @@ class Verifier:
 
     def register(self) -> tuple[audit.Registration, dict]:
         """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError), or
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError). Both registries draw it
+        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError),
+        deferring residency under a lifetime of one window (`audit.Params`'s ValueError), or asking for receipts that
+        bind PoUW's tile outputs (`bind`, which the Lean covers none of: ValueError). Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         hello, _, _ = self.expect("hello")
@@ -778,16 +789,17 @@ class Verifier:
             raise
         node, blocks, root = bytes.fromhex(hello["node"]), hello["blocks"], bytes.fromhex(hello["payload_root"])
         c, receipt, rows = wire.codec_named(hello["codec"]), hello["receipt"], hello.get("rows")
+        bind = hello.get("bind", False)
         nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, rows=rows,
-                                                       nonce=nonce)
+            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, bind=bind,
+                                                       rows=rows, nonce=nonce)
             mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
         except (audit.RegistryError, ValueError) as e:
             mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
         if self.lean is not None:
             try:
-                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce))
+                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind))
             except (lv.LeanError, ValueError):
                 got = {"error": True}
             if got != mine:
@@ -1100,7 +1112,8 @@ class Verifier:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}
             out["end_ns"] = record.end_ns
-            out["ledger"] = self.ledgers(record, arrivals, [w.plans for w in session.windows])
+            out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
+                                         [w.plans for w in session.windows])
             if pace is not None:
                 rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
                 try:
@@ -1277,8 +1290,10 @@ def main() -> int:
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
     ap.add_argument("--verdict", default=VERDICT, choices=VERDICTS,
-                    help="who decides: the Lean verifier (lean), the Lean with audit.Session checking beside it and "
-                         "a mismatch refused as `disagreement` (both), or audit.Session alone (python)")
+                    help="who decides: the Lean verifier, the verifier of record, with audit.Session as the reference "
+                         "keeping the books (lean, the default), the same with audit.Session checking every window's "
+                         "openings beside it (both; under either a mismatch is refused as `disagreement`), or "
+                         "audit.Session alone (python)")
     ap.add_argument("--lean-exe", type=Path,
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",

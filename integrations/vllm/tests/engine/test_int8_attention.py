@@ -126,15 +126,15 @@ def test_the_products_are_exact_past_float32():
     _same(A.window_attention(q, k, v, ks, d ** -0.5), O.attention(q, k, v, ks, d ** -0.5))
 
 
-@pytest.mark.parametrize("m, k, n", [(1, 1, 128), (4, 8, 128), (20, 24, 128), (33, 120, 128), (17, 129, 5)])
-def test_the_products_hand_cublas_k_a_multiple_of_16(monkeypatch, m, k, n):
+@pytest.mark.parametrize("m, k, n", [(1, 1, 128), (4, 8, 128), (20, 24, 128), (33, 120, 128), (17, 129, 5), (4, 64, 33)])
+def test_the_products_hand_cublas_k_and_n_multiples_of_16(monkeypatch, m, k, n):
     gen = torch.Generator().manual_seed(m * k + n)
     a, b = (torch.randint(-127, 128, shape, generator=gen).float() for shape in ((m, k), (n, k)))
     shapes, real = [], A.E.int_mm
     monkeypatch.setattr(A.E, "int_mm", lambda x, w: shapes.append((x.shape, w.shape)) or real(x, w))
     assert torch.equal(A.int_mm(a, b).long(), a.long() @ b.long().T)
     ((xs, ws),) = shapes
-    assert xs[1] == ws[1] and xs[1] % 16 == 0 and xs[1] >= k and ws[0] % 8 == 0 and ws[0] >= n
+    assert xs[1] == ws[1] and xs[1] % 16 == 0 and xs[1] >= k and ws[0] % 16 == 0 and ws[0] >= n
 
 
 def _paged(windows, block_size: int, seed: int):

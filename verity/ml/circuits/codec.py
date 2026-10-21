@@ -382,6 +382,11 @@ def jcs_domain_error(v: Any, where: str = "$") -> str | None:
             if abs(x) > MAX_SAFE_INT:
                 return f"{at}: integer {x} exceeds 2^53 - 1 in magnitude"
         elif isinstance(x, (list, tuple)):
+            if set(map(type, x)) <= {int}:  # checked whole, as popping its items one by one would: the last one out of range first
+                if x and max(max(x), -min(x)) > MAX_SAFE_INT:
+                    i = max(i for i, y in enumerate(x) if abs(y) > MAX_SAFE_INT)
+                    return f"{at}[{i}]: integer {x[i]} exceeds 2^53 - 1 in magnitude"
+                continue
             stack.extend((y, f"{at}[{i}]") for i, y in enumerate(x))
         elif isinstance(x, dict):
             for k, y in x.items():

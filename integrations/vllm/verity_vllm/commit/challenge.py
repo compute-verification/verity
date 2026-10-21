@@ -67,10 +67,11 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
     """`k` committed leaves as (step, leaf within the step), uniform over all leaves with replacement.  Deterministic, so
     the harness and a verifier derive the same list from (root, layout sizes, k, salt) and, off legacy, the source.
 
-    Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total."""
+    Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total.  The root is vllm-v1's 32
+    bytes or a SHA-512 root's 64 (rows-sha512, the TP run root)."""
     _source(legacy, source)
-    if len(run_root) != 32:
-        raise ValueError("run root must be 32 bytes")
+    if len(run_root) not in (32, 64):
+        raise ValueError(f"a run root is 32 bytes (vllm-v1) or 64 (SHA-512), not {len(run_root)}")
     total = sum(leaves_per_step)
     if total == 0 or k <= 0:
         return []

@@ -57,7 +57,6 @@ SKILL_SIZE_CAP = 16 * 1024
 #: compacts it.
 OVERSIZE_SKILLS = {
     ".agents/skills/lean-proofs/SKILL.md": 29 * 1024,
-    ".agents/skills/using-slack/SKILL.md": 29 * 1024,
 }
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
