@@ -19,17 +19,17 @@ many rounds as its timeout allows and still closes; a session that fails is writ
 round's index), the client's check alone (`live_reason` replayed on every opening), the SHA-512 over the round roots in
 order, and every sample (ns); beside it `percall-wait-ns.txt`, one sample a line, which sbench's dither-1s-percall-rtt
 arm replays, and `percall-coins.json`, the openings the client received (`COINS`, about 1.9 kB a round).  `check` is the
-auditor's side, from the session as the gate publishes it (``ssh GATE fetch SESSION``) and
-the gate's ledger (``ssh GATE ledger``): the record verifies under the challenger's key record (``--key-record``, else
-key.json's own key, said so; no key is pinned in code; `remote.trusted_session`); the published session and its ledger
-entries are the client's session, its open binding its reserve, on its stand-in root (`coins.gate_reasons`), in the
-verifier's period when it names one; the challenger's log holds this client's commitment, its salt after that root and
-its round roots in order; and served_h1's `coins.check` passes on the openings the client received (`coins_check`).  It
-adds the challenger's own per-round times from that log (its monotonic clock).
+auditor's side, from the session as the gate publishes it (``ssh GATE fetch SESSION``) and every head of the auditor's
+ledger it holds (``ssh GATE ledger``, one ``--ledger`` each): core's check of both takes the session the ledger opens on
+the client's stand-in root, under the challenger's key record (``--key-record``, else key.json's own key, said so; no
+key is pinned in code; `coins.audited_window`, `remote.trusted_session`); it is the client's session, opened for its
+layout, in the verifier's period when it names one (`coins.window_reasons`); the challenger's log holds this client's
+commitment, its salt after that root and its round roots in order; and served_h1's `coins.check` passes on the openings
+the client received (`coins_check`).  It adds the challenger's own per-round times from that log (its monotonic clock).
 
     python3 percall_rtt.py run --challenger 127.0.0.1:PORT --session ID --secret-file F --commitment HEX --rounds 32768 \\
         --max-s 1800 --out out/percall-rtt.json
-    python3 percall_rtt.py check --challenger-out SESSION_DIR --ledger LEDGER \\
+    python3 percall_rtt.py check --challenger-out SESSION_DIR --ledger LEDGER [--ledger LEDGER ...] \\
         --client ~/.research/runs/CLIENT/out/percall-rtt.json --key-record KEY_RECORD [--period P]
 """
 from __future__ import annotations
@@ -157,7 +157,7 @@ def coins_check(a: argparse.Namespace, stand_in: bytes) -> dict:
 
 
 def check(a: argparse.Namespace) -> int:
-    (d, _, _), client = CO.published(a.challenger_out), json.loads(Path(a.client).read_text())
+    d, client = CO.published(a.challenger_out), json.loads(Path(a.client).read_text())
     theirs = CO.Ch.ChallengerKey.from_json(json.loads((d / CO.R.KEY).read_text()))
     key = CO.key_record(a.key_record) if a.key_record else theirs
     host = CO.Ch.ChallengerRecord.from_json(json.loads((d / CO.R.RECORD).read_text())).host
@@ -168,9 +168,13 @@ def check(a: argparse.Namespace) -> int:
     if reasons["key"] is not None:
         print(json.dumps({"ok": False, "host": host, "reasons": reasons}, indent=1), flush=True)
         return 1
-    commitment, roots = CO.R.trusted_session(d, key, CO.lms_verify)
-    gate, ledger = CO.gate_reasons(a.challenger_out, a.ledger, sid, root, commitment, a.period)
-    reasons.update(gate)
+    try:
+        commitment, roots, audited, entries = CO.audited_window(d, a.ledger, root, key)
+    except CO.Ch.CoinError as e:
+        print(json.dumps({"ok": False, "host": host, "reasons": {**reasons, "ledger": str(e)}}, indent=1), flush=True)
+        return 1
+    reasons.update(CO.window_reasons(audited, entries, commitment, sid, {"root": root.hex()}, root, a.period))
+    ledger = CO.ledger_info(audited, entries)
     n = client["rounds"]
     got = hashlib.sha512(b"".join(roots[CO.Wd.ROUND][:n])).hexdigest()
     reasons["commitment"] = (None if commitment.to_json() == client["commitment"]
@@ -218,8 +222,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", required=True)
     c = sub.add_parser("check")
     c.add_argument("--challenger-out", required=True,
-                   help="the session as the gate publishes it (request.json, open.json, out/)")
-    c.add_argument("--ledger", required=True, help="the gate's ledger (ssh GATE ledger)")
+                   help="the session as the gate publishes it (out/ beside request.json and open.json), or its out/")
+    c.add_argument("--ledger", action="append", required=True,
+                   help="a head of the auditor's ledger as infra published it (ssh GATE ledger); once for each head")
     c.add_argument("--client", required=True)
     c.add_argument("--coins", default=None, help=f"the client's received openings (default {COINS} beside --client)")
     c.add_argument("--key-record", default=None, help="the challenger's key record (challenger-key/v1)")
