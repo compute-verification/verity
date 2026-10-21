@@ -435,9 +435,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
+  `FinalRoundEq` and `ProgReads` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
   about what the transport hands `flock-firewall link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`; `HelloEq`
-  follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow` and the `Finish`'s round facts about the session loop
+  follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and `CoinsRead`)
+  and the `Finish`'s round facts about the session loop
   (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
   (`LeanRelease.checkIs_coinLayer`).
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its

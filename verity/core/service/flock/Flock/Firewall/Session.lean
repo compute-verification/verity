@@ -15,16 +15,21 @@ each connection is one session, relayed on a connection of its own to the audito
   `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
   `planOf`), never at a place the prover names. The coins answered must open the committed tree there
   (`Coins.Session.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
+* A rep stream's `Round` leaves only as the release of a frame the loop serves (`frames`, `Frames.carry`): the frame its
+  stream is bound to, or at the stream's first round, the stream's domain frame and an unbound frame's release. Its coins,
+  once opened, are the frame's (`Frames.feedOf`, `Frames.feed`), set before the prover receives them; the frame takes no
+  others (`Frames.take`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`). What it carries is `Firewall::finish`'s
   (ZKFIN's), relayed as it is.
-* Every other frame is relayed as it is. For now those are the rounds and roots the firewall's own Lean processes
-  released (`frame`, `link`), and `Proof`, which `Firewall::finish` decides.
+* Every other frame is relayed as it is. For now those are the roots the firewall's own Lean link released (`link`) at
+  `Commit`, and `Proof`, which `Firewall::finish` decides.
 
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
 coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only
 moves frames.
 -/
 import Flock.Firewall.SessionPlan
+import Flock.Firewall.Frames
 import Std.Async.TCP
 import Std.Async.DNS
 
@@ -87,13 +92,14 @@ def kind (f : ByteArray) : Except String Kind :=
   | some _ => .ok .other
 
 /-- A session as the loop has seen it: the auditor's draw, whether the `Hello` left, what the coin check reads of it
-(`helloOf`) and its statement's openings (`planOf`), the coin tree once `Hello`'s answer checked, and the refusal that
-stopped it. -/
+(`helloOf`), its statement's openings (`planOf`) and its rep streams' domain frames, the coin tree once `Hello`'s answer
+checked, and the refusal that stopped it. -/
 structure State where
   draw : Option Json := none
   sent : Bool := false
   hello : Option Coins.Hello := none
   plan : Array (String × Nat) := #[]
+  domains : Array (String × ByteArray) := #[]
   session : Option Coins.Session := none
   stop : Option String := none
 
@@ -184,7 +190,15 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
   | none, .ok (spec, sts) =>
     match Hello.msg spec nonce with
     | [] => .error (S.refuse s!"{Coins.STOP}the Lean Hello: the verifier's Hello is not JSON")
-    | m => .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts }, ⟨m.toArray⟩)
+    | m => .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts,
+        domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r)) },
+      ⟨m.toArray⟩)
+
+/-- A `Round` frame's content. -/
+def roundContent (f : ByteArray) : ByteArray :=
+  match getBytes f 1 with
+  | some (_, o) => ((getBytes f o).map (·.1)).getD .empty
+  | none => .empty
 
 /-- `n` bytes from the socket `c`, or `none` where it closes first. -/
 def recvExact (c : Socket.Client) (n : Nat) : IO (Option ByteArray) := do
@@ -219,9 +233,12 @@ def resolve (addr : String) : IO SocketAddress := do
   | .v4 a => pure (.v4 { addr := a, port := p.toUInt16 })
   | .v6 a => pure (.v6 { addr := a, port := p.toUInt16 })
 
-/-- **One session**: the prover's connection `p`, relayed on a connection of its own to the auditor at `auditor` until
-either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.answer`) and only then sent. -/
-def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (p : Socket.Client) : IO Unit := do
+/-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
+`auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
+`Round` against the frames `reg`, `Frames.carry`) and only then sent; a `Round`'s coins, once opened (`State.answer`), are
+fed to its frame (`Frames.feed`) before the prover receives them. -/
+def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Registry) (sid : Nat)
+    (p : Socket.Client) : IO Unit := do
   let a ← Socket.Client.mk
   (a.connect auditor).block
   a.noDelay
@@ -250,18 +267,81 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (p :
         st := st'
         sendFrame p out
         continue
+      let mut slot : Option Nat := none
+      if let .round stream n := k then
+        let dom := ((st.domains.find? (·.1 == stream)).map (·.2)).getD .empty
+        let carried ← reg.modifyGet fun R => match Frames.carry R sid stream dom (roundContent f) n with
+          | .ok (R', i) => (.ok i, R')
+          | .error e => (.error e, R)
+        match carried with
+        | .ok i => slot := some i
+        | .error e =>
+          let (st', out) := st.refuse s!"{Coins.STOP}{e}"
+          st := st'
+          sendFrame p out
+          continue
       sendFrame a f
       let some r ← recvFrame a | break
       let (st', out) := st.answer k r
       st := st'
+      if let (some i, .round _ n, some 2, none) := (slot, k, byte? r 0, st.stop) then
+        reg.modify (Frames.feed · i (Frames.feedOf n r.data.toList))
       sendFrame p out
   (a.shutdown).block
   (p.shutdown).block
 
+/-- The first byte `v` of `b`, if any. -/
+def findByte (b : ByteArray) (v : UInt8) : Option Nat := Id.run do
+  for i in [0:b.size] do
+    if b.get! i == v then return some i
+  return none
+
+/-- The connection `c` as a frame's channel (`Frame.Chan`): lines and bytes read through one buffer. -/
+def sockChan (c : Socket.Client) : IO Frame.Chan := do
+  let buf ← IO.mkRef ByteArray.empty
+  let fill : IO Bool := do
+    match ← (c.recv? 65536).block with
+    | none => return false
+    | some b =>
+      if b.isEmpty then return false
+      buf.modify (· ++ b)
+      return true
+  let getLine : IO String := do
+    while (findByte (← buf.get) 10).isNone do
+      unless ← fill do
+        let rest ← buf.modifyGet fun b => (b, .empty)
+        return (String.fromUTF8? rest).getD "?"
+    let b ← buf.modifyGet fun b => (b, .empty)
+    let j := (findByte b 10).getD 0
+    buf.set (b.extract (j + 1) b.size)
+    return (String.fromUTF8? (b.extract 0 (j + 1))).getD "?\n"
+  let readExact (n : Nat) : IO ByteArray := do
+    while (← buf.get).size < n do
+      unless ← fill do throw (IO.userError s!"frame: the connection closed before a {n}-byte message")
+    let b ← buf.modifyGet fun b => (b, .empty)
+    buf.set (b.extract n b.size)
+    return b.extract 0 n
+  return { getLine, readExact, write := fun b => (c.sendAll #[b]).block, flush := pure () }
+
+/-- **The loop's frames**: each connection to `srv` is one rep's frame (`Frame.serveWith` at the operating system's bytes,
+as `flock-firewall frame` serves it), in a slot of its own in `reg` (`Frames.hooks`), served on its own thread until it
+ends or the connection closes. -/
+def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) : IO Unit := do
+  repeat
+    let c ← srv.accept.block
+    let _ ← IO.asTask (prio := .dedicated) do
+      let i ← reg.modifyGet fun R => let (R', i) := Frames.openSlot R; (i, R')
+      try
+        let _ ← Frame.serveWith IO.getRandomBytes (← sockChan c) (Frames.hooks reg i)
+      catch e => IO.eprintln s!"frame: {e}"
+      reg.modify (Frames.close · i)
+      try (c.shutdown).block catch _ => pure ()
+
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the statement
-flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks),
-prints `LISTENING 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`), each on its own
-thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
+flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
+for sessions and on a port the system picks for the reps' frames, prints `LISTENING 127.0.0.1:PORT` and then
+`FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
+on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
 `refused WHY`. -/
@@ -288,16 +368,24 @@ def cmd (args : List String) : IO UInt32 := do
   let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
+  let reg : IO.Ref Frames.Registry ← IO.mkRef #[]
+  let sids ← IO.mkRef 0
   let srv ← Socket.Server.mk
   srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
   srv.listen 128
+  let fsrv ← Socket.Server.mk
+  fsrv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := 0 })
+  fsrv.listen 128
   IO.println s!"LISTENING 127.0.0.1:{(← srv.getSockName).port}"
+  IO.println s!"FRAMES 127.0.0.1:{(← fsrv.getSockName).port}"
   (← IO.getStdout).flush
+  let _ ← IO.asTask (prio := .dedicated) (frames fsrv reg)
   let _ ← IO.asTask (prio := .dedicated) do
     repeat
       let p ← srv.accept.block
+      let sid ← sids.modifyGet fun n => (n, n + 1)
       let _ ← IO.asTask (prio := .dedicated) do
-        try serve S specs auditor p
+        try serve S specs auditor reg sid p
         catch e => IO.eprintln s!"session: {e}"
   let stdin ← IO.getStdin
   repeat

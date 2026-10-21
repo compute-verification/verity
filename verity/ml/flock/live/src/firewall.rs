@@ -469,14 +469,16 @@ impl Challenger for Framer<'_> {
     }
 }
 
-/// The outer firewall's release (PROTOCOL.md §10.1): one rep's `flock-firewall frame` process (`Flock.Firewall.Frame` in the
-/// Lean verifier), which draws the rep's prover randomness from the OS and commits it, computes each round that leaves from
-/// the device's unmasked round the firewall passed, and decides the rep's refusals from the coins the stream answered.
+/// The outer firewall's release (PROTOCOL.md §10.1): one rep's Lean frame (`Flock.Firewall.Frame` in the Lean verifier), which
+/// draws the rep's prover randomness from the OS and commits it, computes each round that leaves from the device's unmasked
+/// round the firewall passed, and decides the rep's refusals from the coins the stream answered. Under the Lean session loop
+/// it is one of the loop's frames ([`LeanFrame::connect`], `Flock.Firewall.Session.frames`), whose coins are the ones the loop
+/// opened; else a `flock-firewall frame` process of its own ([`LeanFrame::start`]).
 #[cfg(feature = "sha512")]
 pub struct LeanFrame {
-    child: std::process::Child,
-    stdin: std::process::ChildStdin,
-    stdout: std::io::BufReader<std::process::ChildStdout>,
+    child: Option<std::process::Child>,
+    stdin: Box<dyn std::io::Write + Send>,
+    stdout: std::io::BufReader<Box<dyn std::io::Read + Send>>,
 }
 
 /// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
@@ -537,16 +539,29 @@ pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
 
 #[cfg(feature = "sha512")]
 impl LeanFrame {
-    /// Starts a rep on layout `lay` and the statement's mask slot: the frame draws the rep's randomness and commits it, and
-    /// returns its draws, which the rep proves with.
+    /// Starts a rep on layout `lay` and the statement's mask slot in a `flock-firewall frame` process of its own: the frame
+    /// draws the rep's randomness and commits it, and returns its draws, which the rep proves with.
     pub fn start(exe: &std::path::Path, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
-        use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
-        use std::io::{Read, Write};
         use std::process::{Command, Stdio};
         let mut child = Command::new(exe).arg("frame").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
             .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
-        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
-        let mut f = LeanFrame { child, stdin, stdout };
+        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
+        LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)) }.begin(lay, mask)
+    }
+
+    /// Starts a rep as [`LeanFrame::start`] does, as one of the Lean session loop's frames, at `addr` (its `FRAMES` address,
+    /// [`LeanSession::frames`]): the coins it takes are the ones the loop opened for the rounds it released.
+    pub fn connect(addr: &str, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
+        let tcp = std::net::TcpStream::connect(addr).map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
+        let _ = tcp.set_nodelay(true);
+        let reader = tcp.try_clone().map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
+        LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)) }.begin(lay, mask)
+    }
+
+    fn begin(mut self, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
+        use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
+        use std::io::{Read, Write};
+        let f = &mut self;
         let start = serde_json::json!({"layout": {"n_mlv": lay.n_mlv, "n_lc": lay.n_lc, "n_ood0": lay.n_ood0, "k0": lay.k0},
                                        "mask": {"w0": mask.w0, "n": mask.n, "blocks": mask.blocks}});
         writeln!(f.stdin, "{start}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
@@ -566,7 +581,7 @@ impl LeanFrame {
         let pads = crate::zk_veil::Pads { h: words(0, s), mu: words(16 * s, s), pad_h: words(32 * s, K_PAD), pad_mu: words(32 * s + 16 * K_PAD, K_PAD),
                                           tau_salt: b[tau..tau + TAU_SALT_BYTES].to_vec() };
         let drawn = Drawn { pads, salts: b[tau + TAU_SALT_BYTES..len - 64].to_vec(), root: b[len - 64..].try_into().unwrap() };
-        Ok((f, drawn))
+        Ok((self, drawn))
     }
 
     fn line(&mut self) -> Result<String, String> {
@@ -680,8 +695,10 @@ impl LeanFrame {
 #[cfg(feature = "sha512")]
 impl Drop for LeanFrame {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(c) = self.child.as_mut() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
     }
 }
 
@@ -861,12 +878,14 @@ impl Drop for LeanHello {
 /// auditor's connection. The prover connects to [`LeanSession::addr`] as it would to the auditor, and each connection is one
 /// session, which the Lean loop relays on its own connection to `verifier`: the `Hello` that leaves is its own (at the
 /// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's draw), `Hello`'s answer and every coin are
-/// checked there, and only the coins, without their openings, come back. It runs until this handle drops.
+/// checked there, and only the coins, without their openings, come back. Each rep's Lean frame is one of the loop's
+/// ([`LeanSession::frames`]), and a rep's round leaves only as its frame's release. It runs until this handle drops.
 #[cfg(feature = "sha512")]
 pub struct LeanSession {
     child: std::process::Child,
     _stdin: std::process::ChildStdin,
     addr: String,
+    frames: String,
 }
 
 #[cfg(feature = "sha512")]
@@ -881,17 +900,25 @@ impl LeanSession {
         let mut stdout = std::io::BufReader::new(child.stdout.take().expect("piped stdout"));
         let mut line = String::new();
         stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean session's start: {e}")))?;
-        let Some(addr) = line.trim_end().strip_prefix("LISTENING ").map(str::to_string) else {
+        let mut frames = String::new();
+        let _ = stdout.read_line(&mut frames);
+        let (Some(addr), Some(frames)) = (line.trim_end().strip_prefix("LISTENING ").map(str::to_string),
+                                          frames.trim_end().strip_prefix("FRAMES ").map(str::to_string)) else {
             let _ = child.kill();
             let _ = child.wait();
             return Err(refused(format!("the Lean session did not start: {:?}", line.trim_end())));
         };
-        Ok(LeanSession { child, _stdin: stdin, addr })
+        Ok(LeanSession { child, _stdin: stdin, addr, frames })
     }
 
     /// Where the prover connects for a session.
     pub fn addr(&self) -> &str {
         &self.addr
+    }
+
+    /// Where a rep's Lean frame connects ([`LeanFrame::connect`]).
+    pub fn frames(&self) -> &str {
+        &self.frames
     }
 }
 

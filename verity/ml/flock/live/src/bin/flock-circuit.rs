@@ -949,10 +949,13 @@ struct ZkRep {
     lean: Mutex<Option<Result<flock_live::firewall::LeanFrame, String>>>,
 }
 
-/// The rep's Lean frame and its draws (`flock_live::firewall::LeanFrame::start`), Rust's tree over them held to the frame's
-/// root.
-fn lean_draws(st: &Stmt, lay: &Layout) -> Result<(flock_live::firewall::LeanFrame, zkv::Pads, zkv::InnerCommit), String> {
-    let (frame, d) = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), lay, mask_slot(st))?;
+/// The rep's Lean frame and its draws, Rust's tree over them held to the frame's root: one of the Lean session loop's frames,
+/// at its `frames` address (`flock_live::firewall::LeanFrame::connect`), else a frame process of its own (`LeanFrame::start`).
+fn lean_draws(st: &Stmt, lay: &Layout, frames: Option<&str>) -> Result<(flock_live::firewall::LeanFrame, zkv::Pads, zkv::InnerCommit), String> {
+    let (frame, d) = match frames {
+        Some(addr) => flock_live::firewall::LeanFrame::connect(addr, lay, mask_slot(st))?,
+        None => flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), lay, mask_slot(st))?,
+    };
     let ic = zkv::InnerCommit::new(&d.pads, d.salts);
     if ic.root() != d.root {
         return Err(flock_live::firewall::refused(format!("the pads tree over the Lean frame's draws has root {} where the frame's is {}",
@@ -968,7 +971,7 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
               points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>) -> ZkRep {
     let tz0 = Instant::now();
     let lay = zk_layout(st);
-    let (mut pads, mut ic, lean) = match firewall_on(st).then(|| lean_draws(st, &lay)) {
+    let (mut pads, mut ic, lean) = match firewall_on(st).then(|| lean_draws(st, &lay, plan.lean_frames.as_deref())) {
         Some(Ok((frame, pads, ic))) => (pads, Some(ic), Some(Ok(frame))),
         Some(Err(why)) => (zkv::Pads::draw(prng, &lay, rep), None, Some(Err(why))),
         None => (zkv::Pads::draw(prng, &lay, rep), None, None),
@@ -1133,26 +1136,27 @@ fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Ve
     args
 }
 
-/// Where a session of `tables` tables against the auditor at `verifier` connects, and whether that is the firewall's Lean
-/// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection: a
-/// firewalled statement's, unless `FC_FIREWALL_SESSION=0` or `FC_FIREWALL_TRANSCRIPT` (whose recording is the prover's
-/// side of the wire) keep the Rust checks (`coin_tree::Checked` with `LeanCoins`, `lean_hello`) on the auditor's own address.
-fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str) -> Result<(String, bool), String> {
+/// Where a session of `tables` tables against the auditor at `verifier` connects, and, where that is the firewall's Lean
+/// session loop (`firewall::LeanSession`, one process for every such session), which then owns the auditor's connection,
+/// where its reps' Lean frames connect: a firewalled statement's, unless `FC_FIREWALL_SESSION=0` or `FC_FIREWALL_TRANSCRIPT`
+/// (whose recording is the prover's side of the wire) keep the Rust checks (`coin_tree::Checked` with `LeanCoins`,
+/// `lean_hello`) and frame processes of their own on the auditor's own address.
+fn session_addr(st: &Stmt, inst: &Instances, tables: usize, verifier: &str) -> Result<(String, Option<String>), String> {
     if !firewall_on(st) || std::env::var("FC_FIREWALL_SESSION").as_deref() == Ok("0") || std::env::var_os("FC_FIREWALL_TRANSCRIPT").is_some() {
-        return Ok((verifier.to_string(), false));
+        return Ok((verifier.to_string(), None));
     }
     static SESSIONS: Mutex<Vec<(String, usize, flock_live::firewall::LeanSession)>> = Mutex::new(Vec::new());
     let mut g = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some((.., s)) = g.iter().find(|(v, j, _)| v == verifier && *j == tables) {
-        return Ok((s.addr().to_string(), true));
+        return Ok((s.addr().to_string(), Some(s.frames().to_string())));
     }
     let public = lean_public(inst, "session", tables)?;
     let s = flock_live::firewall::LeanSession::start(&flock_live::firewall::lean_frame_exe(), verifier, &lean_statement_args(st, &public, tables));
     let _ = std::fs::remove_file(&public);
     let s = s?;
-    let addr = s.addr().to_string();
+    let (addr, frames) = (s.addr().to_string(), s.frames().to_string());
     g.push((verifier.to_string(), tables, s));
-    Ok((addr, true))
+    Ok((addr, Some(frames)))
 }
 
 thread_local! {
@@ -3309,6 +3313,8 @@ struct Plan {
     early_proofs: bool,
     /// the transport is the firewall's Lean session loop ([`session_addr`]), which sends its own `Hello` and checks every coin
     lean_session: bool,
+    /// that loop's frames' address: each rep's Lean frame is one of the loop's, whose coins are the ones the loop opened
+    lean_frames: Option<String>,
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
@@ -5379,8 +5385,9 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 emit_one(r, join(h), rtt);
             }
         }
-        let (addr, lean) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()]).unwrap_or_else(|e| refuse(e));
-        plan.lean_session = lean;
+        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()]).unwrap_or_else(|e| refuse(e));
+        plan.lean_session = frames.is_some();
+        plan.lean_frames = frames;
         let addr = addr.as_str();
         if let Some(fw) = fw {
             let mut rtt = (0.0, 0.0, 0);

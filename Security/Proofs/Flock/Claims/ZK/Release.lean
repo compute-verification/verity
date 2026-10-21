@@ -286,8 +286,9 @@ structure LeanRelease (W R : Type) where
   coins of the last round); a function of the statement and the history, never of the tape. Its `stopped` is not
   read. -/
   prog : Msg → List (Msg × Msg) → Masker
-  /-- the transport: the coins of the stream's answer to a round, as the frame takes them (`coins N`) -/
-  coinsOf : Msg → Array _root_.Flock.F128
+  /-- the transport: the coins the frame takes (`coins N`) after the rounds of `h`, for the stream's last answer (the
+  session loop's `Frames.feedOf` of it, `LeanRelease.loop`) -/
+  coinsOf : Msg → List (Msg × Msg) → Array _root_.Flock.F128
   /-- the device round at honest worker values, given the values the firewall fixes by its own computation, by name -/
   device : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- the firewall's transcript after the rounds of `h`, whose own values the device round reads -/
@@ -361,7 +362,7 @@ def opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : List (Msg × M
 (`Masker.answer`): the rep's state after them, or the frame's refusal of them. -/
 def frameAnswer {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
   match h.getLast? with
-  | some (_, cs) => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf cs)
+  | some _ => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf x h)
   | none => pure (L.prog x h)
 
 /-- The transport's stop where its coin check refuses. -/
