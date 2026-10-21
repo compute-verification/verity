@@ -119,6 +119,12 @@ class Row:
         return sorted(out)
 
 
+def record_key(key: str) -> bool:
+    """A key that holds a record: a `.json`, not the `<key>.parts.json` sidecar a multipart upload writes beside a large one
+    (remote_s3.parts_sidecar)."""
+    return key.endswith(".json") and not key.endswith(".parts.json")
+
+
 def record_id(key: str) -> str | None:
     """The id a key names, or None when only the content can say (a label under a non-content key, as a local store keeps them)."""
     name = key.rsplit("/", 1)[-1].removesuffix(".json")
@@ -503,7 +509,7 @@ def _private(remote, idx, *, jobs: int, full: bool, now: datetime, batch: int, l
         listings[ATTEMPTS] = remote.list_times(ATTEMPTS)
     else:
         listings[RUNS_TAIL] = remote.list_times(ATTEMPTS, start_after=f"{ATTEMPTS}{newest}.json")
-    want = [(k, m) for keys in listings.values() for k, m in keys if k.endswith(".json") and record_id(k) not in have]
+    want = [(k, m) for keys in listings.values() for k, m in keys if record_key(k) and record_id(k) not in have]
     rep = {"listed": {p: len(v) for p, v in listings.items()}, "runs_listing": "full" if runs_full else "tail", "read": 0,
            "added": {"artifact": 0, "run": 0, "label": 0}, "errors": []}
     for i in range(0, len(want), batch):
@@ -523,7 +529,7 @@ def _private(remote, idx, *, jobs: int, full: bool, now: datetime, batch: int, l
 
 
 def _public(public_remote, idx, private, *, jobs: int, now: datetime) -> dict:
-    listed = public_remote.list_times(MANIFESTS)
+    listed = [(k, m) for k, m in public_remote.list_times(MANIFESTS) if record_key(k)]
     arts = private.rows(record_id(key) for key, _ in listed)
     missing = [(key, modified) for key, modified in listed if record_id(key) not in arts]
     fetched, errors = _read(public_remote, missing, jobs)

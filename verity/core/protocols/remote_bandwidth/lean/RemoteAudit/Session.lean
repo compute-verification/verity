@@ -17,8 +17,8 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
   already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, or one holding a
   released block), `lifetime` (an appended block that joined a window L or more before);
-* `close(t)`: the window's draws; rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin
-  went unused;
+* `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
+  window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws).
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
@@ -257,7 +257,8 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   if w.drawn.isSome then return (.refused "the window is not open to draw", s)
   if (s.windows.extract 0 t).any (·.drawn.isNone) then return (.refused "windows are drawn in order", s)
   let d := s.deadline t
-  if !w.final && (match d with | none => true | some d => now ≤ d) then
+  let full := d.isSome && s.params.pace.any fun p => decide (p.k ≤ w.roots.size)
+  if !w.final && !full && (match d with | none => true | some d => now ≤ d) then
     return (.refused "the window's roots are not final", s)
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
