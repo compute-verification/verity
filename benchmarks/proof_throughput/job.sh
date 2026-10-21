@@ -79,6 +79,15 @@ ph stage end
 PT staged --results "$O/staged.jsonl" > "$O/staged.txt" || { tail -20 "$O/stage.txt"; log "staging failed"; exit 1; }
 log "staged: $(cat "$O/staged.txt")"
 [ "${STAGE_ONLY:-0}" = 1 ] && { log "STAGE_ONLY: done"; exit 0; }
+# a firewalled prover's Lean Hello sets each session up at the verifier's own statement (live PROTOCOL.md §10.4), which takes
+# a stratified draw only with the verifier's own partition, program and K = B, as verify.sh derives them
+if [ "${ZK:-0}" = 1 ] && [ "$FC_FIREWALL" = 1 ]; then
+  C0=$(PT staged --results "$O/staged.jsonl" --cache-dir) && PT partition --workload "$WORKLOAD" --circuit "$C0/circuit.txt" \
+    --out "$S/partition.json" --program-out "$S/program.json" > "$O/partition.txt" 2>&1 \
+    || { tail -5 "$O/partition.txt"; log "no partition object for the firewall's Hello"; exit 1; }
+  export FC_FIREWALL_STATEMENT=verity/flock-circuit
+  export FC_FIREWALL_HELLO_ARGS="--partition $S/partition.json --program $S/program.json --stratified $B"
+fi
 
 # the sessions, on one leased GPU: node 1 lends Kueue's GPUs through its own gpu-lease copy (infra/cluster submit.py)
 if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus ]; then
