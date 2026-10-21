@@ -614,7 +614,8 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
               "secret": secret.hex(), "commitment": "cd" * 64}
     at, answer = CO.open_window("research@gate", sid, root, run=_gate(sent, opened))
     assert sent[-1][1] == ["open", "--session", sid, "--root", root.hex()]
-    assert at == CO.Session(sid, "127.0.0.1:7811", secret) and answer == {k: v for k, v in opened.items() if k != "secret"}
+    assert at == CO.Session(sid, "127.0.0.1:7811", secret, "cd" * 64)
+    assert answer == {k: v for k, v in opened.items() if k != "secret"}
     assert secret.hex() not in repr(at) + json.dumps(answer)
     with pytest.raises(CO.Ch.CoinError, match="refused reserve: period dev-kernels holds its cap"):
         CO.reserve("research@gate", "vy-nebius-2", EPOCH, ROUNDS,
@@ -627,6 +628,10 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
                 {k: v for k, v in opened.items() if k != "secret"}):
         with pytest.raises(CO.Ch.CoinError, match="another session, root or port, or no secret") as refusal:
             CO.open_window("research@gate", sid, root, run=_gate(sent, bad))
+        assert secret.hex() not in str(refusal.value)
+    for unsigned in (None, "cd" * 32):
+        with pytest.raises(CO.Ch.CoinError, match="signed no coin commitment") as refusal:
+            CO.open_window("research@gate", sid, root, run=_gate(sent, {**opened, "commitment": unsigned}))
         assert secret.hex() not in str(refusal.value)
 
 
@@ -642,7 +647,8 @@ def test_coins_py_open_reserves_then_opens_on_the_stand_in_root_and_writes_the_s
         if args[0] == "reserve":
             return {"session": "s1", "seq": 4, "peer": "vy-nebius-2", "by": "kernels", "expires_utc": "2026-10-20T13:02:00Z",
                     "period": "dev-kernels"}
-        return {"session": "s1", "port": 7811, "root": args[4], "seq": 5, "reserve": 4, "secret": secret.hex()}
+        return {"session": "s1", "port": 7811, "root": args[4], "seq": 5, "reserve": 4, "secret": secret.hex(),
+                "commitment": "ab" * 64}
 
     monkeypatch.setattr(CO, "gate_call", gate_call)
     f = tmp_path / "s1.secret"
@@ -652,7 +658,8 @@ def test_coins_py_open_reserves_then_opens_on_the_stand_in_root_and_writes_the_s
     out = capsys.readouterr().out
     assert sent[1] == ["open", "--session", "s1", "--root", CO.stand_in_root("s1").hex()]
     assert secret.hex() not in out and CO.STAND_IN in out
-    assert out.splitlines()[-1] == f"{CO.CHALLENGER_ENV}=127.0.0.1:7811 {CO.SESSION_ENV}=s1 {CO.SECRET_ENV}={f}"
+    assert out.splitlines()[-1] == (f"{CO.CHALLENGER_ENV}=127.0.0.1:7811 {CO.SESSION_ENV}=s1 {CO.SECRET_ENV}={f} "
+                                    f"{CO.COMMITMENT_ENV}={'ab' * 64}")
     assert CO.read_secret(f) == secret and f.stat().st_mode & 0o777 == 0o600
     sent.clear()
     with pytest.raises(SystemExit):
@@ -665,33 +672,45 @@ def test_coins_py_open_reserves_then_opens_on_the_stand_in_root_and_writes_the_s
         return gate_call(gate, args)
 
     monkeypatch.setattr(CO, "gate_call", refusing)
-    with pytest.raises(CO.Ch.CoinError, match="s1 is reserved and not opened .* refused window of period 'dev-kernels'"):
+    with pytest.raises(CO.Ch.CoinError, match="s1 is reserved and its open failed .* refused window of period 'dev-kernels'"):
         CO.main([*argv[:-1], str(tmp_path / "s1-again.secret")])
     assert not (tmp_path / "s1-again.secret").exists()
 
 
 def test_a_sessions_secret_is_its_hello_and_a_client_that_sends_none_refuses_the_session(tmp_path, monkeypatch):
     """`open_coins` hands a session's secret to the client's `connect`, whose hello carries it, and refuses a session
-    with a secret when `connect` takes none (a tree without infra's hello secret in `remote.py`), before connecting."""
-    for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
+    with a secret when `connect` takes none (a tree without infra's hello secret in `remote.py`), before connecting; the
+    hello's commitment must be the one the gate's open answered, else the session is refused and closed before any coin."""
+    for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
-    host = _Host(tmp_path)
+    host = _Host(tmp_path / "a")
     seen = {}
 
     def connect(address, secret=None):
         seen["secret"] = secret
         return CO.R.RemoteChallenger.connect(address)
 
-    at = CO.Session(host.session.id, host.address, bytes([5]) * 32)
+    signed = host.challenger.commitment.root.hex()
+    at = CO.Session(host.session.id, host.address, bytes([5]) * 32, signed)
     cs = CO.open_coins(at, EPOCH, ROUNDS, connect=connect)
     assert seen["secret"] == at.secret
     cs.close()
     assert host.ended() is None
+    other = _Host(tmp_path / "b")
+    with pytest.raises(CO.Ch.CoinError, match="answered the hello with commitment .* not the cdcd"):
+        CO.open_coins(CO.Session(other.session.id, other.address, None, "cd" * 64), EPOCH, ROUNDS)
+    assert other.ended() is None
+    assert [json.loads(x)["event"] for x in (other.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
+    assert CO.session(host.address, "test-session", commitment=signed) == CO.Session("test-session", host.address, None,
+                                                                                      signed)
+    for bad in ({"commitment": signed}, {"address": host.address, "sid": "s", "commitment": signed[:64]}):
+        with pytest.raises(CO.Ch.CoinError, match="an id and an address|128 lowercase hex"):
+            CO.session(**bad)
     with pytest.raises(CO.Ch.CoinError, match="waits on infra's hello secret"):
         CO.open_coins(at, EPOCH, ROUNDS, connect=lambda address: pytest.fail("connected"))
     f = tmp_path / "secret"
     CO.write_secret(f, at.secret)
-    assert CO.session(host.address, "test-session", str(f)) == at
+    assert CO.session(host.address, "test-session", str(f), signed) == at
     with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
         CO.session(secret_file=str(f))
     (tmp_path / "short").write_text("ab" * 16 + "\n")
@@ -710,7 +729,7 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
 
 
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
-    for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
+    for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
     assert CO.session() is None and CO.session("h:1", "s1") == CO.Session("s1", "h:1")
     for half in (("h:1", None), (None, "s1")):
@@ -733,7 +752,8 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     without, until #2950 gives the root a window's session opens on."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
-    monkeypatch.delenv(CO.SECRET_ENV, raising=False)
+    for name in (CO.SECRET_ENV, CO.COMMITMENT_ENV):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(CO.CHALLENGER_ENV, host.address)
     monkeypatch.setenv(CO.SESSION_ENV, host.session.id)
     argv = ["--out", str(tmp_path / "out"), "--at", "2026-10-20T00:00:00Z", "--by", "test", "--steps", str(ROUNDS)]
