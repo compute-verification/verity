@@ -150,7 +150,7 @@ theorem label_acc {C : Circuit} {𝓘 : Finset (Finset (Fin C.N))} (h𝓘 : C.Co
         exact (Finset.card_insert_le _ _).trans (by omega)
 
 theorem PartialSumsRead : Guarantees.PartialSumsRead := by
-  intro C J L Tok Val Mat Row Col _ _ _ _ _ M d aOut c V K Q 𝓘 h𝓘
+  intro C J L Tok Val Mat Row Col _ _ _ _ _ M d aOut c V w K Q 𝓘 h𝓘
   classical
   have hlab : ∀ E, ∃ lab : Fin C.N → Finset (Fin C.N), E ∈ M.P.image Q.entry →
       (∀ g ∈ Q.acc E, lab g ∈ 𝓘 ∧ g ∈ C.computed (lab g)) ∧

@@ -22,8 +22,8 @@ namespace Nci.Cover.SecurityProofs
 
 section
 
-variable {C : Circuit} {J L Tok Val Mat Row Col : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
-  {K : Keyed M Tok Val d aOut c V}
+variable {C : Circuit} {J L Tok Val Mat Row Col : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
+  {K : Keyed M Tok Val d aOut c V w}
 
 /-- The counted products `I` finishes but doesn't compute whole are at most `I`'s inputs among the accumulations. -/
 theorem mem_finished_of [DecidableEq J] {I : Finset (Fin C.N)} {p : J × L} (hp : p ∈ M.P)
@@ -195,8 +195,8 @@ theorem ps_cover_sum {ι : Type*} (𝓘 : Finset ι) (P k : ℕ) (N nH nL Y Z : 
     _ = 2 * k * 𝓘.card := by ring
 
 theorem PartialSumCoverBound : Guarantees.PartialSumCoverBound := by
-  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V K Q s k f a b μ 𝓘 hb ha hμ0 hμ1 hH hX h𝓘 hcov
-  obtain ⟨φ, hφ, hsum⟩ := PartialSumsRead C M d aOut c V K Q 𝓘 hcov
+  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V w K Q s k f a b μ 𝓘 hb ha hμ0 hμ1 hH hX h𝓘 hcov
+  obtain ⟨φ, hφ, hsum⟩ := PartialSumsRead C M d aOut c V w K Q 𝓘 hcov
   refine ps_cover_sum 𝓘 M.P.card k
     (fun I => ((M.P.filter fun p => φ p = I).filter fun p => p ∉ M.whole I).card)
     (fun I => (((M.P.filter fun p => φ p = I).filter fun p => p ∈ M.whole I).filter

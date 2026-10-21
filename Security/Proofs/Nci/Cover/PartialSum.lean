@@ -12,11 +12,11 @@ import Proofs.Nci.Cover.PartialSumKeyed
 namespace Nci.Cover.SecurityProofs
 
 theorem PartialSumKeyedCoverBound : Guarantees.PartialSumKeyedCoverBound := by
-  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V K Q s k E n b bcol μ 𝓘 hb hμ0 hμ1 hH hCI hk hEd hn hKD hW
+  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V w K Q s k E n b bcol μ 𝓘 hb hμ0 hμ1 hH hCI hk hEd hn hW
     h𝓘 hcov
-  have h := PartialSumCoverBound C M d aOut c V K Q s k 1 (min (d - E) n) b μ 𝓘 hb
+  have h := PartialSumCoverBound C M d aOut c V w K Q s k 1 (min (d - E) n) b μ 𝓘 hb
     (lt_min (Nat.sub_pos_of_lt hEd) hn) hμ0 hμ1 hH
-    (KeyedActivationReads C M d aOut c V K Q s k E n bcol hCI hk hKD hW) h𝓘 hcov
+    (KeyedActivationReads C M d aOut c V w K Q s k E n bcol hCI hk hW) h𝓘 hcov
   rwa [Nat.cast_one] at h
 
 end Nci.Cover.SecurityProofs

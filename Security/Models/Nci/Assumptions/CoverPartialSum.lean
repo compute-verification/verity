@@ -17,22 +17,22 @@ an inference block that is handed fewer than `f · a` gates of a token `t` (`Key
 it) computes whole no entry of `t` (some counted product of each entry of `t` is not in `M.whole I`), and is handed `f`
 gates of `t` for each distinct activation of the counted products of `t` it computes whole.
 
-At `f = 1` it holds with `a = min(d − E, n)` under `ColumnsIncompressible`, given key-disjoint activations
-(`Keyed.KeyDisjoint`) and entries of width `n` (`Cube.Wide`): `Guarantees.KeyedActivationReads` proves it. A block that
-holds no root of `t` reaches, from each activation it uses, a value of `t` it reads, distinct activations distinct
-values; holding a root costs `d − E` reads (the fan-out branch's `rootCost`); and an entry whole in the block has `n`
-distinct activations.
+At `f = 1` it holds with `a = min(d − E, n)` under `ColumnsIncompressible`, given entries of width `n` (`Cube.Wide`):
+`Guarantees.KeyedActivationReads` proves it. A block that holds no root of `t` reaches, from each activation it uses, a
+value of `t` it reads, distinct activations distinct values (their key paths are disjoint by `Keyed`'s (I) and (F));
+holding a root costs `d − E` reads (the fan-out branch's `rootCost`); and an entry whole in the block has `n` distinct
+activations.
 
 Rationale for `f > 1`: an activation is a word, and a product's output reads `f` of its bits (A2's cap: `f` is at most
 the activation bits a product's output gate reads). A block handed fewer of them computes the rest from upstream, which
 means holding the activation's root, and its token costs `d − E` reads (blue3's PerValueCut, unproved).
 
-It fails, beside where `KeyDisjoint` fails (grouped-query attention, copies kept as values of their own), when an
+It fails, beside where `Keyed`'s (I) fails (grouped-query attention, copies kept as values of their own), when an
 activation's bits are cheap functions of fewer handed gates: a block handed one bit of each of many activations, which
 computes their other bits from that bit and registered or already-paid values, pays about one gate per activation, so
 `f = 1`. -/
 def ActivationReads {C : Circuit} {J L Tok Val Mat Row Col : Type*} [DecidableEq J] [DecidableEq Val]
-    [DecidableEq Tok] {M : MulBlocks C J L} {d aOut c V : ℕ} {K : Keyed M Tok Val d aOut c V}
+    [DecidableEq Tok] {M : MulBlocks C J L} {d aOut c V w : ℕ} {K : Keyed M Tok Val d aOut c V w}
     (Q : Cube K Mat Row Col) (s k f a : ℕ) : Prop :=
   ∀ I, C.InferenceBlock s k I → ∀ t : Tok, K.tokReads I t < f * a →
     (∀ p ∈ M.P, K.tok (K.act p) = t → ∃ p' ∈ M.P, Q.entry p' = Q.entry p ∧ p' ∉ M.whole I) ∧

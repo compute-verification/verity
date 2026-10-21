@@ -1,6 +1,7 @@
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Models.Nci.Guarantees.CoverPartialSum
 import Proofs.Nci.Cover.FanOutRootCost
+import Proofs.Nci.Cover.FanOutValue
 
 /-!
 # The partial-sum bounds: activation reads from the keyed structure
@@ -13,7 +14,7 @@ import Proofs.Nci.Cover.FanOutRootCost
   own gate among `I`'s inputs (`card_le_tokReads`).
 * `act_card_le_tokReads`: so the walk back from each activation of `t` that `I` uses ends at a value of `t` that `I`
   reads (`walk`; a held stop would be a root of `t` or a lookup, which `reach_lookups` excludes), and distinct
-  activations end at distinct values (`KeyDisjoint`).
+  activations end at distinct values (`Keyed.keyDisjoint`).
 * An entry of `t` all of whose products `I` computes whole has `n ≥ a` products with distinct activations (`Wide`,
   `cell_inj`, `stack`), more than `I` reads.
 -/
@@ -22,8 +23,8 @@ namespace Nci.Cover.SecurityProofs
 
 section
 
-variable {C : Circuit} {J L Tok Val : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
-  {K : Keyed M Tok Val d aOut c V}
+variable {C : Circuit} {J L Tok Val : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
+  {K : Keyed M Tok Val d aOut c V w}
 
 /-- A block's read values of one token are at most its reads of the token. -/
 theorem card_le_tokReads [DecidableEq Tok] {I : Finset (Fin C.N)} {t : Tok} {X : Finset Val}
@@ -44,8 +45,8 @@ theorem not_held_root [DecidableEq J] [DecidableEq L] [DecidableEq Tok] {s k E :
     {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) {t : Tok} (ht : K.tokReads I t < d - E) :
     ∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ t := by
   intro r hr hrt
-  obtain ⟨X, Y, hX, hY, hd⟩ := rootCost C M d aOut c V K I r hr
-  have hYE : Y.card ≤ E := lookupCost C M d aOut c V K s k E bcol hCI hk I hI Y (fun u hu => (hY u hu).1)
+  obtain ⟨X, Y, hX, hY, hd⟩ := rootCost C M d aOut c V w K I r hr
+  have hYE : Y.card ≤ E := lookupCost C M d aOut c V w K s k E bcol hCI hk I hI Y (fun u hu => (hY u hu).1)
     fun v hv v' hv' => (hY v hv).2.trans (hY v' hv').2.symm
   have hXt : X.card ≤ K.tokReads I t :=
     card_le_tokReads (fun u hu => (hX u hu).1.1) fun u hu => (hX u hu).2.trans hrt
@@ -53,8 +54,8 @@ theorem not_held_root [DecidableEq J] [DecidableEq L] [DecidableEq Tok] {s k E :
 
 /-- **One read per activation**: a block that holds no root of `t` reads a distinct value of `t` for each distinct
 activation of the products of `t` it computes whole. -/
-theorem act_card_le_tokReads [DecidableEq J] [DecidableEq Tok] (hKD : K.KeyDisjoint) {I : Finset (Fin C.N)}
-    {t : Tok} (hnoroot : ∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ t) :
+theorem act_card_le_tokReads [DecidableEq J] [DecidableEq Tok] {I : Finset (Fin C.N)} {t : Tok}
+    (hnoroot : ∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ t) :
     (((M.whole I).filter fun p => K.tok (K.act p) = t).image K.act).card ≤ K.tokReads I t := by
   refine (Finset.card_le_card_of_forall_subsingleton (fun v u => Follows K.key (K.roots ∪ K.lookups) v u)
     (t := (K.readSet I).filter fun u => K.tok u = t) ?_ ?_).trans
@@ -65,7 +66,7 @@ theorem act_card_le_tokReads [DecidableEq J] [DecidableEq Tok] (hKD : K.KeyDisjo
     obtain ⟨hpP, hpI⟩ := Finset.mem_filter.1 hpw
     obtain ⟨h, hh, x, hx, hhx, -⟩ := K.act_link p hpP
     have hhI : h ∈ I := pred_subset_of_mem_computed (hpI hx) hhx
-    obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I (K.act p) (K.act_mem p hpP) h hh hhI
+    obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V w K I (K.act p) (K.act_mem p hpP) h hh hhI
     have hfu' : Follows K.key (K.roots ∪ K.lookups) (K.act p) u := hfu.mono Finset.subset_union_left
     rcases hend with hur | ⟨hus, -⟩
     · exact ⟨u, Finset.mem_filter.2 ⟨hur, hut.trans hpt⟩, hfu'⟩
@@ -82,14 +83,15 @@ theorem act_card_le_tokReads [DecidableEq J] [DecidableEq Tok] (hKD : K.KeyDisjo
     obtain ⟨hpw, hpt⟩ := Finset.mem_filter.1 hp
     obtain ⟨hp'w, hp't⟩ := Finset.mem_filter.1 hp'
     by_contra hne
-    exact hKD p (Finset.mem_filter.1 hpw).1 p' (Finset.mem_filter.1 hp'w).1 (hpt.trans hp't.symm) hne u hvu hv'u
+    exact K.keyDisjoint p (Finset.mem_filter.1 hpw).1 p' (Finset.mem_filter.1 hp'w).1 hne (hpt.trans hp't.symm) u hvu
+      hv'u
 
 end
 
 theorem KeyedActivationReads : Guarantees.KeyedActivationReads := by
-  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V K Q s k E n bcol hCI hk hKD hW I hI t ht
+  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V w K Q s k E n bcol hCI hk hW I hI t ht
   rw [one_mul] at ht
-  have hact := act_card_le_tokReads hKD (not_held_root hCI hk hI (lt_of_lt_of_le ht (min_le_left _ _)))
+  have hact := act_card_le_tokReads (not_held_root hCI hk hI (lt_of_lt_of_le ht (min_le_left _ _)))
   refine ⟨fun p hp hpt => ?_, by rw [one_mul]; exact hact⟩
   by_contra hall
   push Not at hall

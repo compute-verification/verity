@@ -35,11 +35,13 @@ theorem card_image_le_of_determines {α β γ : Type*} [DecidableEq β] [Decidab
 
 section
 
-variable {C : Circuit} {J L Tok Val Mat Row Col : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
-  {K : Keyed M Tok Val d aOut c V}
+variable {C : Circuit} {J L Tok Val Mat Row Col : Type} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
+  {K : Keyed M Tok Val d aOut c V w}
 
 /-- Distinct tokens have disjoint gates. -/
-theorem tokGates_disjoint [DecidableEq Tok] {t t' : Tok} (h : t ≠ t') : Disjoint (K.tokGates t) (K.tokGates t') := by
+theorem token_gates_disjoint [DecidableEq Tok] {t t' : Tok} (h : t ≠ t') :
+    Disjoint ((K.vals.filter fun v => K.tok v = t).biUnion K.gates)
+      ((K.vals.filter fun v => K.tok v = t').biUnion K.gates) := by
   rw [Finset.disjoint_left]
   intro g hg hg'
   obtain ⟨v, hv, hgv⟩ := Finset.mem_biUnion.1 hg
@@ -54,8 +56,10 @@ theorem tokGates_disjoint [DecidableEq Tok] {t t' : Tok} (h : t ≠ t') : Disjoi
 theorem tokReads_sum_le [DecidableEq Tok] (I : Finset (Fin C.N)) (T : Finset Tok) :
     ∑ t ∈ T, K.tokReads I t ≤ (C.inputs I \ C.θ).card := by
   simp only [Keyed.tokReads]
-  rw [← Finset.card_biUnion fun t _ t' _ h => Finset.disjoint_of_subset_left Finset.inter_subset_right
-    (Finset.disjoint_of_subset_right Finset.inter_subset_right (tokGates_disjoint h))]
+  rw [← Finset.card_biUnion (s := T)
+    (t := fun t => C.inputs I ∩ (K.vals.filter fun v => K.tok v = t).biUnion K.gates)
+    fun t _ t' _ h => Finset.disjoint_of_subset_left Finset.inter_subset_right
+      (Finset.disjoint_of_subset_right Finset.inter_subset_right (token_gates_disjoint h))]
   refine Finset.card_le_card fun g hg => ?_
   obtain ⟨t, -, hg⟩ := Finset.mem_biUnion.1 hg
   obtain ⟨hgi, hgt⟩ := Finset.mem_inter.1 hg
@@ -200,7 +204,7 @@ theorem block_counts [DecidableEq J] [DecidableEq L] [DecidableEq Tok] [Decidabl
 end
 
 theorem PartialSumIntensity : Guarantees.PartialSumIntensity := by
-  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V K Q s k f a b hb hH hX I hI
+  intro C J L Tok Val Mat Row Col _ _ _ _ _ _ M d aOut c V w K Q s k f a b hb hH hX I hI
   classical
   obtain ⟨X, Ah, Al, hX0, hAh0, hAl0, hXk, hAk, hHi, hLo, -⟩ := block_counts Q hb hH hX hI (subset_refl (M.whole I))
   set Lo := (M.whole I).filter fun p => K.tokReads I (K.tok (K.act p)) < f * a with hLodef

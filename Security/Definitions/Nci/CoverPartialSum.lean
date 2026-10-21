@@ -13,8 +13,7 @@ whose products are split between blocks passes a partial sum from one block to a
 handed (B2's Lemma 1). The structure that makes this precise is `Cube`, a structural property of the training
 computation, checkable on a named circuit, as `Keyed` is for the fan-out bounds.
 
-* `Keyed.tokGates`, `Keyed.tokReads`: a token's gates, and how many of them a block is handed.
-* `Keyed.KeyDisjoint`: distinct activations of one token have disjoint key paths.
+* `Keyed.tokReads`: how many of a token's gates (its values' gates) a block is handed.
 * `Cube`: each counted product's matrix, row and column, and each output entry's accumulation.
 * `Cube.entry`, `Cube.accGates`, `Cube.crossings`, `Cube.Wide`: a product's entry, the accumulations' gates, the
   entries a block contributes whole products to at tokens it reads little of, and the entries' width.
@@ -24,28 +23,11 @@ namespace Nci.Cover
 
 namespace Keyed
 
-variable {C : Circuit} {J L Tok Val : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
+variable {C : Circuit} {J L Tok Val : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
 
-/-- **The gates of token `t`**: the gates of its values. -/
-def tokGates [DecidableEq Tok] (K : Keyed M Tok Val d aOut c V) (t : Tok) : Finset (Fin C.N) :=
-  (K.vals.filter fun v => K.tok v = t).biUnion K.gates
-
-/-- **`I`'s reads of token `t`**: how many of `t`'s gates are among `I`'s inputs. -/
-def tokReads [DecidableEq Tok] (K : Keyed M Tok Val d aOut c V) (I : Finset (Fin C.N)) (t : Tok) : ℕ :=
-  (C.inputs I ∩ K.tokGates t).card
-
-/-- **Key-disjoint activations**: the counted products' distinct activations of one token have disjoint key paths
-(`Follows`, up to the roots and lookups). A structural property of the keyed token structure, checkable on a named
-circuit, like `Keyed`'s own `legs_disjoint`.
-
-Kimi K2 (forward products): every key is per coordinate (a residual coordinate to its branch's, a norm's output to its
-input past the shared scale, an MoE output to its shared expert's) and MLA's `v` is per head, so distinct coordinates
-of one token key to distinct coordinates until each reaches its own root, the accumulation chain that computes it
-(blue3). It fails with grouped-query attention, where `g` heads' outputs key to one shared `v`: there the multiplicity
-is the group size. -/
-def KeyDisjoint (K : Keyed M Tok Val d aOut c V) : Prop :=
-  ∀ p ∈ M.P, ∀ p' ∈ M.P, K.tok (K.act p) = K.tok (K.act p') → K.act p ≠ K.act p' → ∀ u,
-    Follows K.key (K.roots ∪ K.lookups) (K.act p) u → ¬ Follows K.key (K.roots ∪ K.lookups) (K.act p') u
+/-- **`I`'s reads of token `t`**: how many of `t`'s gates, the gates of its values, are among `I`'s inputs. -/
+def tokReads [DecidableEq Tok] (K : Keyed M Tok Val d aOut c V w) (I : Finset (Fin C.N)) (t : Tok) : ℕ :=
+  (C.inputs I ∩ (K.vals.filter fun v => K.tok v = t).biUnion K.gates).card
 
 end Keyed
 
@@ -66,8 +48,8 @@ Kimi K2 (forward products): stacking makes one matrix of q_a and kv_a over the a
 the experts' gate and up over the MoE input. Each counted product is one routed or dense weight at one token. A fused
 dot product (Dot16/32/64) is one accumulation per output coordinate. Fast matrix-multiplication circuits (Strassen,
 Winograd) have no per-cell product and no cube. -/
-structure Cube {C : Circuit} {J L Tok Val : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
-    (K : Keyed M Tok Val d aOut c V) (Mat Row Col : Type*) where
+structure Cube {C : Circuit} {J L Tok Val : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
+    (K : Keyed M Tok Val d aOut c V w) (Mat Row Col : Type*) where
   /-- The matrix of each weight. -/
   mat : L → Mat
   /-- The row of each weight. -/
@@ -93,8 +75,8 @@ structure Cube {C : Circuit} {J L Tok Val : Type*} [DecidableEq Val] {M : MulBlo
 
 namespace Cube
 
-variable {C : Circuit} {J L Tok Val Mat Row Col : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V : ℕ}
-  {K : Keyed M Tok Val d aOut c V}
+variable {C : Circuit} {J L Tok Val Mat Row Col : Type*} [DecidableEq Val] {M : MulBlocks C J L} {d aOut c V w : ℕ}
+  {K : Keyed M Tok Val d aOut c V w}
 
 /-- **The entry of a product**: its matrix, its row and its token. -/
 def entry (Q : Cube K Mat Row Col) (p : J × L) : Mat × Row × Tok :=
