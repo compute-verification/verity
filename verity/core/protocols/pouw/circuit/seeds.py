@@ -1,7 +1,8 @@
 """The seed and the noise a PoUW unit derives inside its own proof (decisions 105 and 106, `PROTOCOL.md` §`compile`).
 
-A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the epoch's salt (the one coin),
-its position and its operands' roots, all inputs of the unit bound before the draw, and its noise from the seed, in gates.
+A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
+(`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the draw, and its
+noise from the seed, in gates.
 
     seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        `PouwSeed`
     σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     `PouwUnitSeeds`, with seed_j
@@ -16,6 +17,9 @@ half (β mod 512) // 32 of block β // 512 (`stream`); a Boolean unit reads it a
 σ_R keys a unit's receipt folds and starts their chains (decision 121): a hash of its own tag, never the noise seed, so no
 fold key is a function of seed_j. A unit with receipt keys calls `PouwUnitSeeds` once, for both, rather than two seeds at
 one position.
+
+The one-stage verifier fills the salt, the positions and the roots itself, so the prover chooses none of them (`compile`'s
+docstring, `sampled_proofs.one_stage.registered.supplied_rows`).
 
 Each Definition has a word form (`_v1`, over `Value<32>` halves, with `hashes.Sha512Compress`) and a Boolean twin (`_v2`, over
 32-bit elements, with `commitments.gates.sha512.compress_gadget`) whose word view it is. The salt port is `In(kind="coin")`

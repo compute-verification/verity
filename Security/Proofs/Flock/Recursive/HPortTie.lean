@@ -181,9 +181,11 @@ theorem site_reads_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, hne] at h
   have e6 : a.domain = b.domain := Classical.byContradiction fun hne => by
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, hne] at h
-  have e7 : a.reads = b.reads := Classical.byContradiction fun hne => by
+  have e7 : a.schema = b.schema := Classical.byContradiction fun hne => by
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, hne] at h
-  exact ⟨by simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6], e7⟩
+  have e8 : a.reads = b.reads := Classical.byContradiction fun hne => by
+    simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, e7, hne] at h
+  exact ⟨by simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6, e7], e8⟩
 
 /-- **`checkStmt` ran `checkOwn`, `checkRows` and `checkShared` on V*'s statement `j`** at the verifier's own reads
 (`regs_of_checkStmt`'s walk). -/

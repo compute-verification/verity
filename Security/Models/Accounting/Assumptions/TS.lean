@@ -10,8 +10,9 @@ instructions (heads, ownership, copies); an assumption over a run is claimed for
 
 Which form each takes:
 
-* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, rows VF3p-16 on VF3o-16),
-  checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet falsifies it.
+* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
+  its statement names), checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet
+  falsifies it.
 * (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
 * (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
@@ -31,8 +32,9 @@ Which form each takes:
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
   least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded (ASK-6 = A): the fold priced
-  at the words the run folds, `FoldOpt` its case at `N_w`. The headlines take it, so a run that skips folds is charged
-  through `WholeLuckAt`.
+  at the words the run folds, `FoldOpt` its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal
+  prices at; the headlines take it at their `π*` (RT2-LOGIC-1), so a run that skips folds is charged through
+  `WholeLuckAt`.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
   (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words (decision 110), through Lemma B at
@@ -54,6 +56,8 @@ Which form each takes:
   `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
+* `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-service pieces as named premises, binding
+  in its fork form (RT2-LOGIC-2), so the headlines' binding is `√δ_fork` and no advantage bound.
 * `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
   the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
   every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
@@ -76,7 +80,8 @@ variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] 
   [Fintype X]
 
 /-- `accounting-ts-facet-ceilings` (measured, device-scoped). **The measured facets are ceilings** for the run `P` on
-the stated device (sm_120 RTX PRO 6000; Π_G = VF3p-16 on VF3o-16, decision 73): the run's counts and cycles are
+the stated device (sm_120 RTX PRO 6000; `G` the measured vector its statement names, VF3s-16 for the measured
+headline, RT2-LOGIC-9): the run's counts and cycles are
 `≥ 0` and its clock is in `(0, f_max]`, every SM-clocked facet's load is at most the run's cycles (S_r), and every
 fixed-clock facet's load, priced at `f_max`, is at most `f_max` times the run's time. Rows take the best configuration
 measured plus a 2% margin; a joint row is a facet on the mixes measured, and beyond them it is a red-team
@@ -123,6 +128,15 @@ certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, 
 is its case at `N_w`. -/
 def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
+
+/-- `accounting-ts-fold-opt` (conjectured at the certificate a headline prices at; RT2-LOGIC-1). **FOLD-OPT_μ per
+word folded at `π`**: at the one certificate `π`, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`.
+`FoldOptFolded` is it at every certificate, and a bit-exact fold of other instructions falsifies that while meeting it
+at `π` (RT2-LOGIC's IMAD rotate, `z = ⌊u·2^r/2^32⌋ + u·2^r + y'`: LOP3 and four IMAD-pipe instructions a word, 20 a
+unit against the menu's 16 at DS-120's issue facet, 14 against 16 halfway between issue and the LOP pipe). D-ideal's
+proof reads FOLD-OPT only at the certificate it prices, so a headline asks for it there. -/
+def FoldOptFoldedAt (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) (lam : R → ℝ) : Prop :=
+  (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
 /-- `accounting-ts-fill-opt` (assumed). **FILL-OPT_μ**: at every certificate, the run's filler is priced at least
 `(1 − μ_x)·χ*(π)`. -/
@@ -228,13 +242,46 @@ def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
 
 /-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
 right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its
-σ, `ProofLayer.committed`) are right for their derivations, the run's owned right fixed words per unit are at least
-`(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation (E1(c)), so with none
-wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the window's words.
+σ, `ProofLayer.committed`) are right for their derivations on that path's coins, the run's owned right fixed words per
+unit are at least `(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation
+(E1(c)), so with none wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the
+window's words.
 `ProofsSound` held this inside it; it stays an assumption until the adaptive model is in Lean. -/
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
-  ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+  ∀ x, P.accepts x → pf.right x (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+
+/-- `accounting-ts-proofs-sound` (binding in its fork form, the 8 Oct ruling's; `cr/sha-512` bounds it at a finder that
+runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, on a run and on its
+continuation from round `w` on fresh coins, which share round `w`'s commitment, every proof of round `w` is accepted
+and some proof opens round `w`'s leaves differently, with probability at most `δ_fork` over the pair
+(`ProofLayer.Forked`; the rest of the window need not be accepted). Different openings of hm96 rows of
+one frame-v3-sha512 tree are two inputs hashed to one SHA-512 digest along their paths. `BindingOfFork` gives binding
+at `√δ_fork` from it. -/
+def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
+  ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
+
+/-- `accounting-ts-proofs-sound` (proof soundness; C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` for a session).
+**Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation on the path
+(the round's coin and the words keyed by it that its proof gives there) with probability at most `δ_ZK` over the
+window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives
+`δ_ZK` only for a cheater whose hash calls over the window are capped (RT2-LOGIC-2). Its "wrong" is against the
+committed transcript fixed at registration, and its statement leaves out the rows link: that the committed inputs and
+the program's outputs on them are the rows the public file commits "is not stated here"
+(`Proofs/Flock/EndToEndHidden/Statement.lean`). `ProofLayer.rel` reads exactly that link (the Definition with the
+leaves' rows among its outputs), so C-Flock's bound doesn't discharge this premise until it states the link
+(RT3-LOGIC-3). -/
+def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δzk : ℝ) : Prop :=
+  pf.SoundAt δzk
+
+/-- `accounting-ts-proofs-pin` (the Definitions' pinning; conjectured, and no Lean checks it of the served relations).
+**The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation on a path
+are right for their derivations on that path's coins. It is a property of the Definitions the window's proofs pass,
+which no Lean here models. As `ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn
+segment's prefix-word set to the one before, so its window's other sets are free witness. PIN (#2417) added checks that
+recompute every word they absorb (`PouwSegCheck_v3`, `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2`), and nothing
+states that the served relations are those (RT3-LOGIC-3). -/
+def ProofsPin {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) : Prop := pf.Pins
 
 open Classical in
 /-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit with its fold clause, proved on paper; the rounds' equal shares).

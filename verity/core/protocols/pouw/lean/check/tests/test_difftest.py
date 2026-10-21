@@ -8,8 +8,9 @@ reasons too, `Core.Protocol.case`'s framing included, so this port compares the 
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
 `pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
-generates (honest openings of a call's tile or the filler's, and one mutation each aimed at every refusal or at a reading
-both sides share), compared output for output: null, or the same reason.
+generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
+mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
+reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
@@ -70,10 +71,15 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_check(server):
+    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the draw: the
+    seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
-    print(f"pouw-check difftest: {stats}; by rule: {dict(sorted(RULES.items()))}")
-    assert stats.counts.get("accept") and stats.counts.get("reject") and stats.counts.get("undecided")
+    swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
+                    for name in ["honest", *cases.NAMES] for seed in range(3))
+    print(f"pouw-check difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+          f"{dict(sorted(RULES.items()))}")
+    assert {"accept", "reject", "undecided"} <= set(swept), dict(swept)
 
 
 def _template(why: str) -> str:
@@ -94,13 +100,21 @@ REASONS = {_template(r) for r in (
     "the proof's body holds no A row and B row",
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
     *(f"side {s}: the proof's committed row is not entry #'s row #" for s in "ab"),
+    "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's "
+    "certified salt", "the window is certified, and the verifier holds no 64-byte certified salt for it",
+    "the window is not certified, so it has no certified salt for a unit to read",
+    "the window's template's unit reads a salt, which only a certified window has",
+    f"the proof's rows {', '.join([*(f'a{k}' for k in range(4)), *(f'b{k}' for k in range(8)), 'pub'])} are not "
+    f"{CC.ROW_V2} rows", "the proof's body holds no A rows, B rows and public row",
+    "the proof's public row is not the window's certified salt, unit #'s position and entry #'s side roots",
 )}
 OPENED: Counter[str] = Counter()
 
 
 def opening(case: dict) -> str | None:
     why = CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
-                     case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+                     case["unit"], bytes.fromhex(case["pub"]), case["opening"],
+                     None if case.get("salt") is None else bytes.fromhex(case["salt"]))
     OPENED[_template(why) if why else "accept"] += 1
     return why
 
@@ -184,8 +198,8 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes and draws, then each mutation over a few seeds (`replay`), so every refusal is reached whatever
-    the draw."""
+    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    every refusal is reached whatever the draw."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -194,7 +208,7 @@ def test_pass_and_draw(pass_server):
                      for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier"}
     assert "draw accept" in PASSED and len(PASSED) > 40
     for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
         early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)

@@ -3,10 +3,12 @@ and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations
 
+import ast
 import copy
 import dataclasses
 import hashlib
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -175,11 +177,12 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
                           "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
                           "coins": s.commitment.root.hex(), "heads": [[None] * 4, [None] * 3, [None] * 3],
-                          "layout": "store-order/v0", "lifetime": audit.LIFETIME, "passes": [4, 3, 3],
+                          "layout": "store-order/v0", "lifetime": audit.LIFETIME, "pace": None,
+                          "passes": [4, 3, 3],
                           "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "released": 0, "rows": 16,
-                          "span_ns": 3000 + A, "stale": [[N] * 4, [N] * 3, [N] * 3]}
+                          "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
@@ -1018,6 +1021,26 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     gpu = 94 * 10 ** 9
     host = timing.spanning(gpu) - 8 * gpu
     assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
+
+
+def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
+    """One GPU's and the host DRAM's write ceilings (MEM-45) are their data sheets' rates, which bound every prover
+    where a measurement bounds only the kernels tried, each above every write its run measured: the card's 1,528.98
+    GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69 (r20261020-212232-6ba5).  Each
+    docstring names its runs; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under
+    the default codec, and no DPU's is stated."""
+    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597e12 > 1528.98e9 > 56.39e9
+    assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
+    body = ast.parse(Path(timing.__file__).read_text()).body
+    docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
+            if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
+            and isinstance(b.value, ast.Constant)}
+    gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
+    assert "r20261020-211937-b9c0" in gpu and "SQUARINGS_PER_S[width]" in gpu
+    assert "r20261020-212232-6ba5" in host and "r20261020-211937-b9c0" in host and "No DPU" in host
+    labels = timing.GPU_SQUARINGS_PER_S[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
+    assert labels == pytest.approx(1.05e9, rel=0.01)
+    assert not [name for name in vars(timing) if name.startswith("DPU_")]
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:

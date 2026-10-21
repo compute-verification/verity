@@ -5,7 +5,7 @@ its tests place PoUW's compiled Program on a block).
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
 For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading (`placed`
-reads W off a block where the datacenter places a Program `SCHEME` compiled):
+reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3` compiled):
 
     ticks(W) = (1 − ε) · U(W) · B_♭ / (4 · SMs · f_max) / G / tick_seconds
 
@@ -22,9 +22,11 @@ reads W off a block where the datacenter places a Program `SCHEME` compiled):
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
-  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 0.599%, LEAN-HEADLINE's `Sm120SheetHeadline` (#2482, not on
-  main yet: receipt luck ½ named, operand luck ¾, p = 7/8). main's machine model reads 0.585% at p = ¾ (`machine-model
-  headline`); the measured reading, 0.591% on VF3r-16, is at measured rates, not the sheet's.
+  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (#2924's A5b on #2791, not on
+  main yet: receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
+  that a fold on the bulk engine (RT4-SHEET-1) costs at least φ*, which lowers N_w(w* + φ*) to 16.1095 against B_♭.
+  main's machine model reads 0.585% at p = ¾ (`machine-model headline`), with no bulk route; the measured reading,
+  0.591% on VF3s-16, is at measured rates, not the sheet's.
 
 W's bound is U(W) · B_♭ exactly, not more: every product's committed word is the same unit on the same facet, so the
 bound is linear in units, and the products differ only in U's weights and in ε_skip, which is the design's most over
@@ -36,10 +38,16 @@ What it rests on:
 - the TS model on the data-sheet machine and its named assumptions A1–A7 (`Accounting.Assumptions.Sheet`): A1 the SM
   clock at most f_max, A2 and A2u dispatch (a uniform instruction takes an issue slot), A3 the tensor peak, A4 the
   pipes, A5 shared memory, A6 words written, A7 semantics;
-- FOLD-OPT (`Accounting.Assumptions.TS.FoldOpt`): fx1 at 4 lane instructions a word is the cheapest fold. It leaves out
-  a run that skips a fold; charged by hand, unproved, the sheet's ε is ≈ 0.656% (#2482);
+- FOLD-OPT at π* (`Accounting.Assumptions.TS.FoldOptFoldedAt`): fx1 at 4 lane instructions a word is the cheapest fold
+  at the words a run folds, checked within a stated menu (`Sm120SheetHeadline`'s docstring); a run that skips a fold is
+  charged at the whole-unit luck ½;
+- A5b (`Accounting.Assumptions.TS.SheetSmem`): a bulk or TMA instruction holds the shared-memory bytes it moves in the
+  banks at A5's rate, a reading no vendor document states;
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
-- G, the block's GPUs, as its only devices for the work: A1–A7 price none of its other devices (its CPUs, its DPU);
+- the node's work, in its G GPUs' ticks: the headline is per node (ASK-65 = A), the work of its GPUs, host CPU and
+  peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
+  the G GPUs' own time, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each
+  window (the machine model's README, "The headline is per node"; RT-SCOPE, #2681);
 - per block only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
   the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.
@@ -47,7 +55,8 @@ What it rests on:
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,11 +70,13 @@ SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
 #: `Accounting.TS.Headline.Sm120.ds120.fmax`, #2482)
 FMAX_MHZ = {"sm_120": 2430}
-#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline` (#2482)
-SHEET_EPS = 599 / 100000
+#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
+SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
 #: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.core.protocols.pouw.circuit.h1tile.SCHEME`)
 SCHEME = "eps1-sm120-h1fx1"
+#: its one-stream form, whose units are `PouwH1Tile_v3` (`h1tile.SCHEME_V3`)
+SCHEME_V3 = "eps1-sm120-h1fx1-os"
 
 
 @dataclass(frozen=True)
@@ -106,17 +117,82 @@ def units(census: Mapping[str, float], s: Sheet) -> float:
     return sum(n * EB.FLOOR_WORDS.get(d.noise[k[4:]], 1.0) for k, n in census.items()) / (h.words * h.depth)
 
 
-def placed(work: Mapping[str, float]) -> dict[str, float]:
-    """The census of a block's work where the datacenter places a Program `SCHEME` compiled (`Profile.work[block]`, the
-    Program's Calls on the block by kind). Its int8 products (`mac:int8`) are the tile units' served products, each a
-    linear's (the unit is H1's Dither-C tile, a committed word a product). Its Boolean gates (`cuda:gate`) are the units'
-    seeds, noise and receipt folds: ♭ prices the fold a unit, and leaving the rest out only lowers the bound. Any other
-    kind isn't the scheme's, and the proved figure stands in for the block's whole compute, so it is refused."""
+@dataclass(frozen=True)
+class Tile:
+    """One H1 + fx1 tile unit's shape: r × c at contraction K, `z` on `cells` of its grid, its Definition's `version`
+    (`PouwH1Tile_v1`, or `PouwH1Tile_v3`, the one stream)."""
+    r: int
+    c: int
+    k: int
+    cells: int
+    version: int = 1
+
+    @property
+    def linears(self) -> int:
+        """`z`'s int8 products, the served linear's: K a cell."""
+        return self.cells * self.k
+
+    @property
+    def products(self) -> int:
+        """Every int8 product census/v1 counts in the tile (none served, no tail): the lanes' segment dots', r·c·(K + 32m)
+        (`PouwSegDot_v2` and `PouwSegDot0_v2`), and on v1 `z`'s own (Lean's `h1Rows` dotMacs). v3 has none of its own:
+        its z is recombined from the lanes' folded words, so its products are the segment dots' alone."""
+        from verity.core.protocols.pouw.circuit import h1tile
+        lanes = self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
+        return lanes + (self.linears if self.version == 1 else 0)
+
+
+def tiles(program, calls: Collection[int] | None = None) -> Counter:
+    """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
+    each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
+    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.circuits.program import is_input
+    versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
+    memo: dict[int, Counter] = {}
+
+    def of(fn) -> Counter:
+        if id(fn) not in memo:
+            if id(getattr(fn, "defn", None)) in versions:
+                s = fn.bindings
+                memo[id(fn)] = Counter({Tile(s["R"], s["C"], s["EXACT"].signature()[0][0][1].n, len(s["PAIRS"]),
+                                             versions[id(fn.defn)]): 1})
+            elif getattr(fn, "body", None) is None:
+                memo[id(fn)] = Counter()
+            else:
+                total: Counter = Counter()
+                for nd in fn.body.nodes:
+                    for t, n in of(nd.fn).items():
+                        total[t] += n * (nd.n if nd.form in ("batch", "scan") else 1)
+                memo[id(fn)] = total
+        return memo[id(fn)]
+
+    if calls is None:
+        return Counter(of(program.fn))
+    out: Counter = Counter()
+    for k, nd in enumerate(program.root.body.nodes):
+        if k in calls and not is_input(nd.fn):
+            out.update(of(nd.fn))
+    return out
+
+
+def placed(work: Mapping[str, float], units: Mapping[Tile, int]) -> dict[str, float]:
+    """The census of a block's work where the datacenter places a Program `SCHEME` or `SCHEME_V3` compiled (`Profile.work[block]`, the
+    Program's Calls on the block by kind), whose tile units are `units` (`tiles` of those Calls). Its int8 products
+    (`mac:int8`) are every tile's census/v1 products, its lanes' segment dots' and on v1 `z`'s (`Tile.products`), which
+    must be the units' exactly. Credited are `z`'s alone on either version, each a linear's at the tile's K (the unit is H1's Dither-C tile, a
+    committed word a product): the segment dots are the receipt's work, as its Boolean gates are. Its Boolean gates
+    (`cuda:gate`) are the units' seeds, noise and receipt folds: ♭ prices the fold a unit, and leaving the rest out only
+    lowers the bound. Any other kind isn't the scheme's, and the proved figure stands in for the block's whole compute, so
+    it is refused."""
     other = sorted(set(work) - {"mac:int8", "cuda:gate"})
     if other:
-        raise ValueError(f"work {other} on the block isn't {SCHEME}'s, whose units are int8 products and Boolean gates: "
+        raise ValueError(f"work {other} on the block isn't {SCHEME}'s or {SCHEME_V3}'s, whose units are int8 products and Boolean gates: "
                          "the proved figure would leave it out of the block's compute")
-    return {"mac:linears": work.get("mac:int8", 0.0)}
+    want = sum(t.products * n for t, n in units.items())
+    if work.get("mac:int8", 0) != want:
+        raise ValueError(f"the block's {work.get('mac:int8', 0):g} int8 products aren't its H1 tiles' {want} (the lanes' "
+                         "segment dots' r·c·(K + 32m) a tile, and on v1 z's cells·K): pass `tiles` of the block's Calls")
+    return {"mac:linears": float(sum(t.linears * n for t, n in units.items()))}
 
 
 def proved_block_ticks(census: Mapping[str, float], s: Sheet, eps: float, tick_seconds: float, gpus: int = 1) -> float:

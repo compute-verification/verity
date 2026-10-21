@@ -71,6 +71,8 @@ POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
+#: the trailer of drive's lock commit (`Driver._land`: `Lock records regenerated for ...`), which names the files it regenerated
+LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
 JOB = """set -u
@@ -113,13 +115,15 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     if attempt is None:
         return passed(sha)
     src = source_of(attempt)
-    merged = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M) and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd,
-                                                                                 check=False)
-    if src and src in (sha, merged):
+    checked = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M)
+    merged = checked and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)
+    # drive's lock commit on top of a train it landed (`Lock records regenerated for ...`) names the train's check
+    locked = checked and LOCKS_RE.search(body) and git("rev-parse", "--verify", "-q", f"{sha}^1", cwd=cwd, check=False)
+    if src and src in (sha, merged, locked):
         return attempt
     print(f"post-train: {attempt} ran on {src[:12] if src else 'no commit its attempt or run record names'}, which is neither "
-          f"{sha[:12]} nor the train it merged (its second parent, with `Checked: {attempt}`), so it is no check of this landing",
-          file=sys.stderr)
+          f"{sha[:12]}, the train it merged (its second parent, with `Checked: {attempt}`), nor the train its lock records were "
+          "regenerated on (its parent, with `Regenerated:`), so it is no check of this landing", file=sys.stderr)
     return None
 
 
@@ -221,13 +225,42 @@ def carried(sha: str, tree: Path) -> dict | None:
     return {**lab, "from": prev}
 
 
+def queued_path() -> Path:
+    """Beside LOCK: each job's landing and the check drive landed it on (`--attempt`), so a job that waited finds the tip's."""
+    return LOCK.with_name(LOCK.stem + ".attempts.json")
+
+
+def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
+    """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
+    once it lands, so `check_attempt` finds no attempt for main's tip (19 Oct: five post-train jobs queued, none superseded,
+    each a 200 GB regression of about an hour on node 1)."""
+    p = queued_path()
+    with open(p.with_suffix(".lock"), "a") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            got = json.loads(p.read_text())
+        except (OSError, ValueError):
+            got = {}
+        got = {k: v for k, v in got.items() if k != sha}
+        got[sha] = attempt
+        p.write_text(json.dumps(dict(list(got.items())[-keep:])))
+
+
+def queued_attempt(sha: str) -> str | None:
+    try:
+        return json.loads(queued_path().read_text()).get(sha)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def later_landing(sha: str, cwd: Path = ROOT) -> str | None:
-    """The attempt of origin/main's tip when that tip is a landing after ``sha``, else None."""
+    """The attempt of origin/main's tip when that tip is a landing after ``sha`` (its `Check:` line or passed check, else the
+    attempt its own post-train job recorded, `note_attempt`), else None."""
     git("fetch", "-q", "origin", "main", cwd=cwd)
     tip = git("rev-parse", "origin/main", cwd=cwd)
     if tip == sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip], cwd=cwd, capture_output=True).returncode:
         return None
-    return check_attempt(tip, cwd=cwd)
+    return check_attempt(tip, cwd=cwd) or queued_attempt(tip)
 
 
 def _status(p: Path) -> dict:
@@ -265,6 +298,8 @@ def main(argv: list[str] | None = None) -> int:
                "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
         print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
+    if attempt and not a.dry_run:
+        note_attempt(sha, attempt)
     with open(LOCK, "a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
