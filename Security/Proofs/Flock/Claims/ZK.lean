@@ -96,6 +96,7 @@ import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
+import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
@@ -466,6 +467,11 @@ import Proofs.Flock.Claims.ZK.HelloLean
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
+* `FinishCommit`: the firewall's own `Finish` (`Flock.Firewall.Finish`) commits as the masked prover does. Its codeword
+  by the FFT is `encodeRows`'s (`Flock.Firewall.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`,
+  in any lawful monad, `FlockComplete.commitP` returns `commitFw`'s commitment and `FlockComplete.commitPZk` of the
+  table `flock-firewall link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
+  their openings agree (`openP_eq`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
