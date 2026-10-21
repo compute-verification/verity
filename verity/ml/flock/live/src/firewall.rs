@@ -504,6 +504,13 @@ fn f128_wire(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()).collect()
 }
 
+/// The name the Lean session loop knows a session by (`Level0.nameOf`): the hex of its coin tree's root, the first four
+/// words of `Hello`'s answer `coins`, as the wire carries them.
+#[cfg(feature = "sha512")]
+pub fn level0_session(coins: &[F128]) -> String {
+    crate::hex(&f128_wire(&coins[..4.min(coins.len())]))
+}
+
 /// The `flock-firewall` the firewall releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.
 #[cfg(feature = "sha512")]
 pub fn lean_frame_exe() -> std::path::PathBuf {
@@ -926,11 +933,12 @@ pub struct LeanLevel0 {
 
 /// The level-0 hiding of record on a firewalled table under the Lean session loop: the loop, on its frames port `addr`, draws
 /// level 0's hiding and salts from the OS for the host's packed witness `z` at `m`, commits level 0 on them and keeps it
-/// (`level0 M LEN` followed by `z`, answered `ok N R` and the draws then the root, its last `R` bytes). `extra_words`, `lanes` (the extra ones
-/// included), `t_pad` and `leaves` are the statement's level-0 sizes, which the answer must have.
+/// for the session `session` names ([`level0_session`]) until that session ends (`level0 SESSION M LEN` followed by `z`,
+/// answered `ok N R` and the draws then the root, its last `R` bytes). `extra_words`, `lanes` (the extra ones included),
+/// `t_pad` and `leaves` are the statement's level-0 sizes, which the answer must have.
 #[cfg(feature = "sha512")]
-pub fn lean_level0(addr: &str, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize, leaves: usize)
-                   -> Result<LeanLevel0, String> {
+pub fn lean_level0(addr: &str, session: &str, m: usize, z: &[F128], extra_words: usize, lanes: usize, t_pad: usize,
+                   leaves: usize) -> Result<LeanLevel0, String> {
     use std::io::{BufRead, Read, Write};
     let fail = |e: String| refused(format!("the Lean loop's level 0 at {addr}: {e}"));
     let tcp = std::net::TcpStream::connect(addr).map_err(|e| fail(e.to_string()))?;
@@ -938,7 +946,7 @@ pub fn lean_level0(addr: &str, m: usize, z: &[F128], extra_words: usize, lanes: 
     let mut out = std::io::BufReader::new(tcp.try_clone().map_err(|e| fail(e.to_string()))?);
     let body = f128_wire(z);
     let mut w = &tcp;
-    write!(w, "level0 {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
+    write!(w, "level0 {session} {m} {}\n", body.len()).and_then(|_| w.write_all(&body)).and_then(|_| w.flush()).map_err(|e| fail(e.to_string()))?;
     let mut line = String::new();
     out.read_line(&mut line).map_err(|e| fail(e.to_string()))?;
     let l = line.trim_end();
@@ -1044,7 +1052,8 @@ impl LeanSession {
         use std::process::{Command, Stdio};
         let mut child = Command::new(exe).arg("session").arg("--verifier").arg(verifier).args(args)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
-            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN; \
+                                          with --firewall-state, `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
         let stdin = child.stdin.take().expect("piped stdin");
         let mut stdout = std::io::BufReader::new(child.stdout.take().expect("piped stdout"));
         let mut line = String::new();
