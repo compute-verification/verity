@@ -1,5 +1,5 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we]`, labelled by their z commitment as every
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we|-wea]`, labelled by their z commitment as every
 dither-a arm (`dither_a.form`, RT4-INT-39 as narrowed 14:44Z): all -zy in the -so order, so form=ASK-71 A (provisional),
 since the served epilogue commits #3018's per-unit z/y records under round s's root before coin s.
 
@@ -62,7 +62,10 @@ S - D + 1 to S - 1 (each the tree over a step's receipt-table roots, its domain 
 sent after the last step's coin, whose coin comes back; then the manifest root, the tree over every round root of the
 window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
 round leaves and every call's A, admit, z, y and receipt roots under them; then the draw coin opened after the manifest
-root, and the session closed.  In process the window ends after each of sbench's generates (and a new one opens at the
+root, and the session closed.  Until the draw the prover keeps what it must open a drawn unit from: each step's live A
+rows and scales and its z/y records' live row blocks (-wea: A and the scales alone, z/y recomputed from them), copied
+to pinned host memory on a stream of their own from the ring slot that holds them, a slot rewritten only once its copy is
+out (`Spill`).  In process the window ends after each of sbench's generates (and a new one opens at the
 next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
 session's window ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
 every family releases all its coins.  `check_end` holds an ended window to: the salt coin after the window's root, every
@@ -70,7 +73,8 @@ round's coin after its root, the draw coin after the manifest root recomputed fr
 each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
 tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
 or the final round) sent after that and before the draw coin, no round after it; and the last step's receipts, from its
-ring slot, against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed.  Two end faults, each
+ring slot, against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed; and three steps
+opened from the spill (`open_spill`).  Two end faults, each
 in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
 round and sent in a round after the draw coin: refused on that leaf and that round alone).  An off-node window's
@@ -119,6 +123,12 @@ END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
+# -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
+SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest are zero)",
+          "a": "A rows and scales (live rows); z/y recomputed from them at an opening (z = A B^T, y = dequant(z))"}
+SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
+SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
+SPILL_MAX_GB = 128
 
 
 def end_steps(depth: int) -> int:
@@ -142,6 +152,7 @@ class SoWindow(DO.Window):
     a_once = False
     overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
     window_end = False  # -we: each window ends (`end`)
+    spill_mode: str | None = None   # -we: what each step keeps until the draw (SPILLS), held by `SoSide.spill`
 
     def __init__(self, *args, **kwargs):
         if self.depth < 2:
@@ -301,6 +312,9 @@ class SoWindow(DO.Window):
                 self.dispatch_units(j)
             self.phase(None)
         t_units = time.perf_counter()
+        if sd.spill is not None:
+            sd.spill.stream.synchronize()
+        t_spill = time.perf_counter()
         torch.cuda.synchronize()
         t_sync = time.perf_counter()
         tail = list(range(max(s0, s1 - D + 1), s1))
@@ -349,12 +363,19 @@ class SoWindow(DO.Window):
             rec["last"] = {"a": [x.clone() for x in sd.ring_slot[p]], "sa": [x.clone() for x in sd.ring_scale[p].unbind(0)],
                            "receipts": self.plan.out.clone(), "m": self.m_last}
             self.end_recs[self.end_name] = rec
+        if sd.spill is not None:
+            held = sd.spill.take_window()
+            if self.end_name is not None:
+                rec["spill"] = held
+            else:
+                sd.spill.release(held)
         self.mf_pool.extend(self.mf_chunks)
         self.mf_chunks = []
         t_end = time.perf_counter()
         e = {"k": self.k, "name": self.end_name, "fault": self.end_fault, "s0": s0, "steps": n, "tail": len(tail),
              "units_pending_at_end": pending, "final_index": i_f, "end_ms": 1e3 * (t_end - t0),
-             "split_ms": {"tail_units": 1e3 * (t_units - t0), "tail_sync": 1e3 * (t_sync - t_units),
+             "split_ms": {"tail_units": 1e3 * (t_units - t0), "spill_sync": 1e3 * (t_spill - t_units),
+                          "tail_sync": 1e3 * (t_sync - t_spill),
                           "receipt_tail_roots": 1e3 * (t_rr - t_sync), "final_round": 1e3 * (t_final - t_rr),
                           "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_draw - t_mf),
                           "close": 1e3 * (t_close - t_draw), "record": 1e3 * (t_end - t_close)}}
@@ -421,6 +442,8 @@ class SoWindow(DO.Window):
         self.t_b0 = time.perf_counter()
         if not self.open:
             self._start()
+        if not self.overlap and DA.SIDE and DA.SIDE[0].spill is not None:
+            DA.SIDE[0].spill.wait_z(0)
         super().before(m)
         self.m_of[self.s] = self.m_last = m
         if self.cap is not None:
@@ -464,8 +487,13 @@ class SoWindow(DO.Window):
                 self.scale_all[:, m:].zero_()
             self.c.build(pre["a"], self.stepv[0:1])
         self.phase("stash")
+        if sd.spill is not None:
+            sd.spill.wait_a(s % self.depth)
         sd.stash(s)
         self.stashed.add(s)
+        if sd.spill is not None:
+            self.phase("spill")
+            sd.spill.put(s, m, sd.ready[s % self.depth])
         ads = self.tree_streams[1] if self.tree_streams is not None else None
         self.phase("admit_tables")
         ev[0].record()
@@ -594,10 +622,15 @@ class SoWindow(DO.Window):
         self.phase("stash")
         if s >= D:
             main.wait_event(sd.udone[s % D])
+        if sd.spill is not None:
+            sd.spill.wait_a(s % D)
+            sd.spill.wait_z(s % ov.R)
         if cap is not None:
             ov.poison(s % ov.R)
         sd.stash(s)
         ov.copy(s)
+        if sd.spill is not None:
+            sd.spill.put(s, m, ov.ev["copied"][s % Ov.EV])
         if cap is not None:
             ov.watch.add(s)
             br = self.bset.roots.cpu()
@@ -664,7 +697,8 @@ class SoWindow(DO.Window):
                 "amortized_ms_per_step": [round(e["amortized_ms_per_step"], 4) for e in ends],
                 "start_ms": {"n": len(starts), "p50": _q(starts, 0.5), "max": _q(starts, 1.0)},
                 "ends": [{k: e[k] for k in ("k", "name", "fault", "s0", "steps", "tail", "units_pending_at_end",
-                                            "final_index")} for e in ends[-4:]]}
+                                            "final_index")} for e in ends[-4:]],
+                "spill": DA.SIDE[0].spill.stats() if DA.SIDE and DA.SIDE[0].spill is not None else None}
 
 
 def _q(xs: list, f: float):
@@ -727,6 +761,7 @@ class SoSide(DA.Side):
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
+        self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
 
     def call(self, w: int, x: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         win = self.win
@@ -1151,6 +1186,151 @@ class Ov:
         self._set(dispatched_upto=s)
 
 
+class Spill:
+    """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row blocks, the values the prover
+    opens a drawn unit from after the draw, copied on a stream of their own into pinned host memory from the ring slot
+    that holds them, and held until the window's end (`take_window`).  The serving stream rewrites a slot only once its
+    copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
+    slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
+    pool's chunks are never freed: a window's go back to it at its end, a named or off-node window's after `check_end`
+    (`release`)."""
+
+    def __init__(self, win: SoWindow, sd: SoSide, mode: str):
+        if mode not in SPILLS:
+            raise ValueError(f"dither-a-so -we: a spill is one of {tuple(SPILLS)}, not {mode!r}")
+        self.win, self.sd, self.mode, self.zy = win, sd, mode, mode == "azy"
+        L = win.L
+        self.stream = torch.cuda.Stream(device=win.dev)
+        self.a_done = [torch.cuda.Event() for _ in range(win.depth)]
+        self.z_done = [torch.cuda.Event() for _ in range(win.overlap or 1)]
+        self.a_used, self.z_used = [False] * win.depth, [False] * (win.overlap or 1)
+        # call w's A rows: index i of the ring's group of its K
+        self.slot_of, at = [], {}
+        for _, k in win.nk:
+            self.slot_of.append((k, at.get(k, 0)))
+            at[k] = at.get(k, 0) + 1
+        self.row_block = [(sd.unit_of[w][0], (win.nk[w][0] // sd.unit_of[w][1]) * DA.zy_bytes(sd.unit_of[w]))
+                          for w in range(L)]
+        self.stage = torch.empty(sum(x.numel() for x in sd.zy), dtype=torch.uint8, device=win.dev) if self.zy else None
+        self.src: dict[tuple, list] = {}
+        self.free: list[torch.Tensor] = []
+        self.chunks: list[torch.Tensor] = []
+        self.at, self.n_chunks, self.grown, self.alloc_ms = 0, 0, 0, 0.0
+        self.max_bytes = int(float(os.environ.get(SPILL_MAX_ENV) or SPILL_MAX_GB) * (1 << 30))
+        self.held: dict[int, dict] = {}
+        self.log: list[tuple] = []
+        self.unfinished = {"a": 0, "z": 0}
+
+    def prefix(self, w: int, m: int) -> int:
+        """Call w's records' live bytes at m rows: its row blocks below m."""
+        ur, per = self.row_block[w]
+        return -(-m // ur) * per
+
+    def take(self, n: int) -> torch.Tensor:
+        """n bytes of the window's pinned chunks, 512-aligned, a chunk from the pool (or a new one) when the last is full."""
+        if not self.chunks or self.at + n > SPILL_CHUNK:
+            if n > SPILL_CHUNK:
+                raise RuntimeError(f"dither-a-so -we: a spill copy of {n} bytes outgrows a chunk ({SPILL_CHUNK})")
+            if self.free:
+                c = self.free.pop()
+            else:
+                if (self.n_chunks + 1) * SPILL_CHUNK > self.max_bytes:
+                    raise RuntimeError(f"dither-a-so -we: the spill's pool would pass {self.max_bytes >> 30} GiB at step "
+                                       f"{self.win.s}, {len(self.held)} steps into its window: serve a shorter window, "
+                                       f"spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+                t0 = time.perf_counter()
+                c = torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True)
+                self.alloc_ms += 1e3 * (time.perf_counter() - t0)
+                self.n_chunks += 1
+                self.grown += 1
+            self.chunks.append(c)
+            self.at = 0
+        v = self.chunks[-1][self.at:self.at + n]
+        self.at += -(-n // 512) * 512
+        return v
+
+    def wait_a(self, p: int) -> None:
+        """On the current stream, before ring slot p is rewritten: its last copy out."""
+        if self.a_used[p]:
+            self.unfinished["a"] += not self.a_done[p].query()
+            torch.cuda.current_stream().wait_event(self.a_done[p])
+
+    def wait_z(self, q: int) -> None:
+        """On the current stream, before the z/y records (under -ov round slot q) are rewritten: their last gather."""
+        if self.zy and self.z_used[q]:
+            self.unfinished["z"] += not self.z_done[q].query()
+            torch.cuda.current_stream().wait_event(self.z_done[q])
+
+    def put(self, s: int, m: int, ready: torch.cuda.Event) -> None:
+        """Step s's copies on the spill's stream once `ready` (ring slot s mod D written; under -ov round slot s mod R
+        too)."""
+        t0 = time.perf_counter()
+        win, sd, st = self.win, self.sd, self.stream
+        p, ov = s % win.depth, sd.ov
+        q = s % ov.R if ov is not None else 0
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        x: dict = {"m": m, "a": {}, "zy": None}
+        nz = 0
+        with torch.cuda.stream(st):
+            st.wait_event(ready)
+            e0.record(st)
+            for k, g in sd.ring_groups[p].items():
+                h = self.take(g.shape[0] * m * k).view(torch.int8).view(g.shape[0], m, k)
+                h.copy_(g[:, :m], non_blocking=True)
+                x["a"][k] = h
+            sa = sd.ring_scale[p]
+            x["sa"] = self.take(sa.shape[0] * m * sa.element_size()).view(sa.dtype).view(sa.shape[0], m)
+            x["sa"].copy_(sa[:, :m], non_blocking=True)
+            self.a_done[p].record(st)
+            self.a_used[p] = True
+            if self.zy:
+                key = (q, m)
+                if key not in self.src:
+                    recs = ov.zy_r[q].split(ov.zl) if ov is not None else sd.zy
+                    self.src[key] = [r[:self.prefix(w, m)] for w, r in enumerate(recs)]
+                nz = sum(self.prefix(w, m) for w in range(win.L))
+                torch.cat(self.src[key], out=self.stage[:nz])
+                self.z_done[q].record(st)
+                self.z_used[q] = True
+                x["zy"] = self.take(nz)
+                x["zy"].copy_(self.stage[:nz], non_blocking=True)
+            e1.record(st)
+        na = sum(h.numel() for h in x["a"].values()) + x["sa"].numel() * x["sa"].element_size()
+        self.held[s] = x
+        self.log.append((na, nz, e0, e1, 1e3 * (time.perf_counter() - t0)))
+
+    def take_window(self) -> dict:
+        """The ended window's held steps and their chunks; the next window's from none."""
+        w = {"mode": self.mode, "steps": self.held, "chunks": self.chunks}
+        self.held, self.chunks, self.at = {}, [], 0
+        return w
+
+    def release(self, w: dict | None) -> None:
+        if w:
+            self.free.extend(w["chunks"])
+            w["chunks"], w["steps"] = [], {}
+
+    def stats(self) -> dict:
+        """The steps spilled since the last call: bytes, the copies' time on the spill's stream, the serving thread's
+        time enqueuing them, how often the serving stream's wait found a copy unfinished, and the pool's growth."""
+        done = [x for x in self.log if x[3].query()]
+        self.log = [x for x in self.log if not x[3].query()]
+        gpu = sorted(x[2].elapsed_time(x[3]) for x in done)
+        host = sorted(x[4] for x in done)
+        na, nz = sorted(x[0] for x in done), sorted(x[1] for x in done)
+        gbps = sorted((x[0] + x[1]) / (1e6 * x[2].elapsed_time(x[3])) for x in done if x[2].elapsed_time(x[3]) > 0)
+        doc = {"mode": self.mode, "what": SPILLS[self.mode], "steps": len(done),
+               "a_bytes_per_step": _q(na, 0.5), "zy_bytes_per_step": _q(nz, 0.5),
+               "copy_gpu_ms": {"p50": _q(gpu, 0.5), "p90": _q(gpu, 0.9), "max": _q(gpu, 1.0)},
+               "copy_gb_per_s_p50": _q(gbps, 0.5), "host_ms": {"p50": _q(host, 0.5), "max": _q(host, 1.0)},
+               "serving_waits_on_unfinished_copy": dict(self.unfinished),
+               "pool_gib": self.n_chunks * SPILL_CHUNK / (1 << 30), "chunks_grown": self.grown,
+               "alloc_ms": round(self.alloc_ms, 1)}
+        self.unfinished = {"a": 0, "z": 0}
+        self.grown, self.alloc_ms = 0, 0.0
+        return doc
+
+
 CONF: dict = {}
 
 
@@ -1162,13 +1342,16 @@ def side() -> SoSide:
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
-          ov: int = 0, serve_prio: bool = False, window_end: bool = False) -> None:
+          ov: int = 0, serve_prio: bool = False, window_end: bool = False, spill: str | None = "azy") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
     calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
     priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire).
-    `window_end`: -we, each window ends (`SoWindow.end`)."""
+    `window_end`: -we, each window ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
+    -we "azy", -wea "a")."""
     global CAPTURES
+    if window_end and spill not in SPILLS:
+        raise ValueError(f"dither-a-so -we: a spill is one of {tuple(SPILLS)}, not {spill!r}")
     if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0:
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
@@ -1176,6 +1359,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
     CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end
+    SoWindow.spill_mode = spill if window_end else None
     if ov:
         CAPTURES = CAPTURES_OV
     if serve_prio:
@@ -1300,8 +1484,9 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
     under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
     after that and before the draw coin, no round after it; the final round from the tail's receipt roots; and the last
-    step's receipts against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed.  Under
-    fault_tail and fault_late_receipt, ``conforming`` holds when it is refused exactly where its fault is."""
+    step's receipts against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed; under -we
+    three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
+    when it is refused exactly where its fault is."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
@@ -1389,8 +1574,11 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
                salts_expected_bad=rearly, tail_leaves_bad=tail_bad, final_root_ok=final_ok,
                receipts_after_draw=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
                receipts_vs_h1r_bad=rc_bad[:8], receipts_vs_h1r_bad_n=len(rc_bad))
+    sp = open_spill(win, rec, kinds)
+    if sp is not None:
+        doc["spill"] = sp
     base = (coins["ok"] and not doc["rounds_recomputed"]["bad"] and doc["rounds_recomputed"]["expected_found"]
-            and sorted(salts_bad) == rearly and final_ok)
+            and sorted(salts_bad) == rearly and final_ok and (sp is None or sp["ok"]))
     doc["ok"] = bool(base and not order_bad and not after and not tail_bad and not late_steps and not rc_bad
                      and not a_bad and not rr_bad)
     if rec["fault"] == "fault_tail":
@@ -1402,6 +1590,63 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         # leaf and that round alone
         doc["conforming"] = bool(base and not order_bad and tail_bad == [s] and late_steps == [s] and after == [li]
                                  and not rc_bad and not a_bad and not rr_bad)
+    return doc
+
+
+def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
+    """After the draw, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
+    its last, and one its draw coin picks), each at a call the draw coin picks.  The call's A table rehashed from the
+    held rows and scales (zero past m) against its manifest row's A root; its z/y records recomputed from them (z = A B^T
+    by int_mm, y = dequant(z), zero past m) against the row's z root; and under "azy" the held records against both."""
+    from verity_vllm.engine import int8_exact as E
+    sp = rec.get("spill")
+    if sp is None:
+        return None
+    sd: SoSide = DA.SIDE[0]
+    W, L, t, key, s0, s1, rows = win.window, win.L, win.t, win.key, rec["s0"], rec["s1"], rec["rows"]
+    near = set(rec["cap_at"]) | {s + 1 for s in rec["cap_at"]}
+    held = [s for s in range(s0, s1) if s not in near and s in sp["steps"]]
+    doc: dict = {"mode": sp["mode"], "what": SPILLS[sp["mode"]], "held_steps": len(sp["steps"]), "steps": s1 - s0}
+    if not held or len(sp["steps"]) != s1 - s0:
+        return {**doc, "ok": False, "why": "the spill holds not every step of the window, or none uncaptured"}
+    h = hashlib.sha512(b"verity/kernels-int12/spill-open/v1" + rec["draw"].coin).digest()
+    steps = sorted({held[0], held[int.from_bytes(h[:8], "big") % len(held)], held[-1]})
+    ai, zi, L8 = kinds.index("a-step"), kinds.index("z-step"), 8 * L
+    out = []
+    for j, s in enumerate(steps):
+        w = int.from_bytes(h[8 + 8 * j:16 + 8 * j], "big") % L
+        x, row = sp["steps"][s], rows[s - s0]
+        m, (n, k), u = x["m"], win.nk[w], sd.unit_of[w]
+        kk, i = sd.spill.slot_of[w]
+        a = np.zeros((t, k), dtype=np.int8)
+        a[:m] = x["a"][kk][i].numpy()
+        sc = np.zeros(t, dtype=np.float32)
+        sc[:m] = x["sa"][w].numpy()
+        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
+        a_ok = (CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", a, sc).root
+                == unwords(row[ai * L8 + 8 * w:ai * L8 + 8 * w + 8]))
+        z = torch.zeros((t, n), dtype=torch.int32, device=win.dev)
+        y = torch.zeros((t, n), dtype=torch.bfloat16, device=win.dev)
+        z[:m] = E.int_mm(torch.from_numpy(a[:m]).to(win.dev), win.wt[w])
+        y[:m] = E.dequantize(z[:m], torch.from_numpy(sc[:m]).to(win.dev), win.sw[w])
+        recs = DA.zy_join(z, y, u).cpu().numpy()
+        cnt = recs.shape[0]
+        zd = CM.domain(DA.zy_fields(win, w, s, u), cnt, DA.ZY_KIND)
+
+        def root(r: np.ndarray, s=s, w=w, zd=zd, cnt=cnt) -> bytes:
+            return CM.levels(zd, [CM.leaf(zd, key, f"zy/{s}/{w}", e, bytes(r[e]))[0] for e in range(cnt)])[-1][0]
+        want = unwords(row[zi * L8 + 8 * w:zi * L8 + 8 * w + 8])
+        o = {"s": s, "call": w, "module": win.names[w], "m": m, "a_root": a_ok, "zy_recomputed_root": root(recs) == want}
+        if x["zy"] is not None:
+            off = sum(sd.spill.prefix(v, m) for v in range(w))
+            got = np.zeros(recs.size, dtype=np.uint8)
+            got[:sd.spill.prefix(w, m)] = x["zy"][off:off + sd.spill.prefix(w, m)].numpy()
+            eq = bool(np.array_equal(got, recs.reshape(-1)))
+            o.update(zy_held_eq_recomputed=eq, zy_held_root=o["zy_recomputed_root"] if eq else root(got.reshape(cnt, -1)) == want)
+        out.append(o)
+    doc["opened"] = out
+    doc["ok"] = all(o["a_root"] and o["zy_recomputed_root"] and o.get("zy_held_eq_recomputed", True)
+                    and o.get("zy_held_root", True) for o in out)
     return doc
 
 
@@ -1435,6 +1680,9 @@ def end_checks(win: SoWindow, lib_h1o: str) -> dict:
     with torch.inference_mode():
         docs = {x: check_end(win, x, lib_h1o) for x in names}
     docs["verdict"] = end_verdict(docs)
+    if DA.SIDE and DA.SIDE[0].spill is not None:
+        for rec in win.end_recs.values():
+            DA.SIDE[0].spill.release(rec.get("spill"))
     win.end_recs.clear()
     torch.cuda.empty_cache()
     return docs

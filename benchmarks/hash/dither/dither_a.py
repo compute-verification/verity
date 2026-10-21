@@ -648,6 +648,16 @@ def zy_split(rec: torch.Tensor, t: int, n: int, unit: tuple[int, int]) -> tuple[
     return z, y
 
 
+def zy_join(z: torch.Tensor, y: torch.Tensor, unit: tuple[int, int]) -> torch.Tensor:
+    """`zy_split`'s inverse: z (T, N) int32 and y (T, N) bf16 as the call's records, (units, zy_bytes) uint8."""
+    ur, uc = unit
+    t, n = z.shape
+
+    def units(x: torch.Tensor) -> torch.Tensor:
+        return x.reshape(t // ur, ur, n // uc, uc).permute(0, 2, 1, 3).reshape(-1, ur * uc).contiguous().view(torch.uint8)
+    return torch.cat([units(z), units(y.view(torch.int16))], dim=1)
+
+
 SIDE: list[Side] = []
 CONF: dict = {}
 
