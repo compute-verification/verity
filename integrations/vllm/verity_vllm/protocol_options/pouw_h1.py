@@ -70,7 +70,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96, commit_rows, weight_binding
+from verity.core.protocols.pouw.audit import commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.protocol import tagged
@@ -450,8 +450,8 @@ class H1Run:
         return self._salt
 
     def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
-        return commit_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, hash=HM96, salt_key=self._key,
-                           nonce=RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]).commitment.root.hex()
+        return RQ.hiding_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, self._key,
+                              RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]).commitment.root.hex()
 
     def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None) -> None:
         """The call's A table (`table_leaves`) and its z table, leaf u unit u's z/y record (`pouw_h1_records`; an empty call's

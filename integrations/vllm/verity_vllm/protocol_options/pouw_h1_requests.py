@@ -52,10 +52,10 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, commit_rows, rows_domain
+from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
+from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
 
 
 @dataclass(frozen=True)
@@ -136,14 +136,25 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
     if len(entries) > rows:
         raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
     values = [e.row() for e in entries] + [EMPTY_REQUEST] * (rows - len(entries))
-    return commit_rows(requests_binding(salt, r), r, values, hash=HM96, salt_key=key, nonce=REQUESTS_NONCE + r)
+    return hiding_rows(requests_binding(salt, r), r, values, key, REQUESTS_NONCE + r)
 
 
 def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key: bytes) -> Any:
     """Round r's slot table: `rows` (T) hiding leaves, leaf i naming the request whose row is slot i of step r's A tables
     (`owners`, in the step's batch order), `EMPTY_SLOT` past them."""
     values = [slot_leaf(o) for o in owners[:rows]] + [EMPTY_SLOT] * (rows - min(len(owners), rows))
-    return commit_rows(slots_binding(salt, r), r, values, hash=HM96, salt_key=key, nonce=SLOTS_NONCE + r)
+    return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
+
+
+def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
+    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
+    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
+    8439's stream (`commit.serving_rows.chacha20`) with the counter's high word, 0 below 2^32 blocks, first in its nonce.
+    The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
+    from verity_vllm.commit.serving_rows import chacha20
+    y = chacha20(key, bytes(4) + nonce.to_bytes(8, "little"), len(values) * HM96_SALT)
+    rows = {i: v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)}
+    return MerkleTree(rows_domain(binding, owner, len(values), HM96), rows, lambda _: ROW_SCHEMA)
 
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
@@ -366,7 +377,7 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
            "REQUESTS_NONCE", "ROUND0",
-           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
+           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root", "hiding_rows",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
            "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
            "sort_batch_req_ids", "step_digest", "tables_reason"]
