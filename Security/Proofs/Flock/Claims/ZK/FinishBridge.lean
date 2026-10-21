@@ -97,14 +97,14 @@ theorem queryP_rel (hio : AsksRel S io io') (nonce : ℕ → ℕ → UInt64) (ms
   unfold FlockComplete.queryP FlockComplete.sampleVecP
   sim_walk [liftT_rel S, squeezeP_rel S hio, powP_rel S]
 
-theorem commitP_rel {hs : Hashes M} {hs' : Hashes N} (hh : S.Hashes hs hs') (ms : MerkleScheme) (lv : Level)
-    (g : Array F128) (salt : ℕ → ByteArray) :
+theorem commitP_rel [LawfulMonad M] [LawfulMonad N] {hs : Hashes M} {hs' : Hashes N} (hh : S.Hashes hs hs')
+    (ms : MerkleScheme) (lv : Level) (g : Array F128) (salt : ℕ → ByteArray) :
     S.R (FlockComplete.commitP hs ms lv g salt) (FlockComplete.commitP hs' ms lv g salt) := by
   have ho := opsWith_sim S hh ms
   unfold FlockComplete.commitP
   sim_walk [ho.leaf, ho.node]
 
-theorem ligeritoPZk_rel (hio : AsksRel S io io') {hs : Hashes M} {hs' : Hashes N} (hh : S.Hashes hs hs')
+theorem ligeritoPZk_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io io') {hs : Hashes M} {hs' : Hashes N} (hh : S.Hashes hs hs')
     (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : FlockComplete.Commit) (t b : Array F128)
     (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) :
