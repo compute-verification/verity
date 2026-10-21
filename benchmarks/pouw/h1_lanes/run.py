@@ -1,4 +1,5 @@
-"""run.py prepare|summarize: one served H1 leaf (32 × 32, at a small K) proved as its seeds, its 32 lanes and its combine
+"""run.py prepare|summarize: one served H1 leaf (32 × 32, at a small K: 384, the least whose combine statement has a row of
+more than one SHA-512 block, which C-Flock's circuit needs) proved as its seeds, its 32 lanes and its combine
 (`pouw.circuit.h1lane`), one C-Flock --zk statement each, the seed pair and the lanes' partials carried from statement to
 statement as produced values (`one_stage.produced`), and the negatives of the produced route.
 
@@ -404,6 +405,9 @@ def prepare(args) -> None:
     ctx.tile = tile(args.k)
     ctx.lay = L.layout(ctx.tile)
     ctx.lanes, ctx.wp = ctx.lay.lanes, 4 * ctx.lay.sets
+    if 2 * ctx.wp + 17 <= 128:
+        raise SystemExit(f"K={args.k}: a partial row of {16 * ctx.wp} bits is one SHA-512 block, and every row of the combine's "
+                         f"statement is one, but C-Flock needs a row with a compression before its last block: K >= 384")
     ctx.program, ctx.query = L.program(ctx.tile), L.query(ctx.tile)
     ctx.part = P.partition(ctx.program, ctx.query)
     ctx.prog, ctx.population = P.program_digest(ctx.program), P.units(ctx.program, ctx.query)
@@ -514,7 +518,7 @@ def main() -> None:
     ap.add_argument("cmd", choices=("prepare", "summarize"))
     ap.add_argument("--work", required=True)
     ap.add_argument("--out")
-    ap.add_argument("--k", type=int, default=64)
+    ap.add_argument("--k", type=int, default=384)
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--seed", type=int, default=20261021)
     ap.add_argument("--position", type=int, default=5)

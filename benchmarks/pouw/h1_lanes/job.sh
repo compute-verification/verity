@@ -8,7 +8,7 @@
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
 #   4. the plan's Lean checks, each with the verifier's own Program, partition, public file and registered reads
 #   5. run.py summarize: out/summary.json
-# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (64)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (4: sessions at a time)
+# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (384: the least the combine stages at)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (4: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  HZ_CACHE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
@@ -17,7 +17,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
-K=${H1L_K:-64} PAR=${H1L_PAR:-4} LPAR=${H1L_LPAR:-8}
+K=${H1L_K:-384} PAR=${H1L_PAR:-4} LPAR=${H1L_LPAR:-8}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
