@@ -161,6 +161,44 @@ __device__ __forceinline__ u32 wrapw(u32 b, u32 v) {
 
 __device__ __forceinline__ void prefetch_l2(const void* p) { asm volatile("prefetch.global.L2 [%0];" ::"l"(p)); }
 
+// H1U_L2HINT = 64 | 128 | 256 (h1u's and h1k's A and B segment loads) and H1U_L2HINT_WS (their workspace loads): the
+// load's L2 prefetch size, so a miss brings the line the next segments (blocks) read instead of the one 32-byte sector
+#ifndef H1U_L2HINT
+#define H1U_L2HINT 0
+#endif
+#ifndef H1U_L2HINT_WS
+#define H1U_L2HINT_WS 0
+#endif
+template <int H>
+__device__ __forceinline__ uint2 ld2(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint2*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint2 v;
+    if constexpr (H == 64) asm("ld.global.nc.L2::64B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else if constexpr (H == 128) asm("ld.global.nc.L2::128B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else asm("ld.global.nc.L2::256B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    return v;
+  }
+}
+template <int H>
+__device__ __forceinline__ uint4 ld4(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint4*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint4 v;
+    if constexpr (H == 64)
+      asm("ld.global.nc.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else
+      asm("ld.global.nc.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    return v;
+  }
+}
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -423,8 +461,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -443,7 +481,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
-          const uint4 v = __ldg(src + w);
+          const uint4 v = ld4<H1U_L2HINT_WS>(src + w);
           dst[4 * w] = v.x;
           dst[4 * w + 1] = v.y;
           dst[4 * w + 2] = v.z;
@@ -514,8 +552,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
           const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
-            ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-            cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+            ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+            cw[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
@@ -778,7 +816,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int m = 0; m < KNI; ++m) {
       const u32 k = pi + 32 * KP * m, kb = k >> 2, w = k & 3;
       const u64 t = kb < 32 ? (u64)kb * rb + blk : 32ull * rb + (u64)(kb - 32) * cb + blk;
-      v[m] = __ldg(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
+      v[m] = ld4<H1U_L2HINT_WS>(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
     }
   };
   const auto store_noise = [&](u32 bf, const uint4(&v)[KNI]) {
@@ -863,8 +901,8 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   uint2 pa[4], pb[4];

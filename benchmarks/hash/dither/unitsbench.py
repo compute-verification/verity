@@ -16,7 +16,8 @@ Gates before any timing, on every build and linear (a failed gate exits 4 and it
 Timing (CUDA graphs, builds interleaved rep by rep): each call's units alone (`units`) and its noise (`noise`, the base
 build's), and the step's units stream: 32 layers x the four calls' units in order on two alternating weight copies
 (`step`, 128 launches, what the served units stream runs apart from the z tables). --profile skips the timing and runs
-each gated build's four calls once between torch.cuda.profiler.start and stop (for ncu --profile-from-start off).
+each gated build's four calls once between torch.cuda.profiler.start and stop (for ncu --profile-from-start off),
+and writes its gates to units-prof.json.
 """
 from __future__ import annotations
 
@@ -174,6 +175,7 @@ def main() -> int:
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    doc_path = out / ("units-prof.json" if args.profile else "units.json")
     paths = dict(v.partition("=")[::2] for v in args.lib)
     libs = {name: Lib(p) for name, p in paths.items()}
     names = list(libs)
@@ -219,7 +221,7 @@ def main() -> int:
         for c in cs.values():
             c.full()
     doc["gate_failed"] = sorted(failed)
-    (out / "units.json").write_text(json.dumps(doc, indent=1))
+    doc_path.write_text(json.dumps(doc, indent=1))
     if names[0] in failed:
         print("unitsbench: the base build failed its gate; nothing timed", file=sys.stderr)
         return 4
@@ -239,7 +241,7 @@ def main() -> int:
             torch.cuda.profiler.stop()
             torch.cuda.nvtx.range_pop()
         doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        (out / "units.json").write_text(json.dumps(doc, indent=1))
+        doc_path.write_text(json.dumps(doc, indent=1))
         return 4 if failed else 0
 
     arms: dict = {}
@@ -293,7 +295,7 @@ def main() -> int:
                           if isinstance(v, dict) and arm in b0 and "median_us" in v}
     doc["timing"] = res
     doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    (out / "units.json").write_text(json.dumps(doc, indent=1))
+    doc_path.write_text(json.dumps(doc, indent=1))
     print(json.dumps({nm: {k: (v["median_us"] if isinstance(v, dict) and "median_us" in v else v)
                            for k, v in r.items() if k != "noise"} for nm, r in res.items()}, indent=1), flush=True)
     return 4 if failed else 0
