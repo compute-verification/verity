@@ -26,7 +26,8 @@
 // heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block, and H1C_LVB = 1
 // (with H1C_MK) levels 0 to 6 in the leaves' launch, each block the subtree over its 128 leaves after them, so only
 // the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
-// room for B blocks an SM (H1C_MID's snapshots take sm_120a's leaves from 126 to 154 registers, 4 blocks an SM to 3).
+// room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
+// sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).
 #include <cstdint>
 #include <cuda_runtime.h>
 
