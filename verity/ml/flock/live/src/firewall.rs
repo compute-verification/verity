@@ -1044,7 +1044,8 @@ impl LeanSession {
         use std::process::{Command, Stdio};
         let mut child = Command::new(exe).arg("session").arg("--verifier").arg(verifier).args(args)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
-            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN; \
+                                          with --firewall-state, `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
         let stdin = child.stdin.take().expect("piped stdin");
         let mut stdout = std::io::BufReader::new(child.stdout.take().expect("piped stdout"));
         let mut line = String::new();

@@ -247,6 +247,10 @@ def recvFrame (c : Socket.Client) : IO (Option ByteArray) := do
 def sendFrame (c : Socket.Client) (f : ByteArray) : IO Unit :=
   (c.sendAll #[u32le f.size, f]).block
 
+/-- `c` shut down, where it still can be. -/
+def close (c : Socket.Client) : IO Unit :=
+  try (c.shutdown).block catch _ => pure ()
+
 /-- `Resp::Ok`'s frame. -/
 def ok : ByteArray := ByteArray.mk #[1]
 
@@ -447,7 +451,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
     match ← admitted p h with
     | some f => first := some f
     | none =>
-      try (p.shutdown).block catch _ => pure ()
+      close p
       return
   let phase ← IO.mkRef Phase.relay
   let ended ← IO.mkRef "the prover ended the session before its Finish"
@@ -460,7 +464,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
       if (← phase.get) == .relay then
         phase.set .done
         h.cut (← ended.get)
-    try (a.shutdown).block catch _ => pure ()
+    close a
   catch e =>
     match hold with
     | none => throw e
@@ -475,7 +479,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
       | .done => pure ()
   finally
     if let some h := hold then h.leave
-  try (p.shutdown).block catch _ => pure ()
+  close p
 
 /-- The first byte `v` of `b`, if any. -/
 def findByte (b : ByteArray) (v : UInt8) : Option Nat := Id.run do
