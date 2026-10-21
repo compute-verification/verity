@@ -88,6 +88,22 @@ def test_each_record_is_its_units_exact_dots_then_their_dequant(m, rows, n, k):
     assert not yr[m:].view(torch.int16).any() and not E.zy_split(zy, rows, n)[0][m:].any()
 
 
+@pytest.mark.slow
+def test_each_records_z_is_the_compiled_units_z_in_its_cells_order():
+    """Record u's z words are `pouw_h1.Call.z(Y, u)`: the compiled Program's unit u, its cells in its tile's pair order, so
+    a leaf of the record is the unit's z as H1's statement reads it.  The only test that holds the layout to the compiled
+    Program rather than to the module doc; about 30 s, compiling the smallest H1 call (K = 64, two by two units)."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    m, rows, n, k = 40, 64, 64, 64
+    xq, sa, w, sw = _args(m, k, n, seed=11)
+    zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)[1]
+    call = PH.Call(0, 0, 0, "q", m, k, n, 0, rows)
+    assert len(call.compiled().units) == zy.shape[0] == call.units
+    dots = E.int_mm(xq, w).numpy()
+    for u in range(zy.shape[0]):
+        assert np.array_equal(_unit(zy, u)[0].reshape(-1), call.z(dots, u)), u
+
+
 def test_the_records_split_back_into_z_and_y():
     g = torch.Generator().manual_seed(1)
     z = torch.randint(-2 ** 31, 2 ** 31 - 1, (64, 96), generator=g, dtype=torch.int32)
