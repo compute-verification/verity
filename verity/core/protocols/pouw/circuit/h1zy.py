@@ -32,7 +32,12 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 * **ok** is a check word, no served value (no ``outZ``, ``outY`` or ``served`` role; Served's ``check`` class, pending), read
   through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`), so a proof the
   verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
-  accepted proof.
+  accepted proof. The ok rows are a registered port of the verifier's own (``--registered``), each call's ok table
+  ``ok@<c>`` (h1_prove's `ok_tables`: row t the word 1 under unit t's public salt), whose root the verifier computes
+  from the window's name and shape before any statement or coin, so Lean opens each unit's ok row there rather than
+  reading ok off the public file alone (proofs' ``CheckedSessionSound``, #3108, binds ok only through a port of
+  ``own``). A lane's and a combine's ok rows are registered the same way, one ok table of the word 1 under public salts
+  for each statement's instances, beside the ``partials`` commitment.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a drawn leaf is proved as its 32
   lanes and their combine). CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The
   partials are values: the prover commits them after the draw under hiding leaves, one row per lane (``partials``, row l
