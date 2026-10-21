@@ -26,6 +26,7 @@
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
   "Flock.Test.ProofCanon",
+  "Flock.Test.Tmpl",
   "VStar"
  ],
  "exempt": {
