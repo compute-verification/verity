@@ -9,9 +9,8 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   one twice.
 * **The tile** is the served path's R × C, `pouw_h1.TILE` (32 × 32) unless given, over the tile unit at each K
   (`h1window.tile_unit`, or ``unit``), each K's template reading its A and B rows as ``a_k<K>`` and ``b_k<K>``
-  (`h1window.template_params`). A unit of K's R A rows are ports ``a_k<K>0`` .. ``a_k<K>{R-1}`` of one value and its C
-  B rows ``b_k<K>0`` .. ``b_k<K>{C-1}`` (`ports`; `registered.reads` keys a lone row ``a_k<K>``, so R = 1 maps it to
-  ``a_k<K>0``), so every K's ports are its own.
+  (`h1window.template_params`). A unit of K's R A rows are ports ``a_k<K>_0`` .. ``a_k<K>_<R-1>`` of one value and its C
+  B rows ``b_k<K>_0`` .. ``b_k<K>_<C-1>`` (`h1window.window_ports`, a lone row row 0's), so every K's ports are its own.
 * **Linears, calls and blocks.** Linear w is the Program's linear ``(module, K, n)``, its weight once. Call (s, w) reads A
   block ``s·B_K + i`` of its K, ``i`` the place of ``blocks[w]`` (each linear's input within a step; q, k and v read one)
   among the blocks its K's linears read, ``B_K`` their number. A block's rows are its calls' T slots (`pouw_h1.slots`, the
@@ -72,22 +71,6 @@ def prefix(window: bytes) -> str:
 def nonce(i: int) -> int:
     """The salt nonce of the window's i-th tree, in `roles` order (each K's A, then its B)."""
     return NONCE + int(i)
-
-
-def ports(tile: tuple[int, int], ks: Sequence[int]) -> dict[str, str]:
-    """Each registered read's circuit port for an R × C tile at the window's contractions `ks`: K's template's A row
-    ``a_k<K>[i]`` is ``a_k<K>{i}`` and its B row ``b_k<K>[j]`` is ``b_k<K>{j}`` (`h1window.template_params`), and a tile of
-    one row reads it under the parameter's own name (`registered.reads`), so R = 1 maps ``a_k<K>`` to ``a_k<K>0`` (C = 1,
-    ``b_k<K>``). Refused (ValueError) when two reads would share a port, which `registered.reads_file` would merge."""
-    out: dict[str, str] = {}
-    for k in ks:
-        for name, n in zip(HW.template_params(k)[:2], tile):
-            out |= {name: f"{name}0"} if n == 1 else {f"{name}[{i}]": f"{name}{i}" for i in range(n)}
-    seen: dict[str, str] = {}
-    for key, port in out.items():
-        if seen.setdefault(port, key) != key:
-            raise ValueError(f"reads {seen[port]!r} and {key!r} would share the port {port!r}")
-    return out
 
 
 def row_words(codes: np.ndarray) -> np.ndarray:
@@ -225,8 +208,8 @@ class Served:
         return {r.value: r.schema for r in self.registered}
 
     def ports(self) -> dict[str, str]:
-        """The window's registered reads' circuit ports (`ports` of its tile and K)."""
-        return ports(self.tile, self.ks())
+        """The window's registered reads' circuit ports (`h1window.window_ports` of its Program)."""
+        return HW.window_ports(self.program)
 
     def entries(self) -> list[dict[str, Any]]:
         return [r.entry() for r in self.registered]
@@ -279,5 +262,5 @@ def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | P
     return reg
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "held", "nonce", "ports", "prefix", "register", "row_words",
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "held", "nonce", "prefix", "register", "row_words",
            "served_tree", "trees"]
