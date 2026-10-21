@@ -377,6 +377,9 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
         def gemm(self, w, x, weight, bias):
             return x
 
+        def end_pass(self):
+            return {}
+
         def finish(self):
             pass
 

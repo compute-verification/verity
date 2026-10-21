@@ -74,6 +74,21 @@ def test_a_member_of_one_instance_per_head_is_all_of_them_in_row_then_storage_or
     assert "ambiguous producer" in o.member_bytes(0, ATTN, "1", "r0", producer={"spec": "Int8KvQuant_v1"})[1]
 
 
+def test_a_hinted_port_member_reads_its_ports_view():
+    """`query.required.member_name` spells port p of a hinted several-port Call `<hint>.<p>` (`kv_quant.1`: V', not K')."""
+    kvq = [(ATTN, "Int8KvQuant_v1{S=2,D=8}", 1, [_view(6, g * 2 * D, [2, D], "int8"), _view(7, g * 2 * D, [2, D], "int8"),
+                                                 _view(8, g * D, [D], "float32"), _view(9, g * D, [D], "float32")]) for g in range(G)]
+    o = _oracle(kvq)
+    man = {"identities": [{"family": "instance_outputs", "op_path": ATTN, "output_member": f"kv_quant.{p}", "port": p,
+                           "spec": "Int8KvQuant_v1{S=2,D=8}"} for p in "0123"]}
+    prods = OC.producers_of(man)
+    assert prods[(ATTN, "kv_quant.1")] == {"spec": "Int8KvQuant_v1", "ordinal": None, "operand": None, "port": "1"}
+    for p, (alloc, width) in enumerate([(6, 2 * D), (7, 2 * D), (8, D * 4), (9, D * 4)]):
+        for prod in (prods[(ATTN, f"kv_quant.{p}")], {"spec": "Int8KvQuant_v1"}):
+            b, why, n = o.member_bytes(0, ATTN, f"kv_quant.{p}", "r0", producer=prod, nbytes=G * width)
+            assert why is None and n == G and b == _span(alloc, 0, G * width), (p, prod)
+
+
 def test_the_compare_passes_each_entrys_bytes_to_the_oracle():
     o = _oracle([(ATTN, "Int8KvQuant_v1{S=2,D=8}", 0, [_view(6, g * 2 * D, [2, D], "int8")]) for g in range(G)])
     o.sampled, o.step_requests, o.step_rows, o.tokens = {}, {}, {}, {}

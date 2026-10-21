@@ -195,7 +195,7 @@
    "status": "exists",
    "definitions": [
     "MoeSum_v1",
-    "MoeSum_v2"
+    "MoeSum_v3"
    ],
    "captures": [
     "glm53_block_fp8_capture"

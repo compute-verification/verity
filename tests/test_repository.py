@@ -56,10 +56,7 @@ SKILL_SIZE_CAP = 16 * 1024
 #: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
 #: compacts it.
 OVERSIZE_SKILLS = {
-    ".agents/skills/smell-check/SKILL.md": 41 * 1024,
     ".agents/skills/lean-proofs/SKILL.md": 29 * 1024,
-    ".agents/skills/using-slack/SKILL.md": 29 * 1024,
-    ".agents/skills/kernel-engineering/SKILL.md": 26 * 1024,
 }
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
@@ -84,8 +81,9 @@ AUDIT_RECORD = "lean-audit.json"
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
-#: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
-#: add up to what one large one may not be.
+#: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
+#: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget.
 DATA_BUDGET = 40 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
@@ -338,7 +336,7 @@ def test_every_path_has_owner() -> None:
 def test_tracked_data_within_budget() -> None:
     total = 0
     for p in _tracked():
-        if os.path.splitext(p)[1] in CODE_SUFFIXES:
+        if os.path.splitext(p)[1] in CODE_SUFFIXES or os.path.basename(p) == AUDIT_RECORD:
             continue
         try:
             total += os.path.getsize(ROOT / p)

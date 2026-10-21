@@ -35,6 +35,16 @@ directory ``registration.json``, ``index.json`` (unit -> served identity, its SH
 ``m<k>-public.bin`` and ``m<k>-private.bin`` (M0's public and prover bodies; the private one is prover only) and ``m<k>-units.json``
 (its global unit indices), and ``window.json``; ``flock_input_files`` wraps
 member ``k``'s bodies as M0's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
+
+A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): one per int8 quantize output (an engine step's token rows
+of one linear, as its ``ScaledMmS8_v1`` rows read them), each a tree of ``hm96-sha512/row-seg/v1`` leaves, committed step by step
+before each step's live coin (``row_tables.step_roots``): a step's tables in ``RowTable.key`` order (rows by request, then token
+row) under the serve-time ``table_domain`` of the window's ``context``, salted by ``step_salts`` under the run's row key, and the
+step's root the tree over their roots.  The window registers one port for them, ``row-table``: the tree over its steps' roots
+(served-domain rule, leaf schema ``ROOTS_SCHEMA``), so no row is committed twice.  Its linked members (``Member.links``) are
+shared-row chunks whose ``x`` table holds the distinct token rows they read, each under its row table row's salt (so the same
+``b || c``), read by offset; ``row_tables.check_row_tables`` ties them to the step roots.  ``write`` adds ``t<k>-public.bin``
+(every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).
 """
 from __future__ import annotations
 
@@ -42,6 +52,7 @@ import hashlib
 import json
 import multiprocessing
 import os
+import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -52,7 +63,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity.ml.commitments import hm96
+from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
@@ -76,6 +87,11 @@ INST = hm96.SHA512
 SALT_BYTES = INST.salt_bytes
 BC_BYTES = INST.proven_bytes
 CHUNK = 1 << 14
+#: a row table's schema, the window's port over its steps' roots (and the tables' name prefix), and the port of a linked member
+#: that reads a table
+TABLE_SCHEMA, TABLE_PORT, LINKED = SCHEMA_HM96_SHA512_ROW_SEG, "row-table", "x"
+ROOTS_SCHEMA = RT.ROOTS_SCHEMA
+_LAYER = re.compile(r"\.layers\.(\d+)\.")
 #: M0's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
 
@@ -122,6 +138,18 @@ def chacha20(key: bytes, nonce: bytes, nbytes: int, counter: int = 0) -> bytes:
 def salts(key: bytes, port_index: int, n: int) -> bytes:
     """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated)."""
     return chacha20(key, port_index.to_bytes(12, "little"), n * SALT_BYTES)
+
+
+def step_salts(key: bytes, engine_step: int, n: int) -> bytes:
+    """The salts of ``engine_step``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
+    each table's rows in rank order, one stream per step (nonce = the engine step, 12 bytes LE)."""
+    return chacha20(key, engine_step.to_bytes(12, "little"), n * SALT_BYTES)
+
+
+def table_key(op_path: str) -> tuple[int, str]:
+    """A table's place in its step: its layer (-1 for none), then its op_path."""
+    hit = _LAYER.search(op_path)
+    return (int(hit.group(1)) if hit else -1, op_path)
 
 
 # --- the frame on SHA-512, batched ---------------------------------------------------------------------------------------
@@ -224,11 +252,14 @@ class Member:
     tables: tuple[tuple[str, int], ...] = ()     # a shared-row member: each row port's table size (rows are referenced by refs)
     name: str = ""
     schemas: tuple[tuple[str, str], ...] = ()
+    links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
                              or any(s not in BIT_ROW_SCHEMAS for _, s in self.schemas)):
             raise ValueError(f"{self.key}: a bit-row member names one of {BIT_ROW_SCHEMAS} for each port, not {dict(self.schemas)}")
+        if self.links and dict(self.tables).get(LINKED) != len(self.links):
+            raise ValueError(f"{self.key}: {len(self.links)} links, one per row of its {LINKED!r} table {dict(self.tables)}")
 
     @property
     def key(self) -> str:
@@ -270,14 +301,61 @@ def population_program(templates: Sequence[tuple[Any, int]], several: bool = Fal
 
 
 @dataclass(frozen=True)
+class RowTable:
+    """One int8 quantize output: the token rows of one linear (``op_path``) at one engine step, as its ``ScaledMmS8_v1`` rows read
+    them (``words`` u16 words: the s8 codes, then the f32 scale), one ``hm96-sha512/row-seg/v1`` leaf each, ranked by (request,
+    token row); ``rows[rank]`` is ``(request, token row, program row)``.  Fixed by the Build's Programs and the arrivals, never by
+    values.  ``port`` names it (its files, the window's entries); the window registers its step's root, not its own."""
+    engine_step: int
+    op_path: str
+    template: str
+    words: int
+    rows: tuple[tuple[str, int, int], ...]
+
+    @property
+    def port(self) -> str:
+        return f"{TABLE_PORT}/{self.engine_step}/{self.op_path}"
+
+    @property
+    def n(self) -> int:
+        return len(self.rows)
+
+    @property
+    def layer(self) -> int | None:
+        layer = table_key(self.op_path)[0]
+        return None if layer < 0 else layer
+
+    @property
+    def key(self) -> tuple[int, int, str]:
+        """Its place in the window: its engine step, then its place in the step (``table_key``)."""
+        return (self.engine_step, *table_key(self.op_path))
+
+    def rank(self, request: str, token_row: int) -> int:
+        """The leaf index of ``request``'s token row ``token_row``."""
+        for k, (rid, tok, _i) in enumerate(self.rows):
+            if rid == str(request) and tok == int(token_row):
+                return k
+        raise KeyError(f"{self.port}: no token row {token_row} of request {request}")
+
+    def doc(self) -> dict[str, Any]:
+        return {"port": self.port, "engine_step": self.engine_step, "layer": self.layer, "op_path": self.op_path,
+                "template": self.template, "words": self.words, "leaves": self.n, "schema": TABLE_SCHEMA,
+                "columns": ["request", "token_row", "program_row"], "rows": [list(r) for r in self.rows]}
+
+
+@dataclass(frozen=True)
 class Window:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
-    run (the vllm-v1 run root, hex), and the members the population is made of, in the partition's order (refused otherwise)."""
+    run (the vllm-v1 run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
+    its row tables in the canonical order (``RowTable.key``), every rank of each the row of at least one linked member's ``x``
+    table, under ``context`` (hex, 64 bytes serving knew before its first step: the live coin commitment's root)."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
     run: str
     members: tuple[Member, ...]
+    row_tables: tuple[RowTable, ...] = ()
+    context: str = ""
 
     def __post_init__(self) -> None:
         mine, want = [(m.template, m.base, m.n) for m in self.members], P.ranges(self.program, self.query)
@@ -294,6 +372,50 @@ class Window:
             raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
+        covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
+        for m in self.members:
+            for t, r in m.links:
+                if not (0 <= t < len(covered) and 0 <= r < len(covered[t])):
+                    raise ValueError(f"{m.key}: link {(t, r)} is no row of the window's {len(covered)} row tables")
+                if self.row_tables[t].words != dict(m.rows)[LINKED]:
+                    raise ValueError(f"{m.key}: its {LINKED!r} rows are {dict(m.rows)[LINKED]} words, {self.row_tables[t].port}'s "
+                                     f"{self.row_tables[t].words}")
+                covered[t][r] = True
+        if len({t.port for t in self.row_tables}) != len(self.row_tables) or not all(c.all() for c in covered):
+            raise ValueError(f"row tables {[t.port for t in self.row_tables]}: each its own port, every row some member's")
+        rising = lambda xs: all(a < b for a, b in zip(xs, xs[1:]))  # noqa: E731
+        if not rising([t.key for t in self.row_tables]) or not all(rising([r[:2] for r in t.rows]) for t in self.row_tables):
+            raise ValueError("row tables go by engine step, layer and op_path (RowTable.key), each table's rows by request and token "
+                             "row, each once")
+        if self.row_tables and not re.fullmatch(f"[0-9a-f]{{{2 * RT.DIGEST_BYTES}}}", self.context):
+            raise ValueError(f"a window with row tables names its serve-time context, {RT.DIGEST_BYTES} bytes hex (the live coin "
+                             f"commitment's root), not {self.context!r}")
+
+    @cached_property
+    def steps(self) -> tuple[tuple[int, tuple[int, ...]], ...]:
+        """Each engine step of the row tables, in order, with its tables' indices among ``row_tables``."""
+        out: dict[int, list[int]] = {}
+        for k, t in enumerate(self.row_tables):
+            out.setdefault(t.engine_step, []).append(k)
+        return tuple((s, tuple(ks)) for s, ks in out.items())
+
+    @cached_property
+    def places(self) -> tuple[int, ...]:
+        """Each row table's index in its step."""
+        return tuple(i for _s, ks in self.steps for i in range(len(ks)))
+
+    def table_domain(self, k: int) -> CommitmentDomain:
+        """Row table ``k``'s serve-time domain."""
+        t = self.row_tables[k]
+        return RT.table_domain(bytes.fromhex(self.context), t.engine_step, self.places[k], t.n)
+
+    def step_root(self, step: int, table_roots: Sequence[bytes]) -> bytes:
+        return RT.step_tree(bytes.fromhex(self.context), step, table_roots).root
+
+    @cached_property
+    def tables_domain(self) -> CommitmentDomain:
+        """The ``row-table`` port's domain: the tree over the steps' roots, under the served-domain rule."""
+        return self.domain(TABLE_PORT, ROOTS_SCHEMA, len(self.steps))
 
     @cached_property
     def partition(self) -> dict[str, Any]:
@@ -325,6 +447,8 @@ class Committed:
     rows: dict[str, np.ndarray]        # per row port, the output rows included: (n, words) u16 (private)
     seconds: dict[str, Any]
     refs: dict[int, np.ndarray] = field(default_factory=dict)   # per shared-row member k: (n, rows) table refs, output rows' own
+    table_roots: dict[str, bytes] = field(default_factory=dict)  # per row table port: its root (the step tree's leaf)
+    step_roots: dict[int, bytes] = field(default_factory=dict)   # per engine step: its root (the row-table port's leaf)
 
     def public_body(self, k: int) -> bytes:
         """Member ``k``'s public body, as M0's ``write()`` lays it out: every instance's ``b || c`` (its input rows, then its
@@ -344,6 +468,15 @@ class Committed:
         rows = np.concatenate([self.rows[m.port(p)] for p, _ in m.all_rows], axis=1).astype("<u2").tobytes()
         ys = np.concatenate([np.frombuffer(self.salts[m.port(p)], dtype=np.uint8).reshape(m.n, SALT_BYTES) for p, _ in m.all_rows], axis=1)
         return rows + ys.tobytes()
+
+    def table_public(self, t: int) -> bytes:
+        """Row table ``t``'s public body: every row's ``b || c``, in rank order."""
+        return self.bc[self.window.row_tables[t].port]
+
+    def table_private(self, t: int) -> bytes:
+        """Row table ``t``'s prover body: every row (u16 LE), then every salt, in rank order."""
+        p = self.window.row_tables[t].port
+        return np.ascontiguousarray(self.rows[p]).astype("<u2").tobytes() + self.salts[p]
 
     def frame_entry(self, k: int) -> dict[str, Any]:
         """M0's header ``frame_v3`` entry for member ``k``: its bare port names, as M0's statement reads them."""
@@ -408,12 +541,30 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     return roots, bc
 
 
-def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None, workers: int = 1,
+def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
+    """Each row table's rows, read off its linked members' ``x`` tables; refused when two members read one row differently."""
+    out = [np.zeros((t.n, t.words), dtype=np.uint16) for t in window.row_tables]
+    seen = [np.zeros(t.n, dtype=bool) for t in window.row_tables]
+    for m in window.members:
+        x = rows[m.port(LINKED)] if m.links else None
+        for j, (t, r) in enumerate(m.links):
+            if seen[t][r] and not np.array_equal(out[t][r], x[j]):
+                raise ValueError(f"{m.key}: {LINKED} row {j} is not {window.row_tables[t].port} row {r} as another member reads it")
+            out[t][r], seen[t][r] = x[j], True
+    return out
+
+
+def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
+           row_salt_key: bytes | None = None, step_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
-    port's committed as its output row).
+    port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
+    their row table row's salt.  Salt nonces: the members' ports in order; a step's tables', ``step_salts`` under ``row_salt_key``.
+    The row tables' roots make each step's root and the ``row-table`` port is the tree over those; with ``step_roots`` (what
+    serving recorded before each step's coin, by engine step), each must be the window's, or the commit is refused.
 
-    ``salt_key``: tests only; serving draws 32 fresh OS bytes."""
+    ``salt_key``: tests only; serving draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the serving loop's
+    ``row_tables.step_roots`` salted under (32 bytes); fresh OS bytes when ``None``, which no recorded step root can match."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
@@ -443,15 +594,36 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
                 raise ValueError(f"{m.key}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
             own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
+    if step_roots is not None and row_salt_key is None:
+        raise ValueError("step roots serving recorded are checked under its row key: give row_salt_key")
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: salts(key, k, len(rows[p])) for k, p in enumerate(rows)}
     del key
-    t_salt = time.perf_counter()
     domains = {p: window.domain(p, schemas[p], len(a)) for p, a in rows.items()}
+    rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
+    for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
+        rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
+    for s, ks in window.steps:
+        ss, at = step_salts(rk, s, sum(window.row_tables[k].n for k in ks)), 0
+        for t in (window.row_tables[k] for k in ks):
+            ys[t.port], at = ss[at:at + t.n * SALT_BYTES], at + t.n * SALT_BYTES
+    del rk
+    for m in ms:
+        if m.links:
+            ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
+    t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
+    table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
+    steps = {s: window.step_root(s, [table_roots[window.row_tables[k].port] for k in ks]) for s, ks in window.steps}
+    if step_roots is not None:
+        bad = [s for s in steps if steps[s] != step_roots.get(s)]
+        if bad:
+            raise ValueError(f"engine steps {bad}: the window's step roots are not the ones serving recorded before their coins")
+    if window.row_tables:
+        roots[TABLE_PORT], domains[TABLE_PORT] = RT.RootTree(window.tables_domain, list(steps.values())).root, window.tables_domain
     t1 = time.perf_counter()
     return Committed(window, roots, domains, bc, ys, rows, {"salts_s": round(t_salt - t0, 3), "commit_s": round(t1 - t_salt, 3),
-                                                            "total_s": round(t1 - t0, 3), "workers": workers}, refs)
+                                                            "total_s": round(t1 - t0, 3), "workers": workers}, refs, table_roots, steps)
 
 
 # --- the files ----------------------------------------------------------------------------------------------------------
@@ -465,9 +637,38 @@ def port_leaves(m: Member) -> dict[str, int]:
 def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
     domain}}``, each domain ``registration.served_domain`` over the window's program, partition and run."""
-    prog, part = window.partition["program"], window.partition_digest
+    prog, part, steps = window.partition["program"], window.partition_digest, len(window.steps)
     return {m.port(p): {"leaves": n, "domain": R.served_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
-            for m in window.members for p, n in port_leaves(m).items()}
+            for m in window.members for p, n in port_leaves(m).items()} | \
+        ({TABLE_PORT: {"leaves": steps, "domain": R.served_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
+         if steps else {})
+
+
+def window_bytes(members: Sequence[Member], row_tables: Sequence[RowTable] = ()) -> dict[str, int]:
+    """The bytes a window commits, from its layout alone: ``public`` (every ``b || c``, and a shared-row member's refs, u32 per
+    instance and port), ``private`` (every row's words and salt), and the ``x`` ports' share of each (``x_public``, ``x_private``;
+    a row table's rows count as ``x``)."""
+    out = dict.fromkeys(("public", "private", "x_public", "x_private", "tables_public", "tables_private"), 0)
+
+    def add(port: str, rows: int, words: int) -> None:
+        pub, priv = rows * BC_BYTES, rows * (2 * words + SALT_BYTES)
+        out["public"] += pub
+        out["private"] += priv
+        if port == LINKED:
+            out["x_public"] += pub
+            out["x_private"] += priv
+
+    for m in members:
+        leaves = port_leaves(m)
+        for p, w in m.all_rows:
+            add(p, leaves[p], w)
+        if m.tables:
+            out["public"] += 4 * m.n * len(m.all_rows)
+    for t in row_tables:
+        add(LINKED, t.n, t.words)
+        out["tables_public"] += t.n * BC_BYTES
+        out["tables_private"] += t.n * (2 * t.words + SALT_BYTES)
+    return out
 
 
 def leaf_layer(publics: Mapping[str, bytes]) -> str:
@@ -532,8 +733,25 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         "public_sha512": hashlib.sha512(pub).hexdigest(), "units": f"m{k}-units.json",
                         "units_sha512": hashlib.sha512(ub).hexdigest(),
                         **({"row_schemas": m.row_schemas} if m.schemas else {}),
-                        **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {})})
+                        **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
+                        **({"row_links": [list(x) for x in m.links]} if m.links else {})})
+    tables = []
+    for t, tab in enumerate(c.window.row_tables):
+        pub = c.table_public(t)
+        (d / f"t{t}-public.bin").write_bytes(pub)
+        fd = os.open(d / f"t{t}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(c.table_private(t))
+        dom = c.domains[tab.port]
+        tables.append({"k": t, **tab.doc(), "step_index": c.window.places[t], "root": c.table_roots[tab.port].hex(),
+                       "domain": dom.domain_id.hex(), "binding": dom.binding.hex(), "public": f"t{t}-public.bin",
+                       "public_sha512": hashlib.sha512(pub).hexdigest(), "private": f"t{t}-private.bin"})
+    steps = {"context": c.window.context, "port": TABLE_PORT, "root_schema": ROOTS_SCHEMA,
+             "steps": [{"engine_step": s, "tables": list(ks), "root": c.step_roots[s].hex()} for s, ks in c.window.steps],
+             "salt_rule": "chacha20 (rfc 8439) under the run's 32-byte row key, nonce = the engine step (12 bytes le), the step's "
+             "tables in order and each table's rows in rank order at consecutive 192-byte offsets"}
     win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
+           **({"row_tables": tables, "row_table_steps": steps} if tables else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
            "domain_tag": DOMAIN_TAG, "registration": R.FORMAT, "registration_digest": R.digest(rec), "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_sha512": hashlib.sha512(ib).hexdigest(),

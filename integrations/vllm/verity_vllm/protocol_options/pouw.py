@@ -69,6 +69,7 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_settings as PHS
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
@@ -83,9 +84,7 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 #: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
 #: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself.
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES, PH.SCHEME)
-#: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
-#: ncp-v2's salt
-CHALLENGED = (PH.SCHEME, "ncp-v2")
+CHALLENGED = PHS.CHALLENGED
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
@@ -209,30 +208,7 @@ class Settings:
         start = raw.get("start_forward", 0)
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
-        rows, steps = raw.get("rows"), raw.get("steps")
-        if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
-            raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
-        if steps is not None and (not isinstance(steps, int) or isinstance(steps, bool) or steps < 1):
-            raise ValueError("pouw setting 'steps' is a positive integer (H1's S: the window's engine steps)")
-        runner, rounds = raw.get("runner"), raw.get("rounds")
-        if runner is not None and not (callable(getattr(runner, "execute_model", None))
-                                       and isinstance(getattr(runner, "decode_query_len", None), int)):
-            raise ValueError("pouw setting 'runner' is the engine's loaded Model Runner V2 (VLLM_USE_V2_MODEL_RUNNER=1): its "
-                             "execute_model, and its decode_query_len, which orders a step's rows (pouw_h1_requests.batch_order)")
-        if rounds is not None:
-            commitment = getattr(getattr(rounds, "challenger", None), "commitment", None)
-            if not callable(getattr(rounds, "record", None)) or commitment is None:
-                raise ValueError("pouw setting 'rounds' is the window's round coins: a LiveRecord over a live challenger")
-            why = Wd.live_epoch_reason(commitment)
-            if why is not None or getattr(rounds, "label", None) != Wd.ROUND:
-                raise ValueError(f"pouw setting 'rounds' is a LiveRecord of a live epoch's {Wd.ROUND} coins"
-                                 + (f": {why}" if why else ""))
-        challenger, session = PHC.address(raw.get("challenger")), PHC.session_of(raw.get("session"))
-        admission = raw.get("admission")
-        if admission is not None and admission not in RQ.ADMISSIONS:
-            raise ValueError(f"pouw setting 'admission' is one of {', '.join(RQ.ADMISSIONS)}")
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, rows, steps, runner, rounds,
-                   challenger, session, admission)
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *PHS.of(raw))
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -257,31 +233,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
-        if scheme == PH.SCHEME and (settings.rows is None or settings.steps is None):
-            out.append(f"{scheme}: the static layout's public parameters are the pouw settings 'rows' (T, vLLM's "
-                       "max_num_batched_tokens) and 'steps' (S, the window's engine steps)")
-        elif scheme != PH.SCHEME and (settings.rows is not None or settings.steps is not None):
-            out.append(f"{scheme}: the pouw settings 'rows' and 'steps' are H1's ({PH.SCHEME})")
-        if scheme == PH.SCHEME and ctx.stage != "capture" and (
-                settings.runner is None or (settings.rounds is None and settings.challenger is None)):
-            out.append(f"{scheme}: each admitted request's entry goes under the root of the round that admits it, before "
-                       "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
-                       "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
-                       "window's round coins, a LiveRecord)")
-        elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
-                                      or settings.admission is not None):
-            out.append(f"{scheme}: the pouw settings 'runner', 'rounds' and 'admission' are H1's ({PH.SCHEME})")
-        if scheme not in CHALLENGED and settings.challenger is not None:
-            out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
-        if settings.session is not None and settings.challenger is None:
-            out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
-        if scheme in CHALLENGED and settings.challenger is not None:
-            out += PHC.refusals(scheme, settings, ctx.stage)
-        if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
-            have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
-            if have < settings.steps:
-                out.append(f"{scheme}: the round coins have {have} unopened coins, fewer than the window's {settings.steps} "
-                           "rounds")
+        out += PHS.refusals(scheme, settings, ctx.stage)
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
@@ -749,6 +701,11 @@ def install(scheme: str, target: Target) -> Option:
                                   {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                   schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
         run.commits["registration"] = weights_claim(s)
+        h = target.hooks(entry)
+        for w, layer in enumerate(layers):
+            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+        return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
+                      end_pass=run.end_pass)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))

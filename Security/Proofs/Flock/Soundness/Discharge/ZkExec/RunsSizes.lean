@@ -43,10 +43,8 @@ theorem post_inner_y : Post Zk.innerReader (fun i => i.y.size < 2 ^ 64) := by
 theorem zk_decode_sizes : ZkDecodeSizes := by
   intro sh bytes zp h
   unfold Zk.decode at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = zp := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post (Zk.reader sh) (fun z => ProofSizes sh z.proof ∧ z.inner.y.size < 2 ^ 64)) p' ⟨_, _, hrun⟩
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
+  refine (?_ : Post (Zk.reader sh) (fun z => ProofSizes sh z.proof ∧ z.inner.y.size < 2 ^ 64)) zp ⟨_, _, hrun⟩
   unfold Zk.reader
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_

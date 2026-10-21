@@ -86,6 +86,11 @@ def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monke
     assert remote.flag_value(timed["harness_args"], "--timeout") == f"{S.POOL_WAIT_S + 2400}", "the runner's covers the wait and the run"
     assert "--timeout 2400 s counts from taking a slot (slot.py --run-max)" in capsys.readouterr().err
     assert "--run-max" not in untimed["command"] and remote.flag_value(untimed["harness_args"], "--timeout") is None
+    assert S.POOL_WAIT_S >= 4 * 3600, "an hour's wait cost proofs' runs their place in a saturated pool each hour (INF-153)"
+    assert main([*argv, "--timeout", "40m", "--pool-wait", "10800", "--", "true"]) == 0
+    waited = seen[-1]
+    assert waited["command"][4:11] == ["--by", "infra", "--wait-max", "10800", "--run-max", "2400", "--"]
+    assert remote.flag_value(waited["harness_args"], "--timeout") == f"{10800 + 2400}"
 
 
 def _run(runs, rid, state, command, *, pgid=None, runner=None):

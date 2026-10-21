@@ -114,7 +114,9 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
+  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
+  provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -135,7 +137,8 @@ the standing rulings stated nowhere else.
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    window's live salt (`pouw.salt`, one per PoUW window from the certifier's draw, #2637) and the operands' committed
+    roots, which a drawn unit's proof derives along with its own noise.
     Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
     μ^m a try (Daniel, 18 Oct).
 
@@ -176,7 +179,8 @@ out-of-memory kill takes all of them down. Locally, run only git (`git merge-tre
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
 remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
+60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots, or in vy-nebius-cpu-1's `research`
+pool when it starts sooner there (`research/auto.py`): every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
@@ -458,7 +462,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
 - When Daniel or a lead asks for a smell check, before you call something served, end to end, proved or credited, and when
-  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`, with the catalogue of smells found so far.
+  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`. The catalogue of smells found so far is the
+  notes' `kb/smell-catalogue.md`.
 - Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
   `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or

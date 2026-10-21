@@ -9,8 +9,11 @@ opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
 
 A TP Commit's windows (`tp-commit --serving-rows`, `pipeline.tp.serving_rows`) are `served`: each rank commits its window from its own
 committed store while serving, after every rank's root is final and before any draw, under ``run = <TP run root>/rank<r>``. Serving's
-own commitment, made before any draw, is what the audit holds; that those rows are the values under the ranks' vllm-v1 roots is
-the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`).
+own commitment, made before any draw, is what the audit holds; that those rows are the values under the ranks' rows-sha512 roots is
+the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`). A5 takes a TP window as served only
+under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's ranks commit under rows-sha512 and its TP run root is
+SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the draw
+(`source`: `sha512`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
@@ -41,7 +44,8 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
   manifest it opened, or a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root
-  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, its run, `tp` and served Programs the record's.
+  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served` under a SHA-512 TP run root, its run, `tp` and
+  served Programs the record's.
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
