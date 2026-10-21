@@ -386,8 +386,8 @@ def test_the_eps_holds_at_the_work_laws_cap():
     assert _worst_miss(drawn, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
 
 
-@pytest.mark.parametrize("light, heavy", [((400, 1), (100, 100)), ((600, 2), (200, 300)), ((300, 1), (300, 64)),
-                                          ((500, 1), (50, 1000))])
+@pytest.mark.parametrize("light, heavy", [((1000, 1), (1000, 1000)), ((400, 1), (100, 100)), ((600, 2), (200, 300)),
+                                          ((300, 1), (300, 64)), ((500, 1), (50, 1000))])
 def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work law
     draws a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
