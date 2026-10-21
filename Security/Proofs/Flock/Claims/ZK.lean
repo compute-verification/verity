@@ -98,6 +98,7 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishPiop
+import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
@@ -476,6 +477,10 @@ import Proofs.Flock.Claims.ZK.HelloLean
 * `FinishPiop`: the firewall's transcript, zerocheck, lincheck and ring switch are the masked session's from its source,
   by unfolding through `Asks.toC`: **`Flock.Firewall.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,
   `lincheckCut` at the masked values) and **`ringSwitchP_eq`** (`ringSwitchCut` at the switched vectors).
+* `FinishInner`: the firewall's pads commitment is the masked prover's (`Flock.Firewall.Finish.innerCommitP_eq`, through
+  `InnerCommit.toC`), and its inner proof, which never checks the batched constraint, is `FlockComplete.innerP`'s
+  wherever that constraint holds at every coin (**`innerP_eq`**), which it does at pads with `h_ab = h_a·h_b` and
+  `w = x·y` where `repFw`'s stop does not fire (**`batched_of_failingOn`**: no constraint `failingOn` the pads).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
