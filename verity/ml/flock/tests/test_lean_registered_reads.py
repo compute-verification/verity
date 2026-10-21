@@ -453,7 +453,9 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
     honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
     refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
-    under one that moves every position."""
+    under one that moves every position. Upstream's seed-injection build has no zk patch, so the session's plain files are
+    upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under `--upstream-plain`
+    (§8.1)."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
@@ -461,7 +463,7 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     def verify(session: str, own: Path) -> dict:
         p = subprocess.run([str(BIN), "verify", "--statement", f"{UPSTREAM_STATEMENT}+seed-injection", "--circuit",
                             str(rope / "stage" / "circuit.txt"), "--public", str(rope / "registered" / "pub-8.bin"), *bound,
-                            "--registered", str(own), "--session", str(rope / "vectors" / session)],
+                            "--registered", str(own), "--upstream-plain", "--session", str(rope / "vectors" / session)],
                            capture_output=True, text=True, check=False)
         (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         return line

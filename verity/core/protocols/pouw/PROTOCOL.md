@@ -1381,9 +1381,20 @@ block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                              
 
 j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
 first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
-a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
-bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
-positions, so each (salt, position) seeds one unit.
+a common value. Unit u reads position slot u (`Compiled.positions(base)`) and its seed group's roots.
+
+The seed inputs `pouw.roots`, `pouw.positions` and `pouw.salt` are registered values the one-stage verifier fills itself,
+so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s `supplied_rows` and `supplied_root`; the
+sampled_proofs README's "Supplied values"; `Compiled.inputs` gives the leaves it fills):
+
+- `pouw.roots`: each seed group's (root(A), root(B)) from the roots the record names for its operands: a served port's
+  root (A's committed tap, an AROW row table included) and a registered value's (B's weights, which the verifier holds to
+  the root it pinned before the salt, `one_stage.registration.check`'s `pinned`).
+- `pouw.positions`: unit u's position is u after every unit of the log's earlier records (`registered.log_base`), so no
+  two records of one log share a position and each (salt, position) seeds one unit.
+- `pouw.salt`: per window, filled by the verifier.
+
+R7 recomputes each one's root and refuses a record that registers any other (`R7-supplied`).
 
 A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
 whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
@@ -1456,7 +1467,7 @@ name not registered.
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
   The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
   ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
-  legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
+  legal proof unit (since ASK-61 a unit's outputs fit a public size class up to 262,144 bits, so 8,320 fit), or the warp check must be a unit kind of its own aggregating coordinates, is
   decision 107's, still open.
 
 The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are

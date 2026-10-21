@@ -281,10 +281,7 @@ UNOWNED = "none yet: compute-accounting's coordinator"
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     # sm_120, unclassed. On DS-120, #2791's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the measured
     # reading (VF3r-16 at JI3s_0, #2791's VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
-    ("sm_120", "STG.E.128"): (RT3_120, "cpw_routes modes 1 and 8-10's checkpoint egress (RT3-120-6); facet_break uc's stg128"),
     ("sm_120", "STG.E.64"): (RT3_120, "cpw_routes modes 2 and 7's state-word stores; facet_break uc's stg64"),
-    ("sm_120", "STG.E"): (RT3_120, "facet_break uc's stg32 probe (on RT3-120's branch)"),
-    ("sm_120", "STS"): (RT3_120, "facet_break uc's sts32 probe: class_of has STS.128 and LDS's 32-bit width, not STS's"),
     ("sm_120", "STS.64"): (RT3_120, "facet_break uc's sts64 probe"),
     ("sm_120", "ST.E.128"): (RT3_120, "facet_break uc's st128 probe, a generic store"),
     ("sm_120", "LD.E.128"): (RT3_120, "facet_break uc's ld128 probe, a generic load"),
@@ -300,48 +297,60 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "CCTL.IVALL"): (UNOWNED, "cpw_routes modes 8-10's L1 invalidate around the bulk reduce-xor"),
     ("sm_120", "DEPBAR.LE"): (UNOWNED, "cpw_routes modes 8-10's wait on the bulk operations"),
     ("sm_120", "ELECT"): (UNOWNED, "cpw_routes modes 8-10's elected issuing lane"),
-    ("sm_120", "ISETP.NE.AND"): (UNOWNED, "cpw_routes mode 9's thread-0 test"),
     ("sm_120", "LDC"): (UNOWNED, "the constant-bank loads of cpw_routes modes 0-8 and 10"),
     ("sm_120", "LDC.64"): (UNOWNED, "cpw_routes modes 2, 3, 5 and 7's 64-bit constant-bank loads"),
-    ("sm_120", "REDUX.XOR"): (UNOWNED, "cpw_routes modes 2 and 7's warp XOR (LI-CP-W's honest route)"),
+    # sm_120, classed since #2761 (loads.class_of: the H200's and B200's checkpoint loops issue them), with no sm_120
+    # line, so neither DS-120 (whose catch-all takes only what no class names) nor the measured reading prices them; a
+    # line on DS_issue and the measured π* row closes each
+    ("sm_120", "STG.E.128"): (RT3_120, "cpw_routes modes 1 and 8-10's checkpoint egress (RT3-120-6); facet_break uc's stg128: STG128"),
+    ("sm_120", "STG.E"): (RT3_120, "facet_break uc's stg32 probe (on RT3-120's branch): STG32"),
+    ("sm_120", "STS"): (RT3_120, "facet_break uc's sts32 probe: STS32"),
+    ("sm_120", "ISETP.NE.AND"): (UNOWNED, "cpw_routes mode 9's thread-0 test: ISETP"),
+    ("sm_120", "REDUX.XOR"): (UNOWNED, "cpw_routes modes 2 and 7's warp XOR (LI-CP-W's honest route): REDUX"),
     # sm_120, classed, no line on the measured reading's π* row (JI3s_0 on main, JI3t_0 on #2791); 1 at DS_issue
     ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
     ("sm_120", "UBLKRED.G.S.XOR"): (UNOWNED, "cpw_routes modes 8-10's bulk reduce-xor (1 to 16 KB): TMAred512"),
     ("sm_120", "UTMA16K"): (UNOWNED, "the TMA loads of twelve honest profiles' [per_mma] (c-fx1, the l7qs kernels, fattn)"),
-    # sm_90 and sm_100, on #2699's DS-90 at DS_issue + DS_alu and DC-90-ri at its three rows, DS-100 and DC-100-ri at
-    # issue: rt3_dc's bit-exact lane loops (RT3-DC-1/-4), none of whose memory and control instructions has a line
-    ("sm_90", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32, which the H200's census has no line for"),
-    ("sm_90", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128, no H200 line"),
-    ("sm_90", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128, no H200 line"),
-    ("sm_90", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: no class"),
-    ("sm_90", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: no class"),
-    ("sm_90", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: class_of says REDG32, the H200's census REDG"),
-    ("sm_90", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: no class"),
-    ("sm_90", "ISETP.LE.AND"): (INT_HB, "the loop test of rt3_dc's lr_seg4, lr_red*, lr8w_*: no class"),
-    ("sm_100", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32, which the B200's census has no line for"),
-    ("sm_100", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128, no B200 line"),
-    ("sm_100", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128, no B200 line"),
-    ("sm_100", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: no class"),
-    ("sm_100", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: no class"),
-    ("sm_100", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: REDG32, no B200 line (RT3-DC-4)"),
-    ("sm_100", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: no class"),
-    ("sm_100", "VIADD"): (INT_HB, "rt3_dc lr8w_seg4's add: no class"),
-    ("sm_100", "MOV"): (INT_HB, "rt3_dc lr_red8's move: NOROW, which the B200's census has no line for"),
+    # sm_90 and sm_100, for #2699's DS-90, DC-90-ri, DS-100 and DC-100-ri: rt3_dc's bit-exact lane loops (RT3-DC-1/-4).
+    # #2761 classes each and gives the class an issue-row line on both censuses; they close with #2699's statements
+    ("sm_90", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32"),
+    ("sm_90", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128"),
+    ("sm_90", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128"),
+    ("sm_90", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: STS32"),
+    ("sm_90", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: STG128"),
+    ("sm_90", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: REDG32"),
+    ("sm_90", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: REDUX"),
+    ("sm_90", "ISETP.LE.AND"): (INT_HB, "the loop test of rt3_dc's lr_seg4, lr_red*, lr8w_*: ISETP"),
+    ("sm_100", "ATOMS.XOR"): (INT_HB, "rt3_dc lr_ats*'s shared atomics: ATOMS32"),
+    ("sm_100", "LDS.128"): (INT_HB, "rt3_dc lr_ats* and lr8w_xt's shared loads: LDS128"),
+    ("sm_100", "STS.128"): (INT_HB, "rt3_dc lr_ats*'s shared stores: STS128"),
+    ("sm_100", "STS"): (INT_HB, "rt3_dc lr8w_xt's 32-bit shared store: STS32"),
+    ("sm_100", "STG.E.128"): (INT_HB, "rt3_dc lr_seg4, lr_ats* and lr8w_seg4's egress: STG128"),
+    ("sm_100", "REDG.E.XOR.STRONG.GPU"): (INT_HB, "rt3_dc lr_red*'s L2 XOR: REDG32 (RT3-DC-4)"),
+    ("sm_100", "REDUX.XOR"): (INT_HB, "rt3_dc lr_seg4 and lr8w_seg4's warp XOR: REDUX"),
+    ("sm_100", "VIADD"): (INT_HB, "rt3_dc lr8w_seg4's add: VIADD"),
+    ("sm_100", "MOV"): (INT_HB, "rt3_dc lr_red8's move: NOROW"),
 }
 
 
+#: an instruction no class can ever name, for the tests of the check itself: every `loads.class_of` rule matches an
+#: upper-case SASS mnemonic, and no SASS opcode is lower case, so a class added later can't take it
+UNCLASSED = "toy.unclassed"
+
+
 def test_the_check_finds_an_unclassed_instruction():
-    """A store with no class (STG.E.128), a classed instruction free at π* (SHFL.BFLY) and a class the vector has no line
-    for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers only the unclassed store."""
+    """An instruction with no class (UNCLASSED), a classed instruction free at π* (SHFL.BFLY) and a class the vector has
+    no line for (IMAD) are each a gap; a priced instruction and a NOP are not; a catch-all covers only the unclassed
+    instruction."""
     st = Statement("toy", "sm_120", DATA, "toy", {"R": Fraction(1)}, {"ALU": Fraction(1), "SHFL": Fraction(0)}, None,
                    "lean_headline.py")
-    p = Program("sm_120", "toy", {"LOP3.LUT": 2, "STG.E.128": 1, "SHFL.BFLY": 1, "NOP": 3}, True)
+    p = Program("sm_120", "toy", {"LOP3.LUT": 2, UNCLASSED: 1, "SHFL.BFLY": 1, "NOP": 3}, True)
     q = Program("sm_120", "toy classes", {"ALU": 1, "IMAD": 1}, False)
     found = gaps([st], [p, q])
-    assert {i for _, i in found} == {"STG.E.128", "SHFL.BFLY", "IMAD"}
-    assert found[("toy", "STG.E.128")].cls is None and found[("toy", "SHFL.BFLY")].cls == "SHFL"
+    assert {i for _, i in found} == {UNCLASSED, "SHFL.BFLY", "IMAD"}
+    assert found[("toy", UNCLASSED)].cls is None and found[("toy", "SHFL.BFLY")].cls == "SHFL"
     caught = Statement(**{**st.__dict__, "catch_all": "ALU"})
     assert set(gaps([caught], [p])) == {("toy", "SHFL.BFLY")}
 
@@ -352,8 +361,8 @@ def test_a_closing_entry_waits_for_its_own_class():
     st = Statement("toy", "sm_120", DATA, "toy", {"R": Fraction(1)}, {"ALU": Fraction(1), "SHFL": Fraction(0)}, "ALU",
                    "lean_headline.py")
     other = Statement(**{**st.__dict__, "vector": "toy2", "price": {"ALU": Fraction(1), "SHFL": Fraction(2)}})
-    p = Program("sm_120", "toy", {"LOP3.LUT": 2, "STG.E.128": 1, "SHFL.BFLY": 1}, True)
-    closing = {("sm_120", "STG.E.128"), ("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT"), ("sm_90", "LOP3.LUT")}
+    p = Program("sm_120", "toy", {"LOP3.LUT": 2, UNCLASSED: 1, "SHFL.BFLY": 1}, True)
+    closing = {("sm_120", UNCLASSED), ("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT"), ("sm_90", "LOP3.LUT")}
     assert set(stale([st, other], gaps([st, other], [p]), closing)) == {("sm_120", "LOP3.LUT")}
     assert set(stale([other], gaps([other], [p]), closing)) == {("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT")}
 

@@ -290,6 +290,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
+    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
+    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
+    # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
+    # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
+    # undeclared GPU
+    Entry("accounting-declared-device", "assumption",
+          "The node's declared devices are its devices for the window: every GPU on the node is declared, each is the "
+          "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
+          "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
+          "or the host provider's instance record", "Declared device", "standard"),
     # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
@@ -380,6 +390,32 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "are free witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) "
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
+    Entry("accounting-ts-accepted-live", "assumption",
+          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
+          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
+          "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
+          "binding is stated", "TS accepted live", "standard"),
+    Entry("accounting-ts-window-law", "assumption",
+          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
+          "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
+          "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
+          "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
+          "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
+          "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
+          "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
+          "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
+    Entry("accounting-ts-served-checks", "assumption",
+          "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
+          "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
+          "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
+    Entry("accounting-ts-served-roots-linked", "assumption",
+          "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
+          "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
@@ -394,6 +430,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
+    # the two premises UnitFixed rests on under ASK-40's option A (Security/Models/Accounting/Assumptions/TS/Fixed.lean)
+    Entry("accounting-ts-modes-run", "assumption",
+          "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
+          "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
+          "its words", "TS modes run", "standard"),
+    Entry("accounting-ts-counts-fixed", "assumption",
+          "The labelling counts fixed words as fixed: on an accepted window the owned right fixed words per round are at "
+          "least the words of the units that are fixed under option A, computed, and with every unit steering them "
+          "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
+          "folds", "TS counts fixed", "conjectured"),
 )}
 
 

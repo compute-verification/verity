@@ -104,9 +104,25 @@ def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
     assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
 
 
+def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
+    """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
+    live = get("accounting-ts-accepted-live")
+    assert live.standing == "standard"
+    assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
+                                        "no served path meets it"))
+    law = get("accounting-ts-window-law").name
+    assert all(s in law for s in ("five facts", "coin tree", "trusted-nebius-host", "Under full checking",
+                                  "serve --zk --operator loopback", "doesn't meet the fifth fact"))
+
+
 def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     e = get("pouw-gamma-per-coin")
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
+
+
+def test_option_a_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
+    assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
+    assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
 
 
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
@@ -129,3 +145,12 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
                       "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+
+
+def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
+    """ASK-74 = A: Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
+    e = get("accounting-declared-device")
+    assert (e.kind, e.standing, e.label) == ("assumption", "standard", "Declared device")
+    assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",
+                                     "no SM clock exceeds f_max, the top of that vBIOS's clock table",
+                                     "MIG and MPS need no clause", "the auditor's inventory of the node"))

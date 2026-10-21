@@ -195,11 +195,10 @@ theorem post_bind_switches {β : Type} {want : ℕ} {w : String} {f : Array (Arr
 `vecExact` it returns has its length, the caps hold `hashLen`-byte digests and the ring switches 128 values. -/
 theorem decodeProof_sizes : DecodeSizes := by
   intro sh bytes p h
-  unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post _ (ProofSizes sh)) p' ⟨_, _, hrun⟩
+  replace h := (Flock.decodeProof_read h).1
+  unfold decodeRead at h
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
+  refine (?_ : Post _ (ProofSizes sh)) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_
   refine post_bind fun m _ => post_bind fun lir _ => post_bind fun lbs _ => post_bind fun profile _ => ?_

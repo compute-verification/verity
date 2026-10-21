@@ -429,11 +429,13 @@ def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[s
 
 
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
-               ports: Mapping[str, str] | None = None) -> dict[str, Any]:
+               ports: Mapping[str, str] | None = None, domains: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
     unit's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
-    accepted). `ports` names a template parameter's circuit port when they differ."""
+    accepted). `ports` names a template parameter's circuit port when they differ. `domains` (`{value: domain}`) gives
+    an output value's domain, its earlier record's port's, which the registration's R7 held its entry to
+    (`registration.check`'s `outputs`)."""
     mine = registered_entries(program, values)
     out = {}
     for name, r in reads(program, query, values).items():
@@ -442,7 +444,8 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
             raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
         e = mine[r["value"]]
         out[(ports or {}).get(name, name)] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
-                                              "word_bits": e["word_bits"], "domain": e["domain"], "reads": list(r["rows"])}
+                                              "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
+                                              "reads": list(r["rows"])}
     return {"format": READS, "ports": out}
 
 

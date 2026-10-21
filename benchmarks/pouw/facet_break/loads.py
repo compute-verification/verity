@@ -72,12 +72,17 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"^ATOMS\..*\.64$", "ATOMS64"), (r"^ATOMS\.", "ATOMS32"),
     (r"^ATOM\.E\..*\.64(\.|$)", "ATOME64"), (r"^ATOM\.E\.", "ATOME32"),
     (r"^STS\.128$", "STS128"), (r"^LDGSTS\.E\.BYPASS\.128$", "LDGSTS16"),
+    # the stores, a sub-word store its word's class
+    (r"^STS(\.[US](8|16))?$", "STS32"), (r"^STG\.E(\.[US](8|16))?$", "STG32"), (r"^STG\.E\.128$", "STG128"),
     (r"^LDSM\.16\.M88$", "LDSM_X1"), (r"^LDSM\.16\.M88\.2$", "LDSM_X2"), (r"^LDSM\.16\.M88\.4$", "LDSM_X4"),
     (r"^LDSM\.16\.MT88$", "LDSM_X1T"), (r"^LDSM\.16\.MT88\.2$", "LDSM_X2T"), (r"^LDSM\.16\.MT88\.4$", "LDSM_X4T"),
     (r"^LDSM\.8\.MT1616$", "LDSM8T_X1"), (r"^LDSM\.8\.MT1616\.2$", "LDSM8T_X2"),
     (r"^STSM\.16\.M88$", "STSM_X1"), (r"^STSM\.16\.M88\.2$", "STSM_X2"), (r"^STSM\.16\.M88\.4$", "STSM_X4"),
     (r"^STSM\.16\.MT88$", "STSM_X1T"), (r"^STSM\.16\.MT88\.2$", "STSM_X2T"), (r"^STSM\.16\.MT88\.4$", "STSM_X4T"),
     (r"^STSM\.8\.MT1616$", "STSM8T_X1"), (r"^STSM\.8\.MT1616\.2$", "STSM8T_X2"), (r"^STSM\.8\.MT1616\.4$", "STSM8T_X4"),
+    # the warp reduce, the predicate test and sm_100's VIADD (ahead of IADD, which VIADD contains): each its own class,
+    # which the H200's and B200's census price on their issue rows alone
+    (r"^REDUX\.", "REDUX"), (r"^ISETP\.", "ISETP"), (r"^VIADD\b", "VIADD"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
     (r"^IDP\.", "IMAD"),  # IDP.4A: the IMAD pipe's (rows.csv's I, the dp4a design's IMAD lanes)
@@ -265,8 +270,9 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
 def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
-    if row.get("x_issue") and "issue" in load:
-        load["issue"] += row["x_issue"]
+    if "x_issue" in row and "issue" in load:
+        # a full loop's instruction whose class this census has no line for still issues once
+        load["issue"] += row["x_issue"] + sum(v for k, v in x.items() if not facet_loads({k: 1.0}, c, cycle_u, generic))
     bps = l2_bytes_per_s(row)
     if l2 and bps > 0:
         load[L2_ROW] = bps / l2
@@ -337,7 +343,8 @@ def gate_loops(out: Path) -> dict[str, list[str]]:
 
 def full_x(row: dict, loop: list[str]) -> tuple[dict[str, float], float] | None:
     """The program's x with every instruction of its timed loop counted, and the x of the loop's instructions with no
-    census class (one `issue` cycle each, on no other row). A loop instruction runs once an iteration, so one the gate
+    census class (one `issue` cycle each, on no other row; `program` counts a class its census has no line for the
+    same way). A loop instruction runs once an iteration, so one the gate
     didn't pin runs at the pinned instructions' rate over their number in the loop. None for a program timed over more
     than one loop, or whose listed loop holds none of its pinned opcodes."""
     rates = row.get("rates") or {}

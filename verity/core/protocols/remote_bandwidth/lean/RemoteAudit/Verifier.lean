@@ -13,8 +13,9 @@ difftest's `session` reads one, `Difftest.eventOf`):
 
 * `{"op": "init", "source", "registry", "chunk"}`: the verifier's secret, the registry `registry/v0` reads back (`null`
   for none), and the draws a thread checks at once; the answer is the registry;
-* `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "rows", "layout", "nonce"}`:
-  `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}`;
+* `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
+  `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
+  whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`;
 * `{"op": "event", "node", "session", "event", "coin"}`: one event through session k (`Registry.step`), its result as
@@ -115,8 +116,9 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let some kind := Kind.ofName? (← ofV (J.str req "receipt" "request"))
       | throwThe String "a receipt kind is sketch-sha512 or block-sha512"
     let (reg?, r) ← ofV (srv.registry.register srv.source (← ofV (bytesOf req "node")) (← ofV (nat req "blocks"))
-      (← ofV (bytesOf req "payload_root")) (← ofV (Difftest.codecOf (← ofV (J.get req "codec" "request")))) kind false
-      (← ofV (J.str req "layout" "request")) (← ofV (nat req "rows")) (← ofV (bytesOf req "nonce")))
+      (← ofV (bytesOf req "payload_root")) (← ofV (Difftest.codecOf (← ofV (J.get req "codec" "request")))) kind
+      (← ofV (J.bool req "bind" "request")) (← ofV (J.str req "layout" "request")) (← ofV (nat req "rows"))
+      (← ofV (bytesOf req "nonce")))
     let out := match reg? with
       | some reg => Json.mkObj [("codec_seed", .str (hexOf reg.codecSeed)), ("digest", .str (hexOf reg.digest))]
       | none => refusedJ

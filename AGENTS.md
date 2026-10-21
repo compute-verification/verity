@@ -114,7 +114,9 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
+  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
+  provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -135,7 +137,8 @@ the standing rulings stated nowhere else.
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
   - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
+    window's live salt (`pouw.salt`, one per PoUW window from the certifier's draw, #2637) and the operands' committed
+    roots, which a drawn unit's proof derives along with its own noise.
     Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
     μ^m a try (Daniel, 18 Oct).
 
@@ -458,7 +461,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
 - When Daniel or a lead asks for a smell check, before you call something served, end to end, proved or credited, and when
-  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`, with the catalogue of smells found so far.
+  you relay another lane's claim: `.agents/skills/smell-check/SKILL.md`. The catalogue of smells found so far is the
+  notes' `kb/smell-catalogue.md`.
 - Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
   `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
