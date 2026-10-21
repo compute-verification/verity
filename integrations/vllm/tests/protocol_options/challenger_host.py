@@ -171,7 +171,8 @@ class Gate:
                 "ended": "closed by the client" if closed else "serve.py exited 1", "released": released,
                 "complete": released is not None and all(released.get(k) == n for k, n in families),
                 "record_leaf": PHC.leaf_of(doc["signature"]), "commitment": record.commitment.root.hex(),
-                "ended_utc": "2026-10-20T11:08:53Z", **override}
+                "refused_hellos": len((out / R.HELLOS).read_text().splitlines()), "ended_utc": "2026-10-20T11:08:53Z",
+                **override}
         if type(body["record_leaf"]) is int:
             self._leaf = max(self._leaf, body["record_leaf"] + 1)
         self._complete[session] = body["complete"] is True

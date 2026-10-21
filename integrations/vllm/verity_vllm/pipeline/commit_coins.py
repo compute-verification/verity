@@ -1,128 +1,282 @@
-"""The served C2 replay's challenge from the auditor host's challenger (RT4-INT-21): its ``replay`` coin 0, opened after
-the Commit's run root (`after`), in a session of a challenger started over `SCHEME` with a ``replay`` family. Without
-the Commit's ``--replay-challenger`` the challenge is ``--replay-challenge`` or one this process draws, and the record
-says so (``source``); only a ``challenger`` source is the auditor's draw.
+"""The Commit's coins from the auditor host's challenger (VLLM-17, CIR-72): one session a Commit, which draws its openings
+and its served C2 replay challenge after each run's root of record.
 
-The Commit carries its session, the challenger gate's reply (``--replay-session``, `pouw_h1_challenger.session_of`), in
-the record. `reason` is the verifier's check of the record against the commitment the challenger signed (read on the
-auditor's side, `pouw_h1_challenger.trusted_rounds_reason`'s way): the coin is replay coin 0 of that commitment, opened
-after this run root, and the challenge is the coin. `session_reason` first holds the record's session to the one the
-auditor's ledger opened for its Commit root (`pouw_h1_challenger.held`), and reads that commitment from the session's
-sealed tree.
+* **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
+  the Commit reserves a session on infra's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
+  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the lane's own gate key). Once its
+  first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
+  root v2, `tp.run_root`), it opens that session on it (``open --session S --root R``): the gate signs the open entry
+  binding the session to the root before the challenger serves a coin, and refuses a second session for the root, ever.
+  The Commit then reaches the challenger on its own 127.0.0.1 (``ssh -R`` from the auditor host), refuses one whose coin
+  commitment isn't the gate's answer before its first coin (`pouw_h1_challenger.connect`), and for run i opens coin i of
+  each family in `FAMILIES` after run i's root (`Session.draw`); it closes the session after its last run. The draws
+  derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
+  (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
+  `REPLAY` coin.
+* **Without a gate** each run's coins are this process's own bytes (``source`` ``in-process``): the run is a measurement,
+  and its coins credit nothing, as H1's in-process coins (`pouw_h1_challenger.session_reason`). ``--replay-challenge``
+  still names the C2 replay's challenge there (``source`` ``flag``).
+* **Checking** (`reason`): the verifier reads the auditor's signed ledger as infra published it (every head,
+  `challenger.ledger_head`), the one session it opens for the Commit's root (`challenger.audited_session`), and that
+  session's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
+  (`remote.trusted_session`): the coin commitment the challenger signed and the roots its signed release log shows it
+  received. The Commit's session must be that session, its coins that commitment's, and the log must show each run's
+  coin of each family released after that run's root of record: coins held in the Commit's process, a session opened on
+  another root, a second session for the Commit's root, a coin drawn before its root and a ledger cut before the
+  session's end are refused.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import secrets
-from typing import Any, Mapping
+import shlex
+import socket
+import subprocess
+import time
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveCommitment, LiveOpening, live_reason,
-                                                             trusted_commitment)
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, live_reason
 
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 SCHEME = "verity/vllm/commit-coins/v1"
-FAMILY = "replay"
-TAG = b"verity/vllm/replay-challenge/v1\0"
+POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
+FAMILIES = (POSITIONS, IDENTITIES, REPLAY)
+CHALLENGER, IN_PROCESS = "challenger", "in-process"
+ROOT_BYTES = remote.ROOT_BYTES
 
 
-def after(run_root: bytes) -> bytes:
-    """The 64-byte root the replay coin opens after: the Commit's run root under `TAG`."""
-    return hashlib.sha512(TAG + bytes(run_root)).digest()
+def families(runs: int) -> list[list[Any]]:
+    """The session's layout for a Commit of `runs` instrumented runs: a coin of each family a run."""
+    return [[f, int(runs)] for f in FAMILIES]
 
 
-def challenge(at: str, run_root: bytes, session: Any = None) -> tuple[str, dict[str, Any]]:
-    """The replay challenge (the coin, hex) from the challenger at `at`, in the session the gate's answer `session` names
-    (`pouw_h1_challenger.session_of`; its hello carries the answer's secret, and a challenger of another commitment is
-    refused before the coin, `pouw_h1_challenger.connect`), and its record, which carries the session without its secret;
-    ValueError (a malformed session, another commitment than the answer's or a challenger of another layout) or
-    `CoinError` (the challenger's refusal), with the session closed either way."""
-    given = PHC.session_of(session)
-    client = remote.RemoteChallenger.connect(at) if given is None else PHC.connect(at, given)
-    try:
-        c = client.commitment
-        if c.scheme != SCHEME or not c.family(FAMILY):
-            raise ValueError(f"the challenger at {at} is {c.scheme} with families {list(c.families)}, not {SCHEME} with a "
-                             f"{FAMILY} family")
-        opening = client.open(FAMILY, 0, after(run_root))
-    finally:
+#: ``run(argv)``: the gate's (exit code, stdout) for one request
+Run = Callable[[list[str]], "tuple[int, str]"]
+
+
+class Gate:
+    """Infra's challenger gate over `command` (its argv prefix as one string, e.g. ``ssh -i KEY -o IdentitiesOnly=yes
+    research@HOST``): each request goes as one shell-quoted word, which the gate's forced command splits. `run` replaces
+    the subprocess (tests)."""
+
+    def __init__(self, command: str, run: Run | None = None) -> None:
+        self.command, self._run = shlex.split(command), run
+
+    def call(self, *words: str) -> dict[str, Any]:
+        """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer."""
+        argv = [*self.command, shlex.join(words)]
+        if self._run is not None:
+            rc, text = self._run(argv)
+        else:
+            p = subprocess.run(argv, capture_output=True, text=True, check=False)
+            rc, text = p.returncode, p.stdout
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            doc = None
+        if rc != 0 or not isinstance(doc, dict) or "refused" in doc:
+            why = doc.get("refused") if isinstance(doc, dict) else (text or "").strip()[:300]
+            raise CoinError(f"the challenger gate refused {words[0]} (exit {rc}): {why}")
+        return doc
+
+
+def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
+    """`pouw_h1_challenger.connect`, retried while the auditor host's ``ssh -R`` to this machine comes up."""
+    for i in range(tries):
+        try:
+            return PHC.connect(at, given)
+        except (ConnectionRefusedError, socket.timeout):
+            if i == tries - 1:
+                raise
+            time.sleep(1)
+    raise AssertionError("unreachable")
+
+
+class Session:
+    """The Commit's session on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
+    run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
+
+    def __init__(self, gate: Gate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
+        self.gate, self.reserved, self.runs = gate, dict(reserved), int(runs)
+        self._address = address or (lambda port: f"127.0.0.1:{port}")
+        self.given: dict[str, Any] | None = None
+        self.client: Any = None
+        self.index = 0
+
+    @classmethod
+    def reserve(cls, gate: Gate, peer: str, runs: int, **kw: Any) -> Session:
+        if runs < 1:
+            raise SystemExit("--challenger-gate draws the coins of the Commit's instrumented runs: not without one")
+        return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME, "--families", json.dumps(families(runs))),
+                   runs, **kw)
+
+    def _open(self, root: bytes) -> None:
+        answer = self.gate.call("open", "--session", self.reserved["session"], "--root", root.hex())
+        if answer.get("commitment") is None:
+            answer["commitment"] = self.gate.call("status", self.reserved["session"]).get("commitment")
+        try:
+            self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
+        except ValueError as e:
+            raise CoinError(f"the challenger gate's open answer: {e}") from e
+        self.client = _connect(self._address(int(answer["port"])), self.given)
+        c = self.client.commitment
+        if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
+            self.close()
+            raise CoinError(f"the challenger's coins are {c.scheme} {list(c.families)}, not the Commit's {SCHEME} "
+                            f"{families(self.runs)}")
+
+    def draw(self, root: bytes) -> dict[str, Any]:
+        """The next run's coins, coin i of each family opened after its root of record `root` (the session opened on run
+        0's), and its record (`record_of`)."""
+        root = bytes(root)
+        if len(root) != ROOT_BYTES:
+            raise CoinError(f"the challenger's coins follow a {ROOT_BYTES}-byte root of record (rows-sha512, the TP run root "
+                            f"v2), not this run's {len(root)}-byte root (vllm-v1)")
+        if self.index >= self.runs:
+            raise CoinError(f"the Commit's session holds coins for {self.runs} runs, and each is drawn")
+        if self.client is None:
+            self._open(root)
+        i, self.index = self.index, self.index + 1
+        openings = {f: self.client.open(f, i, root) for f in FAMILIES}
+        return {"source": CHALLENGER, "index": i, "root": root.hex(), "session": PHC.carried(self.given),
+                "commitment": self.client.commitment.to_json(), "keys": {f: o.coin.hex() for f, o in openings.items()},
+                "openings": {f: o.to_json() for f, o in openings.items()}}
+
+    def close(self) -> str | None:
+        """Close the session (the gate's end entry then seals it); why it didn't close cleanly, or None."""
+        if self.client is None:
+            return None
+        client, self.client = self.client, None
         try:
             client.close()
-        except CoinError:
-            pass
-    return opening.coin.hex(), {"source": "challenger", "at": at, "session": given and PHC.carried(given),
-                                "commitment": c.to_json(), "opening": opening.to_json()}
-
-
-def local(given: str | None, drawn: str) -> tuple[str, dict[str, Any]]:
-    """The challenge without a challenger: ``--replay-challenge`` (`given`) or the one this process drew."""
-    return (given, {"source": "flag"}) if given else (drawn, {"source": "in-process"})
-
-
-def session_option(challenger: str | None, given: str | None, session: str | None) -> dict[str, Any] | None:
-    """The Commit's ``--replay-session`` (`session`, the gate's answer as JSON) parsed, given its ``--replay-challenger``
-    (`challenger`) and ``--replay-challenge`` (`given`); `SystemExit` when they don't go together."""
-    if challenger and given:
-        raise SystemExit("--replay-challenger and --replay-challenge are two sources of the C2 replay's challenge: give one")
-    if bool(challenger) != bool(session):
-        raise SystemExit("--replay-challenger and --replay-session go together: the challenger and the gate's answer for "
-                         "the session it serves the Commit's replay coin in")
-    if not session:
+        except CoinError as e:
+            return str(e)
         return None
+
+
+def of_options(args: Any, runs: int, gate_run: Run | None = None) -> Session | None:
+    """The Commit's session from its ``--challenger-gate`` and ``--challenger-peer`` (reserved now, before any root), or
+    None without a gate; `SystemExit` when they don't go together."""
+    gate, peer = getattr(args, "challenger_gate", None), getattr(args, "challenger_peer", None)
+    if bool(gate) != bool(peer):
+        raise SystemExit("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in "
+                         "the auditor host's peers, where its challenger reaches the Commit")
+    if not gate:
+        return None
+    if getattr(args, "replay_challenge", None):
+        raise SystemExit("--challenger-gate and --replay-challenge are two sources of the C2 replay's challenge: give one")
     try:
-        return PHC.session_of(json.loads(session))
-    except ValueError as e:
-        raise SystemExit(f"--replay-session: {e}") from e
-
-
-def drawn(challenger: str | None, run_root: bytes, session: Any, given: str | None) -> tuple[str, dict[str, Any]]:
-    """The C2 replay's challenge and its record, drawn after `run_root`: the auditor host's replay coin (`challenge`)
-    with a `challenger`, else `local` (``--replay-challenge`` `given`, or one this process draws now)."""
-    if challenger:
-        return challenge(challenger, run_root, session)
-    return local(given, secrets.token_hex(16))
-
-
-def reason(record: Mapping[str, Any], challenge_hex: str, run_root: bytes, trusted: LiveCommitment) -> str | None:
-    """Why the replay challenge `challenge_hex` isn't replay coin 0 of `trusted` (the commitment the auditor's challenger
-    signed) opened after `run_root`; None when it is."""
-    if record.get("source") != "challenger":
-        return f"the replay challenge's source is {record.get('source')!r}, not the auditor host's challenger"
-    try:
-        c, o = LiveCommitment.from_json(record.get("commitment")), LiveOpening.from_json(record.get("opening"))
+        return Session.reserve(Gate(gate, gate_run), peer, runs)
     except CoinError as e:
-        return f"the replay challenge's record is malformed ({e})"
-    if c != trusted:
-        return "the replay challenge's coins are not the commitment the auditor's challenger signed"
+        raise SystemExit(f"--challenger-gate: {e}") from e
+
+
+def draw(session: Session | None, rc: Any) -> dict[str, Any]:
+    """Run `rc`'s coins after its root (``rc.extra["coins"]``): `session`'s, or this process's own bytes without one."""
+    if session is not None:
+        rec = session.draw(bytes(rc.run_root))
+    else:
+        rec = {"source": IN_PROCESS, "root": bytes(rc.run_root).hex(), "keys": {f: secrets.token_hex(64) for f in FAMILIES}}
+    rc.extra["coins"] = rec
+    return rec
+
+
+def _key(rc: Any, family: str) -> bytes:
+    rec = (getattr(rc, "extra", None) or {}).get("coins") or {}
+    if rec.get("root") != bytes(rc.run_root).hex():
+        raise ValueError(f"run root {bytes(rc.run_root).hex()[:16]}: no coins drawn after it (commit_coins.draw)")
+    return bytes.fromhex(rec["keys"][family])
+
+
+_DRAWN = object()
+
+
+def positions(rc: Any, session: Any = _DRAWN) -> dict[str, Any]:
+    """`challenge.challenge_positions`' keywords for run `rc`: off legacy, from its `POSITIONS` coin; given `session`
+    (None without a gate), the run's coins are drawn first (`draw`)."""
+    if session is not _DRAWN:
+        draw(session, rc)
+    return {"legacy": False, "source": _key(rc, POSITIONS)}
+
+
+def identities(rc: Any) -> dict[str, Any]:
+    """`binding.challenge_identities`' keywords for run `rc`: off legacy, from its `IDENTITIES` coin."""
+    return {"legacy": False, "source": _key(rc, IDENTITIES)}
+
+
+def replay_challenge(rc: Any, given: str | None) -> tuple[str, dict[str, Any]]:
+    """The served C2 replay's challenge and its record: run `rc`'s `REPLAY` coin, or ``--replay-challenge`` `given` (a
+    measurement) when the run's coins are this process's own."""
+    rec = rc.extra["coins"]
+    if rec["source"] == IN_PROCESS and given:
+        return given, {"source": "flag"}
+    return _key(rc, REPLAY).hex(), {"source": rec["source"], "family": REPLAY, "index": rec.get("index")}
+
+
+def tp_draw(session: Session | None, root: bytes) -> dict[str, Any]:
+    """A TP Commit's coins for one pair after its TP run root `root` (v2: SHA-512 over the ranks' rows-sha512 roots)."""
+    from types import SimpleNamespace
+
+    rc = SimpleNamespace(run_root=bytes(root), extra={})
+    return draw(session, rc)
+
+
+def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
+    """The (positions, identities) sources of a TP pair's coins record (`tp_draw`)."""
+    return bytes.fromhex(rec["keys"][POSITIONS]), bytes.fromhex(rec["keys"][IDENTITIES])
+
+
+def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
+           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify) -> str | None:
+    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
+    challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
+    session is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head infra
+    published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins. Fails closed."""
+    if not runs or len(runs) != len(roots):
+        return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
+    if any(r.get("source") != CHALLENGER for r in runs):
+        return ("the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, "
+                "which credits nothing")
+    roots = [bytes(r) for r in roots]
+    if any(len(r) != ROOT_BYTES for r in roots):
+        return f"a run's root of record is not {ROOT_BYTES} bytes (rows-sha512 or the TP run root v2)"
+    window = {"root": roots[0].hex()}
     try:
-        why = live_reason(trusted, o, FAMILY, 0, after(run_root))
+        audited = Ch.audited_session(Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify), window, key, verify)
+        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
     except CoinError as e:
-        why = str(e)
-    if why is not None:
-        return f"the replay coin: {why}"
-    return None if o.coin.hex() == challenge_hex else "the replay challenge is not the replay coin"
+        return f"the Commit's challenger session is not trusted: {e}"
+    for i, run in enumerate(runs):
+        given = run.get("session") or {}
+        if given.get("session") != audited.session or given.get("root") != window["root"]:
+            return (f"run {i}'s coins are session {given.get('session')}'s, opened for root {str(given.get('root'))[:16]}, "
+                    f"not {audited.session}, the one the auditor's ledger opened for the Commit's root {window['root'][:16]}")
+        if given.get("commitment") != trusted.root.hex() or run.get("index") != i:
+            return f"run {i}'s coins are not coin {i} of the commitment the auditor's challenger signed"
+    if trusted.scheme != SCHEME or [list(f) for f in trusted.families] != families(len(roots)):
+        return f"the challenger's coins are {trusted.scheme} {list(trusted.families)}, not the Commit's {families(len(roots))}"
+    for f in FAMILIES:
+        if tuple(received.get(f, ())) != tuple(roots):
+            return (f"the challenger's log shows its {f} coins released after roots other than the runs' roots of record, "
+                    "in order: a coin drawn before its run's root, or after another")
+    for i, (run, root) in enumerate(zip(runs, roots)):
+        for f in FAMILIES:
+            try:
+                opening = LiveOpening.from_json((run.get("openings") or {}).get(f))
+                why = live_reason(trusted, opening, f, i, root)
+            except CoinError as e:
+                why = str(e)
+            if why is not None:
+                return f"run {i}'s {f} coin: {why}"
+            if (run.get("keys") or {}).get(f) != opening.coin.hex():
+                return f"run {i}'s {f} key is not the coin the challenger opened"
+    return None
 
 
-def session_reason(record: Mapping[str, Any], challenge_hex: str, run_root: bytes, ledger: PHC.Ledger, fetch: PHC.Fetch,
-                   commit: str | None = None) -> str | None:
-    """Why the replay challenge isn't the replay coin of the one session the auditor's `ledger` opened for the record's
-    Commit root (`commit`, the Commit root the verifier holds, when given), ended closed and complete under the record's
-    commitment (`pouw_h1_challenger.held`), read from that session's tree as `fetch` gives it
-    (`pouw_h1_challenger.evidence`); None when it is."""
-    if record.get("source") != "challenger":
-        return f"the replay challenge's source is {record.get('source')!r}, not the auditor host's challenger"
-    why, window = PHC.held(record.get("session"), ledger, commit)
-    if why is not None:
-        return f"the replay challenge: {why}"
-    try:
-        out = PHC.evidence(window, fetch, ledger.key)
-        trusted = trusted_commitment(out / remote.RECORD, ledger.key, PHC.lms_verify)
-    except CoinError as e:
-        return f"the replay challenge's session {window['open']['session']} is not trusted: {e}"
-    return reason(record, challenge_hex, run_root, trusted)
-
-
-__all__ = ["FAMILY", "SCHEME", "TAG", "after", "challenge", "drawn", "local", "reason", "session_option",
-           "session_reason"]
+__all__ = ["CHALLENGER", "FAMILIES", "Gate", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY", "ROOT_BYTES", "SCHEME",
+           "Session", "draw", "families", "identities", "of_options", "positions", "reason", "replay_challenge", "tp_draw",
+           "tp_keys"]
