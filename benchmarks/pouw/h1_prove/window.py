@@ -1,13 +1,14 @@
 """The committer and prover of one H1 window (`run.py` drives it; the challenger and the verifier never import this file).
 
     python window.py commit LAYER.npz WINDOW PRIV OUT.json [--k K] [--cols N] [--calls q_proj,...] [--program-sha512 HEX]
-        the window's A rows (`layer.py`'s codes, each with its s_a, padded with zero rows of scale 0 to their slot,
-        `h1unit.slot`), every call's B rows (each with its s_w) and every tile's z/y record (`h1unit.records`: z = A Bᵀ
-        exact and y its served dequant, what ``scaled_mm_zy`` writes) as the registered values a/<K>, b/<K> and zy of the
-        window's public Program (`h1unit.register`: row/v2 bit rows under fresh salts, one frame-v3-sha512 tree each under
-        the Program's digest, which ``--program-sha512`` gives or this computes from the shape): OUT.json the public
-        commitment (the slot, each call's B rows, first B row and first tile, the Program's digest, the three registered
-        entries and roots), PRIV the prover's (its token rows too)
+        each call's tables, as a served round commits them before its coin: its A table a/<K>@<c>, the window's A rows
+        (`layer.py`'s codes, each with its s_a, padded with zero rows of scale 0 to their slot, `h1unit.slot`) under the
+        call's own salts, and its z table zy@<c>, its tiles' z/y records in tile order (`h1unit.records`: z = A Bᵀ exact
+        and y its served dequant, what ``scaled_mm_zy`` writes); and every call's B rows (each with its s_w) as b/<K>, the
+        weights' (`h1unit.tables`; `h1unit.register`: row/v2 bit rows under fresh salts, one frame-v3-sha512 tree each
+        under the window Program's digest, which ``--program-sha512`` gives or this computes from the shape): OUT.json
+        the public commitment (the slot, each call's B rows, first B row, first tile and tiles, the Program's digest, the
+        registered entries with their roots), PRIV the prover's (its token rows too)
     python window.py serve PRIV SALT_HEX OUT.json [--workers W]
         once the salt coin is open: every tile's CP-W receipt (`h1tile.reference`, the word reference the served kernel's
         receipts equal), each an output row under a fresh salt in the window's receipt tree, and how many of the tiles'
@@ -23,19 +24,21 @@
           --swap U V        records of units U and V exchanged
           --call U          record the one of the same tile (row block, column block) in the next call
           --z-only U        record of z alone: its y zeroed
-        a record changed re-registers zy (COMMITMENT.json the window's public commitment, its zy root and entry), a receipt
-        changed re-commits the receipt tree (SERVED.json); the input rows a prover of it holds are PRIV's
+        a record changed re-registers its call's z table (COMMITMENT.json the window's public commitment, that table's root
+        and entry), a receipt changed re-commits the receipt tree (SERVED.json); the input rows a prover of it holds are
+        PRIV's
     python window.py open PRIV SALT_HEX UNIT,... OUT_DIR [--tamper-a]
         the drawn units' rows (their public row's and ok row's too) and salts for staging, and each A row's, B row's and
-        record's position and path in its registered value (OUT_DIR/rows.npz, the prover's), and their opening
-        (OUT_DIR/opening.json: each committed row's b || c and its path to its tree's root). The ok row is the one word 1
-        under its public salt (`h1unit.ok_salt`), what the verifier accepts. ``--tamper-a``: the rows a prover that serves
-        an A row the registration does not hold stages, the first unit's a0 row (at every unit that reads it) with code 0's
-        low bit flipped under a fresh salt, its registered path kept; the opening is the honest one
+        record's registered value, position and path (OUT_DIR/rows.npz, the prover's: ``v_``, ``r_`` and ``p_`` of its
+        port), and their opening (OUT_DIR/opening.json: each committed row's b || c and its path to its tree's root). The ok
+        row is the one word 1 under its public salt (`h1unit.ok_salt`), what the verifier accepts. ``--tamper-a``: the rows
+        a prover that serves an A row the registration does not hold stages, the first unit's a0 row (at every unit that
+        reads it) with code 0's low bit flipped under a fresh salt, its registered path kept; the opening is the honest one
 
 A tile is (call, ti, tj): A rows [R ti, R (ti + 1)) of the slot and B rows [C tj, C (tj + 1)) of the call's; tiles are
-numbered call by call, row block major, and a tile's number is its position, the unit's ``position`` input and its row of
-zy (`h1window.PouwH1Window`). The window is one seed group, its roots (root(a), root(b)) every unit's ``roots`` input.
+numbered call by call, row block major, and a tile's number is its position, the unit's ``position`` input
+(`h1window.PouwH1Window`). Tile t of call c reads its A rows at a/<K>@<c>, its record at row t of zy@<c> and its B rows
+at b/<K> (`h1window.table_reads`). The window is one seed group, `h1unit.window_roots` every unit's ``roots`` input.
 ``--k`` truncates every row to its first K codes (a smoke run's), each row's scale kept.
 """
 from __future__ import annotations
@@ -44,7 +47,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -128,7 +130,7 @@ def cmd_commit(a) -> int:
         SBs.append(SB[:n])
         tile0, b0 = tile0 + t, b0 + n
     B, SB = np.concatenate(Bs), np.concatenate(SBs)
-    com = {"schema": "verity/pouw/h1-prove/commitment/v3", "window": a.window,
+    com = {"schema": "verity/pouw/h1-prove/commitment/v4", "window": a.window,
            "unit": {"definition": "PouwH1TileZy_v1", "tile": f"PouwH1Tile_{U.tile()}", "k": k, "r": R, "c": C,
                     "exact": "GemmAccumulatorS8_v2"}, "slot": m, "calls": out_calls, "b_rows": len(B), "tiles": tile0}
     if a.program_sha512:
@@ -137,16 +139,23 @@ def cmd_commit(a) -> int:
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         prog = P.program_digest(shape.window([(c["name"], c["n"]) for c in out_calls], m)[0])
     ZY = window_records(com, A, SA, B, SB)
-    words = {"a": U.row_words(A, SA), "b": U.row_words(B, SB), "zy": ZY}
-    salts = {t: _salts(len(w)) for t, w in words.items()}
-    reg = {t: U.register(prog, U.value(t, k), words[t], _bl(salts[t])) for t in U.REGISTERED}
-    for t, port in (("a", "a0"), ("zy", "zy")):
-        if reg[t].bcs != tuple(U.commit_strings(ports[port], words[t], _bl(salts[t]))):
-            raise SystemExit(f"the registered {t} rows' b || c are not the statement port {port}'s")
-    np.savez(priv / "rows.npz", a=A, b=B, scale_a=SA, scale_b=SB, zyw=ZY, sa=salts["a"], sb=salts["b"], szy=salts["zy"],
-             **{f"bc{t}": _bcs(reg[t].bcs) for t in U.REGISTERED})
-    com.update(program_sha512=prog, registered=[reg[t].entry() for t in U.REGISTERED],
-               **{f"root_{t}": reg[t].root.hex() for t in U.REGISTERED}, rows=rows, tokens=[int(x) for x in lay["tokens"]])
+    wa, nc = U.row_words(A, SA), len(out_calls)
+    sa, sb, szy = _salts(nc * m).reshape(nc, m, U.SALT_BYTES), _salts(len(B)), _salts(tile0)
+    reg = {f"b/{k}": U.register(prog, f"b/{k}", U.row_words(B, SB), _bl(sb))}
+    for c, call in enumerate(out_calls):
+        cut = slice(call["tile0"], call["tile0"] + call["tiles"])
+        reg[f"a/{k}@{c}"] = U.register(prog, f"a/{k}@{c}", wa, _bl(sa[c]))
+        reg[f"zy@{c}"] = U.register(prog, f"zy@{c}", ZY[cut], _bl(szy[cut]))
+    bczy = sum((reg[f"zy@{c}"].bcs for c in range(nc)), ())
+    if list(reg) != list(U.tables(com)) or any(r.leaves != n for r, n in zip(reg.values(), U.tables(com).values())):
+        raise SystemExit(f"the registered values {[(v, r.leaves) for v, r in reg.items()]} are not h1unit.tables'")
+    if any(reg[f"a/{k}@{c}"].bcs != tuple(U.commit_strings(ports["a0"], wa, _bl(sa[c]))) for c in range(nc)) or \
+            bczy != tuple(U.commit_strings(ports["zy"], ZY, _bl(szy))):
+        raise SystemExit("the registered A and z table rows' b || c are not the statement ports a0's and zy's")
+    np.savez(priv / "rows.npz", a=A, b=B, scale_a=SA, scale_b=SB, zyw=ZY, sa=sa, sb=sb, szy=szy,
+             bca=np.stack([_bcs(reg[f"a/{k}@{c}"].bcs) for c in range(nc)]), bcb=_bcs(reg[f"b/{k}"].bcs), bczy=_bcs(bczy))
+    com.update(program_sha512=prog, registered=[r.entry() for r in reg.values()], rows=rows,
+               tokens=[int(x) for x in lay["tokens"]])
     (priv / "commitment.json").write_text(json.dumps(com, indent=1))
     Path(a.out).write_text(json.dumps({x: com[x] for x in PUBLIC}, indent=1))
     print(json.dumps({"window": a.window, "k": k, "slot": m, "calls": {c["name"]: c["n"] for c in out_calls}, "tiles": tile0}))
@@ -154,8 +163,7 @@ def cmd_commit(a) -> int:
 
 
 #: the public commitment's fields; the prover's copy adds its token rows and tokens
-PUBLIC = ("schema", "window", "unit", "slot", "calls", "b_rows", "program_sha512", "registered", "root_a", "root_b", "root_zy",
-          "tiles")
+PUBLIC = ("schema", "window", "unit", "slot", "calls", "b_rows", "program_sha512", "registered", "tiles")
 
 
 roots = U.window_roots
@@ -341,17 +349,22 @@ def cmd_tamper(a) -> int:
             receipts[a.d_word if a.d_word is not None else a.xa_flip] = info.pop("receipt")
     receipts = {u: w for u, w in receipts.items() if not np.array_equal(w, priv["rw"][u])}
     records = {u: w for u, w in records.items() if not np.array_equal(w, priv["zyw"][u])}
-    k, port = com["unit"]["k"], {p.name: p for p in U.Shape(com["unit"]["k"], R, C).ports()}
+    port = {p.name: p for p in U.Shape(com["unit"]["k"], R, C).ports()}
+    tables = []
     if records:
         priv["zyw"], priv["bczy"] = priv["zyw"].copy(), priv["bczy"].copy()
         for u, w in records.items():
             priv["zyw"][u] = w
             priv["bczy"][u] = np.frombuffer(U.commit_strings(port["zy"], w[None, :], [bytes(priv["szy"][u])])[0], np.uint8)
-        reg = U.register(com["program_sha512"], "zy", priv["zyw"], _bl(priv["szy"]))
-        if reg.bcs != tuple(_bl(priv["bczy"])):
-            raise SystemExit("the re-registered zy rows' b || c are not the tampered rows'")
-        com["registered"] = [reg.entry() if e["value"] == "zy" else e for e in com["registered"]]
-        com["root_zy"] = reg.root.hex()
+        entries = {e["value"]: e for e in com["registered"]}
+        for c in sorted({tile_of(com, u)[0] for u in records}):
+            call, tables = com["calls"][c], [*tables, f"zy@{c}"]
+            cut = slice(call["tile0"], call["tile0"] + call["tiles"])
+            reg = U.register(com["program_sha512"], f"zy@{c}", priv["zyw"][cut], _bl(priv["szy"][cut]))
+            if reg.bcs != tuple(_bl(priv["bczy"][cut])):
+                raise SystemExit(f"the re-registered zy@{c} rows' b || c are not the tampered rows'")
+            entries[f"zy@{c}"] = reg.entry()
+        com["registered"] = list(entries.values())
     if receipts:
         priv["rw"], priv["bcr"] = priv["rw"].copy(), priv["bcr"].copy()
         for u, w in receipts.items():
@@ -359,7 +372,7 @@ def cmd_tamper(a) -> int:
             priv["bcr"][u] = np.frombuffer(U.commit_strings(port["o0"], w[None, :], [bytes(priv["sr"][u])])[0], np.uint8)
     served = dict(json.loads((src / "served.json").read_text()),
                   receipt_root=U.levels(U.domain(com["window"], "receipt", com["tiles"]), _bl(priv["bcr"]))[-1][0].hex(),
-                  tampered={"what": what, "records": sorted(records), "receipts": sorted(receipts), **info})
+                  tampered={"what": what, "records": sorted(records), "tables": tables, "receipts": sorted(receipts), **info})
     np.savez(dst / "rows.npz", **priv)
     (dst / "commitment.json").write_text(json.dumps(com, indent=1))
     (dst / "served.json").write_text(json.dumps(served))
@@ -369,60 +382,85 @@ def cmd_tamper(a) -> int:
     return 0
 
 
+def registered_rows(priv: dict, com: dict, u: int) -> dict[str, tuple[str, int, np.ndarray, bytes, bytes]]:
+    """Unit u's registered rows by statement port, each its value, position, words, salt and ``b || c``: A row i at row
+    R ti + i of its call's A table, B row j at its call's row C tj + j of b/<K>, its record at row t of its call's z
+    table (`h1window.table_reads`)."""
+    k, (c, ti, tj) = com["unit"]["k"], tile_of(com, u)
+    call, out = com["calls"][c], {}
+    for i in range(R):
+        r = R * ti + i
+        out[f"a{i}"] = (f"a/{k}@{c}", r, U.row_words(priv["a"][r:r + 1], priv["scale_a"][r:r + 1])[0], bytes(priv["sa"][c][r]),
+                        bytes(priv["bca"][c][r]))
+    for j in range(C):
+        r = call["b0"] + C * tj + j
+        out[f"b{j}"] = (f"b/{k}", r, U.row_words(priv["b"][r:r + 1], priv["scale_b"][r:r + 1])[0], bytes(priv["sb"][r]),
+                        bytes(priv["bcb"][r]))
+    out["zy"] = (f"zy@{c}", u - call["tile0"], priv["zyw"][u], bytes(priv["szy"][u]), bytes(priv["bczy"][u]))
+    return out
+
+
+def table_bcs(priv: dict, com: dict, value: str) -> list[bytes]:
+    """Every row's ``b || c`` of the registered value ``value`` (`h1unit.tables`), in order."""
+    k = com["unit"]["k"]
+    if value == f"b/{k}":
+        return _bl(priv["bcb"])
+    name, c = value.rsplit("@", 1)
+    call = com["calls"][int(c)]
+    return _bl(priv["bca"][int(c)]) if name == f"a/{k}" else _bl(priv["bczy"][call["tile0"]:call["tile0"] + call["tiles"]])
+
+
 def cmd_open(a) -> int:
     priv_dir, out = Path(a.priv), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     com = json.loads((priv_dir / "commitment.json").read_text())
     priv = dict(np.load(priv_dir / "rows.npz"))
     units = [int(x) for x in a.units.split(",")]
-    T, w, k, prog = com["tiles"], com["window"], com["unit"]["k"], com["program_sha512"]
+    T, w, prog = com["tiles"], com["window"], com["program_sha512"]
     lr = U.levels(U.domain(w, "receipt", T), _bl(priv["bcr"]))
-    lv = {t: U.registered_levels(prog, U.value(t, k), _bl(priv[f"bc{t}"])) for t in U.REGISTERED}
+    lv: dict = {}
     salt = bytes.fromhex(a.salt)
     reg_ports = [f"a{i}" for i in range(R)] + [f"b{j}" for j in range(C)] + ["zy"]
     rows = {p: [] for p in reg_ports} | {"pub": [], "o0": [], "o1": []}
     salts = {p: [] for p in rows}
-    positions, paths = {p: [] for p in reg_ports}, {p: [] for p in reg_ports}
+    values, positions, paths = {p: [] for p in reg_ports}, {p: [] for p in reg_ports}, {p: [] for p in reg_ports}
     openings = []
     for u in units:
         c, ti, tj = tile_of(com, u)
-        call = com["calls"][c]
-        op = {"unit": u, "call": call["name"], "tile": [ti, tj], "rows": {}}
-        for port, tree, r, sk, wk in ([(f"a{i}", "a", R * ti + i, "sa", None) for i in range(R)]
-                                      + [(f"b{j}", "b", call["b0"] + C * tj + j, "sb", None) for j in range(C)]
-                                      + [("zy", "zy", u, "szy", "zyw")]):
-            if wk:
-                rows[port].append(priv[wk][r])
-            else:
-                rows[port].append(U.row_words(priv[tree][r:r + 1], priv[f"scale_{tree}"][r:r + 1])[0])
-            salts[port].append(bytes(priv[sk][r]))
+        op = {"unit": u, "call": com["calls"][c]["name"], "tile": [ti, tj], "rows": {}}
+        for port, (value, r, words, s, bc) in registered_rows(priv, com, u).items():
+            if value not in lv:
+                lv[value] = U.registered_levels(prog, value, table_bcs(priv, com, value))
+            rows[port].append(words)
+            salts[port].append(s)
+            values[port].append(value)
             positions[port].append(r)
-            paths[port].append("".join(U.path(lv[tree], r)))
-            op["rows"][port] = {"tree": tree, "value": U.value(tree, k), "index": r, "bc": bytes(priv[f"bc{tree}"][r]).hex(),
-                                "path": U.path(lv[tree], r)}
+            paths[port].append("".join(U.path(lv[value], r)))
+            op["rows"][port] = {"value": value, "index": r, "bc": bc.hex(), "path": U.path(lv[value], r)}
         rows["pub"].append(U.pub_words(salt, u, roots(com)))
         salts["pub"].append(U.pub_salt(w, u))
         rows["o0"].append(priv["rw"][u])
         salts["o0"].append(bytes(priv["sr"][u]))
         rows["o1"].append(U.OK)
         salts["o1"].append(U.ok_salt(w, u))
-        op["rows"]["o0"] = {"tree": "receipt", "index": u, "bc": bytes(priv["bcr"][u]).hex(), "path": U.path(lr, u)}
+        op["rows"]["o0"] = {"value": "receipt", "index": u, "bc": bytes(priv["bcr"][u]).hex(), "path": U.path(lr, u)}
         openings.append(op)
     tampered = None
     if a.tamper_a:
         # instance 0's a0 row, at every instance that reads its position, with code 0's low bit flipped under one fresh salt;
         # the registered path kept
         r0, fresh = positions["a0"][0], bytes(_salts(1)[0])
-        at = [i for i, r in enumerate(positions["a0"]) if r == r0]
+        at = [i for i, rv in enumerate(zip(positions["a0"], values["a0"])) if rv == (r0, values["a0"][0])]
         for i in at:
             rows["a0"][i] = rows["a0"][i].copy()
             rows["a0"][i][0] ^= 1
             salts["a0"][i] = fresh
-        tampered = {"port": "a0", "position": r0, "instances": at}
+        tampered = {"port": "a0", "value": values["a0"][0], "position": r0, "instances": at}
     np.savez(out / "rows.npz", units=np.array(units), salt=np.frombuffer(salt, np.uint8),
              roots=np.array([[np.frombuffer(r, np.uint8) for r in roots(com)]] * len(units)),
              **{f"w_{p}": np.stack(v) for p, v in rows.items()},
              **{f"s_{p}": np.frombuffer(b"".join(v), np.uint8).reshape(len(v), U.SALT_BYTES) for p, v in salts.items()},
+             **{f"v_{p}": np.array(v) for p, v in values.items()},
              **{f"r_{p}": np.array(v, np.int64) for p, v in positions.items()}, **{f"p_{p}": np.array(v) for p, v in paths.items()})
     (out / "opening.json").write_text(json.dumps({"window": w, "units": openings}, indent=1))
     print(json.dumps({"opened": units, **({"tampered": tampered} if tampered else {})}))
