@@ -778,7 +778,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecSetup.checkInner recInner recCoins recBound
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
-        if complete then r.2.forM fun st => Registered.checkComplete st.c (registered.getD #[])
+        if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
         if zk then r.2.forM Zk.shapeOk

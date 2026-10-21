@@ -36,7 +36,7 @@ def file (complete : Option Json) : Json :=
 def run (c : Circuit) (f : Json) : Except String Unit := do
   let own ← Registered.ofJson f
   Registered.check c pub (some own) true
-  if ← Registered.completeOf f then Registered.checkComplete c own
+  if (← Registered.completeOf f) then Registered.checkComplete c own
 
 def why (c : Circuit) (f : Json) : String :=
   match run c f with
