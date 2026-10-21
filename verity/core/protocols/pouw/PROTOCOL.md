@@ -48,14 +48,16 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    weights' root, the root of the window's round-0 request table, committed before the salt, and the SHA-512 of S's
    ASCII, S the id the auditor's gate assigns when it reserves the window's session (1 to 64 of `[A-Za-z0-9._:-]`,
    `salt.SESSION`), which the prover can't relabel. The gate opens the session on that root (`open --session S --root
-   R`), and its challenger opens the salt coin only after R (`serve.py --root`). The verifier recomputes R from the
-   window's record and the S of the session's signed reserve entry: `core_check.salt` (Lean `PouwCheck.saltCheck`)
-   refuses a session whose signed open root isn't that R (`salt`: another window's weights, requests or session, or
-   H1's salt opened after the weights' root), a log of the session that doesn't show R alone as what its salt coin
-   followed (`salt`), and a salt coin that isn't the epoch's `pouw/salt` coin 0 opened after R (`coin`). Each session
-   has its own R, and R fixes one window's weights and requests, so one session salts one window. Not yet: the gate's
-   reserve step and the reader of the ledger's reserve and open entries that hands `salt` the session's S and R are
-   infra's and proofs' (PRF-117), and vllm's served window doesn't call `salt` yet. An epoch without coins
+   R`), and its challenger opens the salt coin only after R (`serve.py --root`). `core_check.salt` (Lean
+   `PouwCheck.saltCheck`) takes the salt's coins and roots only through the window's challenger session, as
+   `core_check.rounds` does ("Live epochs"), never from the prover: S from the session's signed reserve entry in the
+   auditor's ledger, R from its signed open entry, and the coin commitment and the roots the challenger received from
+   the session's signed record and log. It refuses a session opened without a reserve (`salt`), an R that isn't
+   `window_open_root` of the window's record and S (`salt`: another window's weights or requests, R under another
+   session's id, or H1's salt opened after the weights' root), a log of the session that doesn't show R alone as what
+   its salt coin followed (`salt`), and a salt coin that isn't the epoch's `pouw/salt` coin 0 opened after R (`coin`).
+   Each session has its own R, and R fixes one window's weights and requests, so one session salts one window. Not
+   yet: vllm's served window doesn't call `salt`. An epoch without coins
    (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps v1,
    `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified epoch
    (`Epoch.certified`, `salt.py`) is one PoUW window p of the network certifier's, its certifier windows p·k … p·k + k − 1
@@ -251,10 +253,10 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
 `Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
-`PouwCheck.saltCheck`) is the rule on it. Round r's
-coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise key
-is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
-noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. Round r's coin opens after
+the verifier recorded round r's root, the root of the values round r commits, and round r's noise key is
+`derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
+products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
 `PouwCheck.roundsCheck`) is the rule on a window's round coins. It reads the challenger's coins only through the session
 the auditor's signed ledger opens and ends closed for the window under the window's pinned challenger key
 (`challenger.trusted_session_of`, Lean `SampledProofs.Challenger.trustedSessionOf`): the record, on the host the ledger
