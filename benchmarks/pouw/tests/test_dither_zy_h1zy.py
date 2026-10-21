@@ -285,6 +285,23 @@ def _edge(DA, sd: SimpleNamespace) -> tuple[dict, np.ndarray]:
     return check_call(DA, y, zy, z, f32_bits(sa), f32_bits(sw), rows, xq.shape[0], ref), zy
 
 
+# -- CPU -----------------------------------------------------------------------------------------------------------------
+
+def test_the_byte_layout_compared_is_int8_exacts_and_parses_as_h1zy_record():
+    """`records_of`, the layout the CUDA tests compare dither-a's bytes in, is `int8_exact.zy_records` (#3018's records),
+    and `record_fields` reads it back as `h1zy.RECORD` into the same z and y: random words over 3 x 5 units."""
+    rng = np.random.default_rng(2930)
+    rows, n = 3 * UR, 5 * UC
+    z = rng.integers(0, 1 << 32, (rows, n), dtype=np.uint64).astype(np.uint32)
+    y = rng.integers(0, 1 << 16, (rows, n), dtype=np.uint64).astype(np.uint16)
+    rec = records_of(z, y)
+    ref = E.zy_records(torch.from_numpy(z.view(np.int32)), torch.from_numpy(y.view(np.int16)).view(torch.bfloat16))
+    assert np.array_equal(rec, ref.numpy())
+    f = record_fields(rec)
+    assert np.array_equal(grid(f["z"].astype(np.uint32), rows, n), z)
+    assert np.array_equal(grid(f["y"].astype(np.uint16), rows, n), y)
+
+
 # -- CUDA ----------------------------------------------------------------------------------------------------------------
 
 @cuda
