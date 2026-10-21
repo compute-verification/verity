@@ -14,7 +14,7 @@ open Flock
 def same (n m : Net) : Bool :=
   n.name == m.name && n.useful == m.useful && n.constPos == m.constPos && n.inWords == m.inWords &&
     n.unitLog == m.unitLog && n.inGroups.size == m.inGroups.size && n.outGroups.size == m.outGroups.size &&
-    (n.inGroups ++ n.outGroups).toList.zip (m.inGroups ++ m.outGroups).toList |>.all
+    ((n.inGroups ++ n.outGroups).toList.zip (m.inGroups ++ m.outGroups).toList).all
       (fun (g, h) => g.col == h.col && g.words == h.words && g.bits == h.bits) &&
     [(n.a, m.a), (n.b, m.b)].all fun (x, y) =>
       x.rows == y.rows && x.width == y.width && x.data.data == y.data.data && x.start == y.start && x.len == y.len
@@ -31,7 +31,7 @@ def tmplLines (call : String := "CALL 0 2 128 4 1 2 0 0") (extra : List String :
 
 /-- The flat unit, by hand: input bits 0 and 1, copy `j`'s binding rows at `128 + 4j` and `129 + 4j`, its AND at
 `130 + 4j`, its callee constant's column `131 + 4j` empty, the outputs at 256 and 257, the constant at 399. -/
-def flatLines : Array String := Id.run do
+def flatText : Array String := Id.run do
   let rows : List (Nat × String) :=
     [(0, "1 0 1 0"), (1, "1 1 1 1"), (128, "1 0 1 399"), (129, "1 1 1 399"), (130, "1 128 1 129"),
      (132, "1 0 1 399"), (133, "1 1 1 399"), (134, "1 132 1 133"), (256, "1 130 1 399"), (257, "1 134 1 399"),
@@ -41,15 +41,15 @@ def flatLines : Array String := Id.run do
   return out
 
 def unrolled (lines : Array String) : Except String Net := do
-  Tmpl.unroll (← Tmpl.parse lines)
+  _root_.Flock.Tmpl.unroll (← _root_.Flock.Tmpl.parse lines)
 
 def agrees : Bool :=
-  match unrolled tmplLines, Net.parse flatLines with
+  match unrolled tmplLines, Net.parse flatText with
   | .ok n, .ok m => same n m
   | _, _ => false
 
 def roundTrip : Bool :=
-  match Tmpl.parse tmplLines >>= Tmpl.flatLines, unrolled tmplLines with
+  match _root_.Flock.Tmpl.parse tmplLines >>= _root_.Flock.Tmpl.flatLines, unrolled tmplLines with
   | .ok ls, .ok n => match Net.parse ls with
     | .ok m => same n m
     | .error _ => false
@@ -57,7 +57,7 @@ def roundTrip : Bool :=
 
 def refuses (lines : Array String) : Bool := (unrolled lines).toOption.isNone
 
-#guard (Net.parse flatLines).toOption.isSome
+#guard (Net.parse flatText).toOption.isSome
 #guard agrees
 #guard roundTrip
 -- copies at stride 2 overlap a callee of 4 columns
