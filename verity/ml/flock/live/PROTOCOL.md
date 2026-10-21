@@ -697,7 +697,8 @@ nothing of level 0 under the firewall: the Lean finish keeps the table's tree fo
 not whole digests is refused before anything of the table leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's
 root differs, the recheck's root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0
 root`, §10.1). Its cost is reported per statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and
-`cpu.firewall_recheck` the process's CPU seconds of the Lean finish's level-0 request), beside the device's
+`cpu.firewall_recheck` `flock-circuit`'s own CPU seconds over the Lean finish's level-0 request, which leave out the
+Lean process's), beside the device's
 `t.encoding_commitment`.
 
 Through the Lean session loop (§10.4) level 0's hiding is the loop's, not the host's: for each firewalled table the prover
@@ -813,7 +814,10 @@ pad too few positions). Every `Level0` drawn for a session, committed or not, is
 process per rep. `Proof` and `Finish` leave as the prover sends them. The analysis's release is this loop
 (`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its
 frames take are proved (`loop_coinsRead`), and its link (`LinkRoundEq`) and the frames' state (`ProgReads`: the `prior` coins and the
-rounds Rust hands them) are still assumed.
+rounds Rust hands them) are still assumed. So are the bytes it releases, which the theorem reads only through named
+hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`), and so
+are the `Finish`'s record and proof files (`FinalRoundEq`, from `FrameAdmits` and `FinishIs`: `finalRoundEq_of_finishIs`).
+None of them is proved about the live path yet, so the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol:
 - **start**: one JSON line with the rep's layout (`n_mlv`, `n_lc`, `n_ood0`, `k0`) and the statement's mask slot (`w0`,
@@ -878,6 +882,16 @@ coins) and computes the rep's whole proof file from them and its own salts. That
 computes no opening, inner proof or proof file of a firewalled rep. A rep that a check failed, or whose frame stopped
 it, leaves no proof file, so the finish never gets its `rep` request. The bucket's `t.lean_finish` is the request's wall
 seconds, `t.firewall_shadow` the opening's, and `t.zk_inner` the inner proof's.
+
+**What `flock-circuit` still computes** under `FC_FIREWALL=1` is the prover workers' side: the host witness
+(`FC_HOST_WITNESS=1`), the device's (or the CPU prover's) rounds and returned proof, which the Lean frame passes or fails
+against the Lean's, and the algebraic phase's scheduled rounds (the skeleton from the statement's replay). Its own checks
+(`firewall::Checker`, `ShadowLink::check`, the end check on the returned proof, `relations_held` and
+`constraints_failing_on_pads` on the constraints the finish replays) can only refuse more. It moves the rest: the
+rounds and coins between the device, the frames and the session loop, and the finish's proof files as the session's
+`Proof`s. Under the firewall Rust's level-0 commitment (`commit_zk`) and opening are the worker's values only, held
+to the Lean's and never released, and Rust computes no proof file (`zk_finish`). As what leaves, they remain only on the
+unfirewalled `--zk` path, which no ZK server serves.
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
 one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any

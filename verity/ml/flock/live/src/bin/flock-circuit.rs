@@ -1995,7 +1995,7 @@ fn worker<T: Send + 'static>(cut: Option<Cut>, work: impl FnOnce(&mut (dyn FnMut
 }
 
 /// M1's CPU prover: upstream's prover under the masking challenger (or, with `FC_ZK_FRAMED`, under a [`Framer`] whose rounds are
-/// replayed into it, as the device's are), then [`zk_finish`].
+/// replayed into it, as the device's are), then [`zk_finish`], or [`zk_finish_fw`] under the firewall.
 #[allow(clippy::too_many_arguments)]
 fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger, zk: &ZkRep,
                 firewall: &Option<Arc<Mutex<Firewall>>>) -> Result<(Vec<u8>, Value), String> {
@@ -3266,7 +3266,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
 
 /// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
 /// again there by `flock_live::replay_round`, so the verifier sees what M1's CPU prover sends); level 0's hiding runs on the device.
-/// The caller finishes the rep with [`zk_finish`], as on the CPU.
+/// The caller finishes the rep with [`zk_finish`], or [`zk_finish_fw`] under the firewall, as on the CPU.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,

@@ -7,9 +7,9 @@ import Proofs.Flock.Claims.ZK.LinkFft
 # The link round at the Lean recheck
 
 `Flock.Firewall.Link.root` is the code of record of the firewall's level-0 recheck: each table's
-level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts, which
-`Firewall::new` holds `commit_zk`'s root to and the session's link carries (live `PROTOCOL.md` §10.2). Here that
-function is held to the session's link.
+level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts: the root of
+record, which the session's link carries and `Firewall::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
+commits nothing of level 0 that leaves). Here that function is held to the session's link.
 
 * `Flock.Firewall.Link.root_eq`, `cap_eq`, `leaves_getElem!`, `layer_eq`, `parRange_eq`: the recheck's root is
   `FlockComplete.flat` of `FlockComplete.layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows under the
