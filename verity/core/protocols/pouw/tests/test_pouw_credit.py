@@ -74,10 +74,12 @@ WINDOW_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
     "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
-    "other-registration": ("registration", OTHER_REGISTRATION), "proof-other-registration": ("registration", OTHER_ROOT),
+    "other-registration": ("registration", OTHER_REGISTRATION), "a-call-unbound": ("registration", OTHER_REGISTRATION),
+    "proof-other-registration": ("registration", OTHER_ROOT),
     "entry-root": ("registration", OTHER_ROOT),
     "proof-other-circuit": ("registration", "was verified against another circuit than the window's"),
     "proof-no-a": ("registration", "opened no A value …/a/"),
+    "proof-other-call": ("registration", "opened no A value …/a/"),
     "proof-unregistered": ("registration", "which the window registers not"),
     "entry-twice": ("registration", "which the window registers twice"),
     "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
@@ -105,6 +107,8 @@ A_LINK_EXPECT = {
     "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain",
     "blocks": "rounds' equal blocks", "log-form": Cr.LOG_FORM, "round-form": "inner root is not",
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
+    "call-other-round": "which only its call's round", "call-past": "and the window has",
+    "call-blocks": "rounds' equal blocks, so the round",
 }
 
 
@@ -335,7 +339,45 @@ def test_entries_of_another_registration_refuse(seed):
     opened them at those roots. Their domains are not the ones the window's registration gives them, so the window is
     refused."""
     d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
-    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
+    got, refused = Cr.window(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
+
+
+def test_mains_call_tables_are_the_windows_own_and_the_weights_held():
+    """The names main's served form registers (`h1window.table`, `h1window.roles`): a call's A table ``a/<K>@<call>`` is
+    an A value of K and that call, its z table ``zy@<call>`` a value of the window's own, and the weights' ``b/<K>`` the
+    only values held across windows."""
+    prog = h1.HW.program(h1.LINEARS, h1.CALLS, 8, h1.TILE, unit=h1.unit, prefix="h1/w-3/")
+    for c, (lin, _blk) in enumerate(h1.CALLS):
+        k = dict((name, k) for name, k, _n in h1.LINEARS)[lin]
+        a, zy = h1.HW.table(prog, "a", c), h1.HW.table(prog, "zy", c)
+        assert Cr.a_value(a) == (str(k), str(c)) and not Cr.is_held(a)
+        assert not Cr.is_a(zy) and not Cr.is_held(zy)
+    for role in h1.HW.roles(k for _n, k, _c in h1.LINEARS):
+        v = "h1/w-3/" + role
+        assert Cr.is_held(v) == role.startswith("b/") and Cr.is_a(v) == role.startswith("a/"), role
+    assert not any(Cr.is_a(v) for v in ("h1/a/x", "h1/a/4096@", "h1/a/@3", "h1/a/4096@3@4", "a/64@-1", 5))
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_honest_window_of_call_tables_credits_its_bits(seed):
+    """Main's served form: each call's A table ``…/a/<K>@<c>`` committed whole under its call's round's root and its z
+    table ``…/zy@<c>``, both under domains that bind the window's open root, and each drawn unit's proof opening its own
+    call's. The window is credited."""
+    d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest", per_call=True)
+    assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
+    got, refused = Cr.window(*cases.window_args(d))
+    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_call_table_registered_without_the_window_root_refuses(seed):
+    """A call's A table registered under a domain that binds no window root (main's h1_prove registration, its synthetic
+    window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the drawn units' proofs
+    opened it: its domain is not the one the window's registration gives it, so the window is refused."""
+    d = cases.window_instance(random.Random(f"a-call-unbound/{seed}"), "a-call-unbound")
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
     got, refused = Cr.window(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
@@ -372,7 +414,7 @@ def test_a_round_log_the_challenger_never_received_refuses(seed):
     d = cases.window_instance(random.Random(f"never-received/{seed}"), "never-received")
     got, refused = Cr._credited(*cases.credit_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
-    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
     rounds = CC.rounds(d["key"], d["ledger"], d["window"], d["session"], [x["root"] for x in d["rounds"]],
                        [x["coin"] for x in d["rounds"]], rc.lms_verify)
     assert rounds == ("rounds", NOT_RECEIVED)
@@ -482,6 +524,22 @@ def test_the_reported_eps_is_of_the_credited_work():
     assert Cr.established(lay, [], k) is None
 
 
+def test_the_record_k_establishes_about_0_1125_percent_at_u_eight_ninths():
+    """At K = `plan.RECORD_K` = 27,713, the K that establishes 0.1% of a window's work at `DELTA`, a window credited 8
+    of its 9 equal calls reports about 0.1125%, 9/8 of it: the miss bound reads only the missed work εC/W, and
+    `Properties.Pouw.Credit.EpsAtSound` holds at the ε `eps_at` answers, so its K′ is at most 27,713 and the grid
+    point below needs more."""
+    lay = {"calls": [["w", 0]] * 9, "linears": [["w", 4096, 1 << 20]], "m": 16, "tile": [16, 16]}
+    size, work = Cr.call_work(lay)[0]
+    total, credited = 9 * size * work, 8 * size * work
+    eps = Cr.established(lay, list(range(8)), plan.RECORD_K)
+    assert eps == Wd.eps_at(plan.RECORD_K, Cr.DELTA, credited, total, 1)
+    assert Fraction(1_124, 1_000_000) < eps < Fraction(1_126, 1_000_000)
+    assert Wd.k_prime(eps, Cr.DELTA, credited, total, 1) <= plan.RECORD_K
+    assert Wd.k_prime(eps - Fraction(1, 1 << Wd.EPS_BITS), Cr.DELTA, credited, total, 1) > plan.RECORD_K
+    assert Fraction(8, 9) * eps == pytest.approx(Wd.eps_at(plan.RECORD_K, Cr.DELTA, total, total, 1), rel=1e-5)
+
+
 def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -> Fraction:
     """The largest probability that the work law's draw (each stratum (n_s, w_s, k_s) drawn k_s of its n_s units
     without replacement) misses a set holding at least a share `eps` of the work `total`, over two strata: for each
@@ -518,6 +576,27 @@ def test_the_eps_holds_at_the_work_laws_cap():
     by_units = Wd.eps_at(2000, Cr.DELTA, total, 2000, 1000)
     assert by_units == Fraction(1, 1 << Wd.EPS_BITS)
     assert _worst_miss(drawn, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
+
+
+@pytest.mark.parametrize("light, heavy", [((1000, 1), (1000, 1000)), ((400, 1), (100, 100)), ((600, 2), (200, 300)),
+                                          ((300, 1), (300, 64)), ((500, 1), (50, 1000))])
+def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
+    """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work law
+    draws a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
+    share of the work is missed with probability above 9/10. At the same draw the work form (C, W, 1) holds, every set
+    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
+    (n_a, w_a), (n_b, w_b) = light, heavy
+    lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
+    n = n_a + n_b
+    ss, why = Cr.strata(lay)
+    assert why is None and Cr.law(ss, n) is None
+    drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
+    total = sum(size * w for size, w, _k in drawn)
+    assert drawn[0][0] == n_a and drawn[0][2] < n_a and drawn[1][2] == n_b
+    by_units = Wd.eps_at(n, Cr.DELTA, total, n, w_b)
+    assert by_units == Fraction(1, 1 << Wd.EPS_BITS) and _worst_miss(drawn, by_units, total) > Fraction(9, 10)
+    eps = Cr.established(lay, [0, 1], n)
+    assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(drawn, eps, total) <= Cr.DELTA
 
 
 @pytest.mark.parametrize("seed", SEEDS)
