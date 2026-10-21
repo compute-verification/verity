@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
@@ -51,7 +52,7 @@ theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
         D.proved = Array.range st.n := by
   unfold RecSetup.checkForm at h
   dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  simp only [throw_bind'] at h
   repeat' walk_step
   all_goals
     exact ⟨by simpa using ‹¬(fm.statement != Tags.circuitPlainLeaves.name) = true›,
@@ -79,26 +80,6 @@ theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     simpa [e1, e2, e3, e4, pure, Except.pure] using h
 
 /-! ## Flock's plain verifier on the inner statement -/
-
-/-- **What `readX` read of the inner statement**: its bytes decode (`FlockDeploy.decode`) to the inner statement it
-holds, and Flock's own checks pass on them (`innerOk`). -/
-theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
-    FlockDeploy.decode r.w.inner = some r.innerRaw ∧ innerOk r.w.inner = .ok () := by
-  unfold readX at h
-  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
-  obtain ⟨w, -, ri, hri, sh, -, pa, -, dims, hd, vs, -, h⟩ := h
-  split_ifs at h with hl
-  · simp at h
-  have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
-  subst h'
-  show FlockDeploy.decode w.inner = some ri ∧ innerOk w.inner = .ok ()
-  refine ⟨hri, ?_⟩
-  cases hi : RecVStar.innerOf ri.circuit ri.publicFile pa ri.program with
-  | error e => simp [hi, bind, Except.bind, Except.toOption] at hd
-  | ok d =>
-    cases ho : innerOk w.inner with
-    | ok u => rfl
-    | error e => simp [hi, ho, bind, Except.bind, Except.toOption] at hd
 
 /-- **Flock's own checks on the inner statement**: its plain verifier sets it up, and its statement check passes. -/
 theorem innerOk_ok {inner : Msg} (h : innerOk inner = .ok ()) :
@@ -192,8 +173,7 @@ theorem files_stmt {f : RecCoins.Files} {spec : SessionSpec} {st : Stmt}
   | ok q =>
     obtain ⟨spec0, sts0⟩ := q
     rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hs with ⟨-, st0, hst0, rfl, rfl⟩ | ⟨hc, -⟩
-    · have h0 : (#[st0] : Array Stmt)[0]? = some st0 := rfl
-      simp [hs, h0, bind, Except.bind, pure, Except.pure] at h
+    · simp [hs, bind, Except.bind, pure, Except.pure] at h
       obtain ⟨rfl, rfl⟩ := h
       exact ⟨hst0, rfl⟩
     · omega
@@ -231,7 +211,7 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   have hs2 : r.innerRaw.osCoins = true := hs2
   have hs3 : r.innerRaw.tables = [] := hs3
   have hb : r.innerRaw.draw = some b := hb
-  obtain ⟨hdec, hok⟩ := readX_inner hr
+  obtain ⟨hdec, -, hok⟩ := readX_inner hr
   obtain ⟨s, spec, sts, hset, hchk⟩ := innerOk_ok hok
   obtain ⟨hins, hsu⟩ := FlockDeploy.setupOf_some hset
   have hw : r.innerRaw.zk = false ∧ r.innerRaw.ins = .ok s := by
