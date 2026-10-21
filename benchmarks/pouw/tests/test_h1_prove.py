@@ -1,8 +1,7 @@
 """h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `run.py`, `h1unit.py`, `stage.py`), without the
 unit's circuit: the window's public Program and template-instance partition derive exactly the tiles it commits and the
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
-the weights' b/<K>, and each call's ok table, the verifier's own) are read where the window's own reads say, one call's
-units a statement, a window's drawn units open
+the weights' b/<K>) are read where the window's own reads say, one call's units a statement, a window's drawn units open
 to those rows of its registered roots and to nothing else (a tampered window's, another window's, a tampered A row), each
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
@@ -125,11 +124,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     call's A table is the slot's rows (with their scales) under its own salts and its z table its tiles' records, each
     `scaled_mm_zy`'s (`h1zy.records`), the tables the verifier's Program names; a registration of z alone, or of one
     window-wide zy, is refused; the units' roots are the A tables' digest and b/<K>'s root; and the verifier's
-    ``--registered`` file of a call (`h1window.table_reads_file`, from the Program alone, and its ok table's ``o1``) reads,
-    at every unit of the call and port, the row `h1unit.unit_reads` does, and none at any other call's unit. Each call's
-    ok table (`h1unit.ok_tables`, from the window's name and shape) opens each unit's ok row, the word 1 under its public
-    salt, at its row there and no other word, another window's is another root, and a verifier without its roots is
-    refused."""
+    ``--registered`` file of a call (`h1window.table_reads_file`, from the Program alone) reads, at every unit of the call
+    and port, the row `h1unit.unit_reads` does, and none at any other call's unit."""
     layer(tmp_path / "w.npz", 8, rows=6, calls=(("k_proj", 16), ("q_proj", 20)))
     com = commit(tmp_path, tmp_path / "w.npz", "w", win.obj["program"])
     assert (com["slot"], com["b_rows"], [(c["name"], c["n"]) for c in com["calls"]]) == (8, 32, [("k_proj", 16), ("q_proj", 16)])
@@ -180,7 +176,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert U.unit_reads(win.program, win.tp, u) == {
             **{f"a{i}": (f"a/{K}@{c}", R * ti + i) for i in range(R)}, **{f"b{j}": (f"b/{K}", b0 + j) for j in range(C)},
             "zy": (f"zy@{c}", u - t0), "salt": ("salt", 0), "position": ("position", u), "roots": ("roots", 0),
-            "o0": ("receipt", u), "o1": (f"ok@{c}", u - t0)}
+            "o0": ("receipt", u), "o1": ("ok", u)}
         rows, cols = slice(R * ti, R * ti + R), slice(b0, b0 + C)
         a, b, sa, sw = priv["a"][rows], priv["b"][cols], priv["scale_a"][rows], priv["scale_b"][cols]
         assert np.array_equal(priv["zyw"][u], U.record_words(*U.records(a, b, sa, sw)))
@@ -188,23 +184,16 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
             enc = lambda m: [[int(x) & 0xFF for x in r] for r in m]  # noqa: E731
             assert U.split_record(priv["zyw"][u], RC) == Z.records(enc(a), enc(b), f32(sa), f32(sw))
 
-    calls = U.HW.call_units(win.program)
-    oks = U.ok_tables(win.obj["program"], "w", calls)
-    assert U.call_tiles(com) == calls and oks == U.ok_tables(com["program_sha512"], com["window"], U.call_tiles(com))
-    assert {v: n for v, (n, _r) in oks.items()} == {"ok@0": T // 2, "ok@1": T // 2}
-    assert U.ok_tables(win.obj["program"], "w2", calls) != oks
-    ok_port = U.ok_port()
-    for u in range(T):
-        value, row, sibs = U.ok_read(win.obj["program"], "w", calls, u)
-        assert (value, row) == U.unit_reads(win.program, win.tp, u)["o1"]
-        n_ok, root = oks[value]
-        bc = U.commit_strings(ok_port, U.OK[None, :], [U.ok_salt("w", u)])[0]
-        assert U.verify_registered(win.obj["program"], value, n_ok, bytes.fromhex(root), row, bc, [sibs])
-        wrong = U.commit_strings(ok_port, np.zeros((1, 1), np.uint16), [U.ok_salt("w", u)])[0]
-        assert not U.verify_registered(win.obj["program"], value, n_ok, bytes.fromhex(root), row, wrong, [sibs])
-    roots = {v: r for v, (_n, r) in (reg | oks).items()}
-    leaves = tables | {v: n for v, (n, _r) in oks.items()}
-    for c, (first, n) in enumerate(calls):
+    okr = RN.ok_registration(win, com)
+    assert okr.entry() == {"value": "ok", "root": okr.root.hex(), "leaves": T, "words": 1,
+                           "domain": U.registered_domain(win.obj["program"], "ok", T).domain_id.hex()}
+    assert list(okr.bcs) == U.commit_strings(port["o1"], np.tile(U.OK, (T, 1)), [U.ok_salt("w", u) for u in range(T)])
+    assert okr.root == U.register_ok(win.obj["program"], "w", T).root != U.register_ok(win.obj["program"], "v", T).root
+    roots = {v: r for v, (_n, r) in reg.items()}
+    with pytest.raises(ValueError, match="holds no root of them"):
+        U.registered_reads(win.program, win.tp, 0, roots, win.obj["program"])
+    roots["ok"], leaves = okr.root.hex(), {**tables, "ok": T}
+    for c, (first, n) in enumerate(U.HW.call_units(win.program)):
         reads = U.registered_reads(win.program, win.tp, c, roots, win.obj["program"])
         assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
@@ -215,9 +204,11 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
             assert e["reads"] == [U.unit_reads(win.program, win.tp, u)[p][1] if first <= u < first + n else None
                                   for u in range(T)]
         assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
-        assert reads["ports"]["o1"]["value"] == f"ok@{c}" and reads["ports"]["o1"]["words"] == len(U.OK) == 1
-    with pytest.raises(ValueError, match="whose root the verifier does not hold"):
-        U.registered_reads(win.program, win.tp, 0, {v: r for v, (_n, r) in reg.items()}, win.obj["program"])
+        assert reads["ports"]["o1"]["value"] == "ok" and reads["ports"]["o1"]["words"] == 1
+        assert reads["ports"]["o1"]["reads"] == [u if first <= u < first + n else None for u in range(T)]
+        wrote, doc = RN.registered_file(tmp_path / f"c{c}.registered.json", win, com, c, [first, first + n - 1], okr)
+        assert doc == reads and json.loads((tmp_path / f"c{c}.registered.json").read_text()) == reads
+        assert wrote["roots"]["ok"] == okr.root.hex() and "o1" in wrote["ports"]
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -232,8 +223,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 @pytest.mark.slow
 def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     """A drawn unit's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
-    another window's), its ok row is the one word 1 under its public salt at its row of its call's ok table (the
-    verifier's own, `h1unit.ok_tables`, and its registered read), a prover's rows with a tampered A row
+    another window's), its ok row is the one word 1 under its public salt and row u of the verifier's registered ``ok``
+    (a 0 row there opens no root; ``--unregistered-ok`` states no ok registration), a prover's rows with a tampered A row
     (`window.py open --tamper-a`, at every unit that reads it) open no registered root through the path they keep, and
     units of two calls, which read two calls' tables, are no one statement."""
     salt = U.unit_salt(U.stand_in_reveal(b"\x01" * 32), 1)
@@ -241,8 +232,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     assert com["tiles"] == 2 * (8 // R) * (16 // C)
     assert served["salt"] == PS.pouw_salt(U.stand_in_reveal(b"\x01" * 32), 1, U.STREAM, U.PROVER).hex()
     units = [4, 5, 7]
-    honest = opened(tmp_path, "w1", salt, units, "honest")
-    for u, op in zip(units, honest):
+    for u, op in zip(units, opened(tmp_path, "w1", salt, units, "honest")):
         assert RN.check_opening(win, com, served, op, u) == []
     rows = np.load(tmp_path / "honest" / "rows.npz")
     assert rows["w_pub"].shape == (3, 100) and rows["s_pub"].shape == (3, U.SALT_BYTES)
@@ -252,13 +242,20 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     assert all(np.array_equal(w, U.OK) for w in rows["w_o1"])
     assert [bytes(s) for s in rows["s_o1"]] == [U.ok_salt("w1", u) for u in units]
     assert [reference(rows, i)[1] for i in range(3)] == [1, 1, 1]
-    assert (rows["v_o1"].tolist(), rows["r_o1"].tolist()) == (["ok@1"] * 3, [0, 1, 3])
-    ok_reads = [(str(v), int(r), str(p)) for v, r, p in zip(rows["v_o1"], rows["r_o1"], rows["p_o1"])]
-    assert [RN.unit_registered(win, com, op, u)["o1"] for u, op in zip(units, honest)] == ok_reads
-    n_ok, ok_root = U.ok_tables(win.obj["program"], "w1", U.HW.call_units(win.program))["ok@1"]
-    for i, (_v, r, p) in enumerate(ok_reads):
-        bc = U.commit_strings(U.ok_port(), rows["w_o1"][i:i + 1], [bytes(rows["s_o1"][i])])[0]
-        assert U.verify_registered(win.obj["program"], "ok@1", n_ok, bytes.fromhex(ok_root), r, bc, [p])
+    prog, T, o1 = win.obj["program"], com["tiles"], U.Shape(K).ports()[-1]
+    okr = U.register_ok(prog, "w1", T)
+    assert (rows["v_o1"].tolist(), rows["r_o1"].tolist()) == (["ok"] * 3, units)
+    for i, u in enumerate(units):
+        assert str(rows["p_o1"][i]) == okr.path(u).hex()
+        for w, opens in ((rows["w_o1"][i], True), (np.zeros_like(U.OK), False)):
+            bc = U.commit_strings(o1, w[None, :], [bytes(rows["s_o1"][i])])[0]
+            assert U.verify_registered(prog, "ok", T, okr.root, u, bc, [str(rows["p_o1"][i])]) is opens
+    st = U.statement_tables(dict(rows), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    assert st["registered"]["o1"] == {"value": "ok", "positions": units, "paths": [okr.path(u).hex() for u in units]}
+    opened(tmp_path, "w1", salt, units, "ok-unregistered", "--unregistered-ok")
+    loose = dict(np.load(tmp_path / "ok-unregistered" / "rows.npz"))
+    assert not {"v_o1", "r_o1", "p_o1"} & set(loose) and np.array_equal(loose["w_o1"], rows["w_o1"])
+    assert "o1" not in U.statement_tables(loose, [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])["registered"]
 
     a0 = U.Shape(K).ports()[0]
     ops = opened(tmp_path, "w1", salt, units, "tampered", "--tamper-a")
@@ -269,7 +266,6 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     assert np.array_equal(bad["w_a1"], rows["w_a1"]) and np.array_equal(bad["p_a0"], rows["p_a0"])
     st = U.statement_tables(dict(bad), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
     assert st["registered"]["a0"]["positions"] == [0, 4] and st["registered"]["a0"]["value"] == f"a/{K}@1"
-    assert st["registered"]["o1"] == {"value": "ok@1", "positions": [0, 1, 3], "paths": [p for _v, _r, p in ok_reads]}
     reg = U.registered_of(com)
     for z, opens in ((rows, True), (bad, False)):
         bc = U.commit_strings(a0, z["w_a0"][:1], [bytes(z["s_a0"][0])])[0]
@@ -397,10 +393,10 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     record: the prover's shared-row statement (`h1unit.statement_tables` through C-Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
     are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
-    flock-verify --registered's check; each unit's ok row at its row of the verifier's own ok table). A prover's A row
-    the registration does not hold opens none, two rows at one position are refused, and a forged statement
-    (`h1unit.forge_statement`) is the verifier's file of a window with the wrong output row, whose wrong ok word opens no
-    ok table row."""
+    flock-verify --registered's check; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
+    committed afresh state no ok registration, a prover's A row the registration does not hold opens none, two rows at one
+    position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
+    wrong output row."""
     from verity_flock import circuit as FC
     ports = U.Shape(K).ports()
     names = [p.name for p in ports]
@@ -420,9 +416,8 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     reg = {t: U.register(prog, values[t], w, [rng.bytes(U.SALT_BYTES) for _ in w]) for t, w in words.items()}
     assert list(reg["a"].bcs) == U.commit_strings(ports[0], words["a"], list(reg["a"].salts))
     assert list(reg["zy"].bcs) == U.commit_strings(ports[names.index("zy")], words["zy"], list(reg["zy"].salts))
-    com = {"unit": {"k": K}, "window": "w", "calls": [{"tile0": 0, "tiles": T}], "registered": [r.entry() for r in reg.values()]}
+    com = {"unit": {"k": K}, "registered": [r.entry() for r in reg.values()]}
     verifier = SimpleNamespace(obj={"program": prog})
-    ok_reads = [U.ok_read(prog, "w", U.call_tiles(com), u) for u in indices]
     first = {"a": [0, 4, 0], "b": [0, 0, 8], "zy": indices}
     salts_of = lambda s: np.frombuffer(b"".join(s), np.uint8).reshape(len(s), U.SALT_BYTES)  # noqa: E731
     tree_of = lambda p: "zy" if p == "zy" else p[0]  # noqa: E731
@@ -436,9 +431,11 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
         port = ports[names.index(p)]
         z[f"w_{p}"] = rng.integers(0, 1 << 16, (n, port.words)).astype(np.uint16)
         z[f"s_{p}"] = salts_of([rng.bytes(U.SALT_BYTES) for _ in range(n)])
-    z.update(w_o1=np.tile(U.OK, (n, 1)), s_o1=salts_of([U.ok_salt("w", u) for u in indices]),
-             **{f"{x}_o1": np.array([r[i] for r in ok_reads]) for i, x in enumerate("vrp")})
-    reg_reads = [*reg_ports, "o1"]
+    okr = U.register_ok(prog, "w", T)
+    z.update({"w_o1": np.tile(U.OK, (n, 1)), "s_o1": salts_of([U.ok_salt("w", u) for u in indices]),
+              "v_o1": np.array(["ok"] * n), "r_o1": np.array(indices), "p_o1": np.array([okr.path(u).hex() for u in indices])})
+    stated = [*reg_ports, "o1"]
+    roots = U.registered_of(com) | {"ok": (T, okr.root.hex())}
 
     def staged(z: dict, d: Path) -> bytes:
         st = U.statement_tables(z, ins, outs)
@@ -451,7 +448,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     def bcs_reads(z: dict) -> tuple[list, list]:
         bcs = [{p: U.commit_strings(ports[names.index(p)], z[f"w_{p}"][i:i + 1], [bytes(z[f"s_{p}"][i])])[0] for p in names}
                for i in range(n)]
-        return bcs, [{p: (str(z[f"v_{p}"][i]), int(z[f"r_{p}"][i]), str(z[f"p_{p}"][i])) for p in reg_reads}
+        return bcs, [{p: (str(z[f"v_{p}"][i]), int(z[f"r_{p}"][i]), str(z[f"p_{p}"][i])) for p in stated if f"r_{p}" in z}
                      for i in range(n)]
 
     pub = staged(z, tmp_path / "honest")
@@ -462,8 +459,17 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     assert (h["registered"]["a0"]["positions"], h["registered"]["b3"]["positions"], h["registered"]["zy"]["positions"],
             h["units"]["indices"]) == ([0, 4], [3, 11], indices, indices)
     assert (h["registered"]["zy"]["value"], h["registered"]["a0"]["value"]) == ("zy@0", f"a/{K}@0")
-    assert h["registered"]["o1"] == {"value": "ok@0", "positions": indices, "paths": [p for _v, _r, p in ok_reads]}
-    assert all(RN.registered_opens(pub, ports, p, r, verifier, com) for p in reg_reads for r in range(h["shared_rows"][p]))
+    assert h["registered"]["o1"] == {"value": "ok", "positions": indices, "paths": [okr.path(u).hex() for u in indices]}
+    assert all(RN.registered_opens(pub, ports, p, r, verifier, roots) for p in stated for r in range(h["shared_rows"][p]))
+    zero = dict(z, w_o1=z["w_o1"].copy())
+    zero["w_o1"][1] = 0
+    pub_z = staged(zero, tmp_path / "ok-zero")
+    assert U.verifier_pub(head, "s", "sub", *bcs_reads(zero)[:1], indices, bcs_reads(zero)[1]) == pub_z
+    assert [RN.registered_opens(pub_z, ports, "o1", r, verifier, roots) for r in range(n)] == [True, False, True]
+    loose = {x: v for x, v in z.items() if x not in ("v_o1", "r_o1", "p_o1")}
+    pub_l = staged(loose, tmp_path / "ok-unregistered")
+    assert "o1" not in json.loads(pub_l[:pub_l.index(b"\n")])["registered"]
+    assert U.verifier_pub(head, "s", "sub", *bcs_reads(loose)[:1], indices, bcs_reads(loose)[1]) == pub_l
     with pytest.raises(ValueError, match="ascending"):
         U.verifier_pub(head, "s", "sub", bcs, [9, 3, 12], reads)
     other = [dict(r, a0=(f"a/{K}@1", *r["a0"][1:])) if i == 2 else r for i, r in enumerate(reads)]
@@ -478,7 +484,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     bad["w_a0"][[0, 2]], bad["s_a0"][[0, 2]] = row[0], np.frombuffer(rng.bytes(U.SALT_BYTES), np.uint8)
     pub_t = staged(bad, tmp_path / "tampered")
     assert U.verifier_pub(head, "s", "sub", *bcs_reads(bad)[:1], indices, bcs_reads(bad)[1]) == pub_t
-    assert [RN.registered_opens(pub_t, ports, p, r, verifier, com) for p, r in (("a0", 0), ("a0", 1), ("a1", 0))] == [False, True, True]
+    assert [RN.registered_opens(pub_t, ports, p, r, verifier, roots) for p, r in (("a0", 0), ("a0", 1), ("a1", 0))] == [False, True, True]
     half = dict(bad, w_a0=bad["w_a0"].copy(), s_a0=bad["s_a0"].copy())
     half["w_a0"][2], half["s_a0"][2] = z["w_a0"][2], z["s_a0"][2]
     with pytest.raises(ValueError, match="instances 0 and 2 read position 0 as two rows"):
@@ -493,7 +499,6 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     bad_bcs = [dict(b, o1=U.commit_strings(o1, wrong[None, :], [bytes(z["s_o1"][1])])[0]) if i == 1 else b
                for i, b in enumerate(bcs)]
     bad_pub = U.verifier_pub(head, "s", "sub", bad_bcs, indices, reads)
-    assert [RN.registered_opens(bad_pub, ports, "o1", r, verifier, com) for r in range(n)] == [True, False, True]
     got = U.forge_statement(tmp_path / "honest", tmp_path / "forged", bad_pub, 1, "o1", wrong, tmp_path / "circuit.txt")
     assert got == {"instance": 1, "port": "o1", "row_words_changed": 1}
     assert (tmp_path / "forged" / "pub.bin").read_bytes() == bad_pub
@@ -584,8 +589,7 @@ def test_the_seeds_derive_from_the_window_salt():
 
 def test_the_public_and_ok_rows_are_their_parameters_bits():
     """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1, under a salt
-    anyone derives from the window and the position; an ok table of any statements' ok salts (`h1unit.ok_levels`, a
-    leaf's lanes' too) opens the word 1 at each row and no other word."""
+    anyone derives from the window and the position."""
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))
     w = U.pub_words(salt, 0x0123456789, roots)
     bits = np.unpackbits(w.astype("<u2").view(np.uint8), bitorder="little")
@@ -593,13 +597,6 @@ def test_the_public_and_ok_rows_are_their_parameters_bits():
         SD.leaves(roots[1], True)
     assert U.OK.tolist() == [1] and len(U.ok_salt("w", 3)) == U.SALT_BYTES
     assert len({U.ok_salt("w", 3), U.ok_salt("w", 4), U.ok_salt("v", 3), U.pub_salt("w", 3)}) == 4
-    prog, salts = "ab" * 64, tuple(U.ok_salt(f"w#lane{ln}", 7) for ln in range(4))
-    lv = U.ok_levels(prog, "ok", salts)
-    for t, s in enumerate(salts):
-        for word, opens in ((U.OK, True), (np.zeros(1, np.uint16), False)):
-            bc = U.commit_strings(U.ok_port(), word[None, :], [s])[0]
-            assert U.verify_registered(prog, "ok", len(salts), lv[-1][0], t, bc, U.path(lv, t)) is opens
-    assert U.ok_levels(prog, "ok", salts[::-1])[-1][0] != lv[-1][0]
 
 
 def test_the_verifiers_frame_is_c_flocks():

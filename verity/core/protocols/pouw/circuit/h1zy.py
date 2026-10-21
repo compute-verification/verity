@@ -32,12 +32,12 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 * **ok** is a check word, no served value (no ``outZ``, ``outY`` or ``served`` role; Served's ``check`` class, pending), read
   through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`), so a proof the
   verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
-  accepted proof. The ok rows are a registered port of the verifier's own (``--registered``), each call's ok table
-  ``ok@<c>`` (h1_prove's `ok_tables`: row t the word 1 under unit t's public salt), whose root the verifier computes
-  from the window's name and shape before any statement or coin, so Lean opens each unit's ok row there rather than
-  reading ok off the public file alone (proofs' ``CheckedSessionSound``, #3108, binds ok only through a port of
-  ``own``). A lane's and a combine's ok rows are registered the same way, an ok table of the word 1 under the
-  statements' public salts (h1_prove's `ok_levels`), beside the ``partials`` port.
+  accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`, #3124: row u the
+  word 1 under unit u's public salt), and each unit's ok port ``o1`` reads it at the unit's row through ``--registered``,
+  so Lean opens each ok row against that root rather than reading ok off the public file alone (proofs'
+  ``CheckedSessionSound``, #3108, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
+  form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
+  statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a drawn leaf is proved as its 32
   lanes and their combine). Option A is a proof strategy, not a new Served form (RT4-LOGIC-30): a drawn leaf is one Cd
   unit and meets Served as `PouwH1TileZy_v1` does, and BRIDGE2's linked realization carries the 33 statements to it.
