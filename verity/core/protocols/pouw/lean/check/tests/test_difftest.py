@@ -17,8 +17,8 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
-round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
-for output: null, or the same refusal.
+round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
+ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
 """
 from __future__ import annotations
 
@@ -98,6 +98,8 @@ REASONS = {_template(r) for r in (
     "the proof's circuit is not the one the verifier pins for the check's template",
     "the proof's first rows are not an A row and a B row of the registered schemas",
     "the proof's body holds no A row and B row",
+    *(f"the proof's header does not list its rows {', '.join(p)} first, in its circuit's port order"
+      for p in (["a0", "b0"], [*(f"a{k}" for k in range(4)), *(f"b{k}" for k in range(8))])),
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
     *(f"side {s}: the proof's committed row is not entry #'s row #" for s in "ab"),
     "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's "
@@ -243,7 +245,16 @@ def test_rounds(pass_server):
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
     for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
-                 ": coin does not open", ": coin was not opened after", "the verifier's coins are malformed",
+                 ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
-                 "the coin commitment's "):
+                 "the coin commitment's ", "not trusted: no challenger close record",
+                 "not trusted: the challenger record's signature does not verify",
+                 "not trusted: the challenger's release log is not the one its close record signs",
+                 ": a second open for root ", ", not the window's pinned key",
+                 "not trusted: the auditor's ledger has no end for session",
+                 "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
+                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
+                 "not trusted: the challenger's record is signed at leaf ",
+                 "not trusted: the challenger's refused hellos are not the ",
+                 "the challenger's log shows it received"):
         assert any(part in k for k in ROUNDED), part

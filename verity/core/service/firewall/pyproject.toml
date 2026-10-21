@@ -1,7 +1,7 @@
 [project]
 name = "verity-core-firewall"
 version = "0.1.0"
-description = "Tests only: the firewall's release side in Lean (core_firewall) against Rust's flock_live::release and Python's verity_flock.firewall."
+description = "Tests only: the firewall's release side in Lean (core_firewall) against the Rust reference flock_live::release and Python's verity_flock.firewall."
 requires-python = ">=3.12"
 dependencies = ["verity-flock", "verity-difftest", "hypothesis>=6.100"]
 

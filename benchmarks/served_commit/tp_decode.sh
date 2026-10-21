@@ -2,9 +2,11 @@
 # One arm of tp_decode.py (stock against the arm in one TP engine, eager) from the shipped tree, the research run's cwd:
 #   research run --on vy-glm53-eu --cwd source --gpus 8 --mem-gb 400 --timeout 75m --project verity -- env ARM=rows bash benchmarks/served_commit/tp_decode.sh
 # (a tree whose research package predates `--gpus`: drop it and put `gpu-lease 8 --wait --mem-gb 400 --` before `env`)
-# ARM: rows | rows-4k | rows-layer | rows-layer-4k.  BATCHES (default 1,8,32), PAIRS (default 3), ROW (default GLM-5.3's TP8 eager B1
-# row, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default /workspace/cp/venv312).  The engine:
-# gpu_memory_utilization GPU_UTIL (0.92), max_model_len MAX_MODEL_LEN (288), max_num_batched_tokens MAX_BATCHED (2048, the row's).
+# ARM: rows | rows-4k | rows-layer | rows-layer-4k.  RETAIN (default none): the committer's value retention, VERITY_RETAIN
+# (none | host | device), which summary.json records as the committer took it.  BATCHES (default 1,8,32), PAIRS (default 3), ROW
+# (default GLM-5.3's TP8 eager B1 row, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default
+# /workspace/cp/venv312).  The engine: gpu_memory_utilization GPU_UTIL (0.92), max_model_len MAX_MODEL_LEN (288),
+# max_num_batched_tokens MAX_BATCHED (2048, the row's).
 # Out: $RESEARCH_RUN_DIR/out/$ARM (runs.jsonl, summary.json, committer_make.json, versions.json, b<B>/ the warm-ups).
 set -euo pipefail
 TREE=$PWD
@@ -16,7 +18,7 @@ LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
 if [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK"; then sudo -n mount --bind "$LOCAL_CK" "$FS_CK"; fi
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=/workspace/cp/hf HF_HUB_OFFLINE=1 NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
-export VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8 VERITY_RETAIN=none VERITY_WEIGHTS_HASH=device
+export VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8 VERITY_RETAIN=${RETAIN:-none} VERITY_WEIGHTS_HASH=device
 TMPDIR=$(mktemp -d /tmp/tp-decode.XXXXXX)
 export TMPDIR
 trap 'rm -rf "$TMPDIR"' EXIT

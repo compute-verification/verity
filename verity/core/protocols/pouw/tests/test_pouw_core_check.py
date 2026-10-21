@@ -213,6 +213,7 @@ _WINDOW_ENTRY = "is not the registered window's entry"
 _HEADER, _COUNT = "the proof's public file has no JSON header", "the proof's header has no instance count"
 _ROWS = "the proof's first rows are not an A row and a B row of the registered schemas"
 _FIELDS = "the opening's salt is not 192 bytes, or a path"
+_ORDER = "the proof's header does not list its rows a0, b0 first, in its circuit's port order"
 #: the refusal each opening mutation aims at, by its reason's start or end ("…" before an end); None for an acceptance
 OPENING_EXPECT = {
     "honest": None, "undrawn": "…is not drawn", "domain": "the registered window domain is not",
@@ -232,7 +233,8 @@ OPENING_EXPECT = {
     **{n: "the proof's circuit is not the one the verifier pins" for n in ("circuit-other", "circuit-missing",
                                                                           "circuit-type")},
     **{n: _ROWS for n in ("schemas-missing", "frame-type", "schemas-type", "schemas-swapped", "schemas-one",
-                          "schemas-prefixed")},
+                          "schemas-shadowed")},
+    "schemas-prefixed": _ORDER, "schemas-between": _ORDER,
     "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
     "a-index": "side a: the opening is of row", "b-index": "side b: the opening is of row",
     **{n: "side a: the proof's committed row is not" for n in ("a-row", "a-path-short", "rows-swapped", "past-side")},
@@ -246,6 +248,7 @@ OPENING_EXPECT = {
         "salted-other-salt", "salted-position", "salted-roots", "salted-row-salt")},
     "salted-uncertified": "the window's template's unit reads a salt, which only a certified window has",
     **{n: "the proof's rows a0, a1, a2, a3, b0," for n in ("salted-schemas", "salted-schemas-missing")},
+    "salted-header-order": "the proof's header does not list its rows a0, a1, a2, a3, b0,",
     "salted-body-short": "the proof's body holds no A rows, B rows and public row",
     **{n: _FIELDS for n in ("salted-sides-short", "salted-side-dict")},
     "salted-a-index": "side a: the opening is of row", "salted-b-row": "side b: the proof's committed row is not",
@@ -357,6 +360,18 @@ def test_the_opening_reads_what_served_zk_writes():
     assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
         case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
         case["params"]["check"]["entries"], case["params"]["context"])
+
+
+def test_every_pinned_tiles_side_ports_sort_in_port_order():
+    """C-Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
+    row's schema by port name and refuses a header whose keys, in key order, don't list the opened side rows first and in
+    port order, rather than read the rows in key order (`schemas-between`, `salted-header-order`). It refuses no honest
+    header of a pinned template: each one's side ports (Pc8's a0 and b0, the H1 unit's a0..a3 and b0..b7) sort in port
+    order, and its other ports (outputs, a salted unit's pub) after them. A salted layout of more than ten rows a side
+    would not (a10 sorts before a2): the opening would refuse its honest proofs until it reads them otherwise."""
+    for t in CC.TILES.values():
+        ports = CC._ports(t.salted)
+        assert sorted(ports) == ports and len(ports) == (2 if t.salted is None else t.salted.r + t.salted.c), t
 
 
 def test_the_pinned_tiles_are_their_templates():
@@ -561,9 +576,30 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
 
 #: the refusal each rounds mutation aims at: its code and a part of its reason
 ROUNDS_EXPECT = {
-    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed: "),
-    "seeded-coins": ("coin", "the verifier's coins are malformed: a live coin commitment is"),
-    "not-live": ("coin", "the coin commitment's "), "roots-form": ("rounds", "the round roots are not"),
+    "honest": None, "key-form": ("coin", "the verifier's challenger key is malformed: "),
+    "seeded-coins": ("coin", "not trusted: the challenger record is malformed: a live coin commitment is"),
+    "in-process": ("coin", "not trusted: the challenger record's signature does not verify"),
+    "not-live": ("coin", "the coin commitment's "),
+    "unsigned": ("coin", "not trusted: no challenger close record"),
+    "close-signature": ("coin", "not trusted: the challenger's close record's signature does not verify"),
+    "tampered-log": ("coin", "not trusted: the challenger's release log is not the one its close record signs"),
+    "unclosed": ("coin", "not trusted: the challenger's session ended without its client closing it: "),
+    "no-ledger": ("coin", "not trusted: no auditor's ledger"),
+    "no-session": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "second-session": ("coin", ": a second open for root "),
+    "v1-ledger": ("coin", "under verity/challenger-auditor/v1, which names no prover and seals no refused hellos"),
+    "end-form": ("coin", "not trusted: the auditor's ledger's end of session s-1 is malformed: "),
+    "record-leaf": ("coin", "not trusted: the challenger's record is signed at leaf 8 over commitment "),
+    "hellos": ("coin", "not trusted: the challenger's refused hellos are "),
+    "reused-leaf": ("coin", ", not after the last entry's "),
+    "other-session": ("coin", "not trusted: the challenger's session is s-2, not s-1, the one the auditor's ledger opens"),
+    "other-key": ("coin", ", not the window's pinned key "),
+    "forged-ledger": ("coin", "not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify under "
+                              "the challenger key"),
+    "truncated": ("coin", "not trusted: the auditor's ledger has no end for session s-1: "),
+    "unsealed": ("coin", "not trusted: the challenger's release log is not the one the auditor's ledger sealed"),
+    "rewritten": ("rounds", "the round roots are not the roots the challenger's log shows it received, in order"),
+    "roots-form": ("rounds", "the round roots are not"),
     "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
     "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
     "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
@@ -578,9 +614,13 @@ ROUNDS_EXPECT = {
 
 
 def test_every_rounds_mutation_hits_its_refusal():
-    """`core_check.rounds` accepts an honest live window's round coins and refuses each mutation (a coin opened twice, one
-    opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it aims
-    at."""
+    """`core_check.rounds` accepts an honest live window's round coins, read through the challenger's signed session the
+    auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
+    an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
+    second session for the window's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
+    it didn't seal, roots the challenger didn't receive, a coin opened twice,
+    one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
+    aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
     for name, want in ROUNDS_EXPECT.items():
         for seed in range(6):

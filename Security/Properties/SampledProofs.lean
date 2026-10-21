@@ -160,15 +160,15 @@ def OutputPortIs (log : Array Json) (leaves : Nat) (record port : String) : Prop
     (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
 
 /-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
-registered (`Registered.entries`); each output value it has an entry for has its earlier port, with the value's leaf
-count (`OutputPortIs`), and takes that port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
+registered, counting each value's rows in the row format it holds for it (`Registered.entries`, `v.schemas`); each
+output value it has an entry for has its earlier port, with the value's leaf count (`OutputPortIs`), and takes that port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
 record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
 them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
 naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
 else to the root it pinned before the record, else to the log's, and one it fills to none (`heldFor`); and each value it
 fills has the root it recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
-  ∃ mine es mine' held', Registered.entries v.program.desc v.params v.registered = .ok mine ∧
+  ∃ mine es mine' held', Registered.entries v.program.desc v.params v.registered v.schemas = .ok mine ∧
     getD rec "registered" = .arr es ∧
     (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want → OutputPortIs v.log want.leaves o.2.1 o.2.2) ∧
     (Registration.applyOutputs #[] mine (v.pinned ++ Registration.heldRoots v.log) v.outputs v.log).2 = (mine', held') ∧

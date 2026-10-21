@@ -47,6 +47,7 @@ import Flock.HmRow
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.JsonKeys
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup
@@ -71,6 +72,7 @@ import Flock.Firewall.FinishProver
 import Flock.Firewall.Frame
 import Flock.Firewall.Frames
 import Flock.Firewall.Link
+import Flock.Firewall.Level0
 import Flock.Firewall.Hello
 import Flock.Firewall.Session
 import Flock.Witness
