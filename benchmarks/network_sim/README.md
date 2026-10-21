@@ -65,8 +65,11 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer, whose connection
 crosses the fabric. Each block's server plays one strategy: `honest`; `bits`, whose write times carry a random bit per
 session; `late`, which holds a session in window 0 past every sync; `extra`, which writes one event at a position the
-Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
-`check_ingress_link` on its raw and committed records. The datacenter record check is `datacenter.check_records` on its
+Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited three
+times. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link` on its raw and committed records.
+N3Window_v5's reference (`workload.n3_canonical`) checks every raw window, each frame against its direction's template
+of the certifier's canonical framing (`active.event_placement`, `active.request_placement`) on the bytes the Program's
+server and peer send. The datacenter record check is `datacenter.check_records` on its
 records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port (`b0.cert:out`
 for what leaves the block, `b0.cert:in` for what enters it) needs a record for each window, with the declared counts
 and digest, and each carried window leaves log2 of the sync set's size bits of timing advice. The declaration's cadence
@@ -87,7 +90,10 @@ Run `r20261018-073637-e25f`, on vy-nebius-cpu-2 at a load of about 120:
 latest tick was 4.2 ms late against the proxy's 25 ms slack. Each bucket reached the peer about 5.4 ms after its tick
 from the blocks on `na-leaf0`, and about 9.8 ms after it from those behind the spine. The earlier runs gave the same
 certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r20261018-071731-392a`, on the first
-`datacenter` API.
+`datacenter` API. On the canonical framing (the night `r20261021-083115-dae5`, below) the certifier and record verdicts
+are the table's, and v5 accepts all six windows of b0 and b1 and refuses exactly the windows the certifier refuses:
+b2's `responses` window 0, whose record is faulted, and b3's `responses` window 2, whose extra event isn't the
+server's outbox.
 
 ### With the salt
 
@@ -163,7 +169,7 @@ and 14 links.
 - The Program is the same, one outside peer per link (see Limits), so what crosses the WAN is the east blocks' traffic
   with the outside host.
 
-Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
+Each block gets every audit, as on one site. Then the record check runs once more, on every block's records together
 against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
 (`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
 the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3b` (the whole night, below):
@@ -181,7 +187,9 @@ the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3
 | fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.6 ms |
 | fleet-swapped | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
 
-The verdicts are the single site's, block for block. What the WAN adds:
+The verdicts are the single site's, block for block. On the canonical framing (`r20261021-083115-dae5`) they are the
+same, every median wire lag is within 0.3 ms of the table's, and v5 accepts every window but the one the certifier
+refuses on each `late` and `extra` block. What the WAN adds:
 - **To δ, nothing.** A frame's release is counted in buckets from its anchor, the bucket its request entered at the
   block's own certifier, and the frame is handed at that certifier, so both ends of δ are at the block's uplink and the
   WAN is outside it. Every block on both sites declared the same sync, δ = 3 buckets at ρ = 1, and was accepted or
@@ -220,22 +228,28 @@ each spine, that watched no block: the same verdicts, and each east path 4 ms lo
 237,846 gates, a pipeline stage a block) on the lab's declaration. Each block's server runs in the block's namespace,
 mockdc's proxy in its certifier's, and the client on `na-ext0`. A block reaches only its certifier, so the client relays
 every message between blocks: it leaves its source as server-sent events of a response and enters its destination in a
-request (`workload/lab.py`). Each block is checked three ways: the certifier's audit (`audit.Audit` in `active_replay`'s
-live mode, on the block's event log), N3 over the certifier's records (`workload.lab.check`), and the answers against
-the Program evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The
-run needs a Python with torch; the recorded one builds it with `uv` in a scratch directory.
+request (`workload/lab.py`), both on the certifier's canonical framing: a message's bytes are cut into events of at
+most 64 bytes (`active.event`), and a request is its length and bytes over `DATA` frames (`active.request_frames`).
+Each block is checked four ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the block's
+event log), N3 over the certifier's records (`workload.lab.check`), N3Window_v5's reference on each of its link-windows
+with the canonical templates (`n3_unit.lab_windows`, `workload.n3_canonical`), and the answers against the Program
+evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a
+Python with torch; the recorded one builds it with `uv` in a scratch directory.
 
-Run `r20261018-084303-dae6`, on vy-nebius-cpu-2 with the lab up in its default shape:
+The night `r20261021-083115-dae5`, on vy-nebius-cpu-2 with the lab up in its default shape:
 
-| Run | Certifier audit | N3 | Answers |
-|---|---|---|---|
-| honest | accepts all four blocks | holds | equal the reference |
-| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | equal the reference: the bit doesn't change the token |
-| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | none |
+| Run | Certifier audit | N3 | N3 v5 (8 windows a block) | Answers |
+|---|---|---|---|---|
+| honest | accepts all four blocks | holds | accepts all 32 | equal the reference |
+| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | refuses b1's `responses` window 0 and b2's `requests` window 0 | equal the reference: the bit doesn't change the token |
+| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | refuses window 0 of b0's `responses`, b1's and b2's `responses` and `requests`; b3, starved before it sent anything, records nothing | none |
 
-The latest proxy tick was 4.1 ms late against the 25 ms slack. Each first event left its block at most 186 ms after its
-request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms after its tick from the blocks on
-`na-leaf0` and 9.8 ms from those behind the spine.
+Under `late` v5 refuses b2's faulted window and each window that carried bytes of a block that committed no values (b0,
+b1 and b2, starved or late): no committed outbox holds them. b0's request, the client's own bytes, is accepted. The
+latest proxy tick was 5.9 ms late against the 25 ms slack. Each first event left its block at most
+259 ms after its request, against δ's 1.2 s, and each bucket reached the client a median 5.5 ms after its tick from
+the blocks on `na-leaf0` and 10.3 ms from those behind the spine. The run before the canonical framing was
+`r20261018-084303-dae6`, with the same certifier and N3 verdicts.
 
 ## The whole night
 
@@ -255,6 +269,7 @@ it leaves the lab up in its default shape.
 `DIR/summary.txt` has a row per block of each run with:
 - the certifier's verdicts, and the salt check's;
 - the record check's verdicts, or N3's;
+- N3Window_v5's, with the canonical templates, as the windows it accepts of those the block recorded;
 - the account's covert budget;
 - the median lag from a bucket's tick to its bytes reaching the peer;
 - the latest proxy tick against the slack.
@@ -268,12 +283,19 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
   bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
 ~~~
 
-Run `r20261018-112635-7b3b` exited 0. It took 6.5 minutes on vy-nebius-cpu-2 and gave every expected verdict, the
-tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
-salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged, and the
-certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms late against the
-25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`, the night before, and the night before
-the fleet was `r20261018-102319-bb80`.
+Run `r20261021-083115-dae5` (`out/night`), the first on the certifier's canonical framing, exited 0 with "every
+verdict is the expected one". It took 8.1 minutes on vy-nebius-cpu-2. The certifier and record verdicts are those of
+`r20261018-112635-7b3b`, the night before the framing, which took 6.5 minutes, and v5's are the "N3 v5" column of
+`DIR/summary.txt`:
+- on a mockdc block, all six windows, or one refused, the window the certifier refuses (`late` and `extra`);
+- on b4 down for maintenance, the four windows it recorded;
+- on the lab, the table above.
+
+Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the salt, b4's proxy
+revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged, and the certifier's salt
+check, like its audit, found nothing for window 1. The latest proxy tick was 5.9 ms late against the 25 ms slack.
+`run.py`'s tests render the summary of `r20261018-110501-432f`, and the night before the fleet was
+`r20261018-102319-bb80`.
 
 ## N3 in zero knowledge
 
