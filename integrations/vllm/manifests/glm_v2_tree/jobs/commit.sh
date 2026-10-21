@@ -8,15 +8,16 @@
 # each rank's, goes to $OUT/gpu_memory_utilization.json (exit 12, after the bundles are preserved, unless every one is GPU_UTIL).
 # An evicted Commit's run fails, and its rerun is a whole new attempt: the unfinished commit/ (and commit.log) moved aside, a new
 # commitment and new draws.  Each attempt is a line of the row dir's commit_attempts.jsonl (in "_rowmeta", and $OUT), and its
-# number is in the bundles' and the rowmeta's meta.
+# number is in the bundles' and the rowmeta's meta.  ROW_ON=ROOT: the row dir kept on another disk at its path (model.sh `row_on`).
 #   research run --on vy-glm53-eu --mem-gb 600 --timeout 10h --custody-ttl 24h --source . --cwd source --project verity -- env ROW=... BUILD_RUN=... MATCH_RUN=... NODE=vy-glm53-eu bash integrations/vllm/manifests/glm_v2_tree/jobs/commit.sh
-# env: ROW, BUILD_RUN, MATCH_RUN, [NODE=$(hostname)], [SW], [REF] (model.sh's defaults), [MEMORY_MAP], [COMMIT_TIMEOUT].
+# env: ROW, BUILD_RUN, MATCH_RUN, [NODE=$(hostname)], [SW], [REF] (model.sh's defaults), [ROW_ON], [MEMORY_MAP], [COMMIT_TIMEOUT].
 set -uo pipefail
 : "${ROW:?ROW}" "${BUILD_RUN:?BUILD_RUN}" "${MATCH_RUN:?MATCH_RUN}"
 TREE=$PWD
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/model.sh"
 TREE_SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
 D=$SW/$ROW
+[ -z "${ROW_ON:-}" ] || row_on "$ROW_ON" || exit 3
 source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || exit 2
 test -s "$D/manifest.json" || { echo "no manifest.json in $D: copy the Build of record in first"; exit 2; }
 test -s "$D/match/tp2_match.json" || { echo "no match/tp2_match.json in $D: copy the passing Match in first"; exit 2; }
@@ -34,7 +35,7 @@ printf '{"attempt": %d, "run": "%s", "node": "%s", "tree": "%s", "started": "%s"
   "${NODE:-$(hostname)}" "$REF@$TREE_SHA" "$(date -u +%FT%TZ)" "$prev" >>"$L" && cp "$L" "$OUT/commit_attempts.jsonl"
 echo "Commit attempt $ATTEMPT of $ROW ($L)"
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tee "$OUT/gpus_at_start.txt"
-df -h /workspace | tail -1 | tee "$OUT/disk_at_start.txt"
+df -h "$D" | tail -1 | tee "$OUT/disk_at_start.txt"
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 ckpt_bind
@@ -98,10 +99,12 @@ for b in "$D"/commit/replay_bundle_p*_rank*; do
   printf ' "%s": {"art": "%s", "manifest_sha256": "%s"}' "$name" "$art" "$sha" >>"$OUT/bundles.json"
   echo "$name $art"
 done
-M=$(mktemp -d "$SW/.rowmeta.XXXXXX")
-(cd "$D" && find . -type f -not -path './build/*' -not -path './aot_trace/*' -not -path './match/capture/*' -not -path './match/control/*' \
+# hard links, so on the row dir's own disk: a bound row's (ROW_ON) is not $SW's
+M=$(mktemp -d "$D/.rowmeta.XXXXXX")
+(cd "$D" && find . -type f -not -path './.rowmeta.*' -not -path './build/*' -not -path './aot_trace/*' -not -path './match/capture/*' -not -path './match/control/*' \
    -not -path './match.*/*' -not -path './match/fold_match.failed-*/*' -not -path './commit/replay_bundle_*' -not -path './commit.failed-*/*' -not -name manifest.json \
-   -not -regex './match/fold_match/rank[0-9]*/\(instances\.jsonl\|accesses\.jsonl\.gz\|program\.json\)' -print0 | xargs -0 cp --parents -l -t "$M")
+   -not -regex './match/fold_match/rank[0-9]*/\(instances\.jsonl\|accesses\.jsonl\.gz\|program\.json\)' -print0 | xargs -0 cp --parents -l -t "$M") ||
+  { echo "rowmeta: linking the row's records into $M failed"; prc=5; }
 echo "rowmeta: $(find "$M" -type f | wc -l) files, $(du -sh --apparent-size "$M" | cut -f1)"
 art=$("$RB" data put --kind vllm-row-meta/v1 --tree "$M" --preserve \
       --meta "{\"row\": \"$ROW\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"attempt\": $ATTEMPT, \"tree\": \"$REF@$TREE_SHA\", \"what\": \"the row dir's records less the Build, the capture planes, a moved-aside Match, the folds' instances and the replay bundles\"}" \

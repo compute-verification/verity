@@ -178,8 +178,9 @@ The Commits' row dirs stay at their paths on eu's `/workspace`, which the Commit
 at DeepSeek-V4-Pro's start). `/workspace/extra` (2 TiB, infra 01:55Z 21 Oct) takes B32's legs and the room the B8 Commits need.
 B32's legs run with `ROW_ON=/workspace/extra gpu_batch.sh a vy-glm53-eu <B32>`: `match_gpu.sh` binds
 `/workspace/extra/circuits/glm-v2/rows/<B32>` at the row's path (`model.sh` `row_on`, an absent or empty row dir only), and the
-capture waits for its 1100 GiB on the row dir's own disk. A bound row's Commit on eu needs one fix first: `commit.sh` hard-links
-the row's records into a temporary dir under `$SW` (`_rowmeta`), which is on another disk.
+capture waits for its 1100 GiB on the row dir's own disk. A bound row's Commit (`ROW_ON=/workspace/extra commit.sh`, which
+reports the bind or makes it) hard-links the row's records into `_rowmeta`'s temporary dir inside the row dir: under `$SW`, on
+another disk, `cp -l` failed with "Invalid cross-device link" and, its status unchecked, would have preserved an empty `_rowmeta`.
 
 | row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
 |---|---|---|---|---|---|
