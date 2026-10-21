@@ -14,8 +14,8 @@ it in at least `f` gates. All three are statements about the training circuit `C
 
 namespace Nci.Cover.Assumptions
 
-/-- **Update hardness** ([UPDATE-HARDNESS]) at block size `s`, `b` bits per updated parameter: every subcircuit `S` of
-at most `s` gates that computes all of the products `B ⊆ Pall` is handed at least `b` bits, besides the registered
+/-- **Update hardness** ([UPDATE-HARDNESS]) at block size `s`, `b` bits per updated parameter: every set `S` of at
+most `s` gates that computes all of the products `B ⊆ Pall` is handed at least `b` bits, besides the registered
 parameters, for each distinct updated parameter among them:
 `b · #(updated parameters of B) ≤ #(inputs S \ θ)`.
 
@@ -25,11 +25,12 @@ Rationale: an updated parameter is `θ` plus what training has added since the c
 cannot compute from the registered parameters alone; it must be handed about `b` bits of it, or of what it is computed
 from, per parameter (Kimi K2: `b = 2.5`).
 
-It fails when the run has not drifted from `θ` (in the first steps after a checkpoint the updated parameters are nearly
-the registered ones, read for free), and under compressed updates such as low-rank adapters (LoRA), whose factors are
-narrower than the parameters they update, so that a block computes many updated parameters from few bits. -/
+It rules out updates of the form `θ'_l = θ_l + h_l(σ)`, each updated parameter its registered value plus a function of
+a short `σ`, from which a block handed `σ` once computes many updated parameters. Low-rank adapters (LoRA), whose
+factors are narrower than the parameters they update, have that form, and so does a run that has not drifted from `θ`
+(in the first steps after a checkpoint the updated parameters are nearly the registered ones, read for free). -/
 def UpdateHardness {C : Circuit} {J L : Type*} [DecidableEq L] (M : MulBlocks C J L) (s : ℕ) (b : ℝ) : Prop :=
-  ∀ S, C.Subcircuit S → S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
+  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
     b * (B.image Prod.snd).card ≤ (C.inputs S \ C.θ).card
 
 /-- **Conditional update hardness** ([CONDITIONAL-UPDATE-HARDNESS]) at block size `s`, `b` bits per updated parameter,
@@ -43,12 +44,12 @@ fails wherever `UpdateHardness` does, and also when an activation a block is han
 parameter that the block would otherwise have to be handed. -/
 def ConditionalUpdateHardness {C : Circuit} {J L : Type*} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) (s : ℕ) (b : ℝ) : Prop :=
-  ∀ S, C.Subcircuit S → S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
+  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →
     b * (B.image Prod.snd).card ≤ (C.inputs S \ (C.θ ∪ M.uses.biUnion A)).card
 
-/-- **Activation width** ([ACTIVATION-WIDTH]) `f` at block size `s`, for the activation regions `A`: every subcircuit
-`S` of at most `s` gates that computes all of a counted product of use `j`, and is handed some gate of `A j`, is handed
-at least `f` of them: `f ≤ #(inputs S ∩ A j)`.
+/-- **Activation width** ([ACTIVATION-WIDTH]) `f` at block size `s`, for the activation regions `A`: every set `S` of
+at most `s` gates that computes all of a counted product of use `j`, and is handed some gate of `A j`, is handed at
+least `f` of them: `f ≤ #(inputs S ∩ A j)`.
 
 Rationale: the activation a product reads is many bits wide and is computed from its upstream products along many paths
 inside `A j`, so a block handed part of it is handed several of its gates. The intended derivation is from `f` pairwise
@@ -60,7 +61,7 @@ FP4, a product gate whose cone reads all 4 activation bits gives `f = 4`, while 
 exponent bit reads only 2. -/
 def Width {C : Circuit} {J L : Type*} [DecidableEq J] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (s f : ℕ) :
     Prop :=
-  ∀ S, C.Subcircuit S → S.card ≤ s → ∀ p ∈ M.P, M.m p ⊆ C.computed S → (C.inputs S ∩ A p.1).Nonempty →
+  ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ p ∈ M.P, M.m p ⊆ C.computed S → (C.inputs S ∩ A p.1).Nonempty →
     f ≤ (C.inputs S ∩ A p.1).card
 
 end Nci.Cover.Assumptions

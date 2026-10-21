@@ -3,7 +3,7 @@ import Proofs.Nci.Cover.FanOutWalk
 /-!
 # The fan-out proof: a held root costs `d`
 
-`rootCost` (`FanOutPlan.RootCost`): a subcircuit that holds a root of a token spends values of that token, and holds
+`rootCost` (`FanOutPlan.RootCost`): a set of gates that holds a root of a token spends values of that token, and holds
 lookups of it, `d` in all.
 
 Induction on a bound `n` for a computed exit `g < n` of the held root. If the block holds a root of the same token with
@@ -17,38 +17,8 @@ end at distinct values, and the ends number at least `d`.
 
 namespace Nci.Cover.SecurityProofs
 
-namespace RootCostAux
-
-/-- Following keys through a larger stop set follows them through a smaller one. -/
-theorem follows_mono {Val : Type*} {key : Val → Option Val} {S S' : Finset Val} (hS : S' ⊆ S) {v u : Val}
-    (h : Follows key S v u) : Follows key S' v u := by
-  induction h with
-  | refl v => exact Follows.refl v
-  | step hv hk _ ih => exact Follows.step (fun h => hv (hS h)) hk ih
-
-/-- Indices increase along a path. -/
-theorem le_of_isPath {C : Circuit} {π : List (Fin C.N)} {x y : Fin C.N} (h : C.IsPath π x y) : x.val ≤ y.val := by
-  obtain ⟨hx, hy, hπ⟩ := h
-  suffices H : ∀ x y : Fin C.N, π.head? = some x → π.getLast? = some y → x.val ≤ y.val from H x y hx hy
-  clear hx hy
-  induction hπ with
-  | nil => intro x y hx; simp at hx
-  | singleton a =>
-    intro x y hx hy
-    simp only [List.head?_cons, List.getLast?_singleton, Option.some.injEq] at hx hy
-    rw [← hx, ← hy]
-  | @cons_cons a b l hr _ ih =>
-    intro x y hx hy
-    simp only [List.head?_cons, Option.some.injEq] at hx
-    rw [List.getLast?_cons_cons] at hy
-    rw [← hx]
-    exact Nat.le_trans (Nat.le_of_lt (C.pred_lt b a hr)) (ih b y rfl hy)
-
-end RootCostAux
-
-open RootCostAux in
 theorem rootCost : FanOutPlan.RootCost := by
-  intro C J L Tok Val _ _ M d aOut c V K I hI
+  intro C J L Tok Val _ _ M d aOut c V K I
   suffices H : ∀ n : ℕ, ∀ r ∈ K.roots ∩ K.heldSet I, ∀ g ∈ C.exits (K.gates r) ∩ C.computed I, g.val < n →
       ∃ X Y : Finset Val, (∀ u ∈ X, K.Spent I u ∧ K.tok u = K.tok r) ∧
         (∀ u ∈ Y, u ∈ K.lookups ∩ K.heldSet I ∧ K.tok u = K.tok r) ∧ d ≤ X.card + Y.card by
@@ -78,11 +48,11 @@ theorem rootCost : FanOutPlan.RootCost := by
       obtain ⟨h, hh, x, hx, hhx, π, hπ, hπr⟩ := K.legs_link r hrR g hgx q hq
       have hxc : x ∈ C.computed I := by
         by_contra hxc
-        obtain ⟨g', hg', hg'I⟩ := Entry C I π x g hI hπ (computed_subset C I hgc) hxc
+        obtain ⟨g', hg', hg'I⟩ := Entry C I π x g hπ (computed_subset C I hgc) hxc
         exact hrnr ⟨g', Finset.mem_inter.2 ⟨hπr g' hg', hg'I⟩⟩
-      have hhI : h ∈ I := pred_subset_of_mem_computed hI hxc hhx
-      have hlt : h.val < g.val := Nat.lt_of_lt_of_le (C.pred_lt x h hhx) (le_of_isPath hπ)
-      obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I hI q hqv h hh hhI
+      have hhI : h ∈ I := pred_subset_of_mem_computed hxc hhx
+      have hlt : h.val < g.val := Nat.lt_of_lt_of_le (C.pred_lt x h hhx) (isPath_le hπ)
+      obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I q hqv h hh hhI
       refine ⟨u, fun _ => ⟨hut.trans hqt, hfu, ?_⟩⟩
       rcases hend with hend | ⟨hus, g', hg', hle⟩
       · exact Or.inl hend
@@ -95,9 +65,9 @@ theorem rootCost : FanOutPlan.RootCost := by
       intro q hq q' hq' hqq
       by_contra hne
       have h1 : Follows K.key (K.roots ∪ K.lookups) q (f q') :=
-        hqq ▸ follows_mono Finset.subset_union_left (hf q hq).2.1
+        hqq ▸ Follows.mono Finset.subset_union_left (hf q hq).2.1
       have h2 : Follows K.key (K.roots ∪ K.lookups) q' (f q') :=
-        follows_mono Finset.subset_union_left (hf q' hq').2.1
+        Follows.mono Finset.subset_union_left (hf q' hq').2.1
       exact K.legs_disjoint r hrR q hq q' hq' hne (f q') h1 h2
     refine ⟨((K.legs r).image f).filter (· ∈ K.readSet I), ((K.legs r).image f).filter (· ∉ K.readSet I),
       ?_, ?_, ?_⟩
