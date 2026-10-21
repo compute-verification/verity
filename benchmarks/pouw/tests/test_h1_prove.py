@@ -584,7 +584,8 @@ def test_the_seeds_derive_from_the_window_salt():
 
 def test_the_public_and_ok_rows_are_their_parameters_bits():
     """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1, under a salt
-    anyone derives from the window and the position."""
+    anyone derives from the window and the position; an ok table of any statements' ok salts (`h1unit.ok_levels`, a
+    leaf's lanes' too) opens the word 1 at each row and no other word."""
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))
     w = U.pub_words(salt, 0x0123456789, roots)
     bits = np.unpackbits(w.astype("<u2").view(np.uint8), bitorder="little")
@@ -592,6 +593,13 @@ def test_the_public_and_ok_rows_are_their_parameters_bits():
         SD.leaves(roots[1], True)
     assert U.OK.tolist() == [1] and len(U.ok_salt("w", 3)) == U.SALT_BYTES
     assert len({U.ok_salt("w", 3), U.ok_salt("w", 4), U.ok_salt("v", 3), U.pub_salt("w", 3)}) == 4
+    prog, salts = "ab" * 64, tuple(U.ok_salt(f"w#lane{ln}", 7) for ln in range(4))
+    lv = U.ok_levels(prog, "ok", salts)
+    for t, s in enumerate(salts):
+        for word, opens in ((U.OK, True), (np.zeros(1, np.uint16), False)):
+            bc = U.commit_strings(U.ok_port(), word[None, :], [s])[0]
+            assert U.verify_registered(prog, "ok", len(salts), lv[-1][0], t, bc, U.path(lv, t)) is opens
+    assert U.ok_levels(prog, "ok", salts[::-1])[-1][0] != lv[-1][0]
 
 
 def test_the_verifiers_frame_is_c_flocks():

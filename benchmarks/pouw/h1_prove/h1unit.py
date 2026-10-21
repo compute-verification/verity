@@ -214,8 +214,8 @@ def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
 
 def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
     """A registered value's row width in 16-bit leaves: an A table ``a/<K>@<c>`` and ``b/<K>`` K/2 + 2 (`h1zy.ROW`), a z
-    table ``zy@<c>`` 3 R C (`h1zy.RECORD`), an ok table ``ok@<c>`` the ok row's one word (`OK`)."""
-    if name.startswith("ok@"):
+    table ``zy@<c>`` 3 R C (`h1zy.RECORD`), an ok table (``ok`` or ``ok@<...>``) the ok row's one word (`OK`)."""
+    if name == "ok" or name.startswith("ok@"):
         return len(OK)
     return 3 * tile[0] * tile[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
 
@@ -231,9 +231,15 @@ def call_tiles(com: dict) -> list[tuple[int, int]]:
 
 
 @lru_cache(maxsize=None)
+def ok_levels(program: str, value: str, salts: tuple[bytes, ...]):
+    """The registered tree of the ok table ``value`` (``ok`` or ``ok@<...>``) under the Program digest ``program``: row t
+    the one word 1 (`OK`) under ``salts[t]``, each public, so the verifier computes it before any statement or coin. Each
+    call's tile units' (`ok_tables`), and the ok rows of a leaf's lane and combine statements the same way."""
+    return registered_levels(program, value, commit_strings(ok_port(), np.tile(OK, (len(salts), 1)), list(salts)))
+
+
 def _ok_levels(program: str, window: str, call: int, first: int, n: int):
-    bcs = commit_strings(ok_port(), np.tile(OK, (n, 1)), [ok_salt(window, u) for u in range(first, first + n)])
-    return registered_levels(program, ok_value(call), bcs)
+    return ok_levels(program, ok_value(call), tuple(ok_salt(window, u) for u in range(first, first + n)))
 
 
 def ok_tables(program: str, window: str, calls) -> dict[str, tuple[int, str]]:
