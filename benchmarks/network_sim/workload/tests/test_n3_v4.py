@@ -249,6 +249,20 @@ def test_v4_accepts_exactly_where_v3_does_on_salted_lab_windows(salted_lab):
         assert all(x for _, _, x in got) == ok
 
 
+@pytest.mark.slow
+def test_v4_accepts_exactly_where_v3_does_on_a_lab_whose_outboxes_are_two_rows_deep():
+    """At the lab's MLP width every outbox is one row, so its runs open only slot 0 of a depth-0 tree. At width 32 each
+    unit's outbox is two rows, and later windows' runs start at row 1: the one test of whole windows whose runs open
+    at a private start past 0 in a tree with levels. About 80 s, most of it committing the wider MLP."""
+    lab = lab_setup(54, d=32)
+    for edit, ok in ((None, True), (lambda e, i: ([flip(e[0], data_end(e[0]))] + e[1:], i), False)):
+        setup, windows = lab_windows(lab, edit)
+        assert all(x >= 1 for x in setup.layout.fmt.DEPTHS)
+        assert any(V.instance(setup, w).args["run_starts"][0] for w in windows if w.instance is not None)
+        got = agree(setup, windows)
+        assert got and all(x for _, _, x in got) == ok
+
+
 # --- the circuit ------------------------------------------------------------------------------------------------------
 
 def bits_of(d: bytes) -> list[int]:
