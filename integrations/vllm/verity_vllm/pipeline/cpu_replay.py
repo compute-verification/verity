@@ -61,7 +61,7 @@ ATTESTS = ("every weight field the replay consumed, composed from the checkpoint
            "and the tensor roots fold to the committed weights root")
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
-         "uint8": (8, np.uint8), "int8": (8, np.uint8)}
+         "uint8": (8, np.uint8), "int8": (8, np.uint8), "int32": (32, np.uint32)}
 SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 SLIM_DOC = "slim.json"
 PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
