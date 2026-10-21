@@ -232,145 +232,6 @@ def test_a_spec_env_and_setup_load_strictly_and_bind_the_identity(tmp_path):
             load_spec(_spec_with(tmp_path, f'setup = "{bad}"'))
 
 
-def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
-    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
-    gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
-    stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
-    which the adapter's refusals accept."""
-
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import CoinCommitment
-    from verity_vllm.protocol_options import pouw
-    from verity_vllm.protocol_options.interface import Context
-
-    from verity_bench.vllm.arms import protocols_config
-
-    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol")
-    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-    assert (control.id, control.precision) == ("stock-fp8", "fp8")
-    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
-                                             "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
-    assert arm.to_json()["protocols_config"] == arm.protocols_config
-    settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
-    other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
-    assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
-    assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
-
-    with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
-        protocols_config(arm, {})
-    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
-    config = protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm120.cubin"})
-    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
-    assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
-    ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
-    assert pouw.refusals("pearl-c-sm120-v1-h3", ctx) == ()
-    assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
-
-
-def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
-    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol.toml").read_text()
-    path = tmp_path / "spec.toml"
-    for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
-        path.write_text(source.replace('control = "none"', f'control = "{control}"'))
-        spec = load_spec(path)
-        assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
-    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]', 'arms = ["stock-fp8", "pouw:ncp-v1"]',
-                           "must name a protocol arm"),
-                          ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
-                          ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
-                          ('control = "none"', 'control = "stock"', "control must be another arm"),
-                          ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
-        assert old in source
-        path.write_text(source.replace(old, new))
-        with pytest.raises(ValueError, match=why):
-            load_spec(path)
-    with pytest.raises(ValueError, match="not in --arms"):
-        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
-
-
-def test_a_pearl_c_protocol_arm_is_one_pass_per_engine_step(monkeypatch):
-    """`pouw.install` opens one Pearl-C pass for the install's life, which a b32 run's tiles and screened rows outgrow
-    within its first runs; the runner makes each engine step its own pass, as the experimental arm does."""
-
-    from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
-
-    from verity_bench.vllm import runner
-
-    events = []
-
-    class Run(PPD.PearlCDeviceRun):
-        def __init__(self):
-            pass
-
-        def begin(self):
-            events.append("begin")
-
-        def end(self):
-            events.append("end")
-            return {"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0, "unsure_rows": 1}
-
-        def finish(self):
-            events.append("finish")
-
-    run = Run()
-    engine = SimpleNamespace(step=lambda: events.append("step") or ["out"])
-    option = SimpleNamespace(release=run.finish)
-    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None),
-                          vllm=SimpleNamespace(llm_engine=engine))
-    hooks = Hooks(tag="bench:pouw")
-    got, totals = runner._pass_per_step(llm, hooks)
-    assert engine.step() == ["out"] and engine.step() == ["out"]
-    assert events == ["begin", "step", "end"] * 2
-    assert got is run and totals == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
-                                     "failing_rows": 0, "unsure_rows": 2}
-    hooks.uninstall()
-    engine.step()
-    assert events[-1] == "step" and len(events) == 7
-    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)),
-                            vllm=SimpleNamespace(llm_engine=engine))
-    assert runner._pass_per_step(other, hooks) is None
-    assert not hooks.entries
-
-
-def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
-    """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
-    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control."""
-
-    import torch
-
-    from verity_bench.vllm import runner
-
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
-
-    class Run:
-        def __init__(self, y):
-            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
-            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
-            g = torch.Generator().manual_seed(0)
-            self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
-                            for w, n in ((0, 64), (1, 64), (2, 128))}
-
-        def begin(self):
-            pass
-
-        def poison(self):
-            pass
-
-        def gemm(self, w, x, W, bias):
-            return self.y(x, W)
-
-        def end(self):
-            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
-
-    exact = runner._pearl_c_gate(Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16)))
-    assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
-    assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
-    assert not wrong["passed"] and wrong["provided"]
-
-
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     spec = resolve_spec(_spec_with(tmp_path, 'setup = "benchmarks/harness/setup/vllm_encoded.sh"\n[env]\nARM_KNOB = "on"'))
@@ -1141,3 +1002,142 @@ def test_the_readme_states_the_contract_the_code_keeps():
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+
+
+def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
+    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
+    gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
+    stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
+    which the adapter's refusals accept."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import protocols_config
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision) == ("stock-fp8", "fp8")
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
+                                             "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
+    assert arm.to_json()["protocols_config"] == arm.protocols_config
+    settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
+    other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
+    assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
+    assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
+
+    with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
+        protocols_config(arm, {})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm120.cubin"})
+    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
+    assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
+    assert pouw.refusals("pearl-c-sm120-v1-h3", ctx) == ()
+    assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
+
+
+def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol.toml").read_text()
+    path = tmp_path / "spec.toml"
+    for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
+        path.write_text(source.replace('control = "none"', f'control = "{control}"'))
+        spec = load_spec(path)
+        assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
+    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]', 'arms = ["stock-fp8", "pouw:ncp-v1"]',
+                           "must name a protocol arm"),
+                          ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
+                          ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
+                          ('control = "none"', 'control = "stock"', "control must be another arm"),
+                          ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+    with pytest.raises(ValueError, match="not in --arms"):
+        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
+
+
+def test_a_pearl_c_protocol_arm_is_one_pass_per_engine_step(monkeypatch):
+    """`pouw.install` opens one Pearl-C pass for the install's life, which a b32 run's tiles and screened rows outgrow
+    within its first runs; the runner makes each engine step its own pass, as the experimental arm does."""
+
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    from verity_bench.vllm import runner
+
+    events = []
+
+    class Run(PPD.PearlCDeviceRun):
+        def __init__(self):
+            pass
+
+        def begin(self):
+            events.append("begin")
+
+        def end(self):
+            events.append("end")
+            return {"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0, "unsure_rows": 1}
+
+        def finish(self):
+            events.append("finish")
+
+    run = Run()
+    engine = SimpleNamespace(step=lambda: events.append("step") or ["out"])
+    option = SimpleNamespace(release=run.finish)
+    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None),
+                          vllm=SimpleNamespace(llm_engine=engine))
+    hooks = Hooks(tag="bench:pouw")
+    got, totals = runner._pass_per_step(llm, hooks)
+    assert engine.step() == ["out"] and engine.step() == ["out"]
+    assert events == ["begin", "step", "end"] * 2
+    assert got is run and totals == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
+                                     "failing_rows": 0, "unsure_rows": 2}
+    hooks.uninstall()
+    engine.step()
+    assert events[-1] == "step" and len(events) == 7
+    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)),
+                            vllm=SimpleNamespace(llm_engine=engine))
+    assert runner._pass_per_step(other, hooks) is None
+    assert not hooks.entries
+
+
+def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
+    """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
+    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control."""
+
+    import torch
+
+    from verity_bench.vllm import runner
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+
+    class Run:
+        def __init__(self, y):
+            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            g = torch.Generator().manual_seed(0)
+            self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
+                            for w, n in ((0, 64), (1, 64), (2, 128))}
+
+        def begin(self):
+            pass
+
+        def poison(self):
+            pass
+
+        def gemm(self, w, x, W, bias):
+            return self.y(x, W)
+
+        def end(self):
+            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
+
+    exact = runner._pearl_c_gate(Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16)))
+    assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
+    wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    assert not wrong["passed"] and wrong["provided"]
