@@ -279,6 +279,60 @@ def checkTopsListed (i : Inner) (caps : Array VStar.Stmt) : Except String Unit :
   if got != want then
     throw s!"V*'s list: the later levels' caps hold {got} nodes, and the reps' schedule commits tops of {topSizes rs} nodes a rep ({want} both reps')"
 
+/-- `m<k>`'s `k`. -/
+def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
+
+/-- `rec-c<k>`'s `k`. -/
+def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
+
+/-- `claim<k>`'s `k`, the name exactly as `openingPortName` writes it (no `claim01`). -/
+def claimIndex (name : String) : Option Nat :=
+  if name.startsWith "claim" then ((name.drop 5).toString.toNat?).filter (name == s!"claim{·}") else none
+
+/-- RecSparse's registered claim (`rec_outer.CLAIM_VALUE`): row `r` rep `r`'s, which RecSparse's `claim` and R's opening's
+`claim<k>` read. -/
+def CLAIM_VALUE : String := "rec-claim"
+
+/-- A reads file's message-round ports, those named `m<k>`, registering a `rec-c<k>` or reading `rec-claim`: each one's
+name, value and reads. -/
+def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
+  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome || p.value == CLAIM_VALUE).map
+    fun p => (p.name, p.value, p.reads)
+
+/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
+at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none, R's included.
+RecSparse's `h` is the table's h round, `rec-c<hRound>`, and its `claim` reads `rec-claim`, both at both reps' rows, rep
+`r`'s at instance `r` (`rec_vstage.stage_sparse`, `rec_sparse.reads`); a part of R's opening reads each `m<i>` under
+`rec-opening-c<i>` at row 0, R's one stream's (`rec_vstage.opening_messages`), and each `claim<k>` under `rec-claim` at
+row `k`, rep `k`'s claim (`rec_residuals.stage_opening`). So no claim port reads another row than its own. -/
+def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
+  | .recOpen .. => []
+  | .recOpenStacked .. => []
+  | .cap .. => []
+  | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
+  | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
+    | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
+    | none, some k => some (nm, CLAIM_VALUE, #[some k])
+    | none, none => none
+
+/-- Whether one of `ss` registers `rec-c<k>` as a message-round port reading both reps' rows, rep `r`'s at row `r`
+(`ownPorts`). -/
+def roundListed (ss : Array VStar.Stmt) (k : Nat) : Bool :=
+  ss.any fun s => (ownPorts s).any fun q => q.2.1 == s!"rec-c{k}" && q.2.2 == #[some 0, some 1]
+
+/-- **V*'s list holds every message round a rep absorbs**: each `k`-th round of the inner shape's rep schedule that
+absorbs a message (`commitRounds` of `repRounds`, `holoRepRounds` when its circuits are private), whose `c_k` the inner
+transcript fixes as `rec-c<k>` (`fixedRow`), is a message-round port of one of its statements at both reps' rows
+(`roundListed`), so some part holds each rep's every absorbed message whatever the coins draw. A list without one is
+refused. -/
+def checkRoundsListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  let some rs := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
+    | throw s!"V*'s list: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no rep schedule"
+  match (List.range (commitRounds rs).length).find? (!roundListed ss ·) with
+  | some k => throw s!"V*'s list: a rep's message round {k} (rec-c{k}) is a message-round port of none of its statements"
+  | none => pure ()
+
 /-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
 per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
@@ -287,7 +341,8 @@ per region of the inner statement (an extra claim per region at each of two link
 shape one of whose groups holds h's round (`hRound`) as a row port. A part's
 circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
 `circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
-its session needs (`checkCandidate3`). -/
+its session needs (`checkCandidate3`). It holds every level's committed tops (`checkCapListed`) and every message
+round a rep absorbs (`checkRoundsListed`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
@@ -309,6 +364,7 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i) ++ caps ++ #[← VStar.capStatement vsh]
   checkCandidate3 i ss
   checkCapListed i ss
+  checkRoundsListed i ss
   pure ss
 
 def isVStar (name : String) : Bool :=
@@ -516,43 +572,6 @@ def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : By
   checkParsed s c
   checkPart s c
   pure s
-
-/-- `m<k>`'s `k`. -/
-def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
-
-/-- `rec-c<k>`'s `k`. -/
-def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
-
-/-- `claim<k>`'s `k`, the name exactly as `openingPortName` writes it (no `claim01`). -/
-def claimIndex (name : String) : Option Nat :=
-  if name.startsWith "claim" then ((name.drop 5).toString.toNat?).filter (name == s!"claim{·}") else none
-
-/-- RecSparse's registered claim (`rec_outer.CLAIM_VALUE`): row `r` rep `r`'s, which RecSparse's `claim` and R's opening's
-`claim<k>` read. -/
-def CLAIM_VALUE : String := "rec-claim"
-
-/-- A reads file's message-round ports, those named `m<k>`, registering a `rec-c<k>` or reading `rec-claim`: each one's
-name, value and reads. -/
-def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
-  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome || p.value == CLAIM_VALUE).map
-    fun p => (p.name, p.value, p.reads)
-
-/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
-at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none, R's included.
-RecSparse's `h` is the table's h round, `rec-c<hRound>`, and its `claim` reads `rec-claim`, both at both reps' rows, rep
-`r`'s at instance `r` (`rec_vstage.stage_sparse`, `rec_sparse.reads`); a part of R's opening reads each `m<i>` under
-`rec-opening-c<i>` at row 0, R's one stream's (`rec_vstage.opening_messages`), and each `claim<k>` under `rec-claim` at
-row `k`, rep `k`'s claim (`rec_residuals.stage_opening`). So no claim port reads another row than its own. -/
-def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
-  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
-  | .recOpen .. => []
-  | .recOpenStacked .. => []
-  | .cap .. => []
-  | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
-  | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
-    | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
-    | none, some k => some (nm, CLAIM_VALUE, #[some k])
-    | none, none => none
 
 /-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
 `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`, `rec_sparse.reads`); no other statement has any. -/

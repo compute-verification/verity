@@ -382,4 +382,17 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
     | _ => false
   if !same then throw ("draw", s!"the units are not the draw coin's subset:{k} over {n}")
 
+/-- `core_check.work_units`: `drawCheck`'s rule under the law `work:k`, the units the draw coin `coin` draws over the
+work strata `strata`, ascending. Stratum s is `Flock.Draw.subset` of its `k_s` over its units on the stream
+`["draw", template]` of the key the coin derives under the stream's digest, the registration and the receipt's
+(`receiptDigest`), its local index j its j-th unit (`Flock.Draw.stratified`); `none` when a stream runs out. -/
+def workUnits (coin : ByteArray) (stream registration : String) (receipt : List (String × String))
+    (strata : Array Flock.Draw.Stratum) : Except String (Option (Array Nat)) := do
+  let ctx := [("stream", FlockSoundness.Randomness.Part.str stream),
+    ("registration", FlockSoundness.Randomness.Part.str registration),
+    ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest receipt))]
+  let key ← PouwCommit.key? coin DRAW_DOMAIN ctx
+  pure (Flock.Draw.stratified strata (strata.map fun s =>
+    FlockSoundness.Randomness.stream key [.str "draw", .str s.template] s.need))
+
 end PouwCheck

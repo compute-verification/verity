@@ -136,6 +136,26 @@ def k_prime_in(rng: random.Random) -> dict:
     return {"eps": _frac(eps), "delta": _frac(delta), "credited": credited, "n": n, "w_max": w}
 
 
+def eps_at_in(rng: random.Random) -> dict:
+    delta = _delta(rng)
+    n = rng.choice((rng.randint(1, 64), rng.randint(1, 1 << 30), 1 << 40))
+    w = rng.choice((1, rng.randint(1, 100), 4096))
+    credited = rng.choice((n * w, n * w, rng.randint(1, n * w)))
+    k = rng.choice((rng.randint(1, 64), rng.randint(1, 30_000), 27_713, rng.randint(1, n)))
+    match rng.choice(["k0", "k<0", "delta0", "delta1", "credited>nw"] + [None] * 20):
+        case "k0":
+            k = 0
+        case "k<0":
+            k = -rng.randint(1, 9)
+        case "delta0":
+            delta = Fraction(0)
+        case "delta1":
+            delta = Fraction(1)
+        case "credited>nw":
+            credited = n * w + 1
+    return {"k": k, "delta": _frac(delta), "credited": credited, "n": n, "w_max": w}
+
+
 def _some_work(rng: random.Random, bits: int) -> Wd.Work:
     return Wd.Work.at(rng.randint(0, 400), bits) if rng.random() < 0.6 else Wd.bucket(rng.randint(1, 1 << 40), bits)
 
@@ -746,6 +766,7 @@ def layout_constants(_: dict) -> dict:
 #: What each port's run must reach, so that none is vacuous for one of its checks or regimes: K′'s regimes, and every reason
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
+           "eps_at": {"refused", "no ε <= 1", "K′ = K", "K′ < K", "the least grid point"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
            "length_problem": {"accept", *LENGTH},
            "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"}}
@@ -766,6 +787,19 @@ def k_prime(v: dict) -> int:
     return k
 
 
+def eps_at(v: dict) -> str:
+    k, delta, credited, n, w = v["k"], _q(v["delta"]), v["credited"], v["n"], v["w_max"]
+    try:
+        eps = Wd.eps_at(k, delta, credited, n, w)
+    except ValueError as e:
+        SEEN["eps_at"].add("no ε <= 1" if "establishes no" in str(e) else "refused")
+        raise
+    k1 = Wd.k_prime(eps, delta, credited, n, w)
+    SEEN["eps_at"].update(x for x, hit in (("K′ = K", k1 == k), ("K′ < K", k1 < k),
+                                           ("the least grid point", eps == Fraction(1, 1 << Wd.EPS_BITS))) if hit)
+    return str(eps)
+
+
 def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
     kw.setdefault("rejects", (ValueError,))
     return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
@@ -782,6 +816,7 @@ PORTS = {
     "work_at": (_port("work_at", lambda v: asdict(Wd.Work.at(v["ell"], v["bits"])), grid_ell), 500),
     "levels": (_port("levels", lambda v: Wd.levels(v["lo"], v["hi"], v["bits"]), levels_in), 500),
     "k_prime": (_port("k_prime", k_prime, k_prime_in), 3000),
+    "eps_at": (_port("eps_at", eps_at, eps_at_in), 300),
     "sampling": (_port("sampling", lambda v: Wd.sampling(_q(v["eps"]), _q(v["delta"]), _work(v["work"]), v["tile_work"],
                                                          v["bits"]), sampling_in), 1000),
     "work_to_json": (_port("work_to_json", lambda v: _work(v["work"]).to_json(v["tile_work"]), work_to_json_in,
@@ -868,6 +903,33 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
     assert sampling == {"delta": "1/10", "eps": "1/2", "grid_bits": 3, "law": {"k": k, "law": "subset"}}
     for side in ("a", "b"):
         D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
+
+
+#: SERVE-REG's 8B window (Llama-3.1-8B int8, r20261021-082038-028f): 1,548,288 units, 16 of its 18 steps filled, so
+#: u = 8/9 of them credited (1,376,256), every unit's work `tile_work`. At ε = 1/1000 and δ = 2^-40, its grid level
+#: (`bucket` of the credited tiles: 1,310,720 of n = 1,441,792, u = 10/11) has K′ = 30,485, and its units themselves
+#: K′ = 31,178. Each row: name, the credited units, the units, K′, and the ε `eps_at` gives at K′ in the credit's form
+#: (C, W, 1), C the credited work and W the window's, then at C = W (the 11/10- or 9/8-optimistic inputs).
+SERVE_REG = [("grid", 1_310_720, 1_441_792, 30_485, "4294913/4294967296", "1952233/2147483648"),
+             ("units", 1_376_256, 1_548_288, 31_178, "2147467/2147483648", "477215/536870912")]
+
+
+@pytest.mark.parametrize("name,credited,n,k,eps,at_w", SERVE_REG, ids=[s[0] for s in SERVE_REG])
+def test_eps_at_serve_reg(name: str, credited: int, n: int, k: int, eps: str, at_w: str, server) -> None:
+    """Lean and Python give SERVE-REG's 8B window its K′ at ε = 0.1% and δ = 2^-40 in the credit's form
+    `eps_at(K, δ, C, W, 1)`, and invert it to an ε at most 0.1%, one grid point below which K′ exceeds K; taking C = W
+    instead reports ε too small by W/C."""
+    tw, delta, grid = 4096, [1, 1 << 40], Fraction(1, 1 << Wd.EPS_BITS)
+    c, w = credited * tw, n * tw
+    assert json.loads(D.replay(PORTS["k_prime"][0], {"eps": [1, 1000], "delta": delta, "credited": c, "n": w,
+                                                     "w_max": 1}, server)[1]) == k
+    got = json.loads(D.replay(PORTS["eps_at"][0], {"k": k, "delta": delta, "credited": c, "n": w, "w_max": 1},
+                              server)[1])
+    assert got == eps and Fraction(eps) <= Fraction(1, 1000)
+    assert Wd.k_prime(Fraction(eps) - grid, Fraction(*delta), c, w, 1) > k
+    old = json.loads(D.replay(PORTS["eps_at"][0], {"k": k, "delta": delta, "credited": w, "n": w, "w_max": 1},
+                              server)[1])
+    assert old == at_w and Fraction(at_w) * n / credited == pytest.approx(Fraction(eps), rel=1e-5)
 
 
 @pytest.mark.parametrize("fn", sorted(PORTS))
