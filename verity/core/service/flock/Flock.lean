@@ -44,6 +44,7 @@ import Flock.RecAlgebra
 import Flock.RecResiduals
 import Flock.RecOpening
 import Flock.HmRow
+import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered

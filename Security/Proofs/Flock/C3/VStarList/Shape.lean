@@ -12,6 +12,7 @@ the later levels' caps (`VStar.levelCapStatements`) and RecCap at level 0 (`VSta
 `candidate3Statements` RecSparse without R and an R off the two claims or off the bucket's `table_m`. So:
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
+* `holo_of_list`: a `sparse` entry comes with `holo` (`checkSparseHolo`, which `checkCandidate3` runs first).
 * `sparse_of_list`: the list holds RecSparse at that entry; `stacked_of_list`: with R, it holds each of R's levels at
   `fast100(m)` (`recOpenStacked`); `stacked_of_candidate3`: and the inner shape names R at `(table_m, STACKED_CLAIMS)`.
 * `checkInnerStmt_ok`: where check 5 passes `checkInnerStmt`, the inner shape names a sparse entry and its `m`,
@@ -86,6 +87,7 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   obtain ⟨n, rfl⟩ := capStatement_ok hK0
   obtain ⟨u, hu, h⟩ := eok_bind h
   obtain ⟨u', -, h⟩ := eok_bind h
+  obtain ⟨u'', -, h⟩ := eok_bind h
   cases h
   rw [Array.append_assoc] at hu
   exact ⟨_, A, C, K, n, hA, hC, hK, ht, hK0, Array.append_assoc, hu⟩
@@ -222,6 +224,9 @@ theorem check_openings {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} {r : F
     {S : Flock.RecOpen.GfS} {ports : List (String × ℕ)} {nv : ℕ}
     (hs : VStar.Stmt.opening m c j S ports nv ∈ ss) : m = r.m ∧ c = r.claims := by
   unfold Flock.RecVStar.checkCandidate3 at h
+  obtain ⟨⟨⟩, -, h⟩ := eok_bind h
+  have h : Flock.RecVStar.checkCandidate3Lists i ss = .ok () := h
+  unfold Flock.RecVStar.checkCandidate3Lists at h
   rw [hr] at h
   dsimp only at h
   split at h
@@ -250,6 +255,23 @@ theorem check_openings {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} {r : F
       cases he
       simpa [Bool.or_eq_true, bne_iff_ne] using hne
     all_goals exact ⟨(fun _ _ _ _ _ _ he => nomatch he), by cases hst; rfl⟩
+
+/-- **A sparse phase is a holo session's**: `checkCandidate3` refuses an inner shape naming a RecSparse shape at public
+circuits (`checkSparseHolo`), so where the verifier's list builds, a `sparse` entry comes with `holo`. -/
+theorem holo_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss)
+    (hs : i.sparse.isSome = true) : i.holo = true := by
+  obtain ⟨_, _, _, _, _, -, -, -, -, -, -, hck⟩ := statements_ok h
+  unfold Flock.RecVStar.checkCandidate3 at hck
+  obtain ⟨⟨⟩, h1, -⟩ := eok_bind hck
+  unfold Flock.RecVStar.checkSparseHolo at h1
+  cases hsp : i.sparse with
+  | none => rw [hsp] at hs; cases hs
+  | some sp =>
+    rw [hsp] at h1
+    dsimp only at h1
+    split at h1
+    · assumption
+    · cases h1
 
 /-- **The list's openings are R's**: each `rec-opening` statement of the verifier's list is at the bucket's `table_m`
 of the inner shape's `sparse` entry, and at the two reps' claims. -/

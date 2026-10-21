@@ -33,7 +33,9 @@ each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as man
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
-fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it.
+fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
+then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
+(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -85,6 +87,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -1091,7 +1094,10 @@ class Verifier:
                     break
                 arrivals[t].append(stamp)
                 while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
-                    close(drawn)
+                    due = session.next_boundary_ns() if drawn == t and sent + 1 < W else None
+                    with (session.coins.ahead(coins.CHALLENGE, sent + 1, bytes.fromhex(head["root"]))
+                          if due is not None and due <= self.clock.now() else contextlib.nullcontext()):
+                        close(drawn)
                     drawn += 1
             elif kind == "append":
                 try:

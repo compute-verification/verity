@@ -983,6 +983,23 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     assert read("model.model.layers.0.rotary_emb.cos_sin_cache", 0, 9) is None                              # past the field's end
 
 
+def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
+    """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as an int32 Parameter [V, 6]; the in-place reader serves its words
+    as the deferred replay does (`cpu_replay.WORDS`), so a `GatherI32x{V}` row reads the table either way, and an int64 one stays None."""
+    torch = pytest.importorskip("torch")
+
+    class Gate(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.tid2eid = torch.nn.Parameter(torch.tensor([[3, -1, 7], [2, 0, 5]], dtype=torch.int32), requires_grad=False)
+            self.wide = torch.nn.Parameter(torch.tensor([1, 2], dtype=torch.int64), requires_grad=False)
+
+    read = OP.model_weights_provider(Gate(), "")
+    got = read("tid2eid", 0, 6)
+    assert got.dtype == np.uint32 and got.tolist() == [3, 0xFFFFFFFF, 7, 2, 0, 5]
+    assert read("wide", 0, 2) is None
+
+
 # --- [R17 dense, ruling R17-9] RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
 
 def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away(rope_world):

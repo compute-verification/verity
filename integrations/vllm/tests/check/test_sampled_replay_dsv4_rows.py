@@ -16,17 +16,18 @@ from verity.ml.circuits.evaluation.reference import signature_of, statics_of
 from verity_vllm.program.kernels import dsv4_rows, rows
 from verity_vllm.program.kernels.dsa_norm_rows import block_rmsnorm_rows
 from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_moe, dsv4_qnorm_insert, flashmla,
-                                          flashmla_prefill, mhc)
+from verity_vllm.program.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_indexer, dsv4_moe, dsv4_qnorm_insert,
+                                          flashmla, flashmla_prefill, mhc)
 from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query.manifest import format as RM
 
-#: the families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on that this
-#: module evaluates
+#: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on
 DSV4_B1_FAMILIES = ("SiluMulClamp_v1", "TritonBlockRMSNorm_v1", "MhcPostPreTf32_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1",
                     "MoeRouterSqrtSoftplus_v1", "FlashMlaPrefill_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1",
                     "Dsv4MlaCompressC4_v1", "FlashMlaDecode_v1", "MoeRouterHash_v1", "MhcPreBroadcast_v1", "MhcResidualBroadcast_v1",
-                    "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1")
+                    "MhcPost_v1", "HcHead_v1", "Dsv4MlaCompressC128_v1", "Dsv4InvRopeQuantHead_v1", "Dsv4CompressorScore_v1")
+#: the served Programs' spellings of the last two
+HEAD_SPEC, SCORE_SPEC = "Dsv4InvRopeQuantHead_v1{CHUNKS=4,QG=128,ROPE=64}", "Dsv4CompressorScore_v1{W=1024}"
 
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 TWO5 = f'{{"f64":"{float.hex(2.5)}"}}'
@@ -63,12 +64,15 @@ CASES = [
     (f"MoeRouterSqrtSoftplus_v1{{E=16,SCALE={TWO5}}}", bind(dsv4_moe.MoeRouterSqrtSoftplus, E=16, SCALE=2.5)),
     (f"MoeRouterHash_v1{{E=16,SCALE={TWO5}}}", bind(dsv4_moe.MoeRouterHash, E=16, SCALE=2.5)),
     (f"SiluMulClamp_v1{{I=9,LIMIT={TEN}}}", bind(dsv4_moe.SiluMulClamp, I=9, LIMIT=10.0)),
+    (SCORE_SPEC, bind(dsv4_indexer.Dsv4CompressorScore, W=1024)),
+    ("Dsv4InvRopeQuantHead_v1{CHUNKS=2,QG=8,ROPE=4}", bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=2, QG=8, ROPE=4)),
+    (HEAD_SPEC, bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=4, QG=128, ROPE=64)),
 ]
 
 #: the families whose operands are drawn with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
 #: rarely makes)
 DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
-         "MoeRouterHash_v1", "SiluMulClamp_v1")
+         "MoeRouterHash_v1", "SiluMulClamp_v1", "Dsv4CompressorScore_v1", "Dsv4InvRopeQuantHead_v1")
 
 
 def _words(rng: np.random.Generator, pt) -> np.ndarray:
@@ -158,3 +162,18 @@ def test_the_clamp_row_on_non_finite_and_limit_words_is_the_definition():
     gu = np.concatenate([g, g[::-1]])
     got = _row("SiluMulClamp_v1", RM.spec_statics(f"SiluMulClamp_v1{{I=9,LIMIT={TEN}}}"), [gu])
     assert got.tolist() == _reference(d, signature_of(d)[0], [gu]).tolist()
+
+
+def test_the_head_row_on_non_finite_words_is_the_definition():
+    """A served head with +inf in a plain group, NaN and -inf among its rotary words and a NaN sin (which the self-check declines
+    as non-finite bf16): the infinite groups' scales are +inf, and the row kernel is the Definition on every byte and scale."""
+    d = bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=4, QG=128, ROPE=64)
+    rng = np.random.default_rng(12)
+    x = ((rng.standard_normal(512) * 3).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    x[5], x[450], x[500] = 0x7F80, 0x7FC0, 0xFF80
+    ang = rng.uniform(0, 2 * np.pi, 32)
+    cs = np.concatenate([np.cos(ang), np.sin(ang)]).astype(np.float32).view(np.uint32)
+    cs[40] = 0x7FC00000
+    got = _row("Dsv4InvRopeQuantHead_v1", RM.spec_statics(HEAD_SPEC), [x, cs])
+    assert got.tolist() == _reference(d, signature_of(d)[0], [x, cs]).tolist()
+    assert got[512] == got[515] == 0x7F800000 and got[513] != 0x7F800000
