@@ -17,7 +17,7 @@ words, as `tmpl.align` does. Per layout: the unit's rows and its slot's log (`ci
 unit that fills its slot exactly), the runs by kind with the rows they hold unrolled, and, for interleaved, each run's
 bound inputs over all its copies by kind: shared (one column for every copy), lane (copy i's column is ``w0 + i·s``
 with s a power of two and ``w0`` a multiple of ``s·2^m``, so the fold's sum over copies is eq on a bit field), shifted
-(s a power of two, ``w0`` not aligned: adding a constant to the copy bits, a two-state carry over them), param (the
+(s a power of two, ``w0`` not aligned or s negative: adding a constant to the copy bits, a two-state carry), param (the
 Definition's own input, bound by its caller), affine (steps evenly by a non-power of two: a multiply by a constant) or
 irregular. A run is clean when every binding is shared, lane, shifted or param. ``--flat``
 reads the flat unit and checks, under the interleaved map, that the columns are distinct and every row reads only
@@ -138,8 +138,9 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
     out = {"mode": mode, "fallback": fallback if mode == "interleaved" else None, "useful": n,
            "slot_log": _slot_log(n), "slack": round(1 - n / (1 << _slot_log(n)), 4), "rows_unrolled": urows[t.root],
            "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st}
-    if mode == "interleaved":
+    if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
+    if mode == "interleaved":
         out["aliased_inputs"] = {"defs": sum(1 for a in alias if a), "inputs": sum(len(a) for a in alias)}
     return maps[t.root], out
 
@@ -185,53 +186,61 @@ def _chained(c: T.Call, Le: int, D: T.Def, al: dict[int, set[int]]) -> bool:
     return any(((col >= lo) & (col < hi)).any() for _, (_, _, col) in _reads(c, D, al))
 
 
+def _classify(v: np.ndarray, L: int, m: np.ndarray, M: int) -> dict:
+    """Bindings ``v`` (copies × columns, the caller's) by kind, in the layout ``m``."""
+    k = dict.fromkeys(("param", "lane", "shifted", "affine", "irregular"), 0)
+    inp = v >= L
+    k["param"] = int(inp.all(axis=0).sum())
+    k["irregular"] = int((inp.any(axis=0) & ~inp.all(axis=0)).sum())
+    v = v[:, ~inp.any(axis=0)]
+    if v.shape[1] == 0:
+        return k
+    j = np.arange(v.shape[0], dtype=np.int64)[:, None]
+    W = m[v]
+    s = W[1] - W[0]
+    a = np.abs(s)
+    even = (W == W[0][None, :] + j * s[None, :]).all(axis=0)
+    p2 = even & (a > 0) & ((a & (a - 1)) == 0)
+    lane = p2 & (s > 0) & (W[0] % np.maximum(a * M, 1) == 0)
+    k["lane"] += int(lane.sum())
+    k["shifted"] += int((p2 & ~lane).sum())
+    k["affine"] += int((even & ~p2).sum())
+    k["irregular"] += int((~even).sum())
+    return k
+
+
 def _bindings(defs, maps, size, kinds, urows) -> dict:
-    k = {"shared": 0, "lane": 0, "shifted": 0, "param": 0, "affine": 0, "irregular": 0}
-    clean = {"runs": 0, "rows": 0}
-    unclean = {"runs": 0, "rows": 0, "affine_runs": 0, "irregular_runs": 0}
+    """Per kind of run (interleaved ``lanes``, ``contig``uous), its bindings by kind and its runs and rows: clean (every
+    binding shared, lane, shifted or param), affine (a binding steps by a non-power of two), peeled (affine once copy 0
+    is taken off, as `tmpl.align` peels a chained run) or irregular (it splits into single copies, as `tmpl.align`
+    splits)."""
+    out = {}
     for d, D in enumerate(defs):
-        L, L2, m = D.cols, size[d], maps[d]
+        L, m = D.cols, maps[d]
         for c, kind, M in kinds[d]:
-            if kind != "lanes":
+            if c.count < 2:
                 continue
+            o = out.setdefault(kind, {"bindings": dict.fromkeys(("shared", "param", "lane", "shifted", "affine",
+                                                                  "irregular"), 0),
+                                      **{x: {"runs": 0, "rows": 0} for x in ("clean", "affine", "peeled",
+                                                                             "irregular")}})
             j = np.arange(c.count, dtype=np.int64)[:, None]
-            aff = irr = False
-            for ln, at, sp in c.segs:
-                if ln == 0:
-                    continue
-                if sp == 0:
-                    k["shared"] += ln
-                    continue
-                v = at + j * sp + np.arange(ln, dtype=np.int64)[None, :]
-                inp = v >= L
-                if inp.all():
-                    k["param"] += ln
-                    continue
-                if inp.any():
-                    k["irregular"] += ln
-                    irr = True
-                    continue
-                W = m[v]
-                s = W[1] - W[0]
-                even = (W == W[0][None, :] + j * s[None, :]).all(axis=0) & (s >= 0)
-                p2 = even & (s > 0) & ((s & (s - 1)) == 0)
-                lane = p2 & (W[0] % np.maximum(s * M, 1) == 0)
-                k["lane"] += int(lane.sum())
-                k["shifted"] += int((p2 & ~lane).sum())
-                k["affine"] += int((even & ~p2).sum())
-                k["irregular"] += int((~even).sum())
-                aff |= bool((even & ~p2).any())
-                irr |= bool((~even).any())
-            rows = c.count * urows[c.e]
-            if aff or irr:
-                unclean["runs"] += 1
-                unclean["rows"] += rows
-                unclean["affine_runs"] += aff and not irr
-                unclean["irregular_runs"] += irr
+            vs = [at + j * sp + np.arange(ln, dtype=np.int64)[None, :] for ln, at, sp in c.segs if ln and sp]
+            o["bindings"]["shared"] += sum(ln for ln, _, sp in c.segs if ln and not sp)
+            v = np.concatenate(vs, axis=1) if vs else np.zeros((c.count, 0), np.int64)
+            k = _classify(v, L, m, M)
+            for x, n in k.items():
+                o["bindings"][x] += n
+            if k["irregular"]:
+                cls = "irregular"
+                if c.count > 2:
+                    k1 = _classify(v[1:], L, m, M)
+                    cls = "irregular" if k1["irregular"] else "peeled"
             else:
-                clean["runs"] += 1
-                clean["rows"] += rows
-    return {"bindings": k, "clean_lanes": clean, "unclean_lanes": unclean}
+                cls = "affine" if k["affine"] else "clean"
+            o[cls]["runs"] += 1
+            o[cls]["rows"] += c.count * urows[c.e]
+    return {"by_kind": out}
 
 
 def order(phi: np.ndarray, flat: T.Flat) -> dict:
