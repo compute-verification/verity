@@ -29,6 +29,7 @@ Base `origin/main` @ c0ebeb8b93 (0a0782abed through #2893), then, in this order:
 | #2888 (`cursor/multimem-land-21f3`) | af95f837ad | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`); its merges of #2836 and #2765 dec1238773 and its `test_predict` pin are this tree's already |
 | #2893 (`cursor/private-one-class-21f3`, CIR-64) | 57081b13db | `partition_v2.build` refuses a v2 private partition whose units span more than one size class; it is on main 0a0782abed, so it brings this tree to there |
 | `cursor/tp-readback-21f3` (#2935) | 2cf3c2c788 | tp-capture's `topology.json` and tp-commit's `versions.json` record `effective_execution`, read back from the engine's `vllm_config` as the single-GPU paths do, the driver's and (`tp2_probe`) each rank's own, so the Match and Commit jobs can show `gpu_memory_utilization`; record files only, no digest moves (the coordinator, 20 Oct 00:40Z) |
+| `cursor/verity-circuits-6f04` (V2PREP), cherry-picked as 15ea726d5b | a371c5a7f1 | `binding.build_binding_map` indexes leaves in each layout meta's own `chunk` and refuses a `chunk` that differs. The TP worker's map (`rank_worker._tp2_binding`) kept the old 256 B default after 008faa17c3 moved rows-sha512 to 4 KiB rows, so every TP Commit's population openings raised IndexError ("Window B"). Only the Commit calls `build_binding_map`, so `jobs/tree_guard.sh` lets a row's later jobs run past exactly this fix (`COMMIT_FIXES`, by blob) |
 | `cursor/dsv4-v2-21f3` (DSV4V2), `jobs/` only | 8b7254f55b | the jobs read the row's model from its name (`jobs/model.sh`), so DeepSeek-V4-Pro's B1 runs on them from its own tree; `stage_cpu.sh`, `stage_ckpt.sh`, `match_gpu.sh`'s post-load check, `match_cpu.sha256`, `gpu_batch.sh`'s `MODEL`. GLM-5.3 keeps every default (revision, tree, row dirs, snapshot, checkpoint paths, config; no census skip, no derive sizing). Taken as files, not merged: DSV4's pins, its MANIFEST and the census skip in `memory_map.census_entry` stay on that tree (the coordinator, 20 Oct 09:10Z) |
 
 ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
@@ -170,12 +171,36 @@ the row's records into a temporary dir under `$SW` (`_rowmeta`), which is on ano
 
 | row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
 |---|---|---|---|---|---|
-| DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z: weights loaded from eu2data in 7.5 min; the driver and all 8 ranks read back 0.88 (`commit/versions.json`); vLLM's sizing line 123.02 GiB, 102.67 GiB weights and non-torch | 2 | running |
+| DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z, its `vllm.commit` Attempt r20261021-041907-b7a8 (verdict art:01daa488cb9b35fc400c983a2db7ae5d4155e06f8de2b91c6143e02df6a260f6): weights loaded from eu2data in 7.5 min; the driver and all 8 ranks read back 0.88 (`commit/versions.json`); vLLM's sizing line 123.02 GiB, 102.67 GiB weights and non-torch | 2 | FAIL rc 12 at 04:54Z, no `commit/summary.json`: the match oracle (a value disagreement) and the population openings (IndexError). Stopped, not rerun (below) |
+| B1 greedy | r20261020-062246-b987 | Match CPU phase r20261021-001940-db82 running (ranks 0-2 PASS; ranks 6 and 7 last, about 07:45Z) | | | |
 
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
 rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside the Match CPU
 phase's 295 GiB, leaving eu about 450 GB. So nothing else is placed on eu beside it, whatever its admission says.
-| B1 greedy | r20261020-062246-b987 | Match CPU phase r20261021-001940-db82 running (ranks 0-2 PASS; ranks 6 and 7 last, about 07:45Z) | | | |
+
+DeepSeek-V4-Pro B1's attempt 2 failed twice over, both read from `commit.log` and `commit/finalize_pair0.json`:
+
+- The `moe_block_stream` watch item (`../dsv4_v2_tree/README.md` window B step 3) is the harmless pattern: the MoE block source
+  attached on every rank, and each rank declares `moe_block_stream` bound-as-leaf with 23616 tensors, `at_calls` true and
+  `hash_layers` [0, 1, 2]. Every rank's identity check, weights pin and token attribution pass (32 of 32 sampled tokens).
+- The match oracle fails on all 8 ranks, a value disagreement. The committed TP partials and MoE outputs, read back through
+  `open_range` against the run root (13728 reads, none failed), differ from the Match capture's (`match/capture`) in 5697 of
+  5920 tensors a rank, and 959 MoE align witnesses a rank differ. At step 0, layer 0's MoE output and every partial up to it
+  are equal on every rank. Layer 1's rank-local MoE partial (k 4) differs on ranks 2, 4 and 5 and is equal on the other five,
+  so its all-reduced output differs in 12 of 3670016 bytes; the differences grow layer by layer (979504 bytes at layer 4), and
+  from layer 10 `align.par` differs, a routing difference. At the hash-routed layers 0 to 2, where the routing cannot differ,
+  `align.rank`, `align.start` and `align.blk` differ: `moe_align_block_size` placed the pairs in another atomicAdd order. The
+  Match (`match/tp2_match.json`) compares structure, cross-rank provenance and tokens, never a second run's values, so this is
+  the first comparison of two runs' MoE values on this row. The served Marlin MoE runs with `use_atomic_add=False`; which
+  kernel makes the two runs differ is not established, and finding it is a debugging run.
+- Then every rank raised IndexError in `tp2_commit_open_population` (`identity_of`, rank 0 at (10, 108414)). The TP worker's
+  binding map indexed leaves in 256 B units against rows-sha512's 4 KiB rows: rank 0's draw is `model.layers.59.attn/kv` at
+  stream offset 27753748, leaf 108414 in 256 B units, while step 10's stream holds about 7077 rows. That is a371c5a7f1's fault, above,
+  and it fails every rows-sha512 TP Commit, GLM-5.3's included; it is independent of the values, since the oracle reads through
+  the committer's own layouts.
+
+So DeepSeek-V4-Pro B1 is not rerun: a third attempt would fail the oracle again unless the two runs happen to agree, and on its
+tree (47ddb6246e, without a371c5a7f1) the openings too.
 
 B1's Build of record is on eu (copied from cpu-2 at 04:25Z, its 208 files checked and `.tree` e2c986e7ba): of `rowdir.sha256`,
 the six row records the Match CPU phase rewrites (`stages.txt`, `row.log`, `effective_config.json`, `source_identity.json`,
