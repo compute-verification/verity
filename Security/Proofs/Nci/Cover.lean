@@ -7,6 +7,7 @@ import Proofs.Nci.Cover.Witness
 import Proofs.Nci.Cover.FanOut
 import Proofs.Nci.Cover.FanOutWitness
 import Proofs.Nci.Cover.FanOutChain
+import Proofs.Nci.Cover.FanOutValue
 
 /-!
 # Proofs of the cover theorem
@@ -15,5 +16,6 @@ import Proofs.Nci.Cover.FanOutChain
 block pays for the products it finishes (`Charge`), the area bound (`Area`), its additive and width variants
 (`Additive`, `Width`), and the non-vacuity witness (`Witness`). The fan-in/fan-out bounds
 (`Models.Nci.Guarantees.CoverFanOut`) have their plan (`FanOutPlan`), its pieces (`FanOutWalk`, `FanOutRootCost`), the
-bounds (`FanOut`), their witness (`FanOutWitness`), and the key chains' one spent value each (`FanOutChain`).
+bounds (`FanOut`), their witness (`FanOutWitness`), and the key chains' one spent value each (`FanOutChain`). The read
+tier from wiring (`Models.Nci.Guarantees.CoverFanOutValue`) is `FanOutValue`.
 -/
