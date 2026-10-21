@@ -22,6 +22,7 @@ this order:
 | `cursor/glm-v2-21f3` | 5a31cfd737 | V2PREP's runbook since the base: window B on a preemptible node, any vy-glm53-* GPU node |
 | #3020 (`cursor/verity-circuits-6f04`) | a371c5a7f1 | the binding map's leaf unit. Cherry-picked from `cursor/glm-v2-21f3`'s 15ea726d5b, not merged (a merge would bring main), and allowed by blob (COMMIT_FIXES) |
 | #3028 (`cursor/moe-align-schedule-replay-6f04`) | 822660cef7 | the Commit replays the Match capture's MoE align schedule. Cherry-picked, not merged, and allowed by blob (COMMIT_FIXES) |
+| #3075, #3076, #3077, #3079 (`cursor/dsv4-rows-21f3`, `-2-`, `-3-`, `-4-21f3`) | c74d38bf6f, c9accad0ad, 6fd9f01777, 18474e99c0 | replay row kernels (`kernels.dsv4_rows`) for the 19 families attempt 3's deferred replay (r20261021-114850-5bfd, r20261021-114900-5d55) held at its no-evaluator gate, 567,483 value units a rank. Cherry-picked, not merged, and allowed by blob (COMMIT_FIXES, whose `-` names a file the row's tree does not hold) |
 
 This tree's own commits change `../glm_v2_tree/jobs/`, this directory, and `verity_vllm/pipeline/memory_map.py`'s
 `census_entry` (with its test), which is none of `build.py`'s construction sources, so no Program digest or artifact
