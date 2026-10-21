@@ -4,7 +4,7 @@
 #     --declared-output 'out/*' --env H1_SERVED=/workspace/research/runs/RUN/out --env H1_PIN=SHA512 \
 #     -- bash benchmarks/pouw/h1_prove/served.sh
 # H1_SERVED: a vllm H1 window run's out/ (serve/pouw-h1-calls.json, gate/windows.jsonl, gate/fetch/<session>/out), or a
-#   .tgz of those (--send it: $RESEARCH_RUN_DIR/inputs/NAME.tgz)
+#   .tgz of those (--send it, then H1_SERVED=inputs/NAME.tgz); a relative path is the run dir's
 # H1_PIN: the SHA-512 of the challenger's public key the verifier pins (never read from the run)
 # H1_DRAW (1): the units to draw
 set -uo pipefail
@@ -12,6 +12,7 @@ export HZ_CONFIGS=served HZ_MEM_GB=16
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 D=${H1_SERVED:?} PIN=${H1_PIN:?}
+case $D in /*) ;; *) D=$RESEARCH_RUN_DIR/$D ;; esac
 [ -f "$D" ] && { mkdir -p "$W/served" && tar -xzf "$D" -C "$W/served" && D=$W/served; }
 LEAN=$(cached lean "$(tree_key verity/core/service/flock)" build_lean)/.lake/build/bin/flock-verify
 PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
