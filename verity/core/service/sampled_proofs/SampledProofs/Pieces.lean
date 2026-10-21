@@ -92,7 +92,7 @@ def registration (j : Json) : V Json := do
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson)))
-    (Registered.entries v.program.desc v.params v.registered)
+    (Registered.entries v.program.desc v.params v.registered v.schemas)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, to
 `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32). -/
