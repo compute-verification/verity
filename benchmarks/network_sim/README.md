@@ -553,7 +553,7 @@ NET-52's levers as statics; both stay:
 - **Lever 3**, each range level's shared first block hashed once, is estimated only: it needs a node part that takes
   a midstate.
 
-A busy served link-window of 35,386 egress and 1,057 ingress frames (run `r20261021-044737-4b58`, composed from the
+A busy served link-window of 35,386 egress and 1,057 ingress frames (run `r20261021-052039-10ee`, composed from the
 parts, egress reads in one run and salted ingress ones in two). The floor is N2's frames root, 73.9B, which every
 variant keeps.
 
@@ -573,6 +573,6 @@ refuses elsewhere by each leaf's binding under SHA-512, as v4 does. Lever 2 rest
 doesn't have yet, each port's frames one public template; N3 checks the template itself, so its verdict takes no new
 assumption, and the framing owes completeness. Lever 4 rests on that framing and on every egress frame's data being at
 most 64 bytes, one token's text, a longer one cut over frames. Egress rows of 16, 256 and 512 bytes give 1.67, 1.76 and
-1.84; 512 hold any token of GLM-5.3's vocabulary (the one on the node), so a framing that cuts no token is 1.84. Each
+1.84 at one window's depths; 512 hold any token of GLM-5.3's vocabulary (the one on the node), so a framing that cuts no token is 1.84. Each
 lever's mechanism, what the certifier's framing must change, the tests (`workload/tests/test_n3_v5.py`) and
 circuit-check: note:network-accounting/20261021T0520Z-finding-n3-v5-levers.
