@@ -490,6 +490,17 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
 
 
+def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncached_one_does_not(tmp_path):
+    """With the cache, a run whose task list misses builds only the catalog bindings whose record misses
+    (`circuit_check.units`); the uncached run builds the whole catalog, as the nightly check that must agree with it does."""
+    def cc(cache):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, cache=cache) for s in g if s[0] == "circuit-check"]
+        return s[1]
+
+    assert "--catalog-units" in cc(True) and "--cache" in cc(True)
+    assert "--catalog-units" not in cc(False) and "--cache" not in cc(False)
+
+
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
     """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
     while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at

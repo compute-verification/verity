@@ -26,7 +26,7 @@ theorem prob_badU_le (hE : Flock.Guarantees.EndToEndRegisteredRows) (s : RowsSes
     Game.prob s.BadU s.G s.τ ≤ (s.n : ℝ≥0∞) * s.bound := by
   obtain ⟨hCR, hA2, hRows, hReg⟩ := hs
   have hU : ∀ u : Fin s.n, Game.prob (s.EvAt u) s.G s.τ ≤ s.bound := fun u =>
-    hE s.n s.Reg s.own s.I s.ht s.c s.hc s.hU s.pub s.hpub s.hscope s.kd s.hdiv s.dj s.S₀ s.d₀ s.y₀ (s.rdU u) s.wr
+    hE s.n s.Reg s.own s.I s.ht s.D s.hD s.hU s.pub s.hpub s.hscope s.kd s.hdiv s.dj s.S₀ s.d₀ s.y₀ (s.rdU u) s.wr
       s.dg s.N s.Ω s.Lb s.src s.hTags s.hCust s.k s.Rw s.M s.hk s.hRw s.hM s.ρ s.hρ s.hr s.t' s.ht' s.τ s.qF s.qS
       s.qR hCR hA2 (hRows u) (hReg u)
   have hsub : ∀ o, s.BadU o → ∃ u ∈ (Finset.univ : Finset (Fin s.n)), s.EvAt u o := by

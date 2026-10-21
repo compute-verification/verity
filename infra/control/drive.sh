@@ -25,8 +25,11 @@ REPO=$DIR/verity
 CONF=/root/.config/verity
 STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
+# TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
+# root overlay to 95% (21 Oct). post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
 export PATH=$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
-  RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store
+  RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp
+mkdir -p "$TMPDIR"
 locked() {
   exec 8> "$TICK"; flock 8
   set -a; . $CONF/r2.env; . $CONF/relay.env; set +a

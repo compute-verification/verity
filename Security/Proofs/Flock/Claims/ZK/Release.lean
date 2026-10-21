@@ -43,7 +43,8 @@ at the draws on the server's tape (`LeanRelease.draws`):
 * the link (round `1`) and the `Finish` (round `LeanRelease.last`) are the firewall's own (`recomputed`,
   `LeanRelease.ownMsg`, the stop where the frame refuses the coins): the link's level-0 roots, which the firewall
   computes from the leaves under salts the worker never sees (`Firewall::new`'s recheck, sent by `Firewall::root` in
-  `flock-circuit`), and `Final.encode` of the record and proof files the firewall builds itself (`Firewall::finish`).
+  `flock-circuit`), and `Final.encode` of the record and proof files the firewall builds itself (the session's Lean
+  finish, `Flock.Firewall.Finish`, whose files `flock-circuit` sends).
   The worker's value there passes where it is the firewall's: a device root other than the recheck's fails the rep, and
   a worker whose proof the firewall's checks fail sends any other value;
 * every other round is a frame round: the worker's value is its device round, the mask is the frame's release, and the
@@ -53,7 +54,7 @@ The firewall stops a session only at its `Finish` (§10.1): once a round fails, 
 device's place (`LeanRelease.scheduled`), and the last round is the stop. That is the deferred server `ZkServer.nextD` at
 `L.toSrv` with the stand-in `LeanRelease.fillOf`. Every way a worker fails is a round that fails:
 * an error, output that does not decode, a panic or silence is no value (`LeanRelease.pass_of_none`);
-* a tree at another size than the shadow's, or any round Rust's checks, the frame's pass decision or the frame refuses, is
+* a tree at another size than the Lean finish's opening's, or any round Rust's checks, the frame's pass decision or the frame refuses, is
   a value that fails.
 
 From that round on, below the last round, the release is the frame's release of the scheduled round as a stopped rep's,
@@ -298,11 +299,11 @@ structure LeanRelease (W R : Type) where
   /-- the firewall's transcript after the rounds of `h`, whose own values the device round reads -/
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.Transcript
   /-- Rust's own checks on a worker's device round (`firewall::Checker` against the algebraic phase's skeleton,
-  `ShadowLink::check` against the opening's shadow), which run before the Lean frame's pass decision (`pass`) and can only
+  `ShadowLink::check` against the Lean finish's opening), which run before the Lean frame's pass decision (`pass`) and can only
   fail a round more: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
-  values in the algebraic phase, the shadow's round in the opening, and at the inner proof's rounds, which the firewall
+  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds, which the firewall
   sends alone, the firewall's own round itself (`check_self`), given the values the firewall fixes by its own
   computation, by name -/
   scheduled : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
@@ -323,9 +324,11 @@ structure LeanRelease (W R : Type) where
   /-- round `1`, the link, the firewall's own: level 0's roots as its recheck commits them, from the leaves under the
   salts on its tape (`Firewall::root`, `Firewall::new` in `flock-circuit`), never the worker's -/
   link : Msg → W → R → List (Msg × Msg) → Msg
-  /-- the record and proof files the firewall builds itself at the session's `Finish` (`Firewall::finish`) -/
+  /-- the record and proof files the firewall builds itself at the session's `Finish` (the session's Lean finish,
+  `Flock.Firewall.Finish`) -/
   files : Msg → W → R → List (Msg × Msg) → String × Array ByteArray
-  /-- whether the firewall's own `Finish` stops (`Firewall::finish`, `flock-firewall finish` answering `err`): where a
+  /-- whether the firewall's own `Finish` stops (on the constraints the Lean finish replays: `repFw`'s `failingOn`, and
+  `flock-circuit`'s `constraints_failing_on_pads` on those `innerLive` answers): where a
   constraint fails at the rep's drawn pads, a function of the witness and the workers' values, which the server's tape
   fixes -/
   finStops : Msg → W → R → List (Msg × Msg) → Bool

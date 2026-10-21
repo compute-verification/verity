@@ -675,35 +675,23 @@ class _DirectLLM:
 PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
 
 
-def _pass_per_step(llm: Any, hooks: Any) -> tuple[Any, dict[str, int]] | None:
-    """Each engine step its own Pearl-C pass, as the experimental arm runs it (`benchmarks.pouw.pearl_c_vllm.bench_arm`).
-    `pouw.install` opens one pass for the install's life, whose tile, call and screened-row buffers a served run outgrows
-    within a few prefill steps (`pouw_pearl_c_device.LEAF_CAPACITY`, `FLAG_ROWS`). The adapter exposes no pass boundary,
-    so the device run is its option's ``release`` (``run.finish``). Returns the run and the running totals of its passes
-    (`PASS_COUNTS` and ``passes``), None when the arm runs no Pearl-C device run."""
+def _pearl_c_run(llm: Any) -> Any | None:
+    """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
+    a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
+    (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
 
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
-    run = getattr(getattr(option, "release", None), "__self__", None)
-    if not isinstance(run, PPD.PearlCDeviceRun):
-        return None
-    totals = dict.fromkeys(("passes", *PASS_COUNTS), 0)
+    run = getattr(getattr(option, "end_pass", None), "__self__", None)
+    return run if isinstance(run, PPD.PearlCDeviceRun) else None
 
-    def make(original: Any) -> Any:
-        def step(*a: Any, **kw: Any) -> Any:
-            run.begin()
-            out = original(*a, **kw)
-            done = run.end()
-            totals["passes"] += 1
-            for key in PASS_COUNTS:
-                totals[key] += int(done.get(key) or 0)
-            return out
 
-        return step
+def _pass_totals(run: Any) -> dict[str, int]:
+    """The running totals of the passes the run has ended (``details["passes"]``): `PASS_COUNTS` and ``passes``."""
 
-    hooks.wrap(llm.vllm.llm_engine, "step", make)
-    return run, totals
+    passes = run.details["passes"]
+    return {"passes": len(passes), **{key: sum(int(p.get(key) or 0) for p in passes) for key in PASS_COUNTS}}
 
 
 def _pearl_c_gate(run: Any) -> dict[str, Any]:
@@ -716,7 +704,11 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
     check.weights = {w: x.tensor for w, x in run.weights.items()}
-    return {**check.gate(None), "provided": True}
+    got = check.gate(None)
+    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
+    # one between steps.
+    run.begin(stepped=True)
+    return {**got, "provided": True}
 
 
 def _kv_cache_tokens(llm: Any) -> int | None:
@@ -834,7 +826,7 @@ class _VllmEngine:
                     engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
             if arm.protocols:
-                self.pearl_c = _pass_per_step(self.llm, self.target.hooks)
+                self.pearl_c = _pearl_c_run(self.llm)
                 cubin = config.get("pouw", {}).get("cubin")
                 if cubin:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
@@ -881,7 +873,7 @@ class _VllmEngine:
             if got is not None:
                 return got
         info = {} if self.llm.protocols is None else self.llm.protocols.info()
-        return info if self.pearl_c is None else {**info, "pearl_c": dict(self.pearl_c[1])}
+        return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
@@ -964,7 +956,7 @@ class _VllmEngine:
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
-            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c[0])
+            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}
