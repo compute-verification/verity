@@ -127,6 +127,13 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     return meta
 
 
+def program_bytes(d: Path) -> bytes:
+    """The declared window Program's descriptor bytes (``d/PROGRAM``, gunzipped): the period's circuit is their
+    SHA-512, and core's credit reads the window's layout from them."""
+    import gzip
+    return gzip.decompress((d / PROGRAM).read_bytes())
+
+
 def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]]:
     """`pouw_h1.FILL`'s window over Llama-3.1-8B as `pouw_h1_served.declared` takes it: its linears' shapes and names."""
     named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in LLAMA_8B]
@@ -262,9 +269,10 @@ def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
 
 
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
-          period: str | None = None) -> dict[str, Any]:
+          period: str | None = None, descriptor: bytes | None = None) -> dict[str, Any]:
     """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the session's ``out/``
-    (`trusted_rounds_reason`), else on its tree (`session_reason`)."""
+    (`trusted_rounds_reason`), else on its tree (`session_reason`); its credit over `descriptor`, the period's circuit's
+    bytes (`program_bytes`)."""
     from tests.protocol_options import pouw_h1_gpu as GPU
     wfile = None
     if window is not None:
@@ -272,7 +280,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
         wfile = out / "window.json"
         wfile.write_text(json.dumps(window) + "\n")
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
-                               [str(p) for p in ledger], None if wfile is None else str(wfile), period)
+                               [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor)
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -447,9 +455,10 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     if calls.is_file() and doc["evidence"]["fetched"]:
         tree, ledger = out / "gate" / "fetch" / sid, [out / "gate" / "windows.jsonl"]
         record = json.loads(calls.read_text())
+        desc, root = program_bytes(pdir), record["commitment"]["session"]["root"]
         doc["verify"] = {
-            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period),
-            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": record["commitment"]["session"]["root"]}),
+            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc),
+            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc),
         }
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
                                    draw_k)

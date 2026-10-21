@@ -6,6 +6,7 @@ credited; the arm serving ``scaled_mm``'s y with z a second ``_int_mm`` beside i
 is every way of handing over a z or records the served kernel didn't write for the served y."""
 from __future__ import annotations
 
+import functools
 import hashlib
 import itertools
 import json
@@ -188,23 +189,31 @@ def auditor(tmp_path, monkeypatch):
 
 
 PERIOD = "p1"
-#: the bytes of the circuit the period's windows prove (a stand-in for `pouw_h1_served.declared`'s descriptor), whose
-#: SHA-512 the period's open commits as its circuit
-DESCRIPTOR = b"the declared H1 window Program"
-CIRCUIT = hashlib.sha512(DESCRIPTOR).hexdigest()
 #: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 units
 LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 
 
+@functools.cache
+def _descriptor(shapes=((64, K),), modules=(("q"),), rows=ROWS, steps=1) -> bytes:
+    """The declared window Program's descriptor bytes (`pouw_h1_served.descriptor`) on the served test's stand-in
+    unit: the period's circuit is their SHA-512, and core's credit reads the window's layout from them."""
+    from tests.protocol_options.test_pouw_h1_served import _unit
+    return SV.descriptor(SV.declared(list(shapes), dict(enumerate(modules)), rows, steps, unit=_unit()))
+
+
+def _circuit() -> str:
+    return hashlib.sha512(_descriptor()).hexdigest()
+
+
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
-    """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `CIRCUIT` and (unless
+    """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
     None) the draw K ``draw_k``: ``periodic(draw_k)`` is the host; close the period with ``host.ledger.period_close``
     once the session has ended."""
     def make(draw_k):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves)
-        ledger.period_open(PERIOD, circuit=CIRCUIT, draw_k=draw_k)
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
         monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -483,36 +492,42 @@ def _record(run):
     return {"commitment": run.commits, "calls": run.manifest()}
 
 
-def _credit(host, rec, proofs=None, k=None):
-    return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key, proofs, k)
+def _credit(host, rec, proofs=None, k=None, descriptor=None):
+    return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
+                             _descriptor() if descriptor is None else descriptor, proofs, k)
 
 
 def _accept(units, reject=()):
     return [{"unit": u, "verdict": "reject" if u in reject else "accept"} for u in units]
 
 
-def test_the_gate_passed_call_is_credited_by_cores_rules_only_with_a_committed_layout_and_a_link(periodic):
+def test_the_gate_passed_call_is_credited_by_cores_rules_only_when_its_a_rows_are_the_round_roots(periodic):
     """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, so core's
-    `credited` (through the auditor's ledger and the session's files) names it; a window with no served trees commits no
-    layout, so core's `window` has no population to draw from and refuses it, and it has no A values for `a_link`."""
+    `window` (through the auditor's ledger and the session's files, over the layout of the period's committed
+    descriptor) names it once its drawn units' proofs are accepted; a window with no served trees has no A values, so
+    `a_link` refuses it and it credits nothing."""
     auditor = periodic(1)
     _y, run = _serve(ZyArm(), remote=True, n=64)
     assert auditor.ended() is None
     rec = _record(run)
     assert [(r["index"], r[CR.CREDIT]) for r in rec["calls"]] == [(0, True)] and rec["calls"][0]["tables"]["z"]
+    assert "layout" not in rec["commitment"]
     out = _credit(auditor, rec, [])
-    assert out["manifest"] is None and out["credited"] is None and out["calls"] == [0] and out["k"] == 1, out
-    assert out["window"] == ("layout", CR.LAYOUT_FORM) and out["drawn"] is None
-    assert out["a_link"] == ("a-link", CR.ENTRIES_FORM) and out["credit"] is None
+    assert out["manifest"] is None and out["rounds"] is None and out["k"] == 1, out
+    assert out["window"][0] == "missing" and out["calls"] is None and len(out["drawn"]) == 1
+    out = _credit(auditor, rec, _accept(out["drawn"]))
+    assert out["window"] is None and out["calls"] == [0], out
+    assert out["a_link"] == ("a-link", CR.ENTRIES_FORM) and out["credit"] is None and out["eps"] is None
 
 
 def test_an_honest_served_window_is_credited_through_cores_window_only_with_every_drawn_units_proof_accepted(periodic):
     """PRF-132: a served window (its A codes and B rows the window Program's values, each round's root over its A rows)
-    commits its Program's layout, the one its period declared, and its period's open commits K (`draw_k`, here every
-    unit). Core's `window` draws the units from the draw coin (never a list the prover hands in) and credits the
-    gate-passed call once every drawn unit has one accepted proof: a missing, rejected or undrawn unit's outcome refuses
-    the whole window. Credited, it reports what the draw established at δ = 2^-40, and the closed period's credit
-    (`period_credit`) is that window's."""
+    in a period whose open commits the declared Program's descriptor as its circuit and K (`draw_k`, here every unit).
+    Core's `window` reads the layout from that descriptor, draws the units from the draw coin (never a list the prover
+    hands in) and credits the gate-passed call once every drawn unit has one accepted proof: a missing, rejected or
+    undrawn unit's outcome refuses the whole window, and so does another circuit's descriptor or none. Credited, it
+    reports what the draw established at δ = 2^-40, and the closed period's credit (`period_credit`) is that window's;
+    evidence carrying a layout of its own is refused."""
     from tests.protocol_options.test_pouw_h1_served import _unit
     k = PHC.draw_k(LAYOUT)
     assert k == 2
@@ -520,14 +535,14 @@ def test_an_honest_served_window_is_credited_through_cores_window_only_with_ever
     _y, run = _serve(ZyArm(), remote=True, n=64, served=SV.Served(PH.TILE, _unit()))
     assert auditor.ended() is None and not run.served.refused and run.served.registered
     rec = _record(run)
-    assert rec["commitment"]["layout"] == LAYOUT
+    assert CR.layout_of(_descriptor()) == (LAYOUT, None) and "layout" not in rec["commitment"]
     assert any(CR.is_a(e["value"]) for e in rec["commitment"]["served"]["entries"])
     out = _credit(auditor, rec)
     assert out["window"] == ("outcome", CR.PROOFS_FORM) and out["credit"] is None and out["k"] == k
-    assert out["drawn"] == PHC.drawn_of(rec, auditor.window, k)[0] == [0, 1]
+    assert out["drawn"] == PHC.drawn_of(rec, auditor.window, k, _descriptor())[0] == [0, 1]
     out = _credit(auditor, rec, _accept([0, 1]))
-    assert {x: out[x] for x in ("manifest", "credited", "window", "a_link")} == dict.fromkeys(
-        ("manifest", "credited", "window", "a_link")), out
+    assert {x: out[x] for x in ("manifest", "rounds", "window", "a_link")} == dict.fromkeys(
+        ("manifest", "rounds", "window", "a_link")), out
     assert out["calls"] == out["credit"] == [0]
     assert out["eps"] == str(CR.established(LAYOUT, [0], k)) and out["eps"] is not None
     missing = _credit(auditor, rec, _accept([0]))
@@ -535,17 +550,22 @@ def test_an_honest_served_window_is_credited_through_cores_window_only_with_ever
     assert missing["credit"] is None
     failed = _credit(auditor, rec, _accept([0, 1], reject=[1]))
     assert failed["window"][0] == "failed" and failed["credit"] is None
+    other = _descriptor(((64, K), (32, K)), ("q", "k"))
+    assert _credit(auditor, rec, _accept([0, 1]), descriptor=other)["window"][0] == "manifest"
+    assert _credit(auditor, rec, _accept([0, 1]), descriptor=b"")["window"][0] == "layout"
     one = _credit(auditor, rec, _accept([0, 1]), k=1)
     assert one["drawn"] is not None and len(one["drawn"]) == 1 and one["window"][0] == "outcome"
     assert one["credit"] is None and _credit(auditor, rec, _accept(one["drawn"]), k=1)["credit"] == [0]
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key)
     assert PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]]) == []
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, _accept([0, 1]), DESCRIPTOR)
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, _accept([0, 1]), _descriptor())
+    assert "layout" not in evidence
     got, why = PHC.period_credit(ledger, PERIOD, [evidence])
     assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "proofs": _accept([0])}])[1][0] == "window"
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": b"another".hex()}])[1][0] == "circuit"
+    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}])[1][0] == "circuit"
+    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "layout": LAYOUT}])[1][0] == "period"
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
@@ -558,13 +578,13 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert auditor.ended() is None
     rec = _record(run)
     out = _credit(auditor, rec, _accept([0, 1]))
-    assert out["credited"] is None and out["k"] is None and out["credit"] is None
+    assert out["rounds"] is None and out["k"] is None and out["credit"] is None
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key)
     reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, _accept([0, 1]), DESCRIPTOR)
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, _accept([0, 1]), _descriptor())
     assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
@@ -576,32 +596,52 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
     _y, run = _serve(ZyArm(), remote=True, n=64, served=SV.Served(PH.TILE, _unit()))
     assert auditor.ended() is None
     out = _credit(auditor, _record(run), _accept([0, 1]))
-    assert out["credited"] is None and out["window"][0] == "budget" and "in no period" in out["window"][1]
+    assert out["rounds"] is None and out["window"][0] == "budget" and "in no period" in out["window"][1]
     assert out["credit"] is None
 
 
 def test_the_drawn_set_from_a_fixed_coin_is_cores():
     """PRF-132: the units vllm's verifier reads as drawn (`drawn_of`) are core's (`credit.drawn`, and
-    `core_check.work_units` over `credit.strata` under the work law at K): the population is the units of
-    ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the stream of the window's root,
-    the registration of its draw root and the receipt of its last round's receipts."""
-    layout = {"calls": [["q", 0], ["o", 0], ["q", 1]], "linears": [["q", 64, 64], ["o", 128, 32]], "m": 64,
-              "tile": [32, 32]}
+    `core_check.work_units` over `credit.strata` under the work law at K), over the layout core reads from the declared
+    Program's descriptor (`credit.layout_of`, which `pouw_h1_served.declared_layout` is without building it): the
+    population is the units of ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the
+    stream of the window's root, the registration of its draw root and the receipt of its last round's receipts."""
+    shapes, modules = ((64, 64), (32, 128)), ("q", "o")
+    desc = _descriptor(shapes, modules, 64, 2)
+    layout, why = CR.layout_of(desc)
+    assert why is None and layout == SV.declared_layout(list(shapes), dict(enumerate(modules)), 64, 2)
     coin, root, reg, receipts = (hashlib.sha512(x).hexdigest() for x in (b"coin", b"window", b"draw", b"receipts"))
     opening = LiveOpening(0, Wd.DRAW, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
-    record = {"commitment": {"layout": layout, "draw": {"coin": opening, "root": reg, "receipts": receipts}}}
+    record = {"commitment": {"draw": {"coin": opening, "root": reg, "receipts": receipts}}}
     ss, why = CR.strata(layout)
     assert why is None and [(s["template"], s["units"], s["work"]) for s in ss] == [
-        ("k64", [[0, 4], [6, 10]], 32 * 32 * 64), ("k128", [[4, 6]], 32 * 32 * 128)]
-    for k in (1, 5, 10):
+        ("k64", [[0, 4], [6, 10]], 32 * 32 * 64), ("k128", [[4, 6], [10, 12]], 32 * 32 * 128)]
+    for k in (1, 6, 12):
         assert CR.law(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
-        got, why = PHC.drawn_of(record, {"root": root}, k)
+        got, why = PHC.drawn_of(record, {"root": root}, k, desc)
         assert why is None and got == want == CR.drawn(coin, root, reg, {"receipts": receipts}, layout, k)[0]
-        assert len(got) == len(set(got)) and all(0 <= u < 10 for u in got)
-    assert set(PHC.drawn_of(record, {"root": root}, 10)[0]) >= {4, 5}
-    assert PHC.drawn_of(record, {"root": root}, 11)[1][0] == "budget"
-    assert PHC.draw_k(layout) == 10
+        assert len(got) == len(set(got)) and all(0 <= u < 12 for u in got)
+    assert set(PHC.drawn_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
+    assert PHC.drawn_of(record, {"root": root}, 13, desc)[1][0] == "budget"
+    assert PHC.drawn_of(record, {"root": root}, 1, None)[1] == ("layout", CR.DESCRIPTOR_HEX)
+    assert PHC.draw_k(layout) == 12
+
+
+def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
+    """PRF-132: the proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
+    that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
+    0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
+    from tests.protocol_options import pouw_h1_rehearsal as RH
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    shapes, modules = RH.declaration()
+    layout = SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps)
+    k = RH.declared_draw_k()
+    assert k == PHC.draw_k(layout) == 31178
+    work = sum(size * w for size, w in CR.call_work(layout))
+    assert Wd.eps_at(k, CR.DELTA, work * 8 // 9, work, 1) <= PHC.DRAW_EPS
+    assert Wd.eps_at(PHC.draw_k(layout, credited=1), CR.DELTA, work * 8 // 9, work, 1) > PHC.DRAW_EPS
 
 
 def _two_window_period(tmp_path):
@@ -609,7 +649,7 @@ def _two_window_period(tmp_path):
     auditor's ledger (its record leaves between each open's and end's), and their sessions and roots, in order."""
     leaves = itertools.count()
     ledger = CH.Ledger(tmp_path / "w.jsonl", 1, leaves)
-    ledger.period_open(PERIOD, circuit=CIRCUIT, cap=2, draw_k=1)
+    ledger.period_open(PERIOD, circuit=_circuit(), cap=2, draw_k=1)
     sessions, roots = [], []
     for i in (1, 2):
         s, root = CH.session_id(i), hashlib.sha512(bytes([i])).hexdigest()
@@ -650,7 +690,7 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(auditor):
     """PRF-132: the credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
     the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (it is no longer
-    the one root the challenger's log shows its draw coin followed)."""
+    the one root the challenger's log shows its draw coin followed); the honest record gets past them to its proofs."""
     _y, run = _serve(ZyArm(), remote=True, n=64)
     assert auditor.ended() is None
     rec = _record(run)
@@ -658,8 +698,8 @@ def test_a_credit_bit_changed_after_the_draw_coin_is_refused(auditor):
     c = rec["commitment"]
 
     def credited(commitment, calls):
-        return _credit(auditor, {"commitment": commitment, "calls": calls})["credited"]
-    assert credited(c, rec["calls"]) is None
+        return _credit(auditor, {"commitment": commitment, "calls": calls}, k=1)["window"]
+    assert credited(c, rec["calls"]) == ("outcome", CR.PROOFS_FORM)
     assert credited(c, rows) == ("draw", CR.DRAW_ROOT)
     salt = PHC.program_salt_of(c)
     root = CR.draw_root(CR.calls_root(salt, rows), bytes.fromhex(c["draw"]["receipts"]), c["rounds"])

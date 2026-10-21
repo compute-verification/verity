@@ -58,6 +58,7 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -642,7 +643,8 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 
 
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
-                     window_file: str | None = None, period: str | None = None) -> dict[str, Any]:
+                     window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None
+                     ) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
@@ -652,7 +654,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within). The record is held to its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with `period` the ledger
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
-    ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`)."""
+    ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
+    (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
+    (`pouw_h1_served.descriptor`; none refuses it)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1 as PH
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
@@ -678,7 +682,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key)
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor)
     if period is not None:
         try:
             if key is None:
@@ -743,6 +747,9 @@ def main(argv: list[str] | None = None) -> int:
                          "research@HOST), which opens the reserved session on the window's open root")
     ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
                                                      "the ledger must credit with it accepted")
+    ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
+                                                            "(the rehearsal's window-program.json.gz), whose bytes core's "
+                                                            "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit the window's A codes and B rows as its Program's "
                                                           "registered values (pouw_h1_served.Served) and try to register them")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
@@ -770,7 +777,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period)["ok"] else 1
+        desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1
