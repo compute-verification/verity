@@ -21,7 +21,7 @@ this order:
 | #2845 (`cursor/land-dsv4-aot-21f3`) | 67916f1be5 | the row switched to the AOT Build (`aot`: comparison r20261018-222738-a095, trace art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4); `test_predict`'s mHC step pins read from `records.json`. One commit on dec1238773; merged clean |
 | `cursor/glm-v2-21f3` | 5a31cfd737 | V2PREP's runbook since the base: window B on a preemptible node, any vy-glm53-* GPU node |
 | #3020 (`cursor/verity-circuits-6f04`) | a371c5a7f1 | the binding map's leaf unit. Cherry-picked from `cursor/glm-v2-21f3`'s 15ea726d5b, not merged (a merge would bring main), and allowed by blob (COMMIT_FIXES) |
-| #3028 (`cursor/moe-align-schedule-replay-6f04`) | a521e5ed60 | the Commit replays the Match capture's MoE align schedule. Cherry-picked, not merged, and allowed by blob (COMMIT_FIXES) |
+| #3028 (`cursor/moe-align-schedule-replay-6f04`) | 822660cef7 | the Commit replays the Match capture's MoE align schedule. Cherry-picked, not merged, and allowed by blob (COMMIT_FIXES) |
 
 This tree's own commits change `../glm_v2_tree/jobs/`, this directory, and `verity_vllm/pipeline/memory_map.py`'s
 `census_entry` (with its test), which is none of `build.py`'s construction sources, so no Program digest or artifact
@@ -170,7 +170,7 @@ Then:
      - The match oracle failed on every rank: 5,697 of 5,920 committed tensors differ from the capture's.
        `moe_align_block_size` hands out each expert's slots in atomicAdd order, and a pair's block decides the Marlin expert
        GEMM's split-K cuts. So the low bits differ from layer 1 at step 0 and drift, until the learned routing from layer 10
-       on differs too. Fixed by #3028 (a521e5ed60): the capture records each align call's schedule
+       on differs too. Fixed by #3028 (822660cef7): the capture records each align call's schedule
        (`match/capture/align_schedule.rank<r>.pt`), and the Commit replays it.
    - The CPU experiment r20261021-061937-9868 evaluated layer 1's MoE rows (after r20261021-055246-b82b) on ranks 2, 4 and 5,
      whose partials differ:
