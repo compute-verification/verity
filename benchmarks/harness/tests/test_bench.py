@@ -142,6 +142,8 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
 def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
+        if path.name == "pyproject.toml":   # the specs' own suite
+            continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
     sweeps = {d.id for d in loaded if isinstance(d, Sweep)}
