@@ -2134,6 +2134,20 @@
    "assumptions": [],
    "type_hash": "2b3c90af401a23241ab54f737beed2c849e13e173bd7a698d7a680454242557f"
   },
+  "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrf : Accounting.Guarantees.Actual.WipeReadHeldPrf"],
+   "assumptions": [],
+   "type_hash": "7a5c03d11fa6e093f99489852701df3880b8945cd092998b3163ce71465a3d78"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw : Accounting.Guarantees.Actual.WipeReadHeldPrfDraw"
+   ],
+   "assumptions": [],
+   "type_hash": "cee78e770b505edd85f9ac30127d637526bbc92e3d8787208c6769ae9022117c"
+  },
   "Accounting.SecurityProofs.Actual.WipeReadPool": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
@@ -9984,7 +9998,9 @@
    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": "lemma: the count of coins on which a read answers a blocks at one of C contents, from a causal strategy, the latency ceiling (latency-ceiling) and WipeRead's premises on a verdict read off the coins; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.Actual.WipeLag": "lemma: the contents of X's state at t number at most those at s times 2^(beta_X (t - s)), a counting bound over CausalFrom and DeclaredLinks on any strategy, with no function's acceptance; with WipeReadHeld it bounds the state between reads (note:20261019T2210Z-report-timed-round-redteam-3).",
    "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
-   "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for."
+   "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for.",
+   "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": "frozen (no-function): WipeReadHeld on the deployed labels prf s; its acceptance, the challenger's verdict Ch j on its view, is inside the event of a distinguisher (Actual.heldDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
+   "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw": "frozen (no-function): WipeReadHeldPrf on the deployed index draw, the rejection sampler on keyed words of the challenger's coin secret; its acceptance, the challenger's verdict Ch j on its view, is inside the events of two distinguishers (Actual.heldDistinguisher and Actual.drawDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -10092,6 +10108,8 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Actual.WipeLag",
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -10119,6 +10137,15 @@
     "Nci.SecurityProofs.FitRate"
    ]
   },
+  "Definitions.Accounting.Actual.WipeDraw": {
+   "digest": "8edcc4e14b715e5920f4e9ba34cf1f43c4e8a0afa28c9f61590f1a8ea9ba32ed",
+   "definitions": {
+    "Accounting.Actual.drawDistinguisher": "35049525481fdcd2b2ff4072d63eec83d93c173877d33160490b4e29463f0dad",
+    "Accounting.Actual.drawIndex": "8843cc1d2031da572630f337d1b193c29c4764618993516d8ff83ef9cde37fe7",
+    "Accounting.Actual.wordIndex": "d33dadd3418335eec0660359ccf6e2bc823b564c2bb7bd6cd5318f174a710aa5"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"]
+  },
   "Definitions.Accounting.Actual.WipeHeld": {
    "digest": "d10182107aa699d46e6951392f4b620db032fa27e47950e96a88a65f18fa1a77",
    "definitions": {
@@ -10130,6 +10157,18 @@
     "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.WipeLag",
     "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
+  },
+  "Definitions.Accounting.Actual.WipePrf": {
+   "digest": "987a8904e11188238975658f0d1682b32661d29b26290bf962d7138757ce3280",
+   "definitions": {
+    "Accounting.Actual.heldDistinguisher": "4e4772c3c0c859ba772d2e807b1ced9f5fffe849a128c4050a97adeadf2ff79d",
+    "Accounting.Actual.heldEvent": "11fc8639ed7fdbdd660311119a8a4c4aaa5ff93d341225873a03c26d83642f92",
+    "Accounting.Actual.tableLabel": "f2722da234dc0b431f0f10fa8ff94602339d37a01afea5e0c33ef7ed2533e8ca"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"
    ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
@@ -10689,6 +10728,8 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.WipeLag",
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -11561,6 +11602,8 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Actual.WipeLag",
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
     "Nci.SecurityProofs.FitRate"
@@ -14052,6 +14095,8 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Actual.WipeLag",
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -15126,6 +15171,8 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -15404,6 +15451,8 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -15541,7 +15590,12 @@
     "Pous.StreamedWipe.winReal": "94c760c0fdb2e4ab34d177c563ba060705f96dabfbb82a1fdecc60cff27eb6fb",
     "Pous.StreamedWipe.wipeDistinguisher": "98d326b027d2aba7126dd5f1b6c43c56b1c26f2cdafc080de2d3d8824a3edaf1"
    },
-   "guarantees": ["Pous.SecurityProofs.StreamedWipe", "Pous.SecurityProofs.StreamedWipeMeets2600GB"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
+    "Pous.SecurityProofs.StreamedWipe",
+    "Pous.SecurityProofs.StreamedWipeMeets2600GB"
+   ]
   },
   "Definitions.Pous.P2.Cost": {
    "digest": "0f92c989cf95e0d319f2906b71aff0dde15a26ca302a18bc6a203caa57afe05f",
@@ -24811,6 +24865,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
+    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.Actual.WipeReadPool"
    ]
   },
@@ -24871,6 +24927,20 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.Actual.WipeReadPool"
    ]
+  },
+  "Models.Accounting.Guarantees.Actual.WipeDraw": {
+   "digest": "8a7c6cbee4201fd52a0406312d9992243d218d7d67591d5f738119cc77944933",
+   "definitions": {
+    "Accounting.Guarantees.Actual.WipeReadHeldPrfDraw": "5c64de29201b1c8a1ac69aaeff6e26a26c8d17842f5fec1d7844dd549066dcda"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"]
+  },
+  "Models.Accounting.Guarantees.Actual.WipePrf": {
+   "digest": "4321729824bf3d56eb4d65274b8b361451ff0aa761c09280767b5165286005c5",
+   "definitions": {
+    "Accounting.Guarantees.Actual.WipeReadHeldPrf": "6c8b8d8c503d75828440e9358f1ae11d0a55791ac148ad445bbdde133a42dd26"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrf"]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
