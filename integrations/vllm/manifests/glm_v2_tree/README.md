@@ -104,8 +104,13 @@ on a rank off by 0.02 or a missing rank.
 | B8 greedy | r20261020-235054-0dfc (`vllm.match` r20261020-235116-20b7, art:8c26cb7f88573090904af9763fba5703eae0d1443141bc4e1a37119b5d4c3fd9) | de6ca12b5f | PASS, 677 s | 312 GiB | 1,193,569 files |
 | B8 stochastic | r20261020-235116-5968 (`vllm.match` r20261020-235125-02be, art:fa65f85a4ff07e1501f974d151a5169ee8eb90ef8a271591c1a187f52340cd6e) | de6ca12b5f | PASS, 3920 s from 23:51Z: about 13 min on the GPUs from 00:43Z, once the v1 rows' deletion made 360 GiB | 341 GiB | 1,192,954 files |
 | DeepSeek-V4-Pro B1 | r20261021-010646-2249 (`vllm.match` r20261021-010655-e910, art:c376282619cc3cfc8bcfd5675e6253cac7224634cb0204789950ea56f3431a92), `MODEL=dsv4-pro` | dsv4 47ddb6246e | PASS, 1000 s; the post-load tensor on all 8 ranks' Builds | 139 GiB | 1,343,105 files |
+| B32 greedy | r20261021-052310-44ec (`vllm.match` r20261021-052332-1be9, art:3e1434447f4a3963b534848a5ede7929a02124b46be19facde0eea9a24f32897), `ROW_ON=/workspace/extra` | 6d850cae23 | PASS, 2198 s | 904 GiB, on `/workspace/extra` | 1,534,973 files |
+| DeepSeek-V4-Pro B1, attempt 3 | r20261021-065033-b2ef (`vllm.match` r20261021-065042-373e, art:2a239c99a2c131c4c782f6550717a18d82dee7f97fde2927d994d714d0b10da9), `MODEL=dsv4-pro` | dsv4 582c1317f1 | PASS, 1302 s; the post-load tensor on all 8 ranks' Builds; `capture/align_schedule.rank<r>.pt` on all 8 ranks (#3028) | 139 GiB | 1,343,220 files |
 
-Window A ended there at 01:25Z: B32's legs (about 1100 GiB) wait for room, which eu's disk does not have beside window B's.
+Window A ended there at 01:25Z: B32's legs (about 1100 GiB) waited for room, which eu's disk did not have beside window B's,
+and ran from 05:23Z on `/workspace/extra` (infra, 01:55Z 21 Oct). DeepSeek-V4-Pro B1's attempt 3 needs a capture with the align
+schedule (`../dsv4_v2_tree/README.md`, window B), so its legs ran again at 06:50Z, once T1R freed the GPUs at 06:33Z; attempt 2's
+`match/` was renamed `match.attempt2-r20261021-010646-2249` in the row dir first.
 
 eu's `/workspace` (3.0 TB) had 477 GiB free at the start: the GLM-5.3 checkpoint (704 GiB) and @circuits' v1 rows held the rest.
 The v1 rows (1.4 TiB: `fs/glm53-m1` 965 GiB, `cp/circuits/glm-aot` 181, `cp/circuits-prefix-tp` 176, `fs/glm53-failfast`
@@ -134,6 +139,7 @@ one GM-01 at a time at 450, as it would at 750: (750 − 80) / 370 = 1.
 | B8 greedy | r20261021-012405-e484, from 01:24Z | vy-glm53-cpu-2, 450 | 1,011,902 of its files copied again after the VM's restore cut the first copy, then all checked |
 | B8 stochastic | r20261021-011240-7676, from 01:12Z | vy-glm53-eu, 450 | its own; its Build of record (774 files and `.tree`) copied in from cpu-2 |
 | DeepSeek-V4-Pro B1 | r20261021-013528-0d47, from 01:35Z (the first attempt's start failed, below) | vy-glm53-eu, 290 (the dsv4 tree's three ranks) | its own; its Build of record (214 files and `.tree`) copied in from vy-nebius-cpu-3 |
+| DeepSeek-V4-Pro B1, attempt 3 | r20261021-071645-a966, from 07:16Z at dsv4 582c1317f1 | vy-glm53-eu, 100: 0d47's cgroup peaked at 53.2 GiB (`resources.jsonl`), and 450 + 100 is inside the 750 | its own (b2ef's) |
 
 B32's Build of record r20261020-192024-d435 ended before the standing rule (19:25Z 20 Oct) had to cancel it: build PASS at
 00:57Z (wall 20,186 s, digest 28e931b1de151fd5), call boundaries PASS at 00:59Z (671,424 identities); BUILD_RUN
@@ -199,8 +205,11 @@ DeepSeek-V4-Pro B1's attempt 2 failed twice over, both read from `commit.log` an
   and it fails every rows-sha512 TP Commit, GLM-5.3's included; it is independent of the values, since the oracle reads through
   the committer's own layouts.
 
-So DeepSeek-V4-Pro B1 is not rerun: a third attempt would fail the oracle again unless the two runs happen to agree, and on its
-tree (47ddb6246e, without a371c5a7f1) the openings too.
+DSV4V2 settled the divergence: the only difference is `moe_align_block_size`'s atomicAdd schedule, and each run's values
+reproduce bit for bit under its own schedule. #3028 (822660cef7) records the capture's schedule and replays it in the Commit
+wherever the top-k ids match, and it is carried into `cursor/dsv4-v2-21f3` at 582c1317f1 with #3020, both by blob in COMMIT_FIXES.
+So DeepSeek-V4-Pro B1 runs a third attempt there (circuits, 06:48Z 21 Oct), after B1's Commit on the GPUs: its legs and Match
+CPU phase above, then `commit.sh`, whose oracle names the differing tensor if one still differs (`../dsv4_v2_tree/README.md`).
 
 B1's Build of record is on eu (copied from cpu-2 at 04:25Z, its 208 files checked and `.tree` e2c986e7ba): of `rowdir.sha256`,
 the six row records the Match CPU phase rewrites (`stages.txt`, `row.log`, `effective_config.json`, `source_identity.json`,
