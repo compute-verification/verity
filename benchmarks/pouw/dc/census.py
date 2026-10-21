@@ -6,8 +6,10 @@ RUN_OUT is a DC run's `out/` (`research fetch RUN --all` puts it at ~/.research/
 a directory on its path). analyze.py reads each run; a kind's line takes its fastest run (as machine_model's adopt.py
 merges two lines) and names every run that measured it, and the joint rows are the upper hull of every run's points.
 --write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping every
-line and row this doesn't write: the uniform datapath's (UNI, and the row UP) that uniform.py wrote, and the rows of
-other sources (the data sheet's DS_*, TMAB). A row it writes whose old description extends the new one keeps the old,
+line and row this doesn't write: the uniform datapath's (UNI, and the row UP) that uniform.py wrote, the rows of
+other sources (the data sheet's DS_*, TMAB, AT90), and the lines of classes no run prices (the memory and control
+classes added by hand), NOROW's joint issue lines rewritten at the new hull. A row it writes whose old description
+extends the new one keeps the old,
 the added note with it; one whose note it can't keep is named on stderr. Else they print.
 
 The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycles at 1 - 2%, eps1.py's convention):
@@ -471,10 +473,8 @@ def kept(d: Path, name: str, written: set[str] | None = None) -> list[dict[str, 
     """The lines and rows of DIR/NAME that census() doesn't write, which --write keeps: uniform.py's (UNI's census
     lines, the UP row), every row of another source (the data sheet's DS_*, TMAB) and, in census.csv, every line of a
     kind no run prices (`written` is the kinds census() writes) but its joint issue lines, which census() rewrites."""
-    if written is None:
-        return [r for r in old_lines(d, name) if not OWN_ROW.fullmatch(r["row"])]
-    return [r for r in old_lines(d, name) if r["kind"] == "UNI" or not OWN_ROW.fullmatch(r["row"])
-            or (r["kind"] not in written and not JI_ROW.fullmatch(r["row"]))]
+    return [r for r in old_lines(d, name) if r.get("kind") == "UNI" or not OWN_ROW.fullmatch(r["row"])
+            or (written is not None and r["kind"] not in written and not JI_ROW.fullmatch(r["row"]))]
 
 
 def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -506,8 +506,7 @@ def main(argv: list[str] | None = None) -> int:
     print(tables(dev))
     if a.write:
         a.write.mkdir(parents=True, exist_ok=True)
-        written = {ln["kind"] for ln in lines}
-        lines = lines + kept(a.write, "census.csv", written)
+        lines = lines + kept(a.write, "census.csv", set(dev.kinds))
         rows = with_notes(a.write, rows) + kept(a.write, "rows.csv")
         (a.write / "census.csv").write_text(rowsmod.census_csv(lines))
         (a.write / "rows.csv").write_text(rows_csv(rows))
