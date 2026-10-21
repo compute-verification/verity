@@ -101,6 +101,7 @@ def idle(ks: list[tuple[str, int, int, int]], uq: int, steps: int) -> dict:
     oends = [e for e, _ in others]
     by_rel: dict[str, float] = {}
     by_next: dict[str, float] = {}
+    pairs: dict[str, float] = {}
     for (s0, e0, _), (s1, _, n1) in zip(mine, mine[1:]):
         g = s1 - max(e0, s0)
         if g <= 1000:
@@ -110,8 +111,10 @@ def idle(ks: list[tuple[str, int, int, int]], uq: int, steps: int) -> dict:
         by_rel[rel] = by_rel.get(rel, 0) + g / 1e6 / steps
         nxt = SP.part(n1, None)
         by_next[nxt] = by_next.get(nxt, 0) + g / 1e6 / steps
+        pairs[f"{nxt} <- {rel}"] = pairs.get(f"{nxt} <- {rel}", 0) + g / 1e6 / steps
     order = lambda d: dict(sorted(d.items(), key=lambda kv: -kv[1]))
-    return {"gaps_over_1us_ms": sum(by_rel.values()), "by_releaser": order(by_rel), "by_next": order(by_next)}
+    return {"gaps_over_1us_ms": sum(by_rel.values()), "by_releaser": order(by_rel), "by_next": order(by_next),
+            "next_by_releaser": dict(list(order(pairs).items())[:16])}
 
 
 def main() -> None:
