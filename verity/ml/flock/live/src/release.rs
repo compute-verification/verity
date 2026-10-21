@@ -1997,7 +1997,8 @@ mod tests {
     /// them, each op as the shared vectors write it and answered through the index. One JSON line a step, after a line
     /// `{"case", "long"}` for each stream: `{"op", "result" | "reject", "after"}`, with `"edit": [AT, CUT, PUT]` where the
     /// record before the op is not the one the step before left (that record with CUT bytes at byte AT replaced by PUT),
-    /// and `after` the SHA-256 of the record the op leaves.
+    /// `"out"`, the record the op leaves as an edit of the one before it, where they differ, and `after` the SHA-256 of
+    /// the record the op leaves.
     #[test]
     #[ignore]
     fn golden_index_cases() {
@@ -2019,17 +2020,24 @@ mod tests {
                 let got = golden_op(&rec, &op);
                 let after = read();
                 let mut line = json!({"op": op, "after": hex(&sha2::Sha256::digest(after.as_bytes()))});
-                if before != *last {
-                    let (b, l) = (before.as_bytes(), last.as_bytes());
+                // `to` as `from` with CUT bytes at byte AT replaced by PUT: `[AT, CUT, PUT]`
+                let edit = |from: &str, to: &str| -> Value {
+                    let (b, l) = (to.as_bytes(), from.as_bytes());
                     let mut k = b.iter().zip(l).take_while(|(x, y)| x == y).count();
-                    while !before.is_char_boundary(k) {
+                    while !to.is_char_boundary(k) {
                         k -= 1;
                     }
                     let mut s = b[k..].iter().rev().zip(l[k..].iter().rev()).take_while(|(x, y)| x == y).count();
-                    while !before.is_char_boundary(b.len() - s) || !last.is_char_boundary(l.len() - s) {
+                    while !to.is_char_boundary(b.len() - s) || !from.is_char_boundary(l.len() - s) {
                         s -= 1;
                     }
-                    line["edit"] = json!([k, l.len() - s - k, &before[k..b.len() - s]]);
+                    json!([k, l.len() - s - k, &to[k..b.len() - s]])
+                };
+                if before != *last {
+                    line["edit"] = edit(last, &before);
+                }
+                if after != before {
+                    line["out"] = edit(&before, &after);
                 }
                 match &got {
                     Ok(v) => line["result"] = v.clone(),
