@@ -231,8 +231,12 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (roundsMargin_deployRec_V false FlockDeploy.sha512 I rfl ivScope b)
     (FlockDeploy.coinsShown_V FlockDeploy.sha512 false) (callsNil I.V ivScope b FlockDeploy.sha512)
 
-/-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec,
-as `KSA` is `KS`. -/
+/-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec, as
+`KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
+table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at
+the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

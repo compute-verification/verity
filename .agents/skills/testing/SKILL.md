@@ -19,7 +19,8 @@ runs the same runner as its pytest step.
 ## Run tests
 
 Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
-(4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
+(4 CPUs, 16 GiB, 60 min) outside the check slots on vy-nebius-2, or runs it in a slot of vy-nebius-cpu-1's `research` pool
+when it starts sooner there (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
 once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
 to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
@@ -141,7 +142,8 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
-  add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it
+  add the id and path to the registry and the path to `.gitignore`, then ask infra on an INF issue, with the branch and
+  commit, to run `research data export` (only the control pod holds the export key; elsewhere it returns 401). `suites.py` fetches it
   before the suites that read it (`research data fetch-fixtures` by hand, e.g. before `cargo test`), checks every byte
   against its id, and keys the suite on the id. A verifier's fixtures are the prover's bytes, never regenerated in its test.
   When a test can recompute an expected output, pin its digest rather than the file.

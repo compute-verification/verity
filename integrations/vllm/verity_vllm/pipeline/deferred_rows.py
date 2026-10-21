@@ -61,7 +61,8 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
     """The verifier's own window of a deferred Commit (`serving_rows.population`: its population program, partition and law over the
     Build's Programs of record, the run root of record), from the record alone: no committed value is read."""
     r = of_record(bundle, row_dir, required_manifest)
-    window, _rows = SRW.population(r.programs, json.loads(Path(partition_file).read_text()), bytes(r.run.run_root).hex(), r.program_dirs)
+    window, _rows = SRW.population(r.programs, json.loads(Path(partition_file).read_text()), bytes(r.run.run_root).hex(), r.program_dirs,
+                                   arrivals=r.arrivals)
     return window
 
 

@@ -12,15 +12,16 @@ import subprocess
 import tempfile
 import time
 import traceback
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -34,6 +35,10 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8:
 # A step's host time may carry device work its own forward didn't enqueue; past this share of the decode time the
 # run's trailing device work is too large to attribute, and the decode metric is dropped.
 DECODE_TAIL_SHARE = 0.01
+# Past a spec's `warmups`, an engine warms until two consecutive runs' wall times differ by at most this share. On a host
+# at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
+# seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
+WARMUP_AGREEMENT = 0.05
 
 
 def t95(df: int) -> float:
@@ -51,7 +56,7 @@ class BenchEngine(Protocol):
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]: ...
     def custom_gate(self) -> Mapping[str, Any]: ...
-    def warmup(self, point: SweepPoint) -> None: ...
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None: ...
     def measure(self, point: SweepPoint) -> Mapping[str, Any]: ...
     def close(self) -> None: ...
 
@@ -189,14 +194,24 @@ def _evaluate_gates(
 
 
 def _timed_token_gates(
-    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]]
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
 ) -> list[dict[str, Any]]:
     """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
-    before timing, so an arm that computed something else only when timed would pass it."""
+    before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
+    without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in blocks
+    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
 
     out = []
     for arm in arms:
         if not arm.control:
+            if mode != "resident":
+                continue
+            for point in points:
+                want = _token_digest(tokens[(arm.id, point.id)])
+                bad = sorted(r["rep"] for r in samples[(arm.id, point.id)] if r.get("token_digest") != want)
+                out.append({"arm": arm.id, "control": None, "against": "gate", "point": point.id,
+                            "kind": "timed-tokens", "passed": not bad, **({"reps": bad} if bad else {})})
             continue
         for point in points:
             mine = {r["rep"]: r.get("token_digest") for r in samples[(arm.id, point.id)]}
@@ -269,6 +284,31 @@ def _record(
     got["rep"] = rep
     samples[(arm, point.id)].append(got)
     schedule.append({"phase": "timed", "mode": mode, "arm": arm, "point": point.id, "rep": rep})
+
+
+def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int, schedule: list[dict[str, Any]],
+          entry: Mapping[str, Any]) -> None:
+    """`warmups` discarded runs, then more, up to `max_warmups` in all, until the last two runs' wall times agree within
+    WARMUP_AGREEMENT. An engine whose first runs stall (18 Oct: the bandwidth arms' first prefill step, by seconds,
+    for one to three runs after the engine starts) is timed only once it runs as it will keep running. An engine that
+    reaches `max_warmups` without settling says so in its last warm-up's schedule entry (`settled: false`)."""
+
+    walls: list[float | None] = []
+    for index in range(max_warmups):
+        got = engine.warmup(point)
+        run = dict(got) if isinstance(got, Mapping) else {}
+        walls.append(run.get("wall_s"))
+        schedule.append({"phase": "warmup", **entry, "point": point.id, "warmup": index, **({"run": run} if run else {})})
+        if index + 1 >= warmups and (max_warmups == warmups or _agree(walls[-2:])):
+            return
+    schedule[-1]["settled"] = False
+
+
+def _agree(walls: list[float | None]) -> bool:
+    if len(walls) != 2 or None in walls:
+        return False
+    a, b = walls
+    return abs(a - b) <= WARMUP_AGREEMENT * min(a, b)
 
 
 def decode_time_per_token(
@@ -361,6 +401,74 @@ def _aggregate(
     return out
 
 
+def run_trace(timing: Mapping[str, Any], start: float, ready: float) -> dict[str, Any]:
+    """A timed rep's own record of where its time went, small enough to keep in every rep: each `step()` iteration's host
+    time and the prefill and decode tokens its schedule computed, each request's arrival and first output (seconds from
+    the run's start, in request order), and how long after the engine became ready the run started."""
+
+    def us(x: Any) -> float | None:
+        return None if x is None else round(float(x), 6)
+
+    steps = timing.get("steps") or []
+    requests = list(timing["requests"].values())
+    return {
+        "since_ready_s": us(start - ready),
+        "step_s": [us(s["s"]) for s in steps],
+        "step_prefill_tokens": [s.get("prefill_tokens") for s in steps],
+        "step_decode_tokens": [s.get("decode_tokens") for s in steps],
+        "arrival_s": [us(r.get("arrival_s")) for r in requests],
+        "first_output_s": [us(r.get("first_output_s")) for r in requests],
+    }
+
+
+class HostProbe:
+    """The process's CPU time, context switches, page faults and garbage collections over a window, and the host's load
+    when it opened: a slow rep with as much CPU time but more involuntary switches waited on a contended host, one with
+    more CPU time ran slower code (or a slower clock), and one with neither waited on the device. `counters`, when
+    given, is read at both ends and its deltas kept under `device`."""
+
+    def __init__(self, counters: Callable[[], Mapping[str, float]] | None = None) -> None:
+        import gc
+        import os
+        import resource
+
+        self._gc, self._resource = gc, resource
+        self._counters = counters
+        self.counted = dict(counters()) if counters is not None else None
+        self.load = os.getloadavg()[0]
+        self.gc_s, self._gc_at = 0.0, None
+        gc.callbacks.append(self._on_gc)
+        self.thread = time.thread_time()
+        self.usage = resource.getrusage(resource.RUSAGE_SELF)
+
+    def _on_gc(self, phase: str, _info: Mapping[str, Any]) -> None:
+        if phase == "start":
+            self._gc_at = time.perf_counter()
+        elif self._gc_at is not None:
+            self.gc_s += time.perf_counter() - self._gc_at
+            self._gc_at = None
+
+    def close(self) -> dict[str, Any]:
+        after = self._resource.getrusage(self._resource.RUSAGE_SELF)
+        thread = time.thread_time() - self.thread
+        if self._on_gc in self._gc.callbacks:
+            self._gc.callbacks.remove(self._on_gc)
+        b = self.usage
+        counted = ({"device": {k: v - self.counted.get(k, 0) for k, v in self._counters().items()}}
+                   if self._counters is not None else {})
+        return {
+            "loadavg_1m": round(self.load, 2),
+            "process_cpu_s": round(after.ru_utime + after.ru_stime - b.ru_utime - b.ru_stime, 6),
+            "thread_cpu_s": round(thread, 6),
+            "involuntary_switches": after.ru_nivcsw - b.ru_nivcsw,
+            "voluntary_switches": after.ru_nvcsw - b.ru_nvcsw,
+            "minor_faults": after.ru_minflt - b.ru_minflt,
+            "major_faults": after.ru_majflt - b.ru_majflt,
+            "gc_s": round(self.gc_s, 6),
+            **counted,
+        }
+
+
 def _git_head() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
@@ -374,6 +482,8 @@ def _identity(
     config_identity: Mapping[str, Any] | None = None,
     *,
     reps: int,
+    warmups: int = 1,
+    max_warmups: int = 1,
     interleave: str,
 ) -> dict[str, Any]:
     shared = {}
@@ -404,6 +514,8 @@ def _identity(
         "git_commit": git_commit,
         "sweep": sweep,
         "reps": reps,
+        "warmups": warmups,
+        "max_warmups": max_warmups,
         "interleave": interleave,
         **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
@@ -419,12 +531,19 @@ def run_benchmark(
     factory: EngineFactory,
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
+    warmups: int = 1,
+    max_warmups: int | None = None,
 ) -> dict[str, Any]:
-    """Run every gate before any timing, then use resident interleaving or alternating blocks; an arm's own gate is read
-    again after its timed runs (`arm-closing`), and a failure there leaves the result without points."""
+    """Run every gate before any timing, then use resident interleaving or alternating blocks, with at least `warmups`
+    discarded runs of a point before an engine's first timed one and, up to `max_warmups`, as many more as it takes two
+    consecutive runs to agree (`_warm`). An arm's own gate is read again after its timed runs (`arm-closing`), and a
+    failure there leaves the result without points."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
+    max_warmups = warmups if max_warmups is None else max_warmups
+    if warmups < 1 or max_warmups < warmups:
+        raise ValueError("benchmark needs at least one warm-up a point, and max_warmups no fewer than warmups")
     if any(a.control == a.id for a in arms):
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
@@ -455,8 +574,7 @@ def run_benchmark(
             if all(g["passed"] for g in gates):
                 for point in points:
                     for arm in arms:
-                        engines[arm.id].warmup(point)
-                        schedule.append({"phase": "warmup", "mode": "resident", "arm": arm.id, "point": point.id})
+                        _warm(engines[arm.id], point, warmups, max_warmups, schedule, {"mode": "resident", "arm": arm.id})
                     for rep in range(reps):
                         for arm_id in interleave_order(arms, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
@@ -492,9 +610,7 @@ def run_benchmark(
                         continue
                     try:
                         for point in points:
-                            engine.warmup(point)
-                            schedule.append({"phase": "warmup", "mode": "blocks", "cycle": cycle,
-                                             "arm": arm.id, "point": point.id})
+                            _warm(engine, point, warmups, max_warmups, schedule, {"mode": "blocks", "cycle": cycle, "arm": arm.id})
                             for rep in indices:
                                 _record(samples, schedule, arm.id, point, rep, engine, "blocks")
                         gates += _closing_gate(arm, engine, cycle=cycle)
@@ -503,16 +619,18 @@ def run_benchmark(
         mode = "blocks"
 
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples)
+        gates += _timed_token_gates(arms, points, samples, tokens, mode)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
-                         reps=reps, interleave=mode)
+                         reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
         "baseline": baseline,
         "sweep": [p.to_json() for p in points],
         "gates": gates,
-        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "schedule": schedule},
+        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
+                      "max_warmups": max_warmups,
+                      "schedule": schedule},
         "points": _aggregate(arms, points, baseline, samples) if all(g["passed"] for g in gates) else [],
     }
     result_format.validate(doc)
@@ -524,6 +642,17 @@ def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
     return default if not callable(fn) else fn(target)
 
 
+def _allocator_counts() -> dict[str, float]:
+    """The caching allocator's device allocations and frees, its out-of-memory retries (each frees every cached block)
+    and its synchronizations of every stream: a run that needs any of them waits on the driver."""
+
+    import torch
+
+    stats = torch.cuda.memory_stats()
+    keys = ("num_device_alloc", "num_device_free", "num_alloc_retries", "num_sync_all_streams")
+    return {k: stats.get(k, 0) for k in keys}
+
+
 class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
@@ -532,7 +661,7 @@ class _DirectLLM:
 
         runner = get_model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
-        # benchmarks/vllm_encoded/bench_arm.py still reads verity_vllm.LLM's private `_engine.llm`.
+        # commit_arm.py still reads verity_vllm.LLM's private `_engine`: its committer takes the whole engine.
         self._engine = SimpleNamespace(llm=llm, model=self.model)
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
@@ -541,6 +670,45 @@ class _DirectLLM:
         # The worker process exits immediately after close and releases vLLM's
         # process-owned CUDA state.
         pass
+
+
+PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+
+
+def _pearl_c_run(llm: Any) -> Any | None:
+    """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
+    a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
+    (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    option = llm.protocols.get("pouw") if llm.protocols is not None else None
+    run = getattr(getattr(option, "end_pass", None), "__self__", None)
+    return run if isinstance(run, PPD.PearlCDeviceRun) else None
+
+
+def _pass_totals(run: Any) -> dict[str, int]:
+    """The running totals of the passes the run has ended (``details["passes"]``): `PASS_COUNTS` and ``passes``."""
+
+    passes = run.details["passes"]
+    return {"passes": len(passes), **{key: sum(int(p.get(key) or 0) for p in passes) for key in PASS_COUNTS}}
+
+
+def _pearl_c_gate(run: Any) -> dict[str, Any]:
+    """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
+    (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+
+    check = PearlCArm()
+    check.run, check.schedule = run, run.schedule.name
+    check.weights = {w: x.tensor for w, x in run.weights.items()}
+    got = check.gate(None)
+    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
+    # one between steps.
+    run.begin(stepped=True)
+    return {**got, "provided": True}
 
 
 def _kv_cache_tokens(llm: Any) -> int | None:
@@ -620,7 +788,7 @@ class _VllmEngine:
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
 
-        self.arm, self.obj, self.installed = arm, plugin(arm), None
+        self.arm, self.obj, self.installed, self.pearl_c = arm, plugin(arm), None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -632,6 +800,7 @@ class _VllmEngine:
                 self.target.hooks.uninstall()
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
+        kernel_digest = arm.kernel_digest
         engine = engine_args(preset, arm.precision or preset.precision, resident=resident, eager=eager)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
@@ -649,9 +818,18 @@ class _VllmEngine:
                  if engine.get(k) is not None},
             )
         else:
+            config: dict[str, Any] = {}
             if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
+                config = protocols_config(arm, os.environ)
+                if config:
+                    engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
+            if arm.protocols:
+                self.pearl_c = _pearl_c_run(self.llm)
+                cubin = config.get("pouw", {}).get("cubin")
+                if cubin:
+                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
@@ -664,12 +842,13 @@ class _VllmEngine:
                 if self.obj is not None and callable(
                     self.obj.get("kernel_digest") if isinstance(self.obj, Mapping) else getattr(self.obj, "kernel_digest", None)
                 )
-                else arm.kernel_digest
+                else kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
             "engine_overrides": dict(self.llm.engine_record.get("engine_overrides") or {}),
         }
+        self.ready_at = time.perf_counter()
 
     def _requests(self, point: SweepPoint) -> list[Any]:
         vocab = int(self.llm.vllm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
@@ -693,7 +872,8 @@ class _VllmEngine:
             got = _callback(self.obj, "spans", self.target, None)
             if got is not None:
                 return got
-        return {} if self.llm.protocols is None else self.llm.protocols.info()
+        info = {} if self.llm.protocols is None else self.llm.protocols.info()
+        return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
@@ -719,6 +899,7 @@ class _VllmEngine:
         self.target.tokens = sum(len(r.prompt_token_ids) + r.max_tokens for r in requests)
         if self.obj is not None:
             _callback(self.obj, "begin_run", self.target, None)
+        probe = HostProbe(_allocator_counts)
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
             self.llm.vllm,
@@ -733,12 +914,14 @@ class _VllmEngine:
             _callback(self.obj, "end_run", self.target, None)
         torch.cuda.synchronize()
         end = time.perf_counter()
+        host = probe.close()
         wall, device_tail = end - start, end - returned
         tokens = {rid: tuple(int(t) for t in out.outputs[0].token_ids) for rid, out in finished.items()}
-        if not measured:
-            return tokens, {}
-        generated = sum(map(len, tokens.values()))
         ttft = [float(r["time_to_first_token_s"]) for r in timing["requests"].values()]
+        if not measured:
+            return tokens, {"wall_s": round(wall, 6), "time_to_first_token_s": round(statistics.fmean(ttft), 6),
+                            "since_ready_s": round(start - self.ready_at, 6), "host": host}
+        generated = sum(map(len, tokens.values()))
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
         metrics = {
@@ -760,6 +943,8 @@ class _VllmEngine:
             "metrics": metrics,
             "token_digest": _token_digest(tokens),
             "host_timing": {"output_lag_steps": lag, "device_tail_s": device_tail},
+            "host": host,
+            "trace": run_trace(timing, start, self.ready_at),
             "spans": _delta(after, before),
             "extras": extras or {},
             "generated_tokens": generated,
@@ -771,7 +956,7 @@ class _VllmEngine:
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
-            return {"passed": True, "provided": False}
+            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}
@@ -779,8 +964,8 @@ class _VllmEngine:
             return {"passed": got, "provided": True}
         return dict(got)
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._run(point, "warmup")
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any]:
+        return self._run(point, "warmup")[1]
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
         return self._run(point, "measure")[1]
@@ -865,8 +1050,8 @@ class _ProcessEngine:
     def custom_gate(self) -> Mapping[str, Any]:
         return self._ask("custom_gate")
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._ask("warmup", point)
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None:
+        return self._ask("warmup", point)
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
         return self._ask("measure", point)

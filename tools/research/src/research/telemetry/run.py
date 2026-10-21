@@ -7,7 +7,8 @@ dumps the workload's Python stacks with py-spy when D has not changed for --stal
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
 status.json; on a timeout, and on a `research cancel` (D/control/cancel, scope.CONTROL_CANCEL), ends every process of the run's own
 cgroup scopes and the run's processes outside its group the same way, SIGKILL once the grace is over, and records them in status.json
-`scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
+`scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), or, finding no request once the workload has
+exited, claims D/control/cancel as closed (scope.claim: a cancel that comes later ends the run itself), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
 On a machine that caps each login session's memory, CMD never starts from a cgroup without a cap of its own (cgroup.uncapped): status
 failed, a no_memory_cap mark, exit 75.
@@ -34,7 +35,7 @@ from .classify import classify, write as write_failure
 from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import live_group, stat_fields
-from .scope import CONTROL_CANCEL, Sweep
+from .scope import CONTROL_CANCEL, Sweep, cancel_request, claim
 
 
 def _tele_argv() -> list[str]:
@@ -115,13 +116,15 @@ class _TimeoutControl:
             return None
 
 
-def _cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
-    """`research cancel`'s request (scope.CONTROL_CANCEL), once it is there and parses: {"grace_s", "actor", "reason", "scopes"}."""
+def _close_cancel(attempt_dir: Path) -> dict[str, Any] | None:
+    """Once the workload has exited: `research cancel`'s request if it claimed CONTROL_CANCEL first, else None, and the file is
+    then claimed as closed, so a cancel that comes later ends the run's processes itself (scope.claim)."""
     try:
-        doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
-        return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None
-    except (OSError, ValueError, TypeError):
+        if claim(attempt_dir / CONTROL_CANCEL, {"closed_utc": utc_now_ms(), "by": "runner"}):
+            return None
+    except OSError:
         return None
+    return cancel_request(attempt_dir)
 
 
 #: Seconds between the stall watch's looks at the attempt dir (a walk of every file in it).
@@ -312,7 +315,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 except Exception as e:      # the watch is never the reason the workload stops
                     em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
                     stall = None
-            if sweep is None and (req := _cancel_request(d)) is not None:
+            if sweep is None and (req := cancel_request(d)) is not None:
                 # research cancel sent SIGTERM to the run's group and scopes already; what is left at the end of its grace is ours to end
                 sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])
                 stop_actor, stop_grace = (req.get("actor") if req.get("actor") in CANCEL_ACTORS else "manual"), float(req["grace_s"])
@@ -334,12 +337,12 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         _marker(d, "manual", None, proc.pid, signal.SIGTERM, "tele run interrupted (SIGINT)", None, True, a.job)
         rc = proc.wait()
     t_end = time.monotonic()
-    if sweep is None and (req := _cancel_request(d)) is not None:     # the cancel landed as the workload ended
+    if sweep is None and (req := _close_cancel(d)) is not None:     # the cancel landed as the workload ended
         sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])
         stop_grace, deadline = float(req["grace_s"]), clock() + float(req["grace_s"])
     scope_end = None
     if sweep is not None:
-        scope_end = sweep.end(max(0.0, deadline - clock()), termed=True)
+        scope_end = sweep.end(max(0.0, deadline - clock()), termed=True, scopes=lambda: (cancel_request(d) or {}).get("scopes") or [])
         em.mark(a.stage, "scope_ended", **scope_end)
         if not scope_end["empty"]:
             print(f"[tele run] {a.stage}: {len(scope_end['left'])} of the run's process(es) outlived SIGKILL: {', '.join(scope_end['left'])}",

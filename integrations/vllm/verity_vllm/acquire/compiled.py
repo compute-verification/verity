@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
@@ -366,12 +367,11 @@ def compose_pieces(wrappers: list[dict[str, Any]], pieces: int) -> list[list[dic
 
 def schedule_of_workload(wl: dict[str, Any]) -> list[dict[str, Any]]:
     """[B>=2] the query's request schedule from the sweep workload: request `r<i>` (workload order, = commit_delta's ids) arrives at
-    `arrive_step` with its whole prompt (the eager Program's model: one prefill step, then one token per step for max_tokens-1 steps)."""
-    out = []
-    for i, r in enumerate(wl["requests"]):
-        out.append({"request_id": f"r{i}", "arrive": int(r.get("arrive_step") or 0), "prompt_tokens": len(r["prompt_token_ids"]),
-                    "max_tokens": int(r.get("max_tokens") or wl.get("max_tokens") or 1)})
-    return out
+    `arrive_step` under the engine's idle-gap rule (`engine.arrivals.realized_arrive_steps`) with its whole prompt (the eager
+    Program's model: one prefill step, then one token per step for max_tokens-1 steps)."""
+    reqs = [{"arrive_step": int(r.get("arrive_step") or 0), "max_tokens": int(r.get("max_tokens") or wl.get("max_tokens") or 1)} for r in wl["requests"]]
+    return [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": len(r["prompt_token_ids"]), "max_tokens": q["max_tokens"]}
+            for i, (r, q, a) in enumerate(zip(wl["requests"], reqs, realized_arrive_steps(reqs)))]
 
 
 def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]]:

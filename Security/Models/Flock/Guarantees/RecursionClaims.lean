@@ -8,6 +8,15 @@ named assumptions and trusted base they use, so the Lean check records each one'
 under `reads`: a changed claim is a changed record, which reaches Daniel when it lands. It says nothing about the
 compiled verifier. A claim leaves it when a guarantee states that claim at the deployed compiled verifier, and the
 guarantee's own record holds the text from then on.
+
+The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
+`Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
+bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment is not yet established: it takes
+`HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
+`PartOpensB`, `DecompB`, the readers' facts; the full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows
+from it (`bitsLin2_of_ksLin2`).
 -/
 
 namespace Flock.Guarantees
@@ -19,9 +28,11 @@ reference prover's public stop and the pieces it reads (`ZKStop`, `StopDeploy`, 
 inner protocol's KS and its KS against provers that may abort (`Inner.KS`, `Inner.KSAbort`), which the proof reads,
 the readable scope (`Scope`, `InScope`) and the decoders the claims quantify over (`decOK`); option (d)'s KS at the
 representation V* binds (`KSBound`, `KSPrivBound`), the inner claim it rests on (`Bridge`, with its premises
-`Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`) and the last message's binding the recursion's proof
-reads (`Bound.LastBinds`); the shared claims they instantiate (`Claims.KS`, `ZKmalRx`, `Flock.ListWithin`,
-`Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions
+`Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`), the last message's binding as first stated
+(`Bound.LastBinds`) and modulo what `E*` reads, with the last step reading no last coin (`Bound.LastBindsEC`,
+`Bound.LastCoinFree`), which the recursion's proof reads; the shared claims they instantiate (`Claims.KS`,
+`ZKmalRx`, `Flock.ListWithin`, `Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the
+named assumptions
 (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. -/
 def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
@@ -33,7 +44,8 @@ def RecursionClaimsStated : Prop :=
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,
     @Claims.Recursion.Scope, Claims.Recursion.InScope, @Claims.Recursion.decOK,
     @Claims.Recursion.KSBound, @Claims.Recursion.KSPrivBound, @Claims.Recursion.Bridge,
-    @Claims.Recursion.Bound.PlainKSAbort, @Claims.Recursion.Bound.LastBinds,
+    @Claims.Recursion.Bound.PlainKSAbort, @Claims.Recursion.Bound.LastBinds, @Claims.Recursion.Bound.LastBindsEC,
+    @Claims.Recursion.Bound.LastCoinFree,
     @Claims.KS, @Claims.ZKmalRx, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)

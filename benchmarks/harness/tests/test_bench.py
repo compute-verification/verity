@@ -32,7 +32,7 @@ from verity_bench.vllm.presets import (
     served,
 )
 from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
+from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
 from verity_bench.vllm.table import render
 
 
@@ -60,6 +60,7 @@ class FakeEngine:
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
+        return {"wall_s": 0.5}
 
     def measure(self, point):
         rep = sum(e[:2] == ("measure", self.arm.id) for e in self.events)
@@ -68,7 +69,7 @@ class FakeEngine:
         self.events.append(("measure", self.arm.id, point.id))
         scale = 1.0 if self.arm.id == "stock-fp8" else 2.0
         return {
-            "token_digest": self.timed_digest or ("bad" if self.bad_tokens else "good"),
+            "token_digest": self.timed_digest or _token_digest({f"{point.id}-0": (8 if self.bad_tokens else 7, 9)}),
             "metrics": {
                 "time_per_output_token_s": scale * slower if self.drift else scale * (rep + 1),
                 "time_to_first_token_s": scale * 2,
@@ -141,6 +142,8 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
 def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
+        if path.name == "pyproject.toml":   # the specs' own suite
+            continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
     sweeps = {d.id for d in loaded if isinstance(d, Sweep)}
@@ -230,6 +233,19 @@ def test_a_spec_env_and_setup_load_strictly_and_bind_the_identity(tmp_path):
     for bad in ("/etc/profile", "../outside.sh", "benchmarks/harness/no-such.sh"):
         with pytest.raises(ValueError, match="must name a script in the source tree"):
             load_spec(_spec_with(tmp_path, f'setup = "{bad}"'))
+
+
+def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
+    assert resolve_spec("llama31-8b-fp8-1gpu").warmups == 1
+    spec = resolve_spec(_spec_with(tmp_path, "warmups = 3"))
+    assert spec.warmups == 3
+    assert spec.config_sha256 != replace(spec, warmups=1).config_sha256
+    with pytest.raises(ValueError, match="warmups must be positive"):
+        load_spec(_spec_with(tmp_path, "warmups = 0"))
+    capped = resolve_spec(_spec_with(tmp_path, "warmups = 2\nmax_warmups = 8"))
+    assert capped.max_warmups == 8 and capped.config_sha256 != replace(capped, max_warmups=None).config_sha256
+    with pytest.raises(ValueError, match="max_warmups must be at least warmups"):
+        load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
 
 
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
@@ -467,6 +483,97 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
     assert doc["points"][0]["arms"]["candidate"]["metrics"]["time_per_output_token_s"]["ratio_to_stock"]["mean"] == 2
 
 
+@pytest.mark.parametrize("resident_failure", [None, "candidate"])
+def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
+    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms (18 Oct, r20261018-215203-b81a):
+    the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
+    own summary stays in the schedule."""
+
+    preset, points, arms = inputs()
+    factory = FakeFactory(resident_failure=resident_failure)
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, warmups=3, factory=factory, git_commit="abc")
+    assert doc["identity"]["warmups"] == doc["execution"]["warmups"] == 3
+    lifetimes: dict[str, list[list[str]]] = {}
+    for event in factory.events:
+        if event[0] == "create":
+            lifetimes.setdefault(event[1], []).append([])
+        elif event[0] in ("warmup", "measure"):
+            lifetimes[event[1]][-1].append(event[0])
+    timed = [runs for arm in lifetimes.values() for runs in arm if "measure" in runs]
+    assert timed and all(runs[:3] == ["warmup"] * 3 and "warmup" not in runs[3:] for runs in timed)
+    warm = [s for s in doc["execution"]["schedule"] if s["phase"] == "warmup"]
+    assert len(warm) == 3 * len(timed) and [s["warmup"] for s in warm[:3]] == [0, 1, 2]
+    assert all(s["run"]["wall_s"] == 0.5 for s in warm)
+    with pytest.raises(ValueError, match="warm-up"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=0, factory=FakeFactory(), git_commit="abc")
+    with pytest.raises(ValueError, match="max_warmups"):
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=3, max_warmups=2, factory=FakeFactory(),
+                      git_commit="abc")
+
+
+def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
+    """r20261018-234437-5511's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
+    happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
+
+    from verity_bench.vllm.runner import _warm
+
+    class Stalls:
+        def __init__(self, walls):
+            self.walls = list(walls)
+
+        def warmup(self, point):
+            return {"wall_s": self.walls.pop(0)}
+
+    point = expand_sweep("quick")[1]
+    schedule = []
+    _warm(Stalls([7.6, 2.27, 1.26, 1.262, 9.9]), point, 2, 8, schedule, {"arm": "plain"})
+    assert [s["run"]["wall_s"] for s in schedule] == [7.6, 2.27, 1.26, 1.262]
+    assert "settled" not in schedule[-1]
+    schedule = []
+    _warm(Stalls([1.0, 1.01, 9.9]), point, 2, 8, schedule, {"arm": "stock"})
+    assert len(schedule) == 2
+    schedule = []
+    _warm(Stalls([5.0, 4.0, 3.0, 2.0, 1.0]), point, 1, 3, schedule, {"arm": "never"})
+    assert len(schedule) == 3 and schedule[-1]["settled"] is False
+    schedule = []
+    _warm(Stalls([5.0, 4.0]), point, 2, 2, schedule, {"arm": "fixed"})
+    assert len(schedule) == 2 and "settled" not in schedule[-1]
+
+
+def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
+    """A slow rep must say where its time went: which steps were slow, which requests waited, and whether the host was
+    busy, ran slower code or waited on the device."""
+
+    from verity_bench.vllm.runner import HostProbe, run_trace
+
+    timing = {
+        "steps": [{"s": 0.0123456789, "prefill_tokens": 512, "decode_tokens": 0},
+                  {"s": 0.002, "prefill_tokens": 0, "decode_tokens": 8}],
+        "requests": {"r-0": {"arrival_s": 0.0, "first_output_s": 0.0141},
+                     "r-1": {"arrival_s": 0.0005, "first_output_s": None}},
+    }
+    assert run_trace(timing, start=12.5, ready=10.0) == {
+        "since_ready_s": 2.5,
+        "step_s": [0.012346, 0.002],
+        "step_prefill_tokens": [512, 0],
+        "step_decode_tokens": [0, 8],
+        "arrival_s": [0.0, 0.0005],
+        "first_output_s": [0.0141, None],
+    }
+    import gc
+
+    allocations = iter([{"num_device_alloc": 10, "num_alloc_retries": 0}, {"num_device_alloc": 13, "num_alloc_retries": 1}])
+    probe = HostProbe(lambda: next(allocations))
+    gc.collect()
+    host = probe.close()
+    assert host.pop("device") == {"num_device_alloc": 3, "num_alloc_retries": 1}
+    assert set(host) == {"loadavg_1m", "process_cpu_s", "thread_cpu_s", "involuntary_switches", "voluntary_switches",
+                         "minor_faults", "major_faults", "gc_s"}
+    assert host["gc_s"] > 0 and all(v >= 0 for v in host.values())
+    assert probe._on_gc not in gc.callbacks
+    assert "device" not in HostProbe().close()
+
+
 def test_resident_failure_falls_back_to_alternating_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
@@ -624,6 +731,132 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
         factory.create(arm, preset, resident=True)
     assert [e["TORCHINDUCTOR_CACHE_DIR"] for e in spawned] == ["/tmp/verity_bench_inductor_x"] * 2
     assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
+
+
+def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
+    """BENCH-17: `pouw:pearl-c-sm120-v1-h3` was refused before any engine started (r20261018-193211-a10c): the harness
+    gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
+    stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
+    which the adapter's refusals accept."""
+
+    from verity.core.protocols.pouw import verifier
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options.interface import Context
+
+    from verity_bench.vllm.arms import protocols_config
+
+    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol")
+    control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert (control.id, control.precision) == ("stock-fp8", "fp8")
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
+                                             "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
+    assert arm.to_json()["protocols_config"] == arm.protocols_config
+    settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
+    other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
+    assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
+    assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
+
+    with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
+        protocols_config(arm, {})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm120.cubin"})
+    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
+    assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
+    ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
+    assert pouw.refusals("pearl-c-sm120-v1-h3", ctx) == ()
+    assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
+
+
+def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
+    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol.toml").read_text()
+    path = tmp_path / "spec.toml"
+    for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
+        path.write_text(source.replace('control = "none"', f'control = "{control}"'))
+        spec = load_spec(path)
+        assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
+    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"]', 'arms = ["stock-fp8", "pouw:ncp-v1"]',
+                           "must name a protocol arm"),
+                          ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
+                          ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
+                          ('control = "none"', 'control = "stock"', "control must be another arm"),
+                          ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
+        assert old in source
+        path.write_text(source.replace(old, new))
+        with pytest.raises(ValueError, match=why):
+            load_spec(path)
+    with pytest.raises(ValueError, match="not in --arms"):
+        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
+
+
+def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
+    """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
+    device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
+
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    from verity_bench.vllm import runner
+
+    class Run(PPD.PearlCDeviceRun):
+        def __init__(self):
+            self.details = {"passes": []}
+
+        def end_pass(self):
+            self.details["passes"].append({"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0,
+                                           "unsure_rows": 1})
+
+    run = Run()
+    option = SimpleNamespace(end_pass=run.end_pass, release=lambda: None)
+    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None))
+    assert runner._pearl_c_run(llm) is run
+    assert runner._pass_totals(run) == dict.fromkeys(("passes", *runner.PASS_COUNTS), 0)
+    run.end_pass()
+    run.end_pass()
+    assert runner._pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
+                                        "failing_rows": 0, "unsure_rows": 2}
+    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)))
+    assert runner._pearl_c_run(other) is None
+    assert runner._pearl_c_run(SimpleNamespace(protocols=None)) is None
+
+
+def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
+    """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
+    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control."""
+
+    import torch
+
+    from verity_bench.vllm import runner
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
+
+    class Run:
+        def __init__(self, y):
+            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            g = torch.Generator().manual_seed(0)
+            self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
+                            for w, n in ((0, 64), (1, 64), (2, 128))}
+
+        def begin(self, stepped=False):
+            self.stepped = stepped
+
+        def poison(self):
+            pass
+
+        def gemm(self, w, x, W, bias):
+            return self.y(x, W)
+
+        def end(self):
+            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
+
+    run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
+    exact = runner._pearl_c_gate(run)
+    assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert run.stepped
+    assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
+    wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    assert not wrong["passed"] and wrong["provided"]
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
@@ -871,9 +1104,23 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
     in its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
-    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens"]
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["control"]]
     assert not gate["passed"] and gate["reps"] == [0, 1] and doc["points"] == []
     validate(doc)
+
+
+def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
+    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
+    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+
+    doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
+    [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
+    assert (gate["against"], gate["passed"], gate["reps"]) == ("gate", False, [0, 1]) and doc["points"] == []
+    good = bench()
+    assert all(g["passed"] for g in good["gates"] if g["kind"] == "timed-tokens") and good["points"]
+    blocks = bench(FakeFactory(resident_failure="candidate"))
+    assert blocks["execution"]["interleave"] == "blocks"
+    assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
@@ -988,3 +1235,21 @@ def test_the_readme_states_the_contract_the_code_keeps():
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+
+
+def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
+    """The setup's TERM trap runs under `set -e`: a `kill` of an nvcc that already exited returns nonzero, and without a
+    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache (memory accounting, 19 Oct)."""
+
+    root = Path(__file__).resolve().parents[3]
+    script = (root / "benchmarks/harness/setup/vllm_encoded.sh").read_text()
+    [body] = re.findall(r"trap '([^']*)' TERM INT", script)
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    run = subprocess.run(
+        ["bash", "-c", f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
+                       f'VE_TMP={partial}; {body}'],
+        capture_output=True, text=True,
+    )
+    assert run.returncode == 143, run.stderr
+    assert not partial.exists()

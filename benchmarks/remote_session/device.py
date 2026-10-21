@@ -49,6 +49,7 @@ import gc
 import hashlib
 import queue
 import resource
+import secrets
 import shutil
 import struct
 import sys
@@ -1360,12 +1361,12 @@ class Device:
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
-        session = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: now[0],
-                                not_before_ns=0)
+        session = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}
         for t in range(2):
-            small.start_chain(coin.coin, prev if t == 0 else None)
+            small.start_chain(coins.coin(coin), prev if t == 0 else None)
             for i in range(2):
                 prev, kept[t, i] = small.run_chain(i)
                 now[0] += 1

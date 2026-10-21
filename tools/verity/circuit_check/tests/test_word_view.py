@@ -18,7 +18,7 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)
     F = CK.Findings()
     r = CK.word_view(t, CK.Options(), F)
-    assert r["via"] == "word-view:DsaWaksmanOrder_v1{N=9,TOPK=8}" and r["compared"] and r["mismatches"] == 0 and not F.failures
+    assert r["via"] == "word:DsaWaksmanOrder_v1{N=9,TOPK=8}" and r["compared"] and r["mismatches"] == 0 and not F.failures
 
     real = EB.evaluate_bits
 
@@ -30,4 +30,4 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     monkeypatch.setattr(EB, "evaluate_bits", flipped)
     F = CK.Findings()
     r = CK.word_view(t, CK.Options(), F)
-    assert r["mismatches"] == r["compared"] and [f["code"] for f in F.failures] == ["word-view-mismatch"]
+    assert r["mismatches"] == r["compared"] and [f["code"] for f in F.failures] == ["word-mismatch"]

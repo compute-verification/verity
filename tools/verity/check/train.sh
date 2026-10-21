@@ -24,12 +24,16 @@
 # and what they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so
 # no gate reads it; drive reads its steps and suites. It takes neither --agreement nor --against.
 #
+# `TRAIN_ORDINARY=1` runs the check as an ordinary job, without `--priority` (behind every priority check and in turn with lane
+# checks), and `TRAIN_QUIET=1` posts nothing when a launch registers no run: drive's per-PR shadow sets both, so it never takes
+# a slot ahead of a lane's or a train's check, or rings anyone (`research queue drive --per-pr-shadow`).
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, a COMMIT that is
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() against= deferred=
 while [ $# -gt 0 ]; do
@@ -56,7 +60,7 @@ why=$(mktemp "${TMPDIR:-/tmp}/train-why.XXXXXX") log=
 die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
-  if [ "$rc" -ne 0 ]; then
+  if [ "$rc" -ne 0 ] && [ -z "${TRAIN_QUIET:-}" ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${against:+ --against $against}${deferred:+ --deferred $deferred} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
     uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet \
@@ -92,7 +96,8 @@ cd "$tree"
 echo "train: ${sha:0:12} on $machine; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
 if [ -z "$against" ]; then
-  setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} > "$log" 2>&1 < /dev/null &
+  [ -n "${TRAIN_ORDINARY:-}" ] || pass=(--priority ${pass[@]+"${pass[@]}"})
+  setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --keep-going ${pass[@]+"${pass[@]}"} > "$log" 2>&1 < /dev/null &
 else
   case $machine in
     auto|*,*) machine=$(uv run -q python -c 'import sys; from pathlib import Path; from research.queue import place
@@ -112,8 +117,11 @@ got, why = place(sys.argv[1], Path.cwd()); print("train: --on", sys.argv[1] + ":
 fi
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
+# 30 min: drive launches up to 4 trains at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
+# volume (21 Oct 14:11-14:25Z: three such launches gathered past a 10 min wait and were stopped)
+launch_wait_s=1800
 want=1 ids=
-for _ in $(seq 120); do
+for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break
   ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
   on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true

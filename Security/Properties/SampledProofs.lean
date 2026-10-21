@@ -153,21 +153,35 @@ def SuppliedIs (es : Array Json) (mine : Array Registered.Entry) (supplied : Arr
     ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str x.1)) = some e →
       ∃ r, rootOf x.1 x.2 want = .ok r ∧ jeq (getD e "root") (.str r)
 
-/-- R7, for a v2 record (`Registration.checkRegistered`): the verifier derives its own entries for the values it expects
-registered (`Registered.entries`); the record's `registered` is a list of entries, each exactly `{value, root, leaves,
-words, domain}` with `word_bits` beside them or not; its values are exactly the verifier's (`ValuesAre`); each of the
-verifier's values has its entry (the last naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value
-it doesn't fill held to the root it pinned before the record, else to the log's, and one it fills to neither
-(`heldFor`); and each value it fills has the root it recomputes from the record, the log and its binding (`SuppliedIs`,
-`Supplied.root`). -/
+/-- An output value's earlier port: the log's record with digest `record` has a `roots` entry for `port`
+(`Registration.outputPort`) with `leaves` leaves, and a string domain and root. -/
+def OutputPortIs (log : Array Json) (leaves : Nat) (record port : String) : Prop :=
+  ∃ r, Registration.outputPort log record port = some r ∧ int? (getD r "leaves") = some (leaves : Int) ∧
+    (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
+
+/-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
+registered (`Registration.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
+it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
+output value it has an entry for has its earlier port, with the value's leaf count (`OutputPortIs`), and takes that
+port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
+record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
+them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
+naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
+else to the root it pinned before the record, else to the root the log first registered it under with the domain it
+takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
+recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
-  ∃ mine es, Registered.entries v.program.desc v.params v.registered = .ok mine ∧ getD rec "registered" = .arr es ∧
+  ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
+    getD rec "registered" = .arr es ∧
+    (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want → OutputPortIs v.log want.leaves o.2.1 o.2.2) ∧
+    (Registration.applyOutputs #[] mine (v.pinned ++ Registration.heldRoots v.log (Registration.ownEntries v))
+      v.outputs v.log).2 = (mine', held') ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-    ValuesAre es mine ∧
-    (∀ want ∈ mine, ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-      EntryIs e want (heldFor v.supplied (v.pinned ++ Registration.heldRoots v.log) want.value)) ∧
-    SuppliedIs es mine v.supplied
+    ValuesAre es mine' ∧
+    (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+      EntryIs e want (heldFor v.supplied held' want.value)) ∧
+    SuppliedIs es mine' v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
 /-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the

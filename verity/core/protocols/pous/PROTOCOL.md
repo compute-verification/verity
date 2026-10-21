@@ -426,7 +426,8 @@ for wipes: C8, the ideal-permutation premise, is false at the reference Feistel1
 rebuilds any label (verity#1122, art:7617c8017e80). Here the labels need no permutation and no graph. They are the
 auditor's own PRF outputs, so a label the server didn't keep is a label it can't answer, and a server that kept its
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
-`tests/test_pous_streamed_wipe.py`, its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
+`tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
+(`verity/core/devices/memory_challenger/lean/`), its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
 `Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Models/Pous/Guarantees/StreamedWipe.lean`, the
 game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
@@ -457,8 +458,18 @@ indices are uniform and independent, with replacement: live coins, never Fiat–
 
 The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is redrawn, so a
 failed wipe is a visible failure. `verdict(signed, commitment, trusted=...)` accepts a session only when it is
-signed under a trusted key and its header is the published commitment, every batch is present in order, none has a
-wrong answer, each is within `limit_ns` on the challenger's clock, and the first was sent after the fill ended.
+signed under a trusted key and its header is the published commitment, its batch size is 1 (the reveal the guarantee
+covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
+and the first was sent after the fill ended.
+
+The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdict`, the executable
+`streamed-wipe-verdict`, which `wipe_verdict.judge` (beside the Lean package) sends the signed session, the commitment,
+the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which refuses a record `to_json` can't have
+written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
+the two differ on in any field rejected as a disagreement) or `python` (no Lean).
+`verity/core/devices/memory_challenger/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on drawn sessions at every batch size, one adversarial edit of them (a wrong
+label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a field past its width),
+JSON the Lean must refuse, and named negative controls.
 
 **Batches and deadlines.** A batch's deadline runs from its send to its receipt on the challenger's monotonic clock, at
 a resolution of at most `memory_challenger.CLOCK_RESOLUTION_NS`. It is to be set below the challenger's round trip to
@@ -466,7 +477,8 @@ the server plus the fastest fetch from outside the boundary, so that an answer f
 not, is late. The bound doesn't read the deadline: in the game, without `K`, nothing computes a label at any speed, and
 what the outside holds is charged as egress. The deadline is what keeps C5 and C6 checkable during the challenges.
 The guarantee covers the sequential reveal, batch size 1 (`WipeParams.covered`), where each answer reads only the
-indices before it. Batch sizes above 1 are implemented and timed, but not covered (below).
+indices before it. Batch sizes above 1 are implemented and timed, but not covered (below), so the verdict, the Lean's
+and the Python's alike, rejects such a session however it ran (`batch size B is uncovered: …`).
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
@@ -534,15 +546,16 @@ which was not measured. The node's load average was about 930 during the run, wh
   after a history is no longer defined index by index. The two direct arguments fail: a witness batch for each answered
   label costs `(B − 1)·log₂ N` bits for each of about `N` labels, far more than a label saves, and a single shared
   witness gives `(g/N)` a batch, `k/B` factors in place of `k`. Covering it needs a direct-product (multi-instance)
-  compression bound. Until then the covered wipe is the sequential one: 74,000 rounds took 2.6 s over loopback, against
-  a fill of about a minute.
+  compression bound. Until then the verdict accepts only the sequential wipe: 74,000 rounds took 2.6 s over loopback,
+  against a fill of about a minute.
 - **The physical premises** are the game's shape, not yet tied to `Definitions.Accounting.Physical`, whose `Memory` and
   `Links` constraints are their form there.
 - **The inter-node stream** is not measured: between the nodes only TCP 22 passes. The fill time is the NIC's line rate
   (52 s) and its RDMA loopback (59 s), and the deadline needs the challenger's round trip to a server and the fastest
   fetch from outside the boundary, neither measured.
-- **No Lean function and no Program.** `verdict` has no Lean port and no circuit for the proof service, so the guarantees
-  are frozen (no-function) and the verdict is not yet proved in zero knowledge.
+- **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
+  decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)
+  until restated against it. `verdict` has no circuit for the proof service, so it is not yet proved in zero knowledge.
 
 ## API
 
@@ -561,7 +574,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
-| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`); the bound, `log2_error`, `retained_bits`, `challenges_for` |
+| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |

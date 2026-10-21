@@ -24,7 +24,7 @@ for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
 done
 unset CARGO_TARGET_DIR
 export RAYON_NUM_THREADS=${RAYON_NUM_THREADS:-${OMP_NUM_THREADS:-$(nproc)}}
-SW=(DEFS=${DEFS:-backends/flock/pod/gemm-coordinates.defs.json} BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296}
+SW=(DEFS=${DEFS:-verity/ml/flock/pod/gemm-coordinates.defs.json} BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296}
     MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} SELFTEST=0)
 PY=$FLOCK_WORK/flock-circuit/py/bin/python3
 # each later sweep's class_statement writes its result.json to its own RESEARCH_RUN_DIR: the attempt's result.json stays 71's

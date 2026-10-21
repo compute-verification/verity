@@ -99,13 +99,18 @@ no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
 and the owed outputs.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness
-(`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string
-`b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right
-row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
-cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong
-computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
-this by extraction. -/
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness (`¬
+holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
+with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong computation.
+The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids this by
+extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
+per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
+but `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises,
+and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
+This fork form states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

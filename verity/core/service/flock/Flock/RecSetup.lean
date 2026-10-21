@@ -68,13 +68,27 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
   if boundKey (← bound) ≠ boundKey b then
     throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
 
+/-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
+`k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
+(`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
+list and the rep schedule the shape fixes are the inner session's. -/
+def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
+  let (some i, some (.files f)) := (inner, src) | return
+  let (spec, st) ← f.stmt "the inner session"
+  let claims := 2 + spec.points * st.regions.size
+  if i.m != st.m || i.kLog != st.c.kLog || i.regions != st.regions.size || i.claims != claims then
+    throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}, claims {i.claims}) " ++
+      s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
+      "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
+
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
-range on the inner statement (`RecCoins.checkAtC3`, which refuses a session without the files), and, where the
-verifier's inner shape names a RecSparse shape, that the files' inner circuit's META is the header's it read
-(`checkMeta`). -/
+range on the inner statement (`RecCoins.checkAtC3`, which refuses a session without the files), the inner shape the
+inner statement's (`checkShape`), and, where the verifier's inner shape names a RecSparse shape, that the files' inner
+circuit's META is the header's it read (`checkMeta`). -/
 def checkInner (inner : Option RecVStar.Inner) (src : Option RecCoins.Source)
     (bound : V (Option String × Option RecVStar.StackedShape)) : V Unit := do
   RecCoins.checkAtC3 inner src
+  checkShape inner src
   if let (some i, some (.files f)) := (inner, src) then
     if i.sparse.isSome then checkMeta f.circuit bound
 

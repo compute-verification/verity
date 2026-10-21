@@ -5,6 +5,8 @@ import Proofs.Flock.EndToEnd
 import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEndRegistered
+import Proofs.Flock.EndToEndRegisteredRows
+import Proofs.Flock.SoundAtBridge
 import Proofs.Flock.ZeroKnowledgeHidden
 import Proofs.Flock.Masked
 import Proofs.Flock.Recursive

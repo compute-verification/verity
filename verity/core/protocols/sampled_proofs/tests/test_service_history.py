@@ -11,7 +11,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R, ve
 
 from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)
-from test_service import DELTA, PAIR, RUN, SESSION, Clock, _half, _interiors, _lean, _ports, _record, _spec, _two_spec
+from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
 
 class _Whole(S.Stream):
@@ -156,35 +156,6 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
 
 
-def _two_stage(cls) -> tuple[list, tuple, tuple, tuple]:
-    """12 two-stage rounds, where every third round's interiors first repeat an earlier round's window (refused, R6) and
-    are then registered on their own."""
-    clock = Clock()
-    stream = _stream(cls, _two_spec(proof_deadline=60.0), clock=clock)
-    calls, prev = [], None
-    for i in range(12):
-        clock.now = 100.0 * i
-        reg = stream.register(*_half("x", 6, row=i, previous=prev))
-        draw = stream.select(reg)
-        if i % 3 == 2:
-            try:
-                stream.register_interiors(draw, *_interiors(draw, row=i - 2))
-            except S.Refused as e:
-                calls.append(_refusal(e))
-        ireg = stream.register_interiors(draw, *_interiors(draw, row=i))
-        assert stream.deliver(draw, [SESSION]) is None
-        out = stream.outcome(draw, _lean(accepted=i % 4 != 1), {"statement": "stub"})
-        calls += [("registered", reg.digest, ireg.digest, ireg.receipt), ("outcome", out.accepted, out.record)]
-        prev = ireg.digest
-    return calls, stream.log, stream.records, stream.symbols
-
-
-def test_two_stage_interiors_read_the_records_the_whole_log_gives():
-    got = _two_stage(S.Stream)
-    assert got == _two_stage(_Whole)
-    assert [c[2] for c in got[0] if c[0] == "refused"] == [("R6-window",)] * 4 and len(got[1]) == 24
-
-
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
     candidate's check gets the last record and the first registration, and the verifier of record gives it the verdict the
@@ -213,8 +184,9 @@ def test_r7_reads_each_values_first_registration():
             (at(SERVED["row"], last, None), None, ("R6-window",))):
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
-        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered)
-        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered)
+        held = ["W"] if registered else None
+        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
+        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
         assert part == whole and part.codes == codes and part.verifiers["lean"]["codes"] == list(codes)
 
 
@@ -231,8 +203,8 @@ def test_a_supplied_position_reads_the_whole_log():
     cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
     args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
-    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING).ok
-    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING).codes == ("R7-supplied",)
+    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).ok
+    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).codes == ("R7-supplied",)
 
 
 def test_windows_equal_to_either_verifier_share_a_key():

@@ -178,6 +178,10 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
         'export PATH="$HOME/.elan/bin:$PATH"; ')
+#: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
+#: check and its touched-suites run built `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output
+#: gone, and drive bisected a failure no PR caused; CI-147)
+LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
@@ -381,13 +385,36 @@ def discover() -> list[Suite]:
             if s.path != "." else s for s in suites]
 
 
+#: the git tree of the Lean verifier's sources, per checkout (`built_from`): they don't change while a run keys its suites
+_SOURCES: dict[Path, str] = {}
+
+
+def built_from(artifact: str) -> str | None:
+    """What a build output the Lean verifier's `lake build` makes (under its `.lake/build/`) is keyed by: the git tree of the
+    verifier's directory (its sources, lakefile, manifest and toolchain pin), not the bytes built, while its lakefile requires no
+    other package.
+    check runs a suite that declares one only after its lean-build step has built them from that tree (`AFTER_LEAN`), and this
+    runner builds them first (`lean_build`), so a plan that builds nothing (`check.py --plan`) keys such a suite as the check
+    does.  None for any other output, or with no verifier."""
+    lean = flock_lean()
+    if not (lean / "lakefile.toml").is_file() or not (ROOT / artifact).resolve().is_relative_to((lean / ".lake" / "build").resolve()):
+        return None
+    if "require" in (lean / "lakefile.toml").read_text():          # the build reads another package then, which its tree misses
+        return None
+    if ROOT not in _SOURCES:
+        _SOURCES[ROOT] = object_ids(worktree(), [lean.relative_to(ROOT).as_posix()])[lean.relative_to(ROOT).as_posix()]
+    return f"built from {_SOURCES[ROOT]}"
+
+
 def artifact_ids(suite: Suite) -> dict[str, str]:
-    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
-    tree's object ids never see them)."""
+    """Each declared build output as the key sees it: what the Lean verifier builds, by its sources (`built_from`); any other, a
+    file's sha256, "directory", or "absent" (git ignores build outputs, so the tree's object ids never see them)."""
     out = {}
     for a in suite.artifacts:
         p = ROOT / a
-        if p.is_file():
+        if src := built_from(a):
+            out[a] = src
+        elif p.is_file():
             with open(p, "rb") as f:
                 out[a] = hashlib.file_digest(f, "sha256").hexdigest()
         else:
@@ -580,7 +607,7 @@ def lean_build(log: Path) -> str | None:
         return None
     print(f"suites: `lake build` in {lean.relative_to(ROOT)} (check's lean-build step) before {', '.join(AFTER_LEAN)}")
     with log.open("w") as out:
-        rc = subprocess.run(["bash", "-c", ELAN + "lake build"], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", "-c", LAKE_BUILD], cwd=lean, stdout=out, stderr=subprocess.STDOUT).returncode
     return None if rc == 0 else f"`lake build` in {lean.relative_to(ROOT)} exited {rc}"
 
 
@@ -627,6 +654,17 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     one of those only an input inside it covers it."""
     inner = [c for c in cut if _under(path, [c])]
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
+
+
+def merge_base(rev: str) -> str:
+    """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
+    everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
+    r = subprocess.run(["git", "merge-base", rev, "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    base = r.stdout.strip()
+    if r.returncode != 0 or not base:
+        return rev
+    exact = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    return rev if base == exact else base
 
 
 def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock: dict[str, dict]) -> list[Suite]:
@@ -1840,8 +1878,10 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        chosen = touched(chosen, pkgs, a.changed, tree, locked())
-        print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+        base = merge_base(a.changed)
+        chosen = touched(chosen, pkgs, base, tree, locked())
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
     if build_lean:
