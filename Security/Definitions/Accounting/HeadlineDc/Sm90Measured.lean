@@ -20,8 +20,8 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
   lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
   routes, floors and `N_w`.
 * `flatFold`, `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production and filler, its fold DC-90-ri's (the fold routes'
-  cheapest mix, by share of the words: cp-red2-generic 0.9805, li-bulk-trim-inf 0.0195), with ε_skip's skippable work at
-  DC-90-ri's 0.594407% (`eps_budget.design_skip` on DC-90-ri), at FFMA's price.
+  cheapest mix, by share of the words: cp-red2-generic 0.6632, cp-red8-generic 0.3368), with ε_skip's skippable work at
+  DC-90-ri's 0.592731% (`eps_budget.design_skip` on DC-90-ri), at ALU's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
   0.029703).
 -/
@@ -155,12 +155,11 @@ noncomputable def model : Model (Fin 50) (Fin 15) (Fin 2) Unit Empty (Fin 56) Un
   d2s.model 50 2 56 machine
 
 /-- ♭'s fold a unit on DC-90-ri: the lane fold for 4096 words, the fold routes' cheapest mix, by share of the words:
-cp-red2-generic 0.9805, li-bulk-trim-inf 0.0195. -/
-def flatFold : Sparse := [(0, 5768603, 87785), (1, 185842, 87785), (30, 5619952, 87785), (33, 1712, 87785),
-                          (44, 27392, 87785), (46, 27392, 87785), (48, 1712, 87785), (49, 83888, 87785)]
+cp-red2-generic 0.6632, cp-red8-generic 0.3368. -/
+def flatFold : Sparse := [(0, 577013, 8744), (1, 17579, 4372), (30, 64, 1)]
 
-/-- ♭'s skippable work a unit on DC-90-ri, at its FFMA price. -/
-def flatSkip : Sparse := [(9, 56120546897775652544736737696987, 47536402995633539382563137548305)]
+/-- ♭'s skippable work a unit on DC-90-ri, at its ALU price. -/
+def flatSkip : Sparse := [(0, 125777099033414960567038367679, 216302012937701487883735000000)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 50) :=

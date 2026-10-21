@@ -23,19 +23,20 @@ this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
   (NOROW, UNLISTED: A6 counts a vector word's instructions in them, and an instruction no class names, IMAD.WIDE among
   them, counts in the catch-all, RT4-SHEET-14); the fold routes the design's fold and its 54 other programs (cp-seg4,
   cp-seg4u, cp-ats, cp-ats2, cp-ats8, cp-red, cp-red2, cp-red8, cp-red-generic, cp-red2-generic, cp-red8-generic, cp-xt:
-  the checkpoint's bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7; li-rt3, li-wideh, li-rt3-wideh,
-  cp-seg4-rt3, cp-seg4-wideh, cp-seg4-rt3-wideh, cp-seg4u-rt3, cp-seg4u-wideh, cp-seg4u-rt3-wideh, cp-ats-rt3,
-  cp-ats-wideh, cp-ats-rt3-wideh, cp-ats2-rt3, cp-ats2-wideh, cp-ats2-rt3-wideh, cp-ats8-rt3, cp-ats8-wideh,
-  cp-ats8-rt3-wideh, cp-red-rt3, cp-red-wideh, cp-red-rt3-wideh, cp-red2-rt3, cp-red2-wideh, cp-red2-rt3-wideh,
-  cp-red8-rt3, cp-red8-wideh, cp-red8-rt3-wideh, cp-red-generic-rt3, cp-red-generic-wideh, cp-red-generic-rt3-wideh,
-  cp-red2-generic-rt3, cp-red2-generic-wideh, cp-red2-generic-rt3-wideh, cp-red8-generic-rt3, cp-red8-generic-wideh,
-  cp-red8-generic-rt3-wideh, cp-xt-rt3, cp-xt-wideh, cp-xt-rt3-wideh: RT4-SHEET-13's and -14's counted folds, each lane
-  route and the fold with LI's 64 LOP3 a segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E
-  back), its 64 IMAD as IMAD.WIDE, or both; li-bulk, li-bulk-bt1024, li-bulk-trim-inf: li-bulk, li's XOR through the
-  stores, a bulk XOR with the key slab and a load back, at its measured cost and its counted BT1024 and trimmed W = ∞
-  members, RT4-SHEET-17, -21 and -22) on lanes, and alone on the uniform datapath at the least of their counts; the
-  table level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q =
-  q_T = ½`, `b_T = 0`; 4096 committed words a unit of honest work (an IGMMA_S8_N256 at L = 32).
+  the checkpoint's bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7; li-bulk: li's XOR through the
+  stores, a bulk XOR with the key slab and a load back, at its measured cost, RT4-SHEET-17 and -21; and the counted
+  folds, none built, which ♭ never folds by: li-rt3, li-wideh, li-rt3-wideh, cp-seg4-rt3, cp-seg4-wideh,
+  cp-seg4-rt3-wideh, cp-seg4u-rt3, cp-seg4u-wideh, cp-seg4u-rt3-wideh, cp-ats-rt3, cp-ats-wideh, cp-ats-rt3-wideh,
+  cp-ats2-rt3, cp-ats2-wideh, cp-ats2-rt3-wideh, cp-ats8-rt3, cp-ats8-wideh, cp-ats8-rt3-wideh, cp-red-rt3,
+  cp-red-wideh, cp-red-rt3-wideh, cp-red2-rt3, cp-red2-wideh, cp-red2-rt3-wideh, cp-red8-rt3, cp-red8-wideh,
+  cp-red8-rt3-wideh, cp-red-generic-rt3, cp-red-generic-wideh, cp-red-generic-rt3-wideh, cp-red2-generic-rt3,
+  cp-red2-generic-wideh, cp-red2-generic-rt3-wideh, cp-red8-generic-rt3, cp-red8-generic-wideh,
+  cp-red8-generic-rt3-wideh, cp-xt-rt3, cp-xt-wideh, cp-xt-rt3-wideh, RT4-SHEET-13's and -14's moves, each lane route
+  and the fold with LI's 64 LOP3 a segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back),
+  its 64 IMAD as IMAD.WIDE, or both; li-bulk-bt1024, li-bulk-trim-inf, li-bulk's BT1024 and trimmed W = ∞ members,
+  RT4-SHEET-22) on lanes, and alone on the uniform datapath at the least of their counts; the table level's bytes
+  counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T =
+  0`; 4096 committed words a unit of honest work (an IGMMA_S8_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
   routes' cheapest, cp-red2 on every word), no filler, and ε_skip's skippable work at FFMA's price, 0.858332% of ♭'s
   bound (`eps_budget.design_skip` on DS-90).

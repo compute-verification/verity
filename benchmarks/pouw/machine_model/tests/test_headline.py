@@ -22,14 +22,17 @@ PINS = {
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.005927, 0.000466, 0.000989, 0.007382, 2.3435, "issue", None),
+        "sm_90": (0.005927, 0.003303, 0.000986, 0.010215, 2.3435, "issue", None),
         "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
     },
 }
 #: rows at or over 1%, each with its reason
-OVER_ONE: dict[tuple[str, str], str] = {}
+OVER_ONE: dict[tuple[str, str], str] = {
+    ("measured", "sm_90"): "♭ folds by the built routes alone and the cheater by li-bulk's counted trimmed W = ∞ member "
+                           "too, so ε_machine is 0.330% at q* = 1.22; ffill, which no check reads, is uncredited",
+}
 
 
 @pytest.mark.parametrize("reading", H.READINGS)
