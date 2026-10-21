@@ -652,6 +652,17 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
 
 
+def merge_base(rev: str) -> str:
+    """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
+    everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
+    r = subprocess.run(["git", "merge-base", rev, "HEAD"], cwd=ROOT, capture_output=True, text=True)
+    base = r.stdout.strip()
+    if r.returncode != 0 or not base:
+        return rev
+    exact = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    return rev if base == exact else base
+
+
 def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock: dict[str, dict]) -> list[Suite]:
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
     own suite keys on all of them; a suite nested in another's directory is not the other's, `dropped`) or in the runner, or a
@@ -1863,8 +1874,10 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        chosen = touched(chosen, pkgs, a.changed, tree, locked())
-        print(f"suites: the change from {a.changed[:12]} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+        base = merge_base(a.changed)
+        chosen = touched(chosen, pkgs, base, tree, locked())
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
     if build_lean:

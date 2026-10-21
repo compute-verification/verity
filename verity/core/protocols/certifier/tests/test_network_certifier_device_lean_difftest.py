@@ -80,7 +80,7 @@ def test_the_generator_covers_what_it_says():
     assert any(i["config"]["prover"]["prior"] for i, _ in proved)
     assert any(len({a[1] for a in r["actions"] if a[0] == "connect"}) >= 4 for r in results)  # several streams
     writes = [a for r in results for a in r["actions"] if a[0] == "upstream"]
-    assert any(a[3] for a in writes) and any(not a[3] for a in writes)  # a request's LAST waits for its drain
+    assert any(a[3] for a in writes) and any(not a[3] for a in writes)  # a request's last frame waits for its drain
     assert any(e[0] == "refused" for i in insts for e in i["events"])
     assert any(e[0] == "link" and e[2] == "" for i in insts for e in i["events"])  # the link's early end
     ticks = [(i, e) for i in insts for e in i["events"] if e[0] == "tick" and e[1] == "egress"]

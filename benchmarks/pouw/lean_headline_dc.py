@@ -42,12 +42,15 @@ CP_RED, CP_RED2 and CP_RED8 through a generic address, ATOM.E, RT4-SHEET-7, bit-
 r20261020-031119-3113 and r20261020-031119-013a, every global and generic red, red2 and red8 loop at 0 mismatches) on
 lanes, and alone on the uniform datapath at the least of their counts. Each reading declares A2's catch-all
 (`CATCH_ALL`), as sm_120's sheet does: every warp instruction no class of the reading prices counts there, at its issue
-slot alone, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and DC-100-ri. A class no run
-has timed is read the same way (A2's reading, the coordinator's ruling of 20 Oct 03:12Z): ATOME32, the generic-address
-red's ATOM.E, is one slot on the measured issue row (and DS_issue) alone, with no joint issue or pipe line, since no run
-has timed ATOM.E (RT4-SHEET-12; the device batch checks its bits, not its time). Charging it another class's rows
-(SHFL's, RT3-DC's reading) asserts lines nobody measured, which inflates ♭'s credit and, where a cheater uses the
-class, can overstate the floor; measured rows replace it once a run times it. ♭ folds by `setup`'s mix of them on each vector
+slot, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and DC-100-ri, and on DC-90-ri also
+the JI90 lines every timed scalar class carries: LD.E and IMAD.WIDE, the instructions it counts there, were timed
+beside the IGMMA (r20261021-070616-d06c; RT4-SHEET-14). A class no run has timed is read at its issue slot alone (A2's
+reading, the coordinator's ruling of 20 Oct 03:12Z), and measured rows replace that once a run times it: on DC-90-ri
+ATOME32 (the generic-address red's ATOM.E), ATOMS32, REDG32, LDS128 and REDUX carry the JI90 lines (d06c,
+r20261021-074303-da7f), while the stores (STS32, STS128, STG32, STG128) and ISETP are still the issue row alone, as
+every memory and control class is on DC-100-ri. Charging an untimed class another class's rows (SHFL's, RT3-DC's
+reading) asserts lines nobody measured, which inflates ♭'s credit and, where a cheater uses the class, can overstate
+the floor. ♭ folds by `setup`'s mix of them on each vector
 and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
 a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
 """
@@ -123,12 +126,13 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ATOME32 at
-# the issue row alone (RT4-SHEET-12), `setup`'s floor on DC-90-ri folds by the generic CP_RED8 alone and heads
-# 0.047% of the words on the design's lane baseline (dp4a), the rest on the IGMMA; `_flat_shares` makes the split exact.
-# FOLD-OPT at its π* is false for a memory round trip's XOR (an ATOM.E.XOR and a load back, counted but not built, fold
-# a word at 0.5038 φ*; RT4-SHEET-13), so the statement says nothing about such a run, though that run's most-loaded
-# row still holds the conclusion (+0.072 on issue).
+# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With UNLISTED,
+# ATOME32 and REDUX on the JI90 lines (r20261021-070616-d06c, r20261021-074303-da7f), `setup`'s floor on DC-90-ri
+# heads every word on the IGMMA and folds by the generic CP_RED2 and CP_RED8. At its π* (96.7% JI90_0) the counted,
+# unbuilt memory round trip's XOR (an ATOM.E.XOR and a load back, RT4-SHEET-13) folds a word at 1.5065 φ*, and
+# RT4-SHEET-14's mixes with IMAD.WIDE, which counts in UNLISTED (0.9788 at π*, as IMAD), leave the most-loaded row at
+# 1.0041·B_♭ or more, over the line's 0.9846·B_♭ (r20261021-075504-8a82). φ* is CP_XT's price: its STS32 and STG32, like
+# every store and ISETP, no run has timed beside an IGMMA, so they are the issue row alone (0.0036 at π*).
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri", 1980,
               "EPS1 DC's measured f_max at default clocks; the sheet's TOPS are at 1830 MHz", {"UNI": 2},
@@ -137,9 +141,13 @@ SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS
                "the driver's reported maximum (the data sheet gives no clock)", {"UNI": 2}, Fraction(1, 100),
                Fraction(1, 100))
 FAMILIES = (SM90, SM100)
-# A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row
-# alone): NOROW is a class on the measured vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
+# A2's catch-all by device on its sheet (DS_issue alone) and by vector on its measured reading (the measured issue row,
+# with the joint-issue lines once a run times its instructions beside the tensor): NOROW is a class on the measured
+# vectors, at SHFL's joint issue rows, so UNLISTED carries the measured one
 CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-100-ri": "UNLISTED"}
+# A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200, r20261021-070616-d06c)
+# gives it the census's joint-issue lines, which every timed scalar class carries at one coefficient a row
+SCALAR_REF, JOINT_ISSUE = "FFMA", re.compile(r"JI\d+_\d+")
 
 
 def shape(k: str, h: E.Honest) -> tuple[int, int] | None:
@@ -360,9 +368,11 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         raise SystemExit(f"{vector}: no measured issue row to read {untimed} at")
     lists = _sheet_check(fam, pi, c) if sheet else {}
     k = CATCH_ALL.get(vector)
-    if not sheet and k is not None and c.get(k) != {"issue": 1}:
-        raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot alone: "
-                         f"give it one issue line in {fam.key}'s census.csv and none on another of {vector}'s rows")
+    joint = {r: v for r, v in c.get(SCALAR_REF, {}).items() if JOINT_ISSUE.fullmatch(r)}
+    if not sheet and k is not None and c.get(k) not in ({"issue": 1}, {"issue": 1, **joint}):
+        raise SystemExit(f"{vector}: the catch-all {k} is priced at {c.get(k)}, not at the measured issue slot, alone or with "
+                         f"the joint-issue lines {SCALAR_REF} carries ({joint}): give it one issue line in {fam.key}'s "
+                         f"census.csv, and the census's JI lines only from a run that times its instructions beside the tensor")
     load = lambda r, n: sum((c[k].get(r, Fraction(0)) * v for k, v in n.items()), Fraction(0))
     per_mma = Fraction(h.words * h.depth, d.L)
     if per_mma.denominator != 1:
@@ -723,14 +733,17 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
             "them" if r.menu == "honest" else "every MMA class it times (ω its destination's words, A6)")
     lam = LH._wrap([f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items()],
                    " " * (len(f"  cert {m} ["))).lstrip()
+    joint = fam.measured in CATCH_ALL and set(x.c[CATCH_ALL[fam.measured]]) != {"issue"}
     bullets = [
         f"`rowNames`, `{sv}`, `machine`: the measured vector {fam.measured}, {m} rows of SMSP-cycles a warp instruction "
         f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz."
         + (f" `{CATCH_ALL[fam.measured]}` is A2's catch-all here: every warp instruction no other class prices on "
-           f"{fam.measured} counts there, at the measured issue slot alone." if fam.measured in CATCH_ALL else "")
-        + (f" The sheet's classes no run beside {fam.measured}'s census timed ({', '.join(x.untimed)}) are read the "
-           "same way, at the measured issue slot alone, and are off the writer menu, as they were when the catch-all "
-           "counted them: `NoSum` carries their words." if x.untimed else ""),
+           f"{fam.measured} counts there, at the measured issue slot "
+           + ("and the joint-issue lines every timed scalar class carries, since a run timed its instructions beside "
+              "the tensor." if joint else "alone.") if fam.measured in CATCH_ALL else "")
+        + (f" The sheet's classes no run beside {fam.measured}'s census timed ({', '.join(x.untimed)}) are read "
+           + ("" if joint else "the same way, ") + "at the measured issue slot alone, and are off the writer menu, as "
+           "they were when the catch-all counted them: `NoSum` carries their words." if x.untimed else ""),
         f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
         "".join(f"`{n}`, " for n, o in (("flatWords", own_w), ("flatFold", own)) if o)

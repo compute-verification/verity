@@ -15,8 +15,8 @@ back: what `wipe_verdict.py` beside this package sends `streamed-wipe-verdict`. 
 The input is exactly the canonical JSON of what it decodes to (`exactly`), as `to_json` writes it: a field missing or
 extra, a byte string not lowercase hex, a header constant not the protocol's, parameters `WipeParams` refuses, or a scheme
 id this port doesn't verify is refused. Integers are any sign where the Python's dataclasses hold any (a batch record's
-fields, the fill's times, the egress), naturals in the parameters. The output is `{"accepted", "covered", "egress_mib",
-"reasons"}`, the reasons the Python's word for word and `covered` the commitment's `WipeParams.covered`.
+fields, the fill's times, the egress), naturals in the parameters. The output is `{"accepted", "egress_mib", "reasons"}`,
+the reasons the Python's word for word.
 -/
 
 namespace MemoryChallenger.StreamedWipe
@@ -91,8 +91,7 @@ def Record.ofJson (j : Json) : V Record := do
          schemes := ← (← J.arr j "schemes" ctx).mapM (J.asStr · s!"{ctx}.schemes") }
 
 def Verdict.toJson (v : Verdict) : Json :=
-  Json.mkObj [("accepted", .bool v.accepted), ("covered", .bool v.covered), ("egress_mib", intJ v.egressMib),
-    ("reasons", .arr (v.reasons.map Json.str))]
+  Json.mkObj [("accepted", .bool v.accepted), ("egress_mib", intJ v.egressMib), ("reasons", .arr (v.reasons.map Json.str))]
 
 /-- The verdict on a record. -/
 def judge (r : Record) : V Verdict := do

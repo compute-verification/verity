@@ -17,7 +17,8 @@ values of four kinds (`Kind`), on a public schedule (`ZkServer.sched`):
 * `masked`: a worker's value under the server's mask (`ZkServer.mask`), added only once the value passed the server's
   relation check (`ZkServer.rel`), which reads the server's private check coins `Chk`.
 
-A round in which any check fails, or a worker misses its time (`none`), releases the stop (`ZkServer.stop`), and so does
+A round in which any check fails, a worker misses its time (`none`), or the server refuses from the witness and its
+tape alone (`ZkServer.refuses`, `false` unless a server says otherwise), releases the stop (`ZkServer.stop`), and so does
 every later round (`ZkServer.live`). The worker is any function of the statement, the witness, the server's tape and
 the history (`ZkServer.Worker`); it never sees the check coins. The inner phase's firewall, `Flock.Firewall.run`, is the
 same shape: by `run_resalt` its stop never depends on its salts, and by `run_of_one` what it sends is a fixed template
@@ -91,6 +92,9 @@ structure ZkServer (W R : Type) where
   frame : (x : Msg) → (j : ℕ) → (Fin (nS x j) → Val) → Msg
   stop : Msg
   sched : Msg → ℕ → ℕ
+  /-- the server's own refusal of the round after `h`, from the witness and its tape alone, whatever the workers
+  send: the round fails as a failed check does -/
+  refuses : Msg → W → R → List (Msg × Msg) → Bool := fun _ _ _ _ => false
 
 attribute [instance] ZkServer.chkFin ZkServer.chkNe ZkServer.valEq
 
@@ -131,10 +135,23 @@ def check {W R : Type} (S : ZkServer W R) (x : Msg) (j s : ℕ) (w : W) (ρ : R)
   | .masked, some v => S.rel x j s w ρ h cp κ v
   | .masked, none => false
 
-/-- Every slot of the round after `h` passes its check. -/
+/-- The server does not refuse the round after `h`, and every slot of it passes its check. -/
 def pass {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Bool :=
-  (List.range (S.nS x h.length)).all fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)
+  !S.refuses x w ρ h &&
+    (List.range (S.nS x h.length)).all fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)
+
+/-- A round that passes passes every slot's check. -/
+theorem slots_of_pass {W R : Type} {S : ZkServer W R} {wk : S.Worker} {x : Msg} {w : W} {ρ : R} {κ : S.Chk}
+    {h : List (Msg × Msg)} (hp : S.pass wk x w ρ κ h = true) :
+    (List.range (S.nS x h.length)).all
+      (fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)) = true :=
+  (Bool.and_eq_true _ _).mp hp |>.2
+
+/-- A round the server refuses fails. -/
+theorem pass_of_refuses {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) (hr : S.refuses x w ρ h = true) : S.pass wk x w ρ κ h = false := by
+  simp [pass, hr]
 
 /-- Every round so far, the current one's included, passed. -/
 def live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
@@ -208,7 +225,7 @@ theorem copy_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W
   split_ifs with hc
   · obtain ⟨hi, hs, hm⟩ := hc
     have hlen : (h.take i).length = i := by simp only [List.length_take]; omega
-    have hp := S.pass_of_live wk x w ρ κ h hl hi
+    have hp := slots_of_pass (S.pass_of_live wk x w ρ κ h hl hi)
     have hcs := List.all_eq_true.mp hp s (List.mem_range.mpr (by rw [hlen]; exact hs))
     rw [hf i hi s (by rw [hlen]; exact hs) (by rw [hlen]; exact hm) hcs, hlen]
   · rfl
@@ -225,7 +242,7 @@ theorem next_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W
   funext s
   have hp := S.pass_of_live wk x w ρ κ h hl le_rfl
   rw [List.take_length] at hp
-  have hcs := List.all_eq_true.mp hp s.val (List.mem_range.mpr s.isLt)
+  have hcs := List.all_eq_true.mp (slots_of_pass hp) s.val (List.mem_range.mpr s.isLt)
   have hf0 := hf h.length le_rfl
   rw [List.take_length] at hf0
   unfold value

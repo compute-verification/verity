@@ -9,12 +9,22 @@ Its records are `grid.Record`s, published raw and through `commitment.commit`, w
 **Topology.** One TCP connection is the boundary link, the wire, between the proxy and the outside peer. Inside, the
 proxy opens one TCP connection per stream to the server, and writes it the stream's request as the ingress certifier
 releases it. Every frame on the link is B bytes: a header (kind u8, stream u32, length u32), the payload, and zero
-fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload, and `LAST` the last frame of a request.
+fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload.
+
+**The canonical framing** is every sender's, so that each direction's frames are one public template's: the same
+header on every frame, then the sender's bytes at a fixed place, then the same bytes after them (N3 checks a window's
+frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
+`DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
+`TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
+`TOKEN_BYTES` of it (`events`). On ingress a request is its length (u32be) and its bytes, cut into `DATA` frames of
+B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled (`request_frames`): it ends where its length says, so every
+frame's header is the same. `event_placement` and `request_placement` are those templates' places.
 
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
-content is fixed by the bytes and never by how they were read; an HTTP response head goes with the first event. The
-event's `id:` field is its position in the Program's canonical order on the link. A frame's anchor is the egress bucket
-in which the ingress certifier released its stream's `LAST` frame (the request is recorded there), and its logical index
+content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
+Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
+nor an HTTP response head before it is recorded. A frame's anchor is the egress bucket in which the ingress certifier
+released its stream's request's last frame (the request is recorded there), and its logical index
 is its position in its stream. A frame read at time s is ready at bucket ⌊s/τ_b⌋ + 1, the first that starts after it.
 At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), ready(k), last)` is at most t, where
 `h(k) = max(eligible(k), h(k−1))` under the declared sync of its anchor's window (`run_shaper`'s rule). `Certifier.tick`
@@ -22,7 +32,9 @@ then releases min(queue, r) of them, left-packed, and the proxy writes those and
 a bucket after h(k) is late: the declared sync didn't cover it, and the window it is handed in fails closed.
 
 **Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
-model) and released by the ingress `Certifier` at r_in into its stream's server connection.
+model) and released by the ingress `Certifier` at r_in. The released `DATA` frames are cut into requests by their
+lengths (`Requests`): the k-th request on the link is stream k, and its bytes, without the length or the fill, go to
+its stream's server connection.
 
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
@@ -109,13 +121,15 @@ closes faulted while its queue would still hold frames faults the next one too, 
   declared for its anchor's window didn't cover the response, so the Program's grid holds the frame earlier than the
   certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
   the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
-- a malformed frame (`malformed`): an event longer than a frame, without a position or with one already seen, on a
-  stream with no released request, or bytes left unframed at the stream's end.
+- a malformed frame (`malformed`): an event whose body is longer than a frame, without a position or with one already
+  seen, on a stream with no released request, or bytes left unframed at the stream's end.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import heapq
 import itertools
 import json
@@ -150,8 +164,16 @@ from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
 HEADER = struct.Struct(">BII")
-PAD, DATA, LAST, SALT = 0, 1, 2, 3
+PAD, DATA, SALT = 0, 1, 3
 EVENT_END = b"\n\n"
+CANONICAL_STREAM = 0
+TOKEN_BYTES = 64
+EVENT_TEXT = 4 * -(-TOKEN_BYTES // 3)
+EVENT_HEAD = (b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,'
+              b'"delta":{"base64":"')
+EVENT_TAIL = b'"},"finish_reason":null}]}' + EVENT_END
+EVENT_BYTES = len(EVENT_HEAD) + EVENT_TEXT + len(EVENT_TAIL)
+LENGTH = struct.Struct(">I")
 SALT_STREAM = 0xFFFF_FFFF
 SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
@@ -256,6 +278,86 @@ def decode_frame(frame: bytes) -> tuple[int, int, bytes]:
     return kind, stream, bytes(frame[HEADER.size : HEADER.size + n])
 
 
+def event(data: bytes) -> bytes:
+    """The canonical event of at most `TOKEN_BYTES` bytes: `EVENT_HEAD`, their base64 padded with NUL to `EVENT_TEXT`
+    characters, `EVENT_TAIL`; `EVENT_BYTES` long whatever the data."""
+    if len(data) > TOKEN_BYTES:
+        raise ValueError(f"an event carries at most {TOKEN_BYTES} bytes, not {len(data)}")
+    return EVENT_HEAD + base64.b64encode(data).ljust(EVENT_TEXT, b"\0") + EVENT_TAIL
+
+
+def events(token: bytes) -> list[bytes]:
+    """A token's events: its bytes cut every `TOKEN_BYTES`, one event each, and one event for an empty token."""
+    return [event(token[i : i + TOKEN_BYTES]) for i in range(0, max(1, len(token)), TOKEN_BYTES)]
+
+
+def event_data(body: bytes) -> bytes | None:
+    """The bytes a canonical event carries, or None for bytes that aren't one."""
+    text = body[len(EVENT_HEAD) : len(EVENT_HEAD) + EVENT_TEXT]
+    if len(body) != EVENT_BYTES or not body.startswith(EVENT_HEAD) or not body.endswith(EVENT_TAIL):
+        return None
+    try:
+        data = base64.b64decode(text.rstrip(b"\0"), validate=True)
+    except binascii.Error:
+        return None
+    return data if len(data) <= TOKEN_BYTES and event(data) == body else None
+
+
+def event_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The egress template's (p, s, prefix, suffix): an event's frame is its header and `EVENT_HEAD`, the base64 text
+    at p, `EVENT_TAIL` at s = p + `EVENT_TEXT`, and zero fill."""
+    head = HEADER.pack(DATA, CANONICAL_STREAM, EVENT_BYTES) + EVENT_HEAD
+    if len(head) + EVENT_TEXT + len(EVENT_TAIL) > frame_bytes:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for an event")
+    return len(head), len(head) + EVENT_TEXT, head, EVENT_TAIL
+
+
+def data_frames(data: bytes, frame_bytes: int) -> bytes:
+    """Bytes on a link: `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled, one for no bytes."""
+    room = frame_bytes - HEADER.size
+    if room < 1:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for data")
+    return b"".join(encode_frame(DATA, CANONICAL_STREAM, data[i : i + room].ljust(room, b"\0"), frame_bytes)
+                    for i in range(0, max(1, len(data)), room))
+
+
+def request_frames(request: bytes, frame_bytes: int) -> bytes:
+    """A request on the link: its length (u32be) and its bytes as `data_frames`."""
+    if frame_bytes - HEADER.size < LENGTH.size:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for a request's length")
+    return data_frames(LENGTH.pack(len(request)) + request, frame_bytes)
+
+
+def request_frame_count(length: int, frame_bytes: int) -> int:
+    """The frames `request_frames` puts a request of `length` bytes in."""
+    return -(-(LENGTH.size + length) // (frame_bytes - HEADER.size))
+
+
+def request_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The ingress template's (p, s, prefix, suffix), every `data_frames` frame's: its header, then B − 9 bytes of
+    data at p = 9 (a request's length and bytes), zero past them."""
+    return HEADER.size, frame_bytes, HEADER.pack(DATA, CANONICAL_STREAM, frame_bytes - HEADER.size), b""
+
+
+class Requests:
+    """Cuts the link's released `DATA` payloads into requests, one frame at a time (no I/O). A request starts at a
+    frame, with its length (u32be, zero past the payload's end), and ends at the frame that holds its last byte; the
+    rest of that frame is fill. The k-th request is stream k. `feed` gives a frame's stream, the request's bytes in it
+    and whether it ends the request."""
+
+    def __init__(self) -> None:
+        self.stream = self.left = 0
+
+    def feed(self, payload: bytes) -> tuple[int, bytes, bool]:
+        if not self.left:
+            self.stream += 1
+            self.left = int.from_bytes(payload[: LENGTH.size].ljust(LENGTH.size, b"\0"), "big")
+            payload = payload[LENGTH.size :]
+        data = payload[: self.left]
+        self.left -= len(data)
+        return self.stream, data, not self.left
+
+
 def fresh_salt(window: int, nbytes: int = SALT_BYTES) -> bytes:
     """PoUW window `window`'s salt, `nbytes` bytes of the certifier's own randomness. A source of coins handed to the
     certifier has the same signature."""
@@ -285,6 +387,16 @@ def event_position(event: bytes) -> int | None:
             value = line[3:].strip()
             return int(value) if value.isdigit() else None
     return None
+
+
+def event_body(event: bytes) -> bytes:
+    """What the proxy frames of an event: its lines after the first `id:` line (`event_position`'s), so neither the
+    position nor anything before it, such as an HTTP response head, is recorded."""
+    lines = event.split(b"\n")
+    for i, line in enumerate(lines):
+        if line.startswith(b"id:"):
+            return b"\n".join(lines[i + 1 :])
+    return event
 
 
 class Events:
@@ -650,6 +762,7 @@ class Proxy:
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
+        self.requests = Requests()
         self.frames: list[tuple[int, int, int, int, int]] = []
         self.lateness: dict[str, list[float]] = {"egress": [], "ingress": []}
         self.link_frames_read = self.requests_released = 0
@@ -747,12 +860,13 @@ class Proxy:
                 if i in own:
                     self._release_salt(own[i] // self.pouw_window)
                     continue
-                kind, s, payload = decode_frame(frame)
-                if kind not in (DATA, LAST):
+                kind, _, payload = decode_frame(frame)
+                if kind != DATA:
                     continue
+                s, data, last = self.requests.feed(payload)
                 st = self._stream(s)
-                st.out.put_nowait((payload, kind == LAST))
-                if kind == LAST and st.anchor is None:
+                st.out.put_nowait((data, last))
+                if last and st.anchor is None:
                     st.anchor, st.window = anchor, t // p.buckets
                     st.deadline = self.origin + min(t * tau + self.slack, (anchor + 1) * tau_e)
                     self._released.append(st)
@@ -974,11 +1088,11 @@ class Proxy:
             writer.close()
 
     def _egress_event(self, s: int, st: _Stream, event: bytes, ready: int) -> None:
-        position = event_position(event)
-        if position is None or st.anchor is None or HEADER.size + len(event) > self.egress.frame_bytes:
+        position, body = event_position(event), event_body(event)
+        if position is None or st.anchor is None or HEADER.size + len(body) > self.egress.frame_bytes:
             self.shaper.certifier.fault(Reason.MALFORMED)
             return
-        frame = LogicalFrame(encode_frame(DATA, s, event, self.egress.frame_bytes), st.anchor, st.count)
+        frame = LogicalFrame(encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), st.anchor, st.count)
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)

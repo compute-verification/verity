@@ -25,9 +25,11 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
-                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
+                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest.
+                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest;
+                                                   --per-pr-shadow N runs the per-PR landing beside the trains in shadow, N checks
+                                                   at most, landing and ejecting nothing (`research queue stats --per-pr` reads it).
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
@@ -43,6 +45,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
                                                    branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
                                                    has an open PR; prints the PR's URL (`open_pr`)
+    research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
+                                                   where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
+                                                   the per-PR shadow's would-land times from drive's state file instead
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -276,6 +281,7 @@ class DriveFlags:
     defer: tuple[str, ...] = ()
     regenerate_locks: bool = False
     first: tuple[int, ...] = ()
+    per_pr_shadow: int = 0
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -323,12 +329,16 @@ class DriveFlags:
             if not (isinstance(doc["first"], list) and all(type(n) is int and n > 0 for n in doc["first"])):
                 raise bad("first", "a list of PR numbers, as [1858, 1860]")
             got["first"] = tuple(doc["first"])
+        if "per_pr_shadow" in doc:
+            if type(doc["per_pr_shadow"]) is not int or doc["per_pr_shadow"] < 0:
+                raise bad("per_pr_shadow", "a whole number: the per-PR shadow's checks at once, 0 for off")
+            got["per_pr_shadow"] = doc["per_pr_shadow"]
         return cls(**got)
 
     def override(self, a: argparse.Namespace) -> "DriveFlags":
         """These flags with each one ``a`` (the command line) gives explicitly in its place."""
-        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks")
-                 if getattr(a, k) is not None}
+        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks", "per_pr_shadow")
+                 if getattr(a, k, None) is not None}
         if a.defer is not None:
             given["defer"] = tuple(x for x in a.defer.split(",") if x)
         if a.first is not None:
@@ -1390,9 +1400,9 @@ TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
 #: competing with the trains for six slots); 16 CPUs, 160 GB (suites.py gives a parallel suite a worker per 9 GB of the cgroup's
 #: memory, so 64 GB left one at most 7 workers of the 16), 120 min (the slowest touched run took 48 min in a slot), `--jobs 16`
 TOUCHED_ON, TOUCHED_CPUS, TOUCHED_MEM_GB, TOUCHED_MAX_MIN = "auto", 16, 160, 120
-#: the gate's class in the cluster queue: capture (600) ranks above every lane's agent-test (work, 500;
-#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' pre-mark runs (19 Oct, infra and top)
-TOUCHED_CLASS = "capture"
+#: the gate's class in the cluster queue: gate (650) ranks above capture (600) and every lane's agent-test (work, 500;
+#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' runs in a node's cpu-hold line (INF-147)
+TOUCHED_CLASS = "gate"
 #: what `research run` prints of a run it launched
 LAUNCHED_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 
@@ -2007,6 +2017,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--first", metavar="N[,N...]", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
                                                         "order, ahead of members that keep their place (a fix the next "
                                                         "train needs)")
+    ap.add_argument("--per-pr-shadow", type=int, metavar="N",
+                    help="drive: run the per-PR landing in shadow beside the trains, at most N of its checks (and of its plans) "
+                         "at once, oldest ready mark first: it checks each sampled PR's merge onto `main` (pushed as per-pr/PR), "
+                         "plans it by its keys on a moved `main`, and logs what it would land and when; it never pushes "
+                         "`main` or `next` and ejects nothing (`research.drive`; 0, the default, is off)")
+    ap.add_argument("--per-pr", action="store_true", help="stats: the per-PR shadow's records (drive's state file beside "
+                                                          "--workdir) in place of drive's log")
     ap.add_argument("--config", metavar="PATH",
                     help=f"drive: read its flags from PATH (`DriveFlags`, e.g. {DRIVE_FLAGS}) at `main` in the queue's clone, "
                          "fresh each tick; a flag given here overrides the file's")
@@ -2022,9 +2039,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    if a.per_pr_shadow is not None and a.per_pr_shadow < 0:
+        ap.error(f"--per-pr-shadow {a.per_pr_shadow}: a whole number, 0 for off")
     if a.command == "stats":
+        if a.per_pr:
+            from . import queue_stats
+
+            return queue_stats.shadow_main(a.workdir.parent / f"{a.workdir.name}.state.json", a.hours, a.until, a.json)
         if a.log is None:
-            ap.error("stats needs --log FILE (drive's log)")
+            ap.error("stats needs --log FILE (drive's log), or --per-pr")
         return _stats(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
@@ -2127,7 +2150,7 @@ def main(argv: list[str]) -> int:
             from .drive import Driver
 
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
-                   regenerate_locks=flags.regenerate_locks).tick(dry_run=a.dry_run)
+                   regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
