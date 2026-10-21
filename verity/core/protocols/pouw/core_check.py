@@ -37,7 +37,9 @@ before it drew that salt (`salt.committed`).  `recorded_reason` is that last rul
 challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `salt` is the rule on a live window's salt coin, read through the
+and a replay of a recorded draw `COIN_EARLY` too.  `work_units` is the same rule under the law ``work:k``: each work
+stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` draws a served H1 window with it).
+`salt` is the rule on a live window's salt coin, read through the
 same session as `rounds`: S is the session the auditor's signed ledger reserves for the window and R the root its open
 entry opened S on, which the verifier recomputes from the window's record and S (`salt.window_open_root`); the
 session's signed log shows R alone as what its salt coin followed, and under the commitment it signed the salt coin
@@ -52,7 +54,9 @@ Every refusal has one reason, the first rule it breaks in the order below; the L
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
+import itertools
 import json
 import math
 import re
@@ -1238,6 +1242,31 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's draw under the work law (Lean `Flock.Draw.workK`): ⌈k·work·size/total⌉, at least `floor`, at most
+    `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
+
+
+def work_units(coin: bytes, stream: str, registration: str, receipt: dict, strata: list[dict]) -> list[int] | None:
+    """`draw`'s rule under the law ``work:k`` (Lean `workUnits`): the units the draw coin `coin` draws over the work strata
+    `strata` (each ``{template, units, work, floor, k}``, its units ``[lo, hi)`` ranges in order), ascending. Stratum s is
+    ``Draw.subset`` of its k_s over its n_s units on the stream ``("draw", template)`` of the key the coin derives under
+    the stream's digest `stream`, the registration `registration` and its `receipt` (`draw_key_context`), its local index
+    j its j-th unit (`Flock.Draw.stratified`); None when a stream runs out."""
+    key, out = derive(coin, DRAW_DOMAIN, draw_key_context(stream, registration, receipt)), []
+    for s in strata:
+        n = sum(hi - lo for lo, hi in s["units"])
+        got = stream_subset(s["k"], n, key.stream(("draw", s["template"]), 2 * s["k"] * width(n) + 64))
+        if got is None:
+            return None
+        starts = list(itertools.accumulate((hi - lo for lo, hi in s["units"]), initial=0))
+        for j in got:
+            r = bisect.bisect_right(starts, j) - 1
+            out.append(s["units"][r][0] + j - starts[r])
+    return sorted(out)
+
+
 # ---- a live window's salt and round coins -----------------------------------------------------------------------------
 
 NO_RESERVE = ("the auditor's ledger opens the window's session without reserving it: a window's open root binds the "
@@ -1374,4 +1403,4 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer",
            "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
            "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
-           "rounds", "salt", "unit_draw", "verify_path", "window_domain"]
+           "rounds", "salt", "unit_draw", "verify_path", "window_domain", "work_k", "work_units"]

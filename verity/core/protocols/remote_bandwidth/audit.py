@@ -828,8 +828,9 @@ class Session:
         return self.coins.commitment
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
-        """σ_t, after the last root received (R before any).  `now`, read before the challenger is asked, is its
-        release in the record: the coin leaves later, so the record's span is the longer."""
+        """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
+        challenger is asked, unless it was asked with the coin before it, `coins.Coins.ahead`), is its release in the
+        record: the coin leaves later, so the record's span is the longer."""
         opening = self.coins.challenge(t, self._latest)
         self.windows.append(_Window(coins.coin(opening), now))
         return opening

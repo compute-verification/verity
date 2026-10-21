@@ -18,10 +18,12 @@ challenger and the verifier never hold a row, a salt or a served value):
    commitment's public shape (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
-3. the verifier draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream, groups
-   them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds one
-   call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from its
-   own Program under the window's roots, WORK/verifier/w1-c<c>.registered.json);
+3. the verifier registers the window's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
+   u's public salt), draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream,
+   groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
+   one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
+   its own Program under the window's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
+   WORK/verifier/w1-c<c>.registered.json);
 4. the prover opens the drawn units call by call (`window.py open`), and the verifier checks each opened row is the one
    the Program's unit reads (`h1unit.unit_reads`) with a path to its root (its call's A table's and z table's and
    b/<K>'s registered roots under the Program's digest, the receipt's under the window's), and builds its own public
@@ -32,8 +34,9 @@ challenger and the verifier never hold a row, a salt or a served value):
    shared-row statement on the prover's rows at their indices (``honest``, the first drawn unit's call, and
    ``honest-c<c>`` each other drawn call), and each prover's pub.bin must be the verifier's byte for byte: every unit's
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
-   from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row and record
-   against its registered root at the position its Program reads.
+   from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
+   ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
+   registration (`Accounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
 
 The negatives are on ``honest``'s units, the drawn units of the first drawn unit's call.
 
@@ -57,6 +60,16 @@ registered reads:
   against its own public file with the verifier's ``--registered`` file. The proof is of the rows it commits, so Lean
   must reject it for that table row not opening its call's A table's registered root, and say so; the verifier's own
   check of the row (`registered_opens`) refuses it too, and opens the honest statement's.
+
+Two more pass binding against their own public files and fail the ok row's registered read, each a proof Lean would
+accept were ok bound only through the public file:
+
+* ``ok-zero``: the base statement of ``in-z`` (`OK_ZERO`: the drawn units on the tampered window's committed rows, the
+  unit computing ok = 0 at the moved record, `stage.py`'s outputs), whose public file states that 0 under the public
+  ok salt: its o1 table row opens no root of the verifier's ``ok``, and Lean must say so.
+* ``ok-unregistered``: the honest units staged with their ok rows committed afresh (`window.py open --unregistered-ok`),
+  so the statement names no o1 registered read: Lean must refuse the o1 port of its ``--registered`` file as committed
+  with no path to its registered root.
 
 The in-proof negatives (`IN_PROOF`) pass both and carry a wrong witness instead. Each is a window registered with one
 value of the first drawn unit changed (`window.py tamper`, every salt kept), opened and checked like the honest one under
@@ -123,6 +136,8 @@ IN_PROOF = {"in-receipt": "--receipt-word", "in-d": "--d-word", "in-y": "--y-cel
             "in-call": "--call", "in-z-only": "--z-only", **({"in-xa": "--xa-flip"} if U.tile() == "v3" else {})}
 #: the negatives that fail at binding, by `window.py tamper`'s flag
 BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
+#: the in-proof negative whose base statement (its unit computes ok = 0 where its record moved) ``ok-zero`` proves
+OK_ZERO = "in-z"
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
 
@@ -242,21 +257,36 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0"]}, "pub": pub, "o1": ok}
 
 
-def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int) -> dict[str, tuple[str, int, str]]:
+def ok_registration(win: SimpleNamespace, com: dict) -> "U.G.Registered":
+    """The verifier's own registration of a window's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
+    salt), under its own Program's digest, from the window's name and the Program's population alone."""
+    return U.register_ok(win.obj["program"], com["window"], win.tp.population)
+
+
+def roots_of(com: dict, okr) -> dict[str, tuple[int, str]]:
+    """Every registered value a statement of the window reads, each its rows and root: the commitment's (the prover's), and
+    the verifier's own ``ok`` (``okr``, `ok_registration`)."""
+    return U.registered_of(com) | {U.OK_VALUE: (okr.leaves, okr.root.hex())}
+
+
+def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int, okr) -> dict[str, tuple[str, int, str]]:
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
-    registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path."""
+    registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and the
+    ok port's at the verifier's own ``ok`` (``okr``, `ok_registration`) and its path there."""
     reg = set(U.Shape(k).in_rows)
-    return {port: (value, index, "".join(op["rows"][port]["path"]))
-            for port, (value, index) in U.unit_reads(win.program, win.tp, u).items() if port in reg}
+    out = {port: (value, index, "".join(op["rows"][port]["path"]))
+           for port, (value, index) in U.unit_reads(win.program, win.tp, u).items() if port in reg}
+    value, index = U.unit_reads(win.program, win.tp, u)["o1"]
+    return {**out, "o1": (value, index, okr.path(index).hex())}
 
 
-def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int]) -> tuple[dict, dict]:
+def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int], okr) -> tuple[dict, dict]:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (`h1unit.registered_reads`, under
-    its commitment's roots), written to ``path``, held to the h1 window's own reads (`h1unit.unit_reads`) at the drawn
-    ``units``. Returns what it wrote and the file."""
+    its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 window's own reads
+    (`h1unit.unit_reads`) at the drawn ``units``. Returns what it wrote and the file."""
     k, t = com["unit"]["k"], time.time()
-    reg = set(U.Shape(k).in_rows)
-    doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in U.registered_of(com).items()},
+    reg = {*U.Shape(k).in_rows, "o1"}
+    doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
                              win.obj["program"])
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
@@ -268,15 +298,15 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
             "roots": {e["value"]: e["root"] for e in doc["ports"].values()}, "seconds": round(time.time() - t, 1)}, doc
 
 
-def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, com: dict) -> bool:
+def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, roots: dict) -> bool:
     """Whether table row ``row`` of registered port ``port`` in a shared-row public file opens its value's registered root
-    at the position and through the path its header states: the check flock-verify ``--registered`` makes of each table
-    row (`h1unit.verify_registered`)."""
+    (``roots``, `roots_of`) at the position and through the path its header states: the check flock-verify
+    ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
     nl = pub.index(b"\n") + 1
     head, body, names = json.loads(pub[:nl]), pub[nl:], [p.name for p in ports]
     at = sum(int(head["shared_rows"][q]) for q in names[:names.index(port)]) + row
     e = head["registered"][port]
-    leaves, root = U.registered_of(com)[e["value"]]
+    leaves, root = roots[e["value"]]
     return U.verify_registered(win.obj["program"], e["value"], leaves, bytes.fromhex(root), e["positions"][row],
                                body[128 * at:128 * (at + 1)], [e["paths"][row]])
 
@@ -357,6 +387,13 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
+def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
+    """The `k` units of `population` a window's draw coin selects, after its registration (hex) was recorded: Lean
+    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the window's name and its registration."""
+    key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
+    return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
+
+
 def cmd_prepare(a) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
@@ -384,12 +421,13 @@ def cmd_prepare(a) -> int:
     record["z_only_registration"] = {"refused": check_registration(win, z_only(com1))}
     if not record["z_only_registration"]["refused"]:
         raise SystemExit("a registration of the records' z alone is accepted")
+    ok1 = ok_registration(win, com1)
+    record["ok_registration"] = {w1: ok1.entry()}
     reg = registration(com1, served1)
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    key = derive(do.coin, DRAW_DOMAIN, {"window": w1, "registration": reg.hex()})
-    units = sorted(lean_draw(a.lean, T, a.draw, key.stream("draw", 2 * a.draw * CC.width(T) + 64)))
+    units = draw_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
     u0 = units[0]
     by_call: dict[int, list[int]] = {}
     for u in units:
@@ -407,7 +445,7 @@ def cmd_prepare(a) -> int:
     shape = U.Shape(k, R, C)
     regs1, record["registered_reads"] = {c: vp / f"w1-c{c}.registered.json" for c in by_call}, {}
     for c, us in by_call.items():
-        record["registered_reads"][f"w1-c{c}"], _doc = registered_file(regs1[c], win, com1, c, us)
+        record["registered_reads"][f"w1-c{c}"], _doc = registered_file(regs1[c], win, com1, c, us, ok1)
     log(f"the verifier's registered reads of {w1}: {record['registered_reads']}")
 
     # the honest openings, a drawn call's units each, and each negative's tampered window's on the first drawn call's
@@ -430,7 +468,7 @@ def cmd_prepare(a) -> int:
                 raise SystemExit(f"{tag}'s registration is not of the verifier's Program: {why}")
             if U.registered_of(com_t) != U.registered_of(com1):
                 regs[tag] = vp / f"{tag}.registered.json"
-                record["registered_reads"][tag], _doc = registered_file(regs[tag], win, com_t, c0, units0)
+                record["registered_reads"][tag], _doc = registered_file(regs[tag], win, com_t, c0, units0, ok1)
             else:
                 regs[tag] = regs1[c0]
         prover("open", str(work / priv), salt1.hex(), ",".join(map(str, us)), str(work / f"open-{tag}"))
@@ -438,7 +476,7 @@ def cmd_prepare(a) -> int:
         why = {u: check_opening(win, com_t, served_t, op, u) for u, op in zip(us, ops)}
         why_vs_honest = {u: check_opening(win, com1, served1, op, u) for u, op in zip(us, ops)}
         opened[tag] = [unit_bcs(shape, com_t, salt1, op) for op in ops]
-        reads[tag] = [unit_registered(win, k, op, u) for u, op in zip(us, ops)]
+        reads[tag] = [unit_registered(win, k, op, u, ok1) for u, op in zip(us, ops)]
         zy = f"zy@{U.HW.call_of(win.program, us[0])[0]}"
         record.setdefault("openings", {})[tag] = {
             "units": us, "registered": {zy: U.registered_of(com_t)[zy][1], "receipt_root": served_t["receipt_root"]},
@@ -451,6 +489,9 @@ def cmd_prepare(a) -> int:
     # a prover that stages an A row the registration does not hold (`window.py open --tamper-a`): its opening is the honest one
     record["tampered_a"] = prover("open", str(work / w1), salt1.hex(), ",".join(map(str, units0)),
                                   str(work / "open-tampered-a"), "--tamper-a")["tampered"]
+    # a prover that commits its ok rows afresh (`window.py open --unregistered-ok`): no registered position or path for o1
+    prover("open", str(work / w1), salt1.hex(), ",".join(map(str, units0)), str(work / "open-ok-unregistered"),
+           "--unregistered-ok")
 
     # the second window, its first drawn unit's tile presented as window 1's
     com2, served2, salt2, _ch2 = epoch(work, w2, a.layer2, 2, a, record, win.obj["program"])
@@ -458,8 +499,10 @@ def cmd_prepare(a) -> int:
         raise SystemExit("the second window's shape (its slot and calls) is not the first's, so its Program is another")
     if why := check_registration(win, com2):
         raise SystemExit(f"{w2}'s registration is not of the verifier's Program: {why}")
+    ok2 = ok_registration(win, com2)
+    record["ok_registration"][w2] = ok2.entry()
     reg2 = vp / f"w2-c{c0}.registered.json"
-    record["registered_reads"][f"w2-c{c0}"], _doc = registered_file(reg2, win, com2, c0, [u0])
+    record["registered_reads"][f"w2-c{c0}"], _doc = registered_file(reg2, win, com2, c0, [u0], ok2)
     prover("open", str(work / w2), salt2.hex(), str(u0), str(work / "open-other"))
     op2 = json.loads((work / "open-other" / "opening.json").read_text())["units"][0]
     record["openings"]["other-window"] = {"unit": u0, "refused": check_opening(win, com1, served1, op2, u0),
@@ -474,12 +517,15 @@ def cmd_prepare(a) -> int:
     req = lambda rows, set_, out, idx: {"rows": str(rows), "set": set_, "out": str(out), "indices": idx}  # noqa: E731
     stmts = {**{h: req(work / f"open-{h}" / "rows.npz", sets[c], sw / f"st-{h}", by_call[c]) for c, h in honest.items()},
              "other": req(work / "open-other" / "rows.npz", set_o, sw / "st-other", [u0]),
-             "tampered-a": req(work / "open-tampered-a" / "rows.npz", set_h, sw / "st-tampered-a", units0)}
+             "tampered-a": req(work / "open-tampered-a" / "rows.npz", set_h, sw / "st-tampered-a", units0),
+             "ok-unregistered": req(work / "open-ok-unregistered" / "rows.npz", set_h, sw / "st-ok-unregistered", units0)}
     base = {t: sw / "st-honest" for t in IN_PROOF}
     for t in IN_PROOF:
         if record["tampered"][t]["records"]:
             stmts[f"base-{t}"] = req(work / f"open-{t}" / "rows.npz", set_h, sw / f"st-base-{t}", units0)
             base[t] = sw / f"st-base-{t}"
+    if f"base-{OK_ZERO}" not in stmts:
+        raise SystemExit(f"{OK_ZERO} moved no record, so no statement of it computes ok = 0 for ok-zero")
     for name, r in stmts.items():
         (sw / "requests" / f"{name}.json").write_text(json.dumps(r))
 
@@ -492,7 +538,7 @@ def cmd_prepare(a) -> int:
     files = {**{h: (sets[c], opened[h], by_call[c], reads[h]) for c, h in honest.items()},
              **{t: (set_h, opened[t], units0, reads[t]) for t in (*BINDING, *IN_PROOF)},
              "other-window": (set_o, [opened["honest"][0]], [u0], [reads["honest"][0]]),
-             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)], [u0], [unit_registered(win, k, op2, u0)])}
+             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)], [u0], [unit_registered(win, k, op2, u0, ok2)])}
     for tag, (set_name, bcs, indices, rd) in files.items():
         (vp / f"{tag}.pub.bin").write_bytes(U.verifier_pub(head, set_name, head["subcircuit"], bcs, indices, rd))
     for name, r in stmts.items():
@@ -513,12 +559,31 @@ def cmd_prepare(a) -> int:
         raise SystemExit(f"an honest statement's pub.bin is not the verifier's own file: {eq}")
     # the tampered A row's table row in its statement's own public file, as flock-verify --registered checks it
     ta = record["tampered_a"]
+    roots1 = roots_of(com1, ok1)
     record["tampered_a"]["table_row_0_opens"] = {
-        x: registered_opens((sw / f"st-{x}" / "pub.bin").read_bytes(), shape.ports(), ta["port"], 0, win, com1)
+        x: registered_opens((sw / f"st-{x}" / "pub.bin").read_bytes(), shape.ports(), ta["port"], 0, win, roots1)
         for x in ("honest", "tampered-a")}
     log(f"tampered-a: {ta}")
     if ta["table_row_0_opens"] != {"honest": True, "tampered-a": False}:
         raise SystemExit(f"the tampered A row's table row opens the registered root as {ta['table_row_0_opens']}, not only the honest one")
+    # the ok row, bound through the verifier's own registration: each of honest's ok table rows opens ok's root; the base
+    # statement of OK_ZERO (its unit computing ok = 0 where its record moved) states that 0 in its own public file, whose
+    # o1 table row opens no root there; and a statement that commits its ok rows afresh names no o1 registered
+    zero = record["tampered"][OK_ZERO]["records"][0]
+    zi = units0.index(zero)
+    if not np.array_equal(np.load(base[OK_ZERO] / "outs.npz")["o1"][zi], np.zeros_like(U.OK)):
+        raise SystemExit(f"{OK_ZERO}'s base statement does not compute ok = 0 at unit {zero}, whose record moved")
+    pubs = {x: (sw / f"st-{x}" / "pub.bin").read_bytes() for x in ("honest", "ok-unregistered", f"base-{OK_ZERO}")}
+    heads = {x: json.loads(p[:p.index(b"\n")]) for x, p in pubs.items()}
+    record["ok_negatives"] = {
+        "honest_rows_open": [registered_opens(pubs["honest"], shape.ports(), "o1", i, win, roots1) for i in range(len(units0))],
+        "ok_zero": {"unit": zero, "instance": zi, "table_row_opens": registered_opens(
+            pubs[f"base-{OK_ZERO}"], shape.ports(), "o1", zi, win, roots1)},
+        "ok_unregistered": {"registered_ports": sorted(heads["ok-unregistered"]["registered"])}}
+    log(f"ok: {record['ok_negatives']}")
+    if (not all(record["ok_negatives"]["honest_rows_open"]) or record["ok_negatives"]["ok_zero"]["table_row_opens"]
+            or "o1" in heads["ok-unregistered"]["registered"] or "o1" not in heads["honest"]["registered"]):
+        raise SystemExit(f"the ok row is not bound through the verifier's registration: {record['ok_negatives']}")
     # the in-proof negatives: the first drawn call's statement on the tampered window's rows with every output row the
     # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
     for t in IN_PROOF:
@@ -534,9 +599,13 @@ def cmd_prepare(a) -> int:
     st = record["staged"]
     r1, r2 = str(regs1[c0]), str(reg2)
     refusal = f"registered reads: port {ta['port']}: table row 0 does not open {ta['value']}'s registered root at position {ta['position']}"
+    ok_zero = f"registered reads: port o1: table row {zi} does not open {U.OK_VALUE}'s registered root at position {zero}"
+    ok_afresh = f"registered reads: the statement commits port o1's rows of {U.OK_VALUE} afresh, with no path to its registered root"
     plan = {"statements": [*({"tag": h, "dir": stmts[h]["out"], "n": len(by_call[c])} for c, h in honest.items()),
                            {"tag": "other", "dir": stmts["other"]["out"], "n": 1},
                            {"tag": "tampered-a", "dir": stmts["tampered-a"]["out"], "n": len(units0)},
+                           {"tag": "ok-unregistered", "dir": stmts["ok-unregistered"]["out"], "n": len(units0)},
+                           {"tag": "ok-zero", "dir": str(base[OK_ZERO]), "n": len(units0)},
                            *({"tag": d, "dir": str(sw / f"st-{d}"), "n": len(units0)} for t in IN_PROOF for d in (t, f"{t}{SKIP}"))],
             "checks": [*({"tag": h, "statement": h, "pub": str(vp / f"{h}.pub.bin"), "registered": str(regs1[c]),
                           "expect": "ACCEPT"} for c, h in honest.items()),
@@ -549,6 +618,12 @@ def cmd_prepare(a) -> int:
                        # against its own public file, so only the registered reads can refuse it, and they must say why
                        {"tag": "tampered-a", "statement": "tampered-a", "pub": str(sw / "st-tampered-a" / "pub.bin"),
                         "registered": r1, "expect": "REJECT", "why": refusal},
+                       # each against its own public file too: only the ok row's registered read can refuse it
+                       {"tag": "ok-unregistered", "statement": "ok-unregistered",
+                        "pub": str(sw / "st-ok-unregistered" / "pub.bin"), "registered": r1, "expect": "REJECT",
+                        "why": ok_afresh},
+                       {"tag": "ok-zero", "statement": "ok-zero", "pub": str(base[OK_ZERO] / "pub.bin"),
+                        "registered": str(regs[OK_ZERO]), "expect": "REJECT", "why": ok_zero},
                        *({"tag": d, "statement": d, "pub": str(vp / f"{t}.pub.bin"), "registered": str(regs[t]),
                           "expect": "REFUSED"} for t in IN_PROOF for d in (t, f"{t}{SKIP}"))]}
     if a.only:
@@ -656,9 +731,16 @@ def cmd_summarize(a) -> int:
     for s in plan["statements"]:
         t = _time(out / s["tag"] / "prove.time")
         po = out / s["tag"] / "prove.out"
-        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": po.read_text()[-1500:] if po.exists() else None,
-                            "serve": _time(out / s["tag"] / "serve.time")}
+        text = po.read_text(errors="replace") if po.exists() else ""
+        pe = out / s["tag"] / "prove.err"
+        fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
+        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
+    firewall = a.firewall == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
+    if firewall and not proofs.get("honest", {}).get("firewall_timed"):
+        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
+        ok = False
     for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "ACCEPT" if x == "honest" else "REJECT"}
                                for x in a.controls.split()]:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
@@ -684,7 +766,7 @@ def cmd_summarize(a) -> int:
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
-    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok,
+    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok, "firewall": firewall,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile_shape": [R, C],
                "ands": record["circuit"]["ands"], "k_log": record["circuit"]["k_log"],
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],
@@ -740,6 +822,8 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
+    p.add_argument("--firewall", default="0", help="1: the provers ran under the firewall (FC_FIREWALL=1), whose times "
+                                                    "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)
 

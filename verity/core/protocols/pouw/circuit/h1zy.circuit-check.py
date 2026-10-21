@@ -9,12 +9,14 @@ def _pouw_roots() -> list[Any]:
     """`PouwZyCheck_v1` at the smoke's 4 × 8 unit (32 `PouwZyDequant_v2` and `PouwZyCell_v2`, then 31 `PouwAndBit_v2`), and
     `PouwH1TileZy_v1` over `PouwH1Tile_v1` and `PouwH1Tile_v3` at their smallest tile, one lane (4 × 8) at K = 64 on the s8
     accumulator on bits (`h1tile`'s sidecar's), each the tile and that check. `PouwH1LaneZy_v1` over both at the smallest
-    leaf of whole index bits, 8 × 16 (4 lanes, 2 bits): one lane's seed, 13 noise blocks and its key block, each counter
-    picked by `PouwMuxBit_v2` over the index, its fx1 chain, z (v1's exact dots or v3's one-stream cells), its 32 record
-    cells picked over the index, that check, and the admit gate and the equality of its partials row (8 words at KS = 2);
-    and `PouwH1Combine_v1` at that leaf, its 4 rows XORed and held to the receipt. None where `circuit.segment` is not on the
-    tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`, `PouwAndBit` and `PouwMuxBit` are catalog
-    roots (static-free)."""
+    leaf of whole index bits, 8 × 16 (4 lanes, the low 2 bits of a 16-bit index): one lane's seed, 13 noise blocks and its
+    key block, each counter picked by `PouwMuxBit_v2` over the index, its fx1 chain, z (v1's exact dots or v3's one-stream
+    cells), its 32 record cells picked over the index, that check, the admit gate and the equality of its partials row (8
+    words at KS = 2), and ok 0 where the index's 14 high bits are not all 0;
+    and `PouwH1Combine_v1` at that leaf, its 4 rows XORed and held to the receipt. Both are bound as Definitions, since
+    `h1zy.lane` and `h1zy.combine` stage them only at a K whose rows a proof takes (`h1zy.proved_k`, K >= 448). None where
+    `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
+    `PouwAndBit` and `PouwMuxBit` are catalog roots (static-free)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.core.protocols.pouw.circuit import h1tile as H
@@ -29,4 +31,5 @@ def _pouw_roots() -> list[Any]:
 
     tiles = (H.PouwH1Tile, H.PouwH1Tile3)
     return ([bind(Z.PouwZyCheck, R=4, C=8)] + [Z.unit(tile(d, 4, 8)) for d in tiles]
-            + [Z.lane(tile(d, 8, 16)) for d in tiles] + [Z.combine(tile(H.PouwH1Tile, 8, 16))])
+            + [bind(Z.PouwH1LaneZy, TILE=tile(d, 8, 16)) for d in tiles]
+            + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))])

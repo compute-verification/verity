@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conftest import ACCT, BOT_USER, CHAT, COORD, DANIEL, LUKE, TEAM
+from conftest import ACCT, BOT, BOT_USER, CHAT, COORD, DANIEL, LUKE, TEAM
 from slack_events import consumer, router
 from slack_events.consumer import FAILED, MAX_DELIVERIES, NO_MODEL, ROUTING_LINE, START_HERE, Retry, consume
 from slack_events.deps import DEAD, DEAD_TOPIC, LAST_SUCCESS
@@ -69,6 +69,22 @@ def test_what_the_consumer_leaves_alone(world, where, msg, why):
     post = world.slack.add(where, **msg)
     assert consume(world.deps, world.event(where, post), 1) == why
     assert world.rung("top") == world.rung("circuits") == []
+
+
+def test_an_external_posters_post_through_our_bot_rings_by_the_rule_even_at_the_front_door(world):
+    """20 Oct: Codex, Daniel's desktop agent, posts through Verity's bot without `research msg`, so its asks to lanes rang
+    no one (4 a day in the replay).  The service delivers them, by the names they start with only."""
+    codex = {"bot_id": BOT, "username": "Codex", "subtype": "bot_message"}
+    ask = world.slack.add(COORD, text="@circuits @kernels both of you claimed the launch; who owns it?", **codex)
+    assert consume(world.deps, world.event(COORD, ask), 1) == "rule"
+    assert world.rung("circuits") == world.rung("kernels") == [
+        f"from codex, thread {ask['ts']}: @circuits @kernels both of you claimed the launch; who owns it?"]
+    assert consume(world.deps, world.event(COORD, ask, "EvAgain"), 1) == "rule" and len(world.rung("circuits")) == 1
+    note = world.slack.add(COORD, text="readback done, nothing changed", **codex)
+    assert consume(world.deps, world.event(COORD, note), 1) == "rule"
+    assert world.rung("top") == [] and router_lines(world, COORD, note["ts"]) == []
+    lane = world.slack.add(COORD, text="@kernels x", bot_id=BOT, username="circuits", subtype="bot_message")
+    assert consume(world.deps, world.event(COORD, lane), 1) == "ignored: message/bot_message"
 
 
 def test_an_edit_or_another_event_type_is_acknowledged_and_ignored(world):

@@ -117,8 +117,11 @@ got, why = place(sys.argv[1], Path.cwd()); print("train: --on", sys.argv[1] + ":
 fi
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
+# 30 min: drive launches up to 4 trains at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
+# volume (21 Oct 14:11-14:25Z: three such launches gathered past a 10 min wait and were stopped)
+launch_wait_s=1800
 want=1 ids=
-for _ in $(seq 120); do
+for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break
   ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
   on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
