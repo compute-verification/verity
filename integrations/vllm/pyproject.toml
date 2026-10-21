@@ -54,7 +54,7 @@ markers = [
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py.
 inputs_only = true
-inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmarks/specs", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
+inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
