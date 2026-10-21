@@ -2374,15 +2374,24 @@ def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatc
 def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatch, tmp_path):
     """Security/Proofs at the published commit rebuilt 1,607 of its modules with `--dev-cache` (21 Oct), because only its
     own build was restored: Security and Flock, which it requires by path, were built again, not byte-identically, and
-    everything above them compiled. With `--dev-cache`, setup restores each path dependency's build too; without it, or
+    everything above them compiled. With `--dev-cache`, setup restores each path dependency's build too, lending one with no fetched dependencies of its own the root's for the restore; without it, or
     after a failed setup.sh, it restores nothing more."""
-    calls = []
-    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: calls.append(argv) or (0, ""))
+    calls, seen = [], []
     deps = [tmp_path / "Security", tmp_path / "flock"]
+    (tmp_path / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
+    (tmp_path / "flock" / ".lake" / "packages").mkdir(parents=True)
+
+    def run(argv, cwd, log=None, timeout=0):
+        calls.append(argv)
+        seen.append({d.name: (d / ".lake" / "packages").is_symlink() for d in deps})
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
     monkeypatch.setattr(A, "path_deps", lambda p: deps)
     monkeypatch.setattr(A, "DEV_CACHE", True)
     assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "")
     assert calls == [[A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]]
+    assert seen == [{"Security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
     calls.clear()
     assert A.dev_restore(tmp_path / "Proofs", 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
     monkeypatch.setattr(A, "DEV_CACHE", False)

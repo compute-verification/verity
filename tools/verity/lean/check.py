@@ -2153,7 +2153,21 @@ def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
     (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
     if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
         return rc, text
-    _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg, log.with_name(f"{log.stem}-deps.log"))
+    # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
+    # dependency has none of its own (the workspace's are ``pkg``'s, at one Mathlib revision for all), so it borrows them
+    linked = []
+    try:
+        for d in deps:
+            own = d / ".lake" / "packages"
+            if not own.exists() and (pkg / ".lake" / "packages").is_dir():
+                own.parent.mkdir(parents=True, exist_ok=True)
+                own.symlink_to((pkg / ".lake" / "packages").resolve())
+                linked.append(own)
+        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
+                      log.with_name(f"{log.stem}-deps.log"))
+    finally:
+        for own in linked:
+            own.unlink(missing_ok=True)
     return rc, text + more
 
 
