@@ -6,7 +6,9 @@ A case is an honest opening (a window of P entries, a call's and the filler's ea
 of their tiles, its proof's public file a header (over the template's pinned circuit, `core_check.TILES`) and the two
 rows' b ‖ c, the registration's entries root over the
 entries' leaves), then one mutation (`MUTATIONS`) aimed at one refusal of `core_check.opening`, or at a reading both
-sides must share (hex as `bytes.fromhex` reads it, the header's keys in sorted order).  A salted case (`SALTED`) is
+sides must share (hex as `bytes.fromhex` reads it, the header's schemas by port name, in any written order).  A header
+whose keys sort otherwise than its circuit's ports (`schemas-between`, `schemas-shadowed`, `salted-header-order`) is
+refused, the rows never read in key order.  A salted case (`SALTED`) is
 the same over a certified window (`CERTIFIED`) and a salted template (`core_check.Salted`): each entry's side trees hold R
 A rows per tile row and C B rows per tile column, the opening lists the unit's R and C rows, and the proof's body holds
 their b ‖ c and then its public row's, `core_check.public_bc` of the window's context, its salt, the unit and the entry's
@@ -134,14 +136,15 @@ MUTATIONS = [
     "header-not-json", "header-nan", "header-list", "header-utf8", "instances-missing", "instances-bool",
     "instances-two", "instances-float", "instances-string", "circuit-other", "circuit-missing", "circuit-type",
     "schemas-missing", "frame-type", "schemas-type",
-    "schemas-swapped", "schemas-one", "schemas-unsorted", "schemas-prefixed", "body-short", "a-index", "b-index",
+    "schemas-swapped", "schemas-one", "schemas-unsorted", "schemas-prefixed", "schemas-between", "schemas-shadowed",
+    "body-short", "a-index", "b-index",
     "a-row", "b-row", "b-path", "a-path-short", "rows-swapped", "past-side", "params-bad", "commitment-bad",
     "certified-unsalted", "uncertified-salt",
 ]
 #: a salted case (`honest(…, salted=True)`), honest (``salted``) or with one mutation
 SALTED = [
     "salted", "salted-no-salt", "salted-salt-short", "salted-other-salt", "salted-uncertified", "salted-position",
-    "salted-roots", "salted-row-salt", "salted-schemas", "salted-schemas-missing", "salted-body-short",
+    "salted-roots", "salted-row-salt", "salted-schemas", "salted-schemas-missing", "salted-header-order", "salted-body-short",
     "salted-sides-short", "salted-side-dict", "salted-a-index", "salted-b-row", "salted-pub-swapped", "salted-circuit",
 ]
 NAMES = MUTATIONS + SALTED
@@ -239,10 +242,12 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     elif name in ("frame-type", "schemas-type"):
         f = rng.choice([[], "frame", None])
         _repub(case, {**head, "frame_v3": f} if name == "frame-type" else {**head, "frame_v3": {**head["frame_v3"], "schemas": f}})
-    elif name in ("schemas-swapped", "schemas-one", "schemas-unsorted", "schemas-prefixed"):
-        s = head["frame_v3"]["schemas"]
+    elif name in ("schemas-swapped", "schemas-one", "schemas-unsorted", "schemas-prefixed", "schemas-between",
+                  "schemas-shadowed"):
+        s, x = head["frame_v3"]["schemas"], rng.choice(["a1", "a0x", "b"])
         new = {"schemas-swapped": {"a0": s["b0"], "b0": s["a0"], "o0": s["o0"]}, "schemas-one": {"a0": s["a0"]},
-               "schemas-unsorted": dict(reversed(list(s.items()))), "schemas-prefixed": {"0x": s["o0"], **s}}[name]
+               "schemas-unsorted": dict(reversed(list(s.items()))), "schemas-prefixed": {"0x": s["o0"], **s},
+               "schemas-between": {**s, x: s["b0"]}, "schemas-shadowed": {**s, x: s["b0"], "b0": s["a0"]}}[name]
         _repub(case, {**head, "frame_v3": {**head["frame_v3"], "schemas": new}})
     elif name == "body-short":
         _repub(case, head, case["body"][:rng.randrange(2 * CC.BC_BYTES)])
@@ -303,6 +308,9 @@ def _salted(case: dict, rng: random.Random, name: str) -> None:
             s[x] = CC.OPENED[0][1]
         else:
             del s[x]
+        _repub(case, {**head, "frame_v3": {**head["frame_v3"], "schemas": s}})
+    elif name == "salted-header-order":
+        s = {**head["frame_v3"]["schemas"], rng.choice(["a00", f"a{lay.r}", "b", f"a{lay.r - 1}x"]): CC.ROW_V2}
         _repub(case, {**head, "frame_v3": {**head["frame_v3"], "schemas": s}})
     elif name == "salted-body-short":
         _repub(case, head, body[:rng.randrange(at + CC.BC_BYTES)])

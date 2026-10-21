@@ -16,7 +16,8 @@ under the key its key.json holds, ``(checked)`` only against the key's deploymen
 period, and refuses a record under another key, a ledger core refuses, a session the manifest doesn't name, outside the
 window's period or opened for another layout, a round root the challenger didn't receive, a salt that isn't its round's
 coin's, and a draw after another root; an address without its session id is refused, and with neither the coins are
-in-process and labelled not certified; serve.py refuses ``--gate`` until #2950 gives a window's root."""
+in-process and labelled not certified; serve.py refuses ``--gate``, naming vllm's H1 path as the gated served window of
+record."""
 from __future__ import annotations
 
 import dataclasses
@@ -900,7 +901,8 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     """serve.py's coins follow the session: given one (here `$POUW_CHALLENGER`, `$POUW_CHALLENGER_SESSION` and
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
-    ``--gate`` is refused, with a session or without, until #2950 gives the root a window's session opens on."""
+    ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
+    path (`integrations/vllm/verity_vllm/protocol_options/pouw_h1.py`)."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
@@ -918,7 +920,8 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
         if not env:
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
-        with pytest.raises(ValueError, match=r"--gate research@gate: .*salt.window_open_root.* wait on #2950"):
+        with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
+                                             r"integrations/vllm/verity_vllm/protocol_options/pouw_h1\.py \(#3053\)"):
             SV.main([*argv, "--gate", "research@gate"])
 
 

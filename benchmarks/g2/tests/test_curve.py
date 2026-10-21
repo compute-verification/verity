@@ -1,6 +1,6 @@
-"""curve.py's selection: which arm is which scheme, which measures count toward G2's curve and why not, and which counting
-measure is the best per model, GPU, mode, batch, phase and metric. The documents are small stand-ins in the three formats the
-store holds (a verity-bench result doc, a tp_decode summary, a hash-loop result's meta)."""
+"""curve.py's selection: which arm is which scheme and value retention, which measures count toward G2's curve and why not, and
+which counting measure is the best per model, GPU, mode, batch, phase, metric and column. The documents are small stand-ins in
+the three formats the store holds (a verity-bench result doc, a tp_decode summary, a hash-loop result's meta)."""
 from __future__ import annotations
 
 import sys
@@ -176,7 +176,7 @@ def test_loop_measures_read_phase_steps_over_stock_prof_and_skip_what_isnt_g2():
     assert one(full, phase="decode").ratio == pytest.approx(8.021 / 6.363)
     assert {m.row_bytes for m in full} == {4096} and {m.retain for m in full} == {"none"}
     layer = one(ms, arm="served-commit-rows-layer")
-    assert (layer.acquisition, layer.row_bytes) == ("per-layer", 4096)
+    assert (layer.acquisition, layer.row_bytes, layer.retain) == ("per-layer", 4096, "none")
     assert one(ms, arm="served-commit-rows-blake3").counts() == (False, "rows-blake3: not the one hash")
     first = C.loop_measures(loop_meta(), {**LOOP_LABELS, "row": "0"}, source="art:4")
     assert {m.row_bytes for m in first if m.arm == "served-commit-rows"} == {256}
@@ -252,11 +252,53 @@ def test_best_is_the_lowest_counting_measure_per_column():
              for m in C.harness_measures(harness_doc(passed=False), run="r-low", source="art:5", pin="pinned")]
     b = C.best(good + lower)
     cols = b[("Qwen3-8B", "H200", "compiled", 32, "prefill", "ttft")]
-    assert (cols["full"].arm, cols["full"].run) == ("served-commit-rows", "r1")
-    assert cols["per-layer"].arm == "served-commit-rows-layer-4k"
+    assert (cols["full none"].arm, cols["full none"].run) == ("served-commit-rows", "r1")
+    assert cols["per-layer none"].arm == "served-commit-rows-layer-4k"
     assert (cols["vllm-v1"].arm, cols["vllm-v1"].run) == ("served-commit-nativedrain", "r1")
-    better = C.Measure(**{**cols["full"].__dict__, "ratio": 1.5, "run": "r9"})
-    assert C.best(good + [better])[("Qwen3-8B", "H200", "compiled", 32, "prefill", "ttft")]["full"].run == "r9"
+    better = C.Measure(**{**cols["full none"].__dict__, "ratio": 1.5, "run": "r9"})
+    assert C.best(good + [better])[("Qwen3-8B", "H200", "compiled", 32, "prefill", "ttft")]["full none"].run == "r9"
+
+
+def glm(arm: str, retain: str | None, decode: float, *, batch: str = "1", run: str = "r-glm") -> list[C.Measure]:
+    """A tp_decode arm's measures at one batch, its retention read as run_measures reads it (None: a summary without it)."""
+    s = tp_summary(arm=arm)
+    s["batches"] = {batch: {**s["batches"]["1"], "tpot_ratio": {"median": decode, "min": decode, "max": decode, "pairs": 3}}}
+    if retain:
+        s["retain"] = retain
+    return C.tp_measures(s, run=run, source="art:g", gpu="8x H200", retain=C.tp_retain(s, {}))
+
+
+def test_retention_modes_are_columns_of_their_own_and_a_cell_takes_4k_rows_over_256_b():
+    old, b8 = glm("rows", None, 1.398, run="r-256"), glm("rows", None, 1.434, batch="8", run="r-256")
+    none, host = glm("rows-4k", "none", 1.399, run="r-none"), glm("rows-4k", "host", 1.422, run="r-host")
+    assert {m.retain for m in old} == {"none"} and {m.retain for m in host} == {"host"}
+    b = C.best(old + b8 + none + host)
+    b1 = b[("GLM-5.3", "8x H200", "eager", 1, "decode", "step")]
+    assert (b1["full host"].run, b1["full none"].run) == ("r-host", "r-none")
+    assert set(b[("GLM-5.3", "8x H200", "eager", 8, "decode", "step")]) == {"full none"}
+    assert b[("GLM-5.3", "8x H200", "eager", 8, "decode", "step")]["full none"].run == "r-256"
+    head, _, *rows = C.curve_table(old + b8 + none + host).splitlines()
+    assert head.index("full Commit, rows-sha512, retain host") < head.index("full Commit, rows-sha512, retain none") \
+        < head.index("vllm-v1")
+    b8_row = next(r for r in rows if "| 8 | decode | step |" in r)
+    assert "| 194.50 | – | 1.43x [1.43, 1.43] rows r-256 | – |" in b8_row
+
+
+@pytest.mark.parametrize("summary, params, want", [
+    ({"retain": "host"}, {"argv": ["env", "RETAIN=none", "bash", "inputs/tp_decode_retain.sh"]}, "host"),
+    ({}, {"argv": ["gpu-lease", "8", "--wait", "--mem-gb", "160", "--", "env", "RETAIN=host", "BATCHES=1", "ARM=rows-4k", "bash",
+                   "-c", 'bash "$RESEARCH_RUN_DIR/inputs/tp_decode_retain.sh"']}, "host"),
+    ({}, {"argv": ["bash", "inputs/tp_decode_retain.sh"], "env": {"RETAIN": "device"}}, "device"),
+    ({}, {"argv": ["bash", "inputs/tp_decode_retain.sh"]}, "?"),
+    ({}, {"argv": ["gpu-lease", "8", "--wait", "--mem-gb", "400", "--", "env", "ARM=rows", "bash",
+                   "benchmarks/served_commit/tp_decode.sh"]}, "none"),
+    ({}, {"argv": ["env", "RETAIN=host", "bash", "benchmarks/served_commit/tp_decode.sh"]}, "none"),
+    ({}, {"command": ["env", "RETAIN=host", "bash", "inputs/tp_decode_retain.sh"]}, "none"),
+    ({}, {}, "none"),
+])
+def test_a_tp_decode_arms_retention_is_its_summarys_else_t1rs_wrappers_else_none(summary, params, want):
+    """`params` is the attempt's, as `research data show RUN --json` has it: the run's command line is its `argv`."""
+    assert C.tp_retain(summary, params) == want
 
 
 def test_a_key_with_only_sha256_or_failed_measures_is_no_curve_row():

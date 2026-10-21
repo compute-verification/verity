@@ -152,8 +152,9 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # m16n8k4 and m16n8k8 are untimed.
 # The census's memory, atomic and control classes (ATOMS32, ATOME32, LDS128, STS32, STS128, STG32, STG128, REDUX,
 # REDG32, ISETP, NOROW and the catch-all UNLISTED) are issue only: no document gives them a line on a row of the
-# sheet, so A2 prices each at its issue slot alone, as the measured catch-all is (DC-CENSUS-1,
-# note:20261019T2245Z-draft-dc-census).
+# sheet, so A2 prices each at its issue slot alone (DC-CENSUS-1, note:20261019T2245Z-draft-dc-census). On DC-90-ri
+# the ones a run timed beside the IGMMA, the catch-all among them, carry the census's JI90 lines too
+# (r20261021-070616-d06c, r20261021-074303-da7f).
 [kinds]
 ALU = { pipe = "alu" }
 ATOME32 = {}

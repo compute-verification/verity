@@ -1,7 +1,7 @@
-"""The hardware's routes, and φ: positions in messages, the packed cut, HELLOs, and the occupancy profile."""
+"""The hardware's routes, and φ: positions in messages, the canonical cut, HELLOs, and the occupancy profile."""
 import pytest
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame
+from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, HEADER, decode_frame
 from workload import framing as F
 from workload import model as M
 from workload import placement as P
@@ -76,21 +76,26 @@ def test_values_round_trip_through_a_message_at_their_positions():
     assert F.decode(m, payload) == value
 
 
-@pytest.mark.parametrize("n, kinds", [(0, [LAST]), (6, [LAST]), (7, [LAST]), (8, [DATA, LAST]), (14, [DATA, LAST]),
-                                      (15, [DATA, DATA, LAST])])
-def test_the_packed_cut_fills_data_frames_then_ends_with_last(n, kinds):
+@pytest.mark.parametrize("n, count", [(0, 1), (6, 1), (7, 1), (8, 2), (14, 2), (15, 3)])
+def test_the_canonical_cut_fills_frames_of_one_header_and_zero_fills_the_last(n, count):
+    """Every frame is a `DATA` frame on the canonical stream of B − 9 bytes, so no header says where a message ends."""
     payload = bytes(range(1, n + 1))
-    frames = F.cut(9, payload, 16)
-    assert [decode_frame(f)[0] for f in frames] == kinds
-    assert all(len(f) == 16 and decode_frame(f)[1] == 9 for f in frames)
-    assert b"".join(decode_frame(f)[2] for f in frames) == payload
+    frames = F.cut(payload, 16)
+    assert len(frames) == count and all(len(f) == 16 and f[:HEADER.size] == F.head(16) for f in frames)
+    assert {decode_frame(f)[:2] for f in frames} == {(DATA, CANONICAL_STREAM)}
+    data = b"".join(decode_frame(f)[2] for f in frames)
+    assert data[:n] == payload and not any(data[n:])
 
 
 def test_a_hello_names_its_connection_and_needs_room():
     hw = mock(2)
     f = F.hello(hw, "b1", OUTSIDE, 13)
-    assert len(f) == 13 and F.read_hello(hw, f) == ("b1", OUTSIDE)
-    assert F.read_hello(hw, F.cut(1, b"\0\0\0\0", 13)[0]) is None
+    assert len(f) == 13 and f[:HEADER.size] == F.head(13) and F.read_hello(hw, f) == ("b1", OUTSIDE)
+    assert F.read_hello(hw, F.cut(b"\0\0\0\0", 13)[0]) == ("b0", "b0")
+    assert F.read_hello(hw, F.cut(b"\0\x09\0\0", 13)[0]) is None
+    wide = F.hello(hw, "b1", OUTSIDE, 14)
+    assert F.read_hello(hw, wide) == ("b1", OUTSIDE)
+    assert F.read_hello(hw, wide[:-1] + b"\1") is None and F.read_hello(hw, wide[:13]) is None
     with pytest.raises(ValueError):
         F.phi(hw, [], HEADER.size + F.HELLO.size - 1)
 
@@ -118,4 +123,4 @@ def test_the_occupancy_profile_counts_each_frame_at_its_readers_bucket(model):
 def test_a_wide_message_takes_as_many_frames_as_its_bytes_need():
     m = F.Message(1, "b0", "b1", 5, (Edge(5, "b0", "b1", 7, 81, 2, 4, 3),))
     assert [F.frame_count(m, b) for b in (13, 14, 20, 64)] == [3, 3, 1, 1]
-    assert len(F.cut(1, F.encode(m, {7: (1 << 81) - 1}), 13)) == 3
+    assert len(F.cut(F.encode(m, {7: (1 << 81) - 1}), 13)) == 3

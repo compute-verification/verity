@@ -155,6 +155,12 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
 
 
+def test_the_latency_ceiling_is_a_measured_device_claim() -> None:
+    e = get("latency-ceiling")
+    assert (e.kind, e.standing, e.label) == ("assumption", "measured", "Latency ceiling")
+    assert "network certifier on its egress" in e.name and "within the stated ceiling" in e.name
+
+
 def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
     """ASK-74 = A: Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
     e = get("accounting-declared-device")

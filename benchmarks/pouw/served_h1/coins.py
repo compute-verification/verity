@@ -8,9 +8,10 @@
   that period's refused window. `open_window` (``ssh GATE open --session S --root R``) opens it on the window's root R,
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
-  the coin commitment its challenger signed; the challenger opens the salt coin only after R. A served window's R is
-  `salt.window_open_root` of its weights' root, its round-0 request table's root and its session (serve.py ``--gate``,
-  which waits on #2950 for it). ``coins.py open`` reserves and opens one by hand for development, on `stand_in_root` of
+  the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
+  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocol_options/pouw_h1.py` (#3053), which holds its
+  salt, round-0 request table, R, session S and requests_root rules (#2950, PRF-132); serve.py refuses ``--gate``.
+  ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
   ``--secret-file F`` and ``--commitment HEX`` (``$POUW_CHALLENGER``, ``$POUW_CHALLENGER_SESSION``,
   ``$POUW_CHALLENGER_SECRET_FILE``, ``$POUW_CHALLENGER_COMMITMENT``); an address without its session id, either without

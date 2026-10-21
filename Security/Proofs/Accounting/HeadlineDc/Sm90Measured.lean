@@ -14,9 +14,9 @@ rows (issue, JI90_0, JI90_1; `sm90m_isCert`), `p = 7/8`, `p₀ = ½` and `Λ = m
   of the 14 fold routes costs at least the cheapest one's price on π*'s rows (`sm90m_fold`, `sm90m_phiStar`);
 * A6 (`SheetWords`) gives (I2)/(I4) `WordsWritten` and, at `q = q_T = ½` and `b_T = 0`, (I3) `ScalarRoute`
   (`scalarRoute_half`); (I5) `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
-* the folded branch from those bounds (`folded_of_lower`): below `1908/100000` by `decide` (`sm90m_folded_q`), and it
+* the folded branch from those bounds (`folded_of_lower`): below `1544/100000` by `decide` (`sm90m_folded_q`), and it
   binds;
-* the unfolded branch (`unfolded_of_lower`): below `1908/100000` by `decide` (`sm90m_unfolded_q`);
+* the unfolded branch (`unfolded_of_lower`): below `1544/100000` by `decide` (`sm90m_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
@@ -39,7 +39,7 @@ def lam90 (r : Fin 15) : ℚ := Sparse.coeff lamv90 r.val
 
 /-- ♭'s counts on DC-90-ri, its four lists in `labelled`'s order. -/
 def flat90M : Sparse :=
-  Sm90Measured.flatWords ++ Sm90Measured.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
+  Sm90.flatWords ++ Sm90Measured.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
 
 /-- `B_♭` on DC-90-ri as a rational: ♭'s load on JPA90_0. -/
 def B90M : ℚ := dot (vfCoef90 10) 50 flat90M
@@ -100,12 +100,12 @@ theorem sm90m_fold : ∀ i < 14, phi90M ≤
   decide +kernel
 
 theorem sm90m_folded_q :
-    (1 - 1908 / 100000 : ℚ) * B90M ≤ 4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+    (1 - 1544 / 100000 : ℚ) * B90M ≤ 4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6000) +
       4096 * phi90M := by
   decide +kernel
 
 theorem sm90m_unfolded_q :
-    (1 - 1908 / 100000 : ℚ) * B90M ≤ (4096 * w90M + 4096 * phi90M) * (1 - 41 / 48000) := by
+    (1 - 1544 / 100000 : ℚ) * B90M ≤ (4096 * w90M + 4096 * phi90M) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm90m_hG : ∀ r k, Sm90Measured.model.G.a r k = (vfRow90 r k.val : ℝ) := fun _ _ => rfl
@@ -117,7 +117,7 @@ theorem sm90m_a_nonneg : ∀ r k, 0 ≤ Sm90Measured.model.G.a r k := fun r k =>
 theorem sm90m_bnd : Sm90Measured.model.bnd Sm90Measured.flat = (B90M : ℝ) := by
   unfold Model.bnd
   rw [show Sm90Measured.flat.n = Sparse.counts flat90M from
-    labelled_n 50 Sm90Measured.flatWords Sm90Measured.flatFold Sm90.flatFill Sm90Measured.flatSkip]
+    labelled_n 50 Sm90.flatWords Sm90Measured.flatFold Sm90.flatFill Sm90Measured.flatSkip]
   exact bound_eq _ vfRow90 sm90m_hG flat90M 10 fun r => sm90m_max r.val r.isLt
 
 theorem sm90m_Nw : Sm90Measured.model.Nw = 4096 := by
@@ -246,9 +246,9 @@ theorem sm90m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90Measured.model sm90m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 1908/100000`. -/
+/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 1544/100000`. -/
 theorem sm90m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 1908 / 100000 ≤ 1 - Sm90Measured.model.epsSkip Sm90Measured.flat Sm90Measured.lamStar -
+    1 - 1544 / 100000 ≤ 1 - Sm90Measured.model.epsSkip Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsCert Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsRoute Sm90Measured.flat Sm90Measured.lamStar -
       Sm90Measured.model.epsMand Sm90Measured.flat Sm90Measured.lamStar -
@@ -261,9 +261,9 @@ theorem sm90m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm90m_Nw, sm90m_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 1908/100000`. -/
+/-- The unfolded branch's floor at π* is at least `1 − 1544/100000`. -/
 theorem sm90m_unfolded :
-    1 - 1908 / 100000 ≤ (Sm90Measured.model.Nw * Sm90Measured.model.wStar Sm90Measured.lamStar +
+    1 - 1544 / 100000 ≤ (Sm90Measured.model.Nw * Sm90Measured.model.wStar Sm90Measured.lamStar +
       (1 - Sm90Measured.model.muF) * Sm90Measured.model.Nw *
         Sm90Measured.model.phiStar Sm90Measured.lamStar) /
         Sm90Measured.model.bnd Sm90Measured.flat * (1 - 41 / 48000) := by
