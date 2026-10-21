@@ -91,7 +91,7 @@ DC_DEV void wg_until(const OpArgs& a) {
 template <int M, int R>
 DC_DEV void wg_until_mem(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  constexpr int SX = 16 * MEM_SX;  // 12 warps' scratch, and 32 LDS.128 lines
+  constexpr int SX = 32 * MEM_SX;  // 12 warps' scratch, and 64 LDS.128 lines
   __shared__ __align__(16) unsigned char sx[SX];
   const Tiles t = fill_tiles<0>(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
@@ -120,7 +120,7 @@ DC_DEV void wg_until_mem(const OpArgs& a) {
 template <int M, int R>
 DC_DEV void wg_mix_mem(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  constexpr int SX = 8 * MEM_SX;
+  constexpr int SX = 16 * MEM_SX;
   __shared__ __align__(16) unsigned char sx[SX];
   const Tiles t = fill_tiles<0>(sm, a.mode);
   int d[128] = {};

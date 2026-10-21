@@ -112,8 +112,9 @@ DC_DEV void lane_ops(Lane& l) {
 // red.shared.xor (ATOMS, ATOMS32); lds128: ld.shared.v4.u32 (LDS.128, LDS128). A global access goes to its warp's own
 // 8 KB of `g`, a 128-byte line an access and the trip's parity picking one of two sets of lines, so the lane warps' loads
 // stay in L1. Shared accesses go to the block's SX bytes of scratch: an atomic to its warp's own MEM_SX of it, an
-// LDS.128 to a 512-byte line of its own among the trip's R (ptxas merges two loads of one address), so SX holds a warp's
-// MEM_SX each and R lines. A loaded word is XORed into a chain; an atomic XORs a chain into memory.
+// LDS.128 to a 512-byte line of its own among the trip's R and the parity's two sets (ptxas merges two loads of one
+// address and hoists a load whose address no trip changes), so SX holds a warp's MEM_SX each and 2R lines. A loaded word
+// is XORed into a chain; an atomic XORs a chain into memory.
 enum { M_LDE, M_ATOME, M_REDG, M_ATOMS, M_LDS128 };
 constexpr int MEM_WARP_BYTES = 8192, MEM_BLOCK_BYTES = 32 * MEM_WARP_BYTES, MEM_SX = 1024;
 DC_DEV unsigned char* mem_global(unsigned char* g) {
@@ -128,7 +129,7 @@ DC_DEV uint32_t mem_shared(unsigned char* sx) {
 }
 template <int M, int R, int SX>
 DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sb, int n) {
-  static_assert(M != M_LDS128 || SX / 512 >= R, "an LDS.128 lane needs a line of scratch an access");
+  static_assert(M != M_LDS128 || SX / 512 >= 2 * R, "an LDS.128 lane needs two lines of scratch an access");
   const uint32_t lane = threadIdx.x & 31, sp = sb + (threadIdx.x >> 5) * MEM_SX;
 #pragma unroll
   for (int q = 0; q < R; q++) {
