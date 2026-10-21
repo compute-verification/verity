@@ -1,7 +1,7 @@
 """`protocol_options.credit_gate` and its place in H1's credit (`pouw_h1_hooks.traced`, `H1Run.judge`, `H1Run.credit`): a served
 call is credited only if the y the linear hands back is the credited kernel's own output, one GEMM invocation writing z and
 y, no other GEMM ran for it, and its z is its committed z/y records, every unit's y dq of its z and the served y theirs
-(`pouw_h1.records_reason`).  vllm's int8 arm under H1 (``zy_rows`` set, ``verity_int8::scaled_mm_zy`` over T slots) is
+(`pouw_h1_records.reason`).  vllm's int8 arm under H1 (``zy_rows`` set, ``verity_int8::scaled_mm_zy`` over T slots) is
 credited; the arm serving ``scaled_mm``'s y with z a second ``_int_mm`` beside it is refused with its named reason, and so
 is every way of handing over a z or records the served kernel didn't write for the served y."""
 from __future__ import annotations
@@ -25,6 +25,7 @@ from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocol_options import credit_gate as CG  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_records as ZR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
 from tests.protocol_options import challenger_host as CH  # noqa: E402
@@ -324,7 +325,7 @@ def test_one_op_hiding_two_gemms_is_refused():
 def test_a_fused_kernel_handing_over_its_exact_y_rather_than_records_is_refused():
     """One GEMM writing z and y passes the trace, but a z that is not the call's records commits no z table."""
     _y, run = _serve(FusedArm(kernel=fused_linear))
-    v = _refused(run, f"{RECORDS}its z is not its {PH.units(K, 32, ROWS)} z/y records of {PH.ZY_BYTES} bytes")
+    v = _refused(run, f"{RECORDS}its z is not its {PH.units(K, 32, ROWS)} z/y records of {ZR.ZY_BYTES} bytes")
     assert v["kernel"] == "verity_credit_test::fused_linear" and run.tables[0]["z"] is None
 
 
