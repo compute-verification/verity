@@ -591,6 +591,55 @@ theorem pad_filterAll {pin g p t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size
   unfold rowCopiesOf
   rw [List.filter_append, List.filter_append, hcv, hpad, hmsg, List.nil_append, List.append_nil]
 
+/-- **Δ's copy into compression `k`'s message bit `t₀`**, from the block that holds the row's length on: the constant bit
+of the row's block `k + 1` there (a row whose padding spills into its last compression has some). -/
+theorem msgConst_filterAll {pin g p k t₀ : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none)
+    (hkb : c.ports[p]!.bits / 1024 ≤ k) (hk : k < c.ports[p]!.chunks) (ht₀ : t₀ < 1024) :
+    (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
+        (fun e => e.1 = msgColOf c g p k + t₀) =
+      bitCopy c pin (msgColOf c g p k + t₀) (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t₀) := by
+  have hx := msgColOf_pos R (g := g) hp hk t₀
+  rw [filter_rows R hup hg hp (Or.inl ⟨k, 512 + t₀, hk, by omega, hx⟩)]
+  have hw : (wireFAll c g p).filter (fun e => e.1 = msgColOf c g p k + t₀) = [] := filter_nil_of _ _ fun e he => by
+    rw [hx]
+    rcases wireFAll_mem R hp he with ⟨k', t, -, hk', ht, rfl⟩ | ⟨-, t, ht, rfl⟩
+    · intro h
+      have := (shaPos_inj R hg hp hk' (by omega) hg hp hk (by omega) h).2.2.2
+      omega
+    · exact fun h => shaPos_ne_hm R hg hp hk (by omega) hg hp (by omega) h.symm
+  have hcv : (cvCopies c pin g p).filter (fun e => e.1 = msgColOf c g p k + t₀) = [] := filter_nil_of _ _ fun e he => by
+    rw [hx]
+    rcases cvCopies_fst R hp he with ⟨h0, t, ht, he1⟩ | ⟨h, -⟩
+    · rw [he1]
+      intro h
+      have := (shaPos_inj R hg hp h0 (by omega) hg hp hk (by omega) h).2.2.2
+      omega
+    · omega
+  have hpad : (padCopies c pin g p).filter (fun e => e.1 = msgColOf c g p k + t₀) = [] := filter_nil_of _ _ fun e he => by
+    rw [hx]
+    obtain ⟨t, ht, he1⟩ := padCopies_mem R he
+    rw [he1]
+    exact fun h => shaPos_ne_hm R hg hp hk (by omega) hg hp (by omega) h.symm
+  have hmsg : (msgCopies c pin g p).filter (fun e => e.1 = msgColOf c g p k + t₀) =
+      bitCopy c pin (msgColOf c g p k + t₀) (HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) k t₀) := by
+    unfold msgCopies
+    rw [filter_flatMap_single _ List.nodup_range' _ _ k (by rw [List.mem_range'_1, rowSlots_size hp]; omega)
+      fun k' hk' hne => filter_nil_of _ _ fun e he => by
+        rw [List.mem_range'_1, rowSlots_size hp] at hk'
+        have hk2 : k' < c.ports[p]!.chunks := by omega
+        obtain ⟨t, ht, he⟩ := List.mem_flatMap.1 he
+        rw [List.mem_range] at ht
+        rw [bitCopy_fst he, msgColOf_pos R hp hk2 t, hx]
+        intro h
+        exact hne (shaPos_inj R hg hp hk2 (by omega) hg hp hk (by omega) h).2.2.1]
+    rw [filter_flatMap_single _ List.nodup_range _ _ t₀ (List.mem_range.2 ht₀) fun t _ hne =>
+      filter_nil_of _ _ fun e he => by rw [bitCopy_fst he]; omega]
+    exact filter_bitCopy _ _ _ _
+  rw [hw, List.append_nil]
+  unfold rowCopiesOf
+  rw [List.filter_append, List.filter_append, hcv, hpad, hmsg]
+  rfl
+
 /-- **No copy of `HmRow.delta`'s rows or of the rows' wires is at a message bit of a row whose message has no constant
 bit before its last block** (an output row: `bits = 16 · words`, `2 · words = 128 · chunks`). -/
 theorem msg_filterAll {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hup : c.ports[p]!.segs = none)
