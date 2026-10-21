@@ -35,7 +35,8 @@ commitment after `after` (`live_reason`), and refuses every coin after.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
-(`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
+(`ledger_lines`, `challenger.ledger_head`), each entry of the session written at a commit of main's first-parent history
+as the verifier's own copy lists it (`main_lines`): the commitment the challenger signed and the roots its signed release log
 shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
 against which a family's openings are `order_reason`'s.  An
 opening's `after` is the prover's to write, so only the challenger's log shows which root a coin followed.
@@ -439,17 +440,27 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
     return [line for line in text.split("\n") if line]
 
 
+def main_lines(path: str | os.PathLike) -> list[str]:
+    """The verifier's copy of main's first-parent history at `path`, one commit a line (the auditor's own ``git rev-list
+    --first-parent origin/main``), without their newlines; a missing or unreadable file raises `CoinError`."""
+    text = _read(Path(path), "copy of main's history")
+    if text is None:
+        raise CoinError(f"{Ch.NO_MAIN} (none at {path})")
+    return [line for line in text.split("\n") if line]
+
+
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
-                    verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+                    main: Any, verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
     auditor's ledger as infra published it, every head at `heads` checked and the longest taken (`challenger.ledger_head`);
-    the one session it opens for the window, under the challenger key the window's deployment pins, `key`
-    (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
-    session's directory the coin commitment the challenger signed and the roots its signed release log shows it received
+    the one session it opens for the window, under the challenger key the window's deployment pins, `key`, written at a
+    commit of main's first-parent history `main` (`challenger.audited_session`; `main_lines` reads the verifier's copy);
+    its record, close and refused hellos the files the ledger's end sealed; and from that session's directory the coin
+    commitment the challenger signed and the roots its signed release log shows it received
     (`challenger.session_named`).  Each fails closed, raising `CoinError`."""
     d = Path(directory)
     ledger = Ch.ledger_head([ledger_lines(p) for p in heads], key, verify)
-    audited = Ch.audited_session(ledger, window, key, verify)
+    audited = Ch.audited_session(ledger, window, key, main, verify)
     for name in (RECORD, CLOSE, HELLOS):
         try:
             digest = hashlib.sha512((d / name).read_bytes()).hexdigest()
@@ -462,4 +473,4 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
            "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

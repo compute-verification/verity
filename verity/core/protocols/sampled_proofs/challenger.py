@@ -67,12 +67,14 @@ more entries, its `period-open` and `period-close`:
 
     entry   = {body, kind, prev, schema, seq, session, sig}        seq from 0; prev: SHA-512 of the previous line (128
                                                                    zeros first); schema v1 or v2, no v1 after a v2
-    reserve = body {by, [for], peer, scheme, epoch, families, minutes, started_utc, expires_utc}
+    reserve = body {by, [for], peer, scheme, epoch, families, minutes, started_utc, expires_utc, pinned, ...}
     open    = body {window: {root}, host, pinned, key_sha512, by, [for], reserve, opened_by, started_utc, ...}
                                                                    host: the one the session's record signs
-    end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
-    period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
-              null for a reserve never opened
+    end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, pinned, ...}
+                                                                   files: each file's SHA-512
+    period  = body {period, lane, pinned, ...} (session null); a close lists its windows as {root, session, complete},
+              root null for a reserve never opened
+                                                                   pinned: the commit of the host's tree that wrote it
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
 each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
@@ -89,7 +91,14 @@ opened under v2, ended and closed, its end naming its record's leaf and commitme
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  Infra publishes the ledger's heads;
+window it opens no session for, so one session's coins pass for one window only.  The session counts only when the
+host ran code main's check passed (RT4-INT-40): its reserve, open and end and its period's open and close each name
+the commit of the host's tree that wrote it (`pinned`), the session's entries one commit, and each a commit of main's
+first-parent history, which the verifier is given as its own copy (`main`, the auditor's ``git rev-list --first-parent
+origin/main``), never the prover's or the host's word.  A pushed commit that later merged is main's ancestor but no
+first-parent commit, and is refused; a missing copy refuses every session.  The check rests on the host's tree naming
+its own commit truthfully (`trusted-nebius-host`); the host's pins log, which infra's next bundle adds, isn't read yet.
+Infra publishes the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
@@ -206,6 +215,11 @@ DESCRIPTOR_FORM = ("the descriptor of the circuit a window's sessions prove is b
                    "annotations, the bytes program_digest hashes")
 HELLOS_FORM = "the challenger's refused hellos are a list of their lines"
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
+REPIN = "repin the host to a main commit"
+MAIN_FORM = ("a list of main's first-parent commits, each 40 lowercase hex (`git rev-list --first-parent origin/main` in "
+             "the auditor's own checkout)")
+NO_MAIN = ("the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's "
+           "check passed: give it the auditor's own `git rev-list --first-parent origin/main`")
 
 
 class CoinError(ValueError):
@@ -986,15 +1000,47 @@ class Audited(NamedTuple):
     circuit: str | None = None
 
 
-def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> Audited:
+def _main(main: Any) -> frozenset[str]:
+    """The verifier's copy of main's first-parent history `main` (None when it holds none) as a set of commits."""
+    if main is None:
+        raise CoinError(NO_MAIN)
+    if type(main) is not list or not all(_digest_hex(c, 40) for c in main):
+        raise CoinError(f"the verifier's copy of main's history is malformed: {MAIN_FORM}")
+    return frozenset(main)
+
+
+def _pinned(session: str, entries: Sequence[dict], period_entries: Sequence[dict], main: frozenset[str]) -> None:
+    """Refuses (`CoinError`) unless each of session `session`'s entries `entries` and its period's `period_entries`
+    names the host's pinned tree (`pinned`) as a commit of `main`, and `entries` name one commit."""
+    for e in [*entries, *period_entries]:
+        pin, at = e["body"].get("pinned"), f"the auditor's ledger's {e['kind']} entry {e['seq']}"
+        if pin is None:
+            raise CoinError(f"{at} names no pinned tree: {REPIN}, whose auditor names its commit on every entry")
+        if not _digest_hex(pin, 40):
+            raise CoinError(f"{at} names a pinned tree that is not a commit (40 lowercase hex): {REPIN}")
+        if pin not in main:
+            raise CoinError(f"{at} was written by the host's tree at {pin}, which is not a commit of main's first-parent "
+                            f"history: {REPIN}")
+    pins = [e["body"]["pinned"] for e in entries]
+    other = next((p for p in pins if p != pins[0]), None)
+    if other is not None:
+        raise CoinError(f"the auditor's ledger writes session {session}'s entries from the host's trees at {pins[0]} and "
+                        f"{other}: the host was repinned mid-session; {REPIN} between sessions, never during one")
+
+
+def audited_session(ledger: Any, window: Any, key: ChallengerKey, main: Any, verify: Verify) -> Audited:
     """The one challenger session the auditor's ledger `ledger` (its lines, None when the verifier has none) opens for
-    window `window` (``{root}``), under the challenger key the window's deployment pins, `key`, and ends closed.
-    Raises `CoinError` naming why when there is no ledger, a line isn't of the ledger's form or names another key, the
-    ledger fails `verify_ledger`, or the window's session is missing, opened under v1, unended, ended unclosed or its end
-    names no record leaf, commitment, refused hellos or sealed file the verifier reads, or the period holding the window
-    committed no cap or circuit."""
+    window `window` (``{root}``), under the challenger key the window's deployment pins, `key`, and ends closed, every
+    entry it reads written by the host's tree at one commit of main's first-parent history `main` (the verifier's own
+    copy, a list of commits; None when it holds none).  Raises `CoinError` naming why when there is no ledger or no
+    copy of main's history, a line isn't of the ledger's form or names another key, the ledger fails `verify_ledger`,
+    the window's session is missing, opened under v1, unended, ended unclosed or its end names no record leaf,
+    commitment, refused hellos or sealed file the verifier reads, the period holding the window committed no cap or
+    circuit, or the session's reserve, open or end or its period's open or close names no pinned tree, one not in
+    `main`, or (the session's) another than the rest."""
     if not _window(window):
         raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
+    commits = _main(main)
     windows, periods = _checked(ledger, key, verify)
     w = windows.get(window["root"])
     if w is None:
@@ -1017,6 +1063,10 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     p = periods.get(name, {"cap": None, "circuit": None})
     if name is not None and (p["cap"] is None or p["circuit"] is None):
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
+    # TODO(infra's next bundle, RT4-INT-40): also hold each of these entries to an interval of the host's pins log whose
+    # pin is its commit, once infra publishes the log's format.
+    _pinned(s, [x for x in (w["reserve"], o, end) if x is not None],
+            [x for x in (p.get("open"), p.get("close")) if x is not None], commits)
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
                    b["refused_hellos"], name, p["cap"], p["circuit"])
 
@@ -1080,13 +1130,13 @@ def session_named(audited: Audited, key: ChallengerKey, session: Any, verify: Ve
     return commitment, roots
 
 
-def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, session: Any, verify: Verify
+def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, main: Any, session: Any, verify: Verify
                        ) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's session for window `window`: the one session the auditor's ledger
-    opens for it under `key` (`audited_session`), and that session's files `session` (`session_named`): the coin
-    commitment the challenger signed and the roots its release log shows it received.  Raises `CoinError` naming why, so
-    a window whose coins aren't that session's fails closed."""
-    return session_named(audited_session(ledger, window, key, verify), key, session, verify)
+    opens for it under `key`, written at a commit of main's first-parent history `main` (`audited_session`), and that
+    session's files `session` (`session_named`): the coin commitment the challenger signed and the roots its release log
+    shows it received.  Raises `CoinError` naming why, so a window whose coins aren't that session's fails closed."""
+    return session_named(audited_session(ledger, window, key, main, verify), key, session, verify)
 
 
 def circuit_reason(period: str | None, circuit: Any, descriptor: Any) -> str | None:
@@ -1109,11 +1159,12 @@ def circuit_reason(period: str | None, circuit: Any, descriptor: Any) -> str | N
     return None
 
 
-def credited_session(ledger: Any, window: Any, key: ChallengerKey, descriptor: Any, verify: Verify) -> Audited:
+def credited_session(ledger: Any, window: Any, key: ChallengerKey, main: Any, descriptor: Any, verify: Verify
+                     ) -> Audited:
     """`audited_session`, counted toward its period: the window's session as the auditor's ledger names it, when
     `descriptor`, the descriptor of the circuit the window's sessions prove, hashes to the circuit its period committed
     (`circuit_reason`).  Raises `CoinError` naming why, so a window proving another circuit counts toward no period."""
-    audited = audited_session(ledger, window, key, verify)
+    audited = audited_session(ledger, window, key, main, verify)
     why = circuit_reason(audited.period, audited.circuit, descriptor)
     if why is not None:
         raise CoinError(why)
