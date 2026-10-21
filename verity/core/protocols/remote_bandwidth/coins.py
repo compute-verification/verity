@@ -30,15 +30,16 @@ root, or a session whose coins are another challenger session's, is refused.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, audited_session,
-                                                             ledger_head, live_reason, order_reason)
+                                                             ledger_head, live_reason, order_reason, record_many)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -101,7 +102,8 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 class Coins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows, through
     `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`), committed before the session.  Each family's coins
-    open in order, each once, after the root recorded for it (`LiveRecord`, on `clock`)."""
+    open in order, each once, after the root recorded for it (`LiveRecord`, on `clock`); two the session asks for one
+    behind the other may go in one round trip (`ahead`)."""
 
     def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *,
                  clock: Callable[[], float] = time.monotonic) -> None:
@@ -111,16 +113,43 @@ class Coins:
         self.challenger, self.registration, self.session, self.windows = challenger, registration, session, windows
         self.window = window_root(registration, session)
         self._records = {label: LiveRecord(challenger, label, clock) for label in LABELS}
+        self._ahead: tuple[str, int, bytes] | None = None
+        self._held: dict[tuple[str, int], LiveOpening] = {}
 
     @property
     def commitment(self) -> LiveCommitment:
         return self.challenger.commitment
 
+    @contextlib.contextmanager
+    def ahead(self, label: str, index: int, after: bytes) -> Iterator[None]:
+        """Inside, the next coin asked for is asked together with coin (`label`, `index`) after `after`, that coin
+        second, in one round trip to the challenger (`record_many`), and that coin is held until it is asked for, after
+        the same root.  For the coin the session asks for right after the next, after a root it already holds: a paced
+        session's boundary that leaves at once behind its window's close."""
+        self._ahead = (label, index, bytes(after))
+        try:
+            yield
+        finally:
+            self._ahead = None
+
     def _open(self, label: str, index: int, after: bytes) -> LiveOpening:
+        held = self._held.pop((label, index), None)
+        if held is not None:
+            if held.after != after:
+                raise CoinError(f"{label} coin {index} was asked for ahead after another root")
+            return held
         r = self._records[label]
         if index != len(r.roots):
             raise CoinError(f"the next {label} coin is {len(r.roots)}, not {index}")
-        return r.record(after)
+        ahead, self._ahead = self._ahead, None
+        if ahead is None:
+            return r.record(after)
+        a_label, a_index, a_after = ahead
+        q = self._records[a_label]
+        if a_index != len(q.roots) + (q is r):
+            raise CoinError(f"the {a_label} coin asked for ahead is {a_index}, not the next, {len(q.roots) + (q is r)}")
+        opening, self._held[a_label, a_index] = record_many([(r, after), (q, a_after)])
+        return opening
 
     def challenge(self, t: int, after: bytes) -> LiveOpening:
         """σ_t, released now, after `after`: R for σ_0, else the last root received."""

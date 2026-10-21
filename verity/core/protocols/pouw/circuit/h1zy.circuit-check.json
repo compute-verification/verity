@@ -1,0 +1,13 @@
+{
+ "definitions": {
+  "PouwAndBit_v2": {
+   "and": 1
+  },
+  "PouwZyCell_v2": {
+   "and": 47
+  },
+  "PouwZyDequant_v2": {
+   "and": 5230
+  }
+ }
+}

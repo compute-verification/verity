@@ -14,7 +14,8 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 
 * `on_grid`, `floor_point`, `pad`, `level`, `bucket` (`bits`, `n`); `point`, `work_at` (`bits`, `ell`); `levels` (`bits`,
   `lo`, `hi`);
-* `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
+* `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `eps_at` (`k`, `delta`, `credited`, `n`,
+  `w_max`: ε as `str(Fraction)`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
 * `constants`: `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS`, `GRID_BITS` and `STOP_FIXED`;
 * the fixed length: `length_item` (`max_tokens`); `length_problem` (`item`, `max_tokens`);
@@ -132,6 +133,9 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("levels", fun j => do pure (toJson (← levels? (← nat j "bits") (← int j "lo") (← int j "hi")))),
   ("k_prime", fun j => do
     pure (toJson (← kPrime (← rat j "eps") (← rat j "delta") (← int j "credited") (← int j "n") (← int j "w_max")))),
+  ("eps_at", fun j => do
+    pure (toJson (toString (← epsAt (← int j "k") (← rat j "delta") (← int j "credited") (← int j "n")
+      (← int j "w_max"))))),
   ("sampling", fun j => do
     pure (← sampling (← rat j "eps") (← rat j "delta") (← work j) (← int j "tile_work") (← nat j "bits")).toJson),
   ("work_to_json", fun j => do pure ((← work j).itemJson (← int j "tile_work"))),

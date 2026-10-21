@@ -1,0 +1,679 @@
+"""Dither's served standard number on one GPU: each arm a resident vLLM engine in its own worker process on the same GPU,
+the parent alternating reps between them (arm order rotated each rep), on int8-exact Llama-3.1-8B (the verity-int8 pin,
+CA's served_h1 row) and served_h1's prompts (`tests.engine.int8_exact_gpu.PROMPTS`, cycled).
+
+Measures, per arm and rep:
+    tpot_b32_ms      decode at batch 32: 32 requests, greedy, ignore_eos; (t(N2) - t(N1)) / (N2 - N1) over two generate calls
+                     of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel
+    tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
+                     in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
+                     run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
+                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs)
+and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
+
+Arms:
+    stock        native vLLM int8: the pin's weights and scales under a compressed-tensors W8A8 config (int8 channel weights,
+                 dynamic per-token int8 activations), so vLLM serves them with its own kernels, compiled with CUDA graphs
+                 (vLLM's defaults).  On sm_120 vLLM's first int8 choice, CutlassInt8ScaledMMLinearKernel, refuses at its first
+                 call ("Int8 not supported on SM120"), so the arm disables it (VLLM_DISABLED_KERNELS) and vLLM's selector takes
+                 its next, TritonInt8ScaledMMLinearKernel (scaled_int8_quant + triton_scaled_mm)
+    stock-humming  the same with Triton disabled too: vLLM's third choice, HummingInt8ScaledMMLinearKernel
+    stock-cutlass  the same with nothing disabled: CutlassInt8ScaledMMLinearKernel where it serves int8 (sm_90, vLLM's
+                 default there; it applies the weight scale first, so it is not the exact epilogue's order)
+    stock-percall  stock with triton_scaled_mm behind a custom op (`exactlin/percall.py`), so its tile heuristic runs on each
+                 call's M, not once at the traced M; the same values, so its tokens must equal stock's (gated), and its
+                 stats are the op's calls by M
+    exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
+                 as SERVE-H1 runs it (eager, batch-invariant)
+    exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
+                 CUDA graphs, attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`,
+                 which runs int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
+    exact-fused  exact with both ops' CUDA bodies `benchmarks/hash/exactlin`'s two Triton kernels (`exactlin.install`): the
+                 same values, so its tokens must equal exact's (gated)
+    dither       exact with every linear's y from Dither's fused GEMM (`dither_fused`: z = xq W^T and its dequantization in
+                 one kernel that also computes the previous step's receipts; A, admit and z tables, the round, the live
+                 coin and the seeds between steps)
+    dither-side  dither with the receipts in one `h1r` launch a step on a second stream, after the step's coin, beside the
+                 next step (`dither_fused.patch(rc="side")`); the `h1f` launches compute z and y only
+    dither-1s    exact with every linear's y from Dither's one stream (`dither_one`, `h1o.cu`, CA's H1V3): y = dequant(O' -
+                 sum_d 128^d D_d) from the noised mainloop the call's receipts fold, z that O; the call's A table, seeds
+                 (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
+                 tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
+                 its tokens are not exact's (reported, not gated)
+    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate (#2684's
+                 `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
+    dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
+    dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
+    dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z and 12:16Z, H1V3's
+                 PouwPeelSeg): z = O + 256 X wbᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ from the receipted stream's own O, so y is
+                 today's served y and its tokens must equal exact's; the receipts are dither-1s's
+    dither-1s-split-cpeel  dither-1s-cpeel in the split form (`h1o_unitssp`)
+    dither-1s-block2-cpeel, dither-1s-split2-cpeel  those two on the kernels `h1o_init` gives the maximum shared-memory
+                 carveout (DITHER_UNITS=block2 / split2, `h1o_unitsb2p` / `h1o_unitss2p`: two units' blocks an SM, not
+                 the driver's default one; block2 with immediate barrier ids), the same code and values
+    dither-1s-mix-cpeel  dither-1s-cpeel with a units form per call (DITHER_UNITS=mix, `dither_one.MIX_FORMS`): block2
+                 where the call's column blocks outnumber the SMs (qkv, gate_up), split elsewhere (o, down)
+    dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
+                 root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
+    dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
+                 (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
+    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every run labelled form=ASK-71 A
+                 (provisional)): exact-fused's quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
+                 call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
+                 dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
+                 dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
+                 receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA).  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
+                 builds every call's table between steps),
+                 and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
+                 tokens).  With -ao after those, the A tables run on a stream of
+                 their own, each beside the previous call's units (the units of a call still wait on its A table);
+                 -aos puts each call's seeds there too, after its A table (-kh, -hbk and -hbr, whose seeds are a launch of
+                 their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
+                 call's A table reads another's); -aomn (-hbk, -hbr) is -aoms with each call's noise there as well, so
+                 the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
+                 their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
+                 seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
+    ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
+                 serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
+                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
+                 kgate.py in the lease before an -xl or exact-fused arm is timed
+    ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
+                 compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
+                 the suffixes compose (ARM-a3-xl), each gated as ARM
+
+`gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
+checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
+its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's (dither-1s:
+`dither_one.check` on its gate, control, fault and fault_wb steps, and peeled fault_xa, tokens reported), under a CUDA
+profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
+kernels inside the range only).  The decode gate compares each arm's
+tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
+generation after its checks with nothing armed, since its fault steps move served values on purpose (fault_wb moves
+column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
+that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
+checked, so N arms need N engines' memory plus one arm's captures.
+
+`prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
+inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
+arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
+so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
+
+Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
+(DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F}}``,
+each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION and
+$POUW_CHALLENGER_SECRET_FILE), one session a window, opened at the window's build and closed at the arm's stop; without
+one they are in-process, and the arm's stats say ``coins: in-process (not certified)``.
+
+    python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import multiprocessing as mp
+import os
+import statistics
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
+B = 32
+N1, N2 = 32, 160
+SAT_REQS, SAT_TOKENS, MAX_SEQS, MAX_TOKENS_STEP = 768, 256, 256, 1024
+CT_CONFIG = {
+    "quant_method": "compressed-tensors", "format": "int-quantized", "quantization_status": "compressed",
+    "config_groups": {"group_0": {
+        "targets": ["Linear"],
+        "weights": {"num_bits": 8, "type": "int", "symmetric": True, "strategy": "channel", "dynamic": False,
+                    "group_size": None, "observer": "minmax", "actorder": None, "block_structure": None},
+        "input_activations": {"num_bits": 8, "type": "int", "symmetric": True, "strategy": "token", "dynamic": True,
+                              "group_size": None, "observer": None, "actorder": None, "block_structure": None}}},
+    "ignore": ["lm_head"], "kv_cache_scheme": None}
+
+
+def prompts(n: int) -> list[str]:
+    sys.path.insert(0, str(ROOT / "integrations" / "vllm"))
+    from tests.engine.int8_exact_gpu import PROMPTS
+    return [PROMPTS[i % len(PROMPTS)] for i in range(n)]
+
+
+def stock_checkpoint(pin: str, scratch: Path) -> Path:
+    """The pin's files linked into SCRATCH, its config's quantization_config replaced by compressed-tensors W8A8's."""
+    d = scratch / "stock-ckpt"
+    d.mkdir(parents=True, exist_ok=True)
+    for f in Path(pin).iterdir():
+        if f.name != "config.json" and not (d / f.name).exists():
+            (d / f.name).symlink_to(f.resolve())
+    cfg = json.loads((Path(pin) / "config.json").read_text())
+    cfg["quantization_config"] = CT_CONFIG
+    (d / "config.json").write_text(json.dumps(cfg, indent=1))
+    return d
+
+
+def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
+    # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
+    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap, but a stock arm under
+    # --stock-own-batch, which keeps vLLM's own max_num_seqs and max_num_batched_tokens
+    t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
+    a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
+         "gpu_memory_utilization": gpu_mem,
+         "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
+         "kernel_config": {"enable_flashinfer_autotune": False}}
+    if own_batch:
+        del a["max_num_seqs"], a["max_num_batched_tokens"]
+    return a
+
+
+OWN_BATCH_ENV = "SBENCH_STOCK_OWN_BATCH"
+
+
+def stock_args(gpu_mem: float) -> dict:
+    return engine_args(gpu_mem, own_batch=os.environ.get(OWN_BATCH_ENV) == "1")
+
+
+def scheduler_of(llm) -> dict | None:
+    """The engine's resolved batch and its KV cache's tokens: what a stock arm under --stock-own-batch really ran at,
+    and whether its memory share, not its scheduler, bounded its concurrency at saturation."""
+    try:
+        vc = llm.llm_engine.vllm_config
+        sc, cc = vc.scheduler_config, vc.cache_config
+        return {"max_num_seqs": sc.max_num_seqs, "max_num_batched_tokens": sc.max_num_batched_tokens,
+                "gpu_memory_utilization": cc.gpu_memory_utilization,
+                "kv_tokens": cc.num_gpu_blocks * cc.block_size if cc.num_gpu_blocks else None}
+    except AttributeError:
+        return None
+
+
+def arm_mem(spec: str) -> dict[str, float]:
+    """--arm-mem ARM=F,...: those arms' gpu_memory_utilization in place of --gpu-mem."""
+    return {k: float(v) for k, v in (x.split("=") for x in spec.split(",") if x)}
+
+
+DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "CutlassInt8ScaledMMLinearKernel",
+            "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
+
+
+def kernels_of(llm) -> dict:
+    """The linear kernels the engine's layers really run: class name -> layers."""
+    from verity_vllm.engine import engine_profile as prof
+    seen: dict = {}
+    for _, mod in prof.get_model_runner(llm).get_model().named_modules():
+        k = getattr(getattr(mod, "scheme", None), "kernel", None)
+        q = getattr(mod, "quant_method", None)
+        name = type(k).__name__ if k is not None else (type(q).__name__ if q is not None and hasattr(mod, "weight") else None)
+        if name:
+            seen[name] = seen.get(name, 0) + 1
+    return seen
+
+
+def install_exactlin() -> None:
+    sys.path.insert(0, str(HERE.parent / "exactlin"))
+    import exactlin
+    if not getattr(exactlin, "_sbench_installed", False):
+        exactlin.install()
+        exactlin._sbench_installed = True
+
+
+def a_form(f: int):
+    def set_form() -> None:
+        os.environ["DITHER_A_FORM"] = str(f)
+    return set_form
+
+
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3)}
+
+
+def suffix_of(arm: str) -> str | None:
+    if arm.startswith("dither"):
+        for s in SUFFIXES:
+            if arm.endswith(s):
+                return s
+    return None
+
+
+def base_arm(arm: str) -> str:
+    s = suffix_of(arm)
+    return base_arm(arm[:-len(s)]) if s else arm
+
+
+def build(arm: str, scratch: Path, gpu_mem: float):
+    from vllm import LLM
+    s = suffix_of(arm)
+    if s:
+        SUFFIXES[s]()
+        return build(arm[:-len(s)], scratch, gpu_mem)
+    if arm in DISABLED:
+        os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
+    if arm == "stock-cutlass":
+        os.environ.pop("VLLM_DISABLED_KERNELS", None)
+    if arm in ("stock", "stock-humming", "stock-cutlass"):
+        return LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))
+    if arm == "stock-percall":
+        sys.path.insert(0, str(HERE.parent / "exactlin"))
+        import percall
+        percall.install()
+        llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))
+        llm.dither_stats = percall.summary
+        return llm
+    if arm == "exact-eager":
+        vllm_dir = ROOT / "integrations" / "vllm"
+        sys.path.insert(0, str(vllm_dir))
+        from tests.engine import int8_exact_gpu as G
+        from verity_vllm.engine.build import build_engine
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+        target = TargetProfile.from_device().with_overrides(int8_exact="all")
+        ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
+                                base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",
+                                hf_home=os.environ.get("HF_HOME"), by="kernels", at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        entry, _ = G.pin(ns)
+        ckpts = G.scratch_checkpoints(ns.checkpoints, entry, scratch)
+        a = engine_args(gpu_mem)
+        eng = build_engine(ckpts, case=ns.role, target=target, max_num_seqs=a.pop("max_num_seqs"), engine_args=a)
+        return eng.llm
+    if arm in ("exact", "exact-fused", "dither", "dither-side"):
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        if arm == "exact-fused":
+            install_exactlin()
+            llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+            return llm
+        a = engine_args(gpu_mem)
+        if arm != "exact":
+            DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True,
+                     rc="side" if arm == "dither-side" else "fused")
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        if arm != "exact":
+            win = DF.hook(llm)
+            llm.dither_stats = win.stats
+            llm.dither_win = win
+        return llm
+    if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
+               "dither-1s-percall-rtt", "dither-1s-cpeel", "dither-1s-split-cpeel", "dither-1s-block2-cpeel",
+               "dither-1s-split2-cpeel", "dither-1s-mix-cpeel"):
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+        import dither_one as DO
+        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-cpeel", "dither-1s-block2-cpeel",
+                   "dither-1s-split2-cpeel", "dither-1s-mix-cpeel"):
+            os.environ[DO.UNITS_ENV] = arm.split("-")[2]
+        if arm.endswith("-cpeel"):
+            os.environ[DO.PEEL_ENV] = "1"
+        if arm == "dither-1s-percall0":
+            os.environ[DO.PERCALL_ENV] = "0"
+        if arm == "dither-1s-percall-rtt":
+            os.environ[DO.PERCALL_ENV] = os.environ["DITHER_PERCALL_WAITS"]
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        a = engine_args(gpu_mem)
+        credit = os.environ["DITHER_CREDIT_GATE"] if arm == "dither-1s-credit" else None
+        if credit:
+            a["enforce_eager"] = True
+        DO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], gate=True,
+                 credit=credit)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        win = DO.hook(llm)
+        llm.dither_stats, llm.dither_win, llm.dither_mod = win.stats, win, DO
+        return llm
+    if arm in DITHER_A:
+        sys.path.insert(0, str(HERE))
+        import dither_a as DA
+        import dither_fused as DF
+        import dither_one as DO
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        h1u = os.environ.get("HB_H1U")
+        unit, z, ao, pt, ls = DITHER_A[arm]
+        unit = unit or ("kh" if h1u else "h1r")
+        if unit in DA.KONE:
+            h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"]
+        a = engine_args(gpu_mem)
+        DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
+                 h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        win = DO.hook(llm)
+        win.captures = DA.CAPTURES
+        # the y-only floor commits no z, so it has no window gate: its gate is its tokens (TOKENS_ONLY)
+        llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), (win if z != "none" else None), DA
+        return llm
+    raise ValueError(arm)
+
+
+DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
+            for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"))
+            for z, zm in (("", "row"), ("-zy", "zy"), ("-y", "none"))
+            for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"), ("-aomn", "mn"))
+            for p, pt in (("", False), ("-pt", True))
+            for q, ls in (("", False), ("-ls", True))}
+
+
+REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
+          "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
+          "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
+          "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
+          "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in DITHER_A}}
+# an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
+TOKENS_ONLY = {"exact-fused", "stock-percall", *(x for x, (_, z, *_) in DITHER_A.items() if z == "none")}
+def token_diff(a: list, b: list) -> dict:
+    """Two arms' greedy outputs for the same requests: how many are equal, and each other one's first differing position."""
+    first = sorted(next((i for i, (x, y) in enumerate(zip(p, q)) if x != y), min(len(p), len(q)))
+                   for p, q in zip(a, b) if p != q)
+    return {"requests_equal": len(a) - len(first), "first_diff": first}
+
+
+PROF_N = (8, 24)
+PROF_RANGE = "verity/exactlin/prof"
+# an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
+TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
+                "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
+# SBENCH_PICK=first|last: every engine's Inductor autotune choices made untimed (`picks.py`); each arm's picks are
+# logged either way (gate.json's full log, each rep's digest).  SBENCH_PICK_ARMS=PREFIX[,PREFIX]: only the arms whose
+# names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
+PICK_ENV = "SBENCH_PICK"
+PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
+
+
+def pick_of(arm: str) -> str | None:
+    only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
+    return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
+GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F}}: each dither arm's window its own challenger session off
+# the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION and POUW_CHALLENGER_SECRET_FILE), since every arm's engine, and so
+# its window, lives through the whole run
+CHALLENGERS_ENV = "DITHER_CHALLENGERS"
+GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
+
+
+def close_coins() -> None:
+    """End this worker's window's off-node coin session, if it has one: the challenger answers closed."""
+    for name in ("dither_fused", "dither_one"):
+        win = getattr(sys.modules.get(name), "WIN", None)
+        if win is not None:
+            win.coins.close()
+
+
+def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
+    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    at = json.loads(os.environ.get(CHALLENGERS_ENV) or "{}").get(arm)
+    if at:
+        os.environ["POUW_CHALLENGER"], os.environ["POUW_CHALLENGER_SESSION"] = at["address"], at["session"]
+        if at.get("secret_file"):
+            os.environ["POUW_CHALLENGER_SECRET_FILE"] = at["secret_file"]
+    import torch
+    from vllm import SamplingParams
+    if arm.startswith("dither"):
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+    sys.path.insert(0, str(HERE))
+    import picks as PK
+    plog = PK.install(pick_of(arm))
+    t0 = time.perf_counter()
+    try:
+        llm = build(arm, Path(scratch), gpu_mem)
+    except Exception as e:  # noqa: BLE001
+        conn.send({"error": f"{type(e).__name__}: {e}"})
+        return
+    conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
+    ps = prompts(B)
+
+    def gen(reqs: list[str], n: int):
+        sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
+        t = time.perf_counter()
+        outs = llm.generate(reqs, sp, use_tqdm=False)
+        return time.perf_counter() - t, outs
+
+    def serve(cmd: dict) -> None:
+        if cmd["op"] == "warm":
+            gen(ps, 8)
+            gen(prompts(64), 16)
+            conn.send({"warm": True})
+        elif cmd["op"] == "decode":
+            t1, _ = gen(ps, N1)
+            t2, outs = gen(ps, N2)
+            conn.send({"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
+        elif cmd["op"] == "gate":
+            win = getattr(llm, "dither_win", None)
+            mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
+            if win is not None:
+                if mod is DF:
+                    win.arm(B)
+                    win.price_y = True
+                else:
+                    win.arm(B)
+            prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
+            if prof:
+                torch.cuda.synchronize()
+                torch.cuda.profiler.start()
+                torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
+            t, outs = gen(ps, GATE_TOKENS)
+            if prof:
+                torch.cuda.synchronize()
+                torch.cuda.nvtx.range_pop()
+                torch.cuda.profiler.stop()
+            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs], "picks": plog}
+            if win is not None:
+                t0 = time.perf_counter()
+                if mod is DF:
+                    win.price_y = False
+                    with torch.inference_mode():
+                        res["check"] = DF.check(win, os.environ["DITHER_H1F"], "gate")
+                        res["control"] = DF.check(win, os.environ["DITHER_H1F"], "control")
+                    res["verdict"] = DF.gate_verdict(res["check"], res["control"])
+                else:
+                    lib = os.environ[mod.LIB_ENV]
+                    with torch.inference_mode():
+                        caps = {n: mod.check(win, lib, n) for n in win.captures}
+                    res["check"] = caps.pop("gate")
+                    res.update(caps)
+                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:]))
+                    if getattr(mod, "CG", None) is not None:
+                        res["credit_2684"] = mod.credit_doc()
+                res["check_s"] = round(time.perf_counter() - t0, 1)
+                # the captures sit outside vLLM's memory budget; released, the next arm's gate has their room
+                win.caps = {}
+                torch.cuda.empty_cache()
+                # the fault steps move served values on purpose, so the token gate reads a generation with none armed
+                res["tokens_capture"] = res["tokens"]
+                _, outs = gen(ps, GATE_TOKENS)
+                res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
+            conn.send(res)
+        elif cmd["op"] == "prof":
+            prof = os.environ.get("DITHER_NSYS") in ("1", "prof")
+            torch.cuda.synchronize()
+            if prof:
+                torch.cuda.profiler.start()
+            res = {"prof_n": list(PROF_N), "profiled": prof}
+            for n in PROF_N:
+                if prof:
+                    torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
+                t, outs = gen(ps, n)
+                torch.cuda.synchronize()
+                if prof:
+                    torch.cuda.nvtx.range_pop()
+                res[f"gen_n{n}_s"] = round(t, 4)
+            if prof:
+                torch.cuda.profiler.stop()
+            res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
+            conn.send(res)
+        elif cmd["op"] == "sat":
+            t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
+            n = sum(len(o.outputs[0].token_ids) for o in outs)
+            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
+        conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
+
+    while True:
+        cmd = conn.recv()
+        if cmd["op"] == "stop":
+            close_coins()
+            conn.send({"stopped": True})
+            return
+        try:
+            serve(cmd)
+        except Exception as e:  # noqa: BLE001
+            conn.send({"error": f"{cmd['op']}: {type(e).__name__}: {e}"})
+            return
+
+
+def recv(arm: str, conn, op: str) -> dict:
+    """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
+    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it."""
+    try:
+        msg = conn.recv()
+    except EOFError:
+        msg = {"error": f"{op}: the worker exited"}
+    if "error" in msg:
+        print(json.dumps({"arm": arm, "op": op, "error": msg["error"], "timed": False}), flush=True)
+        sys.exit(5)
+    return msg
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--arms", default="stock,exact-eager")
+    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--scratch", default=None)
+    ap.add_argument("--gpu-mem", type=float, default=0.40)
+    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
+    ap.add_argument("--ops", default="decode,sat")
+    ap.add_argument("--gate", action="store_true")
+    ap.add_argument("--stock-own-batch", action="store_true",
+                    help="stock arms at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's")
+    ap.add_argument("--arm-mem", type=arm_mem, default={},
+                    help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
+    ap.add_argument("--time-passed", action="store_true",
+                    help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
+    a = ap.parse_args()
+    os.environ["SBENCH_T"] = str(a.t)
+    if a.stock_own_batch:
+        os.environ[OWN_BATCH_ENV] = "1"
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    import tempfile
+    scratch = Path(a.scratch or tempfile.mkdtemp(prefix="sbench."))
+    arms = a.arms.split(",")
+    for arm in arms:
+        base = base_arm(arm)
+        if base != arm:
+            if base in REF_OF:
+                REF_OF[arm] = REF_OF[base]
+            if base in TOKENS_GATED:
+                TOKENS_GATED[arm] = TOKENS_GATED[base]
+    missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
+    if a.gate and missing:
+        ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
+    ctx = mp.get_context("spawn")
+    conns, procs, info = {}, {}, {}
+    for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
+        here, there = ctx.Pipe()
+        p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.arm_mem.get(arm, a.gpu_mem)), daemon=True)
+        p.start()
+        there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
+        msg = recv(arm, here, "build")
+        conns[arm], procs[arm], info[arm] = here, p, msg
+        print(json.dumps({"arm": arm, **msg}), flush=True)
+    for arm in arms:
+        conns[arm].send({"op": "warm"})
+        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
+    reps: list[dict] = []
+    rc = 0
+    ref_tokens: dict = {}
+    gate = {}
+    vs_ref: dict = {}
+    vs_rep0: dict = {}
+    gate_doc: dict = {}
+    if a.gate:
+        for arm in arms:
+            conns[arm].send({"op": "gate"})
+            res = recv(arm, conns[arm], "gate")
+            msg = recv(arm, conns[arm], "gate")
+            res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
+            gate_doc[arm] = res
+            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+        for arm in arms:
+            ref = REF_OF.get(arm, arms[0])
+            if ref in gate_doc and ref != arm:
+                gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+                if "tokens_capture" in gate_doc[arm]:
+                    gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
+                        x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
+            if "stock" in gate_doc and arm != "stock":
+                gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
+                gate_doc[arm]["tokens_requests_equal_stock"] = sum(
+                    x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
+        for arm in arms:
+            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
+                                               if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
+        (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+        failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
+            gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
+                                                or not TOKENS_GATED.get(arm, True)))]
+        failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
+        if failed:
+            print(json.dumps({"gate_failed": failed, "timed": a.time_passed}), flush=True)
+            for arm in failed if a.time_passed else arms:
+                conns[arm].send({"op": "stop"})
+            if not a.time_passed:
+                return 4
+            arms = [x for x in arms if x not in failed]
+            rc = 4
+    for r in range(a.reps):
+        for op in a.ops.split(","):
+            for j in range(len(arms)):
+                arm = arms[(j + r) % len(arms)]
+                conns[arm].send({"op": op})
+                res = recv(arm, conns[arm], op)
+                msg = recv(arm, conns[arm], op)
+                toks = res.pop("tokens", None)
+                if toks is not None:
+                    ref_tokens.setdefault((r, arm), toks)
+                row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
+                reps.append(row)
+                print(json.dumps(row), flush=True)
+                with open(out / "reps.jsonl", "a") as f:
+                    f.write(json.dumps(row) + "\n")
+        for arm in arms:
+            if (r, arm) in ref_tokens:
+                ref = REF_OF.get(arm, arms[0])
+                gate.setdefault(arm, []).append(None if ref == arm else ref_tokens[(r, arm)] == ref_tokens.get((r, ref)))
+                if ref != arm and (r, ref) in ref_tokens:
+                    vs_ref.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(r, ref)]))
+                if r > 0:
+                    vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
+    for arm in arms:
+        conns[arm].send({"op": "stop"})
+    summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
+               "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
+               "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
+               "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
+               "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
+                              "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
+                              "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
+    for arm in arms:
+        tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
+        th = [x["tokens_per_s"] for x in reps if x["arm"] == arm and x["op"] == "sat"]
+        summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
+                                   "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
+    base = summary["per_arm"][arms[0]]
+    for arm in arms[1:]:
+        p = summary["per_arm"][arm]
+        if p["tpot_b32_ms"] and base["tpot_b32_ms"]:
+            p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
+        if p["tokens_per_s"] and base["tokens_per_s"]:
+            p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
+    summary["gate_failed"] = [x for x in gate_doc if x not in arms]
+    (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
+    print(json.dumps(summary["per_arm"], indent=1), flush=True)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -12,10 +12,11 @@ namespace Nci.Assumptions
 open Verity
 
 /-- **The baseline is registered** ([BASELINE-REGISTERED]; CMP-66). The protocol's baseline rule: every entry of a
-declaration's baseline `θ` holds a value that, before the run's commitment, was either an output of an earlier certified
-declared computation or registered public data, and the reference circuit `c` takes as its own baseline `c.θ` exactly
-the inputs it reads of those two kinds. So no value computed off the books, before the run or during it, is ever
-registered as baseline, and neither is any novel input of `c`.
+declaration's baseline `θ` holds registered public data, registered before the run's commitment, and the reference
+circuit `c` takes as its own baseline `c.θ` exactly the inputs it reads of that kind. An output of an earlier run,
+certified or not, is never baseline (Daniel, 21 Oct: registration happens at the start of a deployment and essentially
+never changes). So no value computed off the books, before the run or during it, is ever registered as baseline, and
+neither is any novel input of `c`.
 
 What the bounds use is the rule's consequence for a partial containment `M` of `c` in `d`: a gate that `M`'s computed
 gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input gate of `c`) goes into `d`'s baseline

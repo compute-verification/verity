@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-lean-prune hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=10min
+Persistent=false
+
+[Install]
+WantedBy=timers.target
