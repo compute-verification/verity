@@ -435,8 +435,8 @@ N2 is 5.46 × 10^9 ANDs a day on one link. N3 is linear in the frames: a least-s
 points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths, 13.8M
 at one window's and 17.2M at a day's, and 14.7M, 21.6M and 26.7M an ingress frame, with the largest residual 3.0%. At
 the lab's depths a busy egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and
-7% frames; at a day's, the deeper trees make it 50% row reads and 29% descriptor reads. `N3Window_v4` (below) brings a
-busy link-window to 320.1B.
+7% frames; at a day's, the deeper trees make it 50% row reads and 29% descriptor reads. `N3Window_v4` and `N3Window_v5`
+(below) bring a busy link-window to 320.1B and 123.9B.
 
 `composed` equals the whole trace (`checked`) at the served format, at the lab's depths, on unsalted one-segment
 windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64 (run `r20261019-171031-6fa8`, at
@@ -481,7 +481,7 @@ The evaluations, `python -m workload.n3_unit sim` and `lab`:
 parts: `N3Frame` (12,448 gates; lowered to C-Flock, 4,983 ANDs) and `N3Seg` (3,882 gates, 1,524 ANDs). In 71 s it finds
 no failures and no dead or redundant gates, and warns only that neither has pinned counts. Without `--parts` it also
 checks the whole window. `python -m workload.n3_v4 circuit-check --out FILE [--window]` checks v4's new parts and,
-with `--window`, its window; the gaps below are v4's too.
+with `--window`, its window, and `workload.n3_v5`'s the same for v5; the gaps below are theirs too.
 
 Its gaps:
 
@@ -535,49 +535,44 @@ Open items:
   every unit's row; it costs only larger trees to register.
 - **The order of frames from several sources.** The lab's order is fixed by the Program (events by position, requests
   by session). Traffic whose interleaving the prover chooses needs that order as witness, checked in the unit.
-- **Further cuts.** What is left after `N3Window_v4`, below, is under its table. N2's frames root, fill included, is
+- **Further cuts.** What is left after `N3Window_v5`, below, is under its table. N2's frames root, fill included, is
   the floor: it is N2's tree, so the unit can't skip the fill.
 
-### N3Window_v4: the openings as runs
+### N3Window_v4 and N3Window_v5
 
-`workload/n3_v4.py` builds `N3Window_v4{FMT, N, G, SALTED, REC, R}`: v3's parts, with two openings as runs (each
-check: the module's docstring); v3 stays. A window's n descriptors, at public positions at, ..., at + n − 1,
-open as one run (`N3Range`): each node above them is hashed once, with each level's two boundary siblings as witness,
-where v3 climbs DL levels a descriptor, and the run mustn't wrap the layout (`N3Fits`; the service builds no window
-that does). Its rows open in R runs at private starts: each read is fresh or repeats the one before it in its run, a
-compaction network puts a run's fresh leaves in its first slots, and the run opens min(T, 2^DB) slots of one unit's
-tree (`N3RunRoot`, `N3RunFits`). A leaf binds its position and domain id, so a row out of place doesn't open. R is
-public, the size class's as G is (`runs_of`, the stretches of one unit's outbox the port's reads need): 1 on every
-port the tests build but the demo's, which reads two units' outboxes.
+`workload/n3_v4.py` builds `N3Window_v4{FMT, N, G, SALTED, REC, R}`: v3's parts with a window's descriptors opened as
+one run of the layout (`N3Range`) and its rows as R runs at private starts, each read fresh or a repeat, R public as G
+is (`runs_of`). `workload/n3_v5.py` builds `N3Window_v5{FMT, N, G, SALTED, REC, R, TPL, FB}` on v4's runs, with
+NET-52's levers as statics; both stay:
 
-`workload/tests/test_n3_v4.py` (19 quick and 7 slow, about 3 minutes) holds v4's reference to v3's on the demo's
-thirteen cases, the simulator's windows and tampers, the lab's honest, edited, extra-frame and salted windows, and a lab
-whose outboxes are two rows deep; refuses cheating run witnesses (a skipped row, another unit's row, a wrong start, a
-slot past the tree and five more); holds `N3Range` to its tree at every start; and holds the circuit to its reference
-on the demo and a salted window. Runs of several rows are only the demo's and that lab's, and that v4 refuses whatever
-v3 refuses on other windows rests on each leaf's binding under SHA-512, not on a proof.
+- **Lever 1:** outbox rows of B bytes, each byte in one row; a read hashes the one row it adds to its run's two.
+- **Lever 2:** a public template TPL fixes every frame's prefix, text and suffix (`N3FrameFixed`); a descriptor keeps
+  only r and the segments.
+- **Lever 4:** with a template, frames of FB bytes on rows of fewer (`prepare(setup, RB)`, `resplit`). A served
+  egress frame is one token's event, so egress rows of 64 bytes hold its data; ingress keeps rows of B.
+- **Lever 3**, each range level's shared first block hashed once, is estimated only: it needs a node part that takes
+  a midstate.
 
-A busy link-window at the served shape, one lever at a time (run `r20261021-020337-2a6e`; composed as v3's counts are,
-egress reads in one run and salted ingress ones in two). Each lever replaces one disjoint part group with v4's, so the
-gains add. The floor is N2's frames root, about 35 compressions a frame, which v4 leaves as v3's.
+A busy served link-window of 35,386 egress and 1,057 ingress frames (run `r20261021-052039-10ee`, composed from the
+parts, egress reads in one run and salted ingress ones in two). The floor is N2's frames root, 73.9B, which every
+variant keeps.
 
-| Depths | Frames, egress and ingress | v3 | Lever 1: descriptors as one run | Lever 2: rows as runs too (v4) | Floor | ÷ floor: v3, lever 1, v4 |
-|---|---|---|---|---|---|---|
-| One window's | 34,499 and 1,031 | 497.9B | 403.0B (−94.9B) | 312.1B (−90.8B) | 72.1B | 6.91, 5.59, 4.33 |
-| One window's | 35,386 and 1,057 | 510.7B | 413.3B (−97.3B) | 320.1B (−93.2B) | 73.9B | 6.91, 5.59, 4.33 |
-| A day's | 34,499 and 1,031 | 619.7B | 464.8B (−154.9B) | 312.4B (−152.5B) | 72.1B | 8.60, 6.45, 4.33 |
-| A day's | 35,386 and 1,057 | 635.6B | 476.8B (−158.8B) | 320.4B (−156.4B) | 73.9B | 8.60, 6.45, 4.33 |
+| Variant | Built | One window's depths | ÷ floor | A day's depths | ÷ floor |
+|---|---|---|---|---|---|
+| v4 | yes | 320.1B | 4.33 | 320.4B | 4.33 |
+| Lever 1 | yes | 253.3B | 3.43 | 253.6B | 3.43 |
+| Lever 2, on v4 | yes | 298.2B | 4.03 | 298.4B | 4.04 |
+| Levers 1 and 2 | yes | 231.4B | 3.13 | 231.6B | 3.13 |
+| Levers 1, 2 and 4 | yes | 123.9B | 1.68 | 124.1B | 1.68 |
+| Lever 3 on levers 1 and 2 | estimated | 227.0B | 3.07 | 227.2B | 3.07 |
+| Lever 3 on levers 1, 2 and 4 | estimated | 119.5B | 1.62 | 119.7B | 1.62 |
+| Frame j reads row j, no descriptors | estimated | 147.5B | 2.00 | 147.6B | 2.00 |
 
-v4 is 4.33 times the floor at both depths, since a run climbs its tree once rather than once a read: 8.62M ANDs an
-egress frame at one window's depths and 8.63M at a day's (v3: 13.8M and 17.2M). It has no unit at the lab's depths,
-which don't hold the window; against v3's 349.6B there it is 8.4% lower. `composed_v4` equals v4's trace at one
-window's depths at 2, 3 and 64 frames, egress and salted, and at the demo's format (`workload/tests/test_n3_cost.py`);
-the busy windows are composed only.
-
-What is left, lever 3 (parts and estimates: note:network-accounting/20261021T0130Z-finding-n3-v4-levers):
-the rows' digests are 44% of v4, half of that hashing the overlapping rows' bytes twice, and segments 11%, descriptor
-reads 8%, frames 8% and the hiding leaves 8%. The canonical protocol's fixed fields would leave a frame its frames
-root and one row's digest and leaves, about 2.2 times the floor, or 1.95 with rows of the raw bytes behind base64:
-estimated, not built. Hashing each byte once in N2's root and once in the outbox makes about twice the floor this
-shape's limit. Each run past the first adds 6.32B to a busy egress window, a range over 35,386 slots whatever the
-run's length, so v4's rows beat v3's up to 14 runs at one window's depths and 24 at a day's.
+Lever 1 rests on nothing new: v5 accepts exactly where v4 does on every window the tests cover, and refuses what v4
+refuses elsewhere by each leaf's binding under SHA-512, as v4 does. Lever 2 rests on a canonical framing the certifier
+doesn't have yet, each port's frames one public template; N3 checks the template itself, so its verdict takes no new
+assumption, and the framing owes completeness. Lever 4 rests on that framing and on every egress frame's data being at
+most 64 bytes, one token's text, a longer one cut over frames. Egress rows of 16, 256 and 512 bytes give 1.67, 1.76 and
+1.84 at one window's depths; 512 hold any token of GLM-5.3's vocabulary (the one on the node), so a framing that cuts no token is 1.84. Each
+lever's mechanism, what the certifier's framing must change, the tests (`workload/tests/test_n3_v5.py`) and
+circuit-check: note:network-accounting/20261021T0520Z-finding-n3-v5-levers.

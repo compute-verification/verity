@@ -34,9 +34,12 @@ the entries root's domain one-stage's served domain of the registered program an
 its salt that root's leaf, the unit one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
 pins for the check's template (its header's `circuit_sha512`, which `flock-verify verify --zk` binds to the circuit it
 verifies against), and each opened row's b ‖ c its side tree's leaf at the unit's row. An unsalted template's proof's
-first two rows (in its header's key order, serde's) are an A row and a B row of the fp8-p schemas. A salted template's
+first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
 (`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
-`hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column, and the public row's
+`hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column. Each schema is read by
+port name, and C-Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
+keys, in key order (serde's), don't list the opened side rows first and in port order (`portsOf`) is refused, never
+read in its own order (every pinned template's side ports sort in port order). The public row's
 b ‖ c must be `publicBc` of the window's context, the certified salt the verifier passes (`opening`'s `salt`,
 `core_check.certified_salt`, the salt `passEpoch` checked), the unit's position and the entry's side roots. Only a
 certified window opens a salted template's units, and only under a 64-byte salt; it opens no unsalted template's unit,
