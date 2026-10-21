@@ -202,6 +202,7 @@ another disk, `cp -l` failed with "Invalid cross-device link" and, its status un
 | DeepSeek-V4-Pro B1, attempt 4 | r20261020-154507-f208 | r20261021-071904-0dc9, as attempt 3 (b2ef's capture, its 8 `align_schedule` files) | r20261021-152252-6748 from 15:23Z at dsv4 4f78cf55e4 (17019d4282, the route pin's fix, with 8a1874456a cherry-picked, so `match.*/` stays out of `_rowmeta`; tree_guard: "changes only pins, this runbook and COMMIT_FIXES"), after attempt 3's `commit/` and `commit.log` were moved aside by hand to `commit.failed-20261021T152234Z`; its `vllm.commit` Attempt r20261021-152313-25f3 (verdict art:b51ef00a400467725fe7f4af4db5924159bd2f2ff03530397fd8205556bb2b74) | 4 | FAIL rc 12 at 16:00:52Z, eu's `/workspace` full (below): pair 0 committed with the match oracle PASS on all 8 ranks (5,920 tensors each, 1,952 MoE align witnesses equal and none differing) and 512 of 512 openings, then every rank's replay-bundle write raised OSError 28 and the Commit failed fast before the value check, with no bundles. Rerun as attempt 5, a whole new commitment, as for an eviction |
 | DeepSeek-V4-Pro B1, attempt 5 | r20261020-154507-f208 | r20261021-071904-0dc9, as attempt 3 | r20261021-161703-abfb from 16:17Z at dsv4 f5892498fd (TPEVAL's evaluators for the 19 families, #3075, #3076, #3077 and #3079; tree_guard passes from 1bbf831029), after attempt 4's `commit/` and `commit.log` were moved aside by hand to `commit.failed-20261021T161359Z`, with 557 GiB free; its `vllm.commit` Attempt r20261021-161715-e71e (verdict art:a143231724c0cc49f8427e632b75eab29788c7247ace77a4308aaead3d074075): the driver and all 8 ranks read back 0.88 | 5 | PENDING by design at 16:53:45Z: the match oracle PASS on all 8 ranks (5,920 tensors each), each rank's `schedule_replay` 1,952 calls replayed with `missing` 0 and `routing_differs` 0 and its 1,952 MoE align witnesses equal; value check PASS, weights pin, cross-rank collectives 374 of 374 equal, 512 openings verified, 222,208 fold-match bindings with none bad. Every bundle's engine of record names the venv's `libcublas.so.12` at 120901 (cuBLASLt 120901). Bundles 8 x 8,739 MiB, sealed by 16:55Z, when the GPUs were free; the job ended rc 0 at 17:20:33Z, every bundle preserved and `_rowmeta` art:14cf49b91233416102200a20b5a9897f22baa2530e59ced727ed162afc8995d9 (147 files, 795 MB) |
 | B8 stochastic | r20261020-132557-d5f6 | r20261021-012926-a901, of r20261021-011240-7676 | r20261021-181707-464b from 18:17Z at 09ac5ac3a5, in place on eu's `/workspace` (427 GiB free); its `vllm.commit` Attempt r20261021-181730-2f80; `cublas_names.txt` the venv's two `.so.12` | 1 | running |
+| B8 greedy | r20261020-132554-c189 | r20261021-012811-2bfd, of r20261021-012405-e484; its last 24 files (rank 7's folds and the rewritten records, 29.2 GB) copied to extra by 18:35Z, all equal | r20261021-183934-d980 from 18:39Z at 2b354e82de, `ROW_ON=/workspace/extra` (`disk_at_start.txt` reads `/dev/vde`, 454 GiB free); its `vllm.commit` Attempt r20261021-183958-acbe waits on the lease for B8 stochastic's GPUs; `cublas_names.txt` the venv's two `.so.12` | 1 | running |
 
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
 rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside B8
@@ -231,15 +232,23 @@ printed "already in" and every bundle "in place", with no 150 GiB fetch. Two ear
 r20261021-114800-b5cd) exited 2 at the input check, before anything ran: the file was sent under another name than `bundles.json`.
 The decision is a FAIL, so nothing is published (`replay_publish.sh` exits with `tp-commit-replay`'s rc 3 before it publishes).
 
-Attempt 5's replay runs on vy-glm53-cpu-2 once e484 ends, not on eu's or vy-nebius-cpu-3's CPUs (circuits, 15:47Z and 16:01Z 21
-Oct). cpu-2's `/workspace/cp/dsv4-ckpt` has a `.verified` from 17 Oct but none of the shards, so `stage_ckpt.sh` stages the
-checkpoint there (864.7 GB, every file checked) once e484, which must not run out of disk, has ended. To make room, `research
+Attempt 5's replay was to run on vy-glm53-cpu-2 once e484 ended, not on eu's or vy-nebius-cpu-3's CPUs (circuits, 15:47Z and
+16:01Z 21 Oct). cpu-2's `/workspace/cp/dsv4-ckpt` had a `.verified` from 17 Oct but none of the shards, so `stage_ckpt.sh` was
+to stage the checkpoint there (864.7 GB, every file checked) once e484, which must not run out of disk, had ended. To make room, `research
 retention rm --approved-by @circuits --ref CIR-25-v2-batch` deleted cpu-2's copy of the v1 rows at 16:33Z (`fs/glm53-m1`'s
 `sweep/`, `sweep-v2/`, `records/` and `unit-rules/`, 319.4 GiB, logged in cpu-2's `deletions.jsonl`; eu's copy went at 00:42Z),
 leaving 822 GiB free. The tool kept `fs/glm53-m1/work` (11 GiB), which holds retained passes. While e484 ran,
 r20261021-173416-6183 (`ONLY='model-000[0-2]?-*'`) staged 29 of the 64 shards (390.6 GB at 1,508 MB/s, all checked, none bad),
 leaving e484 452 GiB. The Build of record (ab0f's `rowdir.sha256`, 214 files, and the `.tree` at 1bbf831029) was copied from
 vy-nebius-cpu-3 with `copy_rowdir.sh`, every file equal. The replay fetches the bundles and `_rowmeta` from the store.
+
+Attempt 5 is not replayed (circuits, 18:52Z 21 Oct). TPEVAL's re-judge of attempt 3 at dsv4 fab2cefa87 (r20261021-164913-4f2b
+and r20261021-164937-8ec8 on eu) found a Definition bug: `TritonBlockRMSNorm_v1`'s q-norm at N=1536 (rank 0, step 17,
+`model.layers.6.attn/q` row 0: "F_V(committed inputs) != committed output"), fixed by #3111. So attempt 5's Programs are wrong
+for those picks. DSV4V2 runs attempt 6 from a re-pin with #3111: a Build on vy-nebius-cpu-3, Match legs and Commit on eu, and the
+Match CPU phase and replay on vy-nebius-cpu-3. cpu-2 is for the two B8 replays only, so the full stage (r20261021-183804-65d2) was
+cancelled during its check, and the 64 shards both stages fetched were deleted, with their `.cache` metadata (only files from
+17:34Z on), leaving cpu-2's `cp/dsv4-ckpt` as it was on 17 Oct and 1,339 GiB free.
 
 Both Commits fail the cuBLAS route pin (`integrations/vllm/verity_vllm/check/cublas_route_pin.py`) on every rank. Their Programs bind Definitions only the pin
 binds (B1 rank 0: `CublasSplitKGemmF32Out_v1` 19,200 and `CublasSplitKGemm_v1` 6,027), so each rank's facts of record must be
