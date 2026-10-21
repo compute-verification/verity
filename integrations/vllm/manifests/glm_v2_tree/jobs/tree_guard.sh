@@ -6,9 +6,12 @@
 PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/|dsv4_v2_tree/)'
 # Commit-only fixes a later job may also run past, each `PATH BLOB_BEFORE BLOB_AFTER`, allowed only when the row's tree holds the
 # first blob and the job's the second. a371c5a7f1: the binding map's leaf unit; only the Commit calls `build_binding_map`, and the
-# Match's `logical_request` is unchanged.
+# Match's `logical_request` is unchanged. 190ee66678: each request's call-boundary spelling in its own Program order; only the
+# Commit builds a `Binder`.
 COMMIT_FIXES='integrations/vllm/verity_vllm/commit/binding.py 986fe71aa64a28158d0eb79f126ad061c9a284de 308391e05e6376641d6f5c1819706cdcfce9b30e
-integrations/vllm/tests/commit/test_binding_negatives.py f8e60d391a898a68ad4e80bcf23a244a7ce8ae2b 12ffd26912b4539a47b51d9c2eab8f606214964b'
+integrations/vllm/tests/commit/test_binding_negatives.py f8e60d391a898a68ad4e80bcf23a244a7ce8ae2b 12ffd26912b4539a47b51d9c2eab8f606214964b
+integrations/vllm/verity_vllm/query/manifest/bind.py b9d3ec27ec5b7659948f05e246da4b187bdafddd 4797d292d6c7d142f3814230dda1cdb4ceb02320
+integrations/vllm/tests/query/test_bind.py 5e61154f8cafa41e702cee9b1ee78141898a9354 8f51c8e7dd88393ae8d4d5410251d0e282617ee4'
 commit_fix() {  # commit_fix S0 SHA PATH: PATH moved from S0 to SHA by exactly a fix COMMIT_FIXES names
   local p b0 b1
   while read -r p b0 b1; do
