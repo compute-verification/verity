@@ -6,8 +6,9 @@
 // mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word.
 // redux: one redux.sync.xor.b32 (the whole warp's XOR in one instruction, sm_80+); reduce: the same by 5 butterfly
 // shuffles and 5 XORs (the fallback). LI-CP-W's per-segment checkpoint is one of these a warp a segment.
-// li: LOP3 and IMAD alternating, LI's op mix; lif: LI with FFMA filler.
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_REDUX, L_REDUCE, L_LI, L_LIF };
+// li: LOP3 and IMAD alternating, LI's op mix; lif: LI with FFMA filler. imadw: mad.wide.u32 (IMAD.WIDE.U32), the 64-bit
+// product and its addend a register pair, so 4 chains.
+enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_REDUX, L_REDUCE, L_LI, L_LIF, L_IMADW };
 struct Lane {
   uint32_t r[8];
   float f[8];
@@ -26,6 +27,12 @@ struct Lane {
       else asm volatile("add.u32 %0,%0,%1;" : "+r"(r[(i >> 1) & 7]) : "r"(r[((i >> 1) + 1) & 7]));
     }
     if constexpr (X == L_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x9E3779B9u));
+    if constexpr (X == L_IMADW) {
+      const int p = 2 * (i & 3);
+      asm volatile("{\n.reg .b64 w;\nmov.b64 w,{%0,%1};\nmad.wide.u32 w,%0,%2,w;\nmov.b64 {%0,%1},w;\n}"
+                   : "+r"(r[p]), "+r"(r[p + 1])
+                   : "r"(0x9E3779B9u));
+    }
     if constexpr (X == L_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(r[s]) : "r"(r[t]), "r"(0x85EBCA6Bu));
     if constexpr (X == L_SHFL) asm volatile("shfl.sync.bfly.b32 %0,%0,1,0x1f,0xffffffff;" : "+r"(r[s]));
     if constexpr (X == L_IADD) asm volatile("add.u32 %0,%0,%1;" : "+r"(r[s]) : "r"(r[t]));
@@ -96,5 +103,54 @@ DC_DEV void lane_ops(Lane& l) {
   } else {
 #pragma unroll
     for (int q = 0; q < R; q++) l.op<X>(q);
+  }
+}
+
+// The memory lanes: R accesses a trip, each one warp instruction whose 32 lanes touch 32 consecutive words (LDS.128: 4
+// words a lane). lde: ld.u32 through a generic address (LD.E, which no census class names); atome: red.relaxed.gpu.xor
+// through a generic address (ATOM.E, ATOME32); redg: the same to a global address (REDG.E, REDG32); atoms:
+// red.shared.xor (ATOMS, ATOMS32); lds128: ld.shared.v4.u32 (LDS.128, LDS128). A global access goes to its warp's own
+// 8 KB of `g`, a 128-byte line an access and the trip's parity picking one of two sets of lines, so the lane warps' loads
+// stay in L1; a shared one to its warp's own 1 KB of scratch. A loaded word is XORed into a chain; an atomic XORs a chain
+// into memory.
+enum { M_LDE, M_ATOME, M_REDG, M_ATOMS, M_LDS128 };
+constexpr int MEM_WARP_BYTES = 8192, MEM_BLOCK_BYTES = 32 * MEM_WARP_BYTES, MEM_SX = 1024;
+DC_DEV unsigned char* mem_global(unsigned char* g) {
+  return g + (size_t)blockIdx.x * MEM_BLOCK_BYTES + (threadIdx.x >> 5) * MEM_WARP_BYTES + (threadIdx.x & 31) * 4;
+}
+// The warp's scratch in `sx` (MEM_SX bytes a warp), each word set to its own offset; read after OP_BEGIN's barrier.
+DC_DEV uint32_t mem_shared(unsigned char* sx) {
+  uint32_t* w = reinterpret_cast<uint32_t*>(sx + (threadIdx.x >> 5) * MEM_SX);
+#pragma unroll
+  for (int i = 0; i < MEM_SX / 128; i++) w[i * 32 + (threadIdx.x & 31)] = i * 32 + (threadIdx.x & 31);
+  return smem_u32(sx + (threadIdx.x >> 5) * MEM_SX);
+}
+template <int M, int R>
+DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sp, int n) {
+  const uint32_t lane = threadIdx.x & 31;
+#pragma unroll
+  for (int q = 0; q < R; q++) {
+    unsigned char* p = gp + (((n & 1) * R + q) % (MEM_WARP_BYTES / 128)) * 128;
+    uint32_t& x = l.r[q & 7];
+    if constexpr (M == M_LDE) {
+      uint32_t v;
+      asm volatile("ld.u32 %0,[%1];" : "=r"(v) : "l"(p) : "memory");
+      x ^= v;
+    }
+    if constexpr (M == M_ATOME) asm volatile("red.relaxed.gpu.xor.b32 [%0],%1;" ::"l"(p), "r"(x) : "memory");
+    if constexpr (M == M_REDG)
+      asm volatile("{\n.reg .u64 a;\ncvta.to.global.u64 a,%0;\nred.relaxed.gpu.global.xor.b32 [a],%1;\n}" ::"l"(p),
+                   "r"(x)
+                   : "memory");
+    if constexpr (M == M_ATOMS)
+      asm volatile("red.shared.xor.b32 [%0],%1;" ::"r"(sp + (q & 7) * 128 + lane * 4), "r"(x) : "memory");
+    if constexpr (M == M_LDS128) {
+      uint32_t a, b, c, d;
+      asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%4];"
+                   : "=r"(a), "=r"(b), "=r"(c), "=r"(d)
+                   : "r"(sp + ((q + n) & 1) * 512 + lane * 16)
+                   : "memory");
+      x ^= a ^ b ^ c ^ d;
+    }
   }
 }
