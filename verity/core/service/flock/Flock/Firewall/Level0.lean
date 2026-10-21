@@ -71,8 +71,8 @@ theorem tower_snd (d : Nat) (lf : Nat → ByteArray) (k : Nat) :
     (tower d lf k).2 = (Array.range (k + 1)).map (Link.layer d lf) := by
   induction k with
   | zero =>
-    simp only [tower, Array.range_succ, Array.append_singleton, Array.map_push,
-      Array.range_eq_empty_iff.mpr (rfl : 0 = 0), Array.map_empty, Array.push_empty]
+    simp only [tower, Array.range_succ, Array.append_singleton, Array.range_eq_empty_iff.mpr (rfl : 0 = 0)]
+    simp only [Array.map_push, Array.map_empty, Array.push_empty]
   | succ k ih =>
     simp only [tower, ih, tower_fst, layer_succ, Array.range_succ, Array.append_singleton, Array.map_push]
 
