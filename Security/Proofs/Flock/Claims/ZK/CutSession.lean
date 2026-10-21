@@ -268,10 +268,11 @@ def ligeritoCut (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedul
         if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4

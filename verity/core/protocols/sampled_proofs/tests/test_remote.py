@@ -2,10 +2,12 @@
 coin opens, answers each root with that family's next coin and logs the release before the coin leaves; it refuses
 every malformed or out-of-order frame and ends the session there, and however the session ends it signs its release log
 (the close record).  The client (`RemoteChallenger`) is `LiveRecord`'s challenger as it is, and refuses a coin that
-doesn't open.  The verifier, reading the challenger's directory and the auditor's signed ledger, trusts only the one
-session the ledger opens for the window under the pinned key, ended closed, its commitment and the roots its signed log
-shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or presents an unsigned log, an
-unclosed session, a second session, a ledger signed under its own key or one older than the session's end is refused."""
+doesn't open; it asks for several coins in one round trip (`open_many`), the release log the same as one at a time, and
+a batch with any bad answer raises whole.  The verifier, reading the challenger's directory and the auditor's signed
+ledger, trusts only the one session the ledger opens for the window under the pinned key, ended closed, its commitment
+and the roots its signed log shows, so a prover that rewrites a coin's root, an entry of the log or the ledger, or
+presents an unsigned log, an unclosed session, a second session, a ledger signed under its own key or one older than the
+session's end is refused."""
 
 from __future__ import annotations
 
@@ -441,6 +443,123 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
     liar.join()
     with pytest.raises(C.CoinError, match="session ended"):
         client.open("positions", 1, root(1))
+
+
+BATCH = [("positions", 0, root(0)), ("replay", 0, root(0)), ("positions", 1, root(1))]
+
+
+def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
+    """`ask(client)` against a challenger served on one end of a socketpair (`serve`, on a clock that counts), the
+    client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
+    directory.mkdir()
+    session = R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), pinned_key(), HOST, signer,
+                             directory, "s-1")
+    a, b = socket.socketpair()
+    ended: list[str | None] = []
+    t = threading.Thread(target=lambda: ended.append(R.serve(a, session, itertools.count().__next__)))
+    t.start()
+    client = R.RemoteChallenger(b)
+    try:
+        got = ask(client)
+    finally:
+        if client._ended is None:
+            client.close()
+        t.join()
+        a.close()
+    return (directory / R.RELEASES).read_bytes(), got, ended[0]
+
+
+def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_does(tmp_path, signer):
+    """One round trip for three coins (two of them after one root, as a paced window's openings coin and the challenge
+    after it are): the same openings, the release log byte for byte, and the in-process challenger's `open_many` the
+    same coins again."""
+    one, sequential, why = _served(tmp_path / "one", signer, lambda c: [c.open(*r) for r in BATCH])
+    many, batched, why_many = _served(tmp_path / "many", signer, lambda c: c.open_many(BATCH))
+    assert (why, why_many) == (None, None)
+    assert batched == sequential and many == one
+    events = [json.loads(line)["event"] for line in many.decode().splitlines()]
+    assert events == ["commitment"] + ["root", "release"] * 3
+    assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def _scripted(n: int, answer):
+    """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
+    then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
+    wrote them back to back before reading a reply."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        with a:
+            reply(a)
+            a.sendall(frame({"type": "commitment", "commitment": ch.commitment.to_json()}))
+            heads = [reply(a) for _ in range(n)]
+            a.sendall(b"".join(answer([ch.open(h["label"], h["index"], bytes.fromhex(h["after"])) for h in heads])))
+            try:
+                while a.recv(1 << 16):
+                    pass
+            except ConnectionResetError:
+                pass  # the client hung up on a reply it refused, with the batch's later replies unread
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _opening(o: C.LiveOpening) -> bytes:
+    return frame({"type": "opening", "opening": o.to_json()})
+
+
+@pytest.mark.parametrize("bad, why", [(_other_coin, "replay coin 0: coin does not open"),
+                                      (_other_root, "replay coin 0: coin was not opened after")])
+def test_a_batch_one_of_whose_coins_fails_live_reason_raises_whole_and_ends_the_session(bad, why):
+    """No partial credit: the coins either side of the bad one are good, and none is returned."""
+    client, t = _scripted(3, lambda ops: [_opening(ops[0]), bad(ops[1]), _opening(ops[2])])
+    with pytest.raises(C.CoinError, match=why):
+        client.open_many(BATCH)
+    t.join()
+    for again in (lambda: client.open("positions", 2, root(2)), lambda: client.open_many(BATCH)):
+        with pytest.raises(C.CoinError, match=r"session ended \(.*replay coin 0.*\): a retry never redraws"):
+            again()
+
+
+def test_a_batch_answered_out_of_order_is_refused():
+    client, t = _scripted(2, lambda ops: [_opening(ops[1]), _opening(ops[0])])
+    with pytest.raises(C.CoinError, match="positions coin 0: coin is the epoch's replay coin 0, not its positions coin"):
+        client.open_many(BATCH[:2])
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open(*BATCH[0])
+
+
+def test_a_batch_the_challenger_refuses_midway_raises_and_releases_only_the_coins_before_it(tmp_path, signer):
+    """`serve` releases the batch's coins before the refused one, logs them and signs the session's close with the
+    refusal; the client returns none of them, the one after is never opened, and every later coin is refused."""
+    batch = [BATCH[0], ("positions", 5, root(1)), BATCH[1]]
+    held: list[R.RemoteChallenger] = []
+
+    def ask(client):
+        held.append(client)
+        with pytest.raises(C.CoinError, match="refused: the next positions coin is 1, not 5"):
+            client.open_many(batch)
+        with pytest.raises(C.CoinError, match="session ended"):
+            client.open(*BATCH[2])
+
+    log, _, why = _served(tmp_path / "s", signer, ask)
+    assert why == "the next positions coin is 1, not 5"
+    assert [json.loads(line).get("label") for line in log.decode().splitlines()] == [None, "positions", "positions"]
+    close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
+    assert (close["ended"], close["lines"]) == (why, 3)
+
+
+def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, signer):
+    def ask(client):
+        with pytest.raises(ValueError, match=f"at most {R.MAX_BATCH} coins"):
+            client.open_many([BATCH[0]] * (R.MAX_BATCH + 1))
+        return client.open_many(BATCH[:1])
+
+    _, got, why = _served(tmp_path / "s", signer, ask)
+    assert why is None and [(o.label, o.index) for o in got] == [("positions", 0)]
 
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):

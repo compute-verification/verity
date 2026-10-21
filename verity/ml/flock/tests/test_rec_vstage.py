@@ -221,6 +221,29 @@ def test_the_shared_rows_list_the_algebras_row_ports_and_rs_tops_and_refuse_two_
         S.shared_rows([p0], [staged("L0x", {"out": e("rec-top-L0")})])
 
 
+def test_the_shared_rows_register_the_level_0_cap_as_level_0_and_rec_cap_read_it(tmp_path):
+    """`shared_rows(..., tops)`: the port reading `rec-top-L0` of level 0 (`out`) and of RecCap (`top`) is one entry under
+    `rec-top-L0`, the first's reads; the two at another root, or a directory with no port reading it, are refused."""
+    from verity_flock import rec_cap as RC
+
+    def e(value, root="aa", reads=(0,)):
+        return {"value": value, "root": root, "leaves": 128, "words": 64, "word_bits": 16, "domain": "dd", "reads": list(reads)}
+
+    def staged(name, ports):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+        return tmp_path / name
+
+    p0 = staged("p0", {"m0": e("rec-c0")})
+    l0 = staged("L0", {"out": e(RC.TOP_VALUE, reads=(3, 9)), "acc": e(O.ACC_VALUE, "bb")})
+    cap = staged("cap", {"top": e(RC.TOP_VALUE, reads=range(128)), "out": e(RC.ZERO_VALUE, "cc", range(128))})
+    assert S.shared_rows([p0], (), [l0, cap])["ports"] == {"m0": e("rec-c0"), RC.TOP_VALUE: e(RC.TOP_VALUE, reads=(3, 9))}
+    with pytest.raises(ValueError, match="its rec-top-L0 is not the other statements' registration of it"):
+        S.shared_rows([p0], (), [l0, staged("cap2", {"top": e(RC.TOP_VALUE, "ab", range(128))})])
+    with pytest.raises(ValueError, match="0 ports read rec-top-L0, not one"):
+        S.shared_rows([p0], (), [p0])
+
+
 @pytest.mark.slow
 def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     """`forge_row` on a two-instance statement's ``inst.bin``: one bit of the named row moves, its header, its other rows, its

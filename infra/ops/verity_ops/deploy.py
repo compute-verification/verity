@@ -58,7 +58,10 @@ import research
 from research.flags import renamed
 
 MANIFEST = Path(research.__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
-REPO = Path(__file__).resolve().parents[3]
+SRC = Path(__file__).resolve().parents[3]
+# the git repository REF and origin's branches are read from: this checkout, or $RESEARCH_DEPLOY_REPO where the code runs from a
+# tree without history (the control pod's watchers run from /data/watchers/src and read the clone /data/watchers/repo)
+REPO = Path(os.environ.get("RESEARCH_DEPLOY_REPO") or SRC)
 PROJECT = "verity"
 HISTORY = 400                  # REF's commits searched for a stale file's version
 AHEAD_DAYS = 21                # origin's branches searched for an unrecorded file's commit
@@ -276,7 +279,7 @@ def git(*args: str, repo: Path = REPO) -> str:
 
 def manifest_at(ref: str, repo: Path = REPO) -> str | None:
     """REF's own deploy.toml, so a commit deploys what it lists; None when REF has none (then the checkout's is used)."""
-    r = subprocess.run(["git", "-C", str(repo), "show", f"{ref}:{MANIFEST.relative_to(REPO)}"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(repo), "show", f"{ref}:{MANIFEST.relative_to(SRC)}"], capture_output=True, text=True)
     return r.stdout if r.returncode == 0 else None
 
 
@@ -344,11 +347,17 @@ def ssh_runner(project: str = PROJECT) -> Runner:
     return run
 
 
+class Unreachable(RuntimeError):
+    """ssh couldn't connect to the node at all (a stopped VM): its files can't be read, which is no drift of theirs."""
+
+
 def probe(node: Node, paths: list[str], run: Runner) -> dict:
     req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
-        raise RuntimeError(f"{node.name}: probe failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
+        err = r.stderr.decode(errors="replace").strip()
+        raise (Unreachable if r.returncode == 255 and "ssh: connect to host" in err else RuntimeError)(
+            f"{node.name}: probe failed (exit {r.returncode}): {err[-400:]}")
     return json.loads(r.stdout)
 
 
@@ -420,10 +429,13 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                for t in node.entries if t.tree and p.startswith(t.path.rstrip("/") + "/")}
     if in_tree:
         got = probe(node, sorted(in_tree), run)["files"]
-        recent = versions(sorted({rp for _, rp in in_tree.values()}), "--remotes=origin", since=f"{AHEAD_DAYS}.days", repo=repo)
+        srcs = sorted({rp for _, rp in in_tree.values()})
+        recent = versions(srcs, "--remotes=origin", since=f"{AHEAD_DAYS}.days", repo=repo)
+        removed = versions(srcs, commit, repo=repo)    # REF held this version once and has deleted it since: a stray
         for p, (t, rp) in sorted(in_tree.items()):
-            hit = recent.get((rp, (got.get(p) or {}).get("blob")))
-            if hit:
+            key = (rp, (got.get(p) or {}).get("blob"))
+            hit = recent.get(key)
+            if hit and key not in removed:
                 strays.remove(p)
                 entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})
@@ -643,7 +655,12 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     if rest:
         ns.paths += rest
     if not ns.no_fetch:
-        subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "main"], capture_output=True)
+        # a clone nobody else fetches ($RESEARCH_DEPLOY_REPO) takes every branch: `ahead` reads origin's recent ones
+        own = repo.resolve() != SRC
+        r = subprocess.run(["git", "-C", str(repo), "fetch", "-q", *(["--prune", "origin"] if own else ["origin", "main"])],
+                           capture_output=True, text=True)
+        if r.returncode:
+            print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
     run = run or ssh_runner()
     if ns.cmd == "drift":
@@ -655,7 +672,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             try:
                 reps[name] = drift(nodes[name], ns.ref, run, repo)
             except (RuntimeError, subprocess.CalledProcessError, ValueError) as e:
-                reps[name] = {"error": str(e)}
+                reps[name] = {"error": str(e), **({"unreachable": True} if isinstance(e, Unreachable) else {})}
             rc |= 0 if "error" not in reps[name] and clean(reps[name]) else 1
         if ns.json:
             print(json.dumps(reps, indent=1))

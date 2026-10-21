@@ -7,7 +7,8 @@
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
-    imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``.
+    imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;  only
+    tests name a function past a guard (``TEST_ONLY``).
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
@@ -137,6 +138,13 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
                                                 "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+}
+#: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
+#: with the file that defines it and why tests need it.
+TEST_ONLY = {
+    "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
+                         "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
+                         "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -345,6 +353,62 @@ def test_nothing_outside_infra_imports_it() -> None:
     assert not offenders, "\n".join(offenders)
     stale = sorted(set(INFRA_IMPORTERS) - set(found))
     assert not stale, f"INFRA_IMPORTERS entries that no longer import infra/; remove them: {stale}"
+
+
+def _is_test(rel: str) -> bool:
+    parts = Path(rel).parts
+    return "tests" in parts[:-1] or parts[-1].startswith("test_") or parts[-1] == "conftest.py"
+
+
+def _uses(tree: ast.AST, names: set[str]) -> list[tuple[str, int]]:
+    """``(name, line)`` for each use of one of ``names``: a name, an attribute, an imported name, or a string equal to one
+    (what ``getattr`` reads).  Defining it is not a use."""
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in names:
+            out.append((node.id, node.lineno))
+        elif isinstance(node, ast.Attribute) and node.attr in names:
+            out.append((node.attr, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            out += [(a.name, node.lineno) for a in node.names if a.name in names]
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in names:
+            out.append((node.value, node.lineno))
+    return out
+
+
+def test_only_tests_call_a_function_past_a_guard() -> None:
+    """No tracked Python file but a test (under a ``tests/`` directory, a ``test_*.py`` or a ``conftest.py``) uses a
+    function of ``TEST_ONLY``, its own file included; each is still defined there, and some test still uses it."""
+    tracked = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, check=True, capture_output=True).stdout
+    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(TEST_ONLY))) + r")\b")
+    offenders, used, defined = [], set(), set()
+    for rel in (p for p in tracked.decode().split("\0") if p):
+        path = ROOT / rel
+        if not path.is_file() or not word.search(text := path.read_text(encoding="utf-8", errors="replace")):
+            continue
+        try:
+            tree = ast.parse(text, filename=rel)
+        except SyntaxError:
+            continue
+        hits = _uses(tree, set(TEST_ONLY))
+        if _is_test(rel):
+            used |= {name for name, _ in hits}
+            continue
+        offenders += [f"{rel}:{line}: {name}" for name, line in hits]
+        defined |= {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and TEST_ONLY.get(n.name, ("",))[0] == rel}
+    assert not offenders, ("only tests may use these (TEST_ONLY), since a guard never fails open: call the guarded function\n"
+                           + "\n".join(offenders))
+    assert defined == set(TEST_ONLY), f"TEST_ONLY entries their file no longer defines; remove them: {sorted(set(TEST_ONLY) - defined)}"
+    assert used == set(TEST_ONLY), f"TEST_ONLY functions no test uses; remove them and the entry: {sorted(set(TEST_ONLY) - used)}"
+
+
+def test_a_use_past_a_guard_is_found() -> None:
+    """The check above isn't vacuous: an import, an attribute call and a ``getattr`` string are each a use, and the
+    definition is not."""
+    src = ("from verity.ml.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
+           "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
+    assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
+    assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

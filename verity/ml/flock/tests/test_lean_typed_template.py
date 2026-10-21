@@ -3,7 +3,9 @@ Rust prover splits it: the instance type's root one slot per VU and each placed 
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
 cover (§16.15), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
-its form, once every check has passed, and every other case for the check that catches it."""
+its form, once every check has passed, and every other case for the check that catches it. That build has no zk patch, so
+its plain files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under
+`--upstream-plain` (PROTOCOL.md §8.1)."""
 from __future__ import annotations
 
 import hashlib
@@ -76,7 +78,7 @@ def test_it_refuses_the_rust_provers_sessions(gemm, tmp_path):
     sessions = sorted(p for p in tmp_path.iterdir() if (p / "case.json").exists())
     p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
                         "--public", str(root / "stage" / "pub-4.bin"), "--tables", str(root / "stage" / "tables"),
-                        "--session", *map(str, sessions)], capture_output=True, text=True)
+                        "--upstream-plain", "--session", *map(str, sessions)], capture_output=True, text=True)
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
     refused = f"refused: {STATEMENT}, a typed statement: a statement form the soundness proof does not cover"
