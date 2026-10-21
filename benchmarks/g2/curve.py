@@ -228,12 +228,12 @@ def harness_measures(doc: dict, *, run: str, source: str, pin: str, device: str 
 
 
 def tp_retain(summary: dict, params: dict) -> str:
-    """A tp_decode arm's value retention: its summary's, else the RETAIN its run (`params`: command and env) gave T1R's wrapper
-    (`tp_decode_retain.sh`, which set `tp_decode.sh`'s VERITY_RETAIN from it, and refused to run without it), else none, which
-    `tp_decode.sh` exported before it took RETAIN."""
+    """A tp_decode arm's value retention: its summary's, else the RETAIN its run (the attempt's `params`: argv and env) gave T1R's
+    wrapper (`tp_decode_retain.sh`, which set `tp_decode.sh`'s VERITY_RETAIN from it, and refused to run without it), else none,
+    which `tp_decode.sh` exported before it took RETAIN."""
     if summary.get("retain"):
         return str(summary["retain"])
-    argv = [str(a) for a in params.get("command") or ()]
+    argv = [str(a) for a in params.get("argv") or ()]
     if any("tp_decode_retain.sh" in a for a in argv):
         given = next((a.split("=", 1)[1] for a in argv if a.startswith("RETAIN=")), None)
         return given or str((params.get("env") or {}).get("RETAIN") or "?")
@@ -497,10 +497,14 @@ def plot(measures: list[Measure], png: Path) -> None:
             ax.set_ylabel("Commit / stock")
             ax.set_title(f"B{batch} {phase} ({'TTFT' if phase == 'prefill' else 'ITL p50; GLM-5.3: decode step'})")
             ax.grid(alpha=0.3)
-            ax.legend(fontsize=7)
+    legend: dict[str, object] = {}
+    for ax in axes.flat:
+        for h, label in zip(*ax.get_legend_handles_labels()):
+            legend.setdefault(label, h)
+    fig.legend(list(legend.values()), list(legend), loc="lower center", ncol=5, fontsize=8)
     fig.suptitle("G2: served Commit over stock, best counting measure (rows-sha512) by value retention; vllm-v1 SHA-256 dotted, "
                  "not counted")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(png, dpi=110)
 
 

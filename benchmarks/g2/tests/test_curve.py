@@ -285,15 +285,19 @@ def test_retention_modes_are_columns_of_their_own_and_a_cell_takes_4k_rows_over_
 
 
 @pytest.mark.parametrize("summary, params, want", [
-    ({"retain": "host"}, {"command": ["env", "RETAIN=none", "bash", "inputs/tp_decode_retain.sh"]}, "host"),
-    ({}, {"command": ["gpu-lease", "8", "--wait", "--", "env", "RETAIN=host", "BATCHES=1", "ARM=rows-4k", "bash", "-c",
-                      'bash "$RESEARCH_RUN_DIR/inputs/tp_decode_retain.sh"']}, "host"),
-    ({}, {"command": ["bash", "inputs/tp_decode_retain.sh"], "env": {"RETAIN": "device"}}, "device"),
-    ({}, {"command": ["bash", "inputs/tp_decode_retain.sh"]}, "?"),
-    ({}, {"command": ["env", "RETAIN=host", "bash", "benchmarks/served_commit/tp_decode.sh"]}, "none"),
+    ({"retain": "host"}, {"argv": ["env", "RETAIN=none", "bash", "inputs/tp_decode_retain.sh"]}, "host"),
+    ({}, {"argv": ["gpu-lease", "8", "--wait", "--mem-gb", "160", "--", "env", "RETAIN=host", "BATCHES=1", "ARM=rows-4k", "bash",
+                   "-c", 'bash "$RESEARCH_RUN_DIR/inputs/tp_decode_retain.sh"']}, "host"),
+    ({}, {"argv": ["bash", "inputs/tp_decode_retain.sh"], "env": {"RETAIN": "device"}}, "device"),
+    ({}, {"argv": ["bash", "inputs/tp_decode_retain.sh"]}, "?"),
+    ({}, {"argv": ["gpu-lease", "8", "--wait", "--mem-gb", "400", "--", "env", "ARM=rows", "bash",
+                   "benchmarks/served_commit/tp_decode.sh"]}, "none"),
+    ({}, {"argv": ["env", "RETAIN=host", "bash", "benchmarks/served_commit/tp_decode.sh"]}, "none"),
+    ({}, {"command": ["env", "RETAIN=host", "bash", "inputs/tp_decode_retain.sh"]}, "none"),
     ({}, {}, "none"),
 ])
 def test_a_tp_decode_arms_retention_is_its_summarys_else_t1rs_wrappers_else_none(summary, params, want):
+    """`params` is the attempt's, as `research data show RUN --json` has it: the run's command line is its `argv`."""
     assert C.tp_retain(summary, params) == want
 
 
