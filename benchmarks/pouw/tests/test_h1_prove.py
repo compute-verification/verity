@@ -18,6 +18,9 @@ H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
+from verity.core.protocols.pouw import salt as PS  # noqa: E402
+from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+
 spec = importlib.util.spec_from_file_location("h1_prove_run", H1 / "run.py")
 RN = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(RN)
@@ -49,9 +52,10 @@ def opened(tmp: Path, priv: str, salt: bytes, units: list[int], tag: str) -> lis
 
 
 def test_drawn_units_open_to_their_window_and_no_other(tmp_path):
-    salt = U.unit_salt(b"\x01" * 32)
+    salt = U.unit_salt(U.stand_in_reveal(b"\x01" * 32), 1)
     com, served = committed(tmp_path, "w1", 1, salt)
     assert com["tiles"] == 2 * (8 // 4) * (16 // 8)
+    assert served["salt"] == PS.pouw_salt(U.stand_in_reveal(b"\x01" * 32), 1, U.STREAM, U.PROVER).hex()
     units = [0, 5, 7]
     for u, op in zip(units, opened(tmp_path, "w1", salt, units, "honest")):
         assert RN.check_opening(com, served, op, u) == []
@@ -65,7 +69,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path):
         why = f"{port}: its path does not reach the registered {'z' if port == 'o0' else 'receipt'} root"
         assert [RN.check_opening(com, served, op, u) for u, op in zip(units, ops)] == [[why]] * len(units)
 
-    salt2 = U.unit_salt(b"\x02" * 32)
+    salt2 = U.unit_salt(U.stand_in_reveal(b"\x02" * 32), 2)
     com2, served2 = committed(tmp_path, "w2", 2, salt2)
     op2 = opened(tmp_path, "w2", salt2, [5], "other")[0]
     assert RN.check_opening(com2, served2, op2, 5) == []
@@ -73,7 +77,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path):
 
 
 def test_an_in_proof_negatives_window_opens_to_its_own_registration_with_one_value_plus_one(tmp_path):
-    salt = U.unit_salt(b"\x03" * 32)
+    salt = U.unit_salt(U.stand_in_reveal(b"\x03" * 32), 1)
     com, served = committed(tmp_path, "w1", 1, salt)
     units = [1, 5]
     opened(tmp_path, "w1", salt, units, "honest")
@@ -150,7 +154,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_z(tmp_path, mon
     a[:, ::5] = 127
     np.savez(tmp_path / "w.npz", tokens=np.arange(8), a=a, **{"b_q_proj": rng.integers(-128, 128, (16, K)).astype(np.int8)})
     window("commit", str(tmp_path / "w.npz"), "w", str(tmp_path / "w"), str(tmp_path / "com.json"))
-    salt = U.unit_salt(b"\x07" * 32)
+    salt = U.unit_salt(U.stand_in_reveal(b"\x07" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
     assert served["z_is_served_product"] == {"cells": 4 * 4 * 8, "equal": 4 * 4 * 8}
     assert served["xa"]["tile_rows_with_xa"] == served["xa"]["tile_rows"] == 16
@@ -160,8 +164,31 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_z(tmp_path, mon
     assert flip["xa_set_in_unit"] > 0 and flip["receipt_is_honest"] and flip["z_words_changed"] > 0
 
 
+def test_the_seeds_derive_from_the_window_salt():
+    """The units' salt is PoUW's window salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
+    stand-in reveal (the salt coin's, standing in for the certifier's), and a unit's noise and receipt seeds are of that
+    salt; another reveal, window, stream or prover gives another salt and other seeds."""
+    import hashlib
+
+    coin, roots = b"\x05" * 32, (bytes(64 * [7]), bytes(range(64, 128)))
+    reveal = U.stand_in_reveal(coin)
+    assert reveal == hashlib.sha512(b"verity/pouw/h1-prove/stand-in-reveal/v0\0" + coin).digest()
+    assert U.PROVER == PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0") and len(U.STREAM) == 64
+    salt = U.unit_salt(reveal, 3)
+    assert salt == PS.pouw_salt(reveal, 3, U.STREAM, U.PROVER) == hashlib.sha512(
+        b"verity/pouw-salt/v1" + reveal + (3).to_bytes(8, "big") + U.STREAM + U.PROVER).digest()
+
+    def seeds(s):
+        return SD.seed(s, 9, *roots), SD.receipt_seed(s, 9, *roots)
+
+    others = [U.unit_salt(U.stand_in_reveal(b"\x06" * 32), 3), U.unit_salt(reveal, 4),
+              U.unit_salt(reveal, 3, stream=bytes(64)), U.unit_salt(reveal, 3, prover=PS.prover_id(b"another key"))]
+    assert len({salt, *others}) == 5
+    mine = seeds(salt)
+    assert all(a != b for o in others for a, b in zip(seeds(o), mine))
+
+
 def test_the_public_row_is_the_parameters_bits():
-    from verity.core.protocols.pouw.circuit import seeds as SD
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))
     w = U.pub_words(salt, 0x0123456789, roots)
     bits = np.unpackbits(w.astype("<u2").view(np.uint8), bitorder="little")

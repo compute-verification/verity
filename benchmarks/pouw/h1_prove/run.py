@@ -8,7 +8,8 @@ challenger and the verifier never hold a row, a salt or a served value):
 
 1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and draw coins; the prover commits the window's
    A and B rows (`window.py commit`), and the salt coin opens after those roots are recorded;
-2. the prover serves every tile's z and receipt under the unit salt (`h1unit.unit_salt` of the coin) and commits them
+2. the prover serves every tile's z and receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt`
+   of the coin's stand-in for the certifier's reveal, the epoch as the window, a stand-in stream and prover) and commits them
    (`window.py serve`); the registration (the window's four kinds of root) is recorded, and the draw coin opens after it;
 3. the verifier draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream;
 4. the prover opens the drawn units (`window.py open`), and the verifier checks each opened row's path to its registered
@@ -172,8 +173,10 @@ def epoch(work: Path, name: str, layer: str, number: int, a, record: dict) -> tu
     after = digest(com_bytes)
     so = ch.open("salt", after)
     assert coin_reason(ch.commitment, so, "salt", after) is None
-    salt = U.unit_salt(so.coin)
+    salt = U.unit_salt(U.stand_in_reveal(so.coin), number)
     rec["salt_opening"] = so.to_json()
+    rec["salt"] = {"by": "pouw_salt", "reveal": "stand-in: h1unit.stand_in_reveal of the salt coin", "window": number,
+                   "stream": U.STREAM.hex(), "prover": U.PROVER.hex()}
     t = time.time()
     served = prover("serve", str(work / name), salt.hex(), str(work / f"{name}-served.json"), "--workers", str(a.workers))
     rec["serve_seconds"] = round(time.time() - t, 1)
