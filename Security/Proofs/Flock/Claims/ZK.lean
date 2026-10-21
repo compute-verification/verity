@@ -95,6 +95,7 @@ import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.HelloLean
+import Proofs.Flock.Claims.ZK.SessionLean
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -434,12 +435,16 @@ import Proofs.Flock.Claims.ZK.HelloLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq`, `ReqsFollow` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`,
-  `coin_tree::Checked`, `LeanFrame`), `LeanRelease.HelloIs` one about what the transport hands `flock-firewall hello`
-  (`HelloLean`; `HelloEq` follows, `helloEq_of_helloIs`), `LinkRoundEq` one about what the transport hands
-  `flock-firewall link` (`LinkRecheck`), and `HelloDParses` one about Lean's own `Hello.parse` of `CoinLayer.helloD`,
-  which the kernel cannot evaluate (`Lean.Json.parse` is `partial`); `CheckIs` is proved from them
-  (`LeanRelease.checkIs_coinLayer`, `helloParses_of_helloEq`).
+  `FinalRoundEq` and `ReadsCoins` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
+  about what the transport hands `flock-firewall link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`; `HelloEq`
+  follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow` and the `Finish`'s round facts about the session loop
+  (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
+  (`LeanRelease.checkIs_coinLayer`).
+* `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
+  requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
+  so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
+  (`LeanRelease.loop_helloIs`, `loop_helloParses`, `loop_reqsFollow`, `loop_last`), and
+  **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` there.
 * `HelloLean`: the server's `Hello` at Lean's `flock-firewall hello`. Its `Hello` is the coin layer's
   (`Flock.Firewall.Hello.json_eq`, `CoinLayer.helloD_eq`, by `rfl`), so `HelloEq` follows from the server's `Hello`
   being that command's message (`LeanRelease.HelloIs`, **`LeanRelease.helloEq_of_helloIs`**).

@@ -187,6 +187,15 @@ def test_coins_before_the_commitment(loop):
     assert reason(call(s, round_("rep0", b"r", 2))) == STOP + "coins before the step-0 coin commitment"
 
 
+def test_a_finish_before_the_commitment_never_leaves(loop):
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    assert reason(call(s, b"\x06")) == STOP + "a Finish before the step-0 coin commitment"
+    s.close()
+    assert auditor.got[0] == [REGISTER]
+
+
 def test_a_draw_that_is_not_json(junk):
     lp = Loop(Auditor(lambda f: draw("{")), junk)
     s = lp.connect()
@@ -267,6 +276,24 @@ def test_a_round_before_the_commitment_never_leaves(zk):
     assert call(s, hello("")) == _answer()
     why = reason(call(s, round_("t/rep0", b"r", 6)))
     assert why == STOP + "a round of t/rep0 before the step-0 coin commitment", why
+    assert reason(call(s, COMMIT)) == why
+    s.close()
+    lp.close()
+    assert [f[0] for f in auditor.got[0]] == [10, 1]
+
+
+@pytest.mark.slow
+def test_a_finish_before_the_last_opening_never_leaves(zk):
+    """`Finish` leaves only after the schedule's last opening: one right after `Hello`'s answer is refused without reaching
+    the auditor, and so is every coin after it."""
+    auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    s = lp.connect()
+    call(s, REGISTER)
+    assert call(s, hello("")) == _answer()
+    why = reason(call(s, b"\x06"))
+    assert why.startswith(STOP + "a Finish after 0 openings, where the schedule's are "), why
+    assert int(why.rsplit(" ", 1)[1]) == len(_schedule(_args(zk, "pub-16.bin"), "null"))
     assert reason(call(s, COMMIT)) == why
     s.close()
     lp.close()
