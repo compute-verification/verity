@@ -53,7 +53,11 @@ at least `f` of them: `f ≤ #(inputs S ∩ A j)`.
 Rationale: the activation a product reads is many bits wide and is computed from its upstream products along many paths
 inside `A j`, so a block handed part of it is handed several of its gates. The intended derivation is from `f` pairwise
 vertex-disjoint paths inside `A j` into the activation (Menger); it is not done, so the width is a named premise for
-now, a property of the circuit's wiring that the derivation would replace. -/
+now, a property of the circuit's wiring that the derivation would replace.
+
+It holds when the output cone of each counted product reads at least `f` bits of its activation (red team, 21 Oct): at
+FP4, a product gate whose cone reads all 4 activation bits gives `f = 4`, while a product whose output is its top
+exponent bit reads only 2. -/
 def Width {C : Circuit} {J L : Type*} [DecidableEq J] (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (s f : ℕ) :
     Prop :=
   ∀ S, C.Subcircuit S → S.card ≤ s → ∀ p ∈ M.P, M.m p ⊆ C.computed S → (C.inputs S ∩ A p.1).Nonempty →
