@@ -25,7 +25,8 @@
 // H1C_MID = 1 (with H1C_MK) a leaf's x, c, h and frame hashes from the block's snapshots of their messages' constant
 // heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block, and H1C_LVB = 1
 // (with H1C_MK) levels 0 to 6 in the leaves' launch, each block the subtree over its 128 leaves after them, so only
-// the levels from 7 up are launches of their own.
+// the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
+// room for B blocks an SM (H1C_MID's snapshots take sm_120a's leaves from 126 to 154 registers, 4 blocks an SM to 3).
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -46,6 +47,9 @@
 #endif
 #ifndef H1C_LVB
 #define H1C_LVB 0
+#endif
+#ifndef H1C_LMINB
+#define H1C_LMINB 1
 #endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
@@ -939,8 +943,9 @@ __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long
 constexpr int LVB = 7;
 static_assert(HT == 1 << LVB, "a leaves block is a subtree of LVB levels");
 
-extern "C" __global__ void __launch_bounds__(HT) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
-                                                           const int* __restrict__ step, const u64* __restrict__ btab) {
+extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
+                                                                      const int* __restrict__ step,
+                                                                      const u64* __restrict__ btab) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   const H1Tab& T = tabs[blockIdx.y];
   const long long width = 1LL << T.depth;
