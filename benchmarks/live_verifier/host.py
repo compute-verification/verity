@@ -34,7 +34,7 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
-  alone when the run left no transcript, into `runs/<run>/replay/`.
+  alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
   data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
@@ -570,7 +570,8 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
                main: Callable[[list[str], Path], int] = replay_main) -> dict:
     """The run's transcripts checked against `SHA256SUMS` and `verifier.json`, unzipped to scratch and replayed through
     both verifiers held to the record (`replay.py transcript --record`), or with none the record itself
-    (`replay.py record`), into `replay/`; its `end.json` last."""
+    (`replay.py record`), into `replay/`; its `end.json` last, whose `rc` is nonzero too when a transcript isn't the
+    recorded one (a gzip off its `SHA256SUMS`, or bytes off `verifier.json`'s), which isn't replayed."""
     request_of(host, run)
     d, out = host.runs / run, host.runs / run / "out"
     rd, scratch = d / "replay", host.scratch / f"{run}-replay"
@@ -605,8 +606,9 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
             rc = main(["record", record, "--out", rd / "replay.json"], rd / "replay.log")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    end = {"run": run, "rc": rc, "kind": "transcript" if unzipped else "record", "gz_sums": sums,
-           "sums_match": all(r["match"] for r in rows) if unzipped else None, "ended_utc": utc(now())}
+    held = all(sums.values()) and all(r["match"] for r in rows)
+    end = {"run": run, "rc": rc or (0 if held else 1), "replay_rc": rc, "kind": "transcript" if unzipped else "record",
+           "gz_sums": sums, "sums_match": held, "ended_utc": utc(now())}
     (rd / "end.json").write_text(json.dumps(end, indent=1, sort_keys=True) + "\n")
     return end
 
