@@ -8,8 +8,10 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   and the session, or the key the run is given), so each window's values are its own and a log's R7-held rule never meets
   one twice.
 * **The tile** is the served path's R × C, `pouw_h1.TILE` (32 × 32) unless given, over the tile unit at each K
-  (`h1window.tile_unit`, or ``unit``). A unit's R A rows are ports ``a0`` .. ``a{R-1}`` of one value and its C B rows
-  ``b0`` .. ``b{C-1}`` (`ports`; `registered.reads` keys a lone row ``a``, so R = 1 maps ``a`` to ``a0``).
+  (`h1window.tile_unit`, or ``unit``), each K's template reading its A and B rows as ``a_k<K>`` and ``b_k<K>``
+  (`h1window.template_params`). A unit of K's R A rows are ports ``a_k<K>0`` .. ``a_k<K>{R-1}`` of one value and its C
+  B rows ``b_k<K>0`` .. ``b_k<K>{C-1}`` (`ports`; `registered.reads` keys a lone row ``a_k<K>``, so R = 1 maps it to
+  ``a_k<K>0``), so every K's ports are its own.
 * **Linears, calls and blocks.** Linear w is the Program's linear ``(module, K, n)``, its weight once. Call (s, w) reads A
   block ``s·B_K + i`` of its K, ``i`` the place of ``blocks[w]`` (each linear's input within a step; q, k and v read one)
   among the blocks its K's linears read, ``B_K`` their number. A block's rows are its calls' T slots (`pouw_h1.slots`, the
@@ -27,11 +29,11 @@ them as ports of the verifier's own ``--registered`` file (`one_stage.served.reg
   What `close` refuses (a window that isn't static, no key, blocks that aren't one per linear, a call whose codes aren't
   its shared block's, an odd K, a linear with no weight or whose weight isn't its n × K int8 codes or changes within the
   window, what `h1window.program` refuses) leaves no tree, and `trees` raises it.
-* `trees` gives the window's `ServedTree`s, each K's A then B, and `register` registers them, one registration and one
-  ``--registered`` file per K (`file`) in the window's directory: every K's template reads its rows under the same ports
-  ``a0`` .., so one file of a mixed-K window would name two values for each port (`registered.reads` refuses it). It refuses a value an earlier record of the log registered under another root
-  (R7-held, `held`) before `register_served`, which reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2
-  follow-up (after #2971 and #2979 land).
+* `trees` gives the window's `ServedTree`s, each K's A then B, and `register` registers them all at once: a window is one
+  statement, one C-Flock session and one registration, so one ``--registered`` file (`FILE`) in the window's directory,
+  whatever its K. It refuses a value an earlier record of the log registered under another root (R7-held, `held`) before
+  `register_served`, which reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up (after #2971 and #2979
+  land).
 """
 from __future__ import annotations
 
@@ -55,7 +57,7 @@ from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
-FILE = "pouw-h1-registered.k{k}.json"
+FILE = "pouw-h1-registered.json"
 PREFIX = "h1/{window}/"
 #: the hm96 salt stream's first nonce of the window's trees, past every round's and call's tables (`pouw_h1_requests`)
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
@@ -67,22 +69,25 @@ def prefix(window: bytes) -> str:
     return PREFIX.format(window=window[:16].hex())
 
 
-def file(k: int) -> str:
-    """K's ``--registered`` file name (`FILE`)."""
-    return FILE.format(k=int(k))
-
-
 def nonce(i: int) -> int:
     """The salt nonce of the window's i-th tree, in `roles` order (each K's A, then its B)."""
     return NONCE + int(i)
 
 
-def ports(tile: tuple[int, int] = PH.TILE) -> dict[str, str]:
-    """Each registered read's circuit port for an R × C tile: ``a[i]`` is ``a{i}`` and ``b[j]`` is ``b{j}``, and a tile of
-    one row reads it under the parameter's own name (`registered.reads`), so R = 1 maps ``a`` to ``a0`` (C = 1, ``b``)."""
-    r, c = tile
-    return ({f"a[{i}]": f"a{i}" for i in range(r)} | {f"b[{j}]": f"b{j}" for j in range(c)}
-            | ({"a": "a0"} if r == 1 else {}) | ({"b": "b0"} if c == 1 else {}))
+def ports(tile: tuple[int, int], ks: Sequence[int]) -> dict[str, str]:
+    """Each registered read's circuit port for an R × C tile at the window's contractions `ks`: K's template's A row
+    ``a_k<K>[i]`` is ``a_k<K>{i}`` and its B row ``b_k<K>[j]`` is ``b_k<K>{j}`` (`h1window.template_params`), and a tile of
+    one row reads it under the parameter's own name (`registered.reads`), so R = 1 maps ``a_k<K>`` to ``a_k<K>0`` (C = 1,
+    ``b_k<K>``). Refused (ValueError) when two reads would share a port, which `registered.reads_file` would merge."""
+    out: dict[str, str] = {}
+    for k in ks:
+        for name, n in zip(HW.template_params(k)[:2], tile):
+            out |= {name: f"{name}0"} if n == 1 else {f"{name}[{i}]": f"{name}{i}" for i in range(n)}
+    seen: dict[str, str] = {}
+    for key, port in out.items():
+        if seen.setdefault(port, key) != key:
+            raise ValueError(f"reads {seen[port]!r} and {key!r} would share the port {port!r}")
+    return out
 
 
 def row_words(codes: np.ndarray) -> np.ndarray:
@@ -211,17 +216,17 @@ class Served:
         """The window's contractions, ascending: one tile template, one A and one B value each."""
         return sorted({int(r.value.rsplit("/", 1)[1]) for r in self.registered})
 
-    def of(self, k: int | None = None) -> list[G.Registered]:
-        """The values of K = `k`'s template (its A, then its B), or every one."""
-        return [r for r in self.registered if k is None or r.value.endswith((f"/a/{k}", f"/b/{k}"))]
+    def values(self) -> dict[str, int]:
+        """`registered.reads`' ``values``: each value's words a row."""
+        return {r.value: r.words for r in self.registered}
 
-    def values(self, k: int | None = None) -> dict[str, int]:
-        """`registered.reads`' ``values`` (`of`): each value's words a row."""
-        return {r.value: r.words for r in self.of(k)}
+    def schemas(self) -> dict[str, str]:
+        """`registered.reads`' ``schemas``: every value's `V2`."""
+        return {r.value: r.schema for r in self.registered}
 
-    def schemas(self, k: int | None = None) -> dict[str, str]:
-        """`registered.reads`' ``schemas`` (`of`): every value's `V2`."""
-        return {r.value: r.schema for r in self.of(k)}
+    def ports(self) -> dict[str, str]:
+        """The window's registered reads' circuit ports (`ports` of its tile and K)."""
+        return ports(self.tile, self.ks())
 
     def entries(self) -> list[dict[str, Any]]:
         return [r.entry() for r in self.registered]
@@ -257,26 +262,22 @@ def held(got: Sequence[ServedTree], log: Sequence[Mapping[str, Any]]) -> None:
                              f"{roots[t.value][:16]}..., and a value is committed once (R7-held)")
 
 
-def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | Path | None = None
-             ) -> dict[int, ServedRegistration]:
-    """The window's trees registered on its window Program and query, one registration per K (`register_served` over that
-    K's A and B, after this prover's earlier records `log`, the tile's circuit ports `ports`: every K's template reads
-    its rows under the same ports ``a0`` .., so each template's ``--registered`` file is its own), each written as `file`
-    of its K in `directory` (default the run's ``transcript_dir``), the files ``flock-verify --zk --registered`` reads."""
+def register(run: Any, log: Sequence[Mapping[str, Any]] = (), directory: str | Path | None = None,
+             ports: Mapping[str, str] | None = None) -> ServedRegistration:
+    """The window's trees registered on its window Program and query, every K's A and B in one registration
+    (`register_served`, after this prover's earlier records `log`, under the circuit ports `ports`, default the window's
+    own, `Served.ports`), written as `FILE` in `directory` (default the run's ``transcript_dir``): the one file
+    ``flock-verify --zk --registered`` reads for the window's session."""
     got = trees(run)
     held(got, log)
-    served, out = run.served, {}
-    for k in served.ks():
-        mine = {r.value for r in served.of(k)}
-        out[k] = register_served(served.program, served.query(), [t for t in got if t.value in mine], log=log,
-                                 ports=ports(served.tile))
+    served = run.served
+    reg = register_served(served.program, served.query(), got, log=log, ports=served.ports() if ports is None else ports)
     d = directory if directory is not None else run.transcript_dir
     if d is not None:
         Path(d).mkdir(parents=True, exist_ok=True)
-        for k, reg in out.items():
-            reg.write(Path(d) / file(k))
-    return out
+        reg.write(Path(d) / FILE)
+    return reg
 
 
-__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "file", "held", "nonce", "ports", "prefix", "register", "row_words",
+__all__ = ["FILE", "NONCE", "PREFIX", "Served", "V2", "held", "nonce", "ports", "prefix", "register", "row_words",
            "served_tree", "trees"]

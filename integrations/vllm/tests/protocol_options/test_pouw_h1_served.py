@@ -1,12 +1,12 @@
 """`protocol_options.pouw_h1_served`: an H1 window that mixes K, committed as compute accounting's window Program's
 parameters (`h1window.program` on vllm's 32 × 32 tile, one template per K), is each K's A codes and B rows as
 ``hm96-sha512/row/v2`` trees whose shapes, rows and roots are the ones the Program's units read (`h1window.unit_reads`),
-recomputed here from the served tensors. B is each linear's weight rows once a window. For each K, `registered.reads` and
-`registered.reads_file` resolve every unit of its template's ports (``a0`` .. ``a31``, ``b0`` .. ``b31``; ``a`` → ``a0``
-for a tile of one row) to the trees' rows, and a read opened with a row of another A block or another B row is refused;
-one file over both K is refused, as both templates read under the same ports. A call whose codes
-aren't its shared block's is refused; y, z and the scale stay under the round roots only; a second window reusing the
-first's names is refused (R7-held); `calls_root` binds the trees.
+recomputed here from the served tensors. B is each linear's weight rows once a window. One `registered.reads` and
+`registered.reads_file` over the whole window resolve every unit's ports, each K's own (``a_k<K>0`` .. ``a_k<K>31``,
+``b_k<K>0`` .. ``b_k<K>31``; ``a_k<K>`` → ``a_k<K>0`` for a tile of one row, ``b_k<K>`` → ``b_k<K>0`` for one column),
+to the trees' rows, and a read opened with a row of another A block or another B row is refused; `register` registers
+the window once, in one file. A call whose codes aren't its shared block's is refused; y, z and the scale stay under the
+round roots only; a second window reusing the first's names is refused (R7-held); `calls_root` binds the trees.
 
 The registration through `register_served` is a strict xfail: its served trees are ``hm96-sha512/row/v1`` alone
 (`served.READ`) until proofs' REGV2 follow-up. A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
@@ -130,9 +130,11 @@ def test_a_mixed_k_window_commits_the_rows_its_programs_units_read():
     for u, (k, a, b) in enumerate(want):
         got = HW.unit_reads(prog, tp, u)
         for i in range(TILE[0]):
-            assert got[f"a[{i}]"][0] == pre + f"a/{k}" and (rows[pre + f"a/{k}"][got[f"a[{i}]"][1]] == SV.row_words(a)[i]).all()
+            v, row = got[f"a_k{k}[{i}]"]
+            assert v == pre + f"a/{k}" and (rows[v][row] == SV.row_words(a)[i]).all()
         for j in range(TILE[1]):
-            assert got[f"b[{j}]"][0] == pre + f"b/{k}" and (rows[pre + f"b/{k}"][got[f"b[{j}]"][1]] == SV.row_words(b)[j]).all()
+            v, row = got[f"b_k{k}[{j}]"]
+            assert v == pre + f"b/{k}" and (rows[v][row] == SV.row_words(b)[j]).all()
         assert got["position"] == (pre + "position", u) and got["z"] == (pre + "z", u)
     x0, o0 = steps_in[0][0].numpy(), steps_in[0][2].numpy()
     a16, a32 = np.zeros((STEPS * T, 16), np.int8), np.zeros((STEPS * T, 32), np.int8)
@@ -149,42 +151,50 @@ def test_b_is_each_linears_weight_once_a_window(steps):
     pre, tp = SV.prefix(W1), P.evaluate(run.served.program, run.served.query())
     assert {t.value: t.leaves for t in SV.trees(run) if "/b/" in t.value} == {pre + "b/16": 64 + 32, pre + "b/32": 32}
     per = tp.population // steps
-    assert all(HW.unit_reads(run.served.program, tp, u)["b[0]"] == HW.unit_reads(run.served.program, tp, u % per)["b[0]"]
+    assert all(_b0(HW.unit_reads(run.served.program, tp, u)) == _b0(HW.unit_reads(run.served.program, tp, u % per))
                for u in range(tp.population))
 
 
-def test_registered_reads_resolve_every_units_ports_and_refuse_another_row():
-    """Over one K's values, `registered.reads` (bit rows count K/2 words as 8K one-bit leaves) gives each unit of K's
-    template the ``a[i]`` and ``b[j]`` rows `unit_reads` does, and the other template's units none; `reads_file` names them
-    as the tile's ports ``a0`` .. ``a31`` and ``b0`` .. ``b31`` in row/v2, with the trees' roots; each read opens its tree
-    at its row, while the same position opened with a row of another A block or the next B row is refused. Over both K's
-    values at once, the port ``a[0]`` would read two values, and `reads` refuses it."""
+def _b0(reads: dict) -> tuple[str, int]:
+    """A unit's read of its first B row, under its K's template's key."""
+    return next(v for key, v in reads.items() if key.startswith("b_k") and key.endswith("[0]"))
+
+
+def test_one_read_resolves_every_units_ports_across_k_and_refuses_another_row():
+    """One `registered.reads` over the whole mixed-K window (bit rows count K/2 words as 8K one-bit leaves) gives each unit
+    its K's ``a_k<K>[i]`` and ``b_k<K>[j]`` rows, exactly those `unit_reads` gives, and none of the other K's; each K's A
+    and B is one value, B once a window. `reads_file` names them as each K's own ports ``a_k<K>0`` .. ``a_k<K>31`` and
+    ``b_k<K>0`` .. ``b_k<K>31`` in row/v2, each with its value's root, width and domain; each read opens its tree at its
+    row, while the same position opened with a row of another A block or the next B row is refused."""
     run, _ws, _inputs = _window(W1)
     served = run.served
     prog, q = served.program, served.query()
     tp = P.evaluate(prog, q)
     want = [HW.unit_reads(prog, tp, u) for u in range(tp.population)]
-    with pytest.raises(ValueError, match="in one template and"):
-        G.reads(prog, q, served.values(), served.schemas())
     assert served.ks() == list(KS)
+    got = G.reads(prog, q, served.values(), served.schemas())
+    assert set(got) == set(served.ports()) == {f"{t}_k{k}[{i}]" for t in "ab" for k in KS for i in range(32)}
+    for key, entry in got.items():
+        assert entry["rows"] == [w[key][1] if key in w else None for w in want], key
+        assert all(w[key][0] == entry["value"] for w in want if key in w), key
+    assert [sum(r is not None for r in got[f"a_k{k}[0]"]["rows"]) for k in KS] == [STEPS * 6, STEPS * 2]
     by = {r.value: r for r in served.registered}
+    pre = SV.prefix(W1)
+    assert sorted(by) == sorted(pre + f"{t}/{k}" for t in "ab" for k in KS), "each K's A and B is one value"
+    roots = {r.value: r.root.hex() for r in served.registered}
+    f = G.reads_file(prog, q, served.values(), roots, ports=served.ports(), schemas=served.schemas())
+    assert set(f["ports"]) == {f"{t}_k{k}{i}" for t in "ab" for k in KS for i in range(32)}
+    assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
     for k in KS:
-        got = G.reads(prog, q, served.values(k), served.schemas(k))
-        assert set(got) == set(SV.ports(TILE)) - {"a", "b"}
-        for u in range(tp.population):
-            mine = want[u]["a[0]"][0] in served.values(k)
-            assert all(got[p]["rows"][u] == (want[u][p][1] if mine else None) and got[p]["value"] in served.values(k)
-                       for p in got)
-            assert all(got[p]["value"] == want[u][p][0] for p in got if mine)
-        roots = {r.value: r.root.hex() for r in served.of(k)}
-        f = G.reads_file(prog, q, served.values(k), roots, ports=SV.ports(TILE), schemas=served.schemas(k))
-        assert set(f["ports"]) == {f"a{i}" for i in range(32)} | {f"b{j}" for j in range(32)}
-        assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
-        for port, (key, other) in {"a0": ("a[0]", T), "b0": ("b[0]", 1)}.items():
+        for t in "ab":
+            p, reg = f["ports"][f"{t}_k{k}0"], by[pre + f"{t}/{k}"]
+            assert (p["value"], p["root"], p["words"], p["leaves"], p["domain"]) == (
+                reg.value, reg.root.hex(), k // 2, reg.leaves, reg.domain.domain_id.hex())
+        for port, (key, other) in {f"a_k{k}0": (f"a_k{k}[0]", T), f"b_k{k}0": (f"b_k{k}[0]", 1)}.items():
             reg = by[f["ports"][port]["value"]]
-            assert f["ports"][port]["root"] == reg.root.hex()
             for u, row in enumerate(f["ports"][port]["reads"]):
                 if row is None:
+                    assert key not in want[u]
                     continue
                 assert want[u][key] == (reg.value, row)
                 wrong = (row + other) % reg.leaves
@@ -192,18 +202,34 @@ def test_registered_reads_resolve_every_units_ports_and_refuse_another_row():
                 assert not G.verify_read(reg.domain, reg.root, row, reg.bcs[wrong], reg.path(row), SV.V2)
 
 
-def test_a_tile_of_one_row_maps_its_lone_a_read_to_port_a0():
-    """With R = 1 `registered.reads` keys a unit's A row ``a``, not ``a[0]``, and `ports` maps it to ``a0``."""
-    tile = (1, 32)
-    assert SV.ports(tile)["a"] == SV.ports(tile)["a[0]"] == "a0" and "b" not in SV.ports(tile)
-    run, _ws, _inputs = _window(W1, shapes=[(32, 16)] * 3, steps=1, tile=tile, rows=32)
+@pytest.mark.parametrize("tile, lone", [((1, 32), "a"), ((32, 1), "b")], ids=["R=1", "C=1"])
+def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
+    """With R = 1 `registered.reads` keys a unit's A row ``a_k<K>``, not ``a_k<K>[0]``, and `ports` maps it to
+    ``a_k<K>0``; likewise B's with C = 1. One read over a mixed-K window still names each K's port."""
+    ports = SV.ports(tile, KS)
+    assert all(ports[f"{lone}_k{k}"] == f"{lone}_k{k}0" and f"{lone}_k{k}[0]" not in ports for k in KS)
+    run, _ws, _inputs = _window(W1, shapes=[(32, 16), (32, 16), (32, 32)], steps=1, tile=tile, rows=32)
     served = run.served
     prog, q = served.program, served.query()
-    assert "a" in G.reads(prog, q, served.values(), served.schemas())
-    f = G.reads_file(prog, q, served.values(), {r.value: r.root.hex() for r in served.registered}, ports=SV.ports(tile),
+    got = G.reads(prog, q, served.values(), served.schemas())
+    assert set(got) == set(served.ports()) and all(f"{lone}_k{k}" in got for k in KS)
+    f = G.reads_file(prog, q, served.values(), {r.value: r.root.hex() for r in served.registered}, ports=served.ports(),
                      schemas=served.schemas())
-    assert set(f["ports"]) == {"a0"} | {f"b{j}" for j in range(32)}
-    assert f["ports"]["a0"]["reads"] == list(range(32)) * 2 + list(range(32, 64))
+    other = "b" if lone == "a" else "a"
+    assert set(f["ports"]) == {f"{lone}_k{k}0" for k in KS} | {f"{other}_k{k}{i}" for k in KS for i in range(32)}
+    reads = {k: f["ports"][f"{lone}_k{k}0"]["reads"] for k in KS}
+    if lone == "a":
+        assert reads[16] == list(range(32)) * 2 + [None] * 32 and reads[32] == [None] * 64 + list(range(32))
+    else:
+        assert reads[16] == list(range(32)) + list(range(32, 64)) + [None] * 32 and reads[32] == [None] * 64 + list(range(32))
+
+
+def test_two_reads_sharing_a_port_are_refused():
+    """At K = 32 and 322, ``a_k32[20]`` and ``a_k322[0]`` would both be port ``a_k3220``, which `reads_file` would merge
+    into one; K = 32 and 64 name 4 × 32 ports."""
+    with pytest.raises(ValueError, match="'a_k32\\[20\\]' and 'a_k322\\[0\\]' would share the port 'a_k3220'"):
+        SV.ports((32, 32), (32, 322))
+    assert len(set(SV.ports((32, 32), (32, 64)).values())) == 4 * 32
 
 
 def test_y_z_and_the_scale_stay_under_the_round_roots_alone():
@@ -273,6 +299,29 @@ def test_a_window_whose_rows_arent_registered_values_is_refused():
     run.close()
     with pytest.raises(ValueError, match="aren't registered values"):
         SV.trees(run)
+
+
+def test_register_registers_the_whole_window_once_in_one_file(tmp_path, monkeypatch):
+    """`register` calls `register_served` once, over every K's A and B tree, with the window's ports (each K's own), and
+    writes its one ``--registered`` file; ``ports`` overrides them."""
+    run, _ws, _inputs = _window(W1)
+    calls = []
+
+    class Reg:
+        def write(self, path):
+            path.write_text("registered")
+
+    def fake(program, query, served, log=(), ports=None):
+        calls.append((program, query, [t.value for t in served], ports))
+        return Reg()
+
+    monkeypatch.setattr(SV, "register_served", fake)
+    SV.register(run, directory=tmp_path)
+    pre = SV.prefix(W1)
+    assert calls == [(run.served.program, run.served.query(), [pre + r for r in HW.roles(KS)[:4]], SV.ports(TILE, KS))]
+    assert sorted(p.name for p in tmp_path.iterdir()) == [SV.FILE] == ["pouw-h1-registered.json"]
+    SV.register(run, directory=tmp_path, ports={"a_k16[0]": "a0"})
+    assert calls[-1][3] == {"a_k16[0]": "a0"}
 
 
 @pytest.mark.xfail(reason="REGV2 follow-up (after #2971 and #2979 land): register_served refuses hm96-sha512/row/v2 served "
