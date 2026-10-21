@@ -334,17 +334,15 @@ def ligeritoPZk (io : Asks M) (commit : Level → Array F128 → (Nat → ByteAr
       let last := i + 1 == R
       let mut f : Array F256 := #[]
       for j in [0:4] do
-        if j + 1 == 4 && last then
-          -- upstream's final level sends the plain fold's message here, the unsplit table's round polynomial
-          let _ ← challengeP io false
-          f := (← get).tab
-        else if j + 1 == 4 then
+        if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4
