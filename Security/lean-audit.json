@@ -3768,6 +3768,12 @@
    "assumptions": [],
    "type_hash": "4a3b2ce6b702162dd24e785c62bd38d5b41382f1c34214f34bad1ed258d58fde"
   },
+  "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline : Accounting.Guarantees.TS.Sm90MeasuredI3Headline"],
+   "assumptions": [],
+   "type_hash": "286945b70fb7a42e185053507b700ce4e9581b27c478db598684e55fe806da20"
+  },
   "Accounting.SecurityProofs.TS.Sm90SheetHeadline": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.Sm90SheetHeadline : Accounting.Guarantees.TS.Sm90SheetHeadline"],
@@ -9990,7 +9996,7 @@
    "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.544%, over 1% (no check reads ffill's chains, so no filler is credited, and its flat is setup's floor), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot and the JI90 lines, its LD.E and IMAD.WIDE timed beside the IGMMA as ATOM.E, ATOMS, REDG, LDS.128 and REDUX were, r20261021-070616-d06c and r20261021-074303-da7f, DC-CENSUS-13, 14 fold routes; flat's words all on the IGMMA, its fold the generic CP_RED2 and CP_RED8, B_flat 195.30 on JPA90_0) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.54398%; the unfolded one gives 1.47628%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at all four readings' pi*: here UNLISTED, where IMAD.WIDE and LD.E count, and ATOME32 cost 0.9788 as an IMAD does, so the counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which at the issue row alone folded a word at 0.50 to 0.86 phi*, fold one at 1.0245 phi* or more and keep the run's most-loaded row at 1.0041 B_flat or more (r20261021-075504-8a82), and phi* is CP_XT's price, its STS32 and STG32 untimed beside the IGMMA and at the issue row alone; false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.535%, over 1% (no check reads ffill's chains, so no filler is credited, and its flat is setup's floor), at A6's proved 1/2 floor (its twin under (I3) ScalarRoute at 3/4, Sm90MeasuredI3Headline, is 0.805%), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot and the JI90 lines, its LD.E and IMAD.WIDE timed beside the IGMMA as ATOM.E, ATOMS, REDG, LDS.128 and REDUX were, r20261021-070616-d06c and r20261021-074303-da7f, DC-CENSUS-13, 14 fold routes; flat's words all on the IGMMA, its fold the generic CP_RED2 and CP_RED8, B_flat 195.30 on JPA90_0) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.53448%, with ln(8/7) >= 2/15; the unfolded one gives 1.47628%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at all five readings' pi*: here UNLISTED, where IMAD.WIDE and LD.E count, and ATOME32 cost 0.9788 as an IMAD does, so the counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which at the issue row alone folded a word at 0.50 to 0.86 phi*, fold one at 1.0245 phi* or more and keep the run's most-loaded row at 1.0041 B_flat or more (r20261021-075504-8a82), and phi* is CP_XT's price, its STS32 and STG32 untimed beside the IGMMA and at the issue row alone; false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
    "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records and caps, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
@@ -10000,7 +10006,8 @@
    "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
    "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for.",
    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf": "frozen (no-function): WipeReadHeld on the deployed labels prf s; its acceptance, the challenger's verdict Ch j on its view, is inside the event of a distinguisher (Actual.heldDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
-   "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw": "frozen (no-function): WipeReadHeldPrf on the deployed index draw, the rejection sampler on keyed words of the challenger's coin secret; its acceptance, the challenger's verdict Ch j on its view, is inside the events of two distinguishers (Actual.heldDistinguisher and Actual.drawDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does."
+   "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw": "frozen (no-function): WipeReadHeldPrf on the deployed index draw, the rejection sampler on keyed words of the challenger's coin secret; its acceptance, the challenger's verdict Ch j on its view, is inside the events of two distinguishers (Actual.heldDistinguisher and Actual.drawDistinguisher, read by Pous.pr, which is not a shape.events probability), and it takes WipeReadHeld's per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance; it fits once the memory challenger's verdict has a Lean function, as WipeReadHeld does.",
+   "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/4 at 0.805%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.535%) beside it, not in its place, so it is cited with its premise (DC-90-ri 0.805% under (I3) at 3/4; 1.53% at the proved 1/2 floor), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/4 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 636767043/1000000000 + JI90_1 33926917/1000000000 + JPA90_0 8232651/25000000, q = q_T = 3/4, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.80495%, with ln(8/7) >= 2/15; the unfolded one gives 0.74680%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/4 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is under 1% for q above 0.6347 and at its floor from about 0.7495), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi*, where STS32, STS128, STG32 and STG128 price 0, so cp-xt's, cp-seg4's and cp-ats's stores are free there and it asks less than at 1/2's pi*: flat's fold prices at 1.0000 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 21.16 N_w phi*; false at every certificate, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -10039,7 +10046,7 @@
    "Accounting.Assumptions.TS.FoldOptFoldedAt": {
     "status": "open",
     "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
-    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the H200's and B200's four readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds), and benchmarks/pouw/tests/test_lean_headline_dc.py::test_folds_meet_fold_opt_at_pi_star prices ♭'s fold and that one at each of their pi*. At those pi* it is open on all four. On DC-90-ri the counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14) priced below phi* while UNLISTED (where IMAD.WIDE counts) and ATOME32 carried only the issue row; since the H200 timed their instructions beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f) they cost what an IMAD does, 0.9788 at that pi*, and those folds price at 1.0245 phi* or more (r20261021-075504-8a82)."
+    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the H200's and B200's five readings (DC-90-ri's at 1/2 and its (I3) twin at 3/4 among them) it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds), and benchmarks/pouw/tests/test_lean_headline_dc.py::test_folds_meet_fold_opt_at_pi_star prices ♭'s fold and that one at each of their pi*. At those pi* it is open on all five; at the twin's, STS32, STS128, STG32 and STG128 price 0, so cp-xt's, cp-seg4's and cp-ats's stores are free there and it asks less than at 1/2's pi*, where no class is free. On DC-90-ri at 1/2 the counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14) priced below phi* while UNLISTED (where IMAD.WIDE counts) and ATOME32 carried only the issue row; since the H200 timed their instructions beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f) they cost what an IMAD does, 0.9788 at that pi*, and those folds price at 1.0245 phi* or more (r20261021-075504-8a82)."
    },
    "Nci.Assumptions.PartialSumsSupport": {
     "status": "falsified",
@@ -11258,6 +11265,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
@@ -11299,6 +11307,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
@@ -11370,11 +11379,12 @@
     "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.HeadlineDc.Sm100": {
-   "digest": "9a7cd2d88877c836d50f900d20bfeead2cd4ddbfc9d93c0a57c7856c1986f9ad",
+   "digest": "11f03c91ded7bc7b5fe05f642d69b3e39c0f4d51a5a6ec2a69db2d52e09ced80",
    "definitions": {
     "Accounting.TS.Headline.Sm100.Pipe": "9ed9396a3aaacf4fb87ceb3b02a74a7ea4cc5358741ae256a9d110782c05ce6e",
     "Accounting.TS.Headline.Sm100.Pipe.alu": "056c9f4bda75465c486da1ec056b982e792b340690b014459d1d4dba0eed4850",
@@ -11386,7 +11396,7 @@
     "Accounting.TS.Headline.Sm100.Pipe.uniform": "cdd0cad8fb006256cb570489daa45573a94b8e6c8bfad19659b649fcd1202c65",
     "Accounting.TS.Headline.Sm100.Pipe.width": "ab8dd1aaa41b91d1ec092515153db7801940a2a32e43a6382f497e90a0746d09",
     "Accounting.TS.Headline.Sm100.checks": "6aa4873db21b385e65c3d2c64beda7079c7a2288bac53a147fb4ad9627760076",
-    "Accounting.TS.Headline.Sm100.d2s": "6f0f1b86c210e84705c72bc512fdcee898fd087636ddcbc05aefa07b7fbdc209",
+    "Accounting.TS.Headline.Sm100.d2s": "25aa61fd4e9e04df71bf23cbd9872a511658657ed590cb67cb179a97b29422ff",
     "Accounting.TS.Headline.Sm100.ds100": "82fef4da2821aa47ebf30e1e56c942bff2334a54b6d6ab6186af284bde088928",
     "Accounting.TS.Headline.Sm100.flat": "7eef8129497b726a345b48afc2272782adb779cffc8afdd46f3cb78c18bb0193",
     "Accounting.TS.Headline.Sm100.flatFill": "f00359a65ad39b14f48d2d7242e9fa53914d3213e172c989325ca467e385d489",
@@ -11418,7 +11428,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline"]
   },
   "Definitions.Accounting.HeadlineDc.Sm90": {
-   "digest": "f151b509ce3402fce69e296514cd74a89fdb551e1ade4b1c7fcee9f7881ca866",
+   "digest": "6372441ab61fad0becb49f03c6fcdd11788600a3ebb171177703a71eb47c299a",
    "definitions": {
     "Accounting.TS.Headline.Sm90.Pipe": "2daf4548527ab21798473e5bf0b7f72af5db897611217553ac09ea4b6c159382",
     "Accounting.TS.Headline.Sm90.Pipe.alu": "9ea444bc9223c89d02761528d72ebce4721d9cc57a1bdb47c82f15b9fb43420f",
@@ -11430,7 +11440,7 @@
     "Accounting.TS.Headline.Sm90.Pipe.uniform": "9cd6ce24d97a3b5da86c45c8c79793008bec8b683831f3e0ea7ca40463626281",
     "Accounting.TS.Headline.Sm90.Pipe.width": "bd3365a43ecdbc538038b8bc75de4158af1ea0102ff8e86f797e38142d26e270",
     "Accounting.TS.Headline.Sm90.checks": "8af3a8490f038e3001fb56cad1a762ed4b611e76f9f1b09ab05116a7977fd795",
-    "Accounting.TS.Headline.Sm90.d2s": "7a35307c952c8dc1445d7c154518535a502016343c734f316db7e6f46d544c7d",
+    "Accounting.TS.Headline.Sm90.d2s": "17fac681952388df71fa4bc52d8cac870bcd966a275ee4d4d511fe35de9557c1",
     "Accounting.TS.Headline.Sm90.ds90": "4dd25493356137d67db933779c466744cae4687ecdd7ae5596b83e7e8d3aaf9c",
     "Accounting.TS.Headline.Sm90.flat": "7bcc271183615132232f50753c5e1cab288b574b32e456d6f1bd2c81582f0f43",
     "Accounting.TS.Headline.Sm90.flatFill": "d299a9ea951b59864e8b87c74d0f263b9b6aeeb7360f06a60989db1b70bc7811",
@@ -11444,7 +11454,11 @@
     "Accounting.TS.Headline.Sm90.model": "8d03962dcd5aa77f12aba8d3b8ab6b95dfe14dbc8819b35f4a89df399e1115d9",
     "Accounting.TS.Headline.Sm90.sheet": "d5ea25e39bc4e4f292d90f9b36eda80f47141f8afc0799c5d78f22758e2c4857"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm90SheetHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+   ]
   },
   "Definitions.Accounting.HeadlineDc.Sm90Measured": {
    "digest": "e18f815db8317fe8780f019149555d48ebd069fbe8f7ab5a31d7f32a80cf0585",
@@ -11458,7 +11472,19 @@
     "Accounting.TS.Headline.Sm90Measured.machine": "2fe754fcf17a61b0dbcd8b581ccbc1ea6cbc67d0acdf7a7b1f413e37aa91fad0",
     "Accounting.TS.Headline.Sm90Measured.model": "0de54e8b18e721ce2116f911ccf4b056a52fd40eeeea3d4012d25f204edbb55d"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline"
+   ]
+  },
+  "Definitions.Accounting.HeadlineDc.Sm90MeasuredI3": {
+   "digest": "200a6bdd1b013a5f0db99754b770f1a3c861794d537fae9d1801c1cb38b32c40",
+   "definitions": {
+    "Accounting.TS.Headline.Sm90MeasuredI3.d2s": "105ed1686cf5dee2e8c5b6509487afcf79d94d06413058f88ffc16e0613e25dd",
+    "Accounting.TS.Headline.Sm90MeasuredI3.lamStar": "3fb8b79702a0127ee4f3cd1dadc3850065916a836e3193e75e41f1a5ff36fb12",
+    "Accounting.TS.Headline.Sm90MeasuredI3.model": "7e83a9580957e5cdbe35baacb0585a5879df9ac0df7e9ee9b6f2b0d1b7a7368c"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -12583,6 +12609,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
@@ -12636,6 +12663,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
@@ -12688,6 +12716,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
@@ -12787,6 +12816,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
@@ -12809,6 +12839,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
@@ -12914,6 +12945,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
@@ -13073,6 +13105,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
@@ -19407,6 +19440,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
@@ -24839,6 +24873,7 @@
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
@@ -25236,17 +25271,19 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Models.Accounting.Guarantees.HeadlineDc": {
-   "digest": "85c3f9b5cc519fd368337d59181758bf8128e62576597a5246ce137521579146",
+   "digest": "c2084ae52ef6dccae671a428a67e2bbeaefce3a98ae95ef8907c02385d39b948",
    "definitions": {
     "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "03569acb8aa478542701191c5fbe978c416c1084431c96a15f7d7d9850a9a849",
     "Accounting.Guarantees.TS.Sm100SheetHeadline": "a25bfa02582f235092289880987c97001343d674b470f38cd4edf7b487bb735a",
-    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "abc08574bbdaab2b1025dfc4df15a4176191dd153aac61a3fcd588a1779a80f5",
+    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "4dfe5d8bac97ff065bdc3eb7ad62e8b72223f1b8a686b5972bbca2d37c90eb07",
+    "Accounting.Guarantees.TS.Sm90MeasuredI3Headline": "25d9cee679b0f3808724d66a6a78aac3459cb59507cfb2794e62af3f7c70e8e5",
     "Accounting.Guarantees.TS.Sm90SheetHeadline": "43db4c6646f2c7ba82dec2e1ff8faff03f828d5398b209b7f94bd04cb2cd8335"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },

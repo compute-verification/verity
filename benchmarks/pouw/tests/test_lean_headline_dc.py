@@ -15,14 +15,16 @@ spec.loader.exec_module(H)
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm100.lean and Sm100Measured.lean are
-    what lean_headline_dc.py writes from the data, π* included, and every reading's bound is at most its target."""
+    """Security/Definitions/Accounting/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm90MeasuredI3.lean, Sm100.lean and
+    Sm100Measured.lean are what lean_headline_dc.py writes from the data, π* included, and every reading's bound is at
+    most its target."""
     assert H.main(["--check"]) == 0
 
 
 def test_each_certificate_is_one_and_prices_the_bound():
     """Each π* is a certificate (weights ≥ 0 summing to 1 exactly), the bound is the larger branch at its prices, χ* is
-    0 on every reading (the form `headline_of_branches` proves), and a uniform writer heads 2 words (RT-HOPPER-7)."""
+    0 on every reading (the form `headline_of_branches` proves), and a uniform writer heads 2 words (RT-HOPPER-7). A6's
+    vector classes hold both catch-alls, where an instruction no class names counts."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             r = H.reading(fam, v)
@@ -31,6 +33,22 @@ def test_each_certificate_is_one_and_prices_the_bound():
             assert r.data.bound == max(Fraction(r.exact["bound"]), Fraction(0)) and r.bound <= r.target
             assert r.chi == 0 and not r.data.nx
             assert dict(r.data.writers)["UNI"] == 2
+            assert H.CATCH_ALLS <= set(r.data.vec), (fam.ns, v, r.data.vec)
+
+
+def test_the_i3_twin_is_dc_90_ri_at_three_quarters():
+    """DC-90-ri's twin (`Sm90MeasuredI3.lean`) reads (I3) `ScalarRoute` at q = q_T = ¾, an assumed premise
+    (`accounting-ts-scalar-route`), beside A6's proved ½ floor, not in its place: the measured file's machine, menu,
+    routes and ♭, its own π*, under the sheet's 1% where the ½ floor is over it, both at ln(8/7) ≥ 2/15."""
+    fam = H.SM90
+    assert [f.ns for f in H.FAMILIES if f.twin] == ["Sm90"] and fam.twin == Fraction(3, 4)
+    r, t = H.reading(fam, fam.measured), H.reading(fam, fam.measured, q=fam.twin)
+    x, xm = t.data, r.data
+    assert (x.classes, x.rows, x.vec, x.writers, x.folds, x.B) == (xm.classes, xm.rows, xm.vec, xm.writers, xm.folds, xm.B)
+    assert (x.q, xm.q) == (fam.twin, H.Q) and x.ln_p == xm.ln_p == H.LH.LN_P_M
+    assert all(v > 0 for v in x.lam.values()) and sum(x.lam.values()) == 1 and x.lam != xm.lam
+    assert x.bound == max(Fraction(t.exact["bound"]), Fraction(0)) and t.chi == 0
+    assert t.bound <= t.target == 0.01 < r.bound <= r.target
 
 
 def test_the_credit_is_what_the_checks_read():
@@ -49,23 +67,28 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
-    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all four π*: on DC-90-ri the
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*: on DC-90-ri the
     counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which this test doesn't build,
-    price at 1.0245 φ* or more since their classes carry the JI90 lines (r20261021-070616-d06c). ♭'s fold meets it, and so
-    does ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That
-    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
-    on the sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""
+    price at 1.0245 φ* or more at ½'s π* since their classes carry the JI90 lines (r20261021-070616-d06c). At the (I3)
+    twin's π* the stores STS32, STS128, STG32 and STG128 price 0, so cp-xt's, cp-seg4's and cp-ats's stores are free
+    there and the conjecture is weaker than at ½'s π*, where every class prices above 0. ♭'s fold meets it, and so does
+    ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That fold
+    is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD on the
+    sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all five readings."""
     for fam in H.FAMILIES:
         s = H.reading(fam, fam.sheet).data
         pipe = dict(zip(s.classes, s.sheet["pipe"]))
+        measured = [H.reading(fam, fam.measured, q=q).data for q in (H.Q, *([fam.twin] if fam.twin else []))]
         for x, rt3 in ((s, {"DS_issue": Fraction(1, 20), "DS_imad": Fraction(19, 20)}),
-                       (H.reading(fam, fam.measured).data, {"I": Fraction(1, 20), "UP": Fraction(19, 20)})):
+                       *((m, {"I": Fraction(1, 20), "UP": Fraction(19, 20)}) for m in measured)):
             assert [k for k in x.nf if pipe.get(k) == "imad"] == ["IMAD"]
             alu = {**x.nf, "IMAD": Fraction(0), "ALU": x.nf["ALU"] + 32 * x.nf["IMAD"]}
             at = {"pi*": x.lam, "rt3": rt3}
             nphi = {c: x.Nw * min(_price(x, lam, f) for f in x.folds) for c, lam in at.items()}
-            assert _price(x, x.lam, x.nf) >= nphi["pi*"] and _price(x, x.lam, alu) > 10 * nphi["pi*"], fam.ns
-            assert _price(x, rt3, alu) < nphi["rt3"], fam.ns
+            assert _price(x, x.lam, x.nf) >= nphi["pi*"] and _price(x, x.lam, alu) > 10 * nphi["pi*"], (fam.ns, x.q)
+            assert _price(x, rt3, alu) < nphi["rt3"], (fam.ns, x.q)
+            free = {k for f in x.folds for k, n in f.items() if n and _price(x, x.lam, {k: Fraction(1)}) <= 0}
+            assert free == (set() if x.q == H.Q else {"STS32", "STS128", "STG32", "STG128"}), (fam.ns, x.q, free)
 
 
 ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
@@ -75,9 +98,10 @@ ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-r
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
     (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), with RT4-SHEET-7's L2 XORs through a generic
-    address (ATOM.E, bit-exact on the H200 and the B200, r20261020-031119-3113 and r20261020-031119-013a), and π*
-    prices each class each of them issues
-    above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each reading's catch-all is priced at
+    address (ATOM.E, bit-exact on the H200 and the B200, r20261020-031119-3113 and r20261020-031119-013a), and each of
+    the four readings' π* at A6's ½ prices each class each of them issues above 0, so no route folds for free at the
+    certificate FOLD-OPT is asked at (the (I3) twin's π* prices the stores at 0:
+    `test_folds_meet_fold_opt_at_pi_star`). Each reading's catch-all is priced at
     its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row (DC-CENSUS-13) and,
     once a run has timed its instructions beside the tensor, the joint-issue lines every timed scalar class carries
     (DC-90-ri: LD.E and IMAD.WIDE, r20261021-070616-d06c)."""

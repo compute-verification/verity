@@ -104,6 +104,14 @@ def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
     assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
 
 
+def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
+    """DC-90-ri's (I3) twin takes SCALAR-ROUTE at ¾ beside sm_120's 9/8, and its citation names the premise and the
+    proved ½ floor beside it."""
+    scalar = get("accounting-ts-scalar-route").name
+    assert all(s in scalar for s in ("Sm90MeasuredI3Headline", "Sm90MeasuredHeadline", "q = q_T = ¾", "9/8",
+                                     "DC-90-ri 0.805% under (I3) at ¾; 1.53% at the proved ½ floor"))
+
+
 def test_the_session_premises_state_their_scope_after_rt4_logic_25_and_27() -> None:
     """RT4-LOGIC-25: no served path verifies with --registered; -27: the window's law also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
