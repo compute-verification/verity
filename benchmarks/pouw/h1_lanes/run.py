@@ -447,6 +447,8 @@ def prepare(args) -> None:
     print(f"registered and produced: {time.time() - t0:.0f} s; produced records' codes against the honest registration: "
           f"{produced_check}", flush=True)
     ctx.stagers = {kind: stager(ctx, kind) for kind in (LL.LANE, LL.COMBINE)}
+    for st in ctx.stagers.values():
+        st.pin, st.class_sha512  # noqa: B018
     print(f"circuits: lane {ctx.stagers[LL.LANE].low.layout.counts['ands']} ANDs, combine "
           f"{ctx.stagers[LL.COMBINE].low.layout.counts['ands']} ANDs, {time.time() - t0:.0f} s", flush=True)
     CTX = ctx
