@@ -165,6 +165,7 @@ def served(lab_fmt: U.Format | None, ladder: list[int], check: list[int], check_
     sides = (("egress", egress, 1, False, runs[0]), ("ingress", ingress, 2, True, runs[1]))
     for name, f in fmts.items():
         memo: dict = {}
+        holds = max(egress) <= 1 << f.DL
         run: dict = {"format": f._asdict(), "check": [], "check_v4": [], "egress": [], "ingress": [],
                      "v4": {"egress": [], "ingress": []}}
         if name == "lab":
@@ -178,7 +179,7 @@ def served(lab_fmt: U.Format | None, ladder: list[int], check: list[int], check_
                 run[key].append({"N": N, "G": G, "salted": salted, **composed(f, N, G, salted, rec, memo),
                                  "seconds": round(time.perf_counter() - t0, 1)})
                 print(name, json.dumps(run[key][-1]), flush=True)
-                if N - salted <= 1 << f.DL:
+                if holds:
                     t0 = time.perf_counter()
                     run["v4"][key].append({"N": N, "G": G, "salted": salted, "R": R,
                                            **composed_v4(f, N, G, salted, rec, R, memo),
@@ -186,7 +187,7 @@ def served(lab_fmt: U.Format | None, ladder: list[int], check: list[int], check_
                     print(name, "v4", json.dumps(run["v4"][key][-1]), flush=True)
         run["egress_fit"], run["ingress_fit"] = fit(run["egress"]), fit(run["ingress"])
         run["parts"] = part_ands(f, memo)
-        if run["v4"]["egress"]:
+        if holds:
             run["v4"]["egress_fit"], run["v4"]["ingress_fit"] = fit(run["v4"]["egress"]), fit(run["v4"]["ingress"])
             n_out = max(S["egress_frames"])
             run["v4"]["run_cost"] = {"egress": run_cost(f, n_out, 1, False, rec, runs[0], memo),
