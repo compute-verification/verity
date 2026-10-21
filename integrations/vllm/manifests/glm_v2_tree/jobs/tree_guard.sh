@@ -15,7 +15,8 @@ PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/|dsv4_v2_tre
 # 906df5058c (#3093): the deferred replay opens DeepSeek-V4's padded attn_sink and hc_attn_fn_broadcast by their Build roles
 # (`derived_weights`), as the weights of record do; only `tp-commit-replay` reads it.  df251e69b6 (#3099): both replay readers serve
 # int32 registered tensors (DeepSeek-V4's `ffn.gate.tid2eid`); only the Commit (its replay and serving rows) reads `opening`'s reader.
-# Neither the Build nor publish reads the code these fixes change.
+# fb04c6ead0 (#3118): the replay refuses a Definition the Build of record did not bind (`check.replay.definitions`); only the Commit's
+# replay and `tp-commit-replay` read it.  Neither the Build nor publish reads the code these fixes change.
 COMMIT_FIXES='integrations/vllm/verity_vllm/commit/binding.py 986fe71aa64a28158d0eb79f126ad061c9a284de 308391e05e6376641d6f5c1819706cdcfce9b30e
 integrations/vllm/tests/commit/test_binding_negatives.py f8e60d391a898a68ad4e80bcf23a244a7ce8ae2b 12ffd26912b4539a47b51d9c2eab8f606214964b
 integrations/vllm/verity_vllm/acquire/sources/moe_align_source.py 2ba05001747aac82998eb3667f2ba859dd111f42 db602f84830a3c2626dcfe4879ff5a03434cdc69
@@ -39,7 +40,16 @@ integrations/vllm/verity_vllm/pipeline/cpu_replay.py e6c427b8a9cfc9d9eaedc8b2205
 integrations/vllm/tests/pipeline/test_tp_replay_deferred.py ed4d627b719c936f45c84329ef39bc2de7ba93f0 cc76ecfb9fb3ce9edfc6d9f267f085fa54b2ab35
 integrations/vllm/verity_vllm/check/replay/opening.py bea24ee88b59e77f8a828a75627aa7eae4e14c8c a68d9d4d7fd48f360e72feca8e7c5707ea1f4e49
 integrations/vllm/tests/pipeline/test_cpu_replay.py 50646716d06ca4b9aee55a57826408a7e849a487 576136b47c834a6b753317d4f4e1cdb426804389
-integrations/vllm/tests/check/test_sampled_replay.py 198eb6b84a2ceca9e2a4624b88d938b0a912cd8c 22a76448e97cb695d59a6ba9c78ba9ea315a9a78'
+integrations/vllm/tests/check/test_sampled_replay.py 198eb6b84a2ceca9e2a4624b88d938b0a912cd8c 22a76448e97cb695d59a6ba9c78ba9ea315a9a78
+integrations/vllm/tests/check/test_replay_definitions.py - 5ac6073ea2c71562d7b78b97003ebea309c4d250
+integrations/vllm/verity_vllm/check/replay/definitions.py - 60c2c5431b7d0f2f2640770bf6acaa02c63907d7
+integrations/vllm/verity_vllm/pipeline/c2_replay.py 465d70b4737ac412af1faca32a5a415437f88464 9054b8110e943d268cdf8363fdadd6fe0ba58cea
+integrations/vllm/verity_vllm/pipeline/cpu_replay.py e6c427b8a9cfc9d9eaedc8b2205712f5def6eb5d 0c6f42521b33b7a0c3eedb47872eeb6589293508
+integrations/vllm/verity_vllm/pipeline/cpu_replay.py 43c9adc9d3ca6e913f5e202f791586a610994388 0c6f42521b33b7a0c3eedb47872eeb6589293508
+integrations/vllm/verity_vllm/pipeline/deferred_rows.py 0813fc8d218f2a38c72cb25f2a23499626b8d727 fa2df7ad0ef275b5bb69479dd7f5c2f5a1469b29
+integrations/vllm/verity_vllm/pipeline/replay_plan.py fb940d0a601d33f38c91f48bdc5ce6aa2963cd7d af48e07500db28e53a0c71cf1336d211d9a282f7
+integrations/vllm/verity_vllm/pipeline/tp/rank_replay.py 0d0dd867c71745b446e5d5de2a0b05895cde1d86 dfd9d14bc94f95f8fed97109dced1d67cf2fb4cb
+integrations/vllm/verity_vllm/pipeline/tp/serving_rows.py 28253606f628a40d983847178b1c90baa3041bf6 ee0f6a80db17fe58af54fe0cfe1671780a6a0439'
 _blob() {  # _blob SHA PATH: PATH's blob at SHA, `-` when SHA holds no PATH
   git -C "$TREE" rev-parse -q --verify "$1:$2" || echo -
 }
