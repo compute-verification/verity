@@ -3,17 +3,20 @@ one record a `dither_a.UNIT` unit, through `dithera_mm` and `dithera_mm_tma` as 
 these records, and a unit opens only a record that parses as `h1zy.RECORD` into its exact z and `h1zy.dequant`'s y, as
 integrations/vllm's `test_int8_zy_h1zy` pins `verity_int8::scaled_mm_zy`'s.
 
-On CUDA (skipped without it) each call runs `Side.gemm` on a stand-in window of T slots, the first m live (its step's m),
-into 0xA5-poisoned y and records, at the config dither-a picks or a forced one:
+On CUDA (skipped without it) each call runs `Side.gemm` and then `Side.ycommit`, as `Side.call` does, on a stand-in window
+of T slots, the first m live (its step's m), into 0xA5-poisoned y and records, at the config dither-a picks or a forced
+one:
 
 * every record parses as `h1zy.RECORD`, and as dither-a's own `zy_split`, into z: ``int8_exact.int_mm``'s block on a live
   slot, 0 on an empty one;
-* every cell of the served y (all M rows), and of every live slot's record y, is `h1zy.dequant` of its z at its row's s_a
-  and its column's s_w;
-* an empty slot's record y is 0x0000 (dither-a's "0 past m"), where h1zy's is dq(0, +0, s_w): the same under a finite
-  positive s_w (the served case), 0x8000 under a negative one and 0x7FFF under an infinite or NaN one. Those cells are
-  counted, and `test_cuda_dither_empty_slots_are_h1zys` holds them to h1zy's y as a strict xfail;
-* the records are `scaled_mm_zy`'s byte for byte on the same inputs (its rows the m live ones), but at those cells.
+* every cell of the served y (all M rows) is `h1zy.dequant` of its z at its row's s_a and its column's s_w, and every cell
+  of every record's y is `h1zy.dequant` of the record's z at the slot's s_a: an empty slot is zero codes under s_a = +0,
+  so its y is dq(0, +0, s_w), +0 under a finite positive s_w (the served case), 0x8000 under a negative one and 0x7FFF
+  under an infinite or NaN one (CA's #3080: Served's DequantOf on every cell);
+* the records are `scaled_mm_zy`'s byte for byte on the same inputs (its rows the m live ones);
+* `ycommit`'s y records (the served y's, RT4-INT-11) are the records' y halves byte for byte, so the two y roots agree;
+* the cells where the y changed from dither-a's earlier "0 past m" (0x0000 on every empty slot) are exactly the empty
+  slots of columns whose dq(0, +0, s_w) isn't +0: under served scales none, so the fix leaves every served byte as it was.
 
 The edge call is `test_int8_zy_h1zy`'s, rebuilt from the same design: K = 14,336, every row scale of `SA` over 36 design
 rows, every column scale of `SW` over 6 column kinds, and 32 empty slots.
@@ -203,34 +206,41 @@ def f32_bits(t: torch.Tensor) -> np.ndarray:
 # -- the calls -----------------------------------------------------------------------------------------------------------
 
 def side(DA, rows: int, m: int, n: int, work=None) -> SimpleNamespace:
-    """What `Side.gemm` reads of a -zy Side over a window of `rows` slots at step m, linear 0 of N = n: its zy records
-    (0xA5), the window's step words S = (parity, m, pad, flags = 0) and slots, ZL = 2, `UNIT`, a split-K workspace."""
+    """What `Side.gemm` and `Side.ycommit` read of a -zy Side over a window of `rows` slots at step m, linear 0 of N = n:
+    its zy and y records (0xA5), the window's step words S = (parity, m, pad, flags = 0) and slots, ZL = 2, `UNIT`, a
+    split-K workspace."""
     units = (rows // UR) * (n // UC)
     zy = torch.full((units * DA.zy_bytes(DA.UNIT),), 0xA5, dtype=torch.uint8, device="cuda")
+    ysv = torch.full((units * DA.y_bytes(DA.UNIT),), 0xA5, dtype=torch.uint8, device="cuda")
     win = SimpleNamespace(t=rows, S=torch.tensor([0, m, 0, 0], dtype=torch.int32, device="cuda"), ydump=None)
-    return SimpleNamespace(win=win, zy=[zy], unit_of=[DA.UNIT], zl=DA.ZMODES["zy"], arch=DA.EL.arch(), cfgs={},
+    return SimpleNamespace(win=win, zy=[zy], ysv=[ysv], unit_of=[DA.UNIT], zl=DA.ZMODES["zy"], arch=DA.EL.arch(), cfgs={},
                            work=work or DA.EL.Workspace("cuda"))
 
 
 def dither_call(DA, sd: SimpleNamespace, xq: torch.Tensor, sa: torch.Tensor, w: torch.Tensor,
-                sw: torch.Tensor) -> tuple[np.ndarray, np.ndarray]:
-    """One call through `Side.gemm` into a 0xA5-poisoned y and sd's records: (y [M, N] u16, records [units, 6 UR UC] u8)."""
+                sw: torch.Tensor) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """One call through `Side.gemm` and `Side.ycommit` into a 0xA5-poisoned y and sd's records: (y [M, N] u16, records
+    [units, 6 UR UC] u8, ycommit's y records [units, 2 UR UC] u8)."""
     m, n = xq.shape[0], w.shape[0]
     y = torch.full((m, 2 * n), 0xA5, dtype=torch.uint8, device="cuda").view(torch.bfloat16)
     sd.zy[0].fill_(0xA5)
+    sd.ysv[0].fill_(0xA5)
     DA.Side.gemm(sd, 0, xq, sa, w, sw, y)
+    DA.Side.ycommit(sd, 0, y, sw)
     torch.cuda.synchronize()
     zy = sd.zy[0].cpu().numpy().reshape(-1, DA.zy_bytes(DA.UNIT))
-    return y.view(torch.int16).cpu().numpy().view(np.uint16), zy
+    ys = sd.ysv[0].cpu().numpy().reshape(-1, DA.y_bytes(DA.UNIT))
+    return y.view(torch.int16).cpu().numpy().view(np.uint16), zy, ys
 
 
-def check_call(DA, y: np.ndarray, zy: np.ndarray, zfull: np.ndarray, sa: np.ndarray, sw: np.ndarray, rows: int, m: int,
-               ref: np.ndarray) -> dict:
-    """Hold one dither-a call to h1zy: served y [M, N] and records zy of the call whose exact product is ``zfull`` [M, N]
-    (u32), over ``rows`` slots with m live; ``ref`` `scaled_mm_zy`'s records over the same live rows. Returns the
-    empty-slot cells where dither-a's y isn't h1zy's, by (dither-a word, h1zy word)."""
+def check_call(DA, y: np.ndarray, zy: np.ndarray, ys: np.ndarray, zfull: np.ndarray, sa: np.ndarray, sw: np.ndarray,
+               rows: int, m: int, ref: np.ndarray) -> dict:
+    """Hold one dither-a call to h1zy: served y [M, N], records zy and ycommit's y records ys of the call whose exact
+    product is ``zfull`` [M, N] (u32), over ``rows`` slots with m live; ``ref`` `scaled_mm_zy`'s records over the same live
+    rows. Returns the empty-slot cells (and record bytes) the fix moved from dither-a's earlier 0x0000, by h1zy's word."""
     n = zfull.shape[1]
     assert zy.shape == (E.zy_units(m, n, rows), E.ZY_BYTES) == ref.shape and DA.zy_bytes(DA.UNIT) == E.ZY_BYTES
+    assert ys.shape == (zy.shape[0], 2 * UR * UC) and DA.y_bytes(DA.UNIT) == 2 * UR * UC
     f = record_fields(zy)
     zr, yr = grid(f["z"].astype(np.uint32), rows, n), grid(f["y"].astype(np.uint16), rows, n)
     dz, dy = DA.zy_split(torch.from_numpy(zy.reshape(-1)), rows, n, DA.UNIT)
@@ -245,20 +255,24 @@ def check_call(DA, y: np.ndarray, zy: np.ndarray, zfull: np.ndarray, sa: np.ndar
     assert np.array_equal(y, served), _diff("served y", y, served, zfull, sa, sw)
     live = np.arange(rows) < m
     assert np.array_equal(yr[live], want[live]), _diff("live slots' record y", yr[live], want[live], z[live], sas[live], sw)
-    assert not yr[~live].any(), "an empty slot's record y other than 0x0000"
-    off = (~live)[:, None] & (want != 0)
+    assert np.array_equal(yr[~live], want[~live]), _diff("empty slots' record y", yr[~live], want[~live], z[~live],
+                                                         sas[~live], sw)
+    assert np.array_equal(zy, records_of(z, want)), "record bytes other than the words parsed"
+    assert np.array_equal(ref, zy), f"{int((ref != zy).sum())} record bytes differ from scaled_mm_zy's"
+    assert np.array_equal(ys, zy[:, 4 * UR * UC:]), \
+        f"{int((ys != zy[:, 4 * UR * UC:]).sum())} bytes of ycommit's y records differ from the records' y halves (RT4-INT-11)"
+    moved = (~live)[:, None] & (want != 0)
     cols = np.array([Z.dequant(0, 0, int(s)) != 0 for s in sw])
-    assert np.array_equal(off, (~live)[:, None] & cols[None, :])
-    assert np.array_equal(zy, records_of(z, np.where(off, 0, want))), "record bytes other than the words parsed"
-    assert np.array_equal(ref, records_of(z, want)), "scaled_mm_zy's records are not h1zy's"
-    bytes_off = zy != ref
-    assert int(bytes_off.sum()) == int(sum((((want[off] >> s) & 0xFF) != 0).sum() for s in (0, 8)))
-    pairs: dict[str, int] = {}
-    for v in want[off]:
-        key = f"0x0000 for 0x{int(v):04x}"
-        pairs[key] = pairs.get(key, 0) + 1
+    assert np.array_equal(moved, (~live)[:, None] & cols[None, :])
+    before = records_of(z, np.where((~live)[:, None], 0, want))
+    bytes_moved = int((zy != before).sum())
+    assert bytes_moved == int(sum((((want[moved] >> s) & 0xFF) != 0).sum() for s in (0, 8)))
+    words: dict[str, int] = {}
+    for v in want[moved]:
+        words[f"0x{int(v):04x}"] = words.get(f"0x{int(v):04x}", 0) + 1
     return {"cells": int(zy.size // 6 + y.size), "empty slots": int((~live).sum()),
-            "empty-slot y not h1zy's": int(off.sum()), "by word": pairs, "record bytes not scaled_mm_zy's": int(bytes_off.sum())}
+            "empty-slot y not +0 (moved from 0x0000)": int(moved.sum()), "by word": words,
+            "record bytes moved from before": bytes_moved}
 
 
 def reference(xq: torch.Tensor, sa: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, rows: int, m: int) -> np.ndarray:
@@ -280,9 +294,9 @@ def edge_tensors():
 
 def _edge(DA, sd: SimpleNamespace) -> tuple[dict, np.ndarray]:
     xq, sa, w, sw, rows, z = edge_tensors()
-    y, zy = dither_call(DA, sd, xq, sa, w, sw)
+    y, zy, ys = dither_call(DA, sd, xq, sa, w, sw)
     ref = reference(xq, sa, w, sw, rows, xq.shape[0])
-    return check_call(DA, y, zy, z, f32_bits(sa), f32_bits(sw), rows, xq.shape[0], ref), zy
+    return check_call(DA, y, zy, ys, z, f32_bits(sa), f32_bits(sw), rows, xq.shape[0], ref), zy
 
 
 # -- CPU -----------------------------------------------------------------------------------------------------------------
@@ -307,8 +321,9 @@ def test_the_byte_layout_compared_is_int8_exacts_and_parses_as_h1zy_record():
 @cuda
 @pytest.mark.slow
 def test_cuda_dither_records_are_h1zys_on_the_edge_call(record_property):
-    """The edge call at the config dither-a picks: records parse as `h1zy.RECORD` into int_mm's z, every live cell's y and
-    the served y are `h1zy.dequant`'s, and the records are `scaled_mm_zy`'s but where an empty slot's h1zy y isn't +0."""
+    """The edge call at the config dither-a picks: records parse as `h1zy.RECORD` into int_mm's z, every record y and the
+    served y are `h1zy.dequant`'s, the records are `scaled_mm_zy`'s and ycommit's y records their y halves, byte for byte;
+    the fix moved exactly the empty slots of the columns whose dq(0, +0, s_w) isn't +0."""
     DA = dither_a()
     assert DA.UNIT == E.UNIT and DA.ZMODES["zy"] == 2
     xq, _sa, w, _sw, rows, _z = edge_tensors()
@@ -317,27 +332,27 @@ def test_cuda_dither_records_are_h1zys_on_the_edge_call(record_property):
     record_property("config", sd.cfgs)
     record_property("result", got)
     kinds = w.shape[0] // len(SW)
-    assert got["empty-slot y not h1zy's"] == (rows - xq.shape[0]) * kinds * sum(Z.dequant(0, 0, s) != 0 for s in SW)
+    assert got["empty-slot y not +0 (moved from 0x0000)"] == (rows - xq.shape[0]) * kinds * sum(Z.dequant(0, 0, s) != 0
+                                                                                              for s in SW)
 
 
 @cuda
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="dither-a's epilogue writes y = 0 past m; h1zy's empty slot is dq(0, +0, s_w), 0x8000 "
-                                       "under a negative s_w and 0x7FFF under an infinite or NaN one")
 def test_cuda_dither_empty_slots_are_h1zys():
-    """h1zy's rule on every cell, empty slots included: the edge call's record y is `h1zy.dequant` of (0, +0, s_w) on an
-    empty slot."""
+    """h1zy's rule on every cell, empty slots included: on the edge call an empty slot's record y, and ycommit's, is
+    `h1zy.dequant(0, +0, s_w)` of its column, among them +0, 0x8000 (a negative s_w) and 0x7FFF (an infinite or NaN one)."""
     DA = dither_a()
-    xq, sa, w, sw, rows, z = edge_tensors()
+    xq, sa, w, sw, rows, _z = edge_tensors()
     sd = side(DA, rows, xq.shape[0], w.shape[0])
-    _y, zy = dither_call(DA, sd, xq, sa, w, sw)
-    yr = grid(record_fields(zy)["y"].astype(np.uint16), rows, w.shape[0])
-    zs = np.zeros((rows, w.shape[0]), np.uint32)
-    zs[:xq.shape[0]] = z
-    sas = np.zeros(rows, np.uint32)
-    sas[:xq.shape[0]] = f32_bits(sa)
-    want = expected(zs, sas, f32_bits(sw))
-    assert np.array_equal(yr, want), _diff("record y", yr, want, zs, sas, f32_bits(sw))
+    _y, zy, ys = dither_call(DA, sd, xq, sa, w, sw)
+    n, m = w.shape[0], xq.shape[0]
+    yr = grid(record_fields(zy)["y"].astype(np.uint16), rows, n)
+    yc = grid(ys.view("<u2"), rows, n)
+    pad = np.array([Z.dequant(0, 0, int(s)) for s in f32_bits(sw)], np.uint16)
+    assert {0x0000, 0x8000, 0x7FFF} <= set(pad.tolist())
+    for what, got in (("record y", yr), ("ycommit's y", yc)):
+        assert np.array_equal(got[m:], np.broadcast_to(pad, (rows - m, n))), \
+            f"{what}: {int((got[m:] != pad).sum())} empty-slot cells differ from h1zy.dequant(0, +0, s_w)"
 
 
 CONFIGS = ["16x64x128:w4:s4:k1", "32x32x256:w4:s3:k2", "16x32x256:w4:s3:k4", "64x64x128:w4:s3:k3", "128x128x64:w4:s3:k1",
@@ -361,7 +376,7 @@ def test_cuda_every_config_writes_h1zys_records_on_the_edge_call(monkeypatch, re
         for _ in range(2):
             got, _zy = _edge(DA, sd)
         assert not sd.work.ws.any() and not sd.work.cnt.any(), text
-        done[text] = got["empty-slot y not h1zy's"]
+        done[text] = got["empty-slot y not +0 (moved from 0x0000)"]
     record_property("configs", done)
 
 
@@ -377,8 +392,9 @@ RANDOM = [("qkv", 200, 200, 224, "served"), ("o", 37, 37, 64, "served"), ("gate_
 @pytest.mark.slow
 @pytest.mark.parametrize("linear,M,m,rows,scales", RANDOM)
 def test_cuda_random_calls_at_llamas_linears_are_h1zys(linear, M, m, rows, scales, record_property):
-    """Random calls at dither-a's config: records parse as `h1zy.RECORD` into int_mm's z, every live cell's y and the served
-    y are `h1zy.dequant`'s; under served scales every empty slot's too, and the records are `scaled_mm_zy`'s byte for byte."""
+    """Random calls at dither-a's config: records parse as `h1zy.RECORD` into int_mm's z, every record y and the served y
+    are `h1zy.dequant`'s, the records are `scaled_mm_zy`'s and ycommit's y records their y halves, byte for byte; under
+    served scales no record byte moved from before the fix."""
     DA = dither_a()
     k, n = LLAMA[linear]
     g = torch.Generator("cuda").manual_seed(M * 131 + m + k)
@@ -391,10 +407,10 @@ def test_cuda_random_calls_at_llamas_linears_are_h1zys(linear, M, m, rows, scale
         sa, sw = (f32_tensor((r.integers(0, 2, c) << 31) | (r.integers(0x30, 0xD0, c) << 23) | r.integers(0, 1 << 23, c)).cuda()
                   for c in (M, n))
     sd = side(DA, rows, m, n)
-    y, zy = dither_call(DA, sd, xq, sa, w, sw)
+    y, zy, ys = dither_call(DA, sd, xq, sa, w, sw)
     z = E.int_mm(xq, w).cpu().numpy().view(np.uint32)
-    got = check_call(DA, y, zy, z, f32_bits(sa), f32_bits(sw), rows, m, reference(xq, sa, w, sw, rows, m))
+    got = check_call(DA, y, zy, ys, z, f32_bits(sa), f32_bits(sw), rows, m, reference(xq, sa, w, sw, rows, m))
     record_property("config", sd.cfgs)
     record_property("result", got)
     if scales == "served":
-        assert got["empty-slot y not h1zy's"] == 0 and got["record bytes not scaled_mm_zy's"] == 0
+        assert got["empty-slot y not +0 (moved from 0x0000)"] == 0 and got["record bytes moved from before"] == 0
