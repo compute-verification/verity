@@ -653,6 +653,12 @@ class WindowRecord:
                 "stale": list(self.stale), "steps": list(self.steps), "window": self.window}
 
 
+def window_profile(lengths: Sequence[int], drawn: int, delta: float) -> IntegrityProfile:
+    """A window's openings law (`WindowRecord.profile`): `drawn` distinct receipts uniform over its passes' `lengths`
+    receipts, at `delta`."""
+    return IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})
+
+
 @dataclass(frozen=True, slots=True)
 class Record:
     """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
@@ -1105,8 +1111,7 @@ class Session:
         out = []
         for t, w in enumerate(self.windows):
             lengths = tuple(plan.length for plan in w.plans)
-            profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
-                                       self.params.delta, drawn={"receipt": len(w.draws)})
+            profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
                                     tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
@@ -1189,12 +1194,16 @@ class Registry:
     def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
         """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with."""
+        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
+        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "
                                 "second draws no codec seed until the verifier closes the first and counts its sessions")
+        if _bind(kw.get("bind", False)):
+            raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
+                             "(RemoteAudit, in Lean) covers receipts of a block alone")
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
