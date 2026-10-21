@@ -333,7 +333,7 @@ class MatchOracle:
         return spec in fams
 
     def member_bytes(self, step: int, op_path: str, member: str, request_label: str | None,
-                     producer: dict[str, Any] | None = None) -> tuple[bytes | None, str | None, int]:
+                     producer: dict[str, Any] | None = None, nbytes: int | None = None) -> tuple[bytes | None, str | None, int]:
         """Oracle bytes of (step, op_path, member) for request r<k> (None: all requests, row order): concatenation over the instances'
         output views (operand view 0 for the ids member 'in'); returns (bytes | None, why, n_instances).
 
@@ -342,9 +342,16 @@ class MatchOracle:
         AddScalar / Square / Mean / Rsqrt / ScaleRow / Narrow ... all hinted `model.layers.N.input_layernorm`) is read at the producer's
         instances only; when the producer family occurs k > 1 times per row (the fused norm's two NarrowF32ToBf16: residual, normed) the
         manifest must say which by `ordinal` (index in Program/fold order per row), else the member is 'ambiguous producer' -- partial,
-        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible)."""
+        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible).
+
+        An `interior` producer (a `call_boundaries` row, op path `<module>/<fx node>`) is read at its module's instances of the producer
+        family.  When every row's group holds the same k > 1 producer instances and their member views together are the identity's
+        `nbytes`, the member is all of them (one Call per instance: an attention row per head, a KV quantization per KV head), in row
+        then storage order."""
         if step not in self.snapshot_steps:
             return None, "step not snapshotted by the Match", 0
+        if (producer or {}).get("interior"):
+            op_path = op_path.split("/", 1)[0]
         uuid: str | None = None
         if request_label is not None and request_label != "*":
             uuid = next((u for u, lab in self.requests.items() if lab == request_label), None)
@@ -388,7 +395,9 @@ class MatchOracle:
             for m in by_spec:
                 per_pos[(m.get("request"), m.get("position"), m.get("row"))].append(m)
             k = max(len(v) for v in per_pos.values())
-            if k > 1:
+            if k > 1 and nbytes is not None and len({len(v) for v in per_pos.values()}) == 1 and self._member_span(by_spec, member, producer) == nbytes:
+                pass
+            elif k > 1:
                 ordinal = (producer or {}).get("ordinal")
                 operand = str((producer or {}).get("operand") or "").split("{", 1)[0].strip()
                 picked = []
@@ -430,15 +439,15 @@ class MatchOracle:
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
             return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), int(first.get("offset") or 0))
         insts = sorted(insts, key=_order)
+        port = _port_view(member, producer)
         parts: list[bytes] = []
         for m in insts:
             if member == "in":
                 views = m["operand_views"][:1]
             elif member in ("out", "0") or want_hint or producer_view0:
                 views = m["output_views"][:1]
-            elif member.isdigit():
-                j = int(member)
-                views = m["output_views"][j:j + 1]
+            elif port is not None and len(m["output_views"]) > 1:
+                views = m["output_views"][port:port + 1]
             else:
                 views = m["output_views"][:1]
             if not views:
@@ -448,6 +457,20 @@ class MatchOracle:
                 return None, why, len(insts)
             parts.append(b)
         return b"".join(parts), None, len(insts)
+
+    def _member_span(self, insts: list[dict], member: str, producer: dict[str, Any] | None = None) -> int | None:
+        """The bytes of the views `member` reads over `insts` (an instance with one output view: that view; else the member's port view,
+        `_port_view`, else view 0); None when one has no such view."""
+        port = _port_view(member, producer)
+        n = 0
+        for m in insts:
+            ovs = m.get("output_views") or []
+            j = port if port is not None and len(ovs) > 1 else 0
+            r = self._view_bytes_range(ovs[j]) if j < len(ovs) else None
+            if r is None:
+                return None
+            n += r[2] - r[1]
+        return n
 
     def ids_bytes(self, step: int, request_label: str, itemsize: int) -> tuple[bytes | None, str | None]:
         """The input token ids of request r<k>'s rows at `step` (row order), from tokens.json (prompt + generated ids) at the StepStart
@@ -486,6 +509,14 @@ class MatchOracle:
         if i >= len(ids):
             return None, f"SampleEnd carries {len(ids)} ids for {len(labs)} requests"
         return ids[i], None
+
+
+def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
+    """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    port = (producer or {}).get("port")
+    port = str(port) if port is not None else member.rsplit(".", 1)[-1]
+    return int(port) if port.isdigit() else None
 
 
 def _family_of(entry: dict) -> str:
@@ -535,7 +566,7 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
     out: dict[tuple[str, str], dict[str, Any]] = {}
     consumers: dict[tuple[str, str], list[str]] = {}
     for r in (manifest or {}).get("identities") or []:
-        if r.get("family") != "instance_outputs" or not r.get("spec"):
+        if r.get("family") not in ("instance_outputs", "call_boundaries") or not r.get("spec"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
         cur = out.get(key)
@@ -543,8 +574,12 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
         # oracle through the Value's dataflow (MatchOracle._promoted_instances); `promoted` is part of the producer's identity here (a
         # promoted and a vocabulary row on one member is a conflict), the consumer lists of the rows are unioned in first-seen order
         ent = {"spec": str(r["spec"]).split("{", 1)[0], "ordinal": r.get("producer_ordinal"), "operand": r.get("producer_operand")}
+        if r.get("port") is not None:
+            ent["port"] = str(r["port"])
         if r.get("promoted"):
             ent["promoted"] = True                    # a vocabulary row's entry is byte-for-byte what it was (no key added)
+        if r.get("family") == "call_boundaries":
+            ent["interior"] = True
         if cur is None:
             out[key] = ent
         elif cur != ent:
@@ -838,7 +873,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         else:
             prod = (producers or {}).get((str(ident.get("op_path")), str(ident.get("output_member"))))
             ob, why, n_inst = oracle.member_bytes(step, op_k, str(ident.get("output_member")), rid,
-                                                  producer=(prod if prod and prod.get("spec") else None))
+                                                  producer=(prod if prod and prod.get("spec") else None), nbytes=bhi - blo)
         if ob is None:
             not_cmp[why] += 1
             not_cmp_fam[fam] += 1

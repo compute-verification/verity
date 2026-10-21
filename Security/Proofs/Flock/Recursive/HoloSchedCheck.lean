@@ -351,6 +351,10 @@ theorem claimReadsAt_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} 
     first
     | cases hq
     | simp [ownPorts] at hq
+  | cap =>
+    first
+    | cases hq
+    | simp [ownPorts] at hq
   | inner j name p =>
     simp only [ownPorts] at hq
     obtain ⟨⟨nm, n⟩, -, hf⟩ := List.mem_filterMap.1 hq

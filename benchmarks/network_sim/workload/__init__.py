@@ -17,6 +17,9 @@ blocks' boundaries. They meet in one place, the consistency relation N3
     n3         the in-the-clear consistency check over what the certified links carried
     n3_unit    N3's proof unit for one port-window, a Boolean Definition (`N3Window_v3`), the outbox and layout
                commitments and N2's record commitment it opens, and each window's instance on the simulator and the lab
+    n3_v4      `N3Window_v4`: v3's unit with its descriptors and rows opened as runs
+    n3_v5      `N3Window_v5`: v4's over outbox rows without overlap, with a template, and with frames wider than rows
+    n3_cost    N3's ANDs on every link-window: the simulator's and the lab's as built, served rows' at their shape
     run        build, place, run every block (in one process or one process each over TCP) and check
     accounting the hardware and placement as `benchmarks/datacenter`'s objects, whose audit and account read the
                Program itself

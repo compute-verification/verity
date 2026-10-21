@@ -475,6 +475,7 @@ def main() -> int:
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     from verity.core.protocols.pouw.audit import weights_root
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
 
     t_start = time.perf_counter()
@@ -492,7 +493,7 @@ def main() -> int:
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(SCHEME)
     roots = PPD.weight_roots(kernel, W, SCHEME, salt_key=salt_key)
-    challenger = Challenger(0)
+    challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     DedupRun = run_class()
     run = DedupRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, W, roots, challenger.commitment, opening, graphs=True,

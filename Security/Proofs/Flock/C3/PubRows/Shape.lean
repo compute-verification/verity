@@ -61,10 +61,11 @@ theorem sparse_ne_names (sh : RecSparse.Shape) :
     (∀ L H : ℕ, RecSparse.unitName sh ≠ s!"rec-open/l{L}-h{H}") ∧
     (∀ m k c j : ℕ, RecSparse.unitName sh ≠ s!"rec-residuals/m{m}-k{k}-c{c}-p{j}") ∧
     (∀ L H, RecSparse.unitName sh ≠ VStar.recOpenStackedName L H) ∧
-    (∀ m c j, RecSparse.unitName sh ≠ RecOpening.unitName m c j) := by
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros <;> intro h <;>
+    (∀ m c j, RecSparse.unitName sh ≠ RecOpening.unitName m c j) ∧
+    (∀ l N, RecSparse.unitName sh ≠ VStar.capName l N) := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> intro h <;>
     have h := congrArg (fun s : String => s.toList.take 5) h <;>
-    simp only [RecSparse.unitName, VStar.recOpenStackedName, RecOpening.unitName, String.toList_append,
+    simp only [RecSparse.unitName, VStar.recOpenStackedName, RecOpening.unitName, VStar.capName, String.toList_append,
       List.append_assoc, FlockVBridge.toString_str] at h <;>
     rw [take_five (by decide), take_five (by decide)] at h <;>
     exact absurd h (by decide)
@@ -149,8 +150,12 @@ theorem candidate3_rest {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVSta
 theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {sh : RecSparse.Shape} (hn : RecSparse.unitName sh = s.name) :
     i.sparse = some sh := by
-  obtain ⟨n1, n2, n3, n4⟩ := sparse_ne_names sh
-  obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨n1, n2, n3, n4, n5⟩ := sparse_ne_names sh
+  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  rcases Array.mem_append.1 hs with hs | hs
+  rotate_left
+  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
+    exact absurd hn (n5 _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs

@@ -1,21 +1,18 @@
 /-
-The release side's functions over JSON, as the difftest (`FirewallDifftest`) serves them and Rust's `release::run_op`
-writes them (`live/src/firewall_record_vectors.json`):
+The release side's functions over JSON, as the difftest (`FirewallDifftest`) serves them and the shared record vectors
+write them (`live/src/firewall_record_vectors.json`):
 
 * `op`, `{"op": [NAME, ARGS…], "record": TEXT}`: one call on the record, `{"record": TEXT', "result": R}`. `open` gives
   the session's id, `{"refused": why}` or `{"error": why}`; `admit` gives `{"release_ms": t or null}` or
   `{"refused": why}`; `stop` whether it recorded the stop; `failures` the count; `finish`, `release` and `slot` null.
-* `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session (`outerSession`),
+* `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session, the stages
+  `Firewall.Loop` runs (`decide`, then `stopAt` or `settle`) in turn on the record with the clock at `now_ms`,
   `{"outcome", "record", "sent_at", "why"}`. `prove` and `ready` are `"ok"`, `{"err": why}` or `{"panic": msg}`; `send` is
-  the challenger's verdict (a boolean) or `{"panic": msg}`.
-* `decide`, `{"now_ms", "part", "prove", "ready", "record", "session"}`: the firewall's decision before anything is sent
-  (`decide`), `{"decision", "record", "release_ms", "why"}`: `decision` is `refused`, `stop` or `go`, `release_ms` a go's
-  release time (null if it has none, and for a refusal or a stop), and `record` the record after the session's slot and
-  admission, a stop's event not yet recorded. Rust's `release::outer_session` holds its own decision to this one
-  (`core-firewall decide`, `decideMain`) and sends nothing unless they are the same.
+  the challenger's verdict (a boolean) or `{"panic": msg}`. `sent_at` is the release time a session that was sent waited
+  for, if it had one.
 
 A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
-statements, budget and schedule are checked before the record is read, as Rust and Python check them.
+statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
 import Firewall.Release
 
@@ -106,36 +103,19 @@ def outerFn (input : Json) : V Json := do
   let send ← match ← Flock.J.get input "send" ctx with
     | Json.bool b => pure (Except.ok b)
     | j => match runOf j "send" with
-      | .ok (.fault m) => pure (Except.error m)
+      | .ok (.fault m) => pure (Except.error (faultWhy m))
       | _ => throw "send: not a boolean or {\"panic\": msg}"
-  let (o, r) ← outerSession r (← Flock.J.str input "session" ctx) (← Flock.J.str input "part" ctx) (← Flock.J.nat input "now_ms" ctx)
-    (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready") send
-  pure (Json.mkObj [("outcome", Json.str o.kind.name), ("record", Json.str r.text),
-    ("sent_at", optNat o.sentAt), ("why", match o.why with | some w => Json.str w | none => Json.null)])
-
-def decideFn (input : Json) : V Json := do
-  let ctx := "input"
-  let r ← Record.read (← Flock.J.str input "record" ctx)
-  let (d, r) ← decide r (← Flock.J.str input "session" ctx) (← Flock.J.str input "part" ctx) (← Flock.J.nat input "now_ms" ctx)
-    (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready")
-  let (name, why, t) := match d with
-    | .refused w => ("refused", Json.str w, none)
-    | .stop w => ("stop", Json.str w, none)
-    | .go a => ("go", Json.null, a.releaseMs)
-  pure (Json.mkObj [("decision", Json.str name), ("record", Json.str r.text), ("release_ms", optNat t), ("why", why)])
-
-/-- `core-firewall decide`: `decideFn` on the one line of JSON on stdin, its answer on stdout as one line. An input that
-isn't JSON or that `decideFn` rejects (a record the firewall can't read among them) exits 1, with why on stderr. -/
-def decideMain : IO UInt32 := do
-  let line := (← (← IO.getStdin).getLine).replace "\n" ""
-  match Json.parse line >>= decideFn with
-  | .ok j =>
-    let out ← IO.getStdout
-    out.putStrLn j.compress
-    out.flush
-    return 0
-  | .error e =>
-    IO.eprintln s!"core-firewall decide: {e}"
-    return 1
+  let (s, part) := (← Flock.J.str input "session" ctx, ← Flock.J.str input "part" ctx)
+  let (outcome, why, sentAt, r) ← match ← decide r s part (← Flock.J.nat input "now_ms" ctx)
+      (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready") with
+    | (.refused why, r) => pure ("refused", some why, none, r)
+    | (.stop why, r) => do
+      let ((), r) ← stopAt r s part why
+      pure ("stop", some why, none, r)
+    | (.go a, r) => do
+      let (why, r) ← settle r s part send
+      pure (if why.isSome then "stop" else "release", why, a.releaseMs, r)
+  pure (Json.mkObj [("outcome", Json.str outcome), ("record", Json.str r.text),
+    ("sent_at", optNat sentAt), ("why", match why with | some w => Json.str w | none => Json.null)])
 
 end Core.Firewall

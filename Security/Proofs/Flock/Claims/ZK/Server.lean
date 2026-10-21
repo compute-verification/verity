@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.ZK.Reference
-import Proofs.Flock.Claims.ZK.Interact
+import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
@@ -17,7 +17,8 @@ values of four kinds (`Kind`), on a public schedule (`ZkServer.sched`):
 * `masked`: a worker's value under the server's mask (`ZkServer.mask`), added only once the value passed the server's
   relation check (`ZkServer.rel`), which reads the server's private check coins `Chk`.
 
-A round in which any check fails, or a worker misses its time (`none`), releases the stop (`ZkServer.stop`), and so does
+A round in which any check fails, a worker misses its time (`none`), or the server refuses from the witness and its
+tape alone (`ZkServer.refuses`, `false` unless a server says otherwise), releases the stop (`ZkServer.stop`), and so does
 every later round (`ZkServer.live`). The worker is any function of the statement, the witness, the server's tape and
 the history (`ZkServer.Worker`); it never sees the check coins. The inner phase's firewall, `Flock.Firewall.run`, is the
 same shape: by `run_resalt` its stop never depends on its salts, and by `run_of_one` what it sends is a fixed template
@@ -91,6 +92,9 @@ structure ZkServer (W R : Type) where
   frame : (x : Msg) → (j : ℕ) → (Fin (nS x j) → Val) → Msg
   stop : Msg
   sched : Msg → ℕ → ℕ
+  /-- the server's own refusal of the round after `h`, from the witness and its tape alone, whatever the workers
+  send: the round fails as a failed check does -/
+  refuses : Msg → W → R → List (Msg × Msg) → Bool := fun _ _ _ _ => false
 
 attribute [instance] ZkServer.chkFin ZkServer.chkNe ZkServer.valEq
 
@@ -131,10 +135,23 @@ def check {W R : Type} (S : ZkServer W R) (x : Msg) (j s : ℕ) (w : W) (ρ : R)
   | .masked, some v => S.rel x j s w ρ h cp κ v
   | .masked, none => false
 
-/-- Every slot of the round after `h` passes its check. -/
+/-- The server does not refuse the round after `h`, and every slot of it passes its check. -/
 def pass {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Bool :=
-  (List.range (S.nS x h.length)).all fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)
+  !S.refuses x w ρ h &&
+    (List.range (S.nS x h.length)).all fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)
+
+/-- A round that passes passes every slot's check. -/
+theorem slots_of_pass {W R : Type} {S : ZkServer W R} {wk : S.Worker} {x : Msg} {w : W} {ρ : R} {κ : S.Chk}
+    {h : List (Msg × Msg)} (hp : S.pass wk x w ρ κ h = true) :
+    (List.range (S.nS x h.length)).all
+      (fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)) = true :=
+  (Bool.and_eq_true _ _).mp hp |>.2
+
+/-- A round the server refuses fails. -/
+theorem pass_of_refuses {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) (hr : S.refuses x w ρ h = true) : S.pass wk x w ρ κ h = false := by
+  simp [pass, hr]
 
 /-- Every round so far, the current one's included, passed. -/
 def live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
@@ -189,107 +206,6 @@ def Faithful {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (
 
 end ZkServer
 
-/-! ## Cut runs -/
-
-/-- The cut prover: `τ`'s messages before round `t`, then the stop. -/
-def cutMsg (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) (h : List (Msg × Msg)) : Msg :=
-  if h.length < t then ((τ[h.length]?).map Prod.fst).getD stop else stop
-
-/-- **The transcript `τ` cut at round `t`**: `n` rounds of `τ`'s messages before `t`, then the stop, against `ask`. -/
-def cutT (ask : List Msg → Out) (stop : Msg) (t n : ℕ) (τ : List (Msg × Out)) : List (Msg × Out) :=
-  interact ask (cutMsg stop t τ) n []
-
-/-- The prover `pm` stopped at round `t`. -/
-def stopAt (pm : List (Msg × Msg) → Msg) (t : ℕ) (stop : Msg) (h : List (Msg × Msg)) : Msg :=
-  if h.length < t then pm h else stop
-
-theorem stopAt_of_lt {pm : List (Msg × Msg) → Msg} {t : ℕ} {stop : Msg} {h : List (Msg × Msg)} (hl : h.length < t) :
-    stopAt pm t stop h = pm h := by
-  simp [stopAt, hl]
-
-theorem stopAt_of_ge {pm : List (Msg × Msg) → Msg} {t : ℕ} {stop : Msg} {h : List (Msg × Msg)}
-    (hl : ¬ h.length < t) : stopAt pm t stop h = stop := by
-  simp [stopAt, hl]
-
-theorem cutMsg_of_lt {stop : Msg} {t : ℕ} {τ : List (Msg × Out)} {h : List (Msg × Msg)} (hl : h.length < t) :
-    cutMsg stop t τ h = ((τ[h.length]?).map Prod.fst).getD stop := by
-  simp [cutMsg, hl]
-
-theorem cutMsg_of_ge {stop : Msg} {t : ℕ} {τ : List (Msg × Out)} {h : List (Msg × Msg)} (hl : ¬ h.length < t) :
-    cutMsg stop t τ h = stop := by
-  simp [cutMsg, hl]
-
-theorem length_histOf_take (τ : List (Msg × Out)) (i : ℕ) : (histOf (τ.take i)).length = min i τ.length := by
-  simp [histOf]
-
-theorem histOf_take_take (τ : List (Msg × Out)) {i i' : ℕ} (h : i' ≤ i) :
-    (histOf (τ.take i)).take i' = histOf (τ.take i') := by
-  simp only [histOf, ← List.map_take, List.take_take, Nat.min_eq_left h]
-
-/-- Round `i`'s message is the prover's on the history before it. -/
-theorem interact_getElem_fst (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (i : ℕ), i < (interact ask pm n hist).length →
-      ((interact ask pm n hist)[i]?).map Prod.fst = some (pm (hist ++ histOf ((interact ask pm n hist).take i)))
-  | 0, _, _, hi => by simp [interact] at hi
-  | n + 1, hist, i, hi => by
-      simp only [interact] at hi ⊢
-      cases hb : ask (hist.map Prod.fst ++ [pm hist]) with
-      | msg m =>
-          rw [hb] at hi
-          cases i with
-          | zero => simp [histOf]
-          | succ i =>
-              have := interact_getElem_fst ask pm n (hist ++ [(pm hist, m)]) i (by simpa using hi)
-              rw [List.getElem?_cons_succ, this, List.take_succ_cons]
-              simp [histOf, msgOf]
-      | acc =>
-          rw [hb] at hi
-          simp only [List.length_singleton, Nat.lt_one_iff] at hi
-          subst hi
-          simp [histOf]
-      | rej =>
-          rw [hb] at hi
-          simp only [List.length_singleton, Nat.lt_one_iff] at hi
-          subst hi
-          simp [histOf]
-
-/-- The stopped prover's run agrees with the prover's before the stop. -/
-theorem stopAt_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
-    (interact ask (stopAt pm t stop) n []).take t = (interact ask pm n []).take t := by
-  cases t with
-  | zero => simp
-  | succ j =>
-      refine interact_take_congr ask pm (stopAt pm (j + 1) stop) n [] j fun i hi hlt => ?_
-      have hl : (histOf ((interact ask pm n []).take i)).length = i := by
-        rw [length_histOf_take]; omega
-      simp only [List.nil_append]
-      exact stopAt_of_lt (by rw [hl]; omega)
-
-/-- **The stopped prover's run is its run cut**. -/
-theorem interact_stopAt (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
-    interact ask (stopAt pm t stop) n [] = cutT ask stop t n (interact ask pm n []) := by
-  symm
-  unfold cutT
-  refine interact_congr ask (stopAt pm t stop) (cutMsg stop t (interact ask pm n [])) n [] fun i hi => ?_
-  simp only [List.nil_append]
-  have hl : (histOf ((interact ask (stopAt pm t stop) n []).take i)).length = i := by
-    rw [length_histOf_take]; omega
-  by_cases hit : i < t
-  · rw [cutMsg_of_lt (by rw [hl]; exact hit), stopAt_of_lt (by rw [hl]; exact hit), hl]
-    have htk := stopAt_take ask pm stop t n
-    have e1 : (interact ask (stopAt pm t stop) n []).take i =
-        ((interact ask (stopAt pm t stop) n []).take t).take i := by
-      rw [List.take_take, Nat.min_eq_left hit.le]
-    have e2 : (interact ask pm n []).take i = ((interact ask pm n []).take t).take i := by
-      rw [List.take_take, Nat.min_eq_left hit.le]
-    have hiτ : i < (interact ask pm n []).length := by
-      have := congrArg List.length htk
-      simp only [List.length_take] at this
-      omega
-    rw [interact_getElem_fst ask pm n [] i hiτ, e1, htk, ← e2]
-    simp
-  · rw [cutMsg_of_ge (by rw [hl]; exact hit), stopAt_of_ge (by rw [hl]; exact hit)]
-
 /-! ## The split -/
 
 namespace ZkServer
@@ -309,7 +225,7 @@ theorem copy_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W
   split_ifs with hc
   · obtain ⟨hi, hs, hm⟩ := hc
     have hlen : (h.take i).length = i := by simp only [List.length_take]; omega
-    have hp := S.pass_of_live wk x w ρ κ h hl hi
+    have hp := slots_of_pass (S.pass_of_live wk x w ρ κ h hl hi)
     have hcs := List.all_eq_true.mp hp s (List.mem_range.mpr (by rw [hlen]; exact hs))
     rw [hf i hi s (by rw [hlen]; exact hs) (by rw [hlen]; exact hm) hcs, hlen]
   · rfl
@@ -326,7 +242,7 @@ theorem next_eq {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W
   funext s
   have hp := S.pass_of_live wk x w ρ κ h hl le_rfl
   rw [List.take_length] at hp
-  have hcs := List.all_eq_true.mp hp s.val (List.mem_range.mpr s.isLt)
+  have hcs := List.all_eq_true.mp (slots_of_pass hp) s.val (List.mem_range.mpr s.isLt)
   have hf0 := hf h.length le_rfl
   rw [List.take_length] at hf0
   unfold value
@@ -1042,7 +958,7 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The ZK server at `flock-circuit --zk`'s masked record**: for every worker, the server whose frame at honest workers
-is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestP` behind
+is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestPR` behind
 `refP`'s `Hello` and coin-tree checks) and whose masked checks are sound (`ZkServer.CheckSound`) releases, on every
 event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork` of `Flock.zk_zkD_ref`,
 plus the checks' errors, under `Claims.Hm96Hiding`, the session's five Props and `RefSession.HonestMsgs`. -/

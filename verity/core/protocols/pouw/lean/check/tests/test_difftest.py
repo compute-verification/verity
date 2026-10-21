@@ -8,16 +8,19 @@ reasons too, `Core.Protocol.case`'s framing included, so this port compares the 
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
 `pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
-generates (honest openings of a call's tile or the filler's, and one mutation each aimed at every refusal or at a reading
-both sides share), compared output for output: null, or the same reason.
+generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
+mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
+reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
-round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
-for output: null, or the same refusal.
+round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
+ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
+Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
+the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`).
 """
 from __future__ import annotations
 
@@ -70,10 +73,15 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_check(server):
+    """Generated cases, then each mutation over a few seeds (`replay`), so every verdict is reached whatever the draw: the
+    seeded draw moves whenever the cases' modules change, and a run of it has drawn no `answer-undecided`."""
     RULES.clear()
     stats = D.run(PORT, examples=EXAMPLES, server=server)
-    print(f"pouw-check difftest: {stats}; by rule: {dict(sorted(RULES.items()))}")
-    assert stats.counts.get("accept") and stats.counts.get("reject") and stats.counts.get("undecided")
+    swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
+                    for name in ["honest", *cases.NAMES] for seed in range(3))
+    print(f"pouw-check difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+          f"{dict(sorted(RULES.items()))}")
+    assert {"accept", "reject", "undecided"} <= set(swept), dict(swept)
 
 
 def _template(why: str) -> str:
@@ -92,15 +100,25 @@ REASONS = {_template(r) for r in (
     "the proof's circuit is not the one the verifier pins for the check's template",
     "the proof's first rows are not an A row and a B row of the registered schemas",
     "the proof's body holds no A row and B row",
+    *(f"the proof's header does not list its rows {', '.join(p)} first, in its circuit's port order"
+      for p in (["a0", "b0"], [*(f"a{k}" for k in range(4)), *(f"b{k}" for k in range(8))])),
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
     *(f"side {s}: the proof's committed row is not entry #'s row #" for s in "ab"),
+    "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's "
+    "certified salt", "the window is certified, and the verifier holds no 64-byte certified salt for it",
+    "the window is not certified, so it has no certified salt for a unit to read",
+    "the window's template's unit reads a salt, which only a certified window has",
+    f"the proof's rows {', '.join([*(f'a{k}' for k in range(4)), *(f'b{k}' for k in range(8)), 'pub'])} are not "
+    f"{CC.ROW_V2} rows", "the proof's body holds no A rows, B rows and public row",
+    "the proof's public row is not the window's certified salt, unit #'s position and entry #'s side roots",
 )}
 OPENED: Counter[str] = Counter()
 
 
 def opening(case: dict) -> str | None:
     why = CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
-                     case["unit"], bytes.fromhex(case["pub"]), case["opening"])
+                     case["unit"], bytes.fromhex(case["pub"]), case["opening"],
+                     None if case.get("salt") is None else bytes.fromhex(case["salt"]))
     OPENED[_template(why) if why else "accept"] += 1
     return why
 
@@ -184,8 +202,8 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes and draws, then each mutation over a few seeds (`replay`), so every refusal is reached whatever
-    the draw."""
+    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    every refusal is reached whatever the draw."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -194,7 +212,7 @@ def test_pass_and_draw(pass_server):
                      for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier"}
     assert "draw accept" in PASSED and len(PASSED) > 40
     for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
         early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)
@@ -229,7 +247,51 @@ def test_rounds(pass_server):
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
     for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
-                 ": coin does not open", ": coin was not opened after", "the verifier's coins are malformed",
+                 ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
-                 "the coin commitment's "):
+                 "the coin commitment's ", "not trusted: no challenger close record",
+                 "not trusted: the challenger record's signature does not verify",
+                 "not trusted: the challenger's release log is not the one its close record signs",
+                 ": a second open for root ", ", not the window's pinned key",
+                 "not trusted: the auditor's ledger has no end for session",
+                 "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
+                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
+                 "not trusted: the challenger's record is signed at leaf ",
+                 "not trusted: the challenger's refused hellos are not the ",
+                 "the challenger's log shows it received"):
         assert any(part in k for k in ROUNDED), part
+
+
+SALTED: Counter[str] = Counter()
+
+
+def salt(case: dict) -> dict | None:
+    refused = CC.salt(*rounds_cases.salt_args(case))
+    SALTED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+              inputs=st.builds(rounds_cases.salt_instance, st.randoms(use_true_random=False),
+                               st.sampled_from(["honest"] * (len(rounds_cases.SALT_NAMES) // 4) + rounds_cases.SALT_NAMES)))
+
+
+def test_salt(pass_server):
+    """Generated live windows' salt coins, read through the challenger's signed session the auditor's signed ledger
+    reserves, opens and ends for the window, then each mutation over a few seeds (`replay`): a session opened without a
+    reserve, the open root under another session's id or of another window's weights or requests, H1's salt opened
+    after the weights' root, a log showing another root, and every other refusal of `core_check.salt`."""
+    SALTED.clear()
+    stats = D.run(SALT, examples=400, server=pass_server)
+    swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *rounds_cases.SALT_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(SALTED.items()))}")
+    assert "accept" in SALTED
+    for part in (CC.NO_RESERVE, CC.SALT_FORM, CC.OTHER_WINDOW, CC.NOT_RECEIVED,
+                 "the verifier's challenger key is malformed",
+                 "not trusted: no auditor's ledger", "not trusted: the challenger record's signature does not verify",
+                 "the coin commitment's ", "the salt's a live coin opening is", "the salt's coin was not opened after",
+                 "not its pouw/salt coin #", "the salt's coin does not open", "the salt's coin is epoch #",
+                 "the salt's coin opening is malformed"):
+        assert any(_template(part) in k for k in SALTED), part

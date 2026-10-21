@@ -220,6 +220,7 @@ class _Pool:
     filler: str
     page_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> page
     slot_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> block of its page
+    released: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), bool))   # freed, its bytes still the block's
 
     @property
     def per_page(self) -> int:
@@ -307,22 +308,19 @@ class Store:
         self._salt_key = secrets.token_bytes(32) if salt_key is None else salt_key
         self._regions: list[_Region] = []
         self._by_name: dict[str, _Region] = {}
-        self._blocks = 0
-        self._words = 0
-        self._log_count = 0
+        self._blocks = self._words = self._log_count = 0
         self._log_root = hashlib.sha512(REGISTRATION_DOMAIN).digest()
         self._pool: _Pool | None = None
         self._challenge: bytes | None = None
         self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
-        self._window = -1
-        self._pass_step = -1
+        self._window = self._pass_step = -1
         self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
-        self.filler_plan = filler_plan
-        self.chaining = chaining
+        self.filler_plan, self.chaining = filler_plan, chaining
         self.counters = Counters()
         self.memory_map: mm.MemoryMap | None = None
+        self.on_write: Callable[[int, np.ndarray], None] | None = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -409,8 +407,7 @@ class Store:
         pool = _Pool(name, names, layout, ids, lo, hi, np.zeros(layout.pages, bool), np.zeros(layout.pages, np.int64),
                      np.zeros(shape, bool), np.zeros(shape, np.uint32), np.full(shape, -1, np.int64), filler_name)
         nb = self._by_name[names[0]].info.blocks if names else 0
-        pool.page_of = np.full(nb, -1, np.int64)
-        pool.slot_of = np.full(nb, -1, np.int64)
+        pool.page_of, pool.slot_of, pool.released = np.full(nb, -1, np.int64), np.full(nb, -1, np.int64), np.zeros(shape, bool)
         pool.page_of[ids.ravel()] = np.repeat(np.arange(layout.pages), ids.shape[1])
         pool.slot_of[ids.ravel()] = np.tile(np.arange(ids.shape[1]), layout.pages)
         self._pool = pool
@@ -434,6 +431,9 @@ class Store:
     def region(self, name: str) -> RegionInfo:
         return self._by_name[name].info
 
+    def backing(self, name: str) -> Backing:
+        return self._by_name[name].backing
+
     def payload(self, slot: int) -> bytes:
         """Store block ``slot``'s payload now: its region codec's decoding of the bytes it holds."""
         r = self._regions[bisect.bisect_right([x.info.first for x in self._regions], slot) - 1]
@@ -441,11 +441,15 @@ class Store:
         return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
 
     def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = LIFETIME,
-                          on_line: Any = None) -> mm.MemoryMap:
+                          on_line: Any = None, on_append: Any = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
         ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
-        the session's lifetime cap of ``lifetime`` windows, each closed line to ``on_line`` (`memory_map.record`)."""
-        return mm.record(self, path, registration, lifetime, on_line)
+        the session's lifetime cap of ``lifetime`` windows, each append to ``on_append`` and each closed line to
+        ``on_line`` (`memory_map.record`).  The registration took every block as its bytes are, so none is dirty now."""
+        m = mm.record(self, path, registration, lifetime, on_line, on_append)
+        if self._pool is not None:
+            self._pool.dirty[:] = self._pool.released[:] = False
+        return m
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
@@ -461,8 +465,7 @@ class Store:
         return self._pool
 
     def kv_alloc(self, pages: Sequence[int]) -> None:
-        t = time.perf_counter()
-        p = self.pool
+        t, p = time.perf_counter(), self.pool
         ix = np.asarray(pages, np.int64)
         if p.allocated[ix].any():
             raise RuntimeError(f"pages {ix[p.allocated[ix]][:8].tolist()} are already allocated")
@@ -471,8 +474,7 @@ class Store:
         self.counters.add("kv_alloc", time.perf_counter() - t)
 
     def kv_free(self, pages: Sequence[int]) -> None:
-        t = time.perf_counter()
-        p = self.pool
+        t, p = time.perf_counter(), self.pool
         ix = np.asarray(pages, np.int64)
         if not p.allocated[ix].all():
             raise RuntimeError(f"pages {ix[~p.allocated[ix]][:8].tolist()} are not allocated")
@@ -480,15 +482,14 @@ class Store:
         if self.memory_map is not None:
             keys = (ix[:, None] * p.per_page + np.arange(p.per_page))[~p.dirty[ix]]
             gone = keys[self.memory_map.free(keys)]
-            p.dirty[gone // p.per_page, gone % p.per_page] = True
+            p.dirty[gone // p.per_page, gone % p.per_page] = p.released[gone // p.per_page, gone % p.per_page] = True
         self.counters.add("kv_free", time.perf_counter() - t)
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line and
-        opens this one's: its completed blocks written, its reached registered ones freed (`memory_map`)."""
-        t = time.perf_counter()
-        p, m = self.pool, self.memory_map
+        (epoch + 1, under ``step``).  Those it reaches while registered or released with their bytes as they were (a
+        plan may still hold them) go first to ``on_write(step, pool blocks)``, if set, before the forward writes them.  One registration record for the step.  A memory map closes the last step's line, opens this one's (`memory_map`).  A store with no KV pool takes steps with no appends."""
+        t, p, m = time.perf_counter(), self.pool if appends else self._pool, self.memory_map
         if m is not None:
             m.flush(step)
         key = reached = np.zeros(0, np.int64)
@@ -500,10 +501,13 @@ class Store:
             if not p.allocated[pg].all() or (end > p.layout.slots).any() or (first < 0).any():
                 raise RuntimeError("an append outside an allocated page's slots")
             touched = (p.lo[None, :] < end[:, None]) & (p.hi[None, :] > first[:, None])
-            if m is not None:
-                reached = np.unique((pg[:, None] * p.per_page + np.arange(p.per_page))[touched & ~p.dirty[pg]])
+            blk = pg[:, None] * p.per_page + np.arange(p.per_page)
+            reached = np.unique(blk[touched & ~p.dirty[pg]])
             np.maximum.at(p.fill, pg, end)
+            if self.on_write is not None:
+                self.on_write(step, np.unique(blk[touched & (~p.dirty[pg] | p.released[pg])]))
             p.dirty[pg] |= touched
+            p.released.flat[blk[touched]] = False
             done = p.dirty[pg] & (p.hi[None, :] <= p.fill[pg][:, None])
             rows, cols = np.nonzero(done)
             key = np.unique(pg[rows] * p.per_page + cols)
@@ -514,7 +518,7 @@ class Store:
             self._log({"event": "kv-append", "step": step, "appends": n, "registered": len(key)},
                       hashlib.sha512(np.stack([pg, first, end]).astype(">i8").tobytes()).digest())
         if m is not None:
-            m.open(step, np.setdiff1d(reached, key), key)
+            m.open(step, reached, key)
         self.counters.add("kv_append", time.perf_counter() - t)
 
     def kv_write_reference(self, appends: Sequence[Append], payload: Callable[[int, int, int], bytes],

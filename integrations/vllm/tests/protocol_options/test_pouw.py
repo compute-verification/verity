@@ -8,6 +8,7 @@ calls.
 from __future__ import annotations
 
 import json
+import random
 import sys
 import types
 
@@ -56,8 +57,13 @@ def _rng(seed=0):
     return np.random.default_rng(seed)
 
 
+def _coins(seed=0):
+    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier of record's, `pouw.verifier.coins`)."""
+    return Challenger(0, random.Random(seed).randbytes)
+
+
 def _serve(*enabled, settings=None, **kw):
-    return PO.Context(stage="serve", enabled=tuple(enabled), settings=settings or {"pouw": {"coins": Challenger(0)}}, **kw)
+    return PO.Context(stage="serve", enabled=tuple(enabled), settings=settings or {"pouw": {"coins": _coins()}}, **kw)
 
 
 def _int7_linear(x, w, bias=None):
@@ -70,9 +76,10 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_executed():
+def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_and_h1_are_executed():
     from verity.core.protocols.pouw import circuit
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES})) and "ncp-v1" in pouw.schemes()
+    from verity_vllm.protocol_options import pouw_h1
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME})) and "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
@@ -109,9 +116,9 @@ def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampl
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
+        commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
         assert any("no Definition" in r for r in PO.refusals(commit)), scheme
-    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": Challenger(0)}})
+    commit = PO.Context(stage="commit", enabled=("pouw:ncp-v2", "sampled-proofs:vllm-v1"), settings={"pouw": {"coins": _coins()}})
     assert PO.refusals(commit) == ()
 
 
@@ -184,7 +191,7 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     rng = _rng(1)
     w0, w1 = rng.standard_normal((N, K), np.float32), rng.standard_normal((N + 64, N), np.float32)
     model = Model(w0, w1)
-    coins = Challenger(0)
+    coins = _coins()
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
     opt = comp.get("pouw")
@@ -279,7 +286,7 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
     """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
     from the plaintext, not what POUS decodes (the composition's decision 3)."""
     _fake_pous(monkeypatch)
-    settings = {"pouw": {"coins": Challenger(0), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
+    settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
     assert pouw.keeps_weight_copy(scheme, _serve(f"pouw:{scheme}", settings=settings))
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
@@ -325,7 +332,7 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
     rng = _rng(3)
     w = rng.standard_normal((N, K), np.float32)
     model = Model(w)
-    settings = {"pouw": {"coins": Challenger(0)}}
+    settings = {"pouw": {"coins": _coins()}}
     with PO.install(model, _serve("pouw:ncp-v1", "pous:band-chain/d12/v1", settings=settings)) as comp:
         assert comp.entries == ("pouw:ncp-v1", "pous:band-chain/d12/v1")
         layer = model.layers[0]
@@ -370,13 +377,16 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
         def gemm(self, w, x, weight, bias):
             return x
 
+        def end_pass(self):
+            return {}
+
         def finish(self):
             pass
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
-    model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), Challenger(0)
+    model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
     settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
     with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:
         c = comp.get("pouw").commitment()
@@ -386,9 +396,9 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
 
 
 def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
-    scheme, on = "pearl-c-sm120-v1-h3", {"coins": Challenger(0), "device": "cuda", "kernel": "k"}
+    scheme, on = "pearl-c-sm120-v1-h3", {"coins": _coins(), "device": "cuda", "kernel": "k"}
     for name in ("serial", "deferred", "deferred-caller"):
         assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
     assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
     assert any("Pearl-C's; this executor runs serially" in r
-               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": Challenger(0), "schedule": "deferred"}})))
+               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), "schedule": "deferred"}})))

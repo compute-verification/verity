@@ -10,8 +10,8 @@
    "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, a duplicate while the queue holds exactly Q, advice outside Σ_sync, frames handed after their h(k), which fault the window they are handed in coverage-never-established, the malformed inputs), the online prover choosing each window's sync at lags of 1 to T − 1 buckets, with frames read before the choosing tick but ready after it, and its refusal of a frame ready before its anchor, which faults the declaring egress window monitor-unavailable",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1500"],
    "data": {
-    "difftest/instances.jsonl": "7f3dc54a64c7032250fa91ce05592d9240b54cc06fb60ab6f934003e70ef396c",
-    "difftest/python.jsonl": "9d657249b942362ae3f50b7e06ca428cd0353ed953e861a801d7e725dec6b3ef"
+    "difftest/instances.jsonl": "585bddfdc71f9c556311a8d3d453a038aa53a5927f2c2b7292fad65f0176ccbe",
+    "difftest/python.jsonl": "9fb9c725497e1f02910202f957a0d0d4c99a7b5106a52ecb790b9c4e027b461c"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },

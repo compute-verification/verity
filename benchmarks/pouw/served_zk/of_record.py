@@ -7,7 +7,8 @@ challenger's path runs its Lean and its Python reference on one input:
 * ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
-* ``draw``: the drawn units are the draw coin's (`pouw-check-difftest draw`, `core_check.draw`);
+* ``draw``: the drawn units are the draw coin's, under the challenger key the window's parameters pin when it is
+  certified (`pouw-check-difftest draw`, `core_check.draw`);
 * ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
 * ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
@@ -74,7 +75,8 @@ def _value(o: D.Outcome) -> Any:
 def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str) -> dict:
     """`core_check`'s parameters of a served window: the check item and query digest, and the window's own numbers."""
     return {"check": dict(check), "context": params["context"], "delta": params["delta"], "eps": params["eps"],
-            "grid_bits": params["grid_bits"], "query": query, "range": list(params["range"])}
+            "grid_bits": params["grid_bits"], "length": dict(params["length"]), "query": query,
+            "range": list(params["range"])}
 
 
 def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
@@ -121,18 +123,20 @@ def py_registered(x: dict) -> dict:
 
 def py_opening(x: dict) -> str | None:
     p, c = _params_commitment(x)
-    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"])
+    salt = None if x.get("salt") is None else bytes.fromhex(x["salt"])
+    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"], salt)
 
 
 def py_pass(x: dict) -> dict:
     raw = None if x["raw"] is None else bytes.fromhex(x["raw"])
-    how, refused = CC.pass_epoch(x["coins"], raw, x["context"], x["recorded"])
+    certified = (None if x.get(k) is None else bytes.fromhex(x[k]) for k in ("reveal", "committed", "stream", "prover"))
+    how, refused = CC.pass_epoch(x["coins"], raw, x["context"], x["recorded"], *certified)
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
 def py_draw(x: dict) -> dict | None:
     refused = CC.draw(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
-                      x["population"], x["units"])
+                      x["population"], x["units"], x.get("key"))
     return None if refused is None else {"refused": list(refused)}
 
 

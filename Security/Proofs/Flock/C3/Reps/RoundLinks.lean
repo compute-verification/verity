@@ -169,8 +169,12 @@ theorem opening_port_of_msgNames {m cl j nv : ℕ} {S : Flock.RecOpen.GfS} {ps :
 theorem opening_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {m c j : ℕ} (hn : RecOpening.unitName m c j = s.name) :
     ∃ m' c' j' S' ps nv, s = .opening m' c' j' S' ps nv := by
-  obtain ⟨n1, n2, n3, n4⟩ := openingName_ne m c j
-  obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨n1, n2, n3, n4, n5⟩ := openingName_ne m c j
+  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  rcases Array.mem_append.1 hs with hs | hs
+  rotate_left
+  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
+    exact absurd hn (n5 _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
@@ -192,14 +196,15 @@ theorem opening_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
         · exact ⟨_, _, _, _, _, _, rfl⟩
 
 /-- **No statement but a part's is named as a part's unit**: V*'s levels, R's levels, RecSparse and R's opening are
-named `rec-open/`, `rec-open-…`, `rec-spars…` and `rec-openi…`. -/
+named `rec-open/`, `rec-open-…`, `rec-spars…`, `rec-openi…` and `rec-cap/n`. -/
 theorem resName_ne (m k c j : ℕ) :
     (∀ L H : ℕ, RecResiduals.unitName m k c j ≠ s!"rec-open/l{L}-h{H}") ∧
     (∀ L H, RecResiduals.unitName m k c j ≠ VStar.recOpenStackedName L H) ∧
-    (∀ sh, RecResiduals.unitName m k c j ≠ RecSparse.unitName sh) := by
-  refine ⟨?_, ?_, ?_⟩ <;> intros <;> intro h <;>
+    (∀ sh, RecResiduals.unitName m k c j ≠ RecSparse.unitName sh) ∧
+    (∀ l N, RecResiduals.unitName m k c j ≠ VStar.capName l N) := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> intros <;> intro h <;>
     have h := congrArg (fun s : String => s.toList.take 9) h <;>
-    simp only [RecSparse.unitName, VStar.recOpenStackedName, RecResiduals.unitName, String.toList_append,
+    simp only [RecSparse.unitName, VStar.recOpenStackedName, RecResiduals.unitName, VStar.capName, String.toList_append,
       List.append_assoc, FlockVBridge.toString_str] at h <;>
     rw [take_nine (by decide), take_nine (by decide)] at h <;>
     exact absurd h (by decide)
@@ -208,8 +213,12 @@ theorem resName_ne (m k c j : ℕ) :
 theorem inner_of_resName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {m k c j : ℕ} (hn : RecResiduals.unitName m k c j = s.name) :
     ∃ j' nm p, s = .inner j' nm p := by
-  obtain ⟨n1, n2, n3⟩ := resName_ne m k c j
-  obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨n1, n2, n3, n4⟩ := resName_ne m k c j
+  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  rcases Array.mem_append.1 hs with hs | hs
+  rotate_left
+  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
+    exact absurd hn (n4 _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs

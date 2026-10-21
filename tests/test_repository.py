@@ -49,6 +49,13 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
+#: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
+#: (Daniel, 20 Oct: "this shouldn't be like a database of shit that went wrong"; `.agents/skills/authoring-skills/`).
+SKILL_SIZE_CAP = 16 * 1024
+#: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
+#: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
+#: compacts it.
+OVERSIZE_SKILLS: dict[str, int] = {}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
@@ -72,8 +79,9 @@ AUDIT_RECORD = "lean-audit.json"
 #: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
-#: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
-#: add up to what one large one may not be.
+#: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
+#: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget.
 DATA_BUDGET = 40 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
@@ -138,6 +146,13 @@ def split_dir(path: str) -> str | None:
 
 def markdown_over_cap(path: str, size: int) -> str | None:
     """Why the markdown file ``path`` of ``size`` bytes is over its cap, and where its detail goes; None within it."""
+    if os.path.basename(path) == "SKILL.md":
+        cap = OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+        if size <= cap:
+            return None
+        return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
+                "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
+                "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
     cap = PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
     if size <= cap:
         return None
@@ -145,7 +160,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 
 
-def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
+def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
@@ -154,6 +169,20 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
     assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
+    assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
+    assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
+        ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")
+    big, cap = ".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 1024
+    monkeypatch.setitem(OVERSIZE_SKILLS, big, cap)
+    assert markdown_over_cap(big, cap) is None and "1 bytes over" in markdown_over_cap(big, cap + 1)
+
+
+def test_oversize_skills_only_shrink() -> None:
+    """An OVERSIZE_SKILLS entry names a skill that exists and is still over SKILL_SIZE_CAP; once it's under, the entry goes,
+    so the list only shrinks."""
+    stale = [f"{p}: {'missing' if not (ROOT / p).exists() else f'{os.path.getsize(ROOT / p)} bytes, under the cap'}"
+             for p in OVERSIZE_SKILLS if not (ROOT / p).exists() or os.path.getsize(ROOT / p) <= SKILL_SIZE_CAP]
+    assert not stale, "delete these OVERSIZE_SKILLS entries in tests/test_repository.py:\n" + "\n".join(stale)
 
 
 def test_markdown_size_caps() -> None:
@@ -171,7 +200,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "archive/shared/hash_gpu/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
@@ -306,7 +335,7 @@ def test_every_path_has_owner() -> None:
 def test_tracked_data_within_budget() -> None:
     total = 0
     for p in _tracked():
-        if os.path.splitext(p)[1] in CODE_SUFFIXES:
+        if os.path.splitext(p)[1] in CODE_SUFFIXES or os.path.basename(p) == AUDIT_RECORD:
             continue
         try:
             total += os.path.getsize(ROOT / p)

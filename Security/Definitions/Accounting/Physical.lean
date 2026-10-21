@@ -14,9 +14,10 @@ resource:
 | Constraint | What it says | What its failure frees |
 | --- | --- | --- |
 | `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
+| `LatencyAtMost X Y ℓ⁺` | a gate in `Y` reads one in `X` at most `ℓ⁺` ticks after it | answers sent before their questions, landing after them |
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed ring D span` | a path through more than `D` computed gates at the location of the ring's multiplications spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
-| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
+| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` (`MemoryAt 𝒳 M T`: at the ticks `T` only) | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
 
@@ -56,6 +57,15 @@ def IsPath {k : ℕ} (p : Fin (k + 1) → Fin A.N) : Prop :=
 def Causal (ℓ : L → L → ℕ) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.t a + ℓ (A.x a) (A.x g) ≤ A.t g
 
+/-- **A latency ceiling** (the listed claim `latency-ceiling`) of `ℓ⁺` from `X` to `Y`: a gate placed in `Y` reads a
+gate placed in `X` at most `ℓ⁺` ticks after it. `Causal` bounds latency from below only, so without a ceiling a value
+sent before a tick can be read at any later one, and what a device sees arrive says nothing about when it was sent.
+One physical premise on a run: `X`'s links into `Y` (a server's egress links into the network certifier on them, which
+the auditor places) deliver within `ℓ⁺`, measured on those links, and nothing between them holds a value longer: a
+delay outside `X` is a leaf of its own, whose wires into `Y` don't come from `X`. -/
+def LatencyAtMost (X Y : Finset L) (ℓmax : ℕ) : Prop :=
+  ∀ g, ∀ a ∈ A.reads g, A.x a ∈ X → A.x g ∈ Y → A.t g ≤ A.t a + ℓmax
+
 /-- **Compute rate**: each location `X` of `𝒳` does at most `compute X` (`Φ_X`) work a tick, at the pricing `π`. -/
 def ComputeRate (𝒳 : Set (Finset L)) (π : Fin A.N → ℕ) (compute : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ a b, A.work π (A.region X (Set.Ico a b)) ≤ compute X * (b - a)
@@ -74,6 +84,10 @@ def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
 /-- **Memory**: each location `X` of `𝒳` carries at most `M X` bits across every tick. -/
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t, A.state X t ≤ M X
+
+/-- **Memory at the ticks `T`**: `Memory` read only at the ticks of `T`; `Memory` is it at every tick. -/
+def MemoryAt (𝒳 : Set (Finset L)) (M : Finset L → ℕ) (T : Set ℕ) : Prop :=
+  ∀ X ∈ 𝒳, ∀ t ∈ T, A.state X t ≤ M X
 
 open Classical in
 /-- The bits link `e` carries to the leaf `y`, read during `I`: the gates whose wire to a reader placed at `y` during `I`,

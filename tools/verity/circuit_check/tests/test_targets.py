@@ -2,7 +2,7 @@
 directory and import name stays in `REGISTERED`, and one whose module can't be judged fails by name.  `targets.root_functions`:
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
 id parses to the Definition it names, bound, recursively, and a record static to the record a catalog root binds, without the
-catalog."""
+catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind is refused by name."""
 from __future__ import annotations
 
 import sys
@@ -115,9 +115,10 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     assert TG.definition(mid.id) is mid and TG.definition(exact.id) is exact
 
 
-def test_the_pouw_h1_tile_root_parses_from_its_id(monkeypatch):
-    """CIR-42: `PouwH1Tile`'s root (its sidecar's binding: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and the tile's cells)
-    could not be targeted by id; it parses to the very Definition the sidecar binds, without building it or the catalog."""
+def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
+    """CIR-42: `PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
+    the tile's cells) could not be targeted by id; each parses to the very Definition the sidecar binds, without building it
+    or the catalog."""
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
@@ -125,9 +126,10 @@ def test_the_pouw_h1_tile_root_parses_from_its_id(monkeypatch):
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
-    (root,) = roots
-    assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
-    assert TG.definition(root.id) is root
+    assert len({root.id for root in roots}) == len(roots)
+    for root in roots:
+        assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
+        assert TG.definition(root.id) is root
 
 
 def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeypatch):
@@ -146,3 +148,16 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
         assert TG.definition(fid) is fn
     with pytest.raises(pytest.fail.Exception, match="the catalog was built"):
         TG.definition("GfResiduals_v1{S={000000000000}}")
+
+
+def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
+    """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
+    `test_every_call_the_suite_checks_is_partitioned` pass without it (#2765's `dsv4_indexer_compress` before its statics)."""
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "_BOUND", {})
+    monkeypatch.setattr(TG, "load_registries", lambda: None)
+    monkeypatch.setattr(TG, "templates", lambda: [])
+    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
+        TG.word_call_families()
+    assert "words" not in TG._SHORT

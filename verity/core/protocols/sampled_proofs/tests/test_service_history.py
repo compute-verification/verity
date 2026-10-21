@@ -9,14 +9,15 @@ from typing import Any
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as R, verifier as V
 
-from test_registered import LAW, Q, SCHEME, SERVED, _program, _registered, _record as _registered_record
-from test_service import DELTA, PAIR, RUN, SESSION, Clock, _half, _interiors, _lean, _ports, _record, _spec, _two_spec
+from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
+                             _record as _registered_record, _seeded_case)
+from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
 
 class _Whole(S.Stream):
     """A stream whose every check reads its whole log, as a stream's did before it kept what R6 and R7 read."""
 
-    def _earlier(self, record):
+    def _earlier(self, record, supplied=None):
         return self._log
 
 
@@ -43,19 +44,25 @@ def _refusal(e: S.Refused) -> tuple:
 
 def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch):
     """Over 30 rounds, accepted and rejected, every registration's check gets one record of the log (the last, which R6's
-    `previous` names), and no round iterates the log or the stream's entries, the failure count included. The whole-log
-    stream, counted the same way, hands its checks a log as long as its history and walks it at every registration."""
-    check, given = V.check, []
+    `previous` names), and no round iterates the log or the stream's entries, the failure count included; the stream's
+    rules decide each op on the one entry it names, or none. The whole-log stream, counted the same way, hands its checks
+    a log as long as its history and walks it at every registration."""
+    check, given, rules, held = V.check, [], V.stream, []
 
     def spy(*a: Any, **kw: Any) -> V.Verdict:
         given.append(len(a[8]))
         return check(*a, **kw)
 
+    def rules_spy(params: Any, state: Any, *a: Any) -> Any:
+        held.append(len(state["entries"]))
+        return rules(params, state, *a)
+
     monkeypatch.setattr(S.V, "check", spy)
+    monkeypatch.setattr(S.V, "stream", rules_spy)
     for cls, rounds in ((S.Stream, 30), (_Whole, 6)):
         given.clear()
         stream = _stream(cls)
-        stream._log, stream._entries = _Counted(), _Counted()
+        stream._log, stream._entries, stream._rule_entries = _Counted(), _Counted(), _Counted()
         prev = None
         for i in range(rounds):
             reg = stream.register(_record(row=i, previous=prev), _ports(6))
@@ -66,7 +73,8 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
         assert len(stream._log) == rounds and stream.failures == rounds // 3 and not stream.stopped
         if cls is S.Stream:
             assert given == [0] + [1] * (rounds - 1)
-            assert stream._log.walks == stream._entries.walks == 0
+            assert stream._log.walks == stream._entries.walks == stream._rule_entries.walks == 0
+            assert max(held) == 1 and len(held) > 4 * rounds
         else:
             assert given == list(range(rounds)) and stream._log.walks >= rounds
 
@@ -119,10 +127,10 @@ def _one_stage(cls) -> tuple[list, tuple, tuple, tuple, S.Stream]:
 class _Forgetful(S.Stream):
     """A stream that leaves the records whose window has no key out of its checks."""
 
-    def _earlier(self, record):
+    def _earlier(self, record, supplied=None):
         irregular, self._irregular = self._irregular, []
         try:
-            return super()._earlier(record)
+            return super()._earlier(record, supplied)
         finally:
             self._irregular = irregular
 
@@ -148,35 +156,6 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
 
 
-def _two_stage(cls) -> tuple[list, tuple, tuple, tuple]:
-    """12 two-stage rounds, where every third round's interiors first repeat an earlier round's window (refused, R6) and
-    are then registered on their own."""
-    clock = Clock()
-    stream = _stream(cls, _two_spec(proof_deadline=60.0), clock=clock)
-    calls, prev = [], None
-    for i in range(12):
-        clock.now = 100.0 * i
-        reg = stream.register(*_half("x", 6, row=i, previous=prev))
-        draw = stream.select(reg)
-        if i % 3 == 2:
-            try:
-                stream.register_interiors(draw, *_interiors(draw, row=i - 2))
-            except S.Refused as e:
-                calls.append(_refusal(e))
-        ireg = stream.register_interiors(draw, *_interiors(draw, row=i))
-        assert stream.deliver(draw, [SESSION]) is None
-        out = stream.outcome(draw, _lean(accepted=i % 4 != 1), {"statement": "stub"})
-        calls += [("registered", reg.digest, ireg.digest, ireg.receipt), ("outcome", out.accepted, out.record)]
-        prev = ireg.digest
-    return calls, stream.log, stream.records, stream.symbols
-
-
-def test_two_stage_interiors_read_the_records_the_whole_log_gives():
-    got = _two_stage(S.Stream)
-    assert got == _two_stage(_Whole)
-    assert [c[2] for c in got[0] if c[0] == "refused"] == [("R6-window",)] * 4 and len(got[1]) == 24
-
-
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
     candidate's check gets the last record and the first registration, and the verifier of record gives it the verdict the
@@ -190,9 +169,10 @@ def test_r7_reads_each_values_first_registration():
         return {**R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
                            registered=[entry] if entry else ()), **change}
 
-    stream._log_record(first, 0)
+    stream._append(stream._registration(first, 0))
     for i in range(1, 24):
-        stream._log_record(at(SERVED["row"] + i, R.digest(stream._log[-1]), reg.entry() if i % 3 else None), i)
+        stream._append(stream._registration(at(SERVED["row"] + i, R.digest(stream._log[-1]),
+                                                reg.entry() if i % 3 else None), i))
     last = R.digest(stream._log[-1])
     row = SERVED["row"] + 24
     for cand, registered, codes in (
@@ -204,9 +184,27 @@ def test_r7_reads_each_values_first_registration():
             (at(SERVED["row"], last, None), None, ("R6-window",))):
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
-        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered)
-        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered)
+        held = ["W"] if registered else None
+        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
+        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
         assert part == whole and part.codes == codes and part.verifiers["lean"]["codes"] == list(codes)
+
+
+def test_a_supplied_position_reads_the_whole_log():
+    """W-a: a supplied position follows every unit of the log (`registered.log_base`), so a check whose supplied values
+    read one gets the whole log and its verdict. On the few records R6 and R7 read, the honest record's positions would
+    follow fewer units and it would be refused (`R7-supplied`)."""
+    base = _seeded_case()
+    stream, log = _stream(), []
+    for i in range(6):
+        rec, _, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + i})
+        stream._append(stream._registration(rec, i))
+        log.append(rec)
+    cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
+    assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
+    args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
+    assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).ok
+    assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).codes == ("R7-supplied",)
 
 
 def test_windows_equal_to_either_verifier_share_a_key():

@@ -93,6 +93,9 @@ def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
     assert home["node"] == "vy-nebius-1" and "cores" not in home
     owner = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
     assert "cores" not in owner
+    gate = submit.resolve(model.load(NEBIUS), _job(priority="gate", cpus=16, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    fill = submit.resolve(model.load(NEBIUS), _job(priority="fill", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert gate["cores"]["rank"] == 150 and fill["cores"]["rank"] == -490, "cpu-hold's line is by class (INF-147)"
 
 
 def test_quiet_and_pinned_gpus_reach_gpu_lease():
@@ -174,6 +177,23 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     out = json.loads(cap.out)
     assert cap.err == "cluster: --node is now --on\n"
     assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
+
+
+def test_the_cli_places_with_the_stop_each_node_reports_and_the_refusal_names_where_the_stop_came_from(capsys):
+    """INF-113: a node renewed on the machine (its /etc/research/deadline) but not in this tree's description places with the stop
+    the caller read from the node (`--stop`); without one the description's stop stands, and the refusal says which it was."""
+    stop = model.load(NEBIUS).nodes["vy-nebius-2"].stops_at
+    base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(stop - 3600), "--project", "verity", "--submitter", "lane-x",
+            "--max-s", "600", "--mem-gb", "8", "--on", "vy-nebius-2"]
+    assert cli.main(base) == 3
+    refused = json.loads(capsys.readouterr().out)["refused"]
+    assert "admission end" in refused and "from the description's stops_at" in refused and "7200 s drain" in refused
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop + 2 * 86400}"]) == 0
+    assert json.loads(capsys.readouterr().out)["machine"] == "vy-nebius-2", "the share lasts until the node's stop, renewals included"
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop - 86400}"]) == 3, "a stop brought forward on the node holds too"
+    assert "from the node's live /etc/research/deadline" in json.loads(capsys.readouterr().out)["refused"]
+    assert cli.main([*base, "--stop", "vy-nebius-9=1"]) == 3
+    assert "unknown node 'vy-nebius-9'" in json.loads(capsys.readouterr().out)["refused"]
 
 
 KINDS = Path(__file__).parents[1] / "kinds"
