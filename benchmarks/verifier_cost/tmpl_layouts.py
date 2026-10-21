@@ -15,8 +15,10 @@ Every layout keeps the unit's input rows at their columns and each output group'
 words, as `tmpl.align` does. Per layout: the unit's rows and its slot's log (`circuit._slot_log`; compose refuses a
 unit that fills its slot exactly), the runs by kind with the rows they hold unrolled, and, for interleaved, each run's
 bound inputs over all its copies by kind: shared (one column for every copy), lane (copy i's column is ``w0 + i·s``
-with s a power of two and ``w0`` a multiple of ``s·2^m``, so the fold's sum over copies is eq on a bit field), param (the
-Definition's own input, bound by its caller), affine (steps evenly, not in a clean field) or irregular. ``--flat``
+with s a power of two and ``w0`` a multiple of ``s·2^m``, so the fold's sum over copies is eq on a bit field), shifted
+(s a power of two, ``w0`` not aligned: adding a constant to the copy bits, a two-state carry over them), param (the
+Definition's own input, bound by its caller), affine (steps evenly by a non-power of two: a multiply by a constant) or
+irregular. A run is clean when every binding is shared, lane, shifted or param. ``--flat``
 reads the flat unit and checks, under the interleaved map, that the columns are distinct and every row reads only
 earlier columns (its own self row for an input, and the constant, excepted).
 """
@@ -49,6 +51,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
     urows = [0] * len(defs)
     maps: list[np.ndarray] = [np.zeros(0, np.int64)] * len(defs)
     size, align = [0] * len(defs), [1] * len(defs)
+    rnd, gap = [0] * len(defs), [0] * len(defs)  # rows each definition adds: copies rounded up, alignment gaps
     kinds: list[list[tuple]] = [[] for _ in defs]  # per def: (call, kind, 2^m)
     st = {"runs": 0, "fixed_runs": 0, "lanes_runs": 0, "chained_runs": 0, "rows_lanes": 0, "rows_chained": 0,
           "pow2_runs": 0, "rows_pow2": 0}
@@ -57,7 +60,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
         L = D.cols
         urows[d] = len(D.rows) + sum(c.count * urows[c.e] for c in D.calls)
         m = np.empty(L, np.int64)
-        pos, x, al = 0, 0, 1
+        pos, x, al, rd = 0, 0, 1, 0
         points = sorted(lo for lo, _ in out_rng) if root else []
         done: set[int] = set()
 
@@ -119,17 +122,20 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
             if kind == "lanes":
                 m[cols] = nb + maps[e][None, :] * M + j
                 pos = nb + size[e] * M
+                rd += (M - c.count) * size[e] + c.count * rnd[e]
             else:
                 m[cols] = nb + j * S + maps[e][None, :]
                 pos = nb + (c.count - 1) * S + size[e]
+                rd += (c.count - 1) * (S - size[e]) + c.count * rnd[e]
             kinds[d].append((c, kind, M))
             x = c.base + width
         seq(x, L)
-        maps[d], size[d], align[d] = m, pos, al
+        maps[d], size[d], align[d], rnd[d] = m, pos, al, rd
+        gap[d] = pos - L - rd
     n = size[t.root]
     out = {"mode": mode, "fallback": fallback if mode == "interleaved" else None, "useful": n,
            "slot_log": _slot_log(n), "slack": round(1 - n / (1 << _slot_log(n)), 4), "rows_unrolled": urows[t.root],
-           **st}
+           "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st}
     if mode == "interleaved":
         out |= _bindings(defs, maps, size, kinds, urows)
     return maps[t.root], out
@@ -141,7 +147,7 @@ def _chained(c: T.Call, Le: int) -> bool:
 
 
 def _bindings(defs, maps, size, kinds, urows) -> dict:
-    k = {"shared": 0, "lane": 0, "param": 0, "affine": 0, "irregular": 0}
+    k = {"shared": 0, "lane": 0, "shifted": 0, "param": 0, "affine": 0, "irregular": 0}
     clean = {"runs": 0, "rows": 0}
     unclean = {"runs": 0, "rows": 0, "affine_runs": 0, "irregular_runs": 0}
     for d, D in enumerate(defs):
@@ -169,11 +175,13 @@ def _bindings(defs, maps, size, kinds, urows) -> dict:
                 W = m[v]
                 s = W[1] - W[0]
                 even = (W == W[0][None, :] + j * s[None, :]).all(axis=0) & (s >= 0)
-                lane = even & (s > 0) & ((s & (s - 1)) == 0) & (W[0] % np.maximum(s * M, 1) == 0)
+                p2 = even & (s > 0) & ((s & (s - 1)) == 0)
+                lane = p2 & (W[0] % np.maximum(s * M, 1) == 0)
                 k["lane"] += int(lane.sum())
-                k["affine"] += int((even & ~lane).sum())
+                k["shifted"] += int((p2 & ~lane).sum())
+                k["affine"] += int((even & ~p2).sum())
                 k["irregular"] += int((~even).sum())
-                aff |= bool((even & ~lane).any())
+                aff |= bool((even & ~p2).any())
                 irr |= bool((~even).any())
             rows = c.count * urows[c.e]
             if aff or irr:
