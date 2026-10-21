@@ -49,7 +49,10 @@ def creditedWork (ss : Array Flock.Draw.WorkStratum) (layout : Json) (got : List
 /-- **The work law at `K ≥ K′` misses a set of work `ε·C` with probability at most `δ`**, the claim behind every ε a
 credit reports: wherever `strata` accepts a layout with strata `ss`, `law` puts them under `work:K`, and
 `kPrime ε δ C W 1` (`W` the strata's work) answers `K′ ≤ K`, the draw over uniform streams (`drawnOn`) draws no unit of a
-set `B` whose units do at least `ε·C` of the work (`unitWork`) with probability at most `δ`. -/
+set `B` whose units do at least `ε·C` of the work (`unitWork`) with probability at most `δ`. The streams are independent
+and uniform, as `Properties.Served.DrawMissesSubset` and `Claims.Sampling.live_work_miss_le` model them: the service
+derives stratum `i`'s as `stream key ["draw", template] need`, its label distinct for each stratum, and this is that
+derivation in the random-oracle model. -/
 def WorkDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),

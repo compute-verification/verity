@@ -1646,6 +1646,12 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.Strata.strataTile": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -2548,6 +2554,14 @@
    },
    "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.epsAt"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
+    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwCheck.Credit.established"],
+    "outcome": "accept"
+   },
+   "Properties.Pouw.Strata.strataTile": {
+    "function": "PouwCheck.Credit.strata",
     "outcome": "accept"
    }
   },

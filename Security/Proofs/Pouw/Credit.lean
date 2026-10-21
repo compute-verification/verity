@@ -24,7 +24,6 @@ doing work draws all its units, and a set of positive work escapes never.
 namespace Properties.Pouw.Credit.SecurityProofs
 
 open Lean (Json toJson)
-open Pouw.RelativeSecurity (prob)
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
 open Properties.Pouw.Strata (unitWork callStart)
 open scoped ENNReal NNReal
@@ -45,7 +44,8 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
   classical
   calc prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d)
       ≤ prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∀ s ∈ (univ : Finset (Fin S.size)),
-          (fun s (f : Fin S[s].need → Fin 256) => ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
+          (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
+            ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
             ∀ j ∈ localOf S B s, j.val ∉ D) s (g s)) := by
         refine prCoin_mono fun g ⟨D, hD, hmiss⟩ s _ => ?_
         have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i)) = some D := hD
@@ -59,7 +59,8 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
         exact ⟨li, hli, fun j hj hjli => hmiss _ (Finset.mem_filter.1 hj).2 (hmem _ hjli)⟩
     _ = ∏ s : Fin S.size, prCoin (fun f : Fin S[s].need → Fin 256 =>
           ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D) :=
-        prCoin_pi_forall (Ω := fun s => Fin S[s].need → Fin 256) univ (fun s (f : Fin S[s].need → Fin 256) =>
+        prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
+          (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
           ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
     _ ≤ ∏ s : Fin S.size, (Law.subset S[s].size S[s].k (hk s)).escape (localOf S B s) :=
         Finset.prod_le_prod fun s _ => Law.subset_exec_escape_le _ _ _ (hk s) _
@@ -67,7 +68,8 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
 
 /-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
-    prob (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
+    Pouw.RelativeSecurity.prob
+        (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       ((∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0) /
         (S[s].size.choose S[s].k : ℝ≥0) : ℝ≥0) : ℝ) := by
   rw [Properties.Served.SecurityProofs.prob_eq_pr, Claims.Sampling.Pr_eq_toReal_prCoin]
@@ -165,10 +167,11 @@ theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W
     (hge : ∀ s : Fin S.size, S[s].k = S[s].size ∨ K * w s * S[s].size ≤ W * S[s].k)
     (hk1 : ∀ s : Fin S.size, 0 < w s → 0 < S[s].size → 1 ≤ S[s].k) (B : Finset ℕ)
     (hT : T ≤ ∑ s, w s * (localOf S B s).card) :
-    prob (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
+    Pouw.RelativeSecurity.prob
+        (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       (((W - T : ℕ) : ℝ) / W) ^ K := by
   refine (prob_le S hkN B).trans ?_
-  have h := prod_le_pow (fun s => S[s].size) (fun s => (localOf S B s).card) (fun s => S[s].k) w K W
+  have h := prod_le_pow (fun s : Fin S.size => S[s].size) (fun s => (localOf S B s).card) (fun s => S[s].k) w K W
     (fun s => card_localOf_le S B s) hkN hW hWsum hge hk1
   have h2 : (((W - ∑ s, w s * (localOf S B s).card : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K ≤
       (((W - T : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K := by
@@ -368,5 +371,9 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
   · exact epsAtSound layout ss K strata PouwCheck.Credit.DELTA e (creditedWork ss layout got) hss hlaw hok B hB
   · intro i _
     exact ⟨fun hg => by simp [hg], fun hg => by simp [hg]⟩
+
+/-- **The ε a credit reports is established** (`EstablishedSound`): `strata` tiles the window's units
+(`Properties.Pouw.Strata.strataTile`), so the credited and total work `established` passes `epsAt` are the strata's. -/
+theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
 end Properties.Pouw.Credit.SecurityProofs
