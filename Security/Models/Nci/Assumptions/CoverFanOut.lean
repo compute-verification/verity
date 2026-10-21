@@ -23,26 +23,29 @@ every one of the `V` entries in its column, handed (one input gate each) or comp
 them from. At `bcol = 1` this costs the same as being handed the column; it is a premise only because the column is
 computed.
 
-It fails:
+It holds only with `Keyed`'s lookup rule (L). A lookup declared narrower than its cone (the gather's output word alone)
+is held from the last mux level's few bits, or a vocab-parallel gather's shard partials, and one declared wider (the id
+decode inside, which the backward scatter-add reuses, so it is an exit) is held from the id's bits. A registered entry
+(the first step after a checkpoint, a frozen row) is held for free, so a column lists only entries updated at that step.
 
-* above 1 bit per entry, outright, if the gather is lowered as a bitwise mux: a block that holds one output bit of it
-  over a handed column pays only `V` bits (so not A3's 2.5);
-* like `UpdateHardness`, in the first steps after a checkpoint, when the column is nearly its registered values, and on
-  rows a run rarely updates;
-* for a frozen embedding: a lookup over a registered column is held for free. Declare the token's input words as its
-  lookups instead (`Keyed`): no block holds an input gate, so the premise says nothing about them.
+It fails above 1 bit per entry, outright, if the gather is lowered as a bitwise mux: a block that holds one output bit
+of it over a handed column pays only `V` bits (so not A3's 2.5). At `bcol ≤ 1` it holds even for rows a run rarely
+updates: from the second step after a checkpoint on, each entry reads the previous step's whole backward pass through
+the scatter-add, more than `s` gates, so a block pays a gate per entry. Those rows' values are nearly their registered
+ones, but the premise counts gates, not information.
 
 Kimi K2 (`V = 163840`, `k = 2·10⁷`): `bcol = 1` gives `E = 122` lookups per token per block. Both fan-out bounds need
 far less, 0.41 bit per entry for `FanOutIntensity` and 0.27 for `FanOutReadIntensity`. -/
 def ColumnsIncompressible {C : Circuit} {J L Tok Val : Type*} [DecidableEq L] [DecidableEq Val]
-    {M : MulBlocks C J L} {d aOut c V : ℕ} (K : Keyed M Tok Val d aOut c V) (s : ℕ) (bcol : ℝ) : Prop :=
+    {M : MulBlocks C J L} {d aOut c V f : ℕ} (K : Keyed M Tok Val d aOut c V f) (s : ℕ) (bcol : ℝ) : Prop :=
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ X ⊆ K.lookups ∩ K.heldSet S, (∀ v ∈ X, ∀ v' ∈ X, K.tok v = K.tok v') →
     bcol * (X.biUnion K.col).card ≤ (C.inputs S \ C.θ).card
 
 /-- NEW PREMISE. **A token value read costs `f` bits** ([VALUE-READ-HARDNESS]), A1's (H′) at block size `s`: a set `S`
 of at most `s` gates that spends the values `X` (`Keyed.Spent`) and computes whole counted products over `w`
 distinct updated parameters is handed `f` bits for each value and `b` for each parameter, besides the registered
-parameters, the two added: `f · #X + b · w ≤ #(inputs S \ θ)`.
+parameters, the two added: `f · #X + b · w ≤ #(inputs S \ θ)`. `f` is the width at which `Keyed` declares the counted
+products to read their activations.
 
 It implies `UpdateHardness` for counted products, and it adds two things: the bits paying for parameters don't also pay
 for values (its additivity is `ConditionalUpdateHardness`'s strengthening of `UpdateHardness`), and a value, a word of
@@ -60,18 +63,18 @@ That is not assuming the conclusion: the premise prices reads, and the theorem c
 Scope:
 
 * A2 (finding 3) shows that this premise and `UpdateHardness` together force `f` to be at most the number of
-  activation bits that a product's output gate reads. So declare each product's output (`MulBlocks.o`) at a gate that
-  reads all `f` bits of its activation (in Verity's NVFP4 lowering, `p[j]^s` with `j ≥ 1`, for `f = 4`).
+  activation bits that a product's output gate reads. `Keyed`'s (W) declares each product's output (`MulBlocks.o`) at
+  a gate that reads `f` of its activation's exits (in Verity's NVFP4 lowering, `p[j]^s` with `j ≥ 1`, for `f = 4`).
 * It fails where `UpdateHardness` fails.
-* It also fails when several spent values are cheap functions of one value (copies, or scalings by registered or
-  already-paid scalars): a block can be handed each one's sign bit alone and compute the rest from the one value's
-  bits, paying about 1 bit per value. So a copy belongs to the value it copies (`Keyed`: Kimi K2's dispatch copies are
-  part of the routed token's MoE-input value), and Kimi K2's keyed values have no fan-out through registered weights.
+* It fails when several spent values are cheap functions of one value: a block is handed each one's sign bit alone and
+  computes the rest from the one value's bits, about 1 bit per value. Kimi K2's backward has 9 such codes per
+  coordinate (the router-scaled MoE-output gradients the routed experts read, and the shared expert's), and its
+  forward 8 dispatch slots per coordinate. `Keyed`'s (I) rules them out: each is a gate of its source value.
 
 Kimi K2 (`f = 4`, `b = 2.5`): with `ColumnsIncompressible` at 1 bit per entry, about 3.6·10⁴ (`FanOutReadCoverBound`),
 four times `FanOutCoverBound`'s 8,900. -/
 def ValueReadHardness {C : Circuit} {J L Tok Val : Type*} [DecidableEq J] [DecidableEq L] [DecidableEq Val]
-    {M : MulBlocks C J L} {d aOut c V : ℕ} (K : Keyed M Tok Val d aOut c V) (s f : ℕ) (b : ℝ) : Prop :=
+    {M : MulBlocks C J L} {d aOut c V f : ℕ} (K : Keyed M Tok Val d aOut c V f) (s : ℕ) (b : ℝ) : Prop :=
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ X : Finset Val, (∀ u ∈ X, K.Spent S u) →
     f * X.card + b * ((M.whole S).image Prod.snd).card ≤ (C.inputs S \ C.θ).card
 

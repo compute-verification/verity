@@ -15,6 +15,10 @@ and gate 7 the product's updated parameter. The lookups are gates 8–9, each re
 reading the token and column 4–6. The root is gates 12–13, each reading both lookups, its two legs (`d = 2`). The
 counted product is gate 14, reading the root, its activation, and gate 7.
 
+`Keyed`'s rules hold with no keys, so (I) holds vacuously. Gate 14 reads both of the root's exits (W, `f = 2`).
+Each lookup is exactly its gather's cone: its gates are the ones after an entry of its column, outside `θ`, on a path
+to one of its exits (L).
+
 A value's gates read the same gates, so a set of gates that contains a value and is handed one of its gates is handed
 both: a spent value costs `f = 2` bits. Holding a lookup costs its column's 3 bits, so `ColumnsIncompressible` holds at
 `bcol = 1`, and `k = 5 < bcol · V · (E + 1) = 6` at `E = 1`. Four blocks of `s = 6` gates cover the circuit: one for each
@@ -35,6 +39,51 @@ local instance decCovers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Deci
 
 theorem reachesIn_refl {C : Circuit} {X : Finset (Fin C.N)} {g : Fin C.N} (hg : g ∈ X) : C.ReachesIn X g g :=
   ⟨[g], ⟨rfl, rfl, .singleton g⟩, fun _ hv => List.mem_singleton.1 hv ▸ hg⟩
+
+theorem isPath_pair {C : Circuit} {x y : Fin C.N} (h : x ∈ C.pred y) : C.IsPath [x, y] x y :=
+  ⟨rfl, rfl, .cons_cons h (.singleton y)⟩
+
+/-- A path into a set closed under predecessors lies in it. -/
+theorem mem_of_isPath_of_predClosed {C : Circuit} {U : Finset (Fin C.N)} (hU : ∀ b ∈ U, C.pred b ⊆ U)
+    {π : List (Fin C.N)} {x y : Fin C.N} (hπ : C.IsPath π x y) (hy : y ∈ U) : ∀ g ∈ π, g ∈ U := by
+  obtain ⟨-, hl, hc⟩ := hπ
+  suffices H : ∀ y, π.getLast? = some y → y ∈ U → ∀ g ∈ π, g ∈ U from H y hl hy
+  clear hl hy
+  induction hc with
+  | nil => intro _ _ _ g hg; simp at hg
+  | singleton a =>
+    intro y hl hy g hg
+    simp only [List.getLast?_singleton, Option.some.injEq] at hl
+    rw [List.mem_singleton.1 hg, hl]
+    exact hy
+  | @cons_cons a b l hr _ ih =>
+    intro y hl hy g hg
+    rw [List.getLast?_cons_cons] at hl
+    have hb := ih y hl hy
+    rcases List.mem_cons.1 hg with rfl | hg'
+    · exact hU b (hb b List.mem_cons_self) hr
+    · exact hb g hg'
+
+/-- A gate of a path other than its first reads a gate. -/
+theorem pred_nonempty_of_mem_isPath {C : Circuit} {π : List (Fin C.N)} {x y g : Fin C.N} (hπ : C.IsPath π x y)
+    (hg : g ∈ π) (hgx : g ≠ x) : (C.pred g).Nonempty := by
+  obtain ⟨hx, -, hc⟩ := hπ
+  suffices H : ∀ x, π.head? = some x → g ∈ π → g ≠ x → (C.pred g).Nonempty from H x hx hg hgx
+  clear hx hg hgx
+  induction hc with
+  | nil => intro _ _ hg; simp at hg
+  | singleton a =>
+    intro x hx hg hgx
+    simp only [List.head?_cons, Option.some.injEq] at hx
+    exact absurd ((List.mem_singleton.1 hg).trans hx) hgx
+  | @cons_cons a b l hr _ ih =>
+    intro x hx hg hgx
+    simp only [List.head?_cons, Option.some.injEq] at hx
+    rcases List.mem_cons.1 hg with hga | hg'
+    · exact absurd (hga.trans hx) hgx
+    · by_cases hgb : g = b
+      · exact ⟨a, by rw [hgb]; exact hr⟩
+      · exact ih b rfl hg' hgb
 
 /-- If the gates of `G` all read the same gates, a set that contains `G` and is handed one of them is handed all. -/
 theorem subset_inputs_of_pred_eq {C : Circuit} {S G : Finset (Fin C.N)}
@@ -87,6 +136,35 @@ def fcol : Fin 3 → Finset ℕ := ![{11, 12, 13}, {21, 22, 23}, ∅]
 /-- The gates of the lookups' columns. -/
 def fcolGates : Fin 3 → Finset (Fin 15) := ![{1, 2, 3}, {4, 5, 6}, ∅]
 
+/-- Each column parameter's entry, one gate. -/
+def fentry : ℕ → Finset (Fin 15)
+  | 11 => {1}
+  | 12 => {2}
+  | 13 => {3}
+  | 21 => {4}
+  | 22 => {5}
+  | 23 => {6}
+  | _ => ∅
+
+/-- Each lookup with everything upstream of it: closed under predecessors. -/
+def fU : Fin 3 → Finset (Fin 15) := ![{0, 1, 2, 3, 8, 9}, {0, 4, 5, 6, 10, 11}, ∅]
+
+theorem fU_closed : ∀ v ∈ ({0, 1} : Finset (Fin 3)), ∀ b ∈ fU v, fC.pred b ⊆ fU v := by decide
+
+theorem fgates_subset_fU : ∀ v ∈ ({0, 1} : Finset (Fin 3)), fgates v ⊆ fU v := by decide
+
+theorem fU_pred : ∀ v ∈ ({0, 1} : Finset (Fin 3)), ∀ g ∈ fU v, (fC.pred g).Nonempty → g ∈ fgates v := by decide
+
+/-- Each gate of a lookup is an exit of it and reads an entry of its column. -/
+theorem fcone : ∀ v ∈ ({0, 1} : Finset (Fin 3)), ∀ g ∈ fgates v, ∃ l ∈ fcol v, ∃ x ∈ fentry l,
+    g ∈ fC.exits (fgates v) ∧ x ∈ fC.pred g ∧ g ≠ x := by
+  decide
+
+theorem fcol_entries : ∀ v ∈ ({0, 1} : Finset (Fin 3)), ∀ l ∈ fcol v, Disjoint (fentry l) fC.θ ∧
+    (∃ x ∈ fentry l, ∃ y ∈ fC.exits (fgates v), x ∈ fC.pred y) ∧
+    ∀ l' ∈ fcol v, l ≠ l' → Disjoint (fentry l) (fentry l') := by
+  decide
+
 theorem fgates_disjoint : ∀ u ∈ (Finset.univ : Finset (Fin 3)), ∀ v ∈ (Finset.univ : Finset (Fin 3)), u ≠ v →
     Disjoint (fgates u) (fgates v) := by
   decide
@@ -94,8 +172,9 @@ theorem fgates_disjoint : ∀ u ∈ (Finset.univ : Finset (Fin 3)), ∀ v ∈ (F
 theorem fgates_legs : ∀ g ∈ fgates 2, ∀ q ∈ ({0, 1} : Finset (Fin 3)), ∃ h ∈ fC.exits (fgates q), h ∈ fC.pred g := by
   decide
 
-/-- The keyed token structure: one token, no keys, the root 2 with legs 0 and 1, which are the lookups. -/
-def fK : Keyed fM Unit (Fin 3) 2 1 1 3 where
+/-- The keyed token structure: one token, no keys, the root 2 with legs 0 and 1, which are the lookups, and the
+product reading both of the root's bits (`f = 2`). -/
+def fK : Keyed fM Unit (Fin 3) 2 1 1 3 2 where
   vals := Finset.univ
   gates := fgates
   tok := fun _ => ()
@@ -107,6 +186,11 @@ def fK : Keyed fM Unit (Fin 3) 2 1 1 3 where
     intro p hp
     obtain rfl : p = (1, 1) := Finset.mem_singleton.1 hp
     exact ⟨12, by decide, 14, by decide, by decide, reachesIn_refl (by decide)⟩
+  act_width := by
+    intro p hp
+    obtain rfl : p = (1, 1) := Finset.mem_singleton.1 hp
+    have h14 : ∀ h ∈ ({12, 13} : Finset (Fin 15)), h ∈ fC.pred 14 := by decide
+    exact ⟨{12, 13}, by decide, by decide, fun h hh => ⟨14, by decide, h14 h hh, reachesIn_refl (by decide)⟩⟩
   mult_le := fun _ _ X hX _ => (Finset.card_le_card hX).trans (by decide)
   roots := {2}
   lookups := {0, 1}
@@ -114,6 +198,9 @@ def fK : Keyed fM Unit (Fin 3) 2 1 1 3 where
   keyed := by
     intro v _ hv
     exact absurd (show v ∈ ({2} : Finset (Fin 3)) ∪ {0, 1} by revert v; decide) hv
+  key_inj := by
+    intro _ _ _ _ _ h
+    simp at h
   legs := fun _ => {0, 1}
   legs_mem := by decide
   legs_card := by decide
@@ -129,6 +216,21 @@ def fK : Keyed fM Unit (Fin 3) 2 1 1 3 where
   col := fcol
   col_card := by decide
   col_disjoint := by decide
+  entry := fentry
+  lookup_cone := by
+    intro v hv g
+    constructor
+    · intro hg
+      obtain ⟨l, hl, x, hx, hge, hxg, hgx⟩ := fcone v hv g hg
+      exact ⟨l, hl, x, hx, g, hge, [x, g], isPath_pair hxg, by simp, hgx⟩
+    · rintro ⟨-, -, x, -, y, hy, π, hπ, hgπ, hgx⟩
+      exact fU_pred v hv g
+        (mem_of_isPath_of_predClosed (fU_closed v hv) hπ (fgates_subset_fU v hv (mem_of_mem_exits hy)) g hgπ)
+        (pred_nonempty_of_mem_isPath hπ hgπ hgx)
+  col_entries := by
+    intro v hv l hl
+    obtain ⟨h1, ⟨x, hx, y, hy, hxy⟩, h3⟩ := fcol_entries v hv l hl
+    exact ⟨h1, ⟨x, hx, y, hy, [x, y], isPath_pair hxy⟩, h3⟩
   reach := fun _ X hX _ => (Finset.card_le_card hX).trans (by decide)
   reach_lookups := by
     intro p _ u hu hf
@@ -158,7 +260,7 @@ theorem fK_spent_pred {S : Finset (Fin 15)} {u : Fin 3} (hu : fK.Spent S u) :
     have h : ∀ u ∈ ({0, 1} : Finset (Fin 3)), ∀ g ∈ fgates 2, fgates u ⊆ fC.pred g := by decide
     exact ⟨g, hgc, h u hur g (mem_of_mem_exits hge)⟩
 
-theorem fK_valueRead (s : ℕ) : Assumptions.ValueReadHardness fK s 2 1 := by
+theorem fK_valueRead (s : ℕ) : Assumptions.ValueReadHardness fK s 1 := by
   intro S _ X hX
   have hin : ∀ u ∈ X, fgates u ⊆ fC.inputs S := by
     intro u hu
@@ -226,19 +328,19 @@ theorem fI_covers : fC.Covers fI := by decide
 end FanOutWitness
 
 open FanOutWitness in
-/-- **Non-vacuity of the fan-out bounds**: some circuit with a counted product and a keyed token structure satisfies
-`UpdateHardness`, `ValueReadHardness` at `f = 2` and `ColumnsIncompressible` with `k < bcol · V · (E + 1)` and
+/-- **Non-vacuity of the fan-out bounds**: some circuit with a counted product and a keyed token structure of width
+`f = 2` satisfies `UpdateHardness`, `ValueReadHardness` and `ColumnsIncompressible` with `k < bcol · V · (E + 1)` and
 `1 ≤ E < d`, and has a cover by inference blocks, one of which holds a lookup, one a root, and one spends a value
 (`FanOutWitness.fC`: `s = 6`, `k = 5`, `E = 1`, `d = 2`, `V = 3`, `b = bcol = 1`, four blocks). -/
 theorem fanOut_witness :
-    ∃ (C : Circuit) (M : MulBlocks C ℕ ℕ) (d aOut c V : ℕ) (K : Keyed M Unit (Fin 3) d aOut c V) (s k E f : ℕ)
+    ∃ (C : Circuit) (M : MulBlocks C ℕ ℕ) (d aOut c V f : ℕ) (K : Keyed M Unit (Fin 3) d aOut c V f) (s k E : ℕ)
       (b bcol : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
       M.P.Nonempty ∧ 0 < b ∧ 2 ≤ f ∧ 1 ≤ E ∧ Assumptions.UpdateHardness M s b ∧
-      Assumptions.ValueReadHardness K s f b ∧ Assumptions.ColumnsIncompressible K s bcol ∧
+      Assumptions.ValueReadHardness K s b ∧ Assumptions.ColumnsIncompressible K s bcol ∧
       (k : ℝ) < bcol * V * (E + 1) ∧ E < d ∧ (∀ I ∈ 𝓘, C.InferenceBlock s k I) ∧ C.Covers 𝓘 ∧
       (∃ I ∈ 𝓘, (K.lookups ∩ K.heldSet I).Nonempty) ∧ (∃ I ∈ 𝓘, (K.roots ∩ K.heldSet I).Nonempty) ∧
       (∃ I ∈ 𝓘, ∃ u, K.Spent I u) :=
-  ⟨fC, fM, 2, 1, 1, 3, fK, 6, 5, 1, 2, 1, 1, fI, ⟨(1, 1), by decide⟩, one_pos, le_rfl, le_rfl, fM_update 6,
+  ⟨fC, fM, 2, 1, 1, 3, 2, fK, 6, 5, 1, 1, 1, fI, ⟨(1, 1), by decide⟩, one_pos, le_rfl, le_rfl, fM_update 6,
     fK_valueRead 6, fK_columns 6, by norm_num, by decide, fI_blocks, fI_covers,
     ⟨{0, 1, 2, 3, 8, 9}, by decide, 0, by decide⟩, ⟨{8, 9, 10, 11, 12, 13}, by decide, 2, by decide⟩,
     ⟨{0, 1, 7, 12, 13, 14}, by decide, 2, by decide, 2, Or.inl ⟨(1, 1), by decide, rfl⟩, Follows.refl 2⟩⟩

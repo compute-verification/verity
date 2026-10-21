@@ -20,7 +20,7 @@ namespace Nci.Cover.SecurityProofs
 and `y` of tokens whose roots it holds, `h` tokens of the second kind, with `(d − E) h ≤ y` and
 `#whole ≤ aOut · x + c · h · #(updated parameters of whole)`. -/
 theorem fanOut_split {C : Circuit} {J L Tok Val : Type} [DecidableEq J] [DecidableEq L] [DecidableEq Val]
-    {M : MulBlocks C J L} {d aOut c V : ℕ} (K : Keyed M Tok Val d aOut c V) {s k E : ℕ} {bcol : ℝ}
+    {M : MulBlocks C J L} {d aOut c V f : ℕ} (K : Keyed M Tok Val d aOut c V f) {s k E : ℕ} {bcol : ℝ}
     (hCI : Assumptions.ColumnsIncompressible K s bcol) (hk : (k : ℝ) < bcol * V * (E + 1))
     {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) :
     ∃ X : Finset Val, (∀ u ∈ X, K.Spent I u) ∧ ∃ x y h : ℕ, x + y = X.card ∧ (d - E) * h ≤ y ∧
@@ -34,13 +34,13 @@ theorem fanOut_split {C : Circuit} {J L Tok Val : Type} [DecidableEq J] [Decidab
     intro i
     by_cases hi : i ∈ Th
     · obtain ⟨r, hr, rfl⟩ := Finset.mem_image.1 hi
-      obtain ⟨X, Y, hXs, hYs, hd⟩ := rootCost C M d aOut c V K I r hr
-      have hY := lookupCost C M d aOut c V K s k E bcol hCI hk I hI Y (fun u hu => (hYs u hu).1)
+      obtain ⟨X, Y, hXs, hYs, hd⟩ := rootCost C M d aOut c V f K I r hr
+      have hY := lookupCost C M d aOut c V f K s k E bcol hCI hk I hI Y (fun u hu => (hYs u hu).1)
         fun u hu u' hu' => (hYs u hu).2.trans (hYs u' hu').2.symm
       exact ⟨X, hXs, fun _ => by omega, fun h => absurd hi h⟩
     · have hnr : ∀ r ∈ K.roots ∩ K.heldSet I, K.tok r ≠ i := fun r hr hri =>
         hi (hri ▸ Finset.mem_image_of_mem _ hr)
-      obtain ⟨X, hXs, hcard⟩ := charge C M d aOut c V K I i hnr (W.filter fun p => K.tok (K.act p) = i)
+      obtain ⟨X, hXs, hcard⟩ := charge C M d aOut c V f K I i hnr (W.filter fun p => K.tok (K.act p) = i)
         (Finset.filter_subset _ _) fun p hp => (Finset.mem_filter.1 hp).2
       exact ⟨X, hXs, fun h => absurd h hi, fun _ => hcard⟩
   choose Xt hXt using hX
@@ -86,12 +86,12 @@ theorem fanOut_split {C : Circuit} {J L Tok Val : Type} [DecidableEq J] [Decidab
     exact (Nat.add_le_add hhigh hlow).trans_eq (Nat.add_comm _ _)
 
 theorem FanOutIntensity : Guarantees.FanOutIntensity := by
-  intro C J L Tok Val _ _ _ M d aOut c V K s k E b bcol hb hH hCI hk hE I hI
+  intro C J L Tok Val _ _ _ M d aOut c V f K s k E b bcol hb hH hCI hk hE I hI
   obtain ⟨X, hXs, x, y, h, hxy, hy, hW⟩ := fanOut_split K hCI hk hI
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hXk : (x : ℝ) + y ≤ k := by
     have h1 := (Finset.card_le_card fun u hu => (hXs u hu).1).trans
-      ((readSet_card_le C M d aOut c V K I).trans hI.2)
+      ((readSet_card_le C M d aOut c V f K I).trans hI.2)
     rw [← hxy] at h1
     exact_mod_cast h1
   have hL : b * ((M.whole I).image Prod.snd).card ≤ k :=
@@ -122,12 +122,12 @@ theorem FanOutIntensity : Guarantees.FanOutIntensity := by
   linarith
 
 theorem FanOutCoverBound : Guarantees.FanOutCoverBound := by
-  intro C J L Tok Val _ _ _ M d aOut c V K s k E b bcol 𝓘 hb hH hCI hk hE h𝓘 hcov
+  intro C J L Tok Val _ _ _ M d aOut c V f K s k E b bcol 𝓘 hb hH hCI hk hE h𝓘 hcov
   exact cover_sum M hcov (by positivity) fun I hI =>
-    FanOutIntensity C M d aOut c V K s k E b bcol hb hH hCI hk hE I (h𝓘 I hI)
+    FanOutIntensity C M d aOut c V f K s k E b bcol hb hH hCI hk hE I (h𝓘 I hI)
 
 theorem FanOutReadIntensity : Guarantees.FanOutReadIntensity := by
-  intro C J L Tok Val _ _ _ M d aOut c V K s k E f b bcol hb hVR hCI hk hE I hI
+  intro C J L Tok Val _ _ _ M d aOut c V f K s k E b bcol hb hVR hCI hk hE I hI
   obtain ⟨X, hXs, x, y, h, hxy, hy, hW⟩ := fanOut_split K hCI hk hI
   have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hpay := (hVR I hI.1.le X hXs).trans hcap
@@ -167,8 +167,8 @@ theorem FanOutReadIntensity : Guarantees.FanOutReadIntensity := by
   linarith
 
 theorem FanOutReadCoverBound : Guarantees.FanOutReadCoverBound := by
-  intro C J L Tok Val _ _ _ M d aOut c V K s k E f b bcol 𝓘 hb hVR hCI hk hE h𝓘 hcov
+  intro C J L Tok Val _ _ _ M d aOut c V f K s k E b bcol 𝓘 hb hVR hCI hk hE h𝓘 hcov
   exact cover_sum M hcov (by positivity) fun I hI =>
-    FanOutReadIntensity C M d aOut c V K s k E f b bcol hb hVR hCI hk hE I (h𝓘 I hI)
+    FanOutReadIntensity C M d aOut c V f K s k E b bcol hb hVR hCI hk hE I (h𝓘 I hI)
 
 end Nci.Cover.SecurityProofs

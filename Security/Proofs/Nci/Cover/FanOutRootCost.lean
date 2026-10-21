@@ -18,7 +18,7 @@ end at distinct values, and the ends number at least `d`.
 namespace Nci.Cover.SecurityProofs
 
 theorem rootCost : FanOutPlan.RootCost := by
-  intro C J L Tok Val _ _ M d aOut c V K I
+  intro C J L Tok Val _ _ M d aOut c V _ K I
   suffices H : ∀ n : ℕ, ∀ r ∈ K.roots ∩ K.heldSet I, ∀ g ∈ C.exits (K.gates r) ∩ C.computed I, g.val < n →
       ∃ X Y : Finset Val, (∀ u ∈ X, K.Spent I u ∧ K.tok u = K.tok r) ∧
         (∀ u ∈ Y, u ∈ K.lookups ∩ K.heldSet I ∧ K.tok u = K.tok r) ∧ d ≤ X.card + Y.card by
@@ -52,7 +52,7 @@ theorem rootCost : FanOutPlan.RootCost := by
         exact hrnr ⟨g', Finset.mem_inter.2 ⟨hπr g' hg', hg'I⟩⟩
       have hhI : h ∈ I := pred_subset_of_mem_computed hxc hhx
       have hlt : h.val < g.val := Nat.lt_of_lt_of_le (C.pred_lt x h hhx) (isPath_le hπ)
-      obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V K I q hqv h hh hhI
+      obtain ⟨u, -, hut, hfu, hend⟩ := walk C M d aOut c V _ K I q hqv h hh hhI
       refine ⟨u, fun _ => ⟨hut.trans hqt, hfu, ?_⟩⟩
       rcases hend with hend | ⟨hus, g', hg', hle⟩
       · exact Or.inl hend
