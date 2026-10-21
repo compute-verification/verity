@@ -1,7 +1,7 @@
 """`verity_vllm.program.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
 Definitions (`trace.word_of`): the routed sum's coordinate on every word at one slot, on every pair of special words, every word
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
-few ulps and rows that overflow; the router's exponential on special words, random words and words across its range, its
+few ulps and rows that overflow; the sum in 64-column chunks (`MoeSum_v3`, the lift's version) on random and special rows; the router's exponential on special words, random words and words across its range, its
 probabilities and its top-k on random, tied and special logits, and its selection rounds on random, tied and special
 probabilities against the word rounds; GLM-5.3's sigmoid router's per-expert score on special, edge and random words, its slots
 and `write_outputs` against the word slots on random, tied and mostly -inf selection scores, and the whole router on both
@@ -28,6 +28,7 @@ from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ZERO
+from verity.ml.circuits.cut import separable
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
@@ -38,6 +39,8 @@ from verity_vllm.program.registry.prims import F32, I32
 PINS = {
     "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "afe7da5c3245a9ec9d6631f1b9b6b686f2c83af71edd52fd8e0c35cd2dee4af2702d65488815ed365213797fb33d77e830fe82d929c5ef3417e60cd05fc59a7d"),
     "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "4c068e14ab23ebb919f4090677ab7cd17c3935c82fe382e6f8cd1ad24bff1210ebffabe282250d4adbda4e23521fa6759ef72a6b539bd49bf4967e6e38f4a699"),
+    "MoeSum_v3{TOPK=8,H=136}": (710192, 1141720, 103904,
+                                "9fe815a960c0f771d368fcd1318874b93f7b806cf1bdc9032f228844b429146759c4eeaead54ae6409970969c8067fd63ccfabf0996d5daebc5cf726a1d8ceb3"),
     "NvExpf_v2": (11372, 21804, 880, "a91ca00bbe5e644fd206e1be3fe064234dc439382fb2201d823f0c8568646e186262ad31cd26a6253072854294694606fa977c8005650aaf938b23a50ebe16f7"),
     "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,
                                                   "285955047f4821f8c5f751d032ec0bafcb8b1621eaf34a635486e7ac65588ad45d9811acfc985d00bbd5bffcc819e11ac40a0e1ee714c99e41fb5b0d0b9adcc7"),
@@ -47,7 +50,8 @@ PINS = {
     "MoeRouterSigmoidBias_v2{E=8,TOPK=2,SCALE=2.5,KERNEL='warp'}": (259626, 494985, 21130,
                                                                     "27ac80523ef558eb7d6bb3d98e86fcdf0345e959eca86586de7a3dc7fd478b57bb9fef175ad1b826c88e125c587efb27e62e3c971cd997b20ba6f9fe8b436750"),
 }
-TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.NvExpf), bind(BM.MoeRouterSigmoidScore),
+TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.MoeSumV3, TOPK=8, H=136), bind(BM.NvExpf),
+           bind(BM.MoeRouterSigmoidScore),
            pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow),
            *[pytest.param(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=k), marks=pytest.mark.slow)
              for k in ("block", "warp")]]
@@ -99,6 +103,8 @@ def test_the_served_router_is_pinned() -> None:
 def test_the_word_views() -> None:
     assert TR.word_of(bind(BM.MoeSumCoordinate, TOPK=8)).id == bind(M.MoeSumCoordinate, TOPK=8).id == "MoeSumCoordinate_v1{TOPK=8}"
     assert TR.word_of(bind(BM.MoeSum, TOPK=8, H=8)).id == bind(M.MoeSum, TOPK=8, H=8).id == "MoeSum_v1{TOPK=8,H=8}"
+    assert TR.word_of(bind(BM.MoeSumV3, TOPK=8, H=6144)).id == "MoeSum_v1{TOPK=8,H=6144}"
+    assert SW.boolean_version(bind(M.MoeSum, TOPK=8, H=6144)).id == "MoeSum_v3{TOPK=8,H=6144}"
     assert TR.word_of(bind(BM.NvExpf)).id == bind(M.NvExpf).id == "NvExpf_v1"
     assert SW.boolean_version(bind(M.NvExpf)).id == "NvExpf_v2"
     assert TR.word_of(bind(BM.MoeRouterProbs, E=8, VPT=4)).id == "MoeRouterProbs_v1{E=8,VPT=4}"
@@ -150,6 +156,27 @@ def test_routed_sum_rows() -> None:
 
 def test_the_routed_sum_passes_the_word_querys_cut_check() -> None:
     prog, _ = standalone_call(bind(BM.MoeSum, TOPK=8, H=3))
+    assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
+
+
+def test_the_chunked_routed_sum_rows() -> None:
+    """`MoeSum_v3` at two full chunks and a remainder of 8 columns, over 150 random tokens and 100 of special words: the word
+    `MoeSum_v1`."""
+    rng = np.random.default_rng(0x5EA)
+    y = np.concatenate([rng.integers(0, 1 << 16, (150, 8, 136), dtype=np.int64).astype(np.uint16),
+                        SPECIALS[rng.integers(0, len(SPECIALS), (100, 8, 136))]])
+    _agree(bind(BM.MoeSumV3, TOPK=8, H=136), y)
+
+
+@pytest.mark.parametrize("H, members", [(8, [("MoeSum_v2{TOPK=8,H=8}", 1)]), (136, [("MoeSum_v2{TOPK=8,H=64}", 2), ("MoeSum_v2{TOPK=8,H=8}", 1)]),
+                                        (6144, [("MoeSum_v2{TOPK=8,H=64}", 96)])])
+def test_the_chunked_routed_sum_is_separable_into_chunks(H, members) -> None:
+    """GLM-5.3's sum (TOPK = 8, H = 6144) is 96 members of 64 columns, each reading one 8 x 1024-bit row."""
+    assert [(c.id, n) for c, n in separable(bind(BM.MoeSumV3, TOPK=8, H=H))] == members
+
+
+def test_the_chunked_routed_sum_passes_the_word_querys_cut_check() -> None:
+    prog, _ = standalone_call(bind(BM.MoeSumV3, TOPK=2, H=66))
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
 
 

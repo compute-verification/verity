@@ -114,7 +114,9 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
+  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
+  provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does

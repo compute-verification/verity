@@ -43,7 +43,7 @@
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
 # are. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it (the same
 # ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
-# both) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
+# lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
 # `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
@@ -58,7 +58,7 @@
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
-# row's target, bf16 KV). Milestone 3's thin slice,
+# row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
 #   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \

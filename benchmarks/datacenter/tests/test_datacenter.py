@@ -165,6 +165,42 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
         Credit("a", "compute", EPOCH, ticks, "fleet-closed", "proved")]
 
 
+@pytest.mark.slow
+def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
+    """The same s8 grid compiled to the one stream (`h1tile.SCHEME_V3`): its unit is `PouwH1Tile_v3`, whose z is the
+    lanes' folded words recombined, so its block's int8 products are the segment dots' alone, r·c·(K + 32m), and the
+    proved figure credits z's r·c·K as on v1. Slow: compiling builds the unit's gates (about 40 s); it catches a v3 block
+    `tiles` doesn't find, which `placed` refuses."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    from verity.core.protocols.pouw.circuit import compile as pouw
+    from verity.core.protocols.pouw.circuit import h1tile
+    from datacenter.models import s8_grid
+
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(PT)
+    assert h1tile.SCHEME_V3 == PT.SCHEME_V3
+    compiled = pouw.compile(s8_grid(), h1tile.SCHEME_V3).program
+    dc = datacenter()
+    p = place(compiled, dc, "a.gpu", registration=register(compiled, {"w": [1] * 16 * 64 * 8}),
+              deliver="world", x="world", **{"pouw.salt": "a.cert", "pouw.positions": "world", "pouw.roots": "world"})
+    work = p.public(Plan(EPOCH)).work
+    assert work["b"] == {} and work["a"]["mac:int8"] == 4 * 16 * (64 + 32 * 2) and set(work["a"]) == {"cuda:gate", "mac:int8"}
+    assert PT.tiles(compiled) == {PT.Tile(4, 16, 64, 64, 3): 1}
+    assert PT.placed(work["a"], PT.tiles(compiled)) == {"mac:linears": 4 * 16 * 64}
+    ticks = PT.proved_block_ticks(PT.placed(work["a"], PT.tiles(compiled)), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
+                                  gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
+    profile = p.public(Plan(EPOCH), ticks={"a": ticks})
+    acc = account([Computed("a", profile.credit("a"), EPOCH)], profile, assume=(FLEET_CLOSED,))
+    assert [c for c in acc.credits if c.resource.startswith("compute")] == [
+        Credit("a", "compute", EPOCH, ticks, "fleet-closed", "proved")]
+    with pytest.raises(ValueError, match="aren't its H1 tiles'"):
+        PT.placed(work["a"], {PT.Tile(4, 16, 64, 64): 1})
+
+
 def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():
     """Compute's review 2: PoUW credits W_ref, multiply-adds weighted by kind (sm_120's cohalf QKᵀ at 1.25), and a
     device's rate depends on the operand format. So each primitive's gates are work of its kind: the BF16 and E4M3

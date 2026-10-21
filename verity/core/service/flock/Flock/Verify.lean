@@ -54,9 +54,11 @@ def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session
   if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
   return cap
 
-/-- The verdict: `.ok ()` is Accept. `tabs[i]` is table `i`'s statement, and `proofs[2i + r]` the file the server received
-for its rep `r`. -/
-def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit := do
+/-- The verdict on the files the server received, each rep's proof decoded from `dec` of its file: S17 binds the
+record's `proof_sha` to the file itself, never to `dec` of it. `.ok ()` is Accept. `tabs[i]` is table `i`'s statement,
+and `proofs[2i + r]` the file the server received for its rep `r`. -/
+def verifyFiles (dec : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
+    (proofs : Array ByteArray) : V Unit := do
   if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
   let sess ← Record.decode spec record
   for (st, p) in tabs.zip sess.publics do st.publics p
@@ -72,8 +74,18 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
       throw s!"S17: {w}: the proof is not the one the server received"
   for i in [0:tabs.size] do
     let (st, sch) := (tabs[i]!, schs[i]!)
-    let c0 ← verifyRep spec st sch sess i 0 proofs[2 * i]!
-    let c1 ← verifyRep spec st sch sess i 1 proofs[2 * i + 1]!
+    let c0 ← verifyRep spec st sch sess i 0 (dec proofs[2 * i]!)
+    let c1 ← verifyRep spec st sch sess i 1 (dec proofs[2 * i + 1]!)
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+/-- The verdict: `.ok ()` is Accept. `tabs[i]` is table `i`'s statement, and `proofs[2i + r]` the file the server received
+for its rep `r`, decoded as it is (the deployed form, `plainBytes false`). -/
+def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit :=
+  verifyFiles (fun b => b) spec tabs record proofs
+
+/-- Under the deployed form the files are decoded as they are: `verifyFiles (plainBytes false)` is `verify`. -/
+theorem verifyFiles_plainBytes_false (spec : SessionSpec) (tabs : Array Setup) (record : String)
+    (proofs : Array ByteArray) : verifyFiles (plainBytes false) spec tabs record proofs = verify spec tabs record proofs :=
+  rfl
 
 end Flock

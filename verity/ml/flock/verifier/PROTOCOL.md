@@ -457,9 +457,17 @@ struct                  its fields in the order below, no tags
 
 Decoding is a total function `decode : Bytes → Except Reason Proof`. It rejects a truncated input, an enum index out of
 range and an `Option` tag other than 0 or 1. Every `Vec` length is compared with the expected length of §8.3 before the
-elements are read; `matrix_evals` (unused) is read with the length it declares, bounded by the input. Bytes after the pair
-are ignored, as upstream's `bincode::deserialize` ignores them; the record's `proof_sha256` (S17) binds the whole file
-anyway.
+elements are read; `matrix_evals`, which no check reads, must be empty (D18). A plain file is the pair, then the zk
+patch's `zk_level0: Option<…>`, which it puts last in `LigeritoProof` and writes as one byte 0 (`None`) on every plain
+proof: every deployed prover is that build (`pod/60-circuit.sh` applies `flock-zk-b684b12.patch`, which has carried the
+field since it was added). The decoder accepts that form alone, and a file only if it is the one encoding of the proof it
+decodes to (`decodeProof` compares it with `Wire.proofFile`): S17 hashes the whole file, so a byte the decoder doesn't
+read, or a second encoding of one proof, would be one the record's digest binds and nothing else does. Upstream's builds
+end the file after `consistency_batch_grinding_nonces`; a statement takes that form only when it says so
+(`Tags.upstreamPlain`, `flock-verify verify --upstream-plain`: the agreement corpus's sessions from upstream's binaries,
+D17), and the verifier then decodes each plain file as the file then the tag (`verifyFiles (plainBytes true)`), while
+S17 still hashes the file as the server received it. Under either pin, and at each
+`--zk` statement, a proof thus has one file (`Flock.decodeProof_canonical`, `Flock.plainBytes_canonical`).
 
 ### 8.2 Layout
 
@@ -479,6 +487,7 @@ LigeritoProof       = initial_cap: Vec<H> ‖ initial_proof: LevelProof ‖ recu
                       ‖ sumcheck_transcript: Vec<(F, F)> ‖ sumcheck_transcript_f256: Vec<(K, K)>
                       ‖ grinding_nonces: Vec<u64> ‖ ood_values: Vec<F> ‖ fold_grinding_nonces: Vec<u64>
                       ‖ claim_batch_grinding_nonces: Vec<u64> ‖ consistency_batch_grinding_nonces: Vec<u64>
+                      ‖ zk_level0: Option<Level0ZkProof>, = None (absent under --upstream-plain)
 LevelProof          = opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 FinalProof          = yr: Vec<F> ‖ opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
 ~~~
@@ -598,8 +607,8 @@ No per-round check. Final: `claim = final_a_eval · final_b_eval` (`SumcheckFina
 
 Inputs: `x_ab = (z, ρ[0 … k_log−7], ρ[k_log−6 … m−7])`, i.e. skip point `z`, inner rest `ρ_in` (`k_log − 6` values) and
 outer `ρ_out` (`n_log` values); `v_a`, `v_b`. Shape checks: `|rounds| = k_log − 6`, `|z_partial| = 64`,
-`grinding_nonces = []`, and the circuit has `2^{k_log}` columns. `matrix_evals` is not read: every honest proof sends it
-empty, and upstream ignores it, as does the spec.
+`grinding_nonces = []`, and the circuit has `2^{k_log}` columns. `matrix_evals` must be empty (§8.1, D18): every honest
+proof sends it empty, and upstream ignores it.
 
 | step | operation | value |
 |---|---|---|
@@ -1257,6 +1266,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   must be `rec-open-stacked/l<LANES>-h<H>`, and the same three rules hold at those parameters, the net being the same
   builder's under the unit's own name.
 
+  Under `--rec-inner`, a unit named `rec-cap/n<N>` (V*'s hold of the table's level-0 cap, `VStar.capUnit`,
+  `rec_cap.lowering`) is V*'s last statement, at `N = 2^cap₀` of `fast100(m)`'s level 0, and its file must be V*'s byte
+  for byte: one input port `top` and one output port `out` of 64 u16 words each, `out` being `top`'s words 32 to 63
+  then 32 zero words, with no AND. Instance `i` reads node `i` of `rec-top-L0`, at the registration the shared rows
+  hold, and `out` the verifier's zero rows `rec-cap-zero` (D19), so every node of `root_B` is held at a fixed row
+  whatever the query coins draw.
+
   So must a unit net whose name starts with `rec-residuals/` (a part of V*'s algebra, `rec_residuals.lowering`):
   - its name must be `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>`, with a `fast100` schedule at `m`, `k_log ≥ 6` and
     `claims ≥ 2`, and neither `k_log` nor `claims` above the unit's input bits, compared before the verifier computes
@@ -1839,12 +1855,35 @@ expectation):
   the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
   spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
   `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
+- **D19:** V*'s list holds the table's level-0 cap (`RecCap`, `rec-cap/n<N>`, `N = 2^cap₀`, its last statement), and a
+  session of it must read node `i` of `rec-top-L0` in instance `i`, at the registration the verifier's shared rows
+  (`--rec-rows`) hold, every row the node the coin server committed, its outputs the verifier's zero rows
+  `rec-cap-zero` (`RecVStar.checkCapListed`, `RecCoins.checkCap`, `RecVStar.checkShared`, `checkTopRows`); a session
+  whose port reads `rec-top-L0` without that shared row is refused, level 0's included. Upstream reads no inner shape
+  and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
+  `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
+  and its refusals on the Lean verifier.
+
+- **D17:** a plain file in the form its statement doesn't pin (§8.1: the zk patch's `zk_level0 = None` tag after the
+  pair, by default, as every deployed prover writes it, or none under `--upstream-plain`), a tag other than 0 there, a
+  byte after it, or a byte after a `--zk` file's inner proof (`Zk.decode`). Upstream's `bincode::deserialize` ignores
+  them; the spec refuses the file (`zk_level0: the file ends without the None tag …` by default, `proof: the file has N
+  bytes and its encoding ends at byte M` for a tagged file under `--upstream-plain` or any byte after the end,
+  `zk_level0: tag T, want 0: …`, `zk proof: …` under `--zk`). S17 hashes the whole file, and the recursion's binding of a session's last message needs
+  every byte S17 hashes to be one the transcript absorbs, a Merkle path hashes or a check pins, so a proof has one file
+  at a statement (`Flock.decodeProof_canonical`). The agreement job runs upstream's binaries' sessions under
+  `--upstream-plain` (`agree.py`) and the live sets' (the zk patch's builds) without it. No plain vector exercises a
+  file in the other form; `Flock.Test.ProofCanon` runs each under each pin on the Lean verifier, and `zk_mutants.py`'s
+  `zk-trailing-bytes` a trailing byte on a `--zk` session (`upstream_accepted`).
+- **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
+  (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
+  exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
 
 Elsewhere the spec follows upstream, even where upstream is lenient without soundness cost: record keys for unconfigured
-tables, `matrix_evals` and bytes after the proof pair are ignored, nonces at proof-of-work sites are accepted as
+tables are ignored, nonces at proof-of-work sites are accepted as
 messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream panics (`m` without a schedule,
 `|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection; the spec rejects explicitly.
 
@@ -2001,7 +2040,7 @@ Each item is a point where the paper is silent, or differs, and the spec follows
 | A4 | `v†` | the verifier computes `P_z(λ)` | the prover sends `final_c_eval`; the verifier compares it with its interpolation; not absorbed |
 | A5 | residual sumcheck encoding | unspecified | `(G(1), G(∞))` of the eq-stripped quadratic, `G(0)` derived, no eq factor in the final check; `inv(0) = 0` |
 | A6 | pinned coordinates | `r_i = x^{2^{i−1}}/(1+x^{2^{i−1}})`, 3 in F8 and 4 in F, order unspecified | address bits 6–8 (F8 via φ8), 9–12 (F) |
-| A7 | lincheck | `(m_0 − k_s + 1)`-round sumcheck, then claims on `Â_0`, `B̂_0` | the verifier computes `α·A_0ᵀe + B_0ᵀe`; `k_log − 6` rounds, top bit first; the prover sends 64 skip values; fresh φ8 coin; `matrix_evals` unused and ignored |
+| A7 | lincheck | `(m_0 − k_s + 1)`-round sumcheck, then claims on `Â_0`, `B̂_0` | the verifier computes `α·A_0ᵀe + B_0ᵀe`; `k_log − 6` rounds, top bit first; the prover sends 64 skip values; fresh φ8 coin; `matrix_evals` empty (D18) |
 | A8 | constant wire | absent | extra coin `β`; `comb[pin] += β`, target `+ β`; needs the pin to be 1 in every block |
 | A9 | ring switching | one claim, own `(m−7)`-round sumcheck, B̂ via MBP | each claim switched with its own 7 coins, then one independent coin per claim; no standalone sumcheck: Ligerito's F256 folding sumcheck replaces it; B̂ at K points |
 | A10 | packing | `(r_hi, r_lo)` generic | the 7 low address bits; `b_v = x^v` |

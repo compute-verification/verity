@@ -187,6 +187,19 @@ def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := 
         if m != r.m || c != r.claims then
           throw s!"candidate 3's V* list: {s.name} opens R at (m {m}, claims {c}), not at R's shape (m {r.m}, claims {r.claims}, META's {STACKED_SHAPE_KEY})"
 
+/-- **V*'s list holds the table's level-0 cap**: exactly one statement is RecCap, over the `2^cap₀` nodes of `root_B`'s
+level-0 cap (`cap₀` of `fast100(m)`'s level 0), so every node of the cap is held at a fixed row whatever the coins draw
+(`RecCoins.checkCap`). A list without it, or with it at another node count, is refused. -/
+def checkCapListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  let some sch := fast100 i.m | throw s!"V*'s list: the inner session's m {i.m} has no fast100 schedule"
+  let some lv := sch.levels[0]? | throw s!"V*'s list: the inner session's schedule (m {i.m}) has no level 0"
+  let caps := ss.toList.filterMap fun | .cap n => some n | _ => none
+  match caps with
+  | [] => throw s!"V*'s list has no RecCap statement ({VStar.capName (2 ^ lv.cap)}): the table's level-0 cap is held by none of its statements"
+  | [n] => if n != 2 ^ lv.cap then
+      throw s!"V*'s list: {VStar.capName n} holds {n} nodes, and the table's level-0 cap has {2 ^ lv.cap} (2^cap₀, cap₀ {lv.cap})"
+  | _ => throw s!"V*'s list has {caps.length} RecCap statements, and holds the table's level-0 cap once"
+
 /-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
 per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
@@ -212,13 +225,14 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   if i.holo && !(gs.any fun g => g.2.1.contains (hRound i.m i.kLog)) then
     throw (s!"at the holo inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): no group of the " ++
       s!"verifier's algebra holds h's round m{hRound i.m i.kLog} as a row port")
-  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i)
+  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i) ++ #[← VStar.capStatement vsh]
   checkCandidate3 i ss
+  checkCapListed i ss
   pure ss
 
 def isVStar (name : String) : Bool :=
   name.startsWith "rec-open/" || name.startsWith "rec-residuals/" || name.startsWith "rec-open-stacked/" ||
-    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/"
+    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/" || name.startsWith "rec-cap/"
 
 /-- When `name` is the circuit table's name (`rec-open/l<LANES>-h<H>`) of one of R's levels in `ss`, a sentence saying so: R's
 levels are named `rec-open-stacked/…`, never as the table's. -/
@@ -452,6 +466,7 @@ def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
   | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
   | .recOpen .. => []
   | .recOpenStacked .. => []
+  | .cap _ => []
   | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
   | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
     | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
@@ -490,7 +505,7 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
 statements, which share no row with another session of the family. -/
 def rowPorts : VStar.Stmt → List String
   | .inner _ _ p => p.S.ports.map (·.1)
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. => []
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap _ => []
 
 /-- The first port of a circuit named as a message round's (`m<k>`) that is none of a statement's message-round ports
 (`ownPorts`). -/
@@ -641,7 +656,7 @@ ports (rec_vstage.py:357), a part of R's opening's too (`rec_residuals.stage_ope
 def accPorts : VStar.Stmt → List String
   | .inner _ _ p => (p.S.ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
   | .recOpen .. | .recOpenStacked .. => ["acc", "acc_out"]
-  | .sparse .. => []
+  | .sparse .. | .cap _ => []
   | .opening _ _ _ _ ports _ => (ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
 
 /-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
@@ -1424,7 +1439,8 @@ def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :
 /-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
 `--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads
 (`portDiff?`: value, root, leaf count, row width, domain), and a port reading R's tops `rec-top-stacked-L<l>`
-(`stackedTopLevel`) needs such an entry. -/
+(`stackedTopLevel`) or the table's level-0 cap `rec-top-L0` (`topLevel`: level 0's openings' `out` and RecCap's `top`)
+needs such an entry, so level 0's query reads open the one registration RecCap holds every node of. -/
 def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) :
     V Unit := do
   for p in registered do
@@ -1435,6 +1451,9 @@ def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Op
     | none =>
       if (stackedTopLevel p.value).isSome then
         throw s!"{s.name}: its port {p.name} reads R's tops {p.value}; pass the verifier's shared rows (--rec-rows F), which register it"
+      if topLevel p.value == some 0 then
+        throw (s!"{s.name}: its port {p.name} reads the table's level-0 cap {p.value}, which RecCap holds; pass the " ++
+          "verifier's shared rows (--rec-rows F), which register it")
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
