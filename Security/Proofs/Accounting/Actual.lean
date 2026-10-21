@@ -12,6 +12,9 @@ import Proofs.Accounting.Actual.Transducer
 import Proofs.Accounting.Actual.Ticks
 import Proofs.Accounting.Actual.Source
 import Proofs.Accounting.Actual.WipePool
+import Proofs.Accounting.Actual.WipeReadPool
+import Proofs.Accounting.Actual.WipeLag
+import Proofs.Accounting.Actual.WipeBridge
 
 /-!
 # The actual circuit's guarantees
@@ -70,4 +73,12 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
   `H = ln(1/δ)/k`, at most `δ`. `UnheldFails` holds of every tree once each un-held set is empty, so it is no physical
   premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
+* `Actual/WipeReadPool.lean`: `WipeReadPool`, the pool per read on the challenger's verdicts, by Ville's inequality
+  on the coins: every read accepted with the un-answered fractions summing to at least `H` on at most `exp(−H)` of
+  them, under live verdicts alone.
+* `Actual/WipeLag.lean`: `WipeLag`, the contents of `X`'s state at `t` at most those at `s` times `2^{β_X (t − s)}`.
+* `Actual/WipeBridge.lean`: `AnsweredOfQuiet`, `a` answered blocks of a read on at most `|T| |C| C(|B|, a) 2^{-a b}`
+  of the coins, from the latency ceiling, the late-answer rule (`verdictBinds_of_lateAnswers`), quiet and live reads
+  and uniform labels; `WipeReadHeld`, the two composed with `WipeReadPool`: `K` narrow reads among accepted ones on
+  at most `exp(−K (1 − (a − 1)/|B|)) + n |T| 2^m C(|B|, a) 2^{-a b}` of the coins.
 -/

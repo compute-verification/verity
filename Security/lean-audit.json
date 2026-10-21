@@ -38,6 +38,18 @@
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
+  "Accounting.Assumptions.LateAnswers": {
+   "owner": "@memory-accounting",
+   "digest": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65"
+  },
+  "Accounting.Assumptions.LiveReads": {
+   "owner": "@memory-accounting",
+   "digest": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18"
+  },
+  "Accounting.Assumptions.LiveVerdicts": {
+   "owner": "@memory-accounting",
+   "digest": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d"
+  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -53,6 +65,10 @@
   "Accounting.Assumptions.PouwLuck": {
    "owner": "@compute-accounting",
    "digest": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
+  },
+  "Accounting.Assumptions.QuietReads": {
+   "owner": "@memory-accounting",
+   "digest": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108"
   },
   "Accounting.Assumptions.RateComputeAdditive": {
    "owner": "@memory-accounting",
@@ -205,6 +221,10 @@
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
+  },
+  "Accounting.Assumptions.UniformLabels": {
+   "owner": "@memory-accounting",
+   "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -409,6 +429,10 @@
   "Accounting.Placed.ComputeRate": {
    "owner": "@lean",
    "digest": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15"
+  },
+  "Accounting.Placed.LatencyAtMost": {
+   "owner": "@memory-accounting",
+   "digest": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1"
   },
   "Accounting.Placed.Links": {
    "owner": "@lean",
@@ -2006,6 +2030,14 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.AnsweredOfQuiet"
+   ],
+   "assumptions": [],
+   "type_hash": "ac96692d388b7e4959ed9180772202cd52228015ebff10809551390c99c4f997"
+  },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
    "owner": "@lean",
    "signature": [
@@ -2087,6 +2119,26 @@
    "signature": ["Accounting.SecurityProofs.Actual.WindowsAt.{u_2, u_3} : Accounting.Guarantees.Actual.WindowsAt"],
    "assumptions": [],
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
+  },
+  "Accounting.SecurityProofs.Actual.WipeLag": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeLag.{u_2, u_3, u_4} : Accounting.Guarantees.Actual.WipeLag"],
+   "assumptions": [],
+   "type_hash": "5a9a4110735b1fb7b83cc6f52ec2804eba21087324d3903036976e07ba856dc9"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadHeld": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeld.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.WipeReadHeld"
+   ],
+   "assumptions": [],
+   "type_hash": "2b3c90af401a23241ab54f737beed2c849e13e173bd7a698d7a680454242557f"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadPool": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
+   "assumptions": [],
+   "type_hash": "53ded1fd00f3bc75c312a97dfdc886aa7b9a42f6dc170b487509cc63dd73d350"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -9928,7 +9980,11 @@
    "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
    "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records and caps, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
-   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork)."
+   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
+   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": "lemma: the count of coins on which a read answers a blocks at one of C contents, from a causal strategy, the latency ceiling (latency-ceiling) and WipeRead's premises on a verdict read off the coins; WipeReadHeld is what it is for.",
+   "Accounting.SecurityProofs.Actual.WipeLag": "lemma: the contents of X's state at t number at most those at s times 2^(beta_X (t - s)), a counting bound over CausalFrom and DeclaredLinks on any strategy, with no function's acceptance; with WipeReadHeld it bounds the state between reads (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -10022,6 +10078,7 @@
     "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -10033,6 +10090,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -10058,6 +10117,19 @@
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.FitRate"
+   ]
+  },
+  "Definitions.Accounting.Actual.WipeHeld": {
+   "digest": "d10182107aa699d46e6951392f4b620db032fa27e47950e96a88a65f18fa1a77",
+   "definitions": {
+    "Accounting.Actual.answered": "82f30dee710bd4f4f4c3f8e8b1ee6f29a131b11e09e29c3c15e228674116ba88",
+    "Accounting.Actual.contents": "c59367b779f35f3ea3fa1454dee9bb299988eec9fade90eb0b8ad0066e19e80c",
+    "Accounting.Actual.unanswered": "a104943d3d4d233095e8a2613aad83c1fb8c5084971587797915d2db759d146c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
    ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
@@ -10613,7 +10685,10 @@
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -11451,7 +11526,7 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "0b94e407f8c752218c33d2a60fdc2348da2be15e8b2b39cb38ad25d2b43ade60",
+   "digest": "73dd130ac4c8d39fdaa54c6ae860941a1b15809c866c332556a7e3f495d502f3",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
@@ -11459,6 +11534,7 @@
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
+    "Accounting.Placed.LatencyAtMost": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1",
     "Accounting.Placed.Links": "21289f1d8100bbc4b24f3fb015950d0d11f515aeb18b02f70d65a6b68f2f813b",
     "Accounting.Placed.Memory": "f12294cc702724cca24f7a1192e560840420a9a1ab87d3eff59ab7a9f53edd15",
     "Accounting.Placed.Spec": "b1bacd8a93bd348e554d654f301218d19023c6018637e1667d2984b36593eda6",
@@ -11472,6 +11548,7 @@
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -11483,6 +11560,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
     "Nci.SecurityProofs.FitRate"
@@ -13960,6 +14039,7 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -13971,6 +14051,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -24716,6 +24798,21 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
+  "Models.Accounting.Assumptions.WipeRead": {
+   "digest": "a054e60327c69db6035cee8f0741c06fe41d3ae1d234e1de03db3c1e00fb7ac9",
+   "definitions": {
+    "Accounting.Assumptions.LateAnswers": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65",
+    "Accounting.Assumptions.LiveReads": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18",
+    "Accounting.Assumptions.LiveVerdicts": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d",
+    "Accounting.Assumptions.QuietReads": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108",
+    "Accounting.Assumptions.UniformLabels": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
+  },
   "Models.Accounting.Guarantees.Actual": {
    "digest": "1beac18716c243f84629c7971bed42665b32b318c9c4de68668daaea23880891",
    "definitions": {
@@ -24757,6 +24854,21 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
+   ]
+  },
+  "Models.Accounting.Guarantees.Actual.WipeBridge": {
+   "digest": "1f3ad22556027fbf8d790e9433a90c70f149e9f3b4e3b790ff68a4d35f1b2e9e",
+   "definitions": {
+    "Accounting.Guarantees.Actual.AnsweredOfQuiet": "d995b35ad0509b18b5aa458adb938c9000e2ef0d29eef133e5c278297f1a077c",
+    "Accounting.Guarantees.Actual.WipeLag": "1b1da8aaaf848b32b285ccef37e813543ddf9d74d0b1e150d21186798350033d",
+    "Accounting.Guarantees.Actual.WipeReadHeld": "20826dd48cdcc354946c9c7c0b54f1925eeeee22321e7e22d976b9c3284943f1",
+    "Accounting.Guarantees.Actual.WipeReadPool": "5ab5cc66a0a0e029bb9c3242fdf674c65d836aef0f8aabd41bcbb1836776283b"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
    ]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
