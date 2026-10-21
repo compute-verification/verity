@@ -54,6 +54,16 @@ export GPU_LEASE=$W/gpu-lease GPU_LEASE_N=8 GPU_LEASE_WHO=circuits-$V2 CUDA_VISI
 export GUARD_PRESERVE_FILE=$SW/guard.preserve TMPDIR=$W
 source /workspace/cp/venv312/bin/activate
 export PATH=$VIRTUAL_ENV/bin:/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda
+# flashinfer's autotune cache (vLLM's warmup) loads cuBLAS by its unversioned name, which the node's ld.so.cache gives the system
+# CUDA's: the unversioned names are torch's own here, so the process maps one cuBLAS, the route pin's (`driver.cublas_versions`)
+mkdir "$W/cublas-names"
+for n in libcublas libcublasLt; do
+  f=("$VIRTUAL_ENV"/lib/python3*/site-packages/nvidia/cublas/lib/$n.so.*)
+  [ ${#f[@]} = 1 ] && [ -f "${f[0]}" ] || { echo "not one $n.so.* in the venv (${f[*]}): the unversioned name must be torch's"; exit 2; }
+  ln -s "${f[0]}" "$W/cublas-names/$n.so"
+done
+export LD_LIBRARY_PATH=$W/cublas-names${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+ls -l "$W/cublas-names" | tail -n +2 | tee "$OUT/cublas_names.txt"
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/integrations/vllm:$TREE/verity/ml/flock/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/core/difftest/python
 export RESEARCH_STORE_CONFIG=$C/store.toml
 eval "$($PY -m verity_vllm.pipeline.cli epoch custody-env "$C")"
