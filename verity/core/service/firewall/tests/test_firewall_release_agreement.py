@@ -112,35 +112,52 @@ def _frozen(name: str) -> list[dict]:
         return [json.loads(line) for line in f]
 
 
+def _apply(text: str, edit: list) -> str:
+    at, cut, put = edit
+    b = text.encode()
+    return (b[:at] + put.encode() + b[at + cut:]).decode()
+
+
+#: why the Lean refuses a record holding a line the firewall doesn't write (`Record.read`), and the one such line Rust's
+#: `foreign` damage writes
+FOREIGN = re.compile(r"the record's line \d+ is not (an event of firewall/v0|the firewall's own)")
+FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
+
+
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
     limit), 1500 steps each, the record damaged (torn, cut, halved, edited, rewritten, a line foreign to it), repaired and
-    appended to between ops. Each op's result, or its rejection where Rust's was an error, and the SHA-256 of the record it
-    leaves are Rust's. A step's `edit` `[AT, CUT, PUT]` is the record before it: the one the step before left, with CUT bytes
-    at byte AT replaced by PUT."""
+    appended to between ops. Each op's result, or its rejection where Rust's was an error, and the record it leaves are
+    Rust's. A record holding a line the firewall doesn't write (`foreign`) is outside the domain: Rust read past the line,
+    and the Lean refuses the record (`test_the_lean_reads_only_the_firewalls_lines`), at each of the 387 steps Rust answered
+    on one. A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
+    at byte AT replaced by PUT), its `out` the record it leaves as an edit of the one before it, and `after` that record's
+    SHA-256."""
     tally: Counter = Counter()
     text = ""
     for n, step in enumerate(_frozen("release-index.jsonl.gz")):
         if "case" in step:
             text = ""
             continue
-        if "edit" in step:
-            at, cut, put = step["edit"]
-            b = text.encode()
-            text = (b[:at] + put.encode() + b[at + cut:]).decode()
-        kind, out = lean.call("op", {"op": step["op"], "record": text})
+        before = _apply(text, step["edit"]) if "edit" in step else text
+        text = _apply(before, step["out"]) if "out" in step else before
+        assert hashlib.sha256(text.encode()).hexdigest() == step["after"], (n, step)
+        kind, out = lean.call("op", {"op": step["op"], "record": before})
         if "reject" in step:
             assert kind == "reject", (n, step, out)
+        elif kind == "reject" and FOREIGN.match(out):
+            assert FOREIGN_LINE in before, (n, step, out)
+            tally["outside"] += 1
+            continue
         else:
             assert kind == "output", (n, step, out)
             got = json.loads(out)
-            assert got["result"] == step["result"], (n, step, got["result"])
-            text = got["record"]
-        assert hashlib.sha256(text.encode()).hexdigest() == step["after"], (n, step)
+            assert (got["result"], got["record"]) == (step["result"], text), (n, step, got)
         tally[f"{step['op'][0]}:{'reject' if 'reject' in step else _result({'result': step['result']})}"] += 1
     print(dict(sorted(tally.items())))
+    assert tally["outside"] == 387, tally
     assert sum(v for k, v in tally.items() if k.endswith(":reject")) >= 500, tally
-    assert {k.split(":")[0] for k in tally} == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
+    assert {k.split(":")[0] for k in tally} - {"outside"} == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
     for k in ("open:ok", "admit:ok", "admit:refused"):
         assert tally[k] >= 10, (k, tally)
 
