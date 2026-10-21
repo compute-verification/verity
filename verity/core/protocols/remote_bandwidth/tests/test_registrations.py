@@ -100,7 +100,7 @@ def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_regi
         registry.session(p, st.registration, None, not_before_ns=0, index=0)
     with pytest.raises(ValueError):
         registry.session(audit.Params(N + 1, p.deadline_ns, 1, codec=P512), st.registration, None, not_before_ns=0)
-    assert registry.session(p, st.registration, None, not_before_ns=0, index=1).commitment.session == 1
+    assert registry.session(p, st.registration, None, not_before_ns=0, index=1).commitment.epoch == 1
     assert registry.close(NODE).sessions == (audit.UNENDED, audit.UNENDED)
 
 
