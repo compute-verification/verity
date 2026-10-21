@@ -1227,6 +1227,30 @@
    "assumptions": [],
    "type_hash": "a0793f07a8d7ded1d610bb98d1a056f90c8ee3d67d01be6f20c199627b1f395e"
   },
+  "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Credit.SecurityProofs.epsAtSound : Properties.Pouw.Credit.EpsAtSound"],
+   "assumptions": [],
+   "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Credit.SecurityProofs.establishedSound : Properties.Pouw.Credit.EstablishedSound"],
+   "assumptions": [],
+   "type_hash": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"],
+   "assumptions": [],
+   "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c"
+  },
+  "Properties.Pouw.Strata.strataTile": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.Strata.strataTile : Properties.Pouw.Strata.StrataTile"],
+   "assumptions": [],
+   "type_hash": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566"
+  },
   "Properties.Pouw.Window.bucket8192": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
@@ -1640,18 +1664,6 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
-  },
-  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
-   "owner": "@compute-accounting"
-  },
-  "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
-   "owner": "@compute-accounting"
-  },
-  "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
-   "owner": "@compute-accounting"
-  },
-  "Properties.Pouw.Strata.strataTile": {
-   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -3963,6 +3975,17 @@
     "Pous.EndToEnd.SecurityProofs.honestPassesRing"
    ]
   },
+  "Definitions.Pouw.RelativeSecurity": {
+   "digest": "a3fb3cd170976750655561ed209c5ce243c845c6e3f284bcf934895844f8e42e",
+   "definitions": {
+    "Pouw.RelativeSecurity.prob": "45903db0657e0aae952b67744101d45314e1904c052d74ff5b83d86cbbdda633"
+   },
+   "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses"
+   ]
+  },
   "Evaluate.Casts": {
    "digest": "0110979fcb42f9bbf5adb4c9f926b00a26170b202fb1785e1c11da17cb30bc61",
    "definitions": {
@@ -4401,7 +4424,7 @@
    ]
   },
   "Flock.Draw": {
-   "digest": "bf7cb7de838ab74737930e7927476b516c4d206a1bf622f9224db0d082d3438b",
+   "digest": "3b04f65d97a35eb031339eec047e1bce81fc9bac4c80043ec02ba883922ec10c",
    "definitions": {
     "Flock.Draw.Law": "89d70aef494b09e73d1a96bde31b4b235372685ef6f2c157ffafdcc9607b9106",
     "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
@@ -4439,6 +4462,7 @@
     "Flock.Draw.onWith": "987dc554e6fcfebb01c1e79cabb529bf2749eb60a567dcf1152e3fe5574af2b8",
     "Flock.Draw.strataOf": "c2e2e3e53ebd658086060b239c578e6bd1545ab73d3de6fabf8a67159a9486a5",
     "Flock.Draw.strataProblem": "fa74f7bb073851b6cf7d8cce5b981434cdcf8d1dded22d33c62d9cb2ee7223a6",
+    "Flock.Draw.stratified": "994cf1f686e0a3601bafc225d0601317b3237197ebe80e7f886bd2470f1b3f2c",
     "Flock.Draw.stratifiedWith": "27438dc7bc06d6f5d55a891addbaeda0c647b7ee9e7ff8616db51c8196d652a3",
     "Flock.Draw.stratumK": "30eec83966e6292ad4120b55dc8e02b63770e2f59f87ca616cdb9da952644c2b",
     "Flock.Draw.subset": "0fc9e572d0b4d8409cedc078bf52b63e6279a64d401dea42cd69525d95bfb335",
@@ -4454,6 +4478,10 @@
    "guarantees": [
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.drawShape",
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -6137,6 +6165,35 @@
     "Properties.Pouw.Check.undecidedOnlyFromService"
    ]
   },
+  "PouwCheck.Credit": {
+   "digest": "a93c2bdbb9b75b080bc70a12dbd25405de8659c24b013032db0791c91745a899",
+   "definitions": {
+    "PouwCheck.Credit.DELTA": "7f25f6dfa4468aa37ff60109df9adcb1b985976a25b622ea09d3a6f339df33e1",
+    "PouwCheck.Credit.K_FIELD": "4d57cb0ada37369c8f2bd555ba384b98505d85a4efc06fabcddb73ed7fa4f9a9",
+    "PouwCheck.Credit.K_FORM": "3cbbfcdfc124dded1e3a3348c76efd50c76c9038ae9ace45f71b6fac3f535333",
+    "PouwCheck.Credit.LAYOUT_FORM": "8441bc7c9294480458d83041f11a2c7ab6f397154e88a1001e75a288736e0a81",
+    "PouwCheck.Credit.LAYOUT_KEYS": "0fea3f4d96797533d3a6ecd237921927ec3f0dbedfd70b6e3a0d21e5f86cb752",
+    "PouwCheck.Credit.MAX_K": "2a9154d7f728f2d801f02430b30f6dcd8f3531e80d5bb2c1da169c8f35f0cea6",
+    "PouwCheck.Credit.callWork": "b930980853aeff5ae917c420daf87193afe3e2e441df48e1f78d09723deb2ac5",
+    "PouwCheck.Credit.credited._sparseCasesOn_11": "1757c343462e8a591d225e204fee8bd8f386a8854ae425e0e1b7a9ddd9daee9d",
+    "PouwCheck.Credit.credited._sparseCasesOn_14": "b26573134bd43f9a11a1a0c06fc8eb056d28f08107472b2b3c793b502f8c5dd9",
+    "PouwCheck.Credit.credited.match_14": "2767fca0a5219aa4ebb33a7c610dc75ac1ffed3d9b499141bf628b1a7b8d2d5f",
+    "PouwCheck.Credit.established": "532303a7f8926c65632e1e4d4578afe95bd19ca6a2a92204dc2777a0fef28328",
+    "PouwCheck.Credit.law": "be2d8235cd9c7c14cec0d896c242edad27c25495aebe3c1876947666e1c639f2",
+    "PouwCheck.Credit.layoutRefuse": "4a415164f4295a282b8f97dcdb41a093d0fcebc94e4d4b2cdcfd5012294eb2c0",
+    "PouwCheck.Credit.listStr": "aadf6d2e3aaa03a76c3cb4a42842ec7351c0f4865dea0a48a4ebf8539472c683",
+    "PouwCheck.Credit.strata": "3fa74dbab6bed2216579834acb5a0164999fccbfbe1c0c5e5f4e11940ff67513",
+    "PouwCheck.Credit.strata._sparseCasesOn_13": "07b66b6c87de5f757f2f0c4a8369b81b9c1a396833b84a70ec80ad4a64355ce6",
+    "PouwCheck.Credit.strata._sparseCasesOn_14": "409f0b54512ca9d98b1ca54c52974f3a7b4e829206bfd0aca7adda99b207b24d",
+    "PouwCheck.Credit.strata._sparseCasesOn_19": "fe84d83e644a6fe99ce940868cadb1d44bf86b548a915b8b35260aba25f6b204"
+   },
+   "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile"
+   ]
+  },
   "PouwCheck.Inputs": {
    "digest": "bbc0458adbfddedb07e13b0e53375d062f757aa2911c6b802121e44007c0ec9c",
    "definitions": {
@@ -6260,7 +6317,23 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.undecidedOnlyFromService"
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile"
+   ]
+  },
+  "PouwCheck.Pass": {
+   "digest": "1e345f18813416106ccb1d78921b527eade59befb11e170cee99d25e3b21d8a5",
+   "definitions": {
+    "PouwCheck.R": "964561e732885ee32ef80c52d4fd2d41dd01dbcedd1b6eab22be1cc326cb10e7"
+   },
+   "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile"
    ]
   },
   "PouwCheck.Protocol": {
@@ -6446,8 +6519,9 @@
    ]
   },
   "PouwWindow.Draw": {
-   "digest": "c2b6739b590ef057879ef5e995ae7fe17362bb2fe19708729bf3e90246ca1143",
+   "digest": "6fd1bd71352d8af4d0988d876ef7a416a48d293b4c221d281699fd195cce9ee6",
    "definitions": {
+    "PouwWindow.EPS_BITS": "af52e28644f3e8ca67e0f25ed04d3fd157393e5cfeb48dcf7e165dbf6aadcd19",
     "PouwWindow.KPrimeDomain": "c4582abdc25a851e94e7fac6a2d7b1b5ab0ffd668e33d58019b1f8aa2a8e7c58",
     "PouwWindow.Sampling": "591ade9d4036802bfcb4735be332bb109aea1a96f40268a10841b8b8aebf9ba5",
     "PouwWindow.Sampling.delta": "65910a4289c98c94f4e133c6d4adec57a9c67690989b566800f31479b20b9d3b",
@@ -6455,6 +6529,7 @@
     "PouwWindow.Sampling.gridBits": "2ffe69122631b3a78c36d1b9b56356c53bd41bef835fae90bbc2dd937984b635",
     "PouwWindow.Sampling.k": "07d957958d4a1238af1f046066b54ad1199621323aa623955f863eb318f3b0c0",
     "PouwWindow.ceilDiv": "9c21b83b23ccaa271c280217bce6f4390ead5e081f8e5708c07f5a9d084e7beb",
+    "PouwWindow.epsAt": "f7775385dce9c11ee5633638006c9304e2c30d96893a5096abb5fcc66f41a2b2",
     "PouwWindow.exactBits": "874847990decb3689333781f9e8be59f1d16f021dd7e62abf5a4573f9d251855",
     "PouwWindow.fixedPow": "3546bb63b7b220e9925285cbb9723bafb9f774cf8721bc0628ad0c81de98ea38",
     "PouwWindow.fixedPowGo": "802ff08d4c965f0aa6a8f972477415b75fe658023ef17541b05113052a457a17",
@@ -6478,6 +6553,9 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
@@ -6522,6 +6600,9 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Window.bucket8192",
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
@@ -6566,7 +6647,11 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
-    "Properties.Pouw.Check.undecidedOnlyFromService"
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile"
    ]
   },
   "PouwWindow.Length": {
@@ -7380,6 +7465,36 @@
     "Properties.Pouw.Commit.taggedSize"
    ]
   },
+  "Properties.Pouw.Credit": {
+   "digest": "6eccc729019975ca71045feb3bc8f0f9e3c7d7a56b9a7d1d5cea65e711d2de74",
+   "definitions": {
+    "Properties.Pouw.Credit.EpsAtSound": "3caafbe985add6486d8909250ef51f8a50b8bcb8a8ac14694f9881c6cd0e1a6b",
+    "Properties.Pouw.Credit.EstablishedSound": "ecbe52e69e9e3754ebaab5f5f746ad6867cd44f5bb3660b419fee03efaddbb74",
+    "Properties.Pouw.Credit.WorkDrawMisses": "e6c933f9295cb759719c165f019d895fea0a0ab121b8d17f518e3aaac425761f",
+    "Properties.Pouw.Credit.creditedWork": "f5b5e379542af0a5e40b41c6da62e5c38c185e7f07c4065b7a233032f396c7a9",
+    "Properties.Pouw.Credit.drawnOn": "c780159f9e3c5c48a9a2c6a1d04ffa2e8908e5eb3096d128bdf3cae888d6c512"
+   },
+   "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses"
+   ]
+  },
+  "Properties.Pouw.Strata": {
+   "digest": "8e088b868f61790cb1bfeec1de99b9ea0f019e2b66932ee2ac5eeeedf34876dd",
+   "definitions": {
+    "Properties.Pouw.Strata.StrataTile": "c72e7fda9c7d71a59c9c60e9bcc9397645f48b049b9b65077cbf09f5faab0308",
+    "Properties.Pouw.Strata.callStart": "09e440b9de88cd83c84946c9c2eafaabf64a022cb578965b287a151ce397044e",
+    "Properties.Pouw.Strata.holds": "fd2304313949b9882e1956a81f7cab6272749454a6f4b5980eabca2cd5d1bec0",
+    "Properties.Pouw.Strata.unitWork": "ab0a550ae0e0e2d1fe7b2834d0ad4ba47f3aef5d0484fdfd282911177aef8d5f"
+   },
+   "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
+    "Properties.Pouw.Strata.strataTile"
+   ]
+  },
   "Properties.RemoteAudit": {
    "digest": "ea5878a1b84a13df217f27a9c0c0cfb6552ac4fd61b8efea1679e6aab1759490",
    "definitions": {
@@ -7484,6 +7599,9 @@
     "Properties.SampledProofs.slotPartition": "18aabaa436c9fd4e37304a20ab3b69226cdec5fee0833e7c70c1844ed6b680db"
    },
    "guarantees": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound",
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
