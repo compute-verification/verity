@@ -225,6 +225,18 @@ class Hooks:
 
 # --- targets more than one site patches --------------------------------------------------------------------------------
 
+#: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner``
+MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+
+
+def model_runners() -> tuple[type, ...]:
+    """The ``GPUModelRunner`` classes of `MODEL_RUNNERS` that this process has imported, without importing any: once an
+    engine is built, its runner's class is among them."""
+    import sys
+    found = (getattr(sys.modules.get(m), "GPUModelRunner", None) for m in MODEL_RUNNERS)
+    return tuple(dict.fromkeys(c for c in found if c is not None))
+
+
 def triton_launch(make: Callable[[Any], Callable[..., Any]]) -> Patch:
     """Replace ``triton.runtime.jit.JITFunction.run``, the entry point of every direct Triton launch, with
     ``make(current run)``."""

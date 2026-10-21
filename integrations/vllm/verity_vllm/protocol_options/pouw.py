@@ -20,7 +20,8 @@ layer's weight root); `commitment` is the scheme, the salt, the weights root the
 commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
+weights were served.  Pearl-C commits one pass per engine step: its option ends the pass when the model runner's
+``execute_model`` returns (`_step_ends`), so serving needs no caller to end it.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only
 ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -63,6 +64,7 @@ from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
 
+from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
@@ -575,6 +577,28 @@ def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
     return apply
 
 
+def _step_ends(run: PPD.PearlCDeviceRun):
+    """The wrapper of a model runner's ``execute_model`` that ends ``run``'s pass once the step's forward has returned
+    (`PearlCDeviceRun.end_step`).  This is the step's own boundary under sync and async scheduling alike.  With async
+    scheduling, vLLM executes step s + 1 before it updates the scheduler from step s, so ``Scheduler.update_from_output``
+    would close one pass over two forwards.  The wrappers made from one call share a depth, so a call inside another (a
+    dummy run's, a subclass's runner wrapping its base's) ends the pass once.  A forward that raises leaves its pass open."""
+    depth = [0]
+
+    def make(orig):
+        def execute_model(runner: Any, *a: Any, **kw: Any) -> Any:
+            depth[0] += 1
+            try:
+                out = orig(runner, *a, **kw)
+            finally:
+                depth[0] -= 1
+            if not depth[0]:
+                run.end_step()
+            return out
+        return execute_model
+    return make
+
+
 def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tuple[int, int]]]:
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
     with their (n, k); ValueError names every layer outside the scheme's domain, sharing a quant method or quantized."""
@@ -686,6 +710,11 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+        step_ends, runners = _step_ends(run), hooks.model_runners()
+        for cls in runners:
+            h.wrap(cls, "execute_model", step_ends)
+        run.details["pass_ends"] = ("each engine step, at the model runner's execute_model" if runners else
+                                    "the caller's end_pass (no model runner in this process)")
         return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
                       end_pass=run.end_pass)
     else:
