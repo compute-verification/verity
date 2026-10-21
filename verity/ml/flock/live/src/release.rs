@@ -1995,8 +1995,9 @@ mod tests {
     /// The index cases frozen for the Lean (`FIREWALL_GOLDEN_OUT=FILE cargo test … -- --ignored golden_index_cases`):
     /// `drive`'s fixed streams of ops, with the record damaged and repaired, its index broken and events appended between
     /// them, each op as the shared vectors write it and answered through the index. One JSON line a step, after a line
-    /// `{"case", "long"}` for each stream: `{"op", "result" | "reject", "after"}`, with `"record"`, the record before the
-    /// op, where it is not the one the step before left, and `after` the SHA-256 of the record the op leaves.
+    /// `{"case", "long"}` for each stream: `{"op", "result" | "reject", "after"}`, with `"edit": [AT, CUT, PUT]` where the
+    /// record before the op is not the one the step before left (that record with CUT bytes at byte AT replaced by PUT),
+    /// and `after` the SHA-256 of the record the op leaves.
     #[test]
     #[ignore]
     fn golden_index_cases() {
@@ -2019,7 +2020,16 @@ mod tests {
                 let after = read();
                 let mut line = json!({"op": op, "after": hex(&sha2::Sha256::digest(after.as_bytes()))});
                 if before != *last {
-                    line["record"] = json!(before);
+                    let (b, l) = (before.as_bytes(), last.as_bytes());
+                    let mut k = b.iter().zip(l).take_while(|(x, y)| x == y).count();
+                    while !before.is_char_boundary(k) {
+                        k -= 1;
+                    }
+                    let mut s = b[k..].iter().rev().zip(l[k..].iter().rev()).take_while(|(x, y)| x == y).count();
+                    while !before.is_char_boundary(b.len() - s) || !last.is_char_boundary(l.len() - s) {
+                        s -= 1;
+                    }
+                    line["edit"] = json!([k, l.len() - s - k, &before[k..b.len() - s]]);
                 }
                 match &got {
                     Ok(v) => line["result"] = v.clone(),
