@@ -1,7 +1,7 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
-`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp]`, labelled by their unit as every dither-a arm
-(`dither_a.form_of`, RT4-INT-39): form=beside, receipts beside the served GEMM, since neither unit commits z (hbr's write
-none; hbk's write z and y into scratch, which nothing commits).
+`dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we]`, labelled by their z commitment as every
+dither-a arm (`dither_a.form_of`, RT4-INT-39 as narrowed 14:37Z): all -zy, so form=ASK-71 A (provisional), since the served
+epilogue commits #3018's per-unit z/y records under round s's root before coin s.
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
