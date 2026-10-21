@@ -169,7 +169,7 @@ theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
           (((EO D I DO decO).eval H P x ω d.1 d.2).2.2 : ℝ)) := by
         rw [Ex_add, Ex_const, Ex_mul_left]
     _ ≤ t + t * (1 + ∑ s : Fin (D.nS x), (((D.nums x s).waits * (D.nums x s).k : ℕ) : ℝ)) :=
-        add_le_add_left (mul_le_mul_of_nonneg_left hr ht0) _
+        add_le_add le_rfl (mul_le_mul_of_nonneg_left hr ht0)
     _ = t * cBe D x / 2 := by rw [hc]; ring
 
 /-- A draw at a uniform tape costs at most what it costs at every tape. -/
@@ -352,7 +352,7 @@ theorem sqrt_mul_two_rpow_le {γ : ℝ} (hγ : 0 ≤ γ) :
   · simp only [Real.sqrt_zero, zero_mul]; positivity
 
 theorem le_two_rpow_logb_inv {κ t : ℝ} (ht : 1 ≤ t) : κ ≤ t * 2 ^ (-Real.logb 2 (1 / κ)) := by
-  rcases le_or_lt κ 0 with h | h
+  rcases le_or_gt κ 0 with h | h
   · exact h.trans (mul_nonneg (by linarith) (Real.rpow_nonneg (by norm_num) _))
   · have hκ : (2 : ℝ) ^ (-Real.logb 2 (1 / κ)) = κ := by
       rw [one_div, Real.logb_inv, neg_neg, Real.rpow_logb (by norm_num) (by norm_num) h]
