@@ -4,6 +4,7 @@ accepted. The drawn units are the draw coin's over the window's own layout, read
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s. The Lean (`PouwCheck.Credit`) is held to the same cases by `lean/check/tests/test_difftest.py`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import math
@@ -273,10 +274,10 @@ def test_the_strata_are_the_compiled_programs():
         assert all(s["floor"] == 1 for s in ss)
 
 
-def _compiled(linears, calls, m) -> bytes:
+def _compiled(linears, calls, m, prefix: str = "") -> bytes:
     """The descriptor bytes of the compiled `h1window.program` over the test tile, as the period's ``circuit`` hashes
     them (`codec.program_digest`'s)."""
-    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, unit=h1.unit))
+    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
@@ -296,6 +297,38 @@ def test_the_layout_is_the_committed_circuits():
         q = h1.HW.query(prog)
         ids = dict(zip(sorted({k for _n, k, _c in linears}), q["params"]["templates"]))
         assert [(ids[int(s["template"][1:])], s["units"]) for s in Cr.strata(lay)[0]] == h1.P.strata(prog, q)
+
+
+@pytest.mark.parametrize("prefix", ["", "h1/w-3/"])
+def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
+    """`credit.registered_file` builds each call's ``--registered`` file from the committed descriptor alone, and it is
+    `h1window.table_reads_file`'s over the compiled Program (its ports `window_ports`', its domains binding the window's
+    open root but the weights'), byte for byte; and `credit.partition_of` is the Program's partition object under
+    `h1window.query`."""
+    window = "ef" * 64
+    for linears, calls, m in COMPILED:
+        raw = _compiled(linears, calls, m, prefix)
+        prog = h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit)
+        digest = h1.P.program_digest(prog)
+        assert digest == hashlib.sha512(raw).hexdigest()
+        lay, _ = Cr.layout_of(raw)
+        shape = Cr.shape_of(raw)
+        assert Cr.partition_of(digest, shape) == {"format": Cr.PARTITION_FORMAT, "program": digest,
+                                                  "query": h1.HW.query(prog)}
+        tp = h1.P.evaluate(prog, h1.HW.query(prog))
+        for call in range(len(calls)):
+            k = dict((name, k) for name, k, _n in linears)[calls[call][0]]
+            vals = (h1.HW.table(prog, "a", call), h1.HW.table(prog, "zy", call), f"{prefix}b/{k}")
+            roots = {v: hashlib.sha512(v.encode()).hexdigest() for v in vals}
+            want = h1.HW.table_reads_file(prog, tp, call, roots, ports=h1.HW.window_ports(prog), window=window)
+            got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in roots.items()}, window)
+            assert refused is None
+            assert json.dumps(got) == json.dumps(want), (linears, calls, m, call)
+            got, refused = Cr.registered_file(digest, lay, shape, call, {**{v: [x] for v, x in roots.items()},
+                                                                          vals[1]: []}, window)
+            assert got is None and refused == ("registration", f"call {call}'s statement reads {vals[1]}, which the "
+                                               "window registers not: register each of a call's tables and its "
+                                               "weights once")
 
 
 def test_an_alternative_layout_with_the_same_descriptor_refuses():

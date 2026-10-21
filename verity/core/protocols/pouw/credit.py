@@ -508,6 +508,99 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     return layout, None
 
 
+def _leaves(t: Any) -> int:
+    """A descriptor type's leaves (`types.from_json`'s): ``["Value", w]`` one, ``["Array", n, t]`` n of t's, a
+    ``["Tuple", [t, ...]]`` or ``["Record", [[name, t], ...]]`` its fields'; zero for any other form."""
+    if not (type(t) is list and t):
+        return 0
+    if t[0] == "Value":
+        return 1
+    if t[0] == "Array" and len(t) == 3 and _nat(t[1]):
+        return t[1] * _leaves(t[2])
+    if t[0] == "Tuple" and len(t) == 2 and type(t[1]) is list:
+        return sum(_leaves(x) for x in t[1])
+    if t[0] == "Record" and len(t) == 2 and type(t[1]) is list:
+        return sum(_leaves(x[1]) for x in t[1] if type(x) is list and len(x) == 2)
+    return 0
+
+
+def shape_of(descriptor: bytes) -> dict:
+    """What a statement over the window's units reads of the descriptor `descriptor`, one `layout_of` accepted: its
+    parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``) and the 16-bit words
+    of its A row, its B row and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
+    `h1window.table_reads_file`'s). Its cost is the descriptor's bytes."""
+    d = json.loads(descriptor.decode())
+    vals = {k: json.loads(v) for k, v in _record(d["program_fn"])}
+    tiles = {}
+    for k, t in vals["TILES"]:
+        a, b, zy = (p[1] for p in d["definitions"][t["fn"]]["body"]["params"][:3])
+        tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16}
+    return {"prefix": vals["PREFIX"], "tiles": tiles}
+
+
+#: the partition object a window's statements are verified under: every instance of each K's template one unit
+PARTITION_FORMAT = "verity/partition/v1"
+QUERY = ("Q_template_instances", 0)
+
+
+def partition_of(program: str, shape: dict) -> dict:
+    """The partition object (`partition_object.build`'s) of the window whose circuit's descriptor has SHA-512 `program`
+    and whose `shape_of` is `shape`: its templates by ascending K, as `h1window.query` names them."""
+    return {"format": PARTITION_FORMAT, "program": program,
+            "query": {"name": QUERY[0], "version": QUERY[1],
+                      "params": {"templates": [shape["tiles"][k]["fn"] for k in sorted(shape["tiles"])]}}}
+
+
+def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str
+                    ) -> tuple[dict | None, tuple[str, str] | None]:
+    """The verifier's ``--registered`` file (`registered.READS`) of call `call`'s statement in the window `layout` (one
+    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`), and None; or None and the
+    refusal (``registration``: the window registers no root, or two, for a value the statement reads). It is
+    `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads
+    its A row i (port ``a_k<K>_<i>``) at row R·ti + i of the call's A table ``<prefix>a/<K>@<call>`` (M rows), its B row
+    j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
+    its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
+    (a row a unit of the call); every other unit reads none of them. Each value is a row/v2 value of 16-bit leaves
+    under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
+    held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
+    gives it. Its cost is the window's units, once a port: the reads file's form."""
+    (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
+    lin = layout["calls"][call][0]
+    ks = {name: (k, n) for name, k, n in layout["linears"]}
+    k, n = ks[lin]
+    tile = shape["tiles"][k]
+    b0 = 0
+    for name, kk, nn in layout["linears"]:
+        if name == lin:
+            break
+        b0 += nn if kk == k else 0
+    sizes = [size for size, _work in call_work(layout)]
+    u0, size, per = sum(sizes[:call]), sizes[call], n // c
+    a, zy, b = f"{prefix}a/{k}@{call}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
+    rows_of = {a: (m, tile["a"]), zy: (size, tile["zy"]),
+               b: (sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
+    for v in rows_of:
+        if len(roots.get(v, ())) != 1:
+            return None, ("registration", f"call {call}'s statement reads {v}, which the window registers "
+                                          f"{'twice' if roots.get(v) else 'not'}: register each of a call's tables and "
+                                          "its weights once")
+    ports: list[tuple[str, str, Any]] = (
+        [(f"a_k{k}_{i}", a, lambda t, i=i: r * (t // per) + i) for i in range(r)]
+        + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
+        + [("zy", zy, lambda t: t)])
+    out = {}
+    for port, v, row in ports:
+        reads: list[int | None] = [None] * sum(sizes)
+        for t in range(size):
+            reads[u0 + t] = row(t)
+        leaves, words = rows_of[v]
+        out[port] = {"value": v, "root": roots[v][0], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
+                     "domain": G.domain(program, v, words, leaves,
+                                        window=None if is_held(v) else window).domain_id.hex(),
+                     **G.schema_entry(G.SCHEMA_V2), "reads": reads}
+    return {"format": G.READS, "ports": out}, None
+
+
 def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
     """`ss` (`strata`'s) under the work law ``work:k`` at the committed K `k`: each stratum's k_s (`core_check.work_k`,
     over the population's work W = Σ w_s·n_s), set in place; else the refusal (``budget``): `k` isn't a positive integer
