@@ -11301,14 +11301,13 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm90SheetHeadline"]
   },
   "Definitions.Accounting.HeadlineDc.Sm90Measured": {
-   "digest": "ec371caf2966192c0d214abfdd62ca8d375ca90b9a569e22a070793aaf82afba",
+   "digest": "e18f815db8317fe8780f019149555d48ebd069fbe8f7ab5a31d7f32a80cf0585",
    "definitions": {
     "Accounting.TS.Headline.Sm90Measured.d2s": "ae6ffdb77225f70cb0fce11653c579f117b7fd8baf016cc6055ac59563ad05bb",
-    "Accounting.TS.Headline.Sm90Measured.dc90ri": "b9ea6e4b6b3c2d2d115049c6fd1602f24fcd050c0c347ca4e61d0fe163095d3d",
-    "Accounting.TS.Headline.Sm90Measured.flat": "ad0e60f25ed616e9c69d3097ee1644bcf4e3ca9ad3a1b5efee4857c1fd3104af",
-    "Accounting.TS.Headline.Sm90Measured.flatFold": "de8f7d1f3d572509d57a205cb1f3b58427b9ac62024f7e129718976435b53e54",
-    "Accounting.TS.Headline.Sm90Measured.flatSkip": "887fca0b4ca6d0337216084df555a5da5af2504bf27cb3f641e5e94b35ccae52",
-    "Accounting.TS.Headline.Sm90Measured.flatWords": "5d726766329b9e3b61dd93090c146f4b8cbc8b691cd30b4324835eef96f4af70",
+    "Accounting.TS.Headline.Sm90Measured.dc90ri": "cd9af5bd6f6a952473d38fb33a74eb506e8b8234291d446a2d423655323df271",
+    "Accounting.TS.Headline.Sm90Measured.flat": "37184a81c1cc9d1d02deee0224158dda7168ecd4028759a587cafb90f6199a88",
+    "Accounting.TS.Headline.Sm90Measured.flatFold": "bdaed5ac7a28f970a18964bdbd3093152f30e3cb884fb3846df6d8b2d73bf1f4",
+    "Accounting.TS.Headline.Sm90Measured.flatSkip": "06ebf526953b18c6f0099a4bdd16bcf10b7d307a64d1d323808842e1e134c9d2",
     "Accounting.TS.Headline.Sm90Measured.lamStar": "17ad9c62bcfff39a83bf8a34e88e8ae77a58fb32344ee9ba9c33f0624876474f",
     "Accounting.TS.Headline.Sm90Measured.machine": "2fe754fcf17a61b0dbcd8b581ccbc1ea6cbc67d0acdf7a7b1f413e37aa91fad0",
     "Accounting.TS.Headline.Sm90Measured.model": "0de54e8b18e721ce2116f911ccf4b056a52fd40eeeea3d4012d25f204edbb55d"
@@ -24997,11 +24996,11 @@
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Models.Accounting.Guarantees.HeadlineDc": {
-   "digest": "8eecb434c062ce8cc82a11781030753cb69b88956d46fc94b2ce65120d98c149",
+   "digest": "85c3f9b5cc519fd368337d59181758bf8128e62576597a5246ce137521579146",
    "definitions": {
     "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "03569acb8aa478542701191c5fbe978c416c1084431c96a15f7d7d9850a9a849",
     "Accounting.Guarantees.TS.Sm100SheetHeadline": "a25bfa02582f235092289880987c97001343d674b470f38cd4edf7b487bb735a",
-    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "def512940cc102b1946c0555f7c742f5622a20b7f5180a717232e22bbfb2562e",
+    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "abc08574bbdaab2b1025dfc4df15a4176191dd153aac61a3fcd588a1779a80f5",
     "Accounting.Guarantees.TS.Sm90SheetHeadline": "43db4c6646f2c7ba82dec2e1ff8faff03f828d5398b209b7f94bd04cb2cd8335"
    },
    "guarantees": [
