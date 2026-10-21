@@ -1,6 +1,5 @@
 import Definitions.Accounting.Gates.Declared
 import Definitions.Accounting.Gates.Registry
-import Std.Data.String.ToNat
 
 /-!
 # The circuit model against the running Python, row by row
@@ -18,14 +17,11 @@ Rows the kernel evaluates the model on, each set recomputed from the Python by
   per engine step, the constants, the limb splits' carries, the inputs' bits, and property/v1's units of the limb steps.
 * `h1Rows`: `census` of an H1 + fx1 tile (`h1Dag`, `h1tile.PouwH1Tile`): its dot steps and `dotMacs` against its
   Program's classes in census/v1, none of its MACs served or tail, and its committed and served words against the
-  receipt's layout.
-* `classRows`, `familyRows`, `tableReadRows`: `classOf` on primitive ids (`classTag`), against property/v1's `class_of`
-  with its gathers' kinds and its s8 family's formats, and circuits' input ids.
+  receipt's layout; and every gate of each row's tile is its primitive's (`Classed`, `classed_h1Rows`).
+* `classRows`, `h1ClassRows`, `familyRows`, `tableReadRows`: `classOf` on primitive ids (`classTag`), against
+  property/v1's `class_of` with its gathers' kinds and its s8 family's formats, and circuits' input ids.
 * `unitsRows`, `tableUnitsRows`: `units` by class on small circuits of primitive ids (`dagOf`: each gate an operation of
   its id's `classOf` class), against property/v1's units of the same Program.
-
-The kernel doesn't unfold `String.Slice.takeWhile` or `String.toNat?`, so the table-read rows read `classOf` through
-`classOf_eq`: `tableReadBits` is `tableReadDigits`, the same function on the id's characters.
 -/
 
 namespace Accounting.SecurityProofs.Gates.Rows
@@ -141,9 +137,18 @@ theorem s8Interval_s8Rows :
 
 /-! ## `census` against census/v1 -/
 
+/-- An input's id at the widths the rows take: `RegisteredInput{w}_v1` when registered, else `Input{w}_v1` (a coin's
+binding is its port's). -/
+def inputId : Binding → ℕ → String
+  | .registered, 8 => "RegisteredInput8_v1"
+  | .registered, 32 => "RegisteredInput32_v1"
+  | _, 8 => "Input8_v1"
+  | _, 32 => "Input32_v1"
+  | _, _ => ""
+
 /-- An input gate of slot `i`, bound at `b`, declared at a signed `w`-bit word's whole range. -/
 def inputGate (b : Binding) (w i : ℕ) : Gate ℕ :=
-  ⟨.input b i, [], -2 ^ (w - 1), 2 ^ (w - 1) - 1, 0, "", .other, false⟩
+  ⟨.input b i, [], -2 ^ (w - 1), 2 ^ (w - 1) - 1, 0, inputId b w, .other, false⟩
 
 /-- A limb step of primitive `prim` (class `cls`) reading gate `y`, at engine step `t`. -/
 def limbGate (t : ℕ) (prim : String) (cls : Budget) (y : ℕ) (lo hi : ℤ) : Gate ℕ :=
@@ -341,78 +346,52 @@ def h1Rows : List (ℕ × ℕ × ℕ × H1Out) := [
 theorem h1Of_h1Rows : h1Rows.all (fun (r, c, K, out) => h1Of r c K == out) := by
   decide +kernel
 
-/-! ## `tableReadBits` on the id's characters -/
+/-! ## Every gate of an H1 + fx1 tile is its primitive's -/
 
-/-- The digits right after an id's `TableRead`. -/
-def digitsAfter (id : String) : List Char := (id.toList.drop 9).takeWhile Char.isDigit
+/-- A gate at a dot step is an s8-family step. -/
+def mmaAtDot (g : Gate ℕ) : Bool :=
+  match g.site, g.op with
+  | .dot .., .mma .. => true
+  | .dot .., _ => false
+  | _, _ => true
 
-/-- `tableReadBits` on the id's characters: the value of the digits after `TableRead`, when there are some and it is
-positive. -/
-def tableReadDigits (id : String) : Option ℕ :=
-  if id.startsWith "TableRead" then
-    (if (digitsAfter id).isEmpty then none else some (Nat.ofDigitChars 10 (digitsAfter id) 0)).filter (0 < ·)
-  else none
+/-- `Classed` through a list `S` of primitives and classes, as the kernel decides it: each of `S` is listed in its class
+(`Class.listed`), and each gate's primitive and class is one of `S`, an s8-family step when it is at a dot step. -/
+def classedIn (S : List (String × Class)) (C : Dag ℕ) : Bool :=
+  (S.all fun p => classOf p.1 == some p.2.listed) && C.all fun g => decide ((g.prim, g.op.cls) ∈ S) && mmaAtDot g
 
-/-- A slice's `takeWhile` of a character predicate is its characters' `takeWhile`. -/
-theorem toList_copy_takeWhile (s : String.Slice) (p : Char → Bool) :
-    (s.takeWhile p).copy.toList = s.copy.toList.takeWhile p := by
-  have hall : ∀ c ∈ (s.takeWhile p).copy.toList, p c = true := by
-    have h := String.Slice.all_takeWhile (s := s) (pat := p)
-    rwa [String.Slice.all_bool_eq, List.all_eq_true] at h
-  have hstop := String.Slice.startsWith_dropWhile (s := s) (pat := p)
-  rw [String.Slice.startsWith_bool_eq_head?] at hstop
-  rw [← String.Slice.takeWhile_append_dropWhile (s := s) (pat := p), String.toList_append,
-    List.takeWhile_append_of_pos hall]
-  cases hd : (s.dropWhile p).copy.toList with
-  | nil => simp
-  | cons c cs =>
-    simp [hd] at hstop
-    simp [hstop]
+theorem classed_of_classedIn {S : List (String × Class)} {C : Dag ℕ} (h : classedIn S C = true) : Classed C := by
+  simp only [classedIn, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at h
+  intro g hg
+  obtain ⟨hmem, hm⟩ := h.2 g hg
+  refine ⟨by simpa using h.1 _ hmem, fun K L tail s hs => ?_⟩
+  unfold mmaAtDot at hm
+  rw [hs] at hm
+  cases hop : g.op <;> simp_all [Op.IsMma]
 
-/-- A string of digits reads as their value, and the empty string as none. -/
-theorem toNat?_of_digits (t : String) (h : ∀ c ∈ t.toList, c.isDigit = true) :
-    t.toNat? = if t.toList.isEmpty then none else some (Nat.ofDigitChars 10 t.toList 0) := by
-  cases he : t.toList.isEmpty
-  · have hne : t ≠ "" := fun h0 => by simp [h0] at he
-    have hf : t.toList.filter (· != '_') = t.toList := List.filter_eq_self.2 fun c hc => by
-      have hd := h c hc
-      simp only [bne_iff_ne, ne_eq]
-      rintro rfl
-      revert hd
-      decide
-    rw [ite_eq_right (show ¬(false = true) by decide),
-      String.toNat?_eq_some_ofDigitChars (String.isNat_of_isDigit hne h), hf]
-  · rw [ite_eq_left rfl]
-    apply String.toNat?_eq_none
-    cases hn : t.isNat
-    · rfl
-    · exact absurd (String.toList_eq_nil_iff.1 (List.isEmpty_iff.1 he)) (String.isNat_iff.1 hn).1
+/-- An H1 + fx1 tile's primitives with their gates' classes (`h1Dag`): its inputs (the salt a coin, by its port), its
+zero, its noise and digit words, its lanes' segment dots, folds and finals, its receipt words and `z`'s IMMA steps. -/
+def h1Classes : List (String × Class) := [
+  ("Input8_v1", .input .run),
+  ("RegisteredInput8_v1", .input .registered),
+  ("Input32_v1", .input .coin),
+  ("Const32[0x00000000]_v1", .const),
+  ("PouwI8AddBit_v2", .budgeted .rounding),
+  ("PouwU129_v2", .budgeted .rounding),
+  ("PouwI8Neg_v2", .budgeted .rounding),
+  ("PouwI8Add_v2", .budgeted .rounding),
+  ("PouwDigitLo_v2", .budgeted .rounding),
+  ("PouwSegDot0_v2", .family .s8 .s8 32 false),
+  ("PouwSegDot_v2", .family .s8 .s8 32 false),
+  ("PouwFx1Absorb_v2", .budgeted .fold),
+  ("PouwXinFinal_v2", .budgeted .rounding),
+  ("PouwXor32_v2", .budgeted .rounding),
+  ("BlackwellS8ImmaDot32_v2", .family .s8 .s8 32 true)]
 
-/-- `tableReadBits` is `tableReadDigits` on every id. -/
-theorem tableReadBits_eq : tableReadBits = tableReadDigits := by
-  funext id
-  unfold tableReadBits tableReadDigits digitsAfter
-  by_cases hs : id.startsWith "TableRead" = true
-  · rw [ite_eq_left hs, ite_eq_left hs]
-    have hl : ((id.drop 9).takeWhile Char.isDigit).copy.toList = (id.toList.drop 9).takeWhile Char.isDigit := by
-      rw [toList_copy_takeWhile, String.toList_copy_drop]
-    have hdig : ∀ c ∈ ((id.drop 9).takeWhile Char.isDigit).copy.toList, c.isDigit = true := by
-      rw [hl]
-      exact List.all_eq_true.1 List.all_takeWhile
-    show (((id.drop 9).takeWhile Char.isDigit).copy.toNat?).filter (0 < ·) = _
-    rw [toNat?_of_digits _ hdig, hl]
-  · rw [ite_eq_right hs, ite_eq_right hs]
-
-/-- `classOf` with `tableReadDigits` for `tableReadBits`. -/
-def classOfDigits (id : String) : Option Class :=
-  (registry.lookup id).orElse fun _ => ((tableReadDigits id).map fun n => .gather (some n) 0).orElse fun _ =>
-    (families.find? fun e => id.startsWith e.1).map Prod.snd
-
-/-- `classOf` is `classOfDigits` on every id. -/
-theorem classOf_eq : classOf = classOfDigits := by
-  funext id
-  unfold classOf classOfDigits
-  rw [tableReadBits_eq]
+/-- **Every gate of each H1 row's tile is its primitive's** (`classOf` classes it, in its operation's class). -/
+theorem classed_h1Rows : ∀ e ∈ h1Rows, Classed (h1Dag e.1 e.2.1 e.2.2.1) := by
+  have h : h1Rows.all (fun e => classedIn h1Classes (h1Dag e.1 e.2.1 e.2.2.1)) = true := by decide +kernel
+  exact fun e he => classed_of_classedIn (List.all_eq_true.1 h e he)
 
 /-! ## `classOf` against property/v1's table -/
 
@@ -464,9 +443,62 @@ def classRows : List (String × String × ℕ) := [
   ("PouwSel32_v1", "compare_select", 0),
   ("PouwDuoAbsorb_v1", "folds", 0)]
 
-/-- Rows `(id, class, k)` of ids `classOf` classes by their family's prefix, and ids it refuses. Four of them
-(`_v2` ids of the gathers, the inputs and the field extractions, and a gather with no column size) are the ids property/v1
-refuses and Lean's prefixes still class (`test_lean_gates.LEAN_LOOSER`). -/
+/-- Rows `(id, class, k)` of the H1 + fx1 tile's primitives, each as its word Definition and on bits: the segment dots
+s8-family steps, the fold's steps folds, the wrap and digit tests and v4's dead-tile mask compare-selects, and the rest
+roundings. -/
+def h1ClassRows : List (String × String × ℕ) := [
+  ("PouwSegDot_v2", "family s8", 32),
+  ("PouwSegDot0_v1", "family s8", 32),
+  ("PouwSegDot0_v2", "family s8", 32),
+  ("PouwFx1Absorb_v1", "folds", 0),
+  ("PouwFx1Absorb_v2", "folds", 0),
+  ("PouwXinFinal_v1", "roundings", 0),
+  ("PouwXinFinal_v2", "roundings", 0),
+  ("PouwXor32_v2", "roundings", 0),
+  ("PouwU129_v1", "roundings", 0),
+  ("PouwU129_v2", "roundings", 0),
+  ("PouwI8AddBit_v1", "roundings", 0),
+  ("PouwI8AddBit_v2", "roundings", 0),
+  ("PouwI8Add_v1", "roundings", 0),
+  ("PouwI8Add_v2", "roundings", 0),
+  ("PouwI8Neg_v1", "roundings", 0),
+  ("PouwI8Neg_v2", "roundings", 0),
+  ("PouwUnitSeeds_v1", "roundings", 0),
+  ("PouwUnitSeeds_v2", "roundings", 0),
+  ("PouwNoiseBlock_v1", "roundings", 0),
+  ("PouwNoiseBlock_v2", "roundings", 0),
+  ("PouwDigitLo_v1", "roundings", 0),
+  ("PouwDigitLo_v2", "roundings", 0),
+  ("PouwDigitHi_v1", "roundings", 0),
+  ("PouwDigitHi_v2", "roundings", 0),
+  ("PouwDigitZ_v1", "compare_select", 0),
+  ("PouwDigitZ_v2", "compare_select", 0),
+  ("PouwLow8_v1", "roundings", 0),
+  ("PouwLow8_v2", "roundings", 0),
+  ("PouwSx8_v1", "roundings", 0),
+  ("PouwSx8_v2", "roundings", 0),
+  ("PouwResAdd_v1", "roundings", 0),
+  ("PouwResAdd_v2", "roundings", 0),
+  ("PouwOneStream2_v1", "roundings", 0),
+  ("PouwOneStream2_v2", "roundings", 0),
+  ("PouwOneStream3_v1", "roundings", 0),
+  ("PouwOneStream3_v2", "roundings", 0),
+  ("PouwWrapBits_v1", "compare_select", 0),
+  ("PouwWrapBits_v2", "compare_select", 0),
+  ("PouwWrapSeg_v1", "roundings", 0),
+  ("PouwWrapSeg_v2", "roundings", 0),
+  ("PouwXWrap_v1", "compare_select", 0),
+  ("PouwXWrap_v2", "compare_select", 0),
+  ("PouwPeelSeg_v1", "roundings", 0),
+  ("PouwPeelSeg_v2", "roundings", 0),
+  ("PouwOrBit_v1", "compare_select", 0),
+  ("PouwOrBit_v2", "compare_select", 0),
+  ("PouwMask32_v1", "compare_select", 0),
+  ("PouwMask32_v2", "compare_select", 0),
+  ("GemmAccumulatorS8_v2", "unlisted", 0)]
+
+/-- Rows `(id, class, k)` of ids `classOf` classes by their family's full pattern, and ids it refuses: another
+version, a numeral with a leading `0`, the numeral `0` or none, and a gather with no column size. -/
 def familyRows : List (String × String × ℕ) := [
   ("Input32_v1", "run", 0),
   ("Input8_v1", "run", 0),
@@ -482,22 +514,35 @@ def familyRows : List (String × String × ℕ) := [
   ("NoSuchPrimitive_v1", "unlisted", 0),
   ("Zero_v1", "unlisted", 0),
   ("I32Add_v2", "unlisted", 0),
-  ("GatherBf16x16_v2", "range", 0),
-  ("Input8_v2", "run", 0),
-  ("BitAtx32_v2", "roundings", 0),
-  ("GatherF32xQ_v1", "range", 0)]
+  ("GatherBf16x16_v2", "unlisted", 0),
+  ("Input8_v2", "unlisted", 0),
+  ("RegisteredInput8_v2", "unlisted", 0),
+  ("BitAtx32_v2", "unlisted", 0),
+  ("GatherF32xQ_v1", "unlisted", 0),
+  ("Input08_v1", "unlisted", 0),
+  ("Input_v1", "unlisted", 0),
+  ("GatherI32x064_v1", "unlisted", 0),
+  ("BitAtx0_v1", "unlisted", 0),
+  ("TopPMaskWordx_v1", "unlisted", 0)]
 
-/-- Rows `(id, class, k)` of table reads: `n` index bits, and a table read of no bits refused. The `_v2` id is one more
-that property/v1 refuses (`test_lean_gates.LEAN_LOOSER`). -/
+/-- Rows `(id, class, k)` of table reads: `n` index bits, and refused: a table read of no bits, another version, a
+numeral with a leading `0`, and no width. -/
 def tableReadRows : List (String × String × ℕ) := [
   ("TableRead16x4_v1", "low", 16),
   ("TableRead4x16_v1", "low", 4),
   ("TableRead8x32_v1", "low", 8),
   ("TableRead0x4_v1", "unlisted", 0),
-  ("TableRead16x4_v2", "low", 16)]
+  ("TableRead16x4_v2", "unlisted", 0),
+  ("TableRead016x4_v1", "unlisted", 0),
+  ("TableRead16x04_v1", "unlisted", 0),
+  ("TableRead16_v1", "unlisted", 0)]
 
 /-- `classOf` is property/v1's `class_of` on every registry row. -/
 theorem classOf_classRows : classRows.all (fun (id, tag, k) => classTag (classOf id) == (tag, k)) := by
+  decide +kernel
+
+/-- `classOf` on every H1 row. -/
+theorem classOf_h1ClassRows : h1ClassRows.all (fun (id, tag, k) => classTag (classOf id) == (tag, k)) := by
   decide +kernel
 
 /-- `classOf` on every family row. -/
@@ -506,7 +551,6 @@ theorem classOf_familyRows : familyRows.all (fun (id, tag, k) => classTag (class
 
 /-- `classOf` on every table-read row. -/
 theorem classOf_tableReadRows : tableReadRows.all (fun (id, tag, k) => classTag (classOf id) == (tag, k)) := by
-  rw [classOf_eq]
   decide +kernel
 
 /-! ## `units` against property/v1 -/
@@ -603,7 +647,6 @@ theorem unitsOf_unitsRows : unitsRows.all (fun (gs, out) => unitsOf classOf gs =
 
 /-- `units` is property/v1's on every table-read row. -/
 theorem unitsOf_tableUnitsRows : tableUnitsRows.all (fun (gs, out) => unitsOf classOf gs == out) := by
-  rw [classOf_eq]
   decide +kernel
 
 end Accounting.SecurityProofs.Gates.Rows
