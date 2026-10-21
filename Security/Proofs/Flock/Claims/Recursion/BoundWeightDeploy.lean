@@ -21,10 +21,10 @@ bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `
 binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route
 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises
-still open: `FinPieces`, `VstarShowsB`, `PartChecksB`, `PartOpensB`, `DecompB`, `RunPairs` and the readers' three facts
-(`RecDeploy.ksLin2_deployed_caps`; `HeldB` at `layoutBTops` follows from `FinPieces`, `RecDeploy.heldB_layoutBTops`).
-Holo statements are candidate 3's own model, and `BitsLin2` at the dense statements follows from it
-(`bitsLin2On_of_ksLin2On`).
+still open: `FinPieces`, `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's
+transcript being injective (`RecDeploy.ksLin2_deployed_staged`; `HeldB` at `layoutBTops` follows from `FinPieces`,
+`RecDeploy.heldB_layoutBTops`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense statements
+follows from it (`bitsLin2On_of_ksLin2On`).
 -/
 
 namespace RecDeploy
@@ -84,7 +84,7 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
 about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target (ASK-73). Route
 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
 `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_caps`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+(`RecDeploy.ksLin2_deployed_staged`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
 follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

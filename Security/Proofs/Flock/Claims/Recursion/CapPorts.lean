@@ -41,7 +41,9 @@ theorem capPorts (shape : Claims.Recursion.Form → Prop) : CapPorts shape := by
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' and RecCap's ports discharged**:
 `ksLin2_deployed_rows` with `CapPorts` from `capPorts` and the schedule from `schedMatches_dense`. What stays at the
 dense form is the last round's pieces (`FinPieces`, open), and `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`;
-then `RunPairs` and the readers' three facts. This bounds no number by itself: those premises are open. -/
+then `RunPairs` and the readers' three facts. This bounds no number by itself: those premises are open, and
+`VstarShowsB` with `HeldB` leaves no accepted run (`vstarShowsB_deployed_rejects`), so they hold only where no honest run
+is accepted. `ksLin2_deployed_staged` reads the staging off the run instead. -/
 theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     let L := layoutBTops fin
