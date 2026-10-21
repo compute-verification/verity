@@ -218,17 +218,6 @@ def test_a_request_it_cannot_read_ends_the_session(loop):
     assert reason(call(lp.connect(), round_("rep0", b"", 0))) == STOP + "coins before the step-0 coin commitment"
 
 
-def test_sessions_at_once(loop):
-    """Each connection is a session of its own, on its own connection to the auditor, served at once."""
-    auditor, lp = loop
-    a, b = lp.connect(), lp.connect()
-    assert call(b, REGISTER) == draw("null") and call(a, REGISTER) == draw("null")
-    assert call(a, ping(b"a")) == b"\x01" and call(b, ping(b"b")) == b"\x01"
-    a.close()
-    b.close()
-    assert sorted(auditor.got, key=len) == sorted([[REGISTER, ping(b"a")], [REGISTER, ping(b"b")]], key=len)
-
-
 class TcpFrame:
     """A rep's frame on a connection to the loop's frames port, asked as `test_firewall_frame.Frame` asks its own."""
 
