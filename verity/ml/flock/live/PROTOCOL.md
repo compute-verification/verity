@@ -687,17 +687,19 @@ after both reps' Lean frames answer `ok` at their `finish`, and the proofs a pro
 
 ### 10.2 The level-0 recheck
 
-Before the session's `Commit` the firewall recomputes the level-0 commitment itself: `commit_zk(z, params, level0)` over the
-host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
-recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
-without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
-drew. The root of record is the Lean verifier's: `flock-firewall link` (`Flock.Firewall.Link`) commits the same level 0
-from the same witness words, extra lanes, paddings and salts, beside `commit_zk` and the session's Lean finish (§10.4),
-and a table whose roots differ is refused before anything of it leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's root differs, the recheck's
-root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps
-`commit_zk`'s tree, so the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per
-statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's CPU seconds of
-`commit_zk`, `t.lean_link` the Lean link's wall seconds, `rust_root_agrees`), beside the device's `t.encoding_commitment`.
+Before the session's `Commit` the firewall recomputes the level-0 commitment itself, from the host witness
+(`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the recheck
+commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is without it),
+the table's level-0 hiding and its level-0 salts. The root of record is the Lean verifier's (`Flock.Firewall.Link`'s
+commitment): under the Lean session loop the loop's, below; without it the session's Lean finish's of the table's level-0
+request (`table J LEN`, §10.4), which commits the same witness words, extra lanes, paddings and salts. Rust's
+`commit_zk(z, params, level0)` runs beside it under `hm96::begin` with the same salts (`LeafSalts::level0`): its tree is
+the shadow opening's prover data (§10.4), and its root must be the Lean root, so a table whose roots differ is refused
+before anything of it leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's root differs, the recheck's root
+leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0 root`, §10.1). Its cost is
+reported per statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's
+CPU seconds of `commit_zk`, `t.lean_finish_table` the Lean finish's, `rust_root_agrees`), beside the device's
+`t.encoding_commitment`.
 
 Through the Lean session loop (§10.4) level 0's hiding is the loop's, not the host's: for each firewalled table the prover
 sends the loop its packed witness (`firewall::lean_level0`), and the loop draws the four extra lanes, every lane's padding
@@ -705,7 +707,7 @@ and the level-0 salts from the OS, commits level 0 on them and keeps the table's
 0's schedule and `t_pad`, the witness, the draws, the codeword's rows, the Merkle layers from the leaves to the cap, and
 the root, each `Link`'s function of the witness and draws: `Level0.ofDraws_ok`). The prover takes the draws in place of
 its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so `commit_zk` and the device commit the codeword the
-loop did; the loop's root is the root of record (`t.lean_link` 0), and `commit_zk`'s must be it.
+loop did; the loop's root is the root of record, and `commit_zk`'s must be it.
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
@@ -853,17 +855,25 @@ the recheck and the shadow opening are still Rust's (`FirewallComputes`), as are
 reads; the inner proof's `[ρ, σ]` and `Y` are the frame's. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
-**The proof file is the Lean finish's.** Each session has one `flock-firewall finish` (`Flock.Firewall.Finish`) on the
-statement the verifier sets up, from the files the Lean `Hello` is set up from (§10.4's `flock-firewall hello`: the
+**The proof file is the Lean finish's.** Each session has one Lean finish (`Flock.Firewall.Finish`) on the statement the
+verifier sets up at the draw Register answered: under the Lean session loop, the loop's own (a connection to its frames
+port, `finish LEN` and the draw, `Finish.serveLoop`), at the statement the loop's `Hello` is set up from; without it, a
+`flock-firewall finish` process, from the files the Lean `Hello` is set up from (§10.4's `flock-firewall hello`: the
 statement's name, `--circuit`, the verifier's own public file, `--tables`, the session's tables and
-`FC_FIREWALL_HELLO_ARGS`) at the draw Register answered. Each table's recheck hands it the table's level-0 request (`table J LEN`, the
-Lean link's bytes), whose root must be the Lean link's. After a rep's inner proof it gets the rep's request (`rep J R LEN`:
-the rep's draws, the values the firewall passed, the extra claims' points, the shadow's salts for levels ≥ 1 and every
-round's coins) and computes the rep's whole proof file from them. That file is the one that leaves. Rust still computes the
-same file (`zk_finish`, from the shadow opening and its own inner proof) as its speed reference, and a rep whose two files
-differ is refused (`FIREWALL-REFUSED: table J rep R: the Lean finish's proof file … is not zk_finish's … from byte N`). A
-rep that a check failed, or whose frame stopped it, leaves no proof file, so the finish never gets its request. The
-bucket's `t.lean_finish` is the request's wall seconds, and the `FIREWALL` line's `t.lean_finish_table` the table's.
+`FC_FIREWALL_HELLO_ARGS`). Each table's recheck hands it the table's level 0: under the loop its root (`level0 J LEN`),
+and the finish takes the loop's `Level0` of that root (§10.2), its rows, layers and cap, without committing again;
+without the loop the table's level-0 request (`table J LEN`: the witness, extra lanes, paddings and level-0 salts).
+Either way the root it answers must be the root of record. With the table it draws each rep's salts for levels ≥ 1
+itself, from the OS (`salts J R 0`, `192·2^d` bytes a level), and hands them to the prover, whose shadow and device
+trees at those levels take them (`LeafSalts::preset`): no salt of the rep's proof file comes from the prover, and a
+shadow whose salts are not the finish's is refused at the rep's end. After a rep's inner proof the finish gets the rep's
+request (`rep J R LEN`: the rep's draws, the values the firewall passed, the extra claims' points and every round's
+coins) and computes the rep's whole proof file from them and its own salts. That file is the one that leaves. Rust still
+computes the same file (`zk_finish`, from the shadow opening and its own inner proof) as its speed reference, and a rep
+whose two files differ is refused (`FIREWALL-REFUSED: table J rep R: the Lean finish's proof file … is not zk_finish's …
+from byte N`). A rep that a check failed, or whose frame stopped it, leaves no proof file, so the finish never gets its
+request. The bucket's `t.lean_finish` is the request's wall seconds, and the `FIREWALL` line's `t.lean_finish_table` the
+table's.
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
 one table's ending before the next table's begins. A later table's level-0 root leaves in table 0's `Commit`, before any

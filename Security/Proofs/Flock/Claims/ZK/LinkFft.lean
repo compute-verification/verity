@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 import Flock.Firewall.Link
 
 /-!
-# `flock-firewall link`'s FFT is level 0's padded codeword
+# `Flock.Firewall.Link`'s FFT is level 0's padded codeword
 
 `Flock.Firewall.Link.rowsFft` evaluates each lane's entry, one polynomial in the novel basis over `cols + 1` bits
 (`coeffs`), on all `2^d` points by the additive FFT (`fft`). Where the padding fits below `2^cols` and `cols < d ≤ 64`,

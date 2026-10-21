@@ -25,7 +25,9 @@ each connection is one session, relayed on a connection of its own to the audito
   roots drawn for its own session, each at its table's `m` (`Level0.commit`). Every level 0 drawn for a session, bound
   or not, is gone when it ends (`Level0.Registry.close`).
 * `Finish` leaves only once the schedule's last opening has (`State.request`). What it carries is `Firewall::finish`'s
-  (ZKFIN's), relayed as it is.
+  (ZKFIN's), relayed as it is. Its proof files are the loop's own finish's, a connection to the frames port
+  (`Finish.serveLoop`): it reads each table's level 0 from the loop's `Level0` of the table's root, and draws each rep's
+  salts for levels ≥ 1 itself, which the prover's trees then take.
 * Every other frame is relayed as it is. For now that is `Proof`, which `Firewall::finish` decides.
 
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
@@ -40,6 +42,7 @@ hold.
 import Flock.Firewall.SessionPlan
 import Flock.Firewall.Frames
 import Flock.Firewall.Level0
+import Flock.Firewall.Finish
 import Std.Async.TCP
 import Std.Async.DNS
 
@@ -542,8 +545,10 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
 
 /-- **The loop's frames**: each connection to `srv` is one rep's frame (`Frame.serveWith` at the operating system's bytes,
 as `flock-firewall frame` serves it), in a slot of its own in `reg` (`Frames.hooks`), served on its own thread until it
-ends or the connection closes; or, where its first line is `level0 …`, one table's level 0 (`level0`). -/
-def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Level0.Registry) : IO Unit := do
+ends or the connection closes; or, where its first line is `level0 …`, one table's level 0 (`level0`); or, where it is
+`finish …`, a session's proof files on the tables' level 0 in `l0s` (`Finish.serveLoop`, at the statement `S`). -/
+def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
+    (l0s : IO.Ref Level0.Registry) : IO Unit := do
   repeat
     let c ← srv.accept.block
     let _ ← IO.asTask (prio := .dedicated) do
@@ -551,6 +556,8 @@ def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Le
       let first ← ch.getLine
       if first.startsWith "level0 " then
         try level0 ch l0s first catch e => IO.eprintln s!"level 0: {e}"
+      else if first.startsWith "finish " then
+        try Finish.serveLoop ch S specs l0s first catch e => IO.eprintln s!"finish: {e}"
       else
         let i ← reg.modifyGet fun R => let (R', i) := Frames.openSlot R; (i, R')
         let held ← IO.mkRef (some first)
@@ -566,7 +573,7 @@ def frames (srv : Socket.Server) (reg : IO.Ref Frames.Registry) (l0s : IO.Ref Le
 
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the statement
 flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
-for sessions and on a port the system picks for the reps' frames and the tables' level 0, prints `LISTENING 127.0.0.1:PORT` and then
+for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
 on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). When a session
 ends, every level 0 drawn for it is freed (`Level0.Registry.close`), and where there were any, its standard error says
@@ -608,7 +615,7 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
   IO.println s!"LISTENING 127.0.0.1:{(← srv.getSockName).port}"
   IO.println s!"FRAMES 127.0.0.1:{(← fsrv.getSockName).port}"
   (← IO.getStdout).flush
-  let _ ← IO.asTask (prio := .dedicated) (frames fsrv reg l0s)
+  let _ ← IO.asTask (prio := .dedicated) (frames S specs fsrv reg l0s)
   let _ ← IO.asTask (prio := .dedicated) do
     repeat
       let p ← srv.accept.block
