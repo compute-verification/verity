@@ -34,6 +34,8 @@ UNITS = {
     "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
     "verity/core/protocols/pouw/tests/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
+    "integrations/vllm/tests/protocol_options/test_pouw_h1_served.py::StandIn":
+        "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
