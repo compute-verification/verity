@@ -7020,6 +7020,15 @@
   "Nci.Cover.SecurityProofs.CoverBound": {
    "owner": "@training"
   },
+  "Nci.Cover.SecurityProofs.CutOfDisjointUpstreams": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CutWidthCoverBound": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CutWidthIntensity": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.Entry": {
    "owner": "@training"
   },
@@ -7033,6 +7042,9 @@
    "owner": "@training"
   },
   "Nci.Cover.SecurityProofs.WidthIntensity": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.WidthOfCut": {
    "owner": "@training"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
@@ -9901,7 +9913,11 @@
    "Nci.Cover.SecurityProofs.AdditiveIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.AdditiveCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.WidthIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
-   "Nci.Cover.SecurityProofs.WidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
+   "Nci.Cover.SecurityProofs.WidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named ConditionalUpdateHardness and Width (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.WidthOfCut": "frozen (no-function): It is about an arbitrary training circuit, its products with the activation's cut width (Security/Definitions/Nci/CoverWidth.lean) and inference blocks of it (Security/Definitions/Nci/Cover.lean), under the named UpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutOfDisjointUpstreams": "frozen (no-function): It is about an arbitrary training circuit and its products, two structural properties of their wiring (Security/Definitions/Nci/CoverWidth.lean), not about the NCI check's code; a check of a circuit's disjoint upstreams, joined to the cover theorem, is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutWidthIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Cover.SecurityProofs.CutWidthCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with an upstream certificate and the activation's cut width and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverWidth.lean), under the named ConditionalUpdateHardness (Security/Models/Nci/Assumptions/Cover.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
