@@ -312,9 +312,10 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
-would keep one of them. -/
-def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
-    IO (Except String (Option (Array Registered.Port))) := do
+would keep one of them. Beside the ports, whether the file names every port of the statement (`Registered.completeOf`,
+`Registered.checkComplete`). -/
+def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+    IO (Except String (Option (Array Registered.Port × Bool))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -327,8 +328,15 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        return ((Registered.ofJson j).mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
+        let r : V (Option (Array Registered.Port × Bool)) := do
+          pure (some (← Registered.ofJson j, ← Registered.completeOf j))
+        return r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}"
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
+
+/-- `registeredFile`'s ports. -/
+def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+    IO (Except String (Option (Array Registered.Port))) :=
+  return (← registeredFile args flag ctx).map (·.map Prod.fst)
 
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
@@ -720,8 +728,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
-    | .ok r => pure r
+  let (registered, complete) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, r.any Prod.snd)
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -770,6 +778,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecSetup.checkInner recInner recCoins recBound
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
+        if complete then r.2.forM fun st => Registered.checkComplete st.c (registered.getD #[])
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
         if zk then r.2.forM Zk.shapeOk
@@ -879,8 +888,8 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
-    | .ok r => pure r
+  let (registered, complete) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, r.any Prod.snd)
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -917,6 +926,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       RecSetup.checkInner recInner recCoins recBound
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
+      if complete then Registered.checkComplete st.c (registered.getD #[])
       if recInner.isSome then
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
           recBindings recRows

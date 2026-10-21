@@ -37,6 +37,10 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   the lanes' XOR, the partials recommitted under its registration: the combine's ok is 0 (REJECT). ``lane3-index4``: lane
   3 whose ``pub`` row holds index 4, which opens no root but lane 4's (REJECT). ``ok-from-public``: the combine whose
   ``o0`` the prover commits afresh, the public file stating it, which the verifier's own reads refuse (REJECT).
+  ``lane3-index-from-public``: lane 3 whose ``pub`` row (its index, 3) the prover commits afresh and the public file
+  states, checked against a verifier's file that leaves ``pub`` out and says it is complete: refused by the verifier's
+  `Registered.checkComplete` by name (REJECT, ``WHY``); ``lane3-index-from-public-open``, the same session against that
+  file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
   Every check registers ok = 1 (``o0``'s known row), so a statement whose ok is 0 is refused at its session's parameters
   (S2/R7: its instance's output commitment is not the verifier's).
 * **The shared openings** (``shared_codes``, `produced.shared`): every row the honest sessions report opening (their
@@ -95,7 +99,11 @@ REGISTERED = (LL.A, LL.B, LL.ZY, LL.RECEIPT)
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
           "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT", "lane3-index4": "REJECT",
-          "ok-from-public": "REJECT"}
+          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT", "lane3-index-from-public-open": "ACCEPT"}
+#: the refusal a negative's verdict names
+WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's"}
+#: a check of another check's statement against its registered file without ``complete``
+OPEN = {"lane3-index-from-public-open": "lane3-index-from-public"}
 
 
 def tile(k: int):
@@ -331,18 +339,21 @@ def expected(kind: str, ln: int | None, w: World, ins: dict, index: int | None =
 
 
 def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, index: int, free: tuple = (),
-              lane_index: int | None = None) -> dict:
+              lane_index: int | None = None, dropped: tuple = ()) -> dict:
     """Stage one statement and write the verifier's files: ``ins`` each input port's opening (`opening`,
     `known_opening`); the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows and registers
     its known ports (`known_rows`, `produced.known_port`), ``o0`` among them. ``free``: output ports the prover commits
-    afresh, which the public file states (``o0`` in ``ok-from-public``). ``lane_index``: the index the lane's ``pub`` row
-    holds, when not ``ln``. The lowered ok is held to the word reference (`expected`) in place of
+    afresh, which the public file states (``o0`` in ``ok-from-public``). ``dropped``: known input ports committed afresh
+    and left out of the verifier's file too, which still says it is complete (``pub`` in ``lane3-index-from-public``),
+    written beside it without ``complete`` as well. ``lane_index``: the index the lane's ``pub`` row holds, when not
+    ``ln``. The lowered ok is held to the word reference (`expected`) in place of
     `UnitStager.reference_check`, as h1_prove's stage does."""
     st = ctx.stagers[kind]
     ent, roots = entries(ctx, w)
     kr = known_rows(ctx, w, kind, ln, index)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, w.registration, schema=V2) for p, (v, row, salt) in kr.items()}
-    reads = LL.registered_file(LL.reads(*RC, kind, ln), ent, roots, {v: V2 for v in ent}, {p: kp for p, (kp, _) in vk.items()})
+    reads = LL.registered_file(LL.reads(*RC, kind, ln), ent, roots, {v: V2 for v in ent},
+                               {p: kp for p, (kp, _) in vk.items() if p not in dropped})
     want = expected(kind, ln, w, ins, lane_index)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: known(row_ok, salt_ok) if LL.OK in free else known_opening(ctx, w, v_ok, row_ok, salt_ok)}
@@ -367,13 +378,15 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     mine = {p: o["bc"] if "bc" in o else U.commit_strings(ports[p], np.asarray([o["row"]], np.uint16), [o["salt"]])[0]
             for p, o in {**ins, **outs}.items()}
     vreads = [{p: (o["value"], reads["ports"][p]["reads"][0], o["path"]) for p, o in {**ins, **outs}.items() if "value" in o}]
-    if set(vreads[0]) | set(free) != set(reads["ports"]) or set(reads["ports"]) != LL.own(*RC, kind, ln):
+    if set(vreads[0]) | (set(free) - set(dropped)) != set(reads["ports"]) or set(reads["ports"]) | set(dropped) != LL.own(*RC, kind, ln):
         raise AssertionError(f"{tag}: the opened ports {sorted(vreads[0])} are not the verifier's {sorted(reads['ports'])}")
     pub = U.verifier_pub({"meta": st.meta, "pin": st.pin, "class": st.class_sha512}, f"h1-lanes-{tag}", st.sub.id, [mine],
                          [0], vreads)
     vd = ctx.work / "verifier"
     (vd / f"{tag}.pub.bin").write_bytes(pub)
     (vd / f"{tag}.registered.json").write_text(json.dumps(reads))
+    if dropped:
+        (vd / f"{tag}.open.registered.json").write_text(json.dumps({x: v for x, v in reads.items() if x != LL.COMPLETE}))
     return {"tag": tag, "kind": kind, "lane": ln, "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
             "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{kind}.program.json"),
             "partition": str(vd / f"{kind}.partition.json"), "ands": got["ands"], "circuit_sha512": got["circuit_sha512"],
@@ -387,8 +400,9 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
 CTX = None
 
 
-def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int | None = None) -> dict:
-    """Lane ``ln``'s openings; ``pub_index``: the index its ``pub`` row holds, when not ``ln``."""
+def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int | None = None, pub_free: bool = False) -> dict:
+    """Lane ``ln``'s openings; ``pub_index``: the index its ``pub`` row holds, when not ``ln``; ``pub_free``: its ``pub``
+    row committed afresh, the public file stating it."""
     t = w.regs
     ins = {f"a{s}": opening(t[LL.A], i) for s, i in enumerate(LL.lane_rows(*RC, ln))}
     ins.update({f"b{s}": opening(t[LL.B], j) for s, j in enumerate(LL.lane_cols(*RC, ln))})
@@ -396,7 +410,8 @@ def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int
     kr = known_rows(ctx, w, LL.LANE, ln, ln)
     for p in (LL.ADMIT, LL.PUB):
         v, row, salt = kr[p]
-        ins[p] = known_opening(ctx, w, v, pub_words(w, pub_index) if p == LL.PUB and pub_index is not None else row, salt)
+        row = pub_words(w, pub_index) if p == LL.PUB and pub_index is not None else row
+        ins[p] = known(row, salt) if p == LL.PUB and pub_free else known_opening(ctx, w, v, row, salt)
     return ins
 
 
@@ -417,7 +432,8 @@ def jobs(ctx) -> list[tuple]:
                      ("other-leaf-in-tree", LL.COMBINE, None, "mixed", None),
                      ("lane5-partial-off-tree", LL.LANE, 5, "mixed", "off-tree"),
                      ("receipt-mismatch", LL.COMBINE, None, "receipt", None),
-                     ("lane3-index4", LL.LANE, 3, "honest", "index4"), ("ok-from-public", LL.COMBINE, None, "honest", "ok-free")]
+                     ("lane3-index4", LL.LANE, 3, "honest", "index4"), ("ok-from-public", LL.COMBINE, None, "honest", "ok-free"),
+                     ("lane3-index-from-public", LL.LANE, 3, "honest", "pub-free")]
 
 
 def run_job(job: tuple) -> dict:
@@ -429,7 +445,9 @@ def run_job(job: tuple) -> dict:
         partial = {"row4": lambda: opening(w.tree, ln, row=4),
                    "off-tree": lambda: opening(ctx.worlds["honest"].tree, ln)}.get(neg, lambda: None)()
         pub_index = 4 if neg == "index4" else None
-        return statement(ctx, kind, ln, tag, w, lane_ins(ctx, w, ln, partial, pub_index), index, lane_index=pub_index)
+        pub_free = neg == "pub-free"
+        return statement(ctx, kind, ln, tag, w, lane_ins(ctx, w, ln, partial, pub_index, pub_free), index,
+                         lane_index=pub_index, free=(LL.PUB,) if pub_free else (), dropped=(LL.PUB,) if pub_free else ())
     ins = combine_ins(ctx, w, opening(ctx.worlds["other"].tree, 5) if neg == "p5" else None)
     return statement(ctx, kind, ln, tag, w, ins, index, free=(LL.OK,) if neg == "ok-free" else ())
 
@@ -505,10 +523,13 @@ def prepare(args) -> None:
     with mp.get_context("fork").Pool(args.jobs) as pool:
         recs = list(pool.imap_unordered(run_job, js))
     by = {r["tag"]: r for r in recs}
+    for tg, of in OPEN.items():
+        by[tg] = {**by[of], "tag": tg, "registered": by[of]["registered"].replace(".registered.json", ".open.registered.json")}
     honest = [j[0] for j in js if j[0] not in EXPECT]
-    checks = [j[0] for j in js]
+    proved = [j[0] for j in js]
+    checks = proved + list(OPEN)
     with open(work / "plan.tsv", "w") as f:
-        for tg in checks:
+        for tg in proved:
             f.write(f"S\t{tg}\t{by[tg]['dir']}\n")
         for tg in checks:
             r = by[tg]
@@ -550,8 +571,9 @@ def summarize(args) -> int:
         v = _verdict(out / "lean" / f"{tag}.out")
         err = out / "lean" / f"{tag}.err"
         word = "NONE" if v is None else ("ACCEPT" if v["accepted"] else "REJECT")
-        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"],
-                     "why": (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else ""),
+        why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
+        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
+                     "why": why,
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
         if tag in plan["honest"] and v and v["accepted"]:

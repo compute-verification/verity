@@ -27,7 +27,9 @@ words at K = 4096. The combine checks that the rows' XOR, word by word, is the l
 
 Every port of every statement, its output row included, is a port of the verifier's own registered reads (`own`,
 `registered_file`), never a row the public file states: a port the verifier doesn't register is free in the relation it
-checks.
+checks. The file says so (``complete``), and the Lean verifier then refuses a statement any port of whose circuit, an
+input its ok's cone reads (the lane index's ``pub`` among them) or an output row, is not one of the file's ports
+(Flock's `Registered.checkComplete`, `checkComplete_ok`).
 
 * **The reads** (`reads`) open the registration's and the produced record's roots at the rows the verifier states here, so
   a partial swapped between rows opens at no read's position, and one from another leaf's tree opens under no root the
@@ -52,6 +54,8 @@ A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
 #: the lane statement's public row's fields, in order
 PUBLIC = ("salt", "position", "roots", "lane")
 PUB, OK = "pub", "o0"
+#: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
+COMPLETE = "complete"
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, COMBINE = "lane", "combine"
 
@@ -143,10 +147,12 @@ def own(r: int, c: int, kind: str, ln: int | None = None) -> set[str]:
 
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
-                    known_ports: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` file of one statement (one unit) from its `reads`: each port's value's entry
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
-    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s)."""
+    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``complete``:
+    the ports are every port of the statement (`own`), which the verifier then holds the circuit to
+    (`Registered.checkComplete`)."""
     out = {}
     for port, (value, row) in ports.items():
         if value not in entries or value not in roots:
@@ -154,12 +160,13 @@ def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, 
         out[port] = PR.port(value, entries[value], roots[value], [row], (schemas or {}).get(value, G.SCHEMA))
     if set(out) & set(known_ports or {}):
         raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **(known_ports or {})}}
+    return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
 
 
 __all__ = [
     "ADMIT",
     "COMBINE",
+    "COMPLETE",
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
