@@ -195,18 +195,20 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, verify: Verify,
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, main: Any, verify: Verify,
             period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the challenger signed for the session's window, read on the auditor's side (`remote.trusted_session`): the
     one challenger session the auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the
-    session's own (`window`), its files in `directory`, under the pinned `key`; its commitment and the roots its signed
+    session's own (`window`), its files in `directory`, under the pinned `key`, its entries written at one commit of
+    main's first-parent history as the verifier's own copy `main` lists it; its commitment and the roots its signed
     release log shows it received.  With `period`, the audit's period on the ledger, the window must be one of that
     period's (`challenger.audited_session`), so the session is bound to its (period, registration).  Raises
     `CoinError` naming why."""
     w = window(coins.registration, coins.session)
-    got = remote.trusted_session(directory, heads, w, key, verify)
+    got = remote.trusted_session(directory, heads, w, key, main, verify)
     if period is not None:
-        held = audited_session(ledger_head([remote.ledger_lines(p) for p in heads], key, verify), w, key, verify).period
+        held = audited_session(ledger_head([remote.ledger_lines(p) for p in heads], key, verify), w, key, main,
+                               verify).period
         if held != period:
             raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
                             f"period {period}")

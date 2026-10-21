@@ -840,15 +840,16 @@ class Session:
         return coins.released_reason(self.coins, [w.roots for w in self.windows],
                                      [a[2].root for a in self._appends], signed, received)
 
-    def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey,
+    def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey, main: Any,
                        verify: coins.Verify, period: str | None = None) -> str | None:
         """Why this session's coins are not those of the one challenger session the auditor's ledger opens for its
         window `{root: R}` (`coins.trusted`: the ledger's published `heads` and the session's files in `directory`,
-        under the pinned `key`, inside the audit's `period` when it names one), held to them as `released_reason`
-        holds them; None when they are.  So coins from a second challenger session, opened for another root or refused
-        by the ledger as a second open for R, are refused."""
+        under the pinned `key`, written at one commit of main's first-parent history as the verifier's own copy `main`
+        lists it, inside the audit's `period` when it names one), held to them as `released_reason` holds them; None
+        when they are.  So coins from a second challenger session, opened for another root or refused by the ledger as
+        a second open for R, or from a host running code main's check didn't pass, are refused."""
         try:
-            signed, received = coins.trusted(self.coins, directory, heads, key, verify, period)
+            signed, received = coins.trusted(self.coins, directory, heads, key, main, verify, period)
         except coins.CoinError as e:
             return f"the challenger's session for this session's window is not trusted: {e}"
         return self.released_reason(signed, received)

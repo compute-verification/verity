@@ -26,6 +26,10 @@ HOST = "vy-test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
+#: the commit of the host's tree that writes the ledger's entries, one of `MAIN`, the verifier's copy of main's
+#: first-parent history
+PIN = "ab" * 20
+MAIN = ["0f" * 20, PIN]
 
 
 def key() -> C.ChallengerKey:
@@ -84,12 +88,13 @@ class Service:
 class Ledger:
     """The auditor's ledger in `path`, each entry signed with `sign` under the challenger key."""
 
-    def __init__(self, path, sign) -> None:
-        self.path, self.sign, self.lines = path, sign, []
+    def __init__(self, path, sign, pin: str = PIN) -> None:
+        self.path, self.sign, self.lines, self.pin = path, sign, [], pin
         self.key_sha512 = hashlib.sha512(lms.public_key(KEY)).hexdigest()
 
     def append(self, kind: str, session: str | None, body: dict) -> None:
-        self.lines.append(C.ledger_line(self.lines, kind, session, body, lms.public_key(KEY)[:16], self.sign))
+        self.lines.append(C.ledger_line(self.lines, kind, session, {**body, "pinned": self.pin}, lms.public_key(KEY)[:16],
+                                        self.sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
     def period(self, name: str = "p-1") -> None:
@@ -97,7 +102,7 @@ class Ledger:
                                           "circuit": CIRCUIT})
 
     def open(self, sid: str, root: bytes) -> None:
-        self.append("open", sid, {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}", "pinned": "ab" * 20,
+        self.append("open", sid, {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}",
                                   "key_sha512": self.key_sha512, "port": 7811, "by": LANE})
 
     def end(self, service: Service) -> None:
@@ -147,12 +152,12 @@ def test_coins_from_a_second_session_for_the_registration_are_refused(store, tmp
     assert all(v.accepted for v in verdicts) and second.close() is None
     ledger.end(second)
     assert s.released_reason(*second.signed()) is None
-    why = s.trusted_reason(first.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(first.directory, [ledger.path], key(), MAIN, verify)
     assert why == "the challenger signed another coin commitment than the one the session's coins open against"
-    why = s.trusted_reason(second.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(second.directory, [ledger.path], key(), MAIN, verify)
     assert why is not None and why.startswith("the challenger's session for this session's window is not trusted")
     ledger.open("s-again", r)
-    why = s.trusted_reason(first.directory, [ledger.path], key(), verify)
+    why = s.trusted_reason(first.directory, [ledger.path], key(), MAIN, verify)
     assert why is not None and "a second open for root" in why
 
 
@@ -164,8 +169,28 @@ def test_the_session_the_ledger_opens_for_its_window_is_trusted(store, tmp_path,
     s, verdicts = served_session(store, service)
     assert all(v.accepted for v in verdicts) and service.close() is None
     ledger.end(service)
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1") is None
+    assert s.trusted_reason(service.directory, [ledger.path], key(), MAIN, verify) is None
+    assert s.trusted_reason(service.directory, [ledger.path], key(), MAIN, verify, "p-1") is None
+
+
+def test_a_session_whose_host_ran_a_commit_off_mains_first_parent_history_is_refused(store, tmp_path, sign):
+    """RT4-INT-40: the challenger's host pinned to a pushed commit main's first-parent history doesn't list writes a
+    ledger whose session counts for no audit, and a verifier holding no copy of main's history trusts none."""
+    pushed = "9e" * 20
+    ledger = Ledger(tmp_path / "windows.jsonl", sign, pin=pushed)
+    ledger.period()
+    ledger.open("s-r", coins.window_root(store.registration.digest, 0))
+    service = Service(tmp_path / "s-r", sign, "s-r", 0, params().windows, b"service")
+    s, verdicts = served_session(store, service)
+    assert all(v.accepted for v in verdicts) and service.close() is None
+    ledger.end(service)
+    why = s.trusted_reason(service.directory, [ledger.path], key(), MAIN, verify, "p-1")
+    assert why == ("the challenger's session for this session's window is not trusted: the auditor's ledger's open entry "
+                   f"1 was written by the host's tree at {pushed}, which is not a commit of main's first-parent history: "
+                   f"{C.REPIN}")
+    assert s.trusted_reason(service.directory, [ledger.path], key(), MAIN + [pushed], verify, "p-1") is None
+    why = s.trusted_reason(service.directory, [ledger.path], key(), None, verify, "p-1")
+    assert why == f"the challenger's session for this session's window is not trusted: {C.NO_MAIN}"
 
 
 @pytest.mark.parametrize("held", ["p-2", None])
@@ -180,8 +205,8 @@ def test_a_session_is_bound_to_the_audits_period(store, tmp_path, sign, held):
     s, verdicts = served_session(store, service)
     assert all(v.accepted for v in verdicts) and service.close() is None
     ledger.end(service)
-    assert s.trusted_reason(service.directory, [ledger.path], key(), verify) is None
-    why = s.trusted_reason(service.directory, [ledger.path], key(), verify, "p-1")
+    assert s.trusted_reason(service.directory, [ledger.path], key(), MAIN, verify) is None
+    why = s.trusted_reason(service.directory, [ledger.path], key(), MAIN, verify, "p-1")
     assert why == ("the challenger's session for this session's window is not trusted: the auditor's ledger holds the "
                    f"session's window in period {held}, not the audit's period p-1")
 
