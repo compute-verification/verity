@@ -50,6 +50,16 @@ case " $* " in *dither-a-hbr*)
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
+# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC)
+case " $* " in *dither-a-hbc*)
+  read -r -a kc <<< "${HB_KC_FLAGS:-}"
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_kc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kc.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u_kc"; grep -v "^ptxas info" "$OUT/build-h1u_kc.log" | tail -30; exit 11; }
+  echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
+  grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
+  export HB_H1U_KC=$S/h1u_kc.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"

@@ -62,7 +62,9 @@ Arms:
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
                  dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
-                 receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA).  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 receipts only, dither-a-hbr the same call built H1K_RONLY (HB_H1U_KRONLY: no z, y or their MMA), dither-a-hbc
+                 -hbr's call from a second receipts-only build (HB_H1U_KC: sbench.sh's HB_KC_FLAGS, a candidate timed beside
+                 -hbr in one run and held to its every gate).  Each with -zy commits CA's z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
                  builds every call's table between steps),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
@@ -332,7 +334,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         unit, z, ao, pt, ls = DITHER_A[arm]
         unit = unit or ("kh" if h1u else "h1r")
         if unit in DA.KONE:
-            h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"]
+            h1u = os.environ["HB_H1U_KSPLIT" if unit == "hbk" else
+                             "HB_H1U_KC" if arm.startswith("dither-a-hbc") else "HB_H1U_KRONLY"]
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=h1u, z=z, ao=ao, pt=pt, ls=ls)
@@ -346,7 +349,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
-            for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"))
+            for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"), ("-hbr", "hbr"), ("-hbc", "hbr"))
             for z, zm in (("", "row"), ("-zy", "zy"), ("-y", "none"))
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"), ("-aomn", "mn"))
             for p, pt in (("", False), ("-pt", True))

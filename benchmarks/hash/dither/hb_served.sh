@@ -62,11 +62,12 @@ srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U_PEEL:-}" ] && HB_H1U_PEEL=$INPUTS/$(basename "$HB_H1U_PEEL")
 [ -n "${HB_H1U_KSPLIT:-}" ] && HB_H1U_KSPLIT=$INPUTS/$(basename "$HB_H1U_KSPLIT")
 [ -n "${HB_H1U_KRONLY:-}" ] && HB_H1U_KRONLY=$INPUTS/$(basename "$HB_H1U_KRONLY") && export HB_H1U_KRONLY
+[ -n "${HB_H1U_KC:-}" ] && HB_H1U_KC=$INPUTS/$(basename "$HB_H1U_KC") && export HB_H1U_KC
 # the hb_*.py files: the source tree's where it has them (it is first on sbench's sys.path), else the ones sent
 HB=$ROOT/$DITHER
 [ -f "$HB/hb_sbench.py" ] || HB=$INPUTS
 sha256sum "$0" "$HB"/hb_sbench.py "$HB"/hb_side.py "$HB"/hb_one.py "$HB"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
-  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} ${HB_H1U_KRONLY:+"$HB_H1U_KRONLY"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} ${HB_H1U_KRONLY:+"$HB_H1U_KRONLY"} ${HB_H1U_KC:+"$HB_H1U_KC"} 2>/dev/null | sed "s#$INPUTS/##; s#$ROOT/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
