@@ -252,7 +252,7 @@ class SoWindow(DO.Window):
         ro = rnd.level_off[0]
         row[nr * L8:nr * L8 + 8 * nr].copy_(rnd.level[ro:ro + 8 * nr], non_blocking=True)
 
-    def units(self, j: int) -> float:
+    def dispatch_units(self, j: int) -> float:
         """Step j's units once its coin is back (`SoSide.dispatch`, under its coin's salt; fault_rearly's under the coin
         before), unless fault_tail drops the window's last step's; when the coin came back (perf_counter)."""
         i = self.ix(j)
@@ -295,7 +295,7 @@ class SoWindow(DO.Window):
             pending = len(self.stashed)
             for j in sorted(self.stashed):
                 self.stashed.discard(j)
-                self.units(j)
+                self.dispatch_units(j)
             self.phase(None)
         t_units = time.perf_counter()
         torch.cuda.synchronize()
@@ -533,7 +533,7 @@ class SoWindow(DO.Window):
         t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
             self.stashed.discard(ju)
-            t_coin = self.units(ju)
+            t_coin = self.dispatch_units(ju)
             t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
