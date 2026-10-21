@@ -192,7 +192,8 @@ def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := d
 
 /-- **Session `sid`'s device round `content` of table `i`'s rep `r`**, squeezing `n` coins, on a stream whose domain
 frame is `dom`, the stream's first round opening with it: the round that leaves in its place, the frame's release
-(`Frame.step`), after the stream's domain frame at its first round; or why none does. -/
+(`Frame.step`, which takes the first round whole and releases it without the domain frame), after the stream's domain
+frame at its first round; or why none does. -/
 def round (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
     IO (Except String ByteArray) := do
   let R ← reg.get
@@ -203,10 +204,9 @@ def round (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Registry) (sid i r : Nat)
   let some l0 := Level0.ofSession (← l0s.get) sid name | return .error s!"a round of {name} before the session's Commit"
   let first := p.coins.isEmpty && !p.st.begun
   let mut p := p
-  let mut c := content
+  let c := content
   if first then
     if (c.extract 0 dom.size).data != dom.data then return .error "a stream's first round without its domain frame"
-    c := c.extract dom.size c.size
     let alg ← match algOf st l0.root (s.spec.domain name r).toUTF8 with
       | .ok a => pure a
       | .error e => return .error e
