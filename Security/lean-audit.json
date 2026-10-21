@@ -941,6 +941,14 @@
    "owner": "@lean",
    "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
   },
+  "Nci.Assumptions.PackedActivationsIncompressible": {
+   "owner": "@lean",
+   "digest": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+  },
+  "Nci.Assumptions.PackedTrainingIncompressible": {
+   "owner": "@lean",
+   "digest": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -7148,6 +7156,28 @@
    "assumptions": [],
    "type_hash": "0339e5b11195f6a2be6a2b2b33069b168fcccd1d874e338d0247bc7742752583"
   },
+  "Nci.SecurityProofs.PackedContainedFanOutOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.PackedContainedFanOutOn : Nci.Guarantees.PackedContainedFanOutOn"],
+   "assumptions": [],
+   "type_hash": "4d2565dacf91227c14474ec7bf24354cc36527de5075976aab9be094e60a3be7"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn : Nci.Guarantees.PackedIncompressibleContainedMatMulOn"
+   ],
+   "assumptions": [],
+   "type_hash": "489269136c34fdbbb4abbd2ee45cd3e3c5a72e8ec2322facf15516da3220425c"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn : Nci.Guarantees.PackedIncompressibleContainedTrainingOn"
+   ],
+   "assumptions": [],
+   "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e"
+  },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
@@ -9795,7 +9825,10 @@
    "Accounting.Guarantees.TS.Sm90SheetHeadline": "unstated: the H200's headline at DS-90, Dither-2S LI-CP-W redux with ffill at p = 1 (no check reads its chains, so ♭ credits no filler) and ♭'s checkpoint by the cheapest mix of every bit-exact checkpoint loop (CP_SEG4, CP_SEG4U, RT2-HOPPER-9, -11; rt3_dc's CP_ATS/ATS2/ATS8, CP_RED/RED2/RED8 and CP_XT, RT3-DC-1, -4), their memory and control classes at one issue slot and no pipe row, at 0.944% (P·V's peel at sm_90a's own counts, RT-ISA-7; the unfolded branch binds), FOLD-OPT at its pi* (FoldOptFoldedAt at Sm90.lamStar, DS_issue alone, so an instruction count with no pipe premise; at every certificate it is false, RT3-LOGIC-6; no slack as a premise, 0.058% against 1%), binding in its fork form (BindingForkAt, read at sqrt(delta_fork)), ProofSoundAt and ProofsPin, in Models.Accounting.Guarantees.Headline's form (statement only, for red team); its theorem Accounting.SecurityProofs.TS.Sm90SheetHeadline is not proved yet. Its data is Definitions.Accounting.HeadlineDc.Sm90, written by benchmarks/pouw/lean_headline_dc.py (note:20261019T0507Z-draft-int-hb, note:20261019T2245Z-draft-dc-census).",
    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "unstated: the H200's headline on DC-90-ri at 1.479%, over 1% (ffill at p = 1, ♭ setup's floor exactly, every word on the IGMMA, its fold by CP_SEG4U, CP_ATS8 and CP_RED2), honest's IGMMA s8 m64n256k32 and UNI its writer kinds (NoSum carries the forms DC-90-ri prices at the scalar coefficient), A6 for (I2)-(I4), the folded branch binding, ♭'s checkpoint by the cheapest mix of every bit-exact checkpoint loop (CP_SEG4, CP_SEG4U, RT2-HOPPER-9, -11; rt3_dc's CP_ATS/ATS2/ATS8, CP_RED/RED2/RED8 and CP_XT, RT3-DC-1, -4), their memory and control classes at one issue slot and no pipe row, the H200's REDG32 also on AT90, FOLD-OPT at its pi* (FoldOptFoldedAt at Sm90Measured.lamStar, issue 0.003603 + JI90_0 0.965711 + JI90_1 0.029738 + AT90 0.000948; at every certificate it is false, RT3-LOGIC-6), binding in its fork form (BindingForkAt, read at sqrt(delta_fork)), ProofSoundAt and ProofsPin, in Models.Accounting.Guarantees.Headline's form (statement only, for red team); its theorem Accounting.SecurityProofs.TS.Sm90MeasuredHeadline is not proved yet. Its data is Definitions.Accounting.HeadlineDc.Sm90Measured, written by benchmarks/pouw/lean_headline_dc.py (note:20261019T0507Z-draft-int-hb, note:20261019T2245Z-draft-dc-census).",
    "Accounting.Guarantees.TS.Sm100SheetHeadline": "unstated: the B200's headline at DS-100, Dither-2S LI-CP-W redux (the fold the checks read) with ♭ crediting no tcgen05.ld, UNI a writer kind at 2 words, ♭'s checkpoint by the cheapest mix of every bit-exact checkpoint loop (CP_SEG4, CP_SEG4U, RT2-HOPPER-9, -11; rt3_dc's CP_ATS/ATS2/ATS8, CP_RED/RED2/RED8 and CP_XT, RT3-DC-1, -4), their memory and control classes at one issue slot and no pipe row, at 0.783% (the unfolded branch binds), FOLD-OPT at its pi* (FoldOptFoldedAt at Sm100.lamStar, DS_issue 2/3 + DS_alu 1/3, a LOP3 at 4/3 and an IMAD or FFMA at 2/3, so it asks that li's XOR of two words has no IMAD- or FP-pipe program of 1 or 2 instructions within the modelled menu IMAD, IMAD.HI, IDP.4A, IDP.2A, FFMA2 (IMAD.WIDE, HFMA2 and the ALU class outside it), a checked fact, not a proof over the chip: FOLD-XOR k = 1, #2778, r20261019-125446-db4e; k = 2, #2850, all 1,456 two-instruction sequences unsat, r20261019-183441-c6b3; at every certificate it is false, RT3-LOGIC-6; no slack as a premise, 0.219% against 1%), binding in its fork form (BindingForkAt, read at sqrt(delta_fork)), ProofSoundAt and ProofsPin, in Models.Accounting.Guarantees.Headline's form (statement only, for red team); its theorem Accounting.SecurityProofs.TS.Sm100SheetHeadline is not proved yet. Its data is Definitions.Accounting.HeadlineDc.Sm100, written by benchmarks/pouw/lean_headline_dc.py (note:20261019T0507Z-draft-int-hb, note:20261019T2245Z-draft-dc-census).",
-   "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "unstated: the B200's headline on DC-100-ri at 0.900%, under 1% (the unfolded branch binds; RT3-DC's pricing, each new class as SHFL on every row, read 1.2401%), UNI a writer kind at 2 words, A6 for (I2)-(I4), ♭'s checkpoint by the cheapest mix of every bit-exact checkpoint loop (CP_SEG4, CP_SEG4U, RT2-HOPPER-9, -11; rt3_dc's CP_ATS/ATS2/ATS8, CP_RED/RED2/RED8 and CP_XT, RT3-DC-1, -4), their memory and control classes at one issue slot and no pipe row, FOLD-OPT at its pi* (FoldOptFoldedAt at Sm100Measured.lamStar, issue alone; at every certificate it is false, RT3-LOGIC-6; no slack as a premise, 0.102% against 1%), binding in its fork form (BindingForkAt, read at sqrt(delta_fork)), ProofSoundAt and ProofsPin, in Models.Accounting.Guarantees.Headline's form (statement only, for red team); its theorem Accounting.SecurityProofs.TS.Sm100MeasuredHeadline is not proved yet. Its data is Definitions.Accounting.HeadlineDc.Sm100Measured, written by benchmarks/pouw/lean_headline_dc.py (note:20261019T0507Z-draft-int-hb, note:20261019T2245Z-draft-dc-census)."
+   "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "unstated: the B200's headline on DC-100-ri at 0.900%, under 1% (the unfolded branch binds; RT3-DC's pricing, each new class as SHFL on every row, read 1.2401%), UNI a writer kind at 2 words, A6 for (I2)-(I4), ♭'s checkpoint by the cheapest mix of every bit-exact checkpoint loop (CP_SEG4, CP_SEG4U, RT2-HOPPER-9, -11; rt3_dc's CP_ATS/ATS2/ATS8, CP_RED/RED2/RED8 and CP_XT, RT3-DC-1, -4), their memory and control classes at one issue slot and no pipe row, FOLD-OPT at its pi* (FoldOptFoldedAt at Sm100Measured.lamStar, issue alone; at every certificate it is false, RT3-LOGIC-6; no slack as a premise, 0.102% against 1%), binding in its fork form (BindingForkAt, read at sqrt(delta_fork)), ProofSoundAt and ProofsPin, in Models.Accounting.Guarantees.Headline's form (statement only, for red team); its theorem Accounting.SecurityProofs.TS.Sm100MeasuredHeadline is not proved yet. Its data is Definitions.Accounting.HeadlineDc.Sm100Measured, written by benchmarks/pouw/lean_headline_dc.py (note:20261019T0507Z-draft-int-hb, note:20261019T2245Z-draft-dc-census).",
+   "Nci.SecurityProofs.PackedContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain it runs (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions/Packed.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13709,6 +13742,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -13785,6 +13821,9 @@
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -13912,6 +13951,9 @@
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -14137,6 +14179,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -14205,6 +14250,9 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -14294,6 +14342,29 @@
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn"
+   ]
+  },
+  "Definitions.Nci.Packed": {
+   "digest": "5c0cf917dac1433d52ec7ff1f154562dc069d90522f8a1f2760a9ac851812d9f",
+   "definitions": {
+    "Nci.PackedChain": "80e0cb21810c4c9dd07873950c6b1e8ba7de8993a4b8de51a9bda3b76022c7ab",
+    "Nci.PackedChain.G": "cbbba0620815a9007dc99788c260a50e5e811a5d09014ad8233059dc7efdc094",
+    "Nci.PackedChain.L": "13a5d3fac16fdce6db840443439418ff0682f45815924cda7e9754670dbea249",
+    "Nci.PackedChain.LinkedWhole": "287c2c7ad98496117339c9d73931236ed165e2a705d887b810d0510667983ac4",
+    "Nci.PackedChain.N": "f3c15d29aee18d14b20895715c90ff8b5a82690cc2e6c6c02567f9613b804cd5",
+    "Nci.PackedChain.Whole": "830dd75b6609ba842aee7af0401c611dbbe8cc49f354ccbc43ca49a57e6622f9",
+    "Nci.PackedChain.d": "888cb57e73a44ddc658c268767c0a5ff922972509d204910881b0d2a7247a77d",
+    "Nci.PackedChain.e": "589f165fcf934756d2bd775bd146ed8571bafc4016fc92a25afa0921c55ac261",
+    "Nci.PackedChain.inputsUsed": "1e431bdd77a00fc13a1fe30505dbe69243ad22cc55ba4943d6411e01af78dcba",
+    "Nci.PackedChain.prod": "f572d9819efccb95791fe5af19978337aa7b76845dcb9eb381ac4f855cb429d7",
+    "Nci.PackedChain.spread": "75e36f64ebc696c267cd7f8a6de2070a1dc9f398c55fe2ce5ef60f312bdf4040",
+    "Nci.PackedChain.weightsUsed": "e1c59424a337dc4469481717ff5ce15b4faa7f057a081328ba41aedd48be2b40",
+    "Nci.PackedChain.π": "77392111ad5311e624eaaff36e4d1cd2d202d12478de4439af97dd2ed921b38f"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -14409,6 +14480,8 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
@@ -25322,6 +25395,9 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -25383,6 +25459,23 @@
     "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
+  },
+  "Models.Nci.Assumptions.Packed": {
+   "digest": "0e92201f09ca7dc081175cbcac6116af2c84cc5a0c82c296d9f52a67809c076d",
+   "definitions": {
+    "Nci.Assumptions.PackedActivationsIncompressible": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Assumptions.PackedTraining": {
+   "digest": "ac2824020eff72bf20c610391f3324978df824cbce953f96d51e5dbeda438b28",
+   "definitions": {
+    "Nci.Assumptions.PackedTrainingIncompressible": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
+   ]
   },
   "Models.Nci.Assumptions.Remote": {
    "digest": "e068989a21dfc9b9c7385b0f5b08844742fc36fa37ec15c4ec5768697236a04a",
@@ -25578,6 +25671,24 @@
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
+   ]
+  },
+  "Models.Nci.Guarantees.Packed": {
+   "digest": "d0c30af618e04a869409fe110fb9dbd106bc232f33ba91b1ccc705a240deea16",
+   "definitions": {
+    "Nci.Guarantees.PackedContainedFanOutOn": "89bfd9784c646dd1122d3a0b68b76061a716d63d9d8e18c50d8a62b8848f1c42"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Guarantees.PackedTraining": {
+   "digest": "4e4b35a61b1961919a2083132a39ba5c8d01c2b552b4237ef264c2f5a25b96f2",
+   "definitions": {
+    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn": "882df2b2560105045718ed39fb3b57386cd76761ca2ff6153a991a23af8de997",
+    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn": "9f3cfc320431eab162e03b4a2a84c51b9c3f48a66c90d298c6ecbd81c02faa1f"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Models.Nci.Guarantees.Reads": {
