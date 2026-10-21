@@ -29,7 +29,9 @@
 // room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
 // sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
 // block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
-// twice the SMs runs its levels' serial chain in two waves.
+// twice the SMs runs its levels' serial chain in two waves.  H1C_APW = 1: h1c_a_pre_k reads a row's M_key byte-table
+// rows a y word at a time, the word's 8 rows' loads issued before any is folded and y rotated in registers (as hb_mk),
+// rather than one row after another with y indexed at run time.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -56,6 +58,9 @@
 #endif
 #ifndef H1C_LT
 #define H1C_LT 256
+#endif
+#ifndef H1C_APW
+#define H1C_APW 0
 #endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
@@ -1175,6 +1180,31 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
     }
 #pragma unroll
     for (int k = 0; k < 8; ++k) mk[k] = 0;
+#if H1C_APW
+    // 24 rotations bring y back in order for the salt hash below.
+#pragma unroll 1
+    for (int wd = 0; wd < 24; ++wd) {
+      const u64 w = y[0];
+#pragma unroll
+      for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+      y[23] = w;
+      uint4 q[8][4];
+#pragma unroll
+      for (int e = 0; e < 8; ++e) {
+        const uint4* r =
+            reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + e) * 256 + ((w >> (56 - 8 * e)) & 0xFFu)) * 8);
+#pragma unroll
+        for (int k = 0; k < 4; ++k) q[e][k] = __ldg(r + k);
+      }
+#pragma unroll
+      for (int e = 0; e < 8; ++e)
+#pragma unroll
+        for (int k = 0; k < 4; ++k) {
+          mk[2 * k] ^= (u64)q[e][k].y << 32 | q[e][k].x;
+          mk[2 * k + 1] ^= (u64)q[e][k].w << 32 | q[e][k].z;
+        }
+    }
+#else
     for (int p = 0; p < 192; ++p) {
       const u32 v = (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
       const uint4* e = reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + v) * 8);
@@ -1185,6 +1215,7 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
         mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
       }
     }
+#endif
 #pragma unroll
     for (int k = 0; k < 8; ++k) R[SNAP + k] = mk[k];
     hb_load(s, P + A_SPS, b);
