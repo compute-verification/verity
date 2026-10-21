@@ -7631,7 +7631,7 @@
    ]
   },
   "RemoteAudit.Session": {
-   "digest": "e37b726de39e77c22a736167faf298b0e8ca6038f2558634a48441084e37200c",
+   "digest": "2cd7da9b87b044524ceebe21131ecc6fe36c83f389830c9712d91ee89ac232f4",
    "definitions": {
     "RemoteAudit.Session.Event": "7baa9e8d3985cf62d1af24e6331dc474d81ea9beedbb4348db658cbb44f12f2b",
     "RemoteAudit.Session.Event.append": "5aa64bdaf3c09a01692debf0a7b3e5425e1f4c0df3ecb2fd04d5ec2f37533297",
@@ -7712,7 +7712,7 @@
     "RemoteAudit.Session.append": "ba3931ab488ef6c4b515183898f75e895b6afce74db23badc18a6c794747b3c0",
     "RemoteAudit.Session.boundary": "cfef51bb7ed2f82202cf2452abed5b171a2405d4be916a289f45340a559f9a6e",
     "RemoteAudit.Session.boundary._sparseCasesOn_1": "a6bfd1c97ba4de2e67378bd53052a385c2191ab711eb4144bd3d1364bd48a507",
-    "RemoteAudit.Session.close": "62d5e065819c2dc79e0e2de84072feb0735285e057fa44b5100801bb6fc61910",
+    "RemoteAudit.Session.close": "a690f00865ee426fe86ab88dc4a0af6a0606af8c42a8adaccbf10dc4f1bf4924",
     "RemoteAudit.Session.instInhabitedWin": "9a7f770f093ad6178da3fa625e671f121996beb21affbbd470cad229793fdadf",
     "RemoteAudit.Session.instInhabitedWin.default": "05d06bf2a24ba65a57e7bb11c43301c8c20949553bfcf4b3ab0a40398d31fee9",
     "RemoteAudit.Session.receive": "bf5b9ebcbc7f3eb32bd518900cd333dcf84e10d4d545a7e91edf53ad53694699",
