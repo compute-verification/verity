@@ -233,13 +233,6 @@ theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k 
 
 /-! ## The cut opening -/
 
-/-- The frames' bytes, step by step. -/
-macro "l0_simp" : tactic => `(tactic| (
-  simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
-    Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
-    List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
-  try rfl))
-
 /-- **Level 0's masked opening, cut round by round**: answered by `asksCut` from `l` and cut `j < k_0 + 4` rounds on, the
 masked Ligerito at any pads `h` and nonces stops past the openings having sent level 0's first `j + 1` bodies
 (`l0BodyAt`, at the coins from round `l.size`) after `l`. -/
@@ -262,7 +255,12 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
   -- `z`'s squeeze, round `l.size`
   rcases Nat.eq_zero_or_pos j with rfl | hj0
   · refine cutStop_bind (cutStop_err (squeezeP_cut_err coin 2 hn _ (by simp)) ?_)
-    exact sent_push 0 (by simp) (by rw [l0BodyAt_zero]; l0_simp) rfl
+    refine sent_push 0 (by simp) ?_ rfl
+    rw [l0BodyAt_zero]
+    simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+      Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+      List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+    try rfl
   rw [bind_go (sampleVecP_at coin sch.n l.size hn _ rfl (by omega))]
   try dsimp only
   rw [modify_bind_run, liftT_bind_run, bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbF_eq _ _) _),
@@ -272,8 +270,17 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
   swap
   · obtain rfl : j = 1 := by omega
     refine cutStop_bind (cutStop_err (sampleP_cut_err coin _ (by simp)) ?_)
-    exact sent_push 1 (sent_push 0 (by simp) (by rw [l0BodyAt_zero]; l0_simp) rfl)
-      (by rw [l0BodyAt_one]; l0_simp) rfl
+    refine sent_push 1 (sent_push 0 (by simp) ?_ rfl) ?_ rfl
+    · rw [l0BodyAt_zero]
+      simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+        Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+      try rfl
+    · rw [l0BodyAt_one]
+      simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+        Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+      try rfl
   rw [bind_go (sampleP_at coin (l.size + 1) _ ?hp1 ?hl1)]
   case hp1 => simp
   case hl1 => omega
@@ -291,9 +298,21 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
     (fun _ _ _ _ _ hI => hI.1) ?step ?init)
   case init =>
     refine ⟨by omega, by omega, rfl, rfl, ?_, ?_⟩
-    · l0_simp
-    · exact sent_push 1 (sent_push 0 (by simp) (by rw [l0BodyAt_zero]; l0_simp) rfl)
-        (by rw [l0BodyAt_one]; l0_simp) rfl
+    · simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+        Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+      try rfl
+    · refine sent_push 1 (sent_push 0 (by simp) ?_ rfl) ?_ rfl
+      · rw [l0BodyAt_zero]
+        simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+          Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+          List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+        try rfl
+      · rw [l0BodyAt_one]
+        simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+          Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+          List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+        try rfl
   case step =>
     intro i hi u s tt L hI
     obtain ⟨-, hji, hts, hws, hpend, hL⟩ := hI
@@ -342,7 +361,11 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
       by_cases hj3 : j = i + 3
       · subst hj3
         refine cutStop_bind (cutStop_err (sampleKP_stop coin _ (by simp only [Array.size_push]; omega)) ?_)
-        exact sent_push (i + 3) (sent_push (i + 2) hL hmi (by omega)) (hme _ (by l0_simp)) rfl
+        refine sent_push (i + 3) (sent_push (i + 2) hL hmi (by omega)) (hme _ ?_) rfl
+        simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+          Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+          List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+        try rfl
       rw [bind_go (sampleKP_at coin (l.size + 2 + i + 1) _ ?hp ?hl)]
       case hp => simp only [Array.size_push, hLs]
       case hl => omega
@@ -350,14 +373,26 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
       rw [liftT_bind_run]
       obtain rfl : j = i + 4 := by omega
       refine cutStop_bind (cutStop_err (sampleKP_stop coin _ (by simp only [Array.size_push]; omega)) ?_)
-      exact sent_push (i + 4) (sent_push (i + 3) (sent_push (i + 2) hL hmi (by omega)) (hme _ (by l0_simp))
-        (by omega)) (by rw [show i + 4 = sch.k0 + 3 by omega, l0BodyAt_r1]; l0_simp) rfl
+      refine sent_push (i + 4) (sent_push (i + 3) (sent_push (i + 2) hL hmi (by omega)) (hme _ ?_)
+        (by omega)) ?_ rfl
+      · simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+          Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+          List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+        try rfl
+      · rw [show i + 4 = sch.k0 + 3 by omega, l0BodyAt_r1]
+        simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+          Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+          List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+        try rfl
     · -- a lane round before the last: the next masked message
       have hb : ¬ (i + 1 == sch.k0) = true := by simpa using hlast
       rw [ite_eq_right_of_eq_false _ _ (eq_false hb), get_bind_run, sendMsg_bind_run, liftT_bind_run,
         bind_go (liftTM_ok (absorbK_ok _ _) _), liftT_bind_run, bind_go (liftTM_ok (absorbK_ok _ _) _)]
       right
       refine ⟨_, _, _, _, rfl, by omega, by omega, rfl, rfl, ?_, sent_push (i + 2) hL hmi (by omega)⟩
-      l0_simp
+      simp only [Claims.toMsg, framed_enc, label_enc, absorbF_enc, absorbBytes_enc, absorbSlice_enc, afterSq,
+        Claims.ZKServer.empty_toList, List.toList_toArray, Claims.ZKServer.oodFr, Claims.ZKServer.pairFr, encs,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append, List.append_assoc]
+      try rfl
 
 end FlockComplete.LigLock
