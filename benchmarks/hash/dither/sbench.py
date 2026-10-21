@@ -369,8 +369,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         int8_vllm.register()
         unit, ao, pt, depth = DITHER_SO[arm]
         a = engine_args(gpu_mem)
-        SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
-                 h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth)
+        # hbc: hbr's call from HB_H1U_KC's build, with DITHER_H1C_KC's libh1c.so where set (as dither-a-hbc)
+        h1c = os.environ.get("DITHER_H1C_KC", os.environ["DITHER_H1C"]) if unit == "hbc" else os.environ["DITHER_H1C"]
+        SO.patch(t=a["max_num_batched_tokens"], h1c=h1c, h1o=os.environ["DITHER_H1O"], unit="hbr" if unit == "hbc" else unit,
+                 h1u=os.environ[{"hbk": "HB_H1U_KSPLIT", "hbr": "HB_H1U_KRONLY", "hbc": "HB_H1U_KC"}[unit]], ao=ao, pt=pt,
+                 depth=depth)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -386,7 +389,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}": (unit, ao, pt, d)
-             for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
+             for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)}
 
 
