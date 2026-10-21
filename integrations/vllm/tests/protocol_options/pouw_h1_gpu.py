@@ -38,7 +38,7 @@ workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR --key-
 (``{root}``, the window's open root) DIR is the challenger run's own ``out/``: the window's coins against the session
 the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for the window
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
-(`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
+(`pouw_h1_challenger.Ledger.load`, core's check), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
 session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). The batch workload admits the
 first prompt alone after the batch, so it admits per round; the fill workload admits in round 0 only.
 """
@@ -478,7 +478,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
     the challenger run's ``out/`` (``research fetch RUN --all``), as the session the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
-    the others extend (`Ledger.newest`), the window held to the session it opened for its Commit's root
+    the others extend (`Ledger.load`, core's check), the window held to the session it opened for its Commit's root
     (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within)."""
     from verity.core.protocols.sampled_proofs import remote
@@ -497,7 +497,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key)
         else:
             sid = (rec["commitment"].get("session") or {}).get("session")
-            newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)
+            newest = PHC.Ledger.load(ledger, key)
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"

@@ -4,7 +4,7 @@ pair, the serving side's `RemoteChallenger` on the other; the session's close is
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads. #2643's `tests/check/challenger_host.py`,
+`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. #2643's `tests/check/challenger_host.py`,
 over any challenger."""
 from __future__ import annotations
 
@@ -117,17 +117,17 @@ class Gate:
         self._leaf += 1
         return self._leaf - 1
 
-    def append(self, kind: str, session: str | None, body: dict, *, schema: str = PHC.LEDGER_SCHEMA,
+    def append(self, kind: str, session: str | None, body: dict, *, schema: str = LC.LEDGER_SCHEMA,
                leaf: int | None = None) -> dict:
-        prev = hashlib.sha512(self.lines[-1]).hexdigest() if self.lines else "0" * 128
+        prev = hashlib.sha512(self.lines[-1].encode()).hexdigest() if self.lines else "0" * 128
         entry = {"schema": schema, "seq": len(self.lines), "prev": prev, "kind": kind, "session": session, "body": body}
-        message = PHC.entry_message(self.key.public[:16], entry)
+        message = LC.ledger_message(self.key.public[:16], entry)
         if leaf is not None:
             self._leaf = max(self._leaf, leaf)
         entry["sig"] = lms.sign_at(self.private, self.take() if leaf is None else leaf, message).encode().hex()
         if leaf is not None:
             self._leaf = max(self._leaf, leaf + 1)
-        self.lines.append(json.dumps(entry, sort_keys=True, separators=(",", ":")).encode())
+        self.lines.append(LC.ledger_text(entry))
         return entry
 
     def open(self, session: str, root: str, families=(), *, scheme: str = Wd.LIVE_SCHEME, epoch: int = 0,
@@ -140,7 +140,7 @@ class Gate:
         reserved = self._reserves.get(session)
         if reserved is not None:
             rb = reserved["body"]
-            body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in PHC.RESERVED if k in rb},
+            body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in LC.RESERVED if k in rb},
                     "opened_by": by, "pinned": "0" * 40, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
                     "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
                     "started_utc": rb["started_utc"]}
@@ -152,7 +152,7 @@ class Gate:
                     **({"lane": by, "by": "research"} if v1 else
                        {"by": by, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest()})}
         body.update(override)
-        e = self.append("open", session, body, schema=PHC.LEDGER_V1 if v1 else PHC.LEDGER_SCHEMA, leaf=leaf)
+        e = self.append("open", session, body, schema=LC.LEDGER_SCHEMA_V1 if v1 else LC.LEDGER_SCHEMA, leaf=leaf)
         self._opens[session] = body
         if reserved is None and not v1:
             self._join(body.get("for") or body["by"], session)
@@ -168,7 +168,7 @@ class Gate:
         doc = json.loads((out / R.RECORD).read_text())
         record = LC.ChallengerRecord.from_json(doc)
         try:
-            released = {k: len(r) for k, r in PHC.released_sealed(out / R.RELEASES, record.commitment).items()}
+            released = {k: len(r) for k, r in R.released_roots(out / R.RELEASES, record.commitment).items()}
         except LC.CoinError:
             released = None
         families = self._opens[session]["families"]
@@ -176,7 +176,7 @@ class Gate:
         body = {"rc": 0 if closed else 1, "closed": closed, "files": files,
                 "ended": "closed by the client" if closed else "serve.py exited 1", "released": released,
                 "complete": released is not None and all(released.get(k) == n for k, n in families),
-                "record_leaf": PHC.leaf_of(doc["signature"]), "commitment": record.commitment.root.hex(),
+                "record_leaf": LC.leaf_of(doc["signature"]), "commitment": record.commitment.root.hex(),
                 "refused_hellos": len(hellos.read_text().splitlines()) if hellos.is_file() else 0,
                 "ended_utc": "2026-10-20T11:08:53Z", **override}
         if type(body["record_leaf"]) is int:
@@ -185,7 +185,7 @@ class Gate:
         return self.append("end", session, body)
 
     def ledger(self) -> PHC.Ledger:
-        return PHC.Ledger.verify(self.lines, self.key)
+        return PHC.Ledger.of([self.lines], self.key)
 
 
 class Ledger:
