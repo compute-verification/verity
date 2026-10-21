@@ -51,9 +51,11 @@ case " $* " in *dither-a-hbr*)
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
-# the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
+# the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
+# under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+(cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+  > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}), each its own session from
