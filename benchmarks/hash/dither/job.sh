@@ -27,7 +27,8 @@
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
 #            commit.py and the base's every word, then each set's h1c_build timed)
-#   zprof    the same builds under ncu (--set full; kernels h1c_*): zbench.py --profile, then the text pages
+#   zprof    the same builds under ncu (ZPROF_NCU, default --set full -k regex:h1c_): zbench.py --profile, then the text
+#            pages; the full set's replays outlast the default lease, so give it LEASE="--max-min 40" or fewer kernels
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -176,7 +177,7 @@ for b in ${BENCH//,/ }; do
         CMDS+=("$PY $HERE/zbench.py$zl --out $OUT ${BENCH_ARGS:-}")
       else
         NCU=${NCU:-$(dirname "$NVCC")/ncu}
-        CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1c_ -f -o $OUT/zprof $PY $HERE/zbench.py$zl --profile --out $OUT ${BENCH_ARGS:-}")
+        CMDS+=("$NCU --profile-from-start off --clock-control none ${ZPROF_NCU:---set full -k regex:h1c_} --nvtx -f -o $OUT/zprof $PY $HERE/zbench.py$zl --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/zprof.ncu-rep --ncu $NCU --out $OUT")
       fi ;;
     prof)
