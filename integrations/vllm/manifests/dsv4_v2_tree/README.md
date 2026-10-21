@@ -191,6 +191,29 @@ Then:
    `missing` 0, and the oracle must PASS. `{"armed": false, "why": ...}` means the capture recorded no schedule, and null means
    the rank had no align source. A nonzero `routing_differs` means a call routed otherwise than the capture's, and its first
    [step, module] is named in `routing_differs_first`.
+
+   Attempts 3 to 5 share one Match on vy-glm53-eu: window A r20261021-065033-b2ef, then its CPU phase r20261021-071645-a966
+   (`MATCH_RUN` r20261021-071904-0dc9). They stay attempts, and none is the record:
+   - Attempt 3, r20261021-092814-0b1c at 582c1317f1, passed window B's GPU gates: the oracle on all 8 ranks, each replaying 1,952
+     align calls, and the value check. Its deferred replay (r20261021-114850-5bfd, r20261021-114900-5d55) stopped at the
+     no-evaluator gate, which #3075, #3076, #3077, #3079, #3093 and #3099 close. Its re-judge at b16d6f5e55 (r20261021-171352-1d9c,
+     r20261021-171402-5673) evaluated all 29,146 picks of every rank and failed twice:
+     - 6 `TritonBlockRMSNorm_v1` q-norm picks on ranks 0, 1, 3 and 7 missed by 1–4 bf16 words (#3111, attempt 6);
+     - the cuBLAS route pin: the Commit mapped two libcublas, before 17019d4282.
+   - Attempt 4, r20261021-152252-6748 at 4f78cf55e4, failed (rc 12): its ranks' sampled replay stage hit `No space left on
+     device` on eu.
+   - Attempt 5, r20261021-161703-abfb at f5892498fd, passed every GPU gate. The oracle passed 8/8, with 1,952 calls replayed on
+     each rank, 0 `missing` and 0 `routing_differs`. The value check passed 8/8, with 64 openings a rank, and the Commit mapped
+     one cuBLAS (`cublas_names.txt`). Superseded by #3111 and never replayed: its Programs carry the q-norm Definition that rounds
+     twice.
+
+   Attempt 6 is a fresh chain at #3111 (60949221d1, cherry-picked as 50ec25756e). ptxas contracts div.full's last multiply and
+   `+ eps` into one FFMA, which the Definition rounded twice. That changes a word only at N 1536, the q norm. #3111 changes
+   `TritonBlockRMSNorm_v1`, its Boolean lowering `TritonBlockRMSNorm_v2` and its row kernel. `dsa_norm.py` is a Build input,
+   so the row's tree moves: every Program is re-derived and re-pinned (CPU gates, steps 1 to 3), and the old row dirs and Match
+   are moved aside.
+   1. The trace: `trace_compare.sh` r20261021-185325-449a on vy-nebius-cpu-3 (`SKIP_AOT1=1`, `SKIP_AOT2=1`, `BUDGET_GB=250`,
+      `WORKERS=8`), unseeded, since every derive reads the q norm.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
@@ -220,21 +243,17 @@ The replay host. The Commit's replay of record evaluates its picks with the word
 re-verification (`row_dir/build_request`, no TP weights) and takes no TP8 bundle, so it is not run for this row. A rank's replay
 holds its share of the checkpoint, opened against the committed weights root, beside a forked pool fitted to the job's memory
 (`driver.fit_pool`). GLM-5.3 B8's peaked at 257–259 GiB a rank with 32 workers, 66–71 min a rank with 9 min of it opening the
-weights (r20261019-123645-e69d). DeepSeek-V4-Pro's checkpoint is 805 GiB against GLM-5.3's 704 GiB, so a rank's share is about
-14% larger, and its replay is estimated at 270–300 GiB a rank. That is not measured: the first job runs `RANKS=0` alone at
-`--mem-gb 330` and records its peak (`sampled_replay_p0_rank0.json`'s `peak_rss_bytes`), and the rest are packed by it. A job
-replays its ranks in turn, so the jobs at once are the host's memory over that peak:
+weights (r20261019-123645-e69d). DeepSeek-V4-Pro B1's is far smaller. Attempt 3's re-judge (r20261021-171352-1d9c,
+r20261021-171402-5673: two jobs of 4 ranks at `--mem-gb 150` on vy-glm53-eu, 24 workers) peaked at 115–119 GiB a rank
+(`sampled_replay_p0_rank<r>.json`'s `peak_rss_bytes`), and took 707–788 s a rank for 29,146 picks. A job replays its ranks in
+turn, so on vy-nebius-cpu-3 (497 GB, /user.slice) three jobs at `--mem-gb 150` (`RANKS=0,1,2`, `3,4,5`, `6,7`) replay the 8
+ranks in about 40 min, and the job without `RANKS` then publishes.
 
-| host | memory | jobs at once | 8 ranks |
-|---|---|---|---|
-| vy-glm53-cpu-3 (cpu-d3, being brought up by infra) | 1 TiB, else 768 GB | 3, else 2 | ~3.5 h, else ~4.5 h |
-| vy-glm53-cpu-2, after its disk restart | 755 GiB | 2 | ~4.5 h |
-| vy-nebius-cpu-3 | 497 GB (/user.slice) | 1 | ~9 h |
-
-The plan is vy-glm53-cpu-3, else vy-glm53-cpu-2. Either needs the checkpoint staged and verified at `REPLAY_CK`,
-`/workspace/cp/dsv4-ckpt`: `stage_ckpt.sh` with `PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's venv), 864.7 GB in
-about 18 min, with 865 GB free. It also needs the row dir: the Build of record (`copy_rowdir.sh vy-nebius-cpu-3 HOST
-~/.research/runs/r20261020-154450-ab0f/out/rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
+The replay host is vy-nebius-cpu-3, which holds the Build of record and runs the Match's CPU phase, so the row dir has both.
+It also needs the checkpoint staged and verified at `REPLAY_CK`, `/workspace/cp/dsv4-ckpt`: `stage_ckpt.sh` with
+`PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's venv), 864.7 GB in about 18 min, with 865 GB free
+(r20261021-185650-5dea). Another host needs the Build of record copied in (`copy_rowdir.sh vy-nebius-cpu-3 HOST
+<the Build's out/>rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
 
 GPU time (wall of the GPU job, all 8 GPUs):
 
