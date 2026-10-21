@@ -74,6 +74,7 @@ import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
+import Proofs.Flock.Claims.ZK.PadFree
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
@@ -94,6 +95,7 @@ import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
+import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -374,6 +376,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`swView_outer`). It is the honest prover at the worker's values rectified, which pass the inner constraint at every
   pad, on a tape moved by a bijection (`swView_sameDist_rect`, `rect_innerHolds`), and Lemma B at such row-satisfying
   values is `table_shvzk`'s (`vals_shvzk`); each also with real hm96 leaves (`worker_shvzk_hm96`, `vals_shvzk_hm96`).
+* `PadFree`: the inner constraint at a worker's values reads no pad: each row's value at the masked values and the
+  drawn pads is its value at the clear values and the zero pads (`rows_padFree`), so the drawn pads' check passes iff
+  `RowsAt` holds (`rowsAt_iff_pass`), and the Finish's stop bit is `1[¬RowsAt (w, v)]`, a function of the witness and
+  the values alone.
 * `Switched`: the switched prover at the session's `J` tables: Lemma B at the workers' values there (`zkViewAtJ_sw`),
   and `SHVZK` against the honest prover's simulator where the prover goes on (`Proto.TabModel.shvzk_sw`).
 * `Server`: the ZK server (`ZkServer`) that releases untrusted workers' values in four kinds (`fixed`, `own`,
@@ -406,7 +412,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
-  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
+  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`);
+  the server refuses the `Finish` where the firewall's own `Finish` stops on values that fail a constraint at the drawn
+  pads (`LeanRelease.finStops`, `refusesFinish`), so the one bit is `1[a round failed ∨ finStops]`.
   Its rounds are the deployed session's (`LeanRelease.kindAt`): the server's own `Hello` at the tape's nonce, the
   firewall's own link (its recheck's level-0 roots) and `Finish` (`Final.encode` of the record and proof files it
   builds, `LeanRelease.ownMsg`), and frame rounds released tagged `0`. Its `RefD` is the item-stream refinement
@@ -454,6 +462,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
   encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
   firewall's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**).
+* `FinishRound`: `FinalRoundEq` split at its branch. On a live history whose last coins the frame takes, every table
+  admits the opened coins (`LeanRelease.FrameAdmits`, one of the transport's trusts: the frame refuses each coin fault
+  `Admits` excludes, and the state the transport hands it is its own run, `LeanFrame`), and where the firewall's own
+  `Finish` does not stop either its files encode `fin` of the switched views (`LeanRelease.FinishIs`), so
+  `FinalRoundEq` follows (**`LeanRelease.finalRoundEq_of_finishIs`**, a live run's `Finish` not stopping by
+  `finStops_of_live`).
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
