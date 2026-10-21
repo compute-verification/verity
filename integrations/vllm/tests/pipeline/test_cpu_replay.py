@@ -120,6 +120,35 @@ def test_a_tree_that_is_not_the_committed_root_opens_nothing_of_record(world):
     assert wc["equal"] is False and "does not fold to its root" in wc["why"]
 
 
+def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
+    """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as int32 [V, 6], stored I64 in the checkpoint: it opens as the
+    checkpoint's values in i32 words (the replay's `GatherI32x{V}` rows read it), and a value outside int32 leaves it unopened."""
+    from tests.pipeline.test_tp_replay_deferred import _safetensors
+
+    name = "model.layers.0.ffn.gate.tid2eid"
+    table = RNG.integers(0, 384, (16, 6), dtype=np.int64)
+
+    def opened(ck_table):
+        ckd, bundle = tmp_path / "ck", tmp_path / "bundle"
+        ckd.mkdir(exist_ok=True)
+        (ckd / "config.json").write_text("{}")
+        _safetensors(ckd / "model.safetensors", {name: ("I64", ck_table)})
+        raw = table.astype(np.int32).reshape(-1).view(np.uint8)
+        names, roots = [[name, "int32", [16, 6], int(raw.size)]], [CPU.tensor_root(raw, CHUNK)]
+        root = scheme.weights_root(GEO, scheme.names_digest(names), roots).hex()
+        tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root, "chunk": CHUNK, "geo_digest": GEO.hex(), "extra": {}}
+        return CPU.open_weights(bundle, tree, root, WR.CheckpointIndex(str(ckd), verify_shards=False), threads=1)
+
+    words, wc = opened(table)
+    assert wc["equal"] is True and wc["servable"] == wc["opened"] == 1, wc
+    got = CPU.provider(words, "model.", set())("model." + name, 0, 96)
+    assert got.dtype == np.uint32 and np.array_equal(got.view(np.int32), table.reshape(-1))
+    wide = table.copy()
+    wide[3, 2] = 1 << 40
+    words, wc = opened(wide)
+    assert name not in words and [u["name"] for u in wc["unopened"]] == [name] and "outside int32" in wc["unopened"][0]["why"]
+
+
 # ------------------------------------------------------------------------------------------------ the bundle is the record's
 
 def _deferred(tmp_path, steps=None):

@@ -8,3 +8,9 @@ import Proofs.Flock.EndToEndRegisteredRows.Reduce
 (`Flock.Guarantees.EndToEndRegisteredRows`). -/
 theorem Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows :=
   FlockSoundness.Discharge.ZkReg.EndToEndRegisteredRows_of_rowsLink FlockSoundness.Discharge.ZkReg.rowsLinkLe
+
+/-- **`EndToEndRegisteredRows` at a flat circuit file** (`Flock.Guarantees.EndToEndRegisteredRowsFlat`): it at
+`Desc.single c`. -/
+theorem Flock.SecurityProofs.EndToEndRegisteredRowsFlat : Flock.Guarantees.EndToEndRegisteredRowsFlat := by
+  intro n Reg own I ht c hc
+  exact Flock.SecurityProofs.EndToEndRegisteredRows n Reg own I ht (.single c) (Flock.Desc.parse_single hc)

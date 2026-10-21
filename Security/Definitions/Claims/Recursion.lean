@@ -73,7 +73,7 @@ eight items:
    bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8), but `KSLin2` at the deployment is not yet established: it takes `HeldB` (false at the deployed V\*, which has
    no holder of round 0's `root_B`) and open premises (`PartChecksB`, `PartOpensB`, `DecompB`, the readers' facts; the
-   full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is not yet derived from it.
+   full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -660,8 +660,8 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment is not yet established: it takes
 `HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
-`PartOpensB`, `DecompB`, the readers' facts; the full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is
-not yet derived from it. -/
+`PartOpensB`, `DecompB`, the readers' facts; the full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows
+from it (`bitsLin2_of_ksLin2`). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
   min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
     (128 - Real.logb 2 (γe D I x * cBe D x) / 2) - 2
@@ -717,7 +717,7 @@ noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (
 about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the
 `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed
 records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`,
-false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. -/
+false at the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (R D I) (E H D I DO decO) x P ≤
@@ -729,8 +729,8 @@ calls per run (both parties') has `Pr[acc ∧ ¬R] ≤ t · 2^{−λ(x)}`, where
 `Be` the linear expected-time bound. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
 table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the
-deployment is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not
-yet derived from it. -/
+deployment is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` follows from
+it (`bitsLin2_of_ksLin2`). -/
 def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) →
@@ -778,7 +778,7 @@ def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) 
 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every
 weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at
-the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. -/
+the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (RPriv D I) (E H D I DO decO) x P ≤
@@ -860,7 +860,7 @@ the outer `DO` each on its own columns and traces (the deployed inner session is
 level (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit
 floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at
 the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it
-takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. -/
+takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → KS H D (Inner.ofFlock DI decI) DO
@@ -869,8 +869,8 @@ def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flo
 its own columns and traces. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at
 `m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`)
 evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment
-is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` is not yet
-derived from it. -/
+is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and `BitsLin2` follows from it
+(`bitsLin2_of_ksLin2`). -/
 def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
@@ -1189,7 +1189,7 @@ ASK-72), where (P3) holds (`RecDeploy.ksBoundRoute_cover`). Its level (`lam`) is
 deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight
 (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at
-the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. `KSFlock` at the deployed framed Flock
+the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). `KSFlock` at the deployed framed Flock
 is false at the deployed record (counterexample B: an honest view's
 held rounds are free-element rows, never its framed bytes). -/
 def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
@@ -1201,7 +1201,7 @@ over the bound record, at every inner and outer decoder that meets the spec. Its
 SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under
 every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at
-the deployed V\*, and open premises, and `BitsLin2` is not yet derived from it. -/
+the deployed V\*, and open premises, and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK Bd.DE decI → KSPriv H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO

@@ -28,6 +28,7 @@
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
+  "Flock.Test.MaskLog",
   "VStar"
  ],
  "exempt": {

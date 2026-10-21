@@ -790,49 +790,34 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
         resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol").arm_settings)
 
 
-def test_a_pearl_c_protocol_arm_is_one_pass_per_engine_step(monkeypatch):
-    """`pouw.install` opens one Pearl-C pass for the install's life, which a b32 run's tiles and screened rows outgrow
-    within its first runs; the runner makes each engine step its own pass, as the experimental arm does."""
+def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
+    """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
+    device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
 
-    from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
     from verity_bench.vllm import runner
 
-    events = []
-
     class Run(PPD.PearlCDeviceRun):
         def __init__(self):
-            pass
+            self.details = {"passes": []}
 
-        def begin(self):
-            events.append("begin")
-
-        def end(self):
-            events.append("end")
-            return {"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0, "unsure_rows": 1}
-
-        def finish(self):
-            events.append("finish")
+        def end_pass(self):
+            self.details["passes"].append({"units": 224, "tiles": 5000, "screened_rows": 64, "failing_rows": 0,
+                                           "unsure_rows": 1})
 
     run = Run()
-    engine = SimpleNamespace(step=lambda: events.append("step") or ["out"])
-    option = SimpleNamespace(release=run.finish)
-    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None),
-                          vllm=SimpleNamespace(llm_engine=engine))
-    hooks = Hooks(tag="bench:pouw")
-    got, totals = runner._pass_per_step(llm, hooks)
-    assert engine.step() == ["out"] and engine.step() == ["out"]
-    assert events == ["begin", "step", "end"] * 2
-    assert got is run and totals == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
-                                     "failing_rows": 0, "unsure_rows": 2}
-    hooks.uninstall()
-    engine.step()
-    assert events[-1] == "step" and len(events) == 7
-    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)),
-                            vllm=SimpleNamespace(llm_engine=engine))
-    assert runner._pass_per_step(other, hooks) is None
-    assert not hooks.entries
+    option = SimpleNamespace(end_pass=run.end_pass, release=lambda: None)
+    llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None))
+    assert runner._pearl_c_run(llm) is run
+    assert runner._pass_totals(run) == dict.fromkeys(("passes", *runner.PASS_COUNTS), 0)
+    run.end_pass()
+    run.end_pass()
+    assert runner._pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
+                                        "failing_rows": 0, "unsure_rows": 2}
+    other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)))
+    assert runner._pearl_c_run(other) is None
+    assert runner._pearl_c_run(SimpleNamespace(protocols=None)) is None
 
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
@@ -853,8 +838,8 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self):
-            pass
+        def begin(self, stepped=False):
+            self.stepped = stepped
 
         def poison(self):
             pass
@@ -865,8 +850,10 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         def end(self):
             return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
 
-    exact = runner._pearl_c_gate(Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16)))
+    run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
+    exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert run.stepped
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]

@@ -1006,7 +1006,7 @@ theorem bridge_bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
 weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
 `KSLin2` at the deployment is not yet established: it takes `HeldB`, false at the deployed V\*, and open premises, and
-`BitsLin2` is not yet derived from it. -/
+`BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
 theorem ksBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRoute rel relO b L :=
   ksBoundRoute_of_bridge rel relO b L fun nextE colsE wE join rowIn final w =>
