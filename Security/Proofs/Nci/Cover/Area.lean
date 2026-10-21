@@ -33,15 +33,15 @@ theorem whole_subset_finished {C : Circuit} {J L : Type} [DecidableEq J] (M : Mu
 theorem Intensity : Guarantees.Intensity := by
   intro C J L _ _ M A s k D b hb hH hU hk I hI
   have hsplit := Finset.card_sdiff_add_card_eq_card (whole_subset_finished M I)
-  have hJ := (ActivationCharge C M A s k D b hb hH hU hk I hI).trans hI.2.2
-  have hL := hH I hI.1 hI.2.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
+  have hJ := (ActivationCharge C M A s k D b hb hH hU hk I hI).trans hI.2
+  have hL := hH I hI.1.le (M.whole I) (fun p hp => M.P_subset (Finset.mem_filter.1 hp).1)
     (fun p hp => (Finset.mem_filter.1 hp).2)
   have hprod : (M.whole I).card ≤ ((M.whole I).image Prod.fst).card * ((M.whole I).image Prod.snd).card := by
     rw [← Finset.card_product]
     exact Finset.card_le_card fun p hp =>
       Finset.mem_product.2 ⟨Finset.mem_image_of_mem _ hp, Finset.mem_image_of_mem _ hp⟩
-  have hrest := (finished_sdiff_whole_card_le M hI.1).trans hI.2.2
-  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+  have hrest := (finished_sdiff_whole_card_le M (I := I)).trans hI.2
+  have hcap : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have e1 : ((M.finished I).card : ℝ) = (M.finished I \ M.whole I).card + (M.whole I).card := by
     exact_mod_cast hsplit.symm
   have e2 : ((M.whole I).card : ℝ) ≤ ((M.whole I).image Prod.fst).card * ((M.whole I).image Prod.snd).card := by

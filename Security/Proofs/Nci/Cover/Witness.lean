@@ -19,7 +19,7 @@ and parameter 5. The activation region of use 1 is gates 6–12. Every product r
 outside `θ` and the region, so `ConditionalUpdateHardness` holds at every block size with `b = 1`
 (`conditionalUpdateHardness_of_feeds`);
 the certificate holds at depth `D = 4`, so `k = 3 < b D`; and seven blocks of `s = 4` gates, each handed at most three
-bits outside `θ`, cover the circuit. The one subcircuit of at most four gates that computes gate 13 is gates
+bits outside `θ`, cover the circuit. The one set of at most four gates that computes gate 13 is gates
 5, 11, 12 and 13, handed both activation gates, so `Width` holds at `f = 2` (at `f = 1` it is implied by its own
 hypothesis).
 -/
@@ -28,16 +28,10 @@ namespace Nci.Cover.SecurityProofs
 
 namespace Witness
 
-/-- A gate a subcircuit computes reads only gates of the subcircuit. -/
-theorem pred_subset_of_computed {C : Circuit} {S : Finset (Fin C.N)} (hS : C.Subcircuit S) {g : Fin C.N}
-    (hg : g ∈ C.computed S) : C.pred g ⊆ S := by
-  obtain ⟨hgS, hgi⟩ := Finset.mem_sdiff.1 hg
-  exact (hS.2 g hgS).resolve_right fun h => hgi (Finset.mem_filter.2 ⟨hgS, h⟩)
-
 /-- **Conditional update hardness from private feeds**: if each product reads, among its gates' predecessors, input
 gates `F l` of its updated parameter `l`, none of them registered or in an activation region, with disjoint `F l` for
-distinct parameters and at least `b` gates each, then `ConditionalUpdateHardness` holds at every block size. A
-subcircuit that computes a product's gates is handed that product's feed. -/
+distinct parameters and at least `b` gates each, then `ConditionalUpdateHardness` holds at every block size. A set of
+gates that computes a product's gates is handed that product's feed. -/
 theorem conditionalUpdateHardness_of_feeds {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L]
     (M : MulBlocks C J L) (A : J → Finset (Fin C.N)) (F : L → Finset (Fin C.N)) (s : ℕ) {b : ℝ}
     (hread : ∀ p ∈ M.Pall, ∀ x ∈ F p.2, C.pred x = ∅ ∧ ∃ g ∈ M.m p, x ∈ C.pred g)
@@ -45,17 +39,15 @@ theorem conditionalUpdateHardness_of_feeds {C : Circuit} {J L : Type} [Decidable
     (hdisj : ∀ p ∈ M.Pall, ∀ q ∈ M.Pall, p.2 ≠ q.2 → Disjoint (F p.2) (F q.2))
     (hb : ∀ p ∈ M.Pall, b ≤ (F p.2).card) :
     Assumptions.ConditionalUpdateHardness M A s b := by
-  intro S hS _ B hB hBS
+  intro S _ B hB hBS
   have hsub : (B.image Prod.snd).biUnion F ⊆ C.inputs S \ (C.θ ∪ M.uses.biUnion A) := by
     intro x hx
     obtain ⟨l, hl, hx⟩ := Finset.mem_biUnion.1 hx
     obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hl
     obtain ⟨hx0, g, hg, hxg⟩ := hread p (hB hp) x hx
-    have hxS : x ∈ S := pred_subset_of_computed hS (hBS p hp hg) hxg
-    refine Finset.mem_sdiff.2 ⟨Finset.mem_filter.2 ⟨hxS, ?_⟩, fun h => ?_⟩
-    · rw [hx0]
-      exact Finset.disjoint_empty_left _
-    · exact Finset.disjoint_left.1 (hout p (hB hp)) hx h
+    have hxS : x ∈ S := pred_subset_of_mem_computed (hBS p hp hg) hxg
+    exact Finset.mem_sdiff.2 ⟨Finset.mem_filter.2 ⟨hxS, Or.inl hx0⟩,
+      fun h => Finset.disjoint_left.1 (hout p (hB hp)) hx h⟩
   have hcard : (((B.image Prod.snd).biUnion F).card : ℝ) = ∑ l ∈ B.image Prod.snd, ((F l).card : ℝ) := by
     rw [Finset.card_biUnion, Nat.cast_sum]
     intro l hl l' hl' hne
@@ -70,12 +62,9 @@ theorem conditionalUpdateHardness_of_feeds {C : Circuit} {J L : Type} [Decidable
     _ = ((B.image Prod.snd).biUnion F).card := hcard.symm
     _ ≤ (C.inputs S \ (C.θ ∪ M.uses.biUnion A)).card := by exact_mod_cast Finset.card_le_card hsub
 
-local instance decSubcircuit (C : Circuit) (I : Finset (Fin C.N)) : Decidable (C.Subcircuit I) :=
-  inferInstanceAs (Decidable (I.Nonempty ∧ ∀ g ∈ I, C.pred g ⊆ I ∨ Disjoint (C.pred g) I))
-
 local instance decInferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) :
     Decidable (C.InferenceBlock s k I) :=
-  inferInstanceAs (Decidable (C.Subcircuit I ∧ I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
+  inferInstanceAs (Decidable (I.card = s ∧ (C.inputs I \ C.θ).card ≤ k))
 
 local instance decCovers (C : Circuit) (𝓘 : Finset (Finset (Fin C.N))) : Decidable (C.Covers 𝓘) :=
   inferInstanceAs (Decidable (∀ g, (C.pred g).Nonempty → ∃ I ∈ 𝓘, g ∈ C.computed I))
@@ -116,7 +105,7 @@ abbrev wM : MulBlocks wC ℕ ℕ where
   P := {(1, 5)}
   P_subset := by decide
   m := wm
-  m_subcircuit := by decide
+  m_nonempty := by decide
   m_computed := by decide
   m_disjoint := by
     have h : ∀ p ∈ ({(0, 1), (0, 2), (0, 3), (0, 4), (1, 5)} : Finset (ℕ × ℕ)),
@@ -153,11 +142,11 @@ theorem wM_conditional (s : ℕ) : Assumptions.ConditionalUpdateHardness wM wA s
   rw [hcard p hp, Nat.cast_one]
 
 theorem wM_width : Assumptions.Width wM wA 4 2 := by
-  intro S hS hs p hp hpS _
+  intro S hs p hp hpS _
   obtain rfl : p = (1, 5) := Finset.mem_singleton.1 hp
   have h13 : (13 : Fin 14) ∈ wC.computed S := hpS (by decide)
   have hsub : ({5, 11, 12, 13} : Finset (Fin 14)) ⊆ S := by
-    have hpred := pred_subset_of_computed hS h13
+    have hpred := pred_subset_of_mem_computed h13
     intro x hx
     simp only [Finset.mem_insert, Finset.mem_singleton] at hx
     rcases hx with rfl | rfl | rfl | rfl
@@ -181,11 +170,9 @@ theorem wM_upstream : wM.Upstream wA 4 where
     intro p hp _
     obtain rfl : p = (1, 5) := Finset.mem_singleton.1 hp
     refine ⟨13, by decide, 11, by decide, ?_⟩
-    have hU : ∀ q ∈ ({(0, 1), (0, 2), (0, 3), (0, 4)} : Finset (ℕ × ℕ)), wM.m q ⊆ {6, 7, 8, 9} := by decide
-    intro q hq x hx
-    have hx' := hU q hq hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx'
-    rcases hx' with rfl | rfl | rfl | rfl
+    intro q hq
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hq
+    rcases hq with rfl | rfl | rfl | rfl
     · exact ⟨[6, 10, 11], ⟨rfl, rfl, by decide⟩, by decide⟩
     · exact ⟨[7, 10, 11], ⟨rfl, rfl, by decide⟩, by decide⟩
     · exact ⟨[8, 10, 11], ⟨rfl, rfl, by decide⟩, by decide⟩
@@ -229,7 +216,7 @@ theorem inference_sanity (C : Circuit) (M : MulBlocks C ℕ ℕ) (hM : M.Pall = 
     (s D : ℕ) (b : ℝ) : Assumptions.UpdateHardness M s b ∧ M.Upstream A D := by
   have hP : M.P = ∅ := Finset.subset_empty.1 (hM ▸ M.P_subset)
   have huses : M.uses = ∅ := by simp [MulBlocks.uses, hP]
-  refine ⟨fun S _ _ B hB _ => ?_, ⟨?_, ?_, ?_⟩⟩
+  refine ⟨fun S _ B hB _ => ?_, ⟨?_, ?_, ?_⟩⟩
   · rw [hM, Finset.subset_empty] at hB
     subst hB
     simp

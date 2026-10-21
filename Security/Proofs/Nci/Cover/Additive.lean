@@ -25,8 +25,8 @@ namespace Nci.Cover.SecurityProofs
 theorem updateHardness_of_conditional {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) {s : ℕ} {b : ℝ} (h : Assumptions.ConditionalUpdateHardness M A s b) :
     Assumptions.UpdateHardness M s b := by
-  intro S hS hs B hB hBS
-  refine (h S hS hs B hB hBS).trans ?_
+  intro S hs B hB hBS
+  refine (h S hs B hB hBS).trans ?_
   exact_mod_cast Finset.card_le_card (Finset.sdiff_subset_sdiff le_rfl Finset.subset_union_left)
 
 /-- **The split of a block's inputs**: under `ConditionalUpdateHardness` and the certificate's disjoint regions, if each
@@ -41,7 +41,7 @@ theorem whole_uses_params_le {C : Circuit} {J L : Type} [DecidableEq J] [Decidab
   have hWP : M.whole I ⊆ M.P := Finset.filter_subset _ _
   have hJ : (M.whole I).image Prod.fst ⊆ M.uses := Finset.image_subset_image hWP
   have hL : b * ((M.whole I).image Prod.snd).card ≤ (C.inputs I \ (C.θ ∪ M.uses.biUnion A)).card :=
-    hCH I hI.1 hI.2.1.le (M.whole I) (hWP.trans M.P_subset) fun p hp => (Finset.mem_filter.1 hp).2
+    hCH I hI.1.le (M.whole I) (hWP.trans M.P_subset) fun p hp => (Finset.mem_filter.1 hp).2
   have hT : ((M.whole I).image Prod.fst).biUnion (fun j => C.inputs I ∩ A j) ⊆
       (C.inputs I \ C.θ) ∩ M.uses.biUnion A := by
     intro x hx
@@ -83,14 +83,14 @@ theorem finished_le_of_charge {C : Circuit} {J L : Type} [DecidableEq J] [Decida
     (hCH : Assumptions.ConditionalUpdateHardness M A s b) (hU : M.Upstream A D) {I : Finset (Fin C.N)}
     (hI : C.InferenceBlock s k I) (hc : ∀ j ∈ (M.whole I).image Prod.fst, c ≤ (C.inputs I ∩ A j).card) :
     4 * b * c * (M.finished I).card ≤ k * k + 4 * b * c * k := by
-  have hK : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2.2
+  have hK : ((C.inputs I \ C.θ).card : ℝ) ≤ k := by exact_mod_cast hI.2
   have hsplit := whole_uses_params_le M A hCH hU hI hc
   have hJL : 4 * (c * ((M.whole I).image Prod.fst).card) * (b * ((M.whole I).image Prod.snd).card) ≤ k * k :=
     four_mul_le_sq (by positivity) (by positivity) (hsplit.trans hK)
   have hW : ((M.whole I).card : ℝ) ≤ ((M.whole I).image Prod.fst).card * ((M.whole I).image Prod.snd).card := by
     exact_mod_cast (Finset.card_le_card Finset.subset_product).trans (Finset.card_product _ _).le
   have hrest : ((M.finished I \ M.whole I).card : ℝ) ≤ k :=
-    (by exact_mod_cast finished_sdiff_whole_card_le M hI.1 : ((M.finished I \ M.whole I).card : ℝ) ≤ _).trans hK
+    (by exact_mod_cast finished_sdiff_whole_card_le M (I := I) : ((M.finished I \ M.whole I).card : ℝ) ≤ _).trans hK
   have hfin : ((M.finished I).card : ℝ) ≤ (M.finished I \ M.whole I).card + (M.whole I).card := by
     exact_mod_cast Finset.card_le_card_sdiff_add_card
   have hbc : 0 ≤ 4 * b * c := by positivity

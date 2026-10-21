@@ -3,8 +3,8 @@ import Models.Nci.Assumptions.Cover
 /-!
 # The cover theorem: the guarantees
 
-A run that declares its computation as inference blocks (subcircuits of `s` gates, each handed at most `k` bits besides
-the registered parameters `θ`) and covers a training circuit with them pays for it in blocks. The argument has three
+A run that declares its computation as inference blocks (sets of `s` gates, each handed at most `k` bits besides the
+registered parameters `θ`) and covers a training circuit with them pays for it in blocks. The argument has three
 steps, and nothing in it assumes its conclusion:
 
 1. Assume `UpdateHardness`: a block that computes whole products over `w` distinct updated parameters is handed `b w`
@@ -25,30 +25,33 @@ Kimi K2, at `k = 2·10⁷` bits, `s = 4.52·10¹⁶` gates, `α₀ = 0.147` and 
 active weights, `4·10⁸`, so `b D ≈ 10⁹` exceeds `k` fifty times.
 
 Scope. First-layer products, whose activation is a function of the token id, have no certificate and are left out of
-`P`. `UpdateHardness` needs the run to have drifted from `θ`, and fails under compressed updates such as LoRA.
+`P`. `UpdateHardness` rules out updates `θ'_l = θ_l + h_l(σ)` with a short `σ`: it needs the run to have drifted from
+`θ`, and fails under compressed updates such as LoRA. The declared compute is `s · #𝓘`; tying it to hardware time is
+part (1) of the dampener's argument, not this one's.
 -/
 
 namespace Nci.Cover.Guarantees
 
-/-- **Entry** (lemma 1): a path that ends in a subcircuit `I` and starts at a gate that `I` does not compute passes
+/-- **Entry** (lemma 1): a path that ends in a set `I` of gates and starts at a gate that `I` does not compute passes
 through an input of `I`. A value reaches a block's computation only through the gates the block is handed. -/
 def Entry : Prop :=
   ∀ (C : Circuit) (I : Finset (Fin C.N)) (π : List (Fin C.N)) (x y : Fin C.N),
-    C.Subcircuit I → C.IsPath π x y → y ∈ I → x ∉ C.computed I → ∃ g ∈ π, g ∈ C.inputs I
+    C.IsPath π x y → y ∈ I → x ∉ C.computed I → ∃ g ∈ π, g ∈ C.inputs I
 
-/-- **Backward closure** (lemma 2): a subcircuit `I` that holds a gate `a` and is handed no gate of a region `A`
+/-- **Backward closure** (lemma 2): a set `I` of gates that holds a gate `a` and is handed no gate of a region `A`
 computes every gate that reaches `a` inside `A`, `a` itself among them. A block that uses an activation without being
 handed any gate of its region has computed all of the activation's upstream computation. -/
 def BackwardClosure : Prop :=
   ∀ (C : Circuit) (I A : Finset (Fin C.N)) (a x : Fin C.N),
-    C.Subcircuit I → a ∈ I → C.inputs I ∩ A = ∅ → C.ReachesIn A x a → x ∈ C.computed I
+    a ∈ I → C.inputs I ∩ A = ∅ → C.ReachesIn A x a → x ∈ C.computed I
 
 /-- **Activation charge** (lemma 3): under `UpdateHardness` and the upstream certificate at depth `D` with `k < b D`, an
 inference block computes whole counted products of at most `#(inputs I \ θ)` uses.
 
 A block that computes whole a counted product of use `j` uses its activation. Were it handed no gate of `A j`, it would
-compute all of `j`'s upstream products (`BackwardClosure`), over at least `D` updated parameters, which `UpdateHardness`
-prices at `b D > k` bits. So it is handed a gate of `A j`, which is not in `θ`, and the regions are disjoint, so
+compute the output gate of each of `j`'s upstream products (`BackwardClosure`), and so all of their gates, which reach
+it inside the product (`Entry`): products over at least `D` updated parameters, which `UpdateHardness` prices at
+`b D > k` bits. So it is handed a gate of `A j`, which is not in `θ`, and the regions are disjoint, so
 distinct uses cost distinct gates. In ML terms: a block computes a token's products at a layer whole only if it is
 handed part of that token's activation region, since computing the activation itself means rebuilding a whole layer's
 updated weights (Kimi K2: `b D ≈ 10⁹`, fifty times `k`). -/
