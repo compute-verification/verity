@@ -1006,13 +1006,16 @@
    "digest": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e"
   },
   "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
-   "owner": "@training"
+   "owner": "@training",
+   "digest": "4b56b0ace48baa7734a6215f314353085ba450414c6c8ddc68fe8c3e8533400d"
   },
   "Nci.Cover.Assumptions.UpdateHardness": {
-   "owner": "@training"
+   "owner": "@training",
+   "digest": "ef96d8fd4e2b803550dccbc8faf3f46944c7d8d6d87f4942e50e44fe0d8f066f"
   },
   "Nci.Cover.Assumptions.Width": {
-   "owner": "@training"
+   "owner": "@training",
+   "digest": "03878ca63e6e1e3ca6197a18ee0fa218088fe2d7ff6bba5708727a89057e16c4"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -1405,6 +1408,30 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Nci.Cover.Circuit.Covers": {
+   "owner": "@training",
+   "digest": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a"
+  },
+  "Nci.Cover.Circuit.InferenceBlock": {
+   "owner": "@training",
+   "digest": "2022694c4d1ccc17c9873f6c8d2cd9b9865bdd1917d7c97d21ecfda534492c56"
+  },
+  "Nci.Cover.Circuit.IsPath": {
+   "owner": "@training",
+   "digest": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949"
+  },
+  "Nci.Cover.Circuit.ReachesIn": {
+   "owner": "@training",
+   "digest": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97"
+  },
+  "Nci.Cover.Circuit.Subcircuit": {
+   "owner": "@training",
+   "digest": "8eb6724e2c9ef869922476725e5c9f8b884d8123c8ad7d4fd1a39604988b3720"
+  },
+  "Nci.Cover.MulBlocks.Upstream": {
+   "owner": "@training",
+   "digest": "42f848fa75df5b62d4067d981b4aec1bb1f9dd2c6e5f64780f92bad44b5bc530"
   }
  },
  "meaning": [
@@ -7006,34 +7033,64 @@
    "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
   },
   "Nci.Cover.SecurityProofs.ActivationCharge": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.ActivationCharge : Nci.Cover.Guarantees.ActivationCharge"],
+   "assumptions": [],
+   "type_hash": "88f19fb5ff52fb7bb4c9f33c305f20153991640e08c91450c6f0fc1c681bd5ce"
   },
   "Nci.Cover.SecurityProofs.AdditiveCoverBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.AdditiveCoverBound : Nci.Cover.Guarantees.AdditiveCoverBound"],
+   "assumptions": [],
+   "type_hash": "2455ea36ac5634cd6a61cc38ed87e1153d11f9310cf779c24182540e48d79c38"
   },
   "Nci.Cover.SecurityProofs.AdditiveIntensity": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.AdditiveIntensity : Nci.Cover.Guarantees.AdditiveIntensity"],
+   "assumptions": [],
+   "type_hash": "1eea798d0dbab28c778bf29952043a865a89e574170265dda9c4941a9480713f"
   },
   "Nci.Cover.SecurityProofs.BackwardClosure": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.BackwardClosure : Nci.Cover.Guarantees.BackwardClosure"],
+   "assumptions": [],
+   "type_hash": "9ba5f0224eb4419c39a18b5d2642161f10a240187a568fc3c4d97e5f3f5c1e4e"
   },
   "Nci.Cover.SecurityProofs.CoverBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.CoverBound : Nci.Cover.Guarantees.CoverBound"],
+   "assumptions": [],
+   "type_hash": "563144deb68650511ff110726f628da0c3e2aba499c349bad24b63c9ec0635ce"
   },
   "Nci.Cover.SecurityProofs.Entry": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.Entry : Nci.Cover.Guarantees.Entry"],
+   "assumptions": [],
+   "type_hash": "6681e575760ca805e4586d48ed45c43b7a03fde01c00a86fc97c07759df23dba"
   },
   "Nci.Cover.SecurityProofs.Intensity": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.Intensity : Nci.Cover.Guarantees.Intensity"],
+   "assumptions": [],
+   "type_hash": "9b7ebc3c11d321b0ca20fd1f28e98b3d12e0a123d22e19527be38f95e30e55ef"
   },
   "Nci.Cover.SecurityProofs.Slowdown": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.Slowdown : Nci.Cover.Guarantees.Slowdown"],
+   "assumptions": [],
+   "type_hash": "b0e37a52abdd870caf990ed7929a9550726c5285a80bd8a8e9a757fab74c0f4b"
   },
   "Nci.Cover.SecurityProofs.WidthCoverBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.WidthCoverBound : Nci.Cover.Guarantees.WidthCoverBound"],
+   "assumptions": [],
+   "type_hash": "0a55d9b25ff8a3985e6ebdc4b66506066ec3889b0a41ad87daaad46a3ab260a9"
   },
   "Nci.Cover.SecurityProofs.WidthIntensity": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cover.SecurityProofs.WidthIntensity : Nci.Cover.Guarantees.WidthIntensity"],
+   "assumptions": [],
+   "type_hash": "2a6aceb7c68f84b05f034fb08815237122b85f452aa493a4c97e18ed42accaba"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
@@ -14419,6 +14476,44 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
+  },
+  "Definitions.Nci.Cover": {
+   "digest": "292b1db2c6de69384ff389f302abeab3e87dc5066d1b569f58a8b915771e9b75",
+   "definitions": {
+    "Nci.Cover.Circuit": "25aef445443bc925efdcb08eaf48e75c7b0372dfd7b76cba8153f160f3257219",
+    "Nci.Cover.Circuit.Covers": "30b9784793dfea7b96510cc9c94282222d7520eae82c5ef5e20fde0afb13071a",
+    "Nci.Cover.Circuit.InferenceBlock": "2022694c4d1ccc17c9873f6c8d2cd9b9865bdd1917d7c97d21ecfda534492c56",
+    "Nci.Cover.Circuit.IsPath": "706329e385c8abc2324f817be9eda23ae43f74bdb286df0942f382ecdcc5a949",
+    "Nci.Cover.Circuit.N": "91b884841166c02cc43c97336c4bc5df52ceaeec6668cf3352576333e4751bdc",
+    "Nci.Cover.Circuit.ReachesIn": "addd81d473b14cda9dcd751e8d4437fc7d54d65e22983a1bbfc6db5d14c16b97",
+    "Nci.Cover.Circuit.Subcircuit": "8eb6724e2c9ef869922476725e5c9f8b884d8123c8ad7d4fd1a39604988b3720",
+    "Nci.Cover.Circuit.computed": "39abffbb936a1148261dd298ee8b13a2f191f8de3e97c82350ad1e183883b792",
+    "Nci.Cover.Circuit.inputs": "ef317778379999f9149d596a0630d4904fca1c093894b8d32e02740a305f4920",
+    "Nci.Cover.Circuit.outputs": "b32817c9c6ef508afe011fced0c1e57ceff37910f928cc78c43e26f548b9698c",
+    "Nci.Cover.Circuit.pred": "c299d020da7fcb18af95f532bf3b3bcfb0388aa36123a61fe3b7eaae836a3508",
+    "Nci.Cover.Circuit.θ": "03e67d1fb23f4fd4382890336e039acfa062af86e09c30fb38ba80fc2ba0d88c",
+    "Nci.Cover.MulBlocks": "7950f3f7467d9c7d09fdda4143eb8b80a949ac2f66713a16d99ffbb1f991659e",
+    "Nci.Cover.MulBlocks.P": "662070ced616aca80b32325df4f846c2c52ebe3613b25b34d75de97ec30320b8",
+    "Nci.Cover.MulBlocks.Pall": "03ae6066aeceac4cba24ab07d95b26cedd93508092f490db009c03a12f56831f",
+    "Nci.Cover.MulBlocks.Upstream": "42f848fa75df5b62d4067d981b4aec1bb1f9dd2c6e5f64780f92bad44b5bc530",
+    "Nci.Cover.MulBlocks.finished": "97320bfa4eff842bc4cb2ad893efec39347452be1d3197984f286640e8e7f184",
+    "Nci.Cover.MulBlocks.m": "a4ef1a48b5c5fd399814ca11324c5120bd4610cc71af3f0e28388028d0953011",
+    "Nci.Cover.MulBlocks.o": "6a53c2e156b127cfd3bcb81793ac3544d55c5f46bf17dd3fe96903fe04ed1e27",
+    "Nci.Cover.MulBlocks.uses": "a3117bfc1cc59a173f13e623686eb32ead5833978976b4f6da36ffb545052601",
+    "Nci.Cover.MulBlocks.whole": "8478789905bc5f64d79ca9898af4e362d0530ae99eb8e513d7082136131ab8d7"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.ActivationCharge",
+    "Nci.Cover.SecurityProofs.AdditiveCoverBound",
+    "Nci.Cover.SecurityProofs.AdditiveIntensity",
+    "Nci.Cover.SecurityProofs.BackwardClosure",
+    "Nci.Cover.SecurityProofs.CoverBound",
+    "Nci.Cover.SecurityProofs.Entry",
+    "Nci.Cover.SecurityProofs.Intensity",
+    "Nci.Cover.SecurityProofs.Slowdown",
+    "Nci.Cover.SecurityProofs.WidthCoverBound",
+    "Nci.Cover.SecurityProofs.WidthIntensity"
    ]
   },
   "Definitions.Nci.Dampener": {
@@ -25659,6 +25754,24 @@
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
+  "Models.Nci.Assumptions.Cover": {
+   "digest": "ff36abd6c997bbd5906639e380009d13ec2322d890227076827273cebb135501",
+   "definitions": {
+    "Nci.Cover.Assumptions.ConditionalUpdateHardness": "4b56b0ace48baa7734a6215f314353085ba450414c6c8ddc68fe8c3e8533400d",
+    "Nci.Cover.Assumptions.UpdateHardness": "ef96d8fd4e2b803550dccbc8faf3f46944c7d8d6d87f4942e50e44fe0d8f066f",
+    "Nci.Cover.Assumptions.Width": "03878ca63e6e1e3ca6197a18ee0fa218088fe2d7ff6bba5708727a89057e16c4"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.ActivationCharge",
+    "Nci.Cover.SecurityProofs.AdditiveCoverBound",
+    "Nci.Cover.SecurityProofs.AdditiveIntensity",
+    "Nci.Cover.SecurityProofs.CoverBound",
+    "Nci.Cover.SecurityProofs.Intensity",
+    "Nci.Cover.SecurityProofs.Slowdown",
+    "Nci.Cover.SecurityProofs.WidthCoverBound",
+    "Nci.Cover.SecurityProofs.WidthIntensity"
+   ]
+  },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
    "definitions": {
@@ -25834,6 +25947,33 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn"
+   ]
+  },
+  "Models.Nci.Guarantees.Cover": {
+   "digest": "2d66cff9ac1e09157edfac1cd78aa68b4c09bacc1cb7603e32060a4ba5a6b492",
+   "definitions": {
+    "Nci.Cover.Guarantees.ActivationCharge": "c9291f417b2977289e8db48ac3f7802ac5e272809010a0b806bfc418b48c8c33",
+    "Nci.Cover.Guarantees.AdditiveCoverBound": "724363ccc019d226196da3a950beaa9cd2470f5c64ca738d7d96c374e5a378da",
+    "Nci.Cover.Guarantees.AdditiveIntensity": "d6c871351532841efa50e6d898633fad4cd049991589aa62588d04f515109b1c",
+    "Nci.Cover.Guarantees.BackwardClosure": "926be53d0a5722f681ca06ec427999767e39a86afc34f4f6c2143b33f5e77dcb",
+    "Nci.Cover.Guarantees.CoverBound": "59ba9c8d45077390f45b755b0bd09deb3023fc9ae1622075c7305870db3e832c",
+    "Nci.Cover.Guarantees.Entry": "d1e53836f88162354630da9ed0e8518828814ed97dc4c89c19bf2d8a6dbb9730",
+    "Nci.Cover.Guarantees.Intensity": "260f55eee2e11fca0d825aeb1e2e2337d53b07a77d206aa2cfaa6fcc796a56c1",
+    "Nci.Cover.Guarantees.Slowdown": "2c49c775ab799cd3b4e413ea66e5949610edace282435fef7265729ee8853070",
+    "Nci.Cover.Guarantees.WidthCoverBound": "f084873374b59c6666ced06385566691e0f73555ad646d7fac2da89c0c2a32da",
+    "Nci.Cover.Guarantees.WidthIntensity": "3152e6a62333797f635e6cc6f7a6ba136de75504db2c0f28562271ab2062ac04"
+   },
+   "guarantees": [
+    "Nci.Cover.SecurityProofs.ActivationCharge",
+    "Nci.Cover.SecurityProofs.AdditiveCoverBound",
+    "Nci.Cover.SecurityProofs.AdditiveIntensity",
+    "Nci.Cover.SecurityProofs.BackwardClosure",
+    "Nci.Cover.SecurityProofs.CoverBound",
+    "Nci.Cover.SecurityProofs.Entry",
+    "Nci.Cover.SecurityProofs.Intensity",
+    "Nci.Cover.SecurityProofs.Slowdown",
+    "Nci.Cover.SecurityProofs.WidthCoverBound",
+    "Nci.Cover.SecurityProofs.WidthIntensity"
    ]
   },
   "Models.Nci.Guarantees.Dampener": {
