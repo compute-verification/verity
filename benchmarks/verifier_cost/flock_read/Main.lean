@@ -93,7 +93,7 @@ def main (args : List String) : IO UInt32 := do
   let pubB ← IO.FS.readBinFile pubPath
   let t0 ← IO.monoNanosNow
   let pin := Sha512.hash bytes
-  if pin.size == 64 then report "sha512" t0 [("pin", Json.str ((hexOf pin).take 16))] else report "sha512" t0
+  if pin.size == 64 then report "sha512" t0 [("pin", Json.str ((hexOf pin).take 16).toString)] else report "sha512" t0
   let t0 ← IO.monoNanosNow
   let ml := Zk.maskLogOf bytes
   if ml > 0 then report "maskLogOf" t0 [("mask_log", toJson ml)] else report "maskLogOf" t0
@@ -119,7 +119,7 @@ def main (args : List String) : IO UInt32 := do
     match Json.parse ((lines.getD 1 "").trimAsciiEnd.toString.drop 5).toString with
     | .error e => report "classOf" t0 [("error", Json.str e)]
     | .ok mj => match HmRow.classOf bytes head mj with
-      | .ok d => report "classOf" t0 [("class", Json.str ((hexOf d).take 16))]
+      | .ok d => report "classOf" t0 [("class", Json.str ((hexOf d).take 16).toString)]
       | .error e => report "classOf" t0 [("error", Json.str e)]
   let t0 ← IO.monoNanosNow
   match HmOut.parse tags bytes [] with
