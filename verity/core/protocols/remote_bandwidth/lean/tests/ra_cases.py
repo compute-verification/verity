@@ -1026,6 +1026,22 @@ def honest_paced(r: Run) -> None:
     r.finish()
 
 
+def honest_paced_drawn_at_k(r: Run) -> None:
+    """A paced session (k = 2) drawn as each window's k-th root arrives: a draw after one root is refused, window 0
+    is drawn before window 1's first root, and the last window before its boundary is sent."""
+    r.start()
+    r.run()
+    r.close(0)
+    r.run()
+    r.close(0)
+    r.verify(0)
+    r.boundary()
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.close(1)
+    r.verify(1)
+
+
 def malformed_root(r: Run) -> None:
     r.start()
     r.receive(0, 0, bytes(32), step=0)
@@ -1138,6 +1154,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
+    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
     "late": (World(), dict(deadline_ns=5), late, "late"),
     "plan-repeated-block": (World(), {}, lambda r: plan(r, ((0, 3), (2, 2))), "plan"),

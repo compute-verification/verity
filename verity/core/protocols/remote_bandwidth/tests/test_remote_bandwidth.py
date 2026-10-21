@@ -869,6 +869,24 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
         s.close(0)
 
 
+def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
+    """A paced window takes at most k roots, so its k-th makes them final: it is drawn then, with no wait for the next
+    window's first root or its deadline, and the openings coin's request names that root on the challenger's log."""
+    clock = Clock()
+    p = params(pace=audit.Pace(2))
+    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s.start()
+    assert s.receive(0, 0, bytes(64), step=0) is None
+    with pytest.raises(SessionError, match="not final"):
+        s.close(0)
+    last = hashlib.sha512(b"window 0's last root").digest()
+    assert s.receive(0, 1, last, step=1) is None
+    assert s.deadline(0) is None
+    assert isinstance(s.close(0), tuple)
+    assert s.coins.afters(coins.OPENINGS) == (last,)
+    assert s.receive(0, 2, bytes(64), step=2) == audit.Verdict(0, False, "order")
+
+
 def test_a_boundary_waits_out_the_stated_window(store) -> None:
     """The window T is stated, 60 s with 33,273 openings at 2^-40 unless the params say otherwise: no boundary message
     leaves sooner than `window_ns` after its window's challenge, and a refused one leaves the window open."""
