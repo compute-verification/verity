@@ -13,13 +13,17 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
-FIXTURE = Path(__file__).parent / "fixtures" / "served-registered"
+#: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it
+FIXTURE = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
+VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
@@ -32,12 +36,16 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 
 @pytest.fixture(scope="module")
-def fx() -> Path:
-    if not (FIXTURE / "stage" / "circuit.txt").is_file():
-        pytest.skip("the evidence store is not reachable: the served-registered fixture was not fetched "
-                    "(`research data fetch-fixtures`)")
+def fx(tmp_path_factory) -> Path:
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    try:
+        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+    except (subprocess.CalledProcessError, OSError) as e:
+        pytest.skip(f"the evidence store is not reachable: {e}")
     PF.executable()
-    return FIXTURE
+    return root
 
 
 def _verify(fx: Path, session: Path, circuit: str = CIRCUIT):
