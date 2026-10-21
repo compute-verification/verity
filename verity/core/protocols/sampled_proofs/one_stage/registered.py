@@ -319,6 +319,11 @@ def _row(hits: Sequence[tuple[str, int] | None], value: str, k: int) -> int | No
     return first // k
 
 
+def _source(template: str, parameter: str, element: int | None) -> str:
+    return (f"parameter {parameter!r}" if element is None else f"row {element} of parameter {parameter!r}") + \
+        f" of template {template}"
+
+
 def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
           schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """Every unit's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
@@ -327,8 +332,10 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     under its own name, or an array whose every element is one whole row of the value (H1's A: a tile's R rows), each
     element `i` read under `name[i]`, as the circuit's port of that row; and a template's parameter reads the same value
     in every unit or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
-    value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). The units are a
-    template query's instances; a `Q_word` or `Q_call` unit reads no registered value (`ValueError`)."""
+    value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). A key is one
+    parameter's or one row's of it (in every template that has it): two reads under one key, a parameter `a[0]` beside
+    row 0 of a parameter `a`, are refused, never merged. The units are a template query's instances; a `Q_word` or
+    `Q_call` unit reads no registered value (`ValueError`)."""
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
@@ -342,6 +349,7 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     nodes = program.root.body.nodes
     out: dict[str, dict[str, Any]] = {}
     value_of: dict[tuple[str, str], str | None] = {}
+    source: dict[str, tuple[str, str, int | None]] = {}
     for u in range(tp.population):
         k, _m = tp.locate(u)
         gates, at = tp.inputs(u), 0
@@ -362,7 +370,11 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
             if value_of.setdefault((template[k], name), value) != value:
                 raise ValueError(f"unit {u}: parameter {name!r} of {template[k]} reads {value!r}, and in another unit "
                                  f"{value_of[(template[k], name)]!r}")
-            for key, row in rows.items():
+            for i, (key, row) in enumerate(rows.items()):
+                src = (name, i if key != name else None)
+                if (was := source.setdefault(key, (template[k], *src)))[1:] != src:
+                    raise ValueError(f"port {key!r} names two reads: {_source(*was)} and {_source(template[k], *src)}: "
+                                     "a port reads one parameter's row")
                 entry = out.setdefault(key, {"value": value, "rows": [None] * tp.population})
                 if entry["value"] != value:
                     raise ValueError(f"parameter {key!r} reads {entry['value']!r} in one template and {value!r} in another")
@@ -529,22 +541,28 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
     unit's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
-    accepted). `ports` names a template parameter's circuit port when they differ. `domains` (`{value: domain}`) gives
+    accepted). `ports` names a template parameter's circuit port when they differ; two reads it names one port are refused,
+    as the Lean verifier refuses a file naming a port twice. `domains` (`{value: domain}`) gives
     an output value's domain, its earlier record's port's, which the registration's R7 held its entry to
     (`registration.check`'s `outputs`). `schemas` (`{value: schema}`) gives a value's row format when it is not
     `SCHEMA` (`row_schema`, `schema_entry`): the format of the circuit port that reads it, which the Lean verifier holds
     the port to. `window` and `fixed`: the window's open root and the values held across windows, as R7 took them
     (`registered_entries`)."""
     mine = registered_entries(program, values, schemas, window, fixed)
-    out = {}
+    out, read_as = {}, {}
     for name, r in reads(program, query, values, schemas).items():
         root = roots.get(r["value"])
         if root is None:
             raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
         e = mine[r["value"]]
-        out[(ports or {}).get(name, name)] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
-                                              "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
-                                              **schema_entry((schemas or {}).get(r["value"], SCHEMA)), "reads": list(r["rows"])}
+        port = (ports or {}).get(name, name)
+        if port in out:
+            raise ValueError(f"port {port!r} names two reads: {read_as[port]!r} of {out[port]['value']!r} and {name!r} of "
+                             f"{r['value']!r}: each read is its own port")
+        read_as[port] = name
+        out[port] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
+                     "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
+                     **schema_entry((schemas or {}).get(r["value"], SCHEMA)), "reads": list(r["rows"])}
     return {"format": READS, "ports": out}
 
 

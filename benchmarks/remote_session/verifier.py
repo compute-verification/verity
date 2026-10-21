@@ -56,11 +56,23 @@ verifiers, rejections included. A message the driver couldn't read is in no even
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
+A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+(`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
+machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
+auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
+window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
+it with the event that released it, and once the session ends what the challenger signed holds the session's coins
+(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
+fail it is refused as `coins`, the reason in its `challenger`.
+
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
+                       [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                       [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+                        --challenger-period P [--challenger-minutes M]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -82,8 +94,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, timing  # noqa: E402
 
+import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
@@ -498,16 +511,17 @@ class Pair:
     and, given `lean`, to the Lean process's session k, at one reading of the verifier's clock. The result is the one
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
-    Everything else is read from `s`."""
+    Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
+    releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
+    close and an append's coin with the append."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape, case: lv.Transcript | None = None) -> None:
+    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.Transcript | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
-                              "coins": [c.hex() for c in tape.coins], "append_coins": [],
-                              "not_before_ns": s.not_before_ns, "index": k})
+                              "coins": None, "append_coins": [], "not_before_ns": s.not_before_ns, "index": k})
             if got != {"session": k}:
                 self._disagree(0, "session", got, {"session": k})
 
@@ -562,15 +576,22 @@ class Pair:
             raise audit.SessionError("refused by both verifiers")
         return out, True
 
+    def _released(self, label: str, index: int) -> bytes | None:
+        """Coin `index` of family `label`, once the challenger has released it."""
+        opened = self.s.coins.opened(label)
+        return coins.coin(opened[index]) if type(index) is int and 0 <= index < len(opened) else None
+
     def start(self):
-        out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True)
+        out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True,
+                                 coin=lambda out: self._released(coins.CHALLENGE, 0))
         if not agreed:
             raise audit.SessionError("the verifiers disagree on the session's start")
         return out
 
     def boundary(self):
         t = next((t for t, w in enumerate(self.s.windows) if w.boundary_ns is None), len(self.s.windows))
-        out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True)
+        out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True,
+                                 coin=lambda out: None if out is None else self._released(coins.CHALLENGE, out.index))
         if not agreed:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
@@ -592,7 +613,7 @@ class Pair:
 
     def close(self, t: int):
         return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json,
-                          clocked=True)[0]
+                          clocked=True, coin=lambda out: self._released(coins.OPENINGS, t))[0]
 
     def openings(self, t: int, body: bytes) -> None:
         """One frame of window t's openings to the Lean, kept there until the window is verified."""
@@ -685,11 +706,14 @@ class Verifier:
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
-                 disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None) -> None:
+                 disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
+                 appends: int = coins.APPENDS) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.transcript = transcript
+        self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
@@ -854,12 +878,11 @@ class Verifier:
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
-        tape = lv.Tape(params.coins, os.urandom)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      entropy=tape)
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, self.appends))
         case = None if self.transcript is None else lv.Transcript(
-            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, tape.coins, not_before_ns)
-        session = Pair(self, books, k, tape, case)
+            self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
+        session = Pair(self, books, k, case)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
                         "commitment": session.commitment.to_json(), "pace": K})
         self.expect("armed")
@@ -1075,6 +1098,11 @@ class Verifier:
                 lost = item
         if lost is not None:
             self.inbox.put(lost)
+        coin_check = self.challenger.finish(session.s)
+        if coin_check["reason"] is not None:
+            self.log(f"verifier: session {k}'s coins are not the challenger's as it signed them: {coin_check['reason']}")
+            if failure is None:
+                failure = {"t": max(0, len(session.windows) - 1), "failure": "coins", "at": None}
         session.end(failure)
         for check_id, _ in lean_ready.values():
             if type(check_id) is int:
@@ -1091,8 +1119,8 @@ class Verifier:
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
-               "verdict": self.verdict, "disagreement": session.disagreement,
-               "transcript": None if case is None else case.close(tape.appends),
+               "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
+               "transcript": None if case is None else case.close(lv.released_coins(session.coins)),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
                "lean_check_ns": {t: v.get("lean_ns") for t, v in sorted(verdicts.items())},
@@ -1309,6 +1337,26 @@ def main() -> int:
     ap.add_argument("--ingress-bytes-per-s", type=float, default=0.0,
                     help="the read ceiling of every route into node memory but a rebuild, which the paced line "
                          "charges (`paced_line`): the node's disks, and its boundary links to drop Identity")
+    ap.add_argument("--challenger", default="local", choices=challengers.KINDS,
+                    help="where each session's coins come from (`challengers`): a challenger in this process (local, "
+                         "the default), serve.py started for the session on this machine (serve), or the auditor "
+                         "host's challenger through its gate (gate), its out/ under OUT/challenger and its record "
+                         "and release log checked when the session ends")
+    ap.add_argument("--challenger-key", type=Path, metavar="DIR",
+                    help="serve's LMS key directory, outside OUT (made there on first use)")
+    ap.add_argument("--challenger-params", metavar="W,H",
+                    help="serve's LMS width and height for a key it makes (default lms.DEPLOYED's)")
+    ap.add_argument("--challenger-ssh", metavar="WORDS",
+                    help="gate: ssh's options and destination for the auditor host, the lane's gate key among them "
+                         "(-i KEY research@HOST)")
+    ap.add_argument("--challenger-peer", metavar="NAME", help="gate: this machine's name in the host's /etc/vy/peers")
+    ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
+    ap.add_argument("--challenger-period", metavar="P",
+                    help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
+                    help="gate: each session's reserve, the most it serves")
+    ap.add_argument("--appends", type=int, default=coins.APPENDS,
+                    help="each session's append coins, the most appends it takes (`coins.families`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1342,6 +1390,15 @@ def main() -> int:
     if a.out is None:
         ap.error("--out is required")
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
+        ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
+                 f"{challengers.GATE_PORTS.stop - 1}), which the host's ssh -R binds on this machine")
+    try:
+        challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
+                                    ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
+                                    period=a.challenger_period, minutes=a.challenger_minutes)
+    except ValueError as e:
+        ap.error(str(e))
     save_registry(a.registry, registry)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
@@ -1359,7 +1416,8 @@ def main() -> int:
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
-                 link_burst_bytes=a.link_burst_bytes)
+                 link_burst_bytes=a.link_burst_bytes,
+                 challenger=challenger, appends=a.appends)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()

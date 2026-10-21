@@ -673,8 +673,9 @@ class ProverSide:
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         commitment = wire.commitment_of(head["commitment"])
-        if commitment.registration != self.registration.digest or commitment.count != 2 * W:
-            raise ValueError("the session's coins are not for this registration")
+        why = coins.layout_reason(commitment, k, W)
+        if why is not None:
+            raise ValueError(f"the session's coins are not session {k}'s: {why}")
         N = self.backend.blocks
         getattr(self.backend, "begin_session", lambda: None)()
         trace = serving = None
@@ -717,10 +718,10 @@ class ProverSide:
         t = 0
 
         def take(coin) -> bytes:
-            reason = coins.coin_reason(commitment, coin, t)
+            reason = coins.coin_reason(commitment, coin, coins.CHALLENGE, t)
             if reason is not None:
                 raise ValueError(reason)
-            return coin.coin
+            return coins.coin(coin)
 
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
