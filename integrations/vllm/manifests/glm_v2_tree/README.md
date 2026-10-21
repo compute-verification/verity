@@ -170,7 +170,11 @@ the row's records into a temporary dir under `$SW` (`_rowmeta`), which is on ano
 
 | row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
 |---|---|---|---|---|---|
-| DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z | 2 | running |
+| DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z: weights loaded from eu2data in 7.5 min; the driver and all 8 ranks read back 0.88 (`commit/versions.json`); vLLM's sizing line 123.02 GiB, 102.67 GiB weights and non-torch | 2 | running |
+
+DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
+rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside the Match CPU
+phase's 295 GiB, leaving eu about 450 GB. So nothing else is placed on eu beside it, whatever its admission says.
 | B1 greedy | r20261020-062246-b987 | Match CPU phase r20261021-001940-db82 running (ranks 0-2 PASS; ranks 6 and 7 last, about 07:45Z) | | | |
 
 B1's Build of record is on eu (copied from cpu-2 at 04:25Z, its 208 files checked and `.tree` e2c986e7ba): of `rowdir.sha256`,
