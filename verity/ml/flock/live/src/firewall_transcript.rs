@@ -14,15 +14,15 @@
 //!   statement: zeros);
 //! - each device round, frame by frame: in the algebraic phase a label, bytes, a squeeze or an observe's header by the
 //!   statement's skeleton (its level-0 cap by the recheck), each observed value `masked` with its pad in `Layout::absorbed` order, and the pads' label and root
-//!   that the masking challenger inserts (the statement, the firewall's own); in the opening every frame by the shadow, level
-//!   0's observed values `masked`; then the round's `coins` (the wire's, after the coin tree's opening is checked and
+//!   that the masking challenger inserts (the statement, the firewall's own); in the opening every frame by the shadow (the Lean
+//!   finish's `open` rounds), level 0's observed values `masked`; then the round's `coins` (the wire's, after the coin tree's opening is checked and
 //!   stripped) and the ones the firewall relayed;
 //! - the inner proof's rounds (the firewall's own stream, nothing relayed): `final_c'`, `ρ = ε h_fa + h_x` and `σ = h_fb + h_y`
 //!   masked; then one `check` per constraint row the verifier checks (`zk_finish`'s rows and the triple's), its outcome
 //!   `Lin.eval(h) = 0` with its affine `form` beside it; then `τ`'s commitment and `Y` (the firewall's own, recomputed here
 //!   from the pads, on every pad used);
 //! - each rep's `Proof`: its shape (the statement), masked zerocheck and lincheck (the firewall's own, from the values it
-//!   passed), commitment (the recheck), opening (the shadow's, level 0 masked) and inner proof (own, on its word); `finish`
+//!   passed), commitment (the recheck), opening (the shadow's: the Lean finish's, level 0 masked) and inner proof (own, on its word); `finish`
 //!   when both reps' proofs went out.
 //!
 //! Where the firewall refuses, the candidate it held back is written as the items it would have sent (masked values with their
@@ -40,22 +40,18 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use flock_core::pcs::BatchOpeningProofLigerito;
 use flock_core::proof::R1csProofLigerito;
 use flock_field::F128;
 use flock_prover::pcs::Commitment;
 use serde_json::{Value, json};
 
-use crate::firewall::{Item, parse};
+use crate::firewall::{Item, LANE_PHASE, RING_SWITCH, parse};
 use crate::zk_veil::{self as zkv, InnerProof, L0_CLOSE, L0_OPEN, LABEL_INNER, LABEL_PADS, LABEL_PCS, LABEL_ZC, Layout, Lin};
 use crate::{KIND_SCALAR, KIND_SLICE, OP_BYTES, OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, Req, Resp, Transport, hex, push_header, push_padded};
 
 pub const FORMAT: &str = "verity/firewall-transcript/v0";
 pub const PUBLIC_FORMAT: &str = "verity/firewall-public/v0";
 
-/// The rows `zk_finish` adds to the replay's: the ring switch's, then level 0's lane phase.
-const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
-const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
 /// `firewall::skeleton`'s item that is the recheck commitment's cap (after the domain, the R1CS label and the digest): a value
 /// of the session's, fixed by the recheck, not by the statement.
 const SKELETON_CAP: usize = 3;
@@ -204,7 +200,6 @@ struct RepRec {
     used: BTreeSet<usize>,
     /// the values the firewall passed, `final_c'` its own (set when the firewall passes the device's proof)
     vals: Option<Vec<F128>>,
-    opening: Option<Vec<u8>>,
     inner: Option<usize>,
     cons: Option<Vec<(&'static str, Lin)>>,
     eps: F128,
@@ -315,7 +310,7 @@ impl Rec {
         let pads = zkv::Pads { h: pads.h.clone(), mu: pads.mu.clone(), pad_h: pads.pad_h.clone(), pad_mu: pads.pad_mu.clone(), tau_salt: pads.tau_salt.clone() };
         self.reps.push(RepRec { rep, base, lay, pads, pads_root: pads_root.to_vec(), domain: domain.to_vec(), cm: bin(cm), skeleton: skeleton.to_vec(),
                                 sk_at: 0, alg_rounds: 0, open_rounds: 0, mask: Mask::new(&lay), stream: None, wire_rounds: 0, used: BTreeSet::new(),
-                                vals: None, opening: None, inner: None, cons: None, eps: F128::ZERO, c: Vec::new(), beta: F128::ZERO });
+                                vals: None, inner: None, cons: None, eps: F128::ZERO, c: Vec::new(), beta: F128::ZERO });
     }
 
     /// The device's level-0 root (after any tamper) and the recheck's, before the `Commit` that would carry it.
@@ -363,14 +358,12 @@ impl Rec {
         }
     }
 
-    /// The firewall passed the device's proof: the shadow's opening, which is what leaves (level 0 masked).
-    pub fn shadow_opening(&mut self, open: &BatchOpeningProofLigerito) {
-        let Some(r) = self.reps.last_mut() else { return };
-        let mut o = open.clone();
-        o.ligerito.zk_record = None;
-        zkv::mask_ligerito(&mut o.ligerito, &r.lay, &r.pads.h);
-        r.opening = Some(bin(&o));
-        r.inner = Some(0);
+    /// The firewall passed the device's proof: the opening that leaves is the Lean finish's (its `open` rounds, level 0
+    /// masked), which its proof file carries.
+    pub fn opening_passed(&mut self) {
+        if let Some(r) = self.reps.last_mut() {
+            r.inner = Some(0);
+        }
     }
 
     /// The device's proof the firewall refuses (after any tamper).
@@ -706,9 +699,12 @@ impl Rec {
         self.fixed(format!("rep {rep} proof: the masked zerocheck and lincheck"), "own", &want, &[bin(&p.zerocheck), bin(&p.lincheck)].concat(), pads);
         let want = self.reps[ri].cm.clone();
         self.fixed(format!("rep {rep} proof: the level-0 commitment"), "recheck", &want, &bin(&cm), vec![]);
-        let want = self.reps[ri].opening.clone().ok_or_else(|| format!("rep {rep}'s opening before the firewall passed it"))?;
+        if self.reps[ri].inner.is_none() {
+            return Err(format!("rep {rep}'s opening before the firewall passed it"));
+        }
         let pads = self.used(ri, |i| i >= lay.piop_exposed() && i < lay.hab());
-        self.fixed(format!("rep {rep} proof: the opening"), "shadow", &want, &bin(&p.pcs_open), pads);
+        let open = bin(&p.pcs_open);
+        self.fixed(format!("rep {rep} proof: the opening"), "shadow", &open, &open, pads);
         let pads = self.used(ri, |_| true);
         self.on_its_word(format!("rep {rep} proof: the inner proof"), "own", &bin(&inner), pads);
         self.proofs += 1;
