@@ -70,8 +70,10 @@ class Loaded:
 
 def load(cfg: dict[str, Any], rank: int, world: Any) -> Loaded:
     """The rank's request Programs (B1: the request Program at the rank's Build dir; B>=2: one component per (LP, T) under it, by the
-    manifest's lookup of record), REFUSED by name unless every loaded digest is of record for the rank (`cfg["of_record"]`) and every
-    Program's TP context (result.json `tp`) is this rank's of this world."""
+    manifest's lookup of record), REFUSED by name unless every loaded digest is of record for the rank (`cfg["of_record"]`), the
+    Definitions this tree evaluates their rows by are the ones their Builds bound (`check.replay.definitions`) and every Program's TP
+    context (result.json `tp`) is this rank's of this world."""
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as RM
 
@@ -91,6 +93,7 @@ def load(cfg: dict[str, Any], rank: int, world: Any) -> Loaded:
     if bad:
         named = ", ".join(f"{k}: {d[:16]} ({loaded[k].get('dir')})" for k, d in bad.items())
         raise RuntimeError(f"rank {rank}: REFUSED (not the Program of record): {named} vs of-record {sorted(x[:16] for x in of_record)}")
+    DF.of_record(dirs, digs, {k: v["instances"]["rows"] for k, v in loaded.items()}, what=f"rank {rank}")
     progs = {k: v["instances"] for k, v in loaded.items()}
     arr = {str(r["request_id"]): int(r.get("arrive_step") or 0) for r in reqs}
     # the export wrapper's prefix is DETERMINED from the Program's attention rows vs the implementation paths result.json observed
