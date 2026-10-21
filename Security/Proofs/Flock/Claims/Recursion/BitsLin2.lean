@@ -6,7 +6,8 @@ import Proofs.Flock.Claims.Sampling.Bext
 
 `bitsLin2_of_ksLin2`: `KSLin2` gives `BitsLin2` at every compiled record where an accepted run shows each V* session
 accepting (`SessionAccepts`, a fact of the record's reader; `RecDeploy.sessionAccepts` at the deployed records, which
-`recBound` builds with `deployRec`). The proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
+`recBound` builds with `deployRec`); `bitsLin2On_of_ksLin2On` is the same at the statements a predicate `G` admits. The
+proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
 
 * one draw (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_drawCost_le`): the
   run at most `t`, and `E_O`, which makes no call of its own (`noHash_EO`), at most `t` per rerun
@@ -22,10 +23,10 @@ accepting (`SessionAccepts`, a fact of the record's reader; `RecDeploy.sessionAc
 
 This is a bound on a number under named premises, not a proved security level. `BitsLin2` reads `StrictBirthday` at
 `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512 collision assumptions. At the deployed records
-`λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`), so there `Pr[acc ∧ ¬R] ≤ t·2^{-100}` holds once `KSLin2` holds at the
-deployment, which is not yet established: it takes `HeldB` (false at the deployed V\*, which has no holder of round 0's
-`root_B`) and open premises (`PartChecksB`, `PartOpensB`, `DecompB`, the readers' facts; the full list is
-`RecDeploy.ksLin2_deployed_plain`'s).
+`λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`), so at the deployment's dense statements `Pr[acc ∧ ¬R] ≤ t·2^{-100}`
+holds once `KSLin2On` at `RecDeploy.DenseAt` does, which only follows from premises still open: `FinPieces`,
+`VstarShowsB`, `PartChecksB`, `PartOpensB`, `DecompB`, `RunPairs` and the readers' three facts
+(`RecDeploy.ksLin2_deployed_caps`). Holo statements are candidate 3's own model.
 -/
 
 namespace Claims.Recursion
@@ -498,14 +499,43 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
 `KSLin2` at `M = 2^256` and `R = 2^257`, and `lin2_bound_le`. `BitsLin2` takes `StrictBirthday` at `B` and `ExpectedCR`
 at `B_I`, `Fdev`, `FCI` and `F0I` as premises, the named SHA-512 collision assumptions. At the deployed records, where
 `λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this makes
-`Pr[acc ∧ ¬R] ≤ t·2^{-100}` follow from `KSLin2` there, which is not yet established (`HeldB`, false at the deployed
-V\*, and the open premises `RecDeploy.ksLin2_deployed_plain` lists): a bound on a number under named premises, not a
-proved security level. -/
+`Pr[acc ∧ ¬R] ≤ t·2^{-100}` follow from `KSLin2` there. At the deployment `KSLin2` is shown only at the dense
+statements, from premises still open (`RecDeploy.ksLin2_deployed_caps`), so the deployed form is
+`bitsLin2On_of_ksLin2On`: a bound on a number under named premises, not a proved security level. -/
 theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2 H D Bd DO Cp) : BitsLin2 H D Bd DO Cp := by
   intro decI hdecI decO hdecO x Ω _ _ P t ht1 hrun hSB hBI hFdev hFCI hF0I
   exact (h decI hdecI decO hdecO x Ω P (2 ^ 256) (2 ^ 257)).trans
+    (lin2_bound_le H _ _ DO decO Cp hS x P t ht1 hrun hSB hBI hFdev hFCI hF0I)
+
+/-- **`BitsLin2` at the statements `G` admits**: its bound at every statement `x` with `G x`, as `KSLin2On` is
+`KSLin2`'s. -/
+def BitsLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
+  ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (t : ℕ), 1 ≤ t →
+    (∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
+      (run H P (D.record Bd.IVStar).V x ω r).vLog.length ≤ t) →
+    (∀ hk : 0 < (D.record Bd.IVStar).V.k x, StrictBirthday H (B H (D.record Bd.IVStar).V P x hk)) →
+    (∀ hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x),
+      ExpectedCR H (Binner H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x hk)) →
+    (∀ (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H (Fdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M hk)) →
+    (∀ (M : ℕ) (hW : 0 < Cp.width (xI (D.record Bd.IVStar) x)),
+      ExpectedCR H (FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW)) →
+    (∀ R : ℕ, ExpectedCR H (F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R)) →
+    PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
+        (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
+      t * (2 : ℝ) ^ (-lamLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x)
+
+/-- **Route 2C: `BitsLin2On` from `KSLin2On`**, at the same statements: `bitsLin2_of_ksLin2`'s proof, which reads
+`KSLin2` only at the statement it bounds. -/
+theorem bitsLin2On_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
+    {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hS : SessionAccepts (D.record Bd.IVStar))
+    (h : KSLin2On H D Bd DO Cp G) : BitsLin2On H D Bd DO Cp G := by
+  intro decI hdecI decO hdecO x hx Ω _ _ P t ht1 hrun hSB hBI hFdev hFCI hF0I
+  exact (h decI hdecI decO hdecO x hx Ω P (2 ^ 256) (2 ^ 257)).trans
     (lin2_bound_le H _ _ DO decO Cp hS x P t ht1 hrun hSB hBI hFdev hFCI hF0I)
 
 end Route

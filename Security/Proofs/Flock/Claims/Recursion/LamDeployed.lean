@@ -25,11 +25,11 @@ caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at t
 * so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
 The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
-It bounds a number and establishes no security level: `KSLin2` at the deployment is not yet established, since it takes
-`HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
-`PartOpensB`, `DecompB`, the readers' facts; the full list is `ksLin2_deployed_plain`'s), and `BitsLin2`, that
-`Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it (`bitsLin2_of_ksLin2`). The proved level at the deployment is still
-`Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor (ASK-73).
+It bounds a number and establishes no security level: `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`DenseAt`) only follows from premises still open (`FinPieces`, `VstarShowsB`, `PartChecksB`, `PartOpensB`, `DecompB`,
+`RunPairs` and the readers' three facts; `ksLin2_deployed_caps`), Holo statements being candidate 3's own model, and
+`BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it (`bitsLin2On_of_ksLin2On`). The proved level at the
+deployment is still `Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor (ASK-73).
 -/
 
 namespace RecDeploy
@@ -332,8 +332,8 @@ record's inner Flock (`Bound.deploy`), at every statement whose inner statement 
 whose `nS x ≤ 2^16` V* parts sets up within the masked verifier's served shapes at the inner rounds its numbers are
 read at (`hO`), at inner caps `Cp` of at most `2^64` positions (`hW`). The element-level steps, columns and weight of `DE`
 (`nextE`, `colsE`, `wE`), the code side's `join`, `rowIn`, `final` and `γ`'s weight at `IVStar` (`w`) are any: `λ₂`
-reads none of them. This bounds a number: `KSLin2` at the deployment is not yet established (it takes `HeldB`, false at
-the deployed V\*, and open premises), and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
+reads none of them. This bounds a number: `KSLin2` at the deployment's dense statements only follows from premises still
+open (`ksLin2_deployed_caps`), and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -447,8 +447,8 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
 
 /-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
 caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
-number: `KSLin2` at the deployment is not yet established (it takes `HeldB`, false at the deployed V\*, and open
-premises), and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`). -/
+number: `KSLin2` at the deployment's dense statements only follows from premises still open (`ksLin2_deployed_caps`),
+and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
