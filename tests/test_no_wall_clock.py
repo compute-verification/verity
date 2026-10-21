@@ -50,6 +50,8 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
+    "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::await_listener":
+        "the live run waits for the challenger's ssh -R listener (ss -ltn) once a second; a probe connect would take its one client",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::served_measures":
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "integrations/vllm/tests/protocol_options/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",

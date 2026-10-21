@@ -88,10 +88,37 @@ def gate_argv(argv: list[str], args: Any) -> list[str]:
     return [*argv, shlex.join(args)] if Path(argv[0]).name == "ssh" else [*argv, *args]
 
 
+def listening(port: int) -> bool:
+    """Whether a socket on this host listens on TCP `port`: ``ss -Hltn``, else the kernel's tables it reads
+    (``/proc/net/tcp``, ``tcp6``; state 0A)."""
+    import shutil
+    if shutil.which("ss"):
+        return bool(subprocess.run(["ss", "-Hltn", f"sport = :{port}"], capture_output=True, text=True).stdout.strip())
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            rows = Path(table).read_text().splitlines()[1:]
+        except OSError:
+            continue
+        if any(int(r.split()[1].rsplit(":", 1)[1], 16) == port and r.split()[3] == "0A" for r in rows):
+            return True
+    return False
+
+
+def await_listener(port: int, polls: int = 300) -> int | None:
+    """The polls (one a second, at most `polls`) until `port` listens here (`listening`), or None: the live challenger
+    reaches the serving node through ``ssh -R`` once the gate's open has answered, and a probe connect would take the
+    place of the session's one client."""
+    for i in range(polls):
+        if listening(port):
+            return i
+        time.sleep(1)
+    return None
+
+
 def gate_command(argv: list[str]) -> Any:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
-    S``."""
+    S``, and the answer returned once its ``port`` listens on this host (`await_listener`)."""
     def verb(*args: str) -> dict[str, Any]:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
@@ -99,6 +126,10 @@ def gate_command(argv: list[str]) -> Any:
         answer = verb("open", "--session", session, "--root", root)
         if answer.get("commitment") is None:
             answer["commitment"] = verb("status", session).get("commitment")
+        if type(answer.get("port")) is int:
+            polls = await_listener(answer["port"])
+            print(f"[gate] session {session}: port {answer['port']} "
+                  + (f"listening after {polls} polls" if polls is not None else "not listening after 300 polls"), flush=True)
         return answer
     return gate
 
