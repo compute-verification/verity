@@ -160,7 +160,7 @@ def main(args: Options) -> None:
                             "engine_core_class": f"{type(core).__module__}.{type(core).__name__}" if core is not None else None,
                             "executor_class": f"{type(executor).__module__}.{type(executor).__name__}" if executor is not None else None,
                             "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "env_flags": env_flags,
-                            "in_process_runner": None, "ranks": None}
+                            "effective_execution": va.effective_execution_doc(llm), "in_process_runner": None, "ranks": None}
     try:
         prof.get_model_runner(llm)
         topo["in_process_runner"] = True
