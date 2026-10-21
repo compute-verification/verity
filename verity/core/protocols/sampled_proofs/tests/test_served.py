@@ -163,8 +163,8 @@ def test_an_earlier_outputs_tree_keeps_its_port():
     ({"value": ""}, "names the parameter"),
     ({"value": "nope"}, "not a parameter of the program"),
     ({"output": ("ab" * 64,)}, "an output is"),
-    ({"row_schema": "hm96-sha512/row/v2"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
-    ({"row_schema": "hm96-sha512/row-seg/v1"}, "the registered form reads hm96-sha512/row/v1 rows alone"),
+    ({"row_schema": "hm96-sha512/row/v2"}, r"10 leaves are not rows of 2 \(4 of its leaves in a hm96-sha512/row/v2 row\)"),
+    ({"row_schema": "hm96-sha512/row-seg/v1"}, r"not rows of 2 \(4 of its leaves in a hm96-sha512/row-seg/v1 row\)"),
     ({"row_schema": "u16"}, "not one of"),
 ])
 def test_a_malformed_tree_is_refused(change, why):
@@ -177,10 +177,77 @@ def test_a_malformed_tree_is_refused(change, why):
 def test_the_row_formats_are_the_commitment_layers():
     """`row_schema`'s values are the frame-v3-sha512 leaf schemas C-Flock's ports name (`Flock.HmRow.ROW_SCHEMA*`)."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-    from verity.core.protocols.sampled_proofs.one_stage.served import READ, SCHEMAS
+    from verity.core.protocols.sampled_proofs.one_stage.served import SCHEMAS
 
-    assert SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
-    assert READ == (SCHEMA_HM96_SHA512_ROW,)
+    assert SCHEMAS == G.SCHEMAS == (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+
+
+#: TABLE's rows packed as bit rows: each row's two 8-bit leaves in one u16 word, leaf 0 low (H1's A: K int8 codes, K/2 words)
+PACKED = [[a | b << 8] for a, b in TABLE]
+
+
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+def test_a_bit_row_tree_registers_in_its_format(schema):
+    """A `row/v2` or `row-seg/v1` tree is a row of `words` u16 words holding as many of the parameter's leaves as their bits
+    do: W's rows of two 8-bit leaves are one word each, so the tree is 5 rows of 1 word, its port names the format, and
+    every read opens the served root under the format's leaves (`verify_read`), where the v1 file opens none."""
+    prog = _program()
+    reg = G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema)
+    tree = ServedTree.of(reg)
+    assert (tree.row_schema, tree.leaves, tree.words) == (schema, 5, 1) and "row_schema" not in tree.entry()
+    sr = register_served(prog, Q, [tree])
+    assert sr.registered == [reg.entry()] and sr.values == {"W": 1} and sr.roots == {"W": reg.root.hex()}
+    assert sr.file == G.reads_file(prog, Q, {"W": 1}, {"W": reg.root.hex()}, schemas={"W": schema})
+    assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 1, "word_bits": 16,
+                              "domain": reg.domain.domain_id.hex(), "row_schema": schema, "reads": list(POS)}}
+    dom = G.domain(P.program_digest(prog), "W", 1, 5)
+    assert reg.domain.domain_id == dom.domain_id
+    for r in POS:
+        assert G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r), schema)
+        assert not G.verify_read(dom, reg.root, r, reg.bcs[r], reg.path(r))
+
+
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+@pytest.mark.parametrize("change, why", [
+    ({"words": 2}, r"10 leaves are not rows of 2 \(4 of its leaves"),
+    ({"words": 3}, r"10 leaves are not rows of 3 \(6 of its leaves"),
+    ({"word_bits": 32}, "5 rows of 1 32-bit leaves, and the program's parameter is 5 rows of 1 16-bit leaves"),
+    ({"leaves": 10}, "10 rows of 1 16-bit leaves, and the program's parameter is 5 rows"),
+])
+def test_a_bit_row_tree_whose_bits_are_not_the_parameters_rows_is_refused(schema, change, why):
+    """A bit row is exactly its `words * word_bits` bits: a tree whose words or width make its rows other than W's
+    two-leaf rows, or that counts its rows as v1 would (one 8-bit leaf a word), is refused."""
+    prog = _program()
+    tree = ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))
+    with pytest.raises(ValueError, match=why):
+        register_served(prog, Q, [dataclasses.replace(tree, **change)])
+
+
+def test_r7_holds_a_bit_row_tree_of_full_width_leaves_and_refuses_a_packed_one():
+    """The record's entry names no format, and R7 counts a row's parameter leaves as `words`: it holds a `row/v2` tree whose
+    leaves are its words' width (32-bit leaves in 32-bit words), and refuses W's packed rows, which it counts as 10 rows of
+    one leaf (R7-leaves), until R7 reads the format too."""
+    def sig(S):
+        return (("x", Array(len(POS), Array(2, Value(8)))), ("W", Array(len(TABLE), Array(2, Value(32))))), Array(len(POS), Value(8))
+
+    wide = Program(bind(CompositeDefinition("ServedTestWideV2", 0, (), sig,
+                                            lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
+                                            register=False)))
+    q = P.template_instance_query(MIX32.id)
+    reg = G.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
+    sr = register_served(wide, q, [ServedTree.of(reg)])
+    assert {e["row_schema"] for e in sr.ports.values()} == {G.SCHEMA_V2}
+    part = P.partition(wide, q)
+    ports = {"x": {"leaves": len(POS), "domain": R.served_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
+                                                                  len(POS), "r-served")}}
+    rec = R.record(wide, q, LAW, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
+    assert R.check(rec, wide, q, LAW, SCHEME, ports, registered=sr.values).ok
+
+    prog = _program()
+    sr = register_served(prog, Q, [ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=G.SCHEMA_V2))])
+    rec, ports = _record(prog, sr.registered)
+    v = R.check(rec, prog, Q, LAW, SCHEME, ports, registered=sr.values)
+    assert not v.ok and "R7-leaves" in v.codes and v.detail["R7-leaves"] == {"value": "W", "registered": 5, "verifier": 10}
 
 
 def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
