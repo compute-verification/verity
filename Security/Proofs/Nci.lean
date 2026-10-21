@@ -25,6 +25,7 @@ import Proofs.Nci.PackedTraining
 import Proofs.Nci.Remote
 import Proofs.Nci.Verdict
 import Proofs.Nci.Activations
+import Proofs.Nci.Cover
 
 /-!
 # Proofs of NCI's guarantees
