@@ -312,15 +312,20 @@ def event_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
     return len(head), len(head) + EVENT_TEXT, head, EVENT_TAIL
 
 
-def request_frames(request: bytes, frame_bytes: int) -> bytes:
-    """A request on the link: its length (u32be) and its bytes in `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`,
-    the last zero-filled."""
+def data_frames(data: bytes, frame_bytes: int) -> bytes:
+    """Bytes on a link: `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled, one for no bytes."""
     room = frame_bytes - HEADER.size
-    if room < LENGTH.size:
-        raise ValueError(f"a {frame_bytes}-byte frame has no room for a request's length")
-    data = LENGTH.pack(len(request)) + request
+    if room < 1:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for data")
     return b"".join(encode_frame(DATA, CANONICAL_STREAM, data[i : i + room].ljust(room, b"\0"), frame_bytes)
-                    for i in range(0, len(data), room))
+                    for i in range(0, max(1, len(data)), room))
+
+
+def request_frames(request: bytes, frame_bytes: int) -> bytes:
+    """A request on the link: its length (u32be) and its bytes as `data_frames`."""
+    if frame_bytes - HEADER.size < LENGTH.size:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for a request's length")
+    return data_frames(LENGTH.pack(len(request)) + request, frame_bytes)
 
 
 def request_frame_count(length: int, frame_bytes: int) -> int:
@@ -329,8 +334,8 @@ def request_frame_count(length: int, frame_bytes: int) -> int:
 
 
 def request_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
-    """The ingress template's (p, s, prefix, suffix): a request's frame is its header, then B − 9 bytes of the
-    request's length and bytes at p = 9, zero past them."""
+    """The ingress template's (p, s, prefix, suffix), every `data_frames` frame's: its header, then B − 9 bytes of
+    data at p = 9 (a request's length and bytes), zero past them."""
     return HEADER.size, frame_bytes, HEADER.pack(DATA, CANONICAL_STREAM, frame_bytes - HEADER.size), b""
 
 

@@ -111,6 +111,7 @@ from verity.core.protocols.certifier.active import (
     DATA,
     HEADER,
     SALT,
+    TOKEN_BYTES,
     Events,
     InlineExecutor,
     Proxy,
