@@ -97,9 +97,8 @@ def composed_v4(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int,
                                    + a(bind(LmsEqual, N=64)) + a(bind(V4.N3Fits, D=f.DL, N=n)))
         per_read = (a(bind(U.N3Pick, U=f.U)) + a(bind(V4.N3HidingLeaf, N_BITS=16 * f.B, D=f.DB))
                     + a(bind(U.N3IsZero, W=16 * f.B)) + a(bind(V4.N3Runs, R=R)))
-        W = 1 + zw + 512
-        per_run = (T * (a(bind(V4.N3Carry)) + a(bind(V4.N3Skip, W=zw)))
-                   + T * sum(a(bind(V4.N3CompactStep, W=W, Z=b)) for b in range((T - 1).bit_length()))
+        per_run = (T * (a(bind(V4.N3Carry)) + a(bind(V4.N3Skip, W=zw))) + (T - 1) * a(bind(U.N3Mux, W=512))
+                   + sum(npos * a(bind(V4.N3CompactStep, W=W)) for npos, W in V4.compaction(T, Sr))
                    + Sr * a(bind(U.N3Mux, W=512)) + a(bind(U.N3Pick, U=f.U)) + a(bind(V4.N3Range, S=Sr, D=f.DB))
                    + a(bind(V4.N3RunRoot, DEPTHS=f.DEPTHS)) + a(bind(V4.N3RunFits, DEPTHS=f.DEPTHS, T=T, S=Sr)))
         out["row_reads"] = T * per_read + R * per_run

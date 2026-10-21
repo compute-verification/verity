@@ -32,10 +32,13 @@ def test_a_window_composed_from_its_parts_is_its_traced_size():
 @pytest.mark.slow
 def test_a_v4_window_composed_from_its_parts_is_its_traced_size():
     """`composed_v4` against `n3_v4.size` at the demo's format (N = 1, 2 and 4 in R = 2 runs, at 4 the demo's v4 window;
-    N = 3 in one run) and salted at B = 128 (N = 2 and 3). It is the one test of the run parts' counts that the served
-    rows' v4 costs are composed from. About 60 s alone, most of it tracing SHA-512's compression once."""
+    N = 3 in one run; one segment a frame at N = 1 and 2, a run of one read and of two, with no compaction stage and
+    one) and salted at B = 128 (N = 2 and 3). It is the one test of the run parts' counts that the served rows' v4
+    costs are composed from. About 60 s alone, most of it tracing SHA-512's compression once."""
     f, rec = U.demo().layout.fmt, U.Shape(4, 2, 2)
     memo: dict = {}
     rows = (C.checked(f, rec, [1, 2, 4], 2, False, memo, R=2) + C.checked(f, rec, [3], 2, False, memo, R=1)
+            + C.checked(f, rec, [1, 2], 1, False, memo, R=1)
             + C.checked(f._replace(B=128), rec, [2, 3], 2, True, memo, R=2))
-    assert [r["ands"] for r in rows] == [3_916_380, 5_647_291, 8_388_069, 6_471_010, 4_377_039, 6_566_566]
+    assert [r["ands"] for r in rows] == [3_915_344, 5_646_217, 8_382_770, 6_469_426, 2_848_566, 4_354_265, 4_376_003,
+                                         6_565_492]

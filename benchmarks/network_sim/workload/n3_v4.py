@@ -40,13 +40,13 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ZERO, add, and_reduce, const_bits, sub
+from verity.ml.circuits.boolean.forms import ZERO, add, const_bits, sub
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
@@ -79,29 +79,38 @@ def _check_run(S, D) -> None:
         raise ValueError(f"a run is 1 <= S <= 2^D leaves of a tree of depth 1 <= D <= 64, not S={S!r}, D={D!r}")
 
 
+def sel_js(S: int, D: int, k: int) -> list[int]:
+    """The j of the positions f + 1 + j (f = (S - 1) >> k) the right sibling can take at level k that are among the
+    nodes `N3Range` hashes there."""
+    return [j for j in range(3) if ((S - 1) >> k) + 1 + j < 2 * width(S, k + 1, D)]
+
+
 def _sig_rangesel(S):
     _check_run(S.S, S.D)
-    return (("start", Array(S.D, BIT)),), Array(S.D, Array(4, BIT))
+    n = sum(len(sel_js(S.S, S.D, k)) for k in range(S.D))
+    if not n:
+        raise ValueError(f"a run of {S.S} leaves of a depth-{S.D} tree has no right sibling to place")
+    return (("start", Array(S.D, BIT)),), Array(n, BIT)
 
 
 def _build_rangesel(C, S, start):
-    W = max(S.D, (S.S - 1).bit_length()) + 2
-    total = add(C, list(start) + [ZERO] * (W - S.D), const_bits(S.S - 1, W), width=W)
+    js = [sel_js(S.S, S.D, k) for k in range(S.D)]
+    W = max(k for k in range(S.D) if js[k]) + 2
+    total = add(C, list(start[:W]), const_bits(S.S - 1, W), width=W)
     out = []
     for k in range(S.D):
-        hi = [total[k], total[k + 1]]
-        lo2 = [ZERO, start[k + 1] if k + 1 < S.D else ZERO]
-        d = sub(C, sub(C, hi, lo2, 2)[0], const_bits(((S.S - 1) >> k) & 3, 2), 2)[0]
-        out.append([start[k]] + [and_reduce(C, [d[0] if j & 1 else d[0].inv(), d[1] if j & 2 else d[1].inv()])
-                                 for j in range(3)])
+        if js[k]:
+            x = [total[k], total[k + 1] ^ start[k + 1] if k + 1 < S.D else total[k + 1]]
+            d = add(C, x, const_bits(-((S.S - 1) >> k) % 4, 2), width=2)
+            out += [C.AND(d[0] if j & 1 else d[0].inv(), d[1] if j & 2 else d[1].inv()) for j in js[k]]
     return out
 
 
 N3RangeSel = U._part(
     "N3RangeSel", ("S", "D"), _sig_rangesel, _build_rangesel,
-    "per level k of a run of S leaves from start: bit k of start (the run's first node is a right child), then which "
-    "of the positions f + 1, f + 2, f + 3 (f = (S - 1) >> k) the right sibling takes: the one after the run's last node, "
-    "with the first's shift")
+    "per level k of a run of S leaves from start, and each position f + 1 + j (j < 3, f = (S - 1) >> k) among the "
+    "nodes N3Range hashes at k (sel_js): whether the right sibling takes it, the one after the run's last node with "
+    "the first's shift")
 
 
 def _sig_range(S):
@@ -117,7 +126,9 @@ def _digests(colls: Sequence[Coll]) -> Coll:
 def _body_range(B, S, start, leaves, domain, left, right):
     K = U._Consts(B)
     zero = U._coll(DIGEST, K.bits(0, 512))
-    sel = B.call(bind(N3RangeSel, S=S.S, D=S.D), start)
+    js = [sel_js(S.S, S.D, k) for k in range(S.D)]
+    sel = B.call(bind(N3RangeSel, S=S.S, D=S.D), start).refs if any(js) else None
+    o = 0
     sb = U._refs(start)
     X = [leaves[j] for j in range(S.S)]
     firsts = [X[0]]
@@ -125,16 +136,16 @@ def _body_range(B, S, start, leaves, domain, left, right):
         M1 = width(S.S, k + 1, S.D)
         f = (S.S - 1) >> k
         P = X + [zero] * max(0, 2 * M1 - len(X))
-        a = U._coll(BIT, [sel.refs[4 * k]])
+        a = U._coll(BIT, [sb[k]])
         base = B.batch(bind(U.N3Mux, W=512), _digests(P[:2 * M1]).reshape(Array(2 * M1, Array(512, BIT))),
                        _digests([left[k]] + P[:2 * M1 - 1]).reshape(Array(2 * M1, Array(512, BIT))), a,
                        axes=(0, 0, None))
         E = [base[i].reshape(DIGEST) for i in range(2 * M1)]
-        for j in range(3):
+        for j in js[k]:
             p = f + 1 + j
-            if p < 2 * M1:
-                E[p] = B.call(bind(U.N3Mux, W=512), E[p].reshape(Array(512, BIT)),
-                              right[k].reshape(Array(512, BIT)), U._coll(BIT, [sel.refs[4 * k + 1 + j]])).reshape(DIGEST)
+            E[p] = B.call(bind(U.N3Mux, W=512), E[p].reshape(Array(512, BIT)),
+                          right[k].reshape(Array(512, BIT)), U._coll(BIT, [sel[o]])).reshape(DIGEST)
+            o += 1
         hi = S.D - k - 1
         nb = index_bytes(hi)
         if hi:
@@ -231,31 +242,41 @@ N3Skip = U._part("N3Skip", ("W",), lambda S: ((("z", Array(S.W, BIT)), ("b", BIT
 def _build_carry(C, S, *e):
     last, leaf, member, fresh = [x for w in e[0:8] for x in w], [x for w in e[8:16] for x in w], e[16][0], e[17][0]
     repeat = C.AND(member, fresh.inv())
-    ok = C.AND(repeat, U._eq(C, leaf, last).inv()).inv()
-    return [x ^ C.AND(member, x ^ y) for x, y in zip(last, leaf)] + [ok, C.AND(member, fresh)]
+    return [C.AND(repeat, U._eq(C, leaf, last).inv()).inv(), C.AND(member, fresh)]
 
 
 N3Carry = U._part(
-    "N3Carry", (), lambda S: ((("last", DIGEST), ("leaf", DIGEST), ("member", BIT), ("fresh", BIT)), Array(514, BIT)),
+    "N3Carry", (), lambda S: ((("last", DIGEST), ("leaf", DIGEST), ("member", BIT), ("fresh", BIT)), Array(2, BIT)),
     _build_carry,
-    "a run's member that isn't fresh has the leaf of the run's member before it: the run's last leaf after this read, "
-    "the read's ok bit, and whether it is a fresh member")
+    "a run's member that isn't fresh has last, the leaf of the run's member before it: the read's ok bit, and whether "
+    "it is a fresh member")
 
 
 def _sig_step(S):
-    return (("stay", Array(S.W, BIT)), ("inc", Array(S.W, BIT))), Array(S.W, BIT)
+    if not isinstance(S.W, int) or isinstance(S.W, bool) or S.W < 2:
+        raise ValueError(f"a compaction element is a valid bit, a shift bit and more, not W={S.W!r}")
+    return (("stay", Array(S.W, BIT)), ("inc", Array(S.W, BIT))), Array(S.W - 1, BIT)
 
 
 def _build_step(C, S, stay, inc):
-    move = C.AND(inc[0], inc[1 + S.Z])
-    keep = C.AND(stay[0], stay[1 + S.Z].inv())
-    return [move ^ keep ^ C.AND(move, keep)] + [x ^ C.AND(move, x ^ y) for x, y in zip(stay[1:], inc[1:])]
+    move = C.AND(inc[0], inc[1])
+    keep = C.AND(stay[0], stay[1].inv())
+    return [move ^ keep ^ C.AND(move, keep)] + [x ^ C.AND(move, x ^ y) for x, y in zip(stay[2:], inc[2:])]
 
 
 N3CompactStep = U._part(
-    "N3CompactStep", ("W", "Z"), _sig_step, _build_step,
-    "one stage of a compaction network over elements (valid, shift, data): the element 2^Z to the right if it is valid "
-    "and its shift has bit Z, else this one, valid if it stays")
+    "N3CompactStep", ("W",), _sig_step, _build_step,
+    "one stage of a compaction network over elements (valid, shift, data), the shift's bit for this stage first: inc "
+    "(the element the stage's distance to the right) if it is valid and has that bit, else stay, valid if it stays "
+    "(hasn't the bit); the element without that bit, which later stages don't read")
+
+
+def compaction(T: int, Sr: int) -> list[tuple[int, int]]:
+    """Each stage b of a run's compaction network over its T reads, as (positions, W): the positions a slot below Sr
+    still reads, Sr + 2^n - 2^(b + 1) (n stages) and at most T, and its elements' width, a valid bit, the shift's
+    bits b and up, and a leaf. An element's shift is below T, so n = bitlen(T - 1) bits."""
+    n = (T - 1).bit_length()
+    return [(min(T, Sr + (1 << n) - (2 << b)), 1 + n - b + 512) for b in range(n)]
 
 
 def _sig_runs(S):
@@ -406,27 +427,31 @@ def _body_window(B, S, *args):
                                                 for t in range(T)])))
         fresh = a["fresh"]
         zero_digest = U._coll(DIGEST, K.bits(0, 512))
-        W = 1 + ZW + 512
-        invalid = U._coll(Array(W, BIT), K.bits(0, W))
+        stages = compaction(T, Sr)
+        nz = len(stages)
         for r in range(S.R):
             last, z, elems, carried = zero_digest, U._coll(Array(ZW, BIT), K.bits(0, ZW)), [], []
             for t in range(T):
-                c = B.call(N3Carry, last, rleaves[t], U._coll(BIT, [mem.refs[t * (S.R + 1) + r]]), fresh[t],
-                           name="rows")
-                last = Coll(DIGEST, c.refs.slice(0, 512))
-                sel = Coll(BIT, c.refs.slice(513, 514))
-                carried.append(c.refs.slice(512, 513))
-                elems.append(Coll(Array(W, BIT), concat([sel.refs, z.refs, rleaves[t].refs])))
+                m = U._coll(BIT, [mem.refs[t * (S.R + 1) + r]])
+                c = B.call(N3Carry, last, rleaves[t], m, fresh[t], name="rows")
+                carried.append(c.refs.slice(0, 1))
+                sel = Coll(BIT, c.refs.slice(1, 2))
+                elems.append(Coll(Array(1 + nz + 512, BIT),
+                                  concat([sel.refs] + ([z.refs.slice(0, nz)] if nz else []) + [rleaves[t].refs])))
+                if t < T - 1:
+                    last = B.call(bind(U.N3Mux, W=512), last.reshape(Array(512, BIT)),
+                                  rleaves[t].reshape(Array(512, BIT)), m, name="rows").reshape(DIGEST)
                 z = B.call(bind(N3Skip, W=ZW), z, sel, name="rows")
             oks.append(Coll(Array(T, BIT), concat(carried)))
-            for b in range((T - 1).bit_length()):
-                s = 1 << b
-                stay = Coll(Array(T, Array(W, BIT)), concat([e.refs for e in elems]))
-                inc = Coll(Array(T, Array(W, BIT)), concat([e.refs for e in elems[s:]] + [invalid.refs] * min(s, T)))
-                out = B.batch(bind(N3CompactStep, W=W, Z=b), stay, inc, axes=(0, 0), name="rows")
-                elems = [out[t] for t in range(T)]
+            for b, (npos, W) in enumerate(stages):
+                s, invalid = 1 << b, U._coll(Array(W, BIT), K.bits(0, W))
+                stay = Coll(Array(npos, Array(W, BIT)), concat([e.refs for e in elems[:npos]]))
+                inc = Coll(Array(npos, Array(W, BIT)),
+                           concat([(elems[p + s] if p + s < len(elems) else invalid).refs for p in range(npos)]))
+                out = B.batch(bind(N3CompactStep, W=W), stay, inc, axes=(0, 0), name="rows")
+                elems = [out[p] for p in range(npos)]
             valid = Coll(Array(Sr, BIT), concat([elems[j].refs.slice(0, 1) for j in range(Sr)]))
-            packed = Coll(Array(Sr, Array(512, BIT)), concat([elems[j].refs.slice(1 + ZW, W) for j in range(Sr)]))
+            packed = Coll(Array(Sr, Array(512, BIT)), concat([elems[j].refs.slice(1, 513) for j in range(Sr)]))
             fill = a["run_fill"][r].reshape(Array(Sr, Array(512, BIT)))
             slots_ = B.batch(bind(U.N3Mux, W=512), fill, packed, valid, axes=(0, 0, 0), name="rows")
             u_r, start = a["run_units"][r], a["run_starts"][r]
@@ -693,8 +718,9 @@ def parts(inst: U.Instance) -> list[tuple[object, bool]]:
     f, n, G, R = inst.fmt, inst.N - inst.salted, inst.G, inst.R  # type: ignore[attr-defined]
     T = n * G
     Sr, zw = min(T, 1 << f.DB), _zw(T)
-    whole = [bind(N3RangeSel, S=n, D=f.DL), bind(N3RangeSel, S=Sr, D=f.DB), bind(N3Fits, D=f.DL, N=n),
-             bind(N3Skip, W=zw), bind(N3Carry), *(bind(N3CompactStep, W=1 + zw + 512, Z=b) for b in range((T - 1).bit_length())),
+    sels = [bind(N3RangeSel, S=s, D=d) for s, d in ((n, f.DL), (Sr, f.DB)) if any(sel_js(s, d, k) for k in range(d))]
+    whole = [*sels, bind(N3Fits, D=f.DL, N=n), bind(N3Skip, W=zw), bind(N3Carry),
+             *(bind(N3CompactStep, W=W) for _, W in compaction(T, Sr)),
              bind(N3Runs, R=R), bind(N3RunFits, DEPTHS=f.DEPTHS, T=T, S=Sr), bind(N3RunRoot, DEPTHS=f.DEPTHS)]
     hashed = [bind(N3Range, S=n, D=f.DL), bind(N3Range, S=Sr, D=f.DB), bind(N3HidingLeaf, N_BITS=16 * f.B, D=f.DB)]
     return [(d, True) for d in whole] + [(d, False) for d in hashed]
