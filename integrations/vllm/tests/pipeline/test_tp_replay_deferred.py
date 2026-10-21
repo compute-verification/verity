@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.commit import scheme
+from verity_vllm.commit import scheme, step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.research_outputs import KEPT_APART
@@ -25,6 +25,7 @@ from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit as TC
 from verity_vllm.pipeline.tp import commit_replay as TPR
 from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.program.frontend import collective_kinds as CK
 
 WORLD = 2
@@ -270,17 +271,19 @@ def _in_process(fins):
                                   "query_population": C2.query_population_component(rows, True)}, default=str))
 
 
-@pytest.fixture
-def deferred(tmp_path):
+def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
     """A one-run TP2 Commit (the config run's only-arm form) as `tp-commit --replay-deferred` leaves it: every rank PENDING, its bundle
-    sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them."""
+    sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
+    rank commits under `commit_scheme` and the TP run root is that scheme's form (rows-sha512: v2; vllm-v1: an old record's v1)."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
 
     out = tmp_path / "commit"
     out.mkdir()
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
+                           commit_scheme=commit_scheme if commit_scheme == step_rows.NAME else None)
+    tag = RT.TP_ROOT_TAG if commit_scheme == step_rows.NAME else RT.TP_ROOT_TAG_V1
     root = rc.run_root.hex()
     man = tmp_path / "manifest.json"
     man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
@@ -300,7 +303,7 @@ def deferred(tmp_path):
         fins.append({k: v for k, v in f.items()})
     vec = {r: rc.run_root for r in range(WORLD)}
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
-             "commit": {"tp_run_root": TC.tp_run_root(WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
+             "commit": {"tp_run_root": RT.combine(tag, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
                         "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
     sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
     qp_comp = C2.query_population_component(rows, True)
@@ -315,12 +318,17 @@ def deferred(tmp_path):
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))
-    (out / "versions.json").write_text(json.dumps(VERSIONS))
+    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": tag.decode()}))
     (out / "finalize_pair0.json").write_text(json.dumps(fins, default=str))
     (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
                                                    "value_correspondence": vc}))
     (out / "sampled_replay.json").write_text(json.dumps({"sampled_replay": sr_comp, "boundary_linkage": lk_comp}, default=str))
     return types.SimpleNamespace(out=out, rc=rc, man=man, dd=json.loads((out / C2.DEFERRED).read_text()))
+
+
+@pytest.fixture
+def deferred(tmp_path):
+    return _seal_deferred(tmp_path)
 
 
 def _replayed(d, rank, sr, lk):
@@ -337,6 +345,7 @@ def test_seal_names_every_ranks_bundle_by_its_manifest_and_a_decided_commit_seal
         m = RB.open_bundle(b["path"])
         assert m["manifest_sha256"] == b["manifest_sha256"] and m["context"]["tp"] == {"world": WORLD, "rank": b["rank"]}
         assert m["context"]["replay"]["seed"] == SEED and m["context"]["required_manifest_sha256"] == hashlib.sha256(d.man.read_bytes()).hexdigest()
+        assert len(bytes.fromhex(m["context"]["tp_run_root"])) == len(bytes.fromhex(m["context"]["run_root"])) == step_rows.ROOT_BYTES
     assert not list(d.out.glob("*.partial"))
     out2 = tmp_path / "decided"
     RB.partial(out2, 0, rank=0).mkdir(parents=True)
@@ -464,12 +473,20 @@ def _tamper_runs(out, fn):
     (out / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
+def _tamper_versions(out, **kw):
+    p = out / "versions.json"
+    p.write_text(json.dumps({**json.loads(p.read_text()), **kw}))
+
+
 @pytest.mark.parametrize("tamper,named", [
     (lambda out: (out / "replay_bundle_p0_rank1" / "binding_map.json").write_text("{}"), "sha256 is not the manifest's"),
-    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(run_root="11" * 32)), "commitment vector|run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(run_root="11" * 64)), "commitment vector|run root of record"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"]["binding"].update(map_digest="22" * 32)), "binding map"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(commit_pass=True)), "no rank awaiting its deferred replay"),
-    (lambda out: _tamper_runs(out, lambda c: c.update(tp_run_root="33" * 32)), "TP run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c.update(tp_run_root="33" * 64)), "TP run root of record"),
+    (lambda out: _tamper_runs(out, lambda c: c["commitment_vector"][1].update(run_root="11" * 32)), "rank 1 root is 32 bytes, a vllm-v1"),
+    (lambda out: _tamper_versions(out, root_tag=RT.TP_ROOT_TAG_V1.decode()), "rank 0 root is not 32 bytes"),
+    (lambda out: _tamper_versions(out, root_tag=None), "None is not a TP run root form"),
 ])
 def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred, stubbed, tamper, named):
     tamper(deferred.out)
@@ -477,6 +494,15 @@ def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred,
     assert "evaluate" not in stubbed and not TPR.result_path(deferred.out, 0, 1).exists()
     with pytest.raises(TPR.Refused, match=named):
         TPR.replay_rank(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck"), deferred.out, deferred.dd, 0, 1)
+
+
+def test_an_old_vllm_v1_record_replays_under_its_v1_tag_and_never_as_v2(tmp_path, stubbed):
+    d = _seal_deferred(tmp_path, "vllm-v1")
+    assert len(d.rc.run_root) == 32 and len(bytes.fromhex(RB.open_bundle(d.dd["bundles"][1]["path"])["context"]["tp_run_root"])) == 32
+    assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", ranks="1")) == 4 and stubbed["evaluate"][2]["run_root"] == d.rc.run_root
+    _tamper_versions(d.out, root_tag=RT.TP_ROOT_TAG.decode())
+    with pytest.raises(TPR.Refused, match="rank 0 root is 32 bytes, a vllm-v1"):
+        TPR.replay_rank(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck"), d.out, d.dd, 0, 0)
 
 
 def test_a_manifest_that_is_not_the_commits_is_refused(deferred, stubbed, tmp_path):

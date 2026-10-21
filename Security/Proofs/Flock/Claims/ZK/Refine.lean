@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.CoinOpen
+import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
 # Toward the item-stream refinement at the reference session
@@ -55,15 +56,18 @@ opening that fails (`strat_eval_cons`).
 * **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`, at SHA-512): `S` is `CoinLayer.session nr T`,
   whose `Hello`, opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. Its
   premises on the transport are the transport's trusts alone, each a named hypothesis for a stated reason: the
-  server's `Hello` is the coin layer's (`LeanRelease.HelloEq`, Rust's `hello_with_nonce`), the firewall's own link and
+  server's `Hello` is `flock-firewall hello`'s at the statement's files (`LeanRelease.HelloIs`, which gives
+  `LeanRelease.HelloEq` by `helloEq_of_helloIs`: that command's `Hello` is the coin layer's), the firewall's own link and
   `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `flock-firewall link`'s, and at the
   deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`
   is Rust's `Firewall::finish`), the transport
-  requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`, Rust's
-  `coin_tree::Checked`) and hands the frame a rep state and coins read from the coins the openings open (`ReadsCoins`,
-  Rust's `LeanFrame`), the `Finish` is one past the last coin, and `flock-firewall coins` reads the coin layer's `Hello`
-  (`HelloDParses`, Lean's own, which the kernel cannot evaluate: `Lean.Json.parse` is `partial`). From them `CheckIs`
-  is proved (`LeanRelease.checkIs_coinLayer`, by `CoinOpen.coinLayer_verdict`, at `helloParses_of_helloEq`), and the
+  requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`) and hands the frame a rep
+  state and coins read from the coins the openings open (`ReadsCoins`, Rust's `LeanFrame`), the `Finish` is one past the
+  last coin, and the coin check reads the session's `Hello` with the tape's nonce (`HelloParses`). At the session loop
+  (`flock-firewall session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow` and the `Finish`'s
+  round are theorems; under `coin_tree::Checked` `ReqsFollow` is a trust, and `HelloParses` follows from `HelloEq` and
+  `HelloDParses` (`helloParses_of_helloEq`). From them `CheckIs` is proved (`LeanRelease.checkIs_coinLayer`, by
+  `CoinOpen.coinLayer_verdict`), and the
   stop rule and both its Props (`rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The rest is the tables' side:
   `S`'s six Props and that `T`'s frame rounds, without a rep's leading domain frame, are the frame's bytes
   (`LiveRoundEq`, `FillRoundEq`). `Claims/ZK/CoinPass.lean` has, at every tape, a history past the link whose answer
@@ -552,14 +556,19 @@ theorem fillRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
       have h1 := hO ν t m₀ ρ₀ ops hlt'.le (Bool.eq_false_of_ne_true hok)
       cases h1.symm.trans hr
 
-/-- **The `Hello` is the session's**: at every tape the server's own `Hello` is the session's at its nonce. A named
-hypothesis, one of the transport's trusts: the server's `Hello` (`hello`) is Rust's, `SessionConfig::hello_with_nonce`
-(`flock-live`'s `lib.rs`: serde's `to_string` of the session's `Hello` with the nonce's hex in `coins.nonce`) framed as
-`Req::Hello` by `flock-circuit`, which no Lean code computes and the frame never sees; at the deployed coin layer the
-session's is `CoinLayer.helloD`, the verifier's own canonical `Hello` (what `CoinTree.checkHello` compares byte for
-byte). -/
+/-- **The `Hello` is the session's**: at every tape the server's own `Hello` is the session's at its nonce. At the
+deployed coin layer the session's is `CoinLayer.helloD`, the verifier's own canonical `Hello` (what
+`CoinTree.checkHello` compares byte for byte), and this follows from the server's `Hello` being `flock-firewall hello`'s
+(`LeanRelease.HelloIs`, `helloEq_of_helloIs`). -/
 def HelloEq (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (x : Msg) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape), L.hello x (ν, t) = S.hello x ν
+
+/-- **`HelloEq` at the deployed coin layer from `flock-firewall hello`**: where the server's `Hello` is that command's
+message (`HelloIs`), it is the session's (`CoinLayer.helloD_eq`). -/
+theorem helloEq_of_helloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
+    (x : Msg) (hL : HelloIs nr T L x) : HelloEq (CoinLayer.session nr T) L x :=
+  fun ν t => (hL ν t).trans (CoinLayer.helloD_eq x ν).symm
 
 /-- **`HelloRefine` at the session with the frame's stops**, from the `Hello` being the session's. -/
 theorem helloRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
@@ -586,9 +595,10 @@ def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.r
 
 /-- **The `Finish` is the session's**: after every history of `refK x` openings whose rounds all passed, whose
 openings pass and whose last coins the frame takes, `Final.encode` of the record and proof files the firewall builds
-itself is the session's switched last message at the coins the openings open. A named hypothesis, one of the
-transport's trusts: the record and proof files (`files`) are `Firewall::finish`'s in Rust (`flock-circuit`), which no
-Lean code computes; only their encoding, `Final.encode`, is Lean's. -/
+itself is the session's switched last message at the coins the openings open. A live run's `Finish` is one the
+firewall's own `Finish` takes (`LeanRelease.finStops_of_live`), so it says nothing where that stops. A named hypothesis,
+one of the transport's trusts: the record and proof files (`files`) are `Firewall::finish`'s in Rust (`flock-circuit`),
+which no Lean code computes; only their encoding, `Final.encode`, is Lean's. -/
 def FinalRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
@@ -732,15 +742,18 @@ theorem stopsCausal_rfOf (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Non
 
 /-! ## The transport's check at the deployed coin layer -/
 
-/-- **`flock-firewall coins` reads the server's `Hello` with the tape's nonce** at `x`: at every tape, `Hello.parse`
-reads the server's own `Hello` (`coinHello`), and the nonce it reads is the bytes of the tape's. It follows from the
-server's `Hello` being the coin layer's (`HelloEq`) and `Hello.parse` reading that one (`HelloDParses`,
-`helloParses_of_helloEq`). -/
+/-- **The coin check reads the session's `Hello` with the tape's nonce** at `x`: at every tape, where it reads one
+(`helloChk`), the nonce it reads is the bytes of the tape's, and where it reads none, the schedule has no place for coin
+`0` (`CoinLayer.slot`), so the session's check refuses every opening too. The session loop's is a theorem
+(`SessionLean`); a transport that parses the `Hello`'s bytes has it from the server's `Hello` being the coin layer's
+(`HelloEq`) and `Hello.parse` reading that one (`HelloDParses`, `helloParses_of_helloEq`). -/
 def HelloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg) :
     Prop :=
   ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape),
-    ∃ hl : _root_.Flock.Firewall.Coins.Hello, coinHello (L.hello x (ν, t)) = .ok hl ∧ hl.nonce = CoinLayer.nb ν
+    match L.helloChk x (ν, t) with
+    | .ok hl => hl.nonce = CoinLayer.nb ν
+    | .error _ => CoinLayer.slot x 0 = none
 
 /-- **`flock-firewall coins` reads the coin layer's `Hello` with its nonce** at `x`: at every nonce, `Hello.parse`
 reads `CoinLayer.helloD` (`coinHello`), and the nonce it reads is the nonce's bytes. A statement about Lean functions
@@ -753,24 +766,31 @@ def HelloDParses (x : Msg) : Prop :=
   ∀ ν : CoinLayer.Nonce,
     ∃ hl : _root_.Flock.Firewall.Coins.Hello, coinHello (CoinLayer.helloD x ν) = .ok hl ∧ hl.nonce = CoinLayer.nb ν
 
-/-- **`HelloParses` from the server's `Hello` being the coin layer's** and `Hello.parse` reading the coin layer's. -/
+/-- **`HelloParses` of a transport whose coin check parses the `Hello`'s bytes** (`coinHello`, `coin_tree::Checked`), from
+the server's `Hello` being the coin layer's and `Hello.parse` reading the coin layer's. -/
 theorem helloParses_of_helloEq (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg)
+    (hR : ∀ ρ, L.helloChk x ρ = coinHello (L.hello x ρ))
     (hH : HelloEq (CoinLayer.session nr T) L x) (hD : HelloDParses x) : HelloParses nr T L x := by
   intro ν t
   obtain ⟨hl, h1, h2⟩ := hD ν
-  exact ⟨hl, (congrArg coinHello (hH ν t)).trans h1, h2⟩
+  have e : L.helloChk x (ν, t) = .ok hl := (hR (ν, t)).trans ((congrArg coinHello (hH ν t)).trans h1)
+  show (match L.helloChk x (ν, t) with
+    | .ok hl => hl.nonce = CoinLayer.nb ν
+    | .error _ => CoinLayer.slot x 0 = none)
+  rw [e]
+  exact h2
 
 /-- **The transport requests each opening at the committed schedule's place** at `x` (`CoinOpen.Follows` at
-`CoinLayer.place`): at every tape, where `flock-firewall coins` reads the server's `Hello` as `hl`, the requests
-(`LeanRelease.req`) of at most the protocol's `refK x` openings name, in order, the places the schedule gives them. A
-named hypothesis, one of the transport's trusts: the requests (`req`) are Rust's `coin_tree::Checked`, which asks for
-the coins of each `Req::Commit` and `Req::Round` by its stream and count, and which no Lean code computes. -/
+`CoinLayer.place`): at every tape, where the coin check reads the session's `Hello` as `hl` (`helloChk`), the requests
+(`LeanRelease.req`) of at most the protocol's `refK x` openings name, in order, the places the schedule gives them. The
+session loop's is a theorem (`SessionLean`: its requests are `Flock.Firewall.Session.reqAt`); under `coin_tree::Checked`,
+which asks for the coins of each `Req::Commit` and `Req::Round` by its stream and count, a named trust. -/
 def ReqsFollow (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg) :
     Prop :=
   ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape) (hl : _root_.Flock.Firewall.Coins.Hello),
-    coinHello (L.hello x (ν, t)) = .ok hl → ∀ ms : List Msg, ms.length ≤ refK x →
+    L.helloChk x (ν, t) = .ok hl → ∀ ms : List Msg, ms.length ≤ refK x →
       CoinOpen.Follows (CoinLayer.place nr x) hl.spec hl.links 0 [] (reqsFrom (L.req x) 0 ms)
 
 /-- **At the deployed coin layer the transport's check is the session's**, at SHA-512: from `flock-firewall coins`
@@ -783,14 +803,37 @@ theorem checkIs_coinLayer (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
   cases ops with
   | nil => rfl
   | cons o ops =>
-    obtain ⟨hlo, hp, hν⟩ := hP ν t
-    have hlen : ((o :: ops).map Prod.snd).length ≤ refK x := by
-      rw [List.length_map]; exact hl
-    have hv := CoinOpen.coinLayer_verdict nr T x ν hlo ρ₀ (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd)) hν
-      (hF ν t hlo hp ((o :: ops).map Prod.snd) hlen) (List.cons_ne_nil _ _)
-    exact (L.opens_of_hello x (ν, t) m₀ ρ₀ o ops hp).trans (hv.trans (congrArg
-      (fun ms => ((allOk ((CoinLayer.session nr T).refP.chk x ν ρ₀) 0 ms).eval CoinOpen.shaH).1)
-      (reqsFrom_map (L.req x) 0 ((o :: ops).map Prod.snd))))
+    have hPνt := hP ν t
+    cases hp : L.helloChk x (ν, t) with
+    | ok hlo =>
+      rw [hp] at hPνt
+      have hlen : ((o :: ops).map Prod.snd).length ≤ refK x := by
+        rw [List.length_map]; exact hl
+      have hv := CoinOpen.coinLayer_verdict nr T x ν hlo ρ₀ (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd)) hPνt
+        (hF ν t hlo hp ((o :: ops).map Prod.snd) hlen) (List.cons_ne_nil _ _)
+      exact (L.opens_of_hello x (ν, t) m₀ ρ₀ o ops hp).trans (hv.trans (congrArg
+        (fun ms => ((allOk ((CoinLayer.session nr T).refP.chk x ν ρ₀) 0 ms).eval CoinOpen.shaH).1)
+        (reqsFrom_map (L.req x) 0 ((o :: ops).map Prod.snd))))
+    | error e =>
+      rw [hp] at hPνt
+      have hpl : CoinLayer.place nr x 0 = { ok := false, pos := [], idx := 0, n := 0, depth := 0 } := by
+        unfold CoinLayer.place
+        rw [hPνt]
+      have hpd : CoinLayer.parseD (CoinLayer.place nr x 0) ρ₀ o.2 = none := by
+        rw [hpl]
+        rfl
+      have hop : L.opens x (ν, t) ((m₀, ρ₀) :: o :: ops) = false := by
+        show (coinVerdict (L.helloChk x (ν, t)) ρ₀ (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = false
+        unfold coinVerdict
+        rw [hp]
+        rfl
+      rw [hop]
+      show false =
+        (OC.eval CoinOpen.shaH (allOk (CoinOpen.chkAt (CoinLayer.place nr x) _ ρ₀) 0 ((o :: ops).map Prod.snd))).1
+      have hc : ∀ ν', CoinOpen.chkAt (CoinLayer.place nr x) ν' ρ₀ 0 o.2 = .ret false := fun ν' => by
+        simp only [CoinOpen.chkAt, hpd, treeChk]
+      simp only [List.map_cons, allOk, hc]
+      all_goals rfl
 
 end LeanRelease
 
@@ -819,7 +862,8 @@ the server's `Hello`, the firewall's own link and `Finish` being the session's (
 frame): the item-stream refinement is proved from them
 (`LeanRelease.helloRefine_withStops`, `ownRefine_withStops`, `liveRefine_withStops`, `fillRefine_withStops`,
 `stopRefine_withStops`). A transport that reads the history only through the decoded coins on the histories its check
-passes gives `Rf` and both its Props (`LeanRelease.rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). -/
+passes gives `Rf` and both its Props (`LeanRelease.rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The stop
+leaks `Flock.zk_server_lean`'s one bit a session, `1[a round failed ∨ L.finStops]`, `0` for honest workers. -/
 theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (hRf : S.StopsCausal Rf) (vs : S.SwVals) (t : ℕ)
@@ -862,12 +906,12 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
 `Hello`'s answer, `CoinLayer.treeD`, `CoinLayer.parseD`) and the coin reading are the deployed ones, and the tables,
 with their round encoding `enc`, `fin` and `off`, are `T`'s, whose six Props and the frame rounds' bytes
 (`LeanRelease.LiveRoundEq`, `FillRoundEq`: `T`'s frame rounds, without their leading domain frame, are the frame's) are
-the tables' side. Each premise on the transport is a named trust, a fact about what Rust computes or, for
-`LeanRelease.HelloDParses`, a fact about Lean's own functions that the kernel cannot evaluate:
-* the server's `Hello` is `CoinLayer.helloD` at the tape's nonce (`LeanRelease.HelloEq`: Rust's
-  `SessionConfig::hello_with_nonce`), and `flock-firewall coins` reads that one with its nonce
-  (`LeanRelease.HelloDParses`: `Lean.Json.parse` is `partial`);
-* the transport requests each opening at the schedule's place (`LeanRelease.ReqsFollow`: Rust's `coin_tree::Checked`);
+the tables' side. Each premise on the transport is a named trust or, at the session loop (`Claims/ZK/SessionLean.lean`),
+a theorem:
+* the server's `Hello` is the Lean `Hello` at the tape's nonce (`LeanRelease.HelloIs`; that `Hello` is `CoinLayer.helloD`,
+  `CoinLayer.helloD_eq`, so `LeanRelease.HelloEq` follows, `helloEq_of_helloIs`), and the coin check reads the session's
+  `Hello` with that nonce (`LeanRelease.HelloParses`);
+* the transport requests each opening at the schedule's place (`LeanRelease.ReqsFollow`);
 * the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `flock-firewall link`'s roots, which
   `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: Rust's `Firewall::finish`);
 * the transport hands the frame a rep state and coins that are functions `pc`, `cc` of the coins the openings open, on
@@ -876,7 +920,10 @@ the tables' side. Each premise on the transport is a named trust, a fact about w
 From them the release's coin check is the session's (`LeanRelease.checkIs_coinLayer`, from `CoinOpen.coinLayer_verdict`,
 at `LeanRelease.helloParses_of_helloEq`), the stop rule is the frame's refusal under the transport's reading
 (`LeanRelease.rfOf`), which reads the coins before its round only (`stopsCausal_rfOf`) and is the release's refusals
-(`stopsAt_of_readsCoins`), and a live frame round is below the `Finish` (`LeanRelease.live_lt_last`). -/
+(`stopsAt_of_readsCoins`), and a live frame round is below the `Finish` (`LeanRelease.live_lt_last`). The stop leaks
+`Flock.zk_server_lean`'s one bit a session, `1[a round failed ∨ L.finStops]`: whether the session stopped at its
+`Finish`, where the firewall's own `Finish` stops on workers' values that fail a constraint at the drawn pads; `0` for
+honest workers. -/
 theorem Flock.zk_server_lean_coinLayer
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (vs : (CoinLayer.session nr T).SwVals) (t : ℕ) (ht : 0 < t)
@@ -891,7 +938,7 @@ theorem Flock.zk_server_lean_coinLayer
     (pc : Msg → List (CoinLayer.session nr T).Coin → Masker)
     (cc : Msg → List (CoinLayer.session nr T).Coin → Array _root_.Flock.F128)
     (hRd : LeanRelease.ReadsCoins (CoinLayer.session nr T) L pc cc x)
-    (hH : LeanRelease.HelloEq (CoinLayer.session nr T) L x) (hHd : LeanRelease.HelloDParses x)
+    (hH : LeanRelease.HelloIs nr T L x) (hP : LeanRelease.HelloParses nr T L x)
     (hFw : LeanRelease.ReqsFollow nr T L x)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session nr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session nr T) vs L CoinOpen.shaH wk x w)
@@ -921,10 +968,11 @@ theorem Flock.zk_server_lean_coinLayer
             (Fork CoinOpen.shaH ((((CoinLayer.session nr T).withStops
                 (LeanRelease.rfOf (CoinLayer.session nr T) L pc cc) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) :=
-  have hC := LeanRelease.checkIs_coinLayer nr T L x (LeanRelease.helloParses_of_helloEq nr T L x hH hHd) hFw
+  have hHe := LeanRelease.helloEq_of_helloIs nr T L x hH
+  have hC := LeanRelease.checkIs_coinLayer nr T L x hP hFw
   Flock.zk_server_lean_stops CoinOpen.shaH rel (CoinLayer.session nr T)
     (LeanRelease.rfOf (CoinLayer.session nr T) L pc cc) (LeanRelease.stopsCausal_rfOf _ L pc cc) vs t ht hT1 hδ₁ hS hV
-    hD hc hsc hT L wk x w hR hlast (LeanRelease.stopsAt_of_readsCoins _ L CoinOpen.shaH pc cc x hRd hC) hC hH hLk hF
+    hD hc hsc hT L wk x w hR hlast (LeanRelease.stopsAt_of_readsCoins _ L CoinOpen.shaH pc cc x hRd hC) hC hHe hLk hF
     hE hEf Vs θ hk Ev
 
 end Claims.ZKServer

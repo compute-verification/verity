@@ -57,6 +57,35 @@ def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them
     assert wf("model.layers.5.mlp.down_proj.weight_scale") == ("layers", 5, "down_ws")
     assert wf("lm_head.weight") == ("lm_head",)
     assert profile_for_case("LLAMA31_8B").weight_field("model.layers.5.mlp.down_proj.weight_scale") is None
+    assert "INT8_LM_HEAD" not in p.config and wf("lm_head.weight_scale") is None
+
+
+def test_the_v2_role_carries_an_s8_lm_head_and_its_row_scales():
+    role = "LLAMA31_8B_INT8_V2"
+    entry = dg.checkpoint_entry(role)
+    assert entry is not None and entry["recipe"]["id"] == "verity-int8-channel127/v2"
+    assert hashlib.sha256((dg.HF_CONFIG_DIR / f"{role}.config.json").read_bytes()).hexdigest() == entry["config_sha256"]
+    p = profile_for_case(role)
+    assert p.config["INT8_EXACT"] == 127 and p.config["INT8_LM_HEAD"]
+    fields = analytic.weights_type(p.config).fields
+    names = [n for n, _ in fields]
+    assert names[names.index("lm_head") + 1] == "lm_head_ws"
+    f = dict(fields)
+    assert str(f["lm_head"]) == "Array<128256,Array<4096,Value<8>>>" and str(f["lm_head_ws"]) == "Array<128256,Array<1,Value<32>>>"
+    assert str(f["embed"]) == str(dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["embed"])
+    assert dict(fields)["layers"].elem == dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["layers"].elem
+    wf = p.weight_field
+    assert wf("lm_head.weight") == ("lm_head",) and wf("lm_head.weight_scale") == ("lm_head_ws",)
+
+
+def test_int8_exact_config_reads_whether_the_lm_head_is_kept():
+    pytest.importorskip("vllm")
+    from verity_vllm.engine.int8_vllm import Int8ExactConfig
+    base = {"quant_method": "verity_int8", "weight_max": 127}
+    assert not Int8ExactConfig.from_config({**base, "modules_to_not_convert": ["lm_head"]}).lm_head
+    assert Int8ExactConfig.from_config({**base, "modules_to_not_convert": []}).lm_head
+    with pytest.raises(ValueError):
+        Int8ExactConfig.from_config({**base, "modules_to_not_convert": ["lm_head", "model.norm"]})
 
 
 # ---------------------------------------------------------------- patterns

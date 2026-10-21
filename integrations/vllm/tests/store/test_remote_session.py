@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
-from verity_vllm.store import remote
+from verity_vllm.store import memory_map as store_map, remote
 from verity_vllm.store.interface import Append, PageLayout
 from verity_vllm.store.registry import ArrayBacking, Store
 
@@ -231,7 +231,7 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
     assert next(x.step for x in lines if {13, 14, 15, 16} <= set(x.freed)) < min(rekeys)
     # the map, replayed, holds the session's live blocks, its writes are the appends' digests, and the store holds them
-    agree = remote.agreement(backend)
+    agree = store_map.agreement(backend)
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
 
 
@@ -244,7 +244,7 @@ def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_fro
     r, p, s, backend = run("serve")
     assert r["accepted"] and p["accepted"]
     trace, plans = backend.trace, dict(backend.plans)
-    agree = remote.agreement(backend)
+    agree = store_map.agreement(backend)
     _, lines = memory_map.parse(s.memory_map.text().splitlines())
     wrote = {w.index: x.step for x in lines for w in x.written}
     late = trace.deferral()["steps_late"]
@@ -327,8 +327,8 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
     assert cs.engine_args({"max_model_len": 128}) == {"max_model_len": 128, "async_scheduling": False,
                                                        "enable_prefix_caching": False, "num_gpu_blocks_override": 8}
-    for bad, why in [({"tensor_parallel_size": 2}, "parallelism"), ({"kv_cache_dtype": "fp8"}, "kv_cache_dtype"),
-                     ({"async_scheduling": True}, "async"), ({"enable_prefix_caching": True}, "prefix caching")]:
+    for bad, why in [({"tensor_parallel_size": 2}, "parallelism"), ({"async_scheduling": True}, "async"),
+                     ({"enable_prefix_caching": True}, "prefix caching")]:
         with pytest.raises(SystemExit, match=why):
             cs.engine_args(bad)
     cs.target(type("T", (), {"async_scheduling": False})())
@@ -336,6 +336,7 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
         with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
             cs.target(t)
     for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode"),
+                    ({"plan": "servedrop:2"}, "appends nothing"), ({"filler_gib": -1}, "nonnegative"),
                     ({"node": "n" * 65}, "node id")]:
         with pytest.raises(Exception, match=err):
             remote.CommitSession("127.0.0.1:7781", **kw)
@@ -347,26 +348,49 @@ class Stats:
         return {}
 
 
+def served_store() -> Store:
+    """The Commit's store: two weights blocks and two of filler, no KV pool (N = 4)."""
+    s = Store()
+    w = np.random.default_rng(1).integers(0, 256, 2 * BLOCK, np.uint8)
+    s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
+    s.register("filler", "hbm", "filler", ArrayBacking(np.zeros(2 * BLOCK, np.uint8)), block_bytes=BLOCK, codec=CODEC,
+               receipt=RECEIPT, source="filler:zeros")
+    return s
+
+
+def served_engine(s: Store):
+    """The binder's steps with the KV outside the store (`Binder(kv=False)`): each numbered, writing no block of it."""
+    def step(k: int) -> None:
+        s.kv_append([], k)
+        s.end_step()
+    return step
+
+
 def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None,
-             each: Callable[[int], None] | None = None):
-    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2 windows,
-    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep` and after ``each(k)``,
-    after ``setup()``, the run's work between `begin` and its first step."""
+             each: Callable[[int], None] | None = None, pace: dict | None = None, step_ms: float = 0.0,
+             served: bool = False):
+    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2
+    windows (paced at ``pace``, `verifier.pace_of`'s), the run ``run_steps`` steps of the scripted engine, each
+    through the session's `Lockstep` and after ``each(k)``, after ``setup()``, the run's work between `begin` and its
+    first step.  ``served``: the Commit's store and steps (`served_store`, `served_engine`), else a KV pool written as
+    `engine` writes it."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
-    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None)
-    cs.store, cs.binder = store(), Stats()
+    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None,
+                              step_ms=step_ms)
+    cs.store, cs.binder = served_store() if served else store(), Stats()
     seen: list = []
 
     def verify() -> None:
         sock, _ = lsock.accept()
         lsock.close()
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
-                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=2)
+                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
+                              lifetime=2)
         v.register()
         try:
-            seen.append(v.session(0, v.allowance(v.ping(4)), None))
+            seen.append(v.session(0, v.allowance(v.ping(4)), None, pace=pace))
         except Exception as e:  # noqa: BLE001  -- a prover that stops mid-session drops the connection
             seen.append(e)
         sock.close()
@@ -376,7 +400,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     lock = cs.begin()
     if setup is not None:
         setup()
-    step, steps = engine(cs.store), []
+    step, steps = (served_engine if served else engine)(cs.store), []
     def run(k: int):
         steps.append(k)
         if each is not None:
@@ -421,6 +445,29 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
     assert "root" in at[1] and sent.index("armed") < sent.index("coin") < sent.index("append") < sent.index("root")
     steps = [x for w in r["record"]["profile"]["windows"] for x in w["steps"]]
     assert steps[0] == rec["memory_map"]["first_step"] == 0
+
+
+def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
+    """At ``--paced 1:…`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
+    the next window); the session's record tags each pass with the step the verifier's record has for it, a step of
+    the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The Commit's store is
+    the weights and filler (the KV outside it), so its steps write no registered block, every pass reads all N, and the
+    memory line is declared in its time-held form as well as its snapshot."""
+    pace = verifier.pace_of("1:1000:4096:2", 1000 / 3)
+    assert pace["groups"] == 3
+    rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, pace=pace, step_ms=2.5, served=True)
+    assert r["accepted"] and rec["accepted"] and r["record"]["public"]["pace"] == {"k": 1, "window_ns": 10**9}
+    wins = r["record"]["profile"]["windows"]
+    assert len(wins) == 9 and all(len(w["steps"]) == 1 for w in wins) and rec["prover"]["discarded"] == 0
+    mm = rec["memory_map"]
+    assert mm["pass_steps"] == [[w["window"], 0, w["steps"][0]] for w in wins] and mm["pass_steps_mapped"]
+    assert mm["agrees"] and mm["recorded"] == 0 and mm["deferral"]["appends"] == 0
+    assert list(memory_map.parse((tmp_path / "memory_map.jsonl").read_text().splitlines(keepends=True))[1]) == []
+    assert {p.length for _, p in cs.backend.plans} == {4}
+    assert rec["step_ms"] == 2.5 and cs.backend.calibrate()["step_ns"] == 2_500_000
+    memory = r["ledger"]["declared"]["memory"]
+    assert 0 <= memory["snapshot"]["epsilon"] <= 1
+    assert "refused" not in memory["time-held"] and 0 <= memory["time-held"]["epsilon"] <= 1
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):

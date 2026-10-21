@@ -106,16 +106,34 @@ def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k
     assert P.placed({"mac:int8": 3 * products}, {t: 3}) == {"mac:linears": 3 * linears}
 
 
+#: (r, c, K): every product census/v1 counts in the one-stream tile (`PouwH1Tile_v3`), the lanes' segment dots' alone
+TILE_ROWS_V3 = {(4, 8, 64): 4096, (4, 16, 64): 8192, (4, 8, 96): 5120}
+
+
+@needs_h1
+@pytest.mark.parametrize("r,c,k", TILE_ROWS)
+def test_a_one_stream_tiles_products_are_its_lanes_and_placed_credits_z_at_its_k(r, c, k):
+    """v3's z is recombined from the lanes' folded words, so its tile has `h1Rows`' products less z's own, and `placed`
+    credits the same z products, r·c·K, as v1's tile."""
+    linears, products = TILE_ROWS[(r, c, k)]
+    t = P.Tile(r, c, k, r * c, 3)
+    assert t.products == TILE_ROWS_V3[(r, c, k)] == h1_rows()[(r, c, k)] - linears and t.linears == linears
+    assert P.placed({"mac:int8": t.products}, {t: 1}) == {"mac:linears": linears}
+    with pytest.raises(ValueError, match="aren't its H1 tiles'"):
+        P.placed({"mac:int8": products}, {t: 1})
+
+
 def test_lean_h1_rows_are_the_three_rows():
     assert set(h1_rows()) == set(TILE_ROWS)
 
 
 @needs_h1
 @pytest.mark.slow
+@pytest.mark.parametrize("version", [1, 3])
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
-def test_placed_on_a_tiles_program_reads_census_v1(r, c, k):
+def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     """The tile's Program, read as the datacenter reads a block (`logical.work`'s `mac:int8`, here census/v1's products by
-    class), is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
+    class), on v1 and on the one stream v3, is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
     from verity.core.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.census import PRODUCTS, census
@@ -124,9 +142,10 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k):
     from verity.ml.circuits.program import Program
 
     exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
-    program = Program(bind(H.PouwH1Tile, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c))))
+    defn = {1: H.PouwH1Tile, 3: H.PouwH1Tile3}[version]
+    program = Program(bind(defn, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c))))
     doc = census(program)
     int8 = sum(cl["instances"] * PRODUCTS.get(cl["family"], 0) for cl in doc["classes"].values())
-    assert P.tiles(program) == {P.Tile(r, c, k, r * c): 1}
-    assert int8 == TILE_ROWS[(r, c, k)][1] and doc["totals"]["served_macs"] == doc["totals"]["tail_atoms"] == 0
+    assert P.tiles(program) == {P.Tile(r, c, k, r * c, version): 1}
+    assert int8 == (TILE_ROWS[(r, c, k)][1] if version == 1 else TILE_ROWS_V3[(r, c, k)]) and doc["totals"]["served_macs"] == doc["totals"]["tail_atoms"] == 0
     assert P.placed({"mac:int8": int8}, P.tiles(program)) == {"mac:linears": TILE_ROWS[(r, c, k)][0]}

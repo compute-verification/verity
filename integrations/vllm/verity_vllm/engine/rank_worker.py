@@ -38,6 +38,7 @@ from typing import Any
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -206,8 +207,11 @@ class TP2CaptureWorkerExtension:
     # ------------------------------------------------------------------ topology
 
     def tp2_probe(self) -> dict[str, Any]:
-        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes."""
-        out = _tp_facts(self)
+        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes, and the execution
+        this rank's engine runs, read back from its own `vllm_config` (`effective_execution`)."""
+        from verity_vllm.engine import vllm_adapter as va
+
+        out, model = _tp_facts(self), None
         try:
             model = self.model_runner.get_model()
             shapes = {}
@@ -225,6 +229,7 @@ class TP2CaptureWorkerExtension:
                 out["logits_processor"] = {k: getattr(lp, k, None) for k in ("use_all_gather", "org_vocab_size", "vocab_size")}
         except Exception as e:  # noqa: BLE001
             out["model_error"] = repr(e)
+        out["effective_execution"] = va.effective_execution_doc(_LLMShim(self), model)
         return _jsonable(out)
 
     # ------------------------------------------------------------------ observer
@@ -526,8 +531,8 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
-        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`); tp-commit's root combination takes vllm-v1's 32-byte roots only,
-        so another scheme is for drivers that read each rank's root as it is (`benchmarks/served_commit/tp_decode.py`)."""
+        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
+        whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -1154,7 +1159,7 @@ class TP2CaptureWorkerExtension:
         t_ver = _t.perf_counter() - t1
         return _jsonable({"rank": st["rank"], "n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver,
                           "claimed_root": rcv.run_root.hex(), "claimed_root_is_own": rcv is rc,
-                          "bytes_mean": statistics.fmean(len(o.value) + 32 * sum(1 for p in o.path if p is not None) for o in ops) if ops else None})
+                          "bytes_mean": statistics.fmean(len(o.value) + len(o.salt) + sum(len(p) for p in o.path if p is not None) for o in ops) if ops else None})
 
     # ------------------------------------------------------------------ [R15 TP-04 C2] value correspondence, per rank
 

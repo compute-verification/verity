@@ -18,6 +18,9 @@ half (β mod 512) // 32 of block β // 512 (`stream`); a Boolean unit reads it a
 fold key is a function of seed_j. A unit with receipt keys calls `PouwUnitSeeds` once, for both, rather than two seeds at
 one position.
 
+The one-stage verifier fills the salt, the positions and the roots itself, so the prover chooses none of them (`compile`'s
+docstring, `sampled_proofs.one_stage.registered.supplied_rows`).
+
 Each Definition has a word form (`_v1`, over `Value<32>` halves, with `hashes.Sha512Compress`) and a Boolean twin (`_v2`, over
 32-bit elements, with `commitments.gates.sha512.compress_gadget`) whose word view it is. The salt port is `In(kind="coin")`
 where port types (`ml.circuits.ports`) are on the tree.

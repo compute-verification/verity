@@ -230,7 +230,9 @@ def check_capture(prop: str, art: str) -> None:
 
 
 def newest_capture(prop: str) -> str | None:
-    """`prop`'s newest holding capture of record at its registered schema in the store (the latest capture run's), None when none."""
+    """`prop`'s newest holding capture of record at its registered schema in the store (the latest capture run's), None when none.
+    A store with nothing to select from (no index and an empty catalog: a `research run` job's) raises: `research data select`
+    exits 1 there rather than answer none."""
     from verity_vllm.properties.record import REGISTRY
     if (want := REGISTRY.get(prop)) is None:
         return None

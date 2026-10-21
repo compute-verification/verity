@@ -69,6 +69,20 @@ measure what is left of each on the card.
   has (`chip_ur.py` rewrites a cubin's uniform-register fields past what ptxas allocates). `run_chip.sh` is one
   Attempt, and it refuses any cubin whose SASS doesn't hold the code that its sweep says it does.
 
+## Write ceilings
+
+The remote bandwidth audit's write ceilings (`timing.GPU_WRITE_BYTES_PER_S`, `timing.HOST_WRITE_BYTES_PER_S`) bound how
+fast a fill can write labels into a tier. These files measure what the node's writers reach, each arm gated before it is
+timed (the destination poisoned with 0xA5, sampled slots checked, and a control that writes nothing rejected).
+
+- `write.cu` (`bwwrite`) on one card: labels derived on the device by 16-byte stores (plain and evict-first) and by
+  bulk (TMA) stores from shared memory, the driver's memset, labels streamed in over PCIe by the copy engines (H2D)
+  and by the SMs (zero copy), and the card's D2H into pinned host memory. `run_write_gpu.sh` is one Attempt under the
+  queue's GPU; its header lists the outputs.
+- `write_host.c` (`bwwrite_host`) on the host's cores: labels by non-temporal and by cached stores, and `rep stosb`,
+  one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
+  was given.
+
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
 of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
