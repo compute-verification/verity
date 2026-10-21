@@ -114,8 +114,8 @@ process or outside symlink that names or holds them; two run records from 16 and
 gone since eu's boot at 23:24Z 20 Oct. `cp/glm53-ckpt` stays, and so do the rows' legs, which window B reads on eu. Window B
 also needs room (a B8 row's dir after the CPU phase, about 580 GiB, and its Commit's bundles, 244 GiB in v1's B8 greedy), so
 DeepSeek-V4-Pro's checkpoint (864.7 GB, staged from the hub by r20261021-005054-35cc in 604 s at 1431 MB/s, every file checked)
-left eu at 01:26Z once its B1 legs passed (r20261021-012549-7e39, `research retention rm`), leaving 990 GiB free; it is staged
-again for its window B. Its Match CPU phase's start resolves the checkpoint dir (`config.checkpoint_dir`: the pin's
+left eu at 01:26Z once its B1 legs passed (r20261021-012549-7e39, `research retention rm`), leaving 990 GiB free; its window B
+serves eu2's verified copy instead ("Window B"). Its Match CPU phase's start resolves the checkpoint dir (`config.checkpoint_dir`: the pin's
 `local_path`, else the hub snapshot under `HF_HOME`), as the CPU nodes do from the metadata `stage_cpu.sh` puts at SNAP, and eu
 had no DeepSeek-V4-Pro snapshot: the first attempt r20261021-012525-f740 stopped there (rc 10) and appended a `build FAIL` line
 that every later reader of `stages.txt` would take for the Build's verdict. r20261021-013423-fed6 copied that attempt's records
@@ -138,6 +138,40 @@ B32's Build of record r20261020-192024-d435 ended before the standing rule (19:2
 00:57Z (wall 20,186 s, digest 28e931b1de151fd5), call boundaries PASS at 00:59Z (671,424 identities); BUILD_RUN
 r20261020-192046-c5a4, BUILD_ART art:3e79e2ccc4c7159a3218717433be5bf6ba9f51c8c599009aabeacd599140a992, `rowdir.sha256`
 `d457bdd6477b0308fd104608e3ba112622fd0b9ce7dd108fd8344043ae9e60aa` (2,695 files). Nothing to restart.
+
+## Window B
+
+On vy-glm53-eu once T1R freed its GPUs (02:43Z 21 Oct), each row's Commit as its Match CPU phase ends (circuits, 01:55Z and
+04:05Z 21 Oct): DeepSeek-V4-Pro B1 first, since its Match ended before B1's.
+
+Retain mode. `commit.sh` exports `RETAIN=host` (with REPLAY_DEFERRED=1 and PAIRS=1), and nothing in `jobs/` passes
+`--retain none`; the driver logs `commit staging: window_mb=256 slots=8 retain=host`. Both trees carry #2824's iteration 4
+(590902f955, which keeps the prefill's hashes on the GPU and runs out of GPU memory under `--retain none` at B8 and B32 on
+GLM-5.3 TP8), as `main` does. Under host retention T1R's B8 rehearsal on eu (r20261021-022741-21d6, rows-4k) peaked at
+135.1 GiB a GPU of 139.8 and 514.7 GB of host (64.2 GB a rank), inside `commit.sh`'s `--mem-gb 600`, beside the Match CPU
+phase's 450 on eu: 1050 GB of eu's 1610 GB admission. Its prefill ran about 9 times stock.
+
+`MATCH_RUN` is the Match CPU phase's `vllm.match` Attempt, the line `match RUN art:… rc=0` in `match_cpu.sh`'s `chain.out`,
+not the `research run` job: DeepSeek-V4-Pro's first attempt named the job (r20261021-013528-0d47) and `row chain` refused it
+at its start ("not a passing Match Attempt"), before the GPUs or any `commit/`; it is attempt 1 in `commit_attempts.jsonl`.
+
+DeepSeek-V4-Pro's checkpoint is eu2's verified copy, on eu2's data disk hot-attached to eu at `/workspace/eu2data` (infra,
+01:50Z 21 Oct): `/workspace/eu2data/cp/dsv4-ckpt`, staged by infra on 17 Oct (`hf/hub` there holds only links to eu2's
+Qwen and Llama snapshots). r20261021-040920-b9af hashed every file of the pin against `checkpoints.json` with no download
+(69 files, 864.7 GB, 410 s, none bad) and then linked `/workspace/cp/dsv4-ckpt` (`model.sh`'s `LOCAL_CK`) to it; the pin's
+`local_path` already linked `LOCAL_CK`, so `ckpt_bind` serves it unchanged.
+
+The Commits' row dirs stay at their paths on eu's `/workspace`, which the Commit records and its replay reads (916 GiB free
+at DeepSeek-V4-Pro's start). `/workspace/extra` (2 TiB, infra 01:55Z 21 Oct) takes B32's legs and the room the B8 Commits need.
+
+| row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
+|---|---|---|---|---|---|
+| DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z | 2 | running |
+| B1 greedy | r20261020-062246-b987 | Match CPU phase r20261021-001940-db82 running (ranks 0-2 PASS; ranks 6 and 7 last, about 07:45Z) | | | |
+
+B1's Build of record is on eu (copied from cpu-2 at 04:25Z, its 208 files checked and `.tree` e2c986e7ba): of `rowdir.sha256`,
+the six row records the Match CPU phase rewrites (`stages.txt`, `row.log`, `effective_config.json`, `source_identity.json`,
+`target_family.json`, `timeline.jsonl`) come with db82's `match_cpu.sha256`.
 
 ## GPU batch
 
@@ -219,7 +253,7 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
    empty vy-nebius-1, one rank at a time, and refuses a `--mem-gb` that cannot hold one. A row dir after the phase is about
    580 GiB (B8) and 1.19M inodes.
 4. Window B (`gpu_batch.sh b ROWS.env [NODE] [ROW]`, NODE vy-glm53-eu by default, or a preemptible 8x H200 node: vy-glm53-h8 or
-   another): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
+   another; a ROWS.env line's `BUILD_RUN` and `MATCH_RUN` are the `vllm.build` and `vllm.match` Attempts, not their jobs): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`, PENDING by design), in value order
    whatever ROWS.env's order, its bundles and row records preserved in the store. Stop the node. An eviction fails the
    Commit's run, which is published as failed, and that row's Commit reruns whole (`gpu_batch.sh b ROWS.env NODE ROW`) from a
    new commitment with new draws: the unfinished `commit/` and `commit.log` are moved aside (`commit.failed-*`), never resumed.
