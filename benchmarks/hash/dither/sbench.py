@@ -57,9 +57,10 @@ Arms:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
                  (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
-    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every run labelled by its z commitment
-                 and order, `dither_a.form`, RT4-INT-39: form=ASK-71 A for -so<D> with -zy, form=beside for every
-                 other arm, these included): exact-fused's
+    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every dither arm labelled by
+                 `forms.form_of`, RT4-INT-39: form=ASK-71 A for -so<D> with -zy on -aom/-aomn without -ov, form=beside
+                 (unadopted arm) for -so's -ab/-abn and -ov, form=beside for every other arm, these and dither-1s's and
+                 dither's included): exact-fused's
                  quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),

@@ -234,7 +234,8 @@ class RoundPipe:
     waiting on the answers, since `remote.serve` answers each after its own root and in order; a thread of the pipe's
     reads them back and holds each to `live_reason` (a refusal, a broken stream or a bad opening ends the session and
     refuses every later coin: a retry never redraws).  In process each opens at once.  `roots` and `openings` are
-    `LiveRecord`'s, `reason` its `order_reason`, and `sent_at` / `got_at` each round's times on `clock`."""
+    `LiveRecord`'s, `reason` its `order_reason`, and `sent_at` / `got_at` each round's times on `clock`; `draw` opens the
+    window's draw coin with its time on the same clock."""
 
     def __init__(self, coins: Coins, clock: Callable[[], float] = time.monotonic) -> None:
         rec = coins.rounds
@@ -334,6 +335,21 @@ class RoundPipe:
             if self._error is not None:
                 raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
             return None
+
+    def draw(self, after: bytes) -> tuple[Ch.LiveOpening, float]:
+        """The window's draw coin opened after `after` once every sent round's coin is back, and the time it was asked
+        for on `clock`, read under the lock `send` records each round's root and time under and held through the draw:
+        every round sent before the draw has an earlier time and every round sent after it a later one, whatever thread
+        sends it."""
+        with self._cv:
+            while self._pending and self._error is None:
+                self._cv.wait()
+            if self._error is not None:
+                raise Ch.CoinError(f"the challenger's session ended ({self._error}): a retry never redraws")
+            if self._closed:
+                raise Ch.CoinError("the round coins are closed")
+            at = self._clock()
+            return self.coins.draw(after), at
 
     def reason(self) -> str | None:
         return Ch.order_reason(self.commitment, self.label, self.roots, self.openings)

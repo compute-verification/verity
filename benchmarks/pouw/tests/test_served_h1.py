@@ -662,6 +662,34 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
     local.close()
 
 
+def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent_under():
+    """`RoundPipe.draw` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
+    the draw's open: another thread can't take it then, every round sent before has an earlier time and the one sent
+    after a later one; a draw after the coins are closed is refused."""
+    ticks = itertools.count()
+    cs = CO.open_coins(None, EPOCH, 4, random.Random("prover").randbytes)
+    roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
+    cs.rounds.record(roots[0])
+    pipe = CO.RoundPipe(cs, lambda: float(next(ticks)))
+    open_, held = cs.challenger.open, []
+
+    def spy(label, index, after):
+        if label == CO.Wd.DRAW:
+            t = threading.Thread(target=lambda: held.append(pipe._cv.acquire(blocking=False)))
+            t.start()
+            t.join()
+        return open_(label, index, after)
+    cs.challenger.open = spy
+    assert [pipe.send(r) for r in roots[1:3]] == [1, 2]
+    after = hashlib.sha512(b"manifest").digest()
+    draw, at = pipe.draw(after)
+    assert held == [False] and draw.label == CO.Wd.DRAW and draw.after == after
+    assert max(pipe.sent_at.values()) < at < pipe.sent_at[pipe.send(roots[3])]
+    pipe.close()
+    with pytest.raises(CO.Ch.CoinError, match="closed"):
+        pipe.draw(after)
+
+
 def _pipe_server(sock, challenger, answers: list[str]) -> None:
     """The challenger's side of a `RoundPipe` stream for its refusals: the hello's commitment, then each open frame's
     reply as `answers` names it in turn ("ok" its coin, "refuse" a refusal, "other" the next coin's opening)."""
