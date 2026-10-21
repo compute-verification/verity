@@ -105,6 +105,7 @@ import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishStop
+import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -521,6 +522,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
   reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
+* `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
+  seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
+  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
