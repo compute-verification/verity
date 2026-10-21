@@ -6,7 +6,8 @@ verifier's check that a served window's coins are that challenger's.
   `families` (S) as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). The epoch's salt is its salt coin, opened after the
   weights' root (`audit.salt_of`), and round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the
   session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
-  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1.
+  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1. The host opens
+  a salt coin only after its window's root (serve.py's ``--root``), so H1's salt waits on its window binding (#2950).
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
@@ -27,8 +28,8 @@ verifier's check that a served window's coins are that challenger's.
   ``open`` entry (v2: ``window.root``) to its ledger, signed under the challenger key, before the session's first coin,
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
-  at and its commitment's root. `remote.trusted_session` reads only a v1 ledger and a signed close, and infra's ledger is
-  v1 then v2, its sessions' close unsigned, so until proofs' v2 follow-up lands its ledger is checked here alone:
+  at and its commitment's root. `remote.trusted_session` reads that v2 ledger with core's check of record
+  (`challenger.ledger_head`, which infra's ``auditor.py`` imports) and a signed close; `session_reason` reads it here too:
   `Ledger.verify` is infra's ``verify_ledger`` and ``verify_periods`` over one published head under the verifier's own
   key (`pinned_key`, its pin from config): chained, no v1 entry after a v2, its LMS leaves strictly increasing, each
   record's leaf between its session's open and end and no entry's, one session a root and one root a session, each
@@ -61,7 +62,8 @@ from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, ChallengerRecord, CoinError, LiveCommitment,
-                                                             LiveOpening, LiveRecord, live_reason, trusted_commitment)
+                                                             LiveOpening, LiveRecord, ledger_head, live_reason,
+                                                             trusted_commitment)
 from verity.ml.commitments.identity import identity_digest_sha512
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -70,10 +72,10 @@ SCHEME = Wd.LIVE_SCHEME
 #: infra's challenger ledger (`benchmarks/live_challenger/auditor.py`): its entries' schema (v2, after the host's v1
 #: entries in one chain, which are `challenger.audited_session`'s), and the role and tag by schema of what an entry's
 #: ``sig`` signs (`entry_message`)
-LEDGER_V1 = Ch.LEDGER_SCHEMA
-LEDGER_SCHEMA = "verity/challenger-auditor/v2"
+LEDGER_V1 = Ch.LEDGER_SCHEMA_V1
+LEDGER_SCHEMA = Ch.LEDGER_SCHEMA
 LEDGER_ROLE = Ch.LEDGER_ROLE
-ENTRY_TAGS = {LEDGER_V1: Ch.LEDGER_TAG, LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
+ENTRY_TAGS = dict(Ch.LEDGER_TAGS)
 #: the files of a session's ``out/`` the verifier reads, each of which its end entry must seal
 SEALED = (remote.RECORD, remote.KEY, remote.RELEASES)
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
@@ -268,17 +270,19 @@ def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received
     return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))
 
 
-def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, ledger: str | Path, window: Mapping[str, Any],
-                          key: ChallengerKey, verify: Any = lms_verify) -> str | None:
+def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path],
+                          window: Mapping[str, Any], key: ChallengerKey, verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
     ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own challenger's, read from `directory`,
-    the session the auditor's signed ledger at `ledger` (infra's ``windows.jsonl``) opens and ends for `window`
-    (``{commit, period}``), under `key`, the challenger key the deployment pins; None when they are. Fails closed: a
-    missing, malformed or unsigned record, log or ledger, a ledger signed under another key or older than the session's
-    end, or a window it opens no one session for, trusts nothing (`remote.trusted_session`)."""
+    the session the auditor's signed ledger opens and ends for `window` (``{root}``), under `key`, the challenger key the
+    deployment pins, the ledger the longest of the heads infra published at `heads` (each a ``windows.jsonl``), any two
+    extending one another; None when they are. Fails closed: a missing, malformed or unsigned record, log, hello log or
+    ledger, a ledger signed under another key, forked or older than the session's end, or a window it opens no one
+    session for, trusts nothing (`remote.trusted_session`)."""
     try:
-        trusted, received = remote.trusted_session(directory, ledger, window, key, verify)
-        lines, files = remote.ledger_lines(ledger), remote.session_files(directory)
+        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
+        lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+        files = remote.session_files(directory)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
 
@@ -414,11 +418,8 @@ def _period(i: int, kind: str, schema: Any, e: Mapping[str, Any], periods: dict[
         del current[lane]
 
 
-# TODO(#2946 v2 follow-up, cursor/challenger-ledger-v2-7c3e): `challenger.audited_session` reads only a v1 ledger, so
-# infra's v1-then-v2 ledger is checked here alone, and this mirror of infra's verify_ledger and verify_periods (the
-# period kinds, the two-step reserve and open, `period_reason`), `evidence` and `released_sealed` go once proofs' v2 reader
-# and signed close are on main; this module then keeps only vllm's checks (a session a window, the commitment before the
-# first coin, the slot tables).
+# TODO(#2953, VLLM-61): with core's `ledger_head` and `audited_session` on main, this ledger mirror, `evidence` and
+# `released_sealed` go; the module keeps vllm's checks (a session a window, the commitment first, the slot tables).
 @dataclass(frozen=True)
 class Ledger:
     """Infra's challenger ledger (`LEDGER_SCHEMA`, after the host's `LEDGER_V1` entries), verified under the verifier's
@@ -714,7 +715,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
                    commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
-    (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a v1 session's, over its
+    (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a session's, over its
     unsigned log, `released_sealed`); None when it is. `registered`
     is the weights' root the period registered and `commit` the window's Commit root as the verifier holds it, which the
     window's must be. Fails closed."""

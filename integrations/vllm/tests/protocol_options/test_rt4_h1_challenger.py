@@ -17,7 +17,7 @@
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * RT4-INT-23: the release log, the only evidence that a round's coin followed its root, was an unsigned file; roots
   chosen after every coin passed once the log was rewritten to name them. The challenger's signed close (#2946) now
-  signs it and the auditor's v1 ledger seals the close, and infra's v2 end entry seals the log itself: a rewritten log is
+  signs it and the auditor's ledger seals the close, and infra's v2 end entry seals the log itself: a rewritten log is
   refused either way.
 """
 from __future__ import annotations
@@ -76,8 +76,10 @@ class _Session:
 
     def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None, close=None) -> None:
         self.name, self.tree, self.directory = name, tmp_path / name, tmp_path / name / "out"
+        self.leaf = leaf
         self.challenger = challenger or Wd.live_challenger(0, 3, CH.entropy(seed))
         self.directory.mkdir(parents=True)
+        (self.directory / R.HELLOS).write_text("")
         leaves = [leaf]
 
         def sign(m: bytes) -> bytes:
@@ -107,10 +109,11 @@ class _Session:
         return self.reason
 
     def audited(self) -> Path:
-        """The auditor's v1 ledger (`CH.Ledger`) under `KEY`, opening this session for `CH.WINDOW` and ending it over its
-        ``out/`` once it has ended (closed when its client closed it)."""
+        """The auditor's signed ledger (`CH.Ledger`, one head) under `KEY`, opening this session for `CH.WINDOW` at the leaf
+        before its record's and ending it over its ``out/`` at the key's last leaf once it has ended (closed when its
+        client closed it)."""
         if self._ledger is None:
-            ledger = CH.Ledger(self.tree / "windows.jsonl", 1, iter((26, 27)), H=KEY.H)
+            ledger = CH.Ledger(self.tree / "windows.jsonl", 1, iter((self.leaf - 1, (1 << KEY.H) - 1)), H=KEY.H)
             ledger.open(self.name, CH.WINDOW)
             ledger.end(self.name, self.directory, self.ended() is None)
             self._ledger = ledger.path
@@ -118,7 +121,7 @@ class _Session:
 
     def trusted(self, commits) -> str | None:
         """`trusted_rounds_reason` of `commits` against this session, as `audited` opens and ends it."""
-        return PHC.trusted_rounds_reason(commits, self.directory, self.audited(), CH.WINDOW, KEY)
+        return PHC.trusted_rounds_reason(commits, self.directory, [self.audited()], CH.WINDOW, KEY)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -457,7 +460,7 @@ def test_a_challenger_off_the_answers_commitment_is_refused_before_its_first_coi
     """RT4-INT-17 (and RT4-INT-29's secret): the serving side's hello carries the answer's secret, and a challenger whose
     coin commitment isn't the one the gate's answer gives the session (another process's on that port) is closed and
     refused before its salt coin; the session it reached released nothing."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=19)
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=19)
     other = {**T.SESSION, "commitment": "dd" * 64, "secret": "5e" * 32}
     with pytest.raises(ValueError, match=f"commits to coins {host.commitment[:16]}..., not {'dd' * 8}..., the commitment "
                                          "the gate's answer gives session"):
@@ -557,7 +560,7 @@ def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_pat
     """RT4-INT-19: a draw coin opened after a root of the prover's, before the window's first round, is the challenger's one
     draw coin; the window's own draw at `finish` is then refused by the challenger (it has no second draw coin, and a
     retry never redraws), the window records the refusal, and the trusted check refuses the early draw."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=13)
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=13)
     probe = hashlib.sha512(b"a root of the prover's, before any round").digest()
     draw = host.client.open(Wd.DRAW, 0, probe)
     commitment = _serve(T._remote())
@@ -577,7 +580,7 @@ def test_an_early_draw_is_refused_and_the_windows_own_draw_fails_visibly(tmp_pat
 def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_path, monkeypatch):
     """RT4-INT-19: the honest window's draw passes; its draw coin swapped for a round coin, a draw root not over the
     window's parts, and a session closed at `finish` with no draw opened are refused."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=14)
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=14)
     honest = _serve(T._remote())
     assert host.ended() is None
     assert host.trusted(honest) is None
@@ -657,7 +660,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     assert PHC.session_reason(local, _gate().ledger(), {}.get).startswith(
         "the window's coins were held in the serving process")
     assert run.credit()["coins"] == "in-process" and run.credit()["credited"] == {"rows": 0, "macs": 0}
-    auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=14)
+    auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=14)
     auditor.client.close()
     assert auditor.ended() is None
     assert "coins from a challenger the verifier doesn't hold" in auditor.trusted(local)
@@ -693,7 +696,7 @@ def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_
     from verity.core.protocols.pouw.audit import salt_of
 
     from verity_vllm.pipeline import cli
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=18)
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
     w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()
     model = SimpleNamespace(modules=lambda: iter([layer]), named_modules=lambda: iter([("up", layer)]))
@@ -746,7 +749,7 @@ def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the
     assert RCN.session_reason(rec, chal, run_root, ledger, {}.get).startswith(
         "the replay challenge's session s-c is not trusted: session s-c has no tree")
     assert RCN.session_reason(rec, "00" * 64, run_root, ledger, fetch) == "the replay challenge is not the replay coin"
-    trusted, received = R.trusted_session(host.directory, host.audited(), CH.WINDOW, KEY, PHC.lms_verify)
+    trusted, received = R.trusted_session(host.directory, [host.audited()], CH.WINDOW, KEY, PHC.lms_verify)
     assert received[RCN.FAMILY] == (RCN.after(run_root),)
     assert RCN.reason(rec, chal, run_root, trusted) is None
     assert RCN.reason(rec, chal, hashlib.sha256(b"another").digest(), trusted) == (
@@ -811,7 +814,7 @@ def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():
 def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_rewrite_of_it_is_refused(tmp_path, monkeypatch):
     """RT4-INT-23: roots chosen after every coin, with a draw opened after a root over them, are refused against the
     honest log, and so is a log rewritten to name them, which the challenger's signed close (#2946) no longer signs."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=0, seed=15)
+    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=15)
     weights = hashlib.sha512(b"the weights' root").digest()
     salt = host.client.open(Wd.SALT, 0, weights)
     early = [hashlib.sha512(b"before any round, %d" % s).digest() for s in range(3)]

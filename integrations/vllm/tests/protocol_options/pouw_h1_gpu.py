@@ -32,12 +32,12 @@ static schedule's check (`engine.static_schedule.check`) of every request. Compi
 ``--challenger HOST:PORT --session JSON`` takes the window's salt and round coins from the auditor host's challenger, in
 the session infra's gate opened for the window (the gate's open answer; `pouw_h1_challenger`; on PEER, the port the gate
 forwards), one session a window, so the fill workload serves only the 64's window. ``--check-challenger CALLS_JSON DIR
---key-sha512 HEX --ledger JSONL`` is the verifier's side on no GPU. With ``--window WINDOW_JSON`` (``{commit, period}``)
-the ledger is the auditor's signed v1 ledger and DIR the challenger run's own ``out/``: the window's coins against the
-session the ledger opens and ends for the window (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is
-infra's v2 one, ``--ledger`` given once per published head, read as the newest that the others extend
-(`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
-session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). The batch workload admits the
+--key-sha512 HEX --ledger HEAD [--ledger HEAD ...]`` is the verifier's side on no GPU, ``--ledger`` given once per head
+infra published. With ``--window WINDOW_JSON`` (``{root}``) DIR is the challenger run's own ``out/``: the window's coins
+against the session the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for
+the window (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others
+extend (`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held
+to the session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). The batch workload admits the
 first prompt alone after the batch, so it admits per round; the fill workload admits in round 0 only.
 """
 from __future__ import annotations
@@ -452,12 +452,12 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
                      window_file: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
-    directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`). With
-    `window_file` (the window's ``{commit, period}``) `ledger` is one path, the auditor's signed ledger, and `directory`
-    the challenger run's ``out/`` (``research fetch RUN --all``), as the session that ledger opens and ends for the window
-    (`trusted_rounds_reason`); without it `ledger` is every published head of infra's v2 ledger (the gate's ``ledger``,
-    read as the newest that the others extend, `Ledger.newest`), the window held to the session it opened for its Commit's
-    root (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
+    directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
+    every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
+    the challenger run's ``out/`` (``research fetch RUN --all``), as the session the longest of the heads, each extending
+    the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
+    the others extend (`Ledger.newest`), the window held to the session it opened for its Commit's root
+    (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
@@ -472,7 +472,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
         if window_file is not None:
             doc["window"] = json.loads(Path(window_file).read_text())
-            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger[0], doc["window"], key)
+            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key)
         else:
             sid = (rec["commitment"].get("session") or {}).get("session")
             newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)
@@ -518,10 +518,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="no GPU: a served window's coins against the challenger run's out/ (with --window) or the "
                          "session's tree (needs --key-sha512 and --ledger)")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
-    ap.add_argument("--ledger", metavar="JSONL", action="append",
-                    help="with --check-challenger: the auditor's signed ledger (with --window), or once per published "
-                         "head infra's v2 challenger ledger (the gate's ledger), CHALLENGER_DIR then the session's tree")
-    ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {commit, period}, in a v1 ledger")
+    ap.add_argument("--ledger", metavar="HEAD", action="append",
+                    help="with --check-challenger: a published head of the auditor's signed ledger (infra's windows.jsonl), "
+                         "once a head infra labelled")
+    ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {root}; CHALLENGER_DIR then the "
+                                                            "challenger run's out/, else the session's tree")
     ap.add_argument("--session", type=json.loads, metavar="JSON",
                     help="with --challenger: the challenger gate's open answer, {\"session\", \"seq\", \"root\", "
                          "\"commitment\"} and its \"secret\"")
@@ -532,9 +533,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.compile_from:
         return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
     if a.check_challenger:
-        if not (a.key_sha512 and a.ledger) or (a.window and len(a.ledger) != 1):
-            ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (one, with "
-                     "--window)")
+        if not (a.key_sha512 and a.ledger):
+            ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
         return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")

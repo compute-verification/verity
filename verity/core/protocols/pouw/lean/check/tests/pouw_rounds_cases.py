@@ -2,14 +2,16 @@
 "openings"}``.
 
 A case is an honest live window read through its challenger's session: a live epoch's coins (`window.live_challenger`),
-the challenger's record of them signed at leaf 0 of a small LMS key (the window's pinned key), its release log (the
-salt coin opened after a root, sometimes, then each round root recorded in order and its coin opened after it, the
-challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's close signed at leaf 1 over the log's
-chain, and the auditor's signed ledger opening that session for the window under the key's hash, among others, and
-ending it closed, sealing the log the session's challenger left, its entries at leaves 2, 3, ….  Then one mutation
-(`ROUNDS_NAMES`) aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an unsigned or
-tampered log, a ledger signed under another key or cut before the session's end or at a reused leaf, a second session
-for the window's Commit under its period or another, …) or the coin rule's.  `tests/test_difftest.py` draws them for
+the challenger's record of them signed at leaf `RECORD_LEAF` of a small LMS key (the window's pinned key), its release
+log (the salt coin opened after a root, sometimes, then each round root recorded in order and its coin opened after it,
+the challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's close signed at the next leaf over
+the log's chain, no refused hellos, and the auditor's v2 ledger opening that session for the window (``{root}``) under
+the key's hash, among others and sometimes inside a period with its cap and circuit, and ending it closed, sealing the
+log and hellos the session's challenger left and naming its record's leaf and commitment; its entries up to the
+session's open sign at leaves 0, 1, …, and those after at `RECORD_LEAF` + 2 on.  Then one mutation (`ROUNDS_NAMES`)
+aimed at one refusal of `rounds`: the session's (an in-process challenger's coins, an unsigned or tampered log, a ledger
+signed under another key, under v1, cut before the session's end or at a reused leaf, a second session for the window's
+root, an end naming another record leaf or no hellos, hellos it didn't seal, …) or the coin rule's.  `tests/test_difftest.py` draws them for
 the harness, and
 `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
 """
@@ -31,9 +33,12 @@ from verity.ml.crypto import lms
 _RECORDED = {"twice", "early-root", "never", "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "label",
              "openings-form", "swapped", "rewritten", "tampered-log"}
 _LEFT = {"early"}
-#: a small LMS parameter set: the record at leaf 0, the close at leaf 1, the ledger's entries from leaf 2
-PARAMS = lms.Params(64, 4, 4)
+#: a small LMS parameter set: the ledger's entries up to the session's open from leaf 0, the record at `RECORD_LEAF`, the
+#: close at the next leaf, the ledger's later entries from the one after
+PARAMS = lms.Params(64, 4, 5)
+RECORD_LEAF = 8
 HOST = "vy-challenger-test"
+LANE = "pouw"
 
 
 @functools.cache
@@ -65,7 +70,7 @@ class Session:
                  sid: str = "s-1") -> None:
         self.ch, self.k, self.sid = ch, _key(seed), sid
         self.pub = lms.public_key(self.k)
-        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, 0, m).encode())
+        ch.sign_record(HOST, self.pub, lambda m: lms.sign_at(self.k, RECORD_LEAF, m).encode())
         clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
         self.lines = [canonical_json_text({"event": "commitment", "root": ch.commitment.root.hex()})]
         records = [] if salt is None else [Ch.LiveRecord(ch, Wd.SALT, clock)]
@@ -75,7 +80,7 @@ class Session:
             self.rounds.record(r)
         records += [] if self.rounds is None else [self.rounds]
         self.lines += [canonical_json_text(e) for rec in records for e in rec.log]
-        self.sealed = self.lines
+        self.sealed, self.hellos, self.sealed_hellos = self.lines, [], []
         self.close = self.signed()
 
     def signed(self, lines: list[str] | None = None, sid: str | None = None, ended: str | None = None) -> dict:
@@ -83,50 +88,80 @@ class Session:
         sid = self.sid if sid is None else sid
         chain = Ch.log_chain(lines)
         m = Ch.close_message(self.pub[:16], HOST, self.ch.commitment, sid, len(lines), chain, ended)
-        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, 1, m).encode()).to_json()
+        return Ch.ChallengerClose(sid, len(lines), chain, ended, lms.sign_at(self.k, RECORD_LEAF + 1, m).encode()).to_json()
 
     def files(self) -> dict:
-        return {"close": self.close, "log": list(self.lines), "record": self.ch.record.to_json()}
+        return {"close": self.close, "hellos": list(self.hellos), "log": list(self.lines), "record": self.ch.record.to_json()}
 
     def key(self) -> dict:
         return Ch.ChallengerKey(PARAMS.W, PARAMS.H, self.pub).to_json()
 
 
 PERIODS = ["p-0", "smoke-20261020", "2026-10-20T09:00Z", "a"]
+CIRCUITS = ["ab" * 64, "0f" * 64]
 
 
 def _window(rng: random.Random) -> dict:
-    return {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
+    return {"root": rng.randbytes(64).hex()}
 
 
 def _open(rng: random.Random, window: dict, public: bytes) -> dict:
     return {"window": window, "host": HOST, "pinned": rng.randbytes(20).hex(),
-            "key_sha512": hashlib.sha512(public).hexdigest(), "port": 7811}
+            "key_sha512": hashlib.sha512(public).hexdigest(), "port": 7811, "by": LANE,
+            **({"for": LANE} if rng.random() < 0.3 else {})}
 
 
-def ledger_lines(events: list[tuple[str, str, dict]], k: lms.PrivateKey, leaves: list[int] | None = None) -> list[str]:
-    """The auditor's ledger of `events` (kind, session, body), chained and signed under `k` at `leaves`, by default the
-    leaves from 2 on."""
+def leaves_of(events: list[tuple[str, str | None, dict]], sid: str = "s-1") -> list[int]:
+    """The leaves `ledger_lines` signs `events` at: 0, 1, … up to session `sid`'s open, then `RECORD_LEAF` + 2 on, so the
+    session's record and close (at `RECORD_LEAF` and the next) fall between its open and its end."""
+    j = next((i for i, e in enumerate(events) if e[:2] == ("open", sid)), len(events))
+    return [i if i <= j else RECORD_LEAF + 2 + i - j - 1 for i in range(len(events))]
+
+
+def ledger_lines(events: list[tuple[str, str | None, dict]], k: lms.PrivateKey, leaves: list[int] | None = None,
+                 schema: str = Ch.LEDGER_SCHEMA) -> list[str]:
+    """The auditor's ledger of `events` (kind, session, body), chained and signed under `k` at `leaves` (`leaves_of`'s by
+    default), in `schema`."""
+    leaves = leaves_of(events) if leaves is None else leaves
     out: list[str] = []
     for i, (kind, sid, body) in enumerate(events):
         entry = {"body": body, "kind": kind, "prev": hashlib.sha512(out[-1].encode()).hexdigest() if out else "0" * 128,
-                 "schema": Ch.LEDGER_SCHEMA, "seq": i, "session": sid}
+                 "schema": schema, "seq": i, "session": sid}
         m = Ch.ledger_message(lms.public_key(k)[:16], entry)
-        q = 2 + i if leaves is None else leaves[i]
-        out.append(canonical_json_text({**entry, "sig": lms.sign_at(k, q, m).encode().hex()}))
+        out.append(Ch.ledger_text({**entry, "sig": lms.sign_at(k, leaves[i], m).encode().hex()}))
     return out
 
 
-def ledger_events(rng: random.Random, window: dict, s: Session) -> list[tuple[str, str, dict]]:
-    """The window's session `s` opened and ended closed, sealing the log its challenger left, among up to two others."""
-    named = [("open", s.sid, _open(rng, window, s.pub)),
-             ("end", s.sid, {"closed": True, "files": {Ch.LOG_FILE: Ch.log_digest(s.sealed)}, "rc": 0})]
-    others = [[("open", f"o-{i}", _open(rng, _window(rng), s.pub)), ("end", f"o-{i}", {"closed": True, "files": {}, "rc": 0})]
+def _end(s: Session, **changes) -> dict:
+    files = {Ch.LOG_FILE: Ch.log_digest(s.sealed), Ch.HELLOS_FILE: Ch.log_digest(s.sealed_hellos),
+             Ch.RECORD_FILE: hashlib.sha512(canonical_json_text(s.ch.record.to_json()).encode()).hexdigest(),
+             Ch.CLOSE_FILE: hashlib.sha512(canonical_json_text(s.close).encode()).hexdigest()}
+    body = {"closed": True, "files": files, "rc": 0, "record_leaf": RECORD_LEAF, "commitment": s.ch.commitment.root.hex(),
+            "refused_hellos": len(s.sealed_hellos), "complete": True}
+    return {k: v for k, v in {**body, **changes}.items() if v is not None}
+
+
+def ledger_events(rng: random.Random, window: dict, s: Session, **end) -> list[tuple[str, str | None, dict]]:
+    """The window's session `s` opened and ended closed (its end's body changed by `end`), sealing the log and hellos its
+    challenger left, among up to two others, sometimes inside a period of lane `LANE` that a close ends."""
+    named = [("open", s.sid, _open(rng, window, s.pub)), ("end", s.sid, _end(s, **end))]
+    others = [[("open", f"o-{i}", _open(rng, _window(rng), s.pub)),
+               ("end", f"o-{i}", {"closed": True, "files": {}, "rc": 0, "complete": True})]
               for i in range(rng.randint(0, 2))]
     queues = [named] + others
     events = []
     while any(queues):
         events.append(rng.choice([q for q in queues if q]).pop(0))
+    if rng.random() < 0.5:
+        name = rng.choice(PERIODS)
+        events.insert(0, ("period-open", None, {"period": name, "lane": LANE, "by": LANE, "cap": 4,
+                                                "circuit": rng.choice(CIRCUITS), "pinned": "ab" * 20,
+                                                "key_sha512": hashlib.sha512(s.pub).hexdigest()}))
+        if rng.random() < 0.5:
+            windows = [{"root": b["window"]["root"], "session": sid, "complete": True}
+                       for kind, sid, b in events if kind == "open"]
+            events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
+                                                  "complete": True}))
     return events
 
 
@@ -157,6 +192,14 @@ def _set(lines: list[str], i: int, **changes) -> list[str]:
     return lines[:i] + [canonical_json_text(doc)] + lines[i + 1:]
 
 
+def _with_open(events: list, at: int, sid: str, body: dict) -> list:
+    """`events` with an open of session `sid` inserted at `at`, and any period-close after it listing it too."""
+    out = events[:at] + [("open", sid, body)] + events[at:]
+    return [(k, s, {**b, "windows": [{"root": o["window"]["root"], "session": t, "complete": t != sid}
+                                     for kk, t, o in out if kk == "open"], "complete": False})
+            if k == "period-close" else (k, s, b) for k, s, b in out]
+
+
 def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
     ch, roots, ops, files = s.ch, d["roots"], d["openings"], d["session"]
     c = ch.commitment
@@ -170,7 +213,7 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
         case "in-process":
             other = Session(rng, Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes),
                             [bytes.fromhex(r) for r in roots], salt=None, seed=1)
-            d["session"], s.sealed = other.files(), other.lines
+            d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
             d["openings"] = [o.to_json() for o in other.rounds.openings]
         case "not-live":
             scheme, layout = rng.choice([
@@ -179,7 +222,7 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
                 (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
                 (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", len(roots) + 1)))])
             other = Session(rng, Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes), [], salt=None)
-            d["session"], s.sealed = other.files(), other.lines
+            d["session"], s.sealed, s.ch = other.files(), other.lines, other.ch
             d["roots"], d["openings"] = [], []
         case "unsigned":
             files["close"] = None
@@ -196,27 +239,37 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
             d["ledger"] = None
         case "no-session":
             d["ledger"] = ledger_lines(ledger_events(rng, d["window"], s), _key(0))
-            d["window"] = {**d["window"], "period": "p-other"}
+            d["window"] = _window(rng)
         case "second-session":
             events = ledger_events(rng, d["window"], s)
-            events.insert(rng.randint(0, len(events)), ("open", "s-2", _open(rng, d["window"], s.pub)))
+            first = next(i for i, e in enumerate(events) if e[0] == "open")
+            d["ledger"] = ledger_lines(_with_open(events, rng.randint(first + 1, len(events)), "s-2",
+                                                  _open(rng, d["window"], s.pub)), _key(0))
+        case "v1-ledger":
+            events = [(k, sid, {**b, "window": {"commit": b["window"]["root"], "period": rng.choice(PERIODS)}}
+                       if k == "open" else b) for k, sid, b in ledger_events(rng, d["window"], s) if k in ("open", "end")]
+            d["ledger"] = ledger_lines(events, _key(0), schema=Ch.LEDGER_SCHEMA_V1)
+        case "end-form":
+            drop = rng.choice(["record_leaf", "commitment", "refused_hellos", "hellos"])
+            files = {k: v for k, v in _end(s)["files"].items() if k != Ch.HELLOS_FILE}
+            d["ledger"] = ledger_lines(ledger_events(rng, d["window"], s, **(
+                {"files": files} if drop == "hellos" else {drop: None})), _key(0))
+        case "record-leaf":
+            events = ledger_events(rng, d["window"], s, record_leaf=RECORD_LEAF + 1)
             d["ledger"] = ledger_lines(events, _key(0))
-        case "second-period":
-            other = {**d["window"], "period": next(p for p in PERIODS if p != d["window"]["period"])}
-            events = ledger_events(rng, d["window"], s)
-            events.insert(rng.randint(0, len(events)), ("open", "s-2", _open(rng, other, s.pub)))
-            d["ledger"] = ledger_lines(events, _key(0))
+        case "hellos":
+            files["hellos"] = rng.choice([[canonical_json_text({"n": 0, "reason": "no hello"})], None, "x"])
         case "reused-leaf":
             events = ledger_events(rng, d["window"], s)
-            leaves = list(range(2, 2 + len(events)))
+            leaves = leaves_of(events)
             i = rng.randrange(1, len(events))
-            leaves[i] = rng.randint(2, leaves[i - 1])
+            leaves[i] = rng.randint(0, leaves[i - 1])
             d["ledger"] = ledger_lines(events, _key(0), leaves)
         case "other-session":
             files["close"] = s.signed(sid="s-2")
         case "other-key":
             other = hashlib.sha512(lms.public_key(_key(1))).hexdigest()
-            d["ledger"] = ledger_lines([(k, sid, {**b, "key_sha512": other} if k == "open" else b)
+            d["ledger"] = ledger_lines([(k, sid, {**b, "key_sha512": other} if k in ("open", "period-open") else b)
                                         for k, sid, b in ledger_events(rng, d["window"], s)], _key(1))
         case "forged-ledger":
             d["ledger"] = ledger_lines(ledger_events(rng, d["window"], s), _key(1))
@@ -272,7 +325,8 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
 
 
 ROUNDS_NAMES = ["key-form", "seeded-coins", "in-process", "not-live", "unsigned", "close-signature", "tampered-log",
-                "unclosed", "no-ledger", "no-session", "second-session", "second-period", "reused-leaf", "other-session",
+                "unclosed", "no-ledger", "no-session", "second-session", "v1-ledger", "end-form", "record-leaf", "hellos",
+                "reused-leaf", "other-session",
                 "other-key", "forged-ledger", "truncated", "unsealed", "rewritten",
                 "roots-form", "openings-list", "openings-form", "twice", "early", "early-root", "never", "swapped",
                 "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "too-many", "label"]
