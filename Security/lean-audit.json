@@ -38,6 +38,18 @@
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
+  "Accounting.Assumptions.LateAnswers": {
+   "owner": "@memory-accounting",
+   "digest": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65"
+  },
+  "Accounting.Assumptions.LiveReads": {
+   "owner": "@memory-accounting",
+   "digest": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18"
+  },
+  "Accounting.Assumptions.LiveVerdicts": {
+   "owner": "@memory-accounting",
+   "digest": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d"
+  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -53,6 +65,10 @@
   "Accounting.Assumptions.PouwLuck": {
    "owner": "@compute-accounting",
    "digest": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
+  },
+  "Accounting.Assumptions.QuietReads": {
+   "owner": "@memory-accounting",
+   "digest": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108"
   },
   "Accounting.Assumptions.RateComputeAdditive": {
    "owner": "@memory-accounting",
@@ -206,9 +222,9 @@
    "owner": "@compute-accounting",
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
   },
-  "Accounting.Assumptions.TimedRoundSound": {
+  "Accounting.Assumptions.UniformLabels": {
    "owner": "@memory-accounting",
-   "digest": "35b775f317173ee028959ca9d3c47b07ec6597e73ac13936e7181350910e93d8"
+   "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -413,6 +429,10 @@
   "Accounting.Placed.ComputeRate": {
    "owner": "@lean",
    "digest": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15"
+  },
+  "Accounting.Placed.LatencyAtMost": {
+   "owner": "@memory-accounting",
+   "digest": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1"
   },
   "Accounting.Placed.Links": {
    "owner": "@lean",
@@ -944,6 +964,14 @@
   "Nci.Assumptions.FitsSlots": {
    "owner": "@lean",
    "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
+  },
+  "Nci.Assumptions.PackedActivationsIncompressible": {
+   "owner": "@lean",
+   "digest": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+  },
+  "Nci.Assumptions.PackedTrainingIncompressible": {
+   "owner": "@lean",
+   "digest": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
   },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
@@ -2002,6 +2030,14 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.AnsweredOfQuiet"
+   ],
+   "assumptions": [],
+   "type_hash": "ac96692d388b7e4959ed9180772202cd52228015ebff10809551390c99c4f997"
+  },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
    "owner": "@lean",
    "signature": [
@@ -2084,17 +2120,25 @@
    "assumptions": [],
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
   },
-  "Accounting.SecurityProofs.Actual.WipePool": {
-   "owner": "@lean",
-   "signature": ["Accounting.SecurityProofs.Actual.WipePool : Accounting.Guarantees.Actual.WipePool"],
+  "Accounting.SecurityProofs.Actual.WipeLag": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeLag.{u_2, u_3, u_4} : Accounting.Guarantees.Actual.WipeLag"],
    "assumptions": [],
-   "type_hash": "81e03646978345b929dc63f50b3f5d939d70a114e023002ea49f48db931e8907"
+   "type_hash": "5a9a4110735b1fb7b83cc6f52ec2804eba21087324d3903036976e07ba856dc9"
   },
-  "Accounting.SecurityProofs.Actual.WipePoolDelta": {
-   "owner": "@lean",
-   "signature": ["Accounting.SecurityProofs.Actual.WipePoolDelta : Accounting.Guarantees.Actual.WipePoolDelta"],
+  "Accounting.SecurityProofs.Actual.WipeReadHeld": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.WipeReadHeld.{u_5, u_6, u_7, u_8} : Accounting.Guarantees.Actual.WipeReadHeld"
+   ],
    "assumptions": [],
-   "type_hash": "6d1788cd897b115bad02b6978826ceae7b7be7b32e0b3b26abe4736b4f3277a7"
+   "type_hash": "2b3c90af401a23241ab54f737beed2c849e13e173bd7a698d7a680454242557f"
+  },
+  "Accounting.SecurityProofs.Actual.WipeReadPool": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
+   "assumptions": [],
+   "type_hash": "53ded1fd00f3bc75c312a97dfdc886aa7b9a42f6dc170b487509cc63dd73d350"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -2476,6 +2520,14 @@
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
   },
+  "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "510443f144524d82ec1b720a21e2e37297f8437f24dce77bfb35365b2ff8e300"
+  },
   "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": {
    "owner": "@compute-accounting",
    "signature": [
@@ -2483,6 +2535,14 @@
    ],
    "assumptions": [],
    "type_hash": "9bf83cdf3cfbd6f55a855ddf9851c188eff696b8cae663149595ba04195c05b3"
+  },
+  "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline"
+   ],
+   "assumptions": [],
+   "type_hash": "7262035bfa980cd0821ae8935cce8e648e64ea13f9f5680359fbf229e17906dc"
   },
   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": {
    "owner": "@compute-accounting",
@@ -3664,6 +3724,18 @@
    "assumptions": [],
    "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
   },
+  "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline : Accounting.Guarantees.TS.Sm100MeasuredHeadline"],
+   "assumptions": [],
+   "type_hash": "1566b38a672d5921b6ec9b17c8323c909769be68211fcefb495ddd6d43ad7f2a"
+  },
+  "Accounting.SecurityProofs.TS.Sm100SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline"],
+   "assumptions": [],
+   "type_hash": "68c898355ef65b6d02ae11f2a197ddd63c3ce5e1cfdd3fcb58c8492091169f75"
+  },
   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline"],
@@ -3675,6 +3747,18 @@
    "signature": ["Accounting.SecurityProofs.TS.Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline"],
    "assumptions": [],
    "type_hash": "0707af8f7ef0f1b38f84f251088d19dcca4fd9e8a5e66a965e0d71629a781ef6"
+  },
+  "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline : Accounting.Guarantees.TS.Sm90MeasuredHeadline"],
+   "assumptions": [],
+   "type_hash": "4a3b2ce6b702162dd24e785c62bd38d5b41382f1c34214f34bad1ed258d58fde"
+  },
+  "Accounting.SecurityProofs.TS.Sm90SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm90SheetHeadline : Accounting.Guarantees.TS.Sm90SheetHeadline"],
+   "assumptions": [],
+   "type_hash": "a221d8c2874d0328ee82da4d0639ebcbf4453ab9e58a9c412ef4f62f0bfa6d37"
   },
   "Accounting.SecurityProofs.TS.StageBudget": {
    "owner": "@compute-accounting",
@@ -7164,6 +7248,28 @@
    "assumptions": [],
    "type_hash": "0339e5b11195f6a2be6a2b2b33069b168fcccd1d874e338d0247bc7742752583"
   },
+  "Nci.SecurityProofs.PackedContainedFanOutOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.PackedContainedFanOutOn : Nci.Guarantees.PackedContainedFanOutOn"],
+   "assumptions": [],
+   "type_hash": "4d2565dacf91227c14474ec7bf24354cc36527de5075976aab9be094e60a3be7"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn : Nci.Guarantees.PackedIncompressibleContainedMatMulOn"
+   ],
+   "assumptions": [],
+   "type_hash": "489269136c34fdbbb4abbd2ee45cd3e3c5a72e8ec2322facf15516da3220425c"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn : Nci.Guarantees.PackedIncompressibleContainedTrainingOn"
+   ],
+   "assumptions": [],
+   "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e"
+  },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
@@ -8828,6 +8934,62 @@
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
   },
+  "RecDeploy.lamLin2_deployed_ge": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.lamLin2_deployed_ge (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (b : RecDeploy.Brings)",
+    "  (L : Claims.Recursion.VStarB.LayoutB)",
+    "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
+    "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
+    "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) (w : Claims.Msg → Real)",
+    "  (decI : List (Prod Nat (List FlockLevel3.GF128)) → List Claims.Flock.PlainTrace)",
+    "  (Cp : Claims.Recursion.Caps FlockDeploy.Coin) {x : Claims.Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec}",
+    "  {sts : Array Flock.Stmt} (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hO :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        Exists fun i =>",
+    "          Exists fun spec' =>",
+    "            Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16))",
+    "  (hW : instLENat.le (Cp.width (RecDeploy.xIOf x)) (instHPow.hPow 2 64)) :",
+    "  Real.instLE.le 100",
+    "    (Claims.Recursion.lamLin2",
+    "      ((RecDeploy.recBoundAt rel b L).record (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).IVStar)",
+    "      (Claims.Recursion.Inner.ofFlock (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x)"
+   ],
+   "assumptions": [],
+   "type_hash": "546ccd629ce2e7bcfaa89bc1e67ffc82ee88b8a66514d06777ea133da444b27f"
+  },
+  "RecDeploy.lamLin2_deployed_ge_dep": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.lamLin2_deployed_ge_dep (rel : Flock.Readable.Parsed → Flock.Readable.Relation) (b : RecDeploy.Brings)",
+    "  (L : Claims.Recursion.VStarB.LayoutB)",
+    "  (nextE : Claims.Msg → List Claims.Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)",
+    "  (colsE : Claims.Seen → Nat → List (Prod Nat (List FlockLevel3.GF128))) (wE : Claims.Msg → Real)",
+    "  (join : List Claims.Msg → Claims.Msg) (rowIn : Claims.Msg → Claims.Msg)",
+    "  (final : Claims.Msg → Option (Prod (List (List (Prod Claims.Msg RecDeploy.Salt))) Claims.Msg)) (w : Claims.Msg → Real)",
+    "  (decI : List (Prod Nat (List FlockLevel3.GF128)) → List Claims.Flock.PlainTrace) {x : Claims.Msg}",
+    "  {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}",
+    "  (hin : FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts)",
+    "  (hO :",
+    "    ∀ (j : Nat),",
+    "      instLTNat.lt j (RecDeploy.nS x) →",
+    "        Exists fun i =>",
+    "          Exists fun spec' =>",
+    "            Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')",
+    "  (hn : instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16)) :",
+    "  Real.instLE.le 100",
+    "    (Claims.Recursion.lamLin2",
+    "      ((RecDeploy.recBoundAt rel b L).record (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).IVStar)",
+    "      (Claims.Recursion.Inner.ofFlock (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)",
+    "      FlockDeploy.KS.CpDep x)"
+   ],
+   "assumptions": [],
+   "type_hash": "fc9040a10677f74473fe6409c43ae03eb1114fe68d0c5b36cfe0916881b6fdc7"
+  },
   "Verity.SecurityProofs.ComposeCone": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
@@ -9752,8 +9914,6 @@
    "Nci.SecurityProofs.ReferenceTraining": "restatable (conjecture,no-function): It is vacuous for a training run. Its declaration must contain the reference circuit gate for gate (Declaration.Contains), which the Dot16 restatement of ReferenceLayered, (17, 2328, 0, 163840 * 16), now allows; but that restatement still assumes its lookups read columns of novel inputs (Layered's col_input, Security/Definitions/Nci/Layered.lean: bf16 embedding columns that are inputs, not weights), and a training run's embedding table is updated weights. Every step after a run's first gathers from a computed table, which is no lookup, so the reference circuit of a run that trains its embedding is keyed only at d0 = 1 and ReferenceLayered fails for it. It fits once Layered's lookups may read weight columns, a trained embedding (LEAN-35, F6). It also rests on the open conjecture ReferenceLayered and the named WeightsIncompressible, and is about an arbitrary reference circuit, not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.DampenerWindowsCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.FitRate": "frozen (conjecture,no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Models/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
-   "Accounting.SecurityProofs.Actual.WipePool": "frozen (no-function): It states the lifetime pool over an abstract run tree of wipes (Accounting.WipePlay.prEv) under the named timed-round premise Accounting.Assumptions.TimedRoundSound, a bound on a probability over the prover's strategies rather than a property of a function's acceptance.",
-   "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance.",
    "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Nci.SecurityProofs.ThreadedReadsInfoFmt": "falsified (no-function): It rests on WeightsSupportFmt, false at the deployed point (shape.conjectures, 19 Oct 2026, NCI-FALSIFY, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2); it is also about an arbitrary reference circuit and a threading of it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedContainedInfoFmt": "falsified (no-function): It rests on WeightsSupportFmt, false at the deployed point (shape.conjectures, 19 Oct 2026, NCI-FALSIFY, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -9809,7 +9969,22 @@
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)"
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
+   "Nci.SecurityProofs.PackedContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain it runs (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions/Packed.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.908%, over 1% (no check reads ffill's chains, so no filler is credited, and its flat is setup's floor), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's words on the IGMMA but 0.047% on the design's dp4a baseline, its fold the generic CP_RED8 alone, B_flat 191.31 on JPA90_0, RT4-SHEET-12) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.90750%; the unfolded one gives 1.83633%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the H200's and B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
+   "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records and caps, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
+   "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
+   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
+   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": "lemma: the count of coins on which a read answers a blocks at one of C contents, from a causal strategy, the latency ceiling (latency-ceiling) and WipeRead's premises on a verdict read off the coins; WipeReadHeld is what it is for.",
+   "Accounting.SecurityProofs.Actual.WipeLag": "lemma: the contents of X's state at t number at most those at s times 2^(beta_X (t - s)), a counting bound over CausalFrom and DeclaredLinks on any strategy, with no function's acceptance; with WipeReadHeld it bounds the state between reads (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadHeld": "frozen (no-function): its acceptance, the challenger's verdict Ch j on its view, is inside a counted event (the card of a filter over the coins, not a shape.events probability), and it takes per-run physical premises (CausalStrategy, Placed.LatencyAtMost) over an arbitrary strategy rather than a function's acceptance (note:20261019T2210Z-report-timed-round-redteam-3).",
+   "Accounting.SecurityProofs.Actual.WipeReadPool": "lemma: Ville's inequality over the reads on the challenger's verdicts read off the coins, arithmetic under LiveVerdicts alone; WipeReadHeld is what it is for."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -9848,7 +10023,7 @@
    "Accounting.Assumptions.TS.FoldOptFoldedAt": {
     "status": "open",
     "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
-    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*."
+    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the H200's and B200's four readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds), and benchmarks/pouw/tests/test_lean_headline_dc.py::test_folds_meet_fold_opt_at_pi_star prices ♭'s fold and that one at each of their pi*."
    },
    "Nci.Assumptions.PartialSumsSupport": {
     "status": "falsified",
@@ -9903,6 +10078,7 @@
     "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -9914,6 +10090,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -9941,23 +10119,18 @@
     "Nci.SecurityProofs.FitRate"
    ]
   },
-  "Definitions.Accounting.Actual.WipePool": {
-   "digest": "6eef17b71c9d60a389316ede112f0f67c2aa18b4ed80c605dd559e518fd87964",
+  "Definitions.Accounting.Actual.WipeHeld": {
+   "digest": "d10182107aa699d46e6951392f4b620db032fa27e47950e96a88a65f18fa1a77",
    "definitions": {
-    "Accounting.WipePlay": "f87900a958246708958d5fb12b359dae6bc4bf5cbe0040b942d0638c4ab085e5",
-    "Accounting.WipePlay.UnheldFails": "48ef14da2ef22a27e6bfae1b12d874271505054cc4fa2f3d8fc28dabb830cf4b",
-    "Accounting.WipePlay.below": "befd1fc34e4cf2e584697f9cb6ca12202e4eb025be8b352686a191d741a9fcb4",
-    "Accounting.WipePlay.brecOn": "5f347e8810558360fd5edc6067ec2d4c68d642730fda351de0f97d20b3575efb",
-    "Accounting.WipePlay.brecOn.go": "a94d42db29f6e5cd06c3bd9a5f0a4b13eccb7b1799165787ff8f1ff5d67c098a",
-    "Accounting.WipePlay.casesOn": "9c3dd37e06dd4c776f65b27e68e05d0ff43f4412d24ffc168e1edc0c4495263a",
-    "Accounting.WipePlay.coin": "e5b401a93dfc8d0bf9e56fc88b0b3ed419ad5509c81bd56b5a1f048bddf5ba25",
-    "Accounting.WipePlay.prEv": "06801eaf73feef1a24d08c8f5c00233959c874805ce9912a6fa462f12a9b5957",
-    "Accounting.WipePlay.rec": "eb9f25ad6c9dbf98896ce7201982caac7be6c755045398977821013dbeeda654",
-    "Accounting.WipePlay.stop": "968c61b670ed33aaf448368c2a74bd9e0463625ebc48452d32360a12557d2fff",
-    "Accounting.WipePlay.unheld": "1c54b46e6d33513a1c2c39b97bb46e05b10116d110a556569cb6eab4dcf62477",
-    "Accounting.WipePlay.wipe": "514fdb9b902a3c207b4fa5923b6026d399b04c589cd23a814a51f61ce47057dd"
+    "Accounting.Actual.answered": "82f30dee710bd4f4f4c3f8e8b1ee6f29a131b11e09e29c3c15e228674116ba88",
+    "Accounting.Actual.contents": "c59367b779f35f3ea3fa1454dee9bb299988eec9fade90eb0b8ad0066e19e80c",
+    "Accounting.Actual.unanswered": "a104943d3d4d233095e8a2613aad83c1fb8c5084971587797915d2db759d146c"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
    "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
@@ -10512,7 +10685,10 @@
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -10975,7 +11151,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Registry": {
-   "digest": "34c46945d0648fdb3601db0885d52ed3f597736490aad915659217d78681898c",
+   "digest": "0cac192d1d4ebe7d382e6630e72c49275a3b50f5e6ccb65bd544125faee4c440",
    "definitions": {
     "Accounting.Gates.Class": "fbc22a2c1fae8184bf3932dc00e980466fc000346f7fe30bff3745694b6f8e75",
     "Accounting.Gates.Class.affine": "291a5bf226e55e5c668cb70e73d5771ac2aaa288c12cf33ba623992c8c83ac2d",
@@ -10985,10 +11161,12 @@
     "Accounting.Gates.Class.gather": "b468f274abe0fb9e5c8a2ddf035f8d9d9d57d9e0b0e5ce7beca7c8f439d68318",
     "Accounting.Gates.Class.input": "817cfefafe298744352f594fd22643cc4378b29f5fbab9e06464bbc4de36cb6a",
     "Accounting.Gates.bf16ToF32Op": "b3405a4846146f55f87aece18f4494631969b9273625eff8610d0ab80d3b5086",
-    "Accounting.Gates.classOf": "8a2e8e6efbf17c481fc786dbfe9079d87eb04afb03f6061fe766e5b9624ca511",
+    "Accounting.Gates.classOf": "175e7ee427ec02f3755f81ee9a35d80adaf13615ab74846aead17c352c69d7f2",
     "Accounting.Gates.families": "dfb46f7c1cb52f844eda2868694b07f7d04d6edbf3b57626a3db4ce29fb1ae43",
-    "Accounting.Gates.registry": "4b0d5794f3121446997f5b73c8a7ebc57d55f29e4022a0c8641a3a29161852b5",
-    "Accounting.Gates.tableReadBits": "214433e54d46a90dbe885f436f3ecca36b89f0ed053fb755442bc635c6080c9a"
+    "Accounting.Gates.numbered": "93dcb39c1bbb6694e874093a2f05e622440d55eb647d2d777cb75ea3395bf2e8",
+    "Accounting.Gates.numeral": "e60186403df5edd56fda63d293e84fce58023c2d30e5704103cc3dfaad1a6b5f",
+    "Accounting.Gates.registry": "f2fc1eaad694a5fe78eaa7907e83fed3a01e60f7c3e7eda19efff47efbe60987",
+    "Accounting.Gates.tableReadBits": "910b13c7bf81cf9efe6f6d863a602f0d3ca4b8d543780aad847da22a62b80f83"
    },
    "guarantees": ["Accounting.SecurityProofs.Gates.Bf16ToF32Affine"]
   },
@@ -11024,7 +11202,9 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
@@ -11032,8 +11212,12 @@
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.Headline.Encoding": {
@@ -11065,10 +11249,16 @@
     "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.Headline.Sm120": {
@@ -11097,7 +11287,9 @@
     "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
@@ -11114,7 +11306,119 @@
     "Accounting.TS.Headline.Sm120Measured.piStar": "c1de65e34966627832062e95e941279474355bf7dbd9f34cfc3ddae0573b0239",
     "Accounting.TS.Headline.Sm120Measured.vf3s16": "df7561232e082fdc78ba414b646d5e6cbfd6cfda4a907e9b45e8846aac2b0bdc"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"]
+   "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"
+   ]
+  },
+  "Definitions.Accounting.HeadlineDc.Encoding": {
+   "digest": "ca069f58b5da9f7c4c112765f82ccde630f44bdfd778f46316176f974efed67d",
+   "definitions": {
+    "Accounting.TS.Headline.SheetDataQ": "e888df9b570af6c0289c53952a0946df666828ddd1f5a00f57179b582deae878",
+    "Accounting.TS.Headline.SheetDataQ.fmax": "6caebc62997534b3842e3c41105fc919f9db40780f802860e0f5b0503697acb2",
+    "Accounting.TS.Headline.SheetDataQ.macs": "7ef13426c4a3ccce24b14edfe239f6497adc97b07ef1fe129d82763b45f13d01",
+    "Accounting.TS.Headline.SheetDataQ.peak": "7ff0b81d04f189589a4ab4147f8505dfb5810c2183dbad0c618b7f411d81138f",
+    "Accounting.TS.Headline.SheetDataQ.pipe": "2a31c4908502e10f05f1be0316d1df37443c0d5bd2264e886d6fc2bddf3ba2a8",
+    "Accounting.TS.Headline.SheetDataQ.sheet": "146eafa7bf883a27a929c1827c3b23db4ef0b5f216f19edc38002e7eb81f11e3",
+    "Accounting.TS.Headline.SheetDataQ.smem": "bb0eca201edab13cbe836398c68bf4ae53d136be39851067abf58795141fee7d",
+    "Accounting.TS.Headline.SheetDataQ.width": "01bc60d7d11433ecea672a6f76ecf76385dbc0ce9e0c9008df7a3229ee1e0bd9",
+    "Accounting.TS.Headline.cert": "5eb044716ab7efdd65e45e7990b2d1d799ec55745abf8bf6031d7c8300c4ef6f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+   ]
+  },
+  "Definitions.Accounting.HeadlineDc.Sm100": {
+   "digest": "9a7cd2d88877c836d50f900d20bfeead2cd4ddbfc9d93c0a57c7856c1986f9ad",
+   "definitions": {
+    "Accounting.TS.Headline.Sm100.Pipe": "9ed9396a3aaacf4fb87ceb3b02a74a7ea4cc5358741ae256a9d110782c05ce6e",
+    "Accounting.TS.Headline.Sm100.Pipe.alu": "056c9f4bda75465c486da1ec056b982e792b340690b014459d1d4dba0eed4850",
+    "Accounting.TS.Headline.Sm100.Pipe.casesOn": "20798bac9bfd83c07f93471b0f48e877d3bc8ac0bd27cde624b2aa1eb3db3109",
+    "Accounting.TS.Headline.Sm100.Pipe.ctorIdx": "b8748cdac19acaee469e1740a1b95c891d4db52ce28904abdbb15174fad39698",
+    "Accounting.TS.Headline.Sm100.Pipe.imad": "10444a8f11f244ffcc49b8a02258a529322a9e1ce23c14534774d4abda101d10",
+    "Accounting.TS.Headline.Sm100.Pipe.rec": "a7fe2a5d05f2ca995b32a735a14e8ed44580da12b3b47eecff8e1f81b1b06348",
+    "Accounting.TS.Headline.Sm100.Pipe.shfl": "39a3f768bf33458bddd2a61dc0511c180b8c2992f919c7c028cfdc3285cd1c0e",
+    "Accounting.TS.Headline.Sm100.Pipe.uniform": "cdd0cad8fb006256cb570489daa45573a94b8e6c8bfad19659b649fcd1202c65",
+    "Accounting.TS.Headline.Sm100.Pipe.width": "ab8dd1aaa41b91d1ec092515153db7801940a2a32e43a6382f497e90a0746d09",
+    "Accounting.TS.Headline.Sm100.checks": "6aa4873db21b385e65c3d2c64beda7079c7a2288bac53a147fb4ad9627760076",
+    "Accounting.TS.Headline.Sm100.d2s": "6f0f1b86c210e84705c72bc512fdcee898fd087636ddcbc05aefa07b7fbdc209",
+    "Accounting.TS.Headline.Sm100.ds100": "82fef4da2821aa47ebf30e1e56c942bff2334a54b6d6ab6186af284bde088928",
+    "Accounting.TS.Headline.Sm100.flat": "7eef8129497b726a345b48afc2272782adb779cffc8afdd46f3cb78c18bb0193",
+    "Accounting.TS.Headline.Sm100.flatFill": "f00359a65ad39b14f48d2d7242e9fa53914d3213e172c989325ca467e385d489",
+    "Accounting.TS.Headline.Sm100.flatFold": "b524d25dbb6bffbf5a7d4154ecc076eaaac653eed5b595faa34305d55f3c4a83",
+    "Accounting.TS.Headline.Sm100.flatSkip": "c1d6c1c5a8ecfa72d0eb4b1f2a780137610cae5fa7f1914398a7d1fd5c997e0c",
+    "Accounting.TS.Headline.Sm100.flatWords": "da31939e6d7aff952dc7bb73cbd68c2022ed5a5311ad2179907626b5351802e6",
+    "Accounting.TS.Headline.Sm100.instDecidableEqPipe": "14cb944b13734427a0e528fadf4f611bac2babccd42e70e9f072e32d06128367",
+    "Accounting.TS.Headline.Sm100.instFintypePipe": "b79f75bff7f14a9c98e3fb5d38657fa6183c2f0272e8ce022e7d792a1ace99f4",
+    "Accounting.TS.Headline.Sm100.lamStar": "d5012a51274967d23d8c091a8170941d896ec4aa20ce7444052161e40d17aa80",
+    "Accounting.TS.Headline.Sm100.lamStar._sparseCasesOn_1": "945f5abde8c2eb3da19e067ceebca61eaee2c8079d3a877411552caf457a91ba",
+    "Accounting.TS.Headline.Sm100.lamStar._sparseCasesOn_2": "e7f134502f5a79bf61a8b1becacfabc8a3e1c1958d591656f156995a24c82b85",
+    "Accounting.TS.Headline.Sm100.model": "473f722c71713f129c497578a87a57202777ff9876e24afa1915c009db913f66",
+    "Accounting.TS.Headline.Sm100.sheet": "d4b7c2bb5572b464f105d0e6d01b505a55c5acc24bebb6980d78c659cbc949a1"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm100SheetHeadline"]
+  },
+  "Definitions.Accounting.HeadlineDc.Sm100Measured": {
+   "digest": "a812d91577bc1b14b7d4ff6a0f8d0779190cf3f88cb83374c2d3e86add8cca8f",
+   "definitions": {
+    "Accounting.TS.Headline.Sm100Measured.d2s": "a060f99deb4a5d228bd36b31261b7b824fbf420cbca607cc8e55fd917ff89d0a",
+    "Accounting.TS.Headline.Sm100Measured.dc100ri": "0225a224e35b76667b1fd6ed06b3bbf5bd276c7bee8373921b744882688f644f",
+    "Accounting.TS.Headline.Sm100Measured.flat": "4deaa73f2f2ba31f2a80ef7a67e37cd9a5a8d4becf24be9b31fa21e333f47e16",
+    "Accounting.TS.Headline.Sm100Measured.flatFold": "b7b10cb8ae010a0ee66b62fc12331764d8abb7ae0cb430e6a1534bdd30cb3d1d",
+    "Accounting.TS.Headline.Sm100Measured.flatSkip": "930d8e5a6732e1c11823d0557bd43fb02544c216a4e53042d79c5683378fe447",
+    "Accounting.TS.Headline.Sm100Measured.lamStar": "9deb6e0e13fe43f49574ac87fa2c32e36b5e0e6517d3d278158a5ee7de3f313d",
+    "Accounting.TS.Headline.Sm100Measured.machine": "143e70ca16397d6e525997f48542e71a9b323fae7dfe370dfe237bd4f68c33d0",
+    "Accounting.TS.Headline.Sm100Measured.model": "106a7a808b7d4836378681acf0ae239c0b92e0e8c346d44d8332611d00edcab8"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline"]
+  },
+  "Definitions.Accounting.HeadlineDc.Sm90": {
+   "digest": "f151b509ce3402fce69e296514cd74a89fdb551e1ade4b1c7fcee9f7881ca866",
+   "definitions": {
+    "Accounting.TS.Headline.Sm90.Pipe": "2daf4548527ab21798473e5bf0b7f72af5db897611217553ac09ea4b6c159382",
+    "Accounting.TS.Headline.Sm90.Pipe.alu": "9ea444bc9223c89d02761528d72ebce4721d9cc57a1bdb47c82f15b9fb43420f",
+    "Accounting.TS.Headline.Sm90.Pipe.casesOn": "115943cd48699727bc070237a7988259ebbddbbdb8cc2404737704e7907a24d4",
+    "Accounting.TS.Headline.Sm90.Pipe.ctorIdx": "cc6bc57d645f50a8b346b07052a0a229718f0b2cf96ab443d2503399e70a6e3e",
+    "Accounting.TS.Headline.Sm90.Pipe.imad": "174f055470b2d3e2586886e5f3103f435e390233aae7780443fb8051b5bcf17c",
+    "Accounting.TS.Headline.Sm90.Pipe.rec": "754b1bc4539a21e5f447743b29b050092829d3b50b0f964ac7fdf5adc22d78c0",
+    "Accounting.TS.Headline.Sm90.Pipe.shfl": "6bcf1cc04637823d9de7080183a1f1fbfae822d9bebe0b546a84bb574cf60942",
+    "Accounting.TS.Headline.Sm90.Pipe.uniform": "9cd6ce24d97a3b5da86c45c8c79793008bec8b683831f3e0ea7ca40463626281",
+    "Accounting.TS.Headline.Sm90.Pipe.width": "bd3365a43ecdbc538038b8bc75de4158af1ea0102ff8e86f797e38142d26e270",
+    "Accounting.TS.Headline.Sm90.checks": "8af3a8490f038e3001fb56cad1a762ed4b611e76f9f1b09ab05116a7977fd795",
+    "Accounting.TS.Headline.Sm90.d2s": "7a35307c952c8dc1445d7c154518535a502016343c734f316db7e6f46d544c7d",
+    "Accounting.TS.Headline.Sm90.ds90": "4dd25493356137d67db933779c466744cae4687ecdd7ae5596b83e7e8d3aaf9c",
+    "Accounting.TS.Headline.Sm90.flat": "7bcc271183615132232f50753c5e1cab288b574b32e456d6f1bd2c81582f0f43",
+    "Accounting.TS.Headline.Sm90.flatFill": "d299a9ea951b59864e8b87c74d0f263b9b6aeeb7360f06a60989db1b70bc7811",
+    "Accounting.TS.Headline.Sm90.flatFold": "c8f00de96c7e2e62feb2323a1e5396a3ec30f7e007e6bf9187327100f26bf16d",
+    "Accounting.TS.Headline.Sm90.flatSkip": "f74b33e1c65fd3b809390e7d268f723fa707eba17045ff51cd9fee3464dd8fb5",
+    "Accounting.TS.Headline.Sm90.flatWords": "09798bc528058c495238893cb8caec3c0c93fd828af4fd951bb3451c439ccc8a",
+    "Accounting.TS.Headline.Sm90.instDecidableEqPipe": "e6f72d7e67d44def3c0999ccf44cba9cbe48f831a63b66b5d2e2a3e43157eb80",
+    "Accounting.TS.Headline.Sm90.instFintypePipe": "0e1e56d8aee279ff115b94cbbeac7fb99eb1e81b199f702863925f8a2d908822",
+    "Accounting.TS.Headline.Sm90.lamStar": "0671d39e333de8038b0e24f6145903c5fbdac2b47c87e5ee63bae27b8aa48e4e",
+    "Accounting.TS.Headline.Sm90.lamStar._sparseCasesOn_1": "87d91216e42a91d2f67510e9ab72bb938562db55f78e4c687bbb3cdb535396f0",
+    "Accounting.TS.Headline.Sm90.model": "8d03962dcd5aa77f12aba8d3b8ab6b95dfe14dbc8819b35f4a89df399e1115d9",
+    "Accounting.TS.Headline.Sm90.sheet": "d5ea25e39bc4e4f292d90f9b36eda80f47141f8afc0799c5d78f22758e2c4857"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm90SheetHeadline"]
+  },
+  "Definitions.Accounting.HeadlineDc.Sm90Measured": {
+   "digest": "ec371caf2966192c0d214abfdd62ca8d375ca90b9a569e22a070793aaf82afba",
+   "definitions": {
+    "Accounting.TS.Headline.Sm90Measured.d2s": "ae6ffdb77225f70cb0fce11653c579f117b7fd8baf016cc6055ac59563ad05bb",
+    "Accounting.TS.Headline.Sm90Measured.dc90ri": "b9ea6e4b6b3c2d2d115049c6fd1602f24fcd050c0c347ca4e61d0fe163095d3d",
+    "Accounting.TS.Headline.Sm90Measured.flat": "ad0e60f25ed616e9c69d3097ee1644bcf4e3ca9ad3a1b5efee4857c1fd3104af",
+    "Accounting.TS.Headline.Sm90Measured.flatFold": "de8f7d1f3d572509d57a205cb1f3b58427b9ac62024f7e129718976435b53e54",
+    "Accounting.TS.Headline.Sm90Measured.flatSkip": "887fca0b4ca6d0337216084df555a5da5af2504bf27cb3f641e5e94b35ccae52",
+    "Accounting.TS.Headline.Sm90Measured.flatWords": "5d726766329b9e3b61dd93090c146f4b8cbc8b691cd30b4324835eef96f4af70",
+    "Accounting.TS.Headline.Sm90Measured.lamStar": "17ad9c62bcfff39a83bf8a34e88e8ae77a58fb32344ee9ba9c33f0624876474f",
+    "Accounting.TS.Headline.Sm90Measured.machine": "2fe754fcf17a61b0dbcd8b581ccbc1ea6cbc67d0acdf7a7b1f413e37aa91fad0",
+    "Accounting.TS.Headline.Sm90Measured.model": "0de54e8b18e721ce2116f911ccf4b056a52fd40eeeea3d4012d25f204edbb55d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -11222,7 +11526,7 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "0b94e407f8c752218c33d2a60fdc2348da2be15e8b2b39cb38ad25d2b43ade60",
+   "digest": "73dd130ac4c8d39fdaa54c6ae860941a1b15809c866c332556a7e3f495d502f3",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
@@ -11230,6 +11534,7 @@
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
+    "Accounting.Placed.LatencyAtMost": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1",
     "Accounting.Placed.Links": "21289f1d8100bbc4b24f3fb015950d0d11f515aeb18b02f70d65a6b68f2f813b",
     "Accounting.Placed.Memory": "f12294cc702724cca24f7a1192e560840420a9a1ab87d3eff59ab7a9f53edd15",
     "Accounting.Placed.Spec": "b1bacd8a93bd348e554d654f301218d19023c6018637e1667d2984b36593eda6",
@@ -11243,6 +11548,7 @@
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -11254,6 +11560,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
     "Nci.SecurityProofs.FitRate"
@@ -12209,7 +12517,9 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -12226,8 +12536,12 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
@@ -12259,7 +12573,9 @@
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.CompilerStage",
@@ -12273,8 +12589,12 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords"
@@ -12310,7 +12630,9 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
@@ -12319,8 +12641,12 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
@@ -12399,7 +12725,9 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
@@ -12412,8 +12740,12 @@
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -12426,10 +12758,16 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.Routes": {
@@ -12512,7 +12850,9 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -12527,8 +12867,12 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -12542,7 +12886,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.CondReceiptLuckMarginal"]
   },
   "Definitions.Accounting.TS.Sheet": {
-   "digest": "1cfc992fd24b7c21a652bbe6ecdea0891d713bb1ba67609d41b62d48783afa3f",
+   "digest": "75db1d09a07b87e29568e9fd23b79bd56b9dd1a90b77897873c35004836bf29b",
    "definitions": {
     "Accounting.TS.Sheet": "e4ac34c1d3a252753762139ebcb218e7f59cb8b7f98b57e34b1be60342fe8bbb",
     "Accounting.TS.Sheet.fmax": "96206b791af38cbd657f608e98fbb2325a372b4965ead42e95b62dfeb421a758",
@@ -12554,6 +12898,7 @@
     "Accounting.TS.Sheet.width": "190f3ddbbd5e58b38fae4f0b3e654c3bd41e973f9b9dade35615106ccfbf33eb",
     "Accounting.TS.SheetRow": "63a57f01f0937de08170bd92e2d36e1365cbafdb20828a0595d2f787e1db6d32",
     "Accounting.TS.SheetRow.casesOn": "6d5ae7e7676550f851432c989a210d0e01c04b8c1c78a3ba4a6208a6bfd69a3b",
+    "Accounting.TS.SheetRow.ctorIdx": "77115ea0806e28b6203f70563fd3461525eb09a6b9895093ceb9e74ad5b888d9",
     "Accounting.TS.SheetRow.issue": "d34f0e27b245e34f3f5a8362f839b1d8537e61b2036081d85138395c0783d6c4",
     "Accounting.TS.SheetRow.pipe": "b6b800e5a547b04d83ca67abf5561ae7ae94a6b0bc54639a5326fa4db59779e2",
     "Accounting.TS.SheetRow.proxyTypeEquiv": "aeb5d2e7ae32146d663e416573e5fc5232694a52b2f9e3d885b9513fb1d039de",
@@ -12574,7 +12919,9 @@
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.Slots": {
@@ -12675,10 +13022,16 @@
     "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.Tag.PolyHash": {
@@ -13089,7 +13442,9 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
     "Flock.SecurityProofs.SamplingClaimsStated",
-    "Hash.SecurityProofs.Stated"
+    "Hash.SecurityProofs.Stated",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -13380,7 +13735,9 @@
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Claims.Witness.Recursion.ZK_fails",
-    "Flock.SecurityProofs.RecursionClaimsStated"
+    "Flock.SecurityProofs.RecursionClaimsStated",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.RecursionLin": {
@@ -13439,7 +13796,9 @@
     "Claims.Witness.Recursion.KSBoundLin_fails",
     "Claims.Witness.Recursion.KSFlockLin_fails",
     "Claims.Witness.Recursion.KSLin2_fails",
-    "Claims.Witness.Recursion.KSLin_fails"
+    "Claims.Witness.Recursion.KSLin_fails",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Definitions.Claims.Sampling": {
@@ -13680,6 +14039,7 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -13691,6 +14051,8 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -13741,6 +14103,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -13817,6 +14182,9 @@
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -13944,6 +14312,9 @@
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -14169,6 +14540,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -14237,6 +14611,9 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -14326,6 +14703,29 @@
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn"
+   ]
+  },
+  "Definitions.Nci.Packed": {
+   "digest": "5c0cf917dac1433d52ec7ff1f154562dc069d90522f8a1f2760a9ac851812d9f",
+   "definitions": {
+    "Nci.PackedChain": "80e0cb21810c4c9dd07873950c6b1e8ba7de8993a4b8de51a9bda3b76022c7ab",
+    "Nci.PackedChain.G": "cbbba0620815a9007dc99788c260a50e5e811a5d09014ad8233059dc7efdc094",
+    "Nci.PackedChain.L": "13a5d3fac16fdce6db840443439418ff0682f45815924cda7e9754670dbea249",
+    "Nci.PackedChain.LinkedWhole": "287c2c7ad98496117339c9d73931236ed165e2a705d887b810d0510667983ac4",
+    "Nci.PackedChain.N": "f3c15d29aee18d14b20895715c90ff8b5a82690cc2e6c6c02567f9613b804cd5",
+    "Nci.PackedChain.Whole": "830dd75b6609ba842aee7af0401c611dbbe8cc49f354ccbc43ca49a57e6622f9",
+    "Nci.PackedChain.d": "888cb57e73a44ddc658c268767c0a5ff922972509d204910881b0d2a7247a77d",
+    "Nci.PackedChain.e": "589f165fcf934756d2bd775bd146ed8571bafc4016fc92a25afa0921c55ac261",
+    "Nci.PackedChain.inputsUsed": "1e431bdd77a00fc13a1fe30505dbe69243ad22cc55ba4943d6411e01af78dcba",
+    "Nci.PackedChain.prod": "f572d9819efccb95791fe5af19978337aa7b76845dcb9eb381ac4f855cb429d7",
+    "Nci.PackedChain.spread": "75e36f64ebc696c267cd7f8a6de2070a1dc9f398c55fe2ce5ef60f312bdf4040",
+    "Nci.PackedChain.weightsUsed": "e1c59424a337dc4469481717ff5ce15b4faa7f057a081328ba41aedd48be2b40",
+    "Nci.PackedChain.π": "77392111ad5311e624eaaff36e4d1cd2d202d12478de4439af97dd2ed921b38f"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -14441,6 +14841,8 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
@@ -16050,7 +16452,9 @@
     "Pouw.FpG1.instDecidablePredE4M3Nat": "526915b0330ba3929f6abb76e69f31df11fc22bd8d50f0ebcf9964e2e0037692"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
@@ -16069,7 +16473,9 @@
     "Pouw.FpG1.Level.int8": "b9e394d4d9a7b4ba06082916111fbb0e0a10f2189fe292d7010eb605cc081dee"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
@@ -18904,7 +19310,9 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
@@ -18941,8 +19349,12 @@
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
@@ -19057,7 +19469,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Canon": {
@@ -19259,7 +19673,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CircuitType": {
@@ -19366,7 +19782,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.CoinTree": {
@@ -19430,7 +19848,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Comp": {
@@ -19510,7 +19930,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Derive": {
@@ -19560,7 +19982,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveAll": {
@@ -19685,7 +20109,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.DeriveCheck": {
@@ -19777,7 +20203,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Draw": {
@@ -20110,7 +20538,9 @@
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Firewall": {
@@ -20845,7 +21275,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Library": {
@@ -20903,7 +21335,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Ligerito": {
@@ -21140,7 +21574,9 @@
     "FlockVBridge.sound_climbRow",
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Net": {
@@ -21241,7 +21677,9 @@
     "FlockVBridge.laid_recOpen",
     "FlockVBridge.laid_unit",
     "FlockVBridge.unit_check",
-    "FlockVBridge.unit_recOpen"
+    "FlockVBridge.unit_recOpen",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Opening": {
@@ -21927,7 +22365,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Qcall": {
@@ -23106,7 +23546,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Registered": {
@@ -23233,7 +23675,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Schedule": {
@@ -23403,7 +23847,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_soundHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
-    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
+    "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Steps": {
@@ -23578,7 +24024,9 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
-    "FlockVBridge.keyProg_parse"
+    "FlockVBridge.keyProg_parse",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.TemplateQuery": {
@@ -23811,7 +24259,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
-    "FlockVBridge.unit_check"
+    "FlockVBridge.unit_check",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Flock.Verify": {
@@ -24241,7 +24691,11 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
@@ -24301,7 +24755,9 @@
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdaptSteerFail",
     "Accounting.SecurityProofs.TS.CompilerC",
@@ -24323,8 +24779,12 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords"
@@ -24338,12 +24798,20 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
-  "Models.Accounting.Assumptions.WipePool": {
-   "digest": "743792b099ea890e1036fc170abfed8491f859390bb45f03386a486be9c4fc86",
+  "Models.Accounting.Assumptions.WipeRead": {
+   "digest": "a054e60327c69db6035cee8f0741c06fe41d3ae1d234e1de03db3c1e00fb7ac9",
    "definitions": {
-    "Accounting.Assumptions.TimedRoundSound": "35b775f317173ee028959ca9d3c47b07ec6597e73ac13936e7181350910e93d8"
+    "Accounting.Assumptions.LateAnswers": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65",
+    "Accounting.Assumptions.LiveReads": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18",
+    "Accounting.Assumptions.LiveVerdicts": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d",
+    "Accounting.Assumptions.QuietReads": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108",
+    "Accounting.Assumptions.UniformLabels": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
   },
   "Models.Accounting.Guarantees.Actual": {
    "digest": "1beac18716c243f84629c7971bed42665b32b318c9c4de68668daaea23880891",
@@ -24388,13 +24856,20 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
   },
-  "Models.Accounting.Guarantees.Actual.WipePool": {
-   "digest": "d6b5e0a238a2125d1ac93438fd778241c60f37ea570db222abb216230290847a",
+  "Models.Accounting.Guarantees.Actual.WipeBridge": {
+   "digest": "1f3ad22556027fbf8d790e9433a90c70f149e9f3b4e3b790ff68a4d35f1b2e9e",
    "definitions": {
-    "Accounting.Guarantees.Actual.WipePool": "bab700fb1940bfd5b4dfccebd7f00a5e511a6a16c831453f663180bc57a40ac3",
-    "Accounting.Guarantees.Actual.WipePoolDelta": "0835b482ae308e03678734a16c433a6830faa25265017d34f618005da0d1ebcf"
+    "Accounting.Guarantees.Actual.AnsweredOfQuiet": "d995b35ad0509b18b5aa458adb938c9000e2ef0d29eef133e5c278297f1a077c",
+    "Accounting.Guarantees.Actual.WipeLag": "1b1da8aaaf848b32b285ccef37e813543ddf9d74d0b1e150d21186798350033d",
+    "Accounting.Guarantees.Actual.WipeReadHeld": "20826dd48cdcc354946c9c7c0b54f1925eeeee22321e7e22d976b9c3284943f1",
+    "Accounting.Guarantees.Actual.WipeReadPool": "5ab5cc66a0a0e029bb9c3242fdf674c65d836aef0f8aabd41bcbb1836776283b"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
+    "Accounting.SecurityProofs.Actual.WipeLag",
+    "Accounting.SecurityProofs.Actual.WipeReadHeld",
+    "Accounting.SecurityProofs.Actual.WipeReadPool"
+   ]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
@@ -24591,13 +25066,17 @@
    ]
   },
   "Models.Accounting.Guarantees.FpG1": {
-   "digest": "7297e683773877092b8981f9224e81970da2fdba8d9c6650b8f4472b3cab2f64",
+   "digest": "5a8e41ad6fb5a4cd61fc6edd4393c30de18fc58f6f749b187d4e493d35ad9349",
    "definitions": {
+    "Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline": "b0c4499ed07b90e492574a9b08b309caa870d2956f2dc624b2c8073097123ab0",
     "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "7a08d8ea36e23b38e12a914529b83204294a0bdeed2582a718f998b025101a2a",
+    "Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline": "61bced753f31e19edf524b4e88e0bd579c406536f746a5c2d0306e86d5166757",
     "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "eb7646db3e1481aee6d8b41906c88408ce615e373a6ed7429b1fdcac4dd1cd41"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
+    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
     "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
@@ -24684,6 +25163,21 @@
     "Accounting.Guarantees.TS.Sm120SheetHeadline": "30817f7fabe9b49af37106c5856ada7503ca2061d514649929ad7d10c55d3945"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+  },
+  "Models.Accounting.Guarantees.HeadlineDc": {
+   "digest": "8eecb434c062ce8cc82a11781030753cb69b88956d46fc94b2ce65120d98c149",
+   "definitions": {
+    "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "03569acb8aa478542701191c5fbe978c416c1084431c96a15f7d7d9850a9a849",
+    "Accounting.Guarantees.TS.Sm100SheetHeadline": "a25bfa02582f235092289880987c97001343d674b470f38cd4edf7b487bb735a",
+    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "def512940cc102b1946c0555f7c742f5622a20b7f5180a717232e22bbfb2562e",
+    "Accounting.Guarantees.TS.Sm90SheetHeadline": "43db4c6646f2c7ba82dec2e1ff8faff03f828d5398b209b7f94bd04cb2cd8335"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+   ]
   },
   "Models.Accounting.Guarantees.Joint": {
    "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",
@@ -25371,6 +25865,9 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -25432,6 +25929,23 @@
     "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
+  },
+  "Models.Nci.Assumptions.Packed": {
+   "digest": "0e92201f09ca7dc081175cbcac6116af2c84cc5a0c82c296d9f52a67809c076d",
+   "definitions": {
+    "Nci.Assumptions.PackedActivationsIncompressible": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Assumptions.PackedTraining": {
+   "digest": "ac2824020eff72bf20c610391f3324978df824cbce953f96d51e5dbeda438b28",
+   "definitions": {
+    "Nci.Assumptions.PackedTrainingIncompressible": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
+   ]
   },
   "Models.Nci.Assumptions.Remote": {
    "digest": "e068989a21dfc9b9c7385b0f5b08844742fc36fa37ec15c4ec5768697236a04a",
@@ -25627,6 +26141,24 @@
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
+   ]
+  },
+  "Models.Nci.Guarantees.Packed": {
+   "digest": "d0c30af618e04a869409fe110fb9dbd106bc232f33ba91b1ccc705a240deea16",
+   "definitions": {
+    "Nci.Guarantees.PackedContainedFanOutOn": "89bfd9784c646dd1122d3a0b68b76061a716d63d9d8e18c50d8a62b8848f1c42"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Guarantees.PackedTraining": {
+   "digest": "4e4b35a61b1961919a2083132a39ba5c8d01c2b552b4237ef264c2f5a25b96f2",
+   "definitions": {
+    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn": "882df2b2560105045718ed39fb3b57386cd76761ca2ff6153a991a23af8de997",
+    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn": "9f3cfc320431eab162e03b4a2a84c51b9c3f48a66c90d298c6ecbd81c02faa1f"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Models.Nci.Guarantees.Reads": {
@@ -26950,7 +27482,9 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.chainAcc_level",
-    "FlockVBridge.chainAcc_sum"
+    "FlockVBridge.chainAcc_sum",
+    "RecDeploy.lamLin2_deployed_ge",
+    "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
   "Proofs.Flock.Level3.GF128Ring": {

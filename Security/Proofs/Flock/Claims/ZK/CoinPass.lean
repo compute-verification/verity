@@ -22,9 +22,8 @@ premise that asked the openings to pass under every nonce would leave none, sinc
   bit 2047 clear and every opening that reads back; `opens_coinPass_zeros` at the all-zero key and opening.
 
 Whether the frame round there is live reads nothing more of the check: it is the frame's own taking of the coins
-(`frameAnswer`) and the round (`Frame.round`). `HelloParses` is a hypothesis here, which
-`Flock.zk_server_lean_coinLayer` takes as `LeanRelease.HelloIs` and `LeanRelease.HelloDParses`
-(`helloEq_of_helloIs`, `helloParses_of_helloEq`): the kernel evaluates `Hello.parse` at no `Hello` (`Lean.Json.parse` is `partial`).
+(`frameAnswer`) and the round (`Frame.round`). `HelloParses` and `ReqsFollow` are hypotheses here, as
+`Flock.zk_server_lean_coinLayer` takes them; at the session loop both are theorems (`Claims/ZK/SessionLean.lean`).
 -/
 
 namespace Claims.ZKMal.CoinPass
@@ -201,8 +200,8 @@ open Claims Claims.ZKMal
 
 namespace LeanRelease
 
-/-- **The release's coin check passes a history at every tape** at the deployed coin layer: where `flock-firewall
-coins` reads the server's `Hello` with the tape's nonce (`HelloParses`), the transport requests the openings at the
+/-- **The release's coin check passes a history at every tape** at the deployed coin layer: where the coin check reads
+the session's `Hello` with the tape's nonce (`HelloParses`), the transport requests the openings at the
 schedule's places (`ReqsFollow`), coin `0`'s place is in the schedule and the protocol has a coin, the check passes
 `Hello`'s answer `ansOf` (the root the opening `b` walks to under the tape's nonce and the key `k`) and the opening
 `openMsg` of coin `0`, at every tape, key with bit 2047 clear and opening that reads back. There the coins the frame

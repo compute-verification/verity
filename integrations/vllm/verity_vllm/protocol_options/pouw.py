@@ -710,6 +710,11 @@ def install(scheme: str, target: Target) -> Option:
                                   {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                   schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
         run.commits["registration"] = weights_claim(s)
+        h = target.hooks(entry)
+        for w, layer in enumerate(layers):
+            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+        return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
+                      end_pass=run.end_pass)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))

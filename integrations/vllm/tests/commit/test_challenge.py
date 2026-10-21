@@ -76,7 +76,7 @@ def test_a_run_with_an_uncommitted_step_has_no_root_to_draw_from():
         CH.run_root_of(_run([b"", step, b""], (err,)))
     with pytest.raises(CH.NoRunRoot, match="first error: none recorded"):
         CH.run_root_of(_run([b""]))
-    with pytest.raises(ValueError, match="run root must be 32 bytes"):
+    with pytest.raises(ValueError, match=r"a run root is 32 bytes \(vllm-v1\) or 64 \(SHA-512\), not 0"):
         CH.challenge_positions(b"", [4], 1)
 
 
@@ -101,6 +101,18 @@ def test_non_legacy_positions_follow_the_source_root_and_layout():
     assert a != CH.challenge_positions(hashlib.sha256(b"x").digest(), lps, 64, legacy=False, source=AUDITOR_KEY)
     assert a != CH.challenge_positions(ROOT, lps, 64, b"salt", legacy=False, source=AUDITOR_KEY)
     assert a != CH.challenge_positions(ROOT, [10, 0, 20, 6], 64, legacy=False, source=AUDITOR_KEY)
+
+
+def test_positions_draw_over_a_sha512_root_and_refuse_other_sizes():
+    root = hashlib.sha512(b"tp run root").digest()
+    lps = [10, 0, 20, 5]
+    for legacy, src in ((True, None), (False, AUDITOR_KEY)):
+        a = CH.challenge_positions(root, lps, 64, legacy=legacy, source=src)
+        assert len(a) == 64 and all(0 <= off < lps[s] for s, off in a)
+        assert a != CH.challenge_positions(root[:32], lps, 64, legacy=legacy, source=src)
+    for n in (0, 31, 48, 65):
+        with pytest.raises(ValueError, match=f"32 bytes .* or 64 .*not {n}"):
+            CH.challenge_positions(bytes(n), lps, 4)
 
 
 def test_non_legacy_identities_draw_through_the_picker():

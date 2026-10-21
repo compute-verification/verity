@@ -207,6 +207,15 @@ loopback() {
   return $rc
 }
 
+# hello_at DIR: a firewalled prover's Lean Hello sets each session up at the statement STEP=lean verifies (live PROTOCOL.md
+# §10.4), verity/flock-circuit with DIR's partition and program; read only under FC_FIREWALL=1
+hello_at() {
+  export FC_FIREWALL_STATEMENT=verity/flock-circuit
+  FC_FIREWALL_HELLO_ARGS=; local k
+  for k in partition program; do [ -f $1/$k.json ] && FC_FIREWALL_HELLO_ARGS+="--$k $1/$k.json "; done
+  export FC_FIREWALL_HELLO_ARGS
+}
+
 # proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
 # with $DD/stage/draw.json) and prove_live against it; the prover's status
 proxied() {
@@ -625,6 +634,7 @@ oprove)
   for C in $(cd $V && find . -name inst.bin -printf '%h\n' | sed 's:^\./::' | sort -V); do
     l=${C//\//-}; want $l || continue
     case $l in forged-*) WARM=0 RUNS=1 SELF_CHECK=skip ;; *) WARM=$W0 RUNS=$R0 SELF_CHECK=stop ;; esac; NS=$((WARM + RUNS))
+    hello_at $V/$C
     for mode in $MODES; do
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; *) echo "MODES: dev host firewall"; exit 1 ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
@@ -646,7 +656,7 @@ oprove)
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
   # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
-    C=$V/$CONTROLS
+    C=$V/$CONTROLS; hello_at $C
     for w in root witness label opening algebra algebra-proof shape; do
       PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_TAMPER=$w" WARM=0 RUNS=1 NS=1 again loopback neg-${CONTROLS//\//-}-$w $C/pub.bin $C/inst.bin $C/circuit.txt --zk
     done

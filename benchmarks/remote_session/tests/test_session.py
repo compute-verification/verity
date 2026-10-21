@@ -1058,7 +1058,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     def session():
         from verity.core.protocols.remote_bandwidth import coins
 
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         return s
@@ -1076,7 +1076,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
     assert s.windows[0].steps == [5]
     assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
-    assert appended(s) == audit.Verdict(0, False, "coin") and s.challenger.appends == 1
+    assert appended(s) == audit.Verdict(0, False, "coin") and s.coins.appends == 1
     for step in (5, 4):
         s = session()
         appended(s)
@@ -1124,7 +1124,7 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: 0,
+        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
                           not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})

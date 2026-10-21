@@ -54,6 +54,8 @@ POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
 RUN = "r-salt-bind"
+#: the runner's record of a request served at the verifier's fixed length under ignore_eos (ASK-39)
+SERVED = {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS], "served": [SC.MAX_TOKENS]}
 #: the network certifier's LMS key and the challenger's, which the certifier registers, and the certifier run's id
 CERTIFIER, CHALLENGER = (lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(s).digest())
                          for s in (b"certifier", b"challenger"))
@@ -145,9 +147,11 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
                                               reveal, sid, prover).salt.hex()}, sort_keys=True).encode()
     params = {"context": PS.context(f"served-zk/{RUN}", p, hashlib.sha512(raw).hexdigest()),
               "deployment": f"served-zk/{RUN}", "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS,
-              "range": [1, 1 << 40], "entries": 4, "w_rows": N}
+              "range": [1, 1 << 40], "entries": 4, "w_rows": N,
+              "length": {"max_tokens": [SC.MAX_TOKENS], "stop": Wd.STOP_FIXED}}
     root_w, _ = SC.commit_weights(params, [np.arange(K, dtype="<u2").tobytes() for _ in range(N)])
-    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man))
+    public, advice, priv = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man),
+                                            length=SC.served_length(SERVED))
     return {"params": params, "raw": raw, "rec": SC.register(params, public), "advice": advice, "priv": priv}
 
 

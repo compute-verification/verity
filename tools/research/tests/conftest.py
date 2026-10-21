@@ -58,6 +58,12 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
     # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
+    # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
+    monkeypatch.setattr("research.auto._reach", _unreachable)
+
+
+def _unreachable(name: str) -> list[str]:
+    raise RuntimeError(f"a test reaches no machine ({name})")
 
 
 @pytest.fixture(autouse=True)
