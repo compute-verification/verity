@@ -1,18 +1,19 @@
 """H1's coins from the proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (the pouw setting ``challenger``, ``HOST:PORT``): `session` connects once per window
-  (`remote.RemoteChallenger.connect`) to a challenger started over a live epoch's layout, scheme `SCHEME` and
-  `families` (S) as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). The epoch's salt is its salt coin, opened after the
-  weights' root (`audit.salt_of`), and round s's coin opens after round s's root (`pouw_h1.H1Run`); `finish` closes the
-  session once the window has finished. The challenger is auditor-trusted (`trusted-nebius-host`): it runs on a machine
-  the prover doesn't control, and the serving process reaches it through ``ssh -R`` on its own 127.0.0.1. The host opens
-  a salt coin only after its window's root (serve.py's ``--root``), so H1's salt waits on its window binding (#2950).
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and draw coins from one session of the auditor host's
+  challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
-  that commitment's, its salt coin must have followed the weights' root, and its rounds pass PoUW's round rule of record
+  that commitment's, its salt coin must have followed its own open root, the root the ledger opened its session on
+  (PoUW's salt rule of record, `core_check.salt`, Lean `PouwCheck.saltCheck`: that root is `salt.window_open_root` of the
+  window's weights' root, its round-0 request table's root, round 0's ``requests`` in its log, and the session the
+  ledger's signed reserve entry names, each read from the ledger and the session's own files, never the prover's; a salt
+  opened after another window's root or after the bare weights' root is refused, and so is a session opened without a
+  reserve), and its rounds pass PoUW's
+  round rule of record
   (`core_check.rounds`, Lean `PouwCheck.roundsCheck`): each coin opened after its root, the roots the challenger's log
   shows in order. A window whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds``
   of tests, or a host of the prover's), whose log no one signed, or whose ledger is signed under another key, is cut
@@ -21,10 +22,11 @@ verifier's check that a served window's coins are that challenger's.
   draw opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
 * **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
-  the lane's own gate key) and opens it for its window's root (``open --session S --root R``), and the serving window
-  carries the gate's open answer (``commits["session"]``: its ``session``, ``seq``, ``root`` and coin ``commitment``,
+  the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
+  root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
+  ``session``, ``seq``, ``root`` and coin ``commitment``,
   without its ``secret``; `session_of`, `carried`). The serving side's hello carries the answer's secret, and it refuses a
-  challenger whose coin commitment isn't the answer's before its first coin (`connect`). The gate appends the window's
+  challenger whose coin commitment isn't the answer's before its first coin (`pouw_h1_window.connect`). The gate appends the window's
   ``open`` entry (v2: ``window.root``) to its ledger, signed under the challenger key, before the session's first coin,
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
@@ -58,12 +60,10 @@ from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, ChallengerRecord, CoinError, LiveCommitment,
-                                                             LiveOpening, LiveRecord, ledger_head, live_reason,
-                                                             trusted_commitment)
+                                                             LiveOpening, ledger_head, live_reason, trusted_commitment)
 from verity.ml.commitments.identity import identity_digest_sha512
 
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -135,81 +135,6 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in given.items() if k != "secret"}
 
 
-def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
-    out = []
-    if settings.session is None:
-        out.append(f"{scheme}: the pouw setting 'challenger' needs 'session', the challenger gate's open answer for the "
-                   "window's Commit ({'session', 'seq', 'root', 'commitment'}), which the window carries and the verifier "
-                   "checks against the auditor's ledger")
-    if settings.coins is not None or settings.rounds is not None:
-        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor host's "
-                   "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
-    if stage == "capture":
-        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor host's challenger (the pouw "
-                   "setting 'challenger' is a served window's)")
-    return out
-
-
-def connect(at: str, given: Mapping[str, Any]) -> Any:
-    """The session the gate's answer `given` (`session_of`) opened, on the challenger at `at`: its hello carries the
-    answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
-    (ValueError) before its first coin, since another process's challenger on that port would serve other coins."""
-    secret = given.get("secret")
-    if secret is None:
-        client = remote.RemoteChallenger.connect(at)
-    else:
-        client = remote.RemoteChallenger.connect(at, bytes.fromhex(secret))
-    got = client.commitment.root.hex()
-    if got != given["commitment"]:
-        _close(client)
-        raise ValueError(f"the challenger at {at} commits to coins {got[:16]}..., not {given['commitment'][:16]}..., the "
-                         f"commitment the gate's answer gives session {given['session']}: refused before its first coin")
-    return client
-
-
-def session(entry: str, at: str, steps: int, root: bytes,
-            given: Mapping[str, Any]) -> tuple[Any, LiveCommitment, LiveOpening, LiveRecord, bytes]:
-    """The window's session on the challenger at `at`, the one the gate's answer `given` opened (`connect`): a live epoch's
-    coins with at least `steps` round coins, its salt coin opened after the weights' root `root`. Returns the session, its
-    coin commitment, the salt coin's opening, the `LiveRecord` of its round coins and the epoch's salt; on a refusal the
-    session is closed and ValueError (another commitment than the answer's, or a layout other than a live window's) or
-    `CoinError` (the challenger's) raised."""
-    try:
-        client = connect(at, given)
-    except ValueError as e:
-        raise ValueError(f"{entry}: {e}") from e
-    try:
-        c = client.commitment
-        why = Wd.live_epoch_reason(c)
-        if why is None and c.family(Wd.ROUND) < steps:
-            why = (f"its {c.family(Wd.ROUND)} round coins are fewer than the window's {steps} rounds (start it with SCHEME "
-                   f"{SCHEME} and FAMILIES {families(steps)})")
-        if why is not None:
-            raise ValueError(f"{entry}: the challenger at {at} is not a live window's: {why}")
-        opening = LiveRecord(client, Wd.SALT).record(root)
-    except BaseException:
-        _close(client)
-        raise
-    return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root)
-
-
-def _close(client: Any) -> str | None:
-    try:
-        client.close()
-    except CoinError as e:
-        return str(e)
-    return None
-
-
-def finish(run: Any, client: Any) -> None:
-    """The window's release: `run.finish()`, then its session closed; how it closed goes in ``details.challenger``."""
-    try:
-        run.finish()
-    finally:
-        if client is not None:
-            why = _close(client)
-            run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
-
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
@@ -235,10 +160,17 @@ def pinned_key(path: str | Path, public_sha512: str) -> ChallengerKey:
     return key
 
 
+#: ``salt(weights_root, requests_root, opening)``: `core_check.salt` over the auditor's signed ledger and the session's own
+#: files, which read S from the ledger's reserve entry and R from its open entry
+Salt = Callable[[Any, Any, Any], "tuple[str, str] | None"]
+
+
 def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Mapping[str, Sequence[bytes]],
-                   rounds: Callable[[list], str | None]) -> str | None:
-    """Why the window's coins (its H1 commitment `commits`) aren't those of the session whose signed coin commitment is
-    `trusted` and whose log shows it received `received`, its round log held to `rounds`; None when they are."""
+                   salt: Salt, rounds: Callable[[list], str | None], session: str) -> str | None:
+    """Why the window's coins (its H1 commitment `commits`) aren't those of the session `session`, the one the auditor's
+    ledger opened for the window, whose signed coin commitment is `trusted` and whose log shows it received `received`,
+    its salt coin opened after the window's own open root (`salt`, `core_check.salt`) and its round log held to `rounds`;
+    None when they are."""
     for name in ("round_coins", "coins"):
         try:
             c = LiveCommitment.from_json(commits.get(name))
@@ -247,23 +179,20 @@ def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received
         if c != trusted:
             return (f"the window's {name} {c.root.hex()[:16]} are not the coin commitment the verifier's challenger signed "
                     f"({trusted.root.hex()[:16]}): coins from a challenger the verifier doesn't hold")
-    why = Wd.live_epoch_reason(trusted)
-    if why is not None:
-        return why
-    try:
-        root, salt = bytes.fromhex(commits["weights_root"]), LiveOpening.from_json(commits.get("salt_opening"))
-    except (CoinError, KeyError, TypeError, ValueError) as e:
-        return f"the window's salt coin or weights' root is malformed ({e})"
-    if tuple(received.get(Wd.SALT, ())) != (root,):
-        return "the challenger's log does not show the weights' root as the one root its salt coin followed"
-    why = live_reason(trusted, salt, Wd.SALT, 0, root)
-    if why is not None:
-        return f"the window's salt coin: {why}"
+    given = commits.get("session")
+    named = given.get("session") if isinstance(given, Mapping) else None
+    if named != session:
+        return f"the window records session {named!r}, not {session}, the one the auditor's ledger opened on its root"
+    refused = salt(commits.get("weights_root"), commits.get("requests_root"), commits.get("salt_opening"))
+    if refused is not None:
+        return f"the window's salt: {refused[1]}"
     log = list(commits.get("rounds") or ())
     if len(log) != commits.get("steps"):
         return f"the window's round log has {len(log)} rounds, not its {commits.get('steps')} steps"
     if [x.get("round") for x in log] != list(range(len(log))):
         return "the round log is not rounds 0, 1, ... in order"
+    if (log[0].get("requests") if log else None) != commits.get("requests_root"):
+        return "round 0's request table is not the one the window's open root is over (its requests_root)"
     why = rounds(log)
     if why is not None:
         return f"the window's rounds: {why}"
@@ -273,25 +202,29 @@ def _window_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received
 def trusted_rounds_reason(commits: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path],
                           window: Mapping[str, Any], key: ChallengerKey, verify: Any = lms_verify) -> str | None:
     """Why the window's coins (its H1 commitment `commits`: ``coins``, ``round_coins``, ``salt_opening``, ``weights_root``,
-    ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own challenger's, read from `directory`,
-    the session the auditor's signed ledger opens and ends for `window` (``{root}``), under `key`, the challenger key the
-    deployment pins, the ledger the longest of the heads infra published at `heads` (each a ``windows.jsonl``), any two
-    extending one another; None when they are. Fails closed: a missing, malformed or unsigned record, log, hello log or
-    ledger, a ledger signed under another key, forked or older than the session's end, or a window it opens no one
-    session for, trusts nothing (`remote.trusted_session`)."""
+    ``requests_root``, ``session``, ``steps``, the round log ``rounds`` and the ``draw``) aren't the verifier's own
+    challenger's, read from `directory`, the session the auditor's signed ledger opens and ends for `window` (``{root}``,
+    the window's open root), under `key`, the challenger key the deployment pins, the ledger the longest of the heads
+    infra published at `heads` (each a ``windows.jsonl``), any two extending one another; None when they are. Fails
+    closed: a missing, malformed or unsigned record, log, hello log or ledger, a ledger signed under another key, forked
+    or older than the session's end, or a window it opens no one session for, trusts nothing (`remote.trusted_session`)."""
     try:
         trusted, received = remote.trusted_session(directory, heads, window, key, verify)
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         files = remote.session_files(directory)
+        sid = Ch.audited_session(lines, window, key, verify).session
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
+
+    def salt(weights: Any, requests: Any, opening: Any) -> tuple[str, str] | None:
+        return CC.salt(key.to_json(), lines, window, files, weights, requests, opening, verify)
 
     def rounds(log: list) -> str | None:
         refused = CC.rounds(key.to_json(), lines, window, files, [x.get("root") for x in log],
                             [x.get("coin") for x in log], verify)
         return None if refused is None else refused[1]
 
-    return _window_reason(commits, trusted, received, rounds)
+    return _window_reason(commits, trusted, received, salt, rounds, sid)
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
@@ -425,11 +358,13 @@ class Ledger:
     """Infra's challenger ledger (`LEDGER_SCHEMA`, after the host's `LEDGER_V1` entries), verified under the verifier's
     challenger `key`: each window root to its one session's ``reserve`` entry (None for a one-step open), ``open`` entry
     and ``end`` entry (None while it hasn't ended), and each period's name to its ``lane``, ``open`` and ``close`` entries
-    (``close`` None while it is open), its ``windows`` (session ids, in order) and its ``cap`` and ``circuit``."""
+    (``close`` None while it is open), its ``windows`` (session ids, in order) and its ``cap`` and ``circuit``; `lines`
+    is the head it verified, which `core_check.salt` reads again."""
 
     key: ChallengerKey
     windows: Mapping[str, Mapping[str, Any]]
     periods: Mapping[str, Mapping[str, Any]]
+    lines: tuple[str, ...] = ()
 
     @classmethod
     def verify(cls, lines: Sequence[bytes], key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
@@ -555,7 +490,7 @@ class Ledger:
             prev, last = hashlib.sha512(line).hexdigest(), q
         if reused := sorted(leaves & set(records)):
             raise CoinError(f"ledger entry {records[reused[0]]}'s record leaf {reused[0]} is also an entry's leaf")
-        return cls(key, windows, periods)
+        return cls(key, windows, periods, tuple(line.decode() for line in lines))
 
     @classmethod
     def load(cls, path: str | Path, key: ChallengerKey, verify: Any = lms_verify) -> Ledger:
@@ -715,8 +650,9 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
                    commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
     Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
-    (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a session's, over its
-    unsigned log, `released_sealed`); None when it is. `registered`
+    (its ``out/`` as `fetch` gives it, `evidence`, checked as `trusted_rounds_reason` checks a session's, its rounds over
+    its unsigned log, `released_sealed`, and its salt by `core_check.salt` over the ledger's head and that ``out/``, S
+    the ledger's reserve's session and R its open's root); None when it is. `registered`
     is the weights' root the period registered and `commit` the window's Commit root as the verifier holds it, which the
     window's must be. Fails closed."""
     if commits.get("coin_source") != "challenger":
@@ -735,8 +671,13 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     try:
         trusted = trusted_commitment(out / remote.RECORD, ledger.key, verify)
         received = released_sealed(out / remote.RELEASES, trusted)
+        files = remote.session_files(out)
     except CoinError as e:
         return f"the challenger's session is not trusted: {e}"
+
+    def salt(weights: Any, requests: Any, opening: Any) -> tuple[str, str] | None:
+        return CC.salt(ledger.key.to_json(), list(ledger.lines), {"root": root_of(window["open"])}, files, weights,
+                       requests, opening, verify)
 
     def rounds(log: list) -> str | None:
         why = RQ.rounds_reason(log, trusted)
@@ -750,7 +691,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
             return "the round roots are not the roots the challenger's log shows it received, in order"
         return None
 
-    return _window_reason(commits, trusted, received, rounds)
+    return _window_reason(commits, trusted, received, salt, rounds, sid)
 
 
 def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
@@ -791,8 +732,7 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[
     return out
 
 
-__all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS", "REPLY_FIELDS",
-           "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "address", "carried", "connect", "draw_reason",
-           "entry_message", "evidence", "families", "finish", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
-           "period_reason", "refusals", "released_sealed", "root_of", "session", "session_of", "session_reason",
-           "trusted_rounds_reason"]
+__all__ = ["ENTRY_TAGS", "Fetch", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_V1", "Ledger", "PERIOD_KINDS",
+           "REPLY_FIELDS", "RESERVED", "SCHEME", "SEALED", "SESSION_FIELDS", "Salt", "address", "carried", "draw_reason",
+           "entry_message", "evidence", "families", "held", "leaf_of", "lines_of", "lms_verify", "pinned_key",
+           "period_reason", "released_sealed", "root_of", "session_of", "session_reason", "trusted_rounds_reason"]

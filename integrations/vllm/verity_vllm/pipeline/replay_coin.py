@@ -22,6 +22,7 @@ from verity.core.protocols.sampled_proofs.challenger import (CoinError, LiveComm
                                                              trusted_commitment)
 
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_window as PHW
 
 SCHEME = "verity/vllm/commit-coins/v1"
 FAMILY = "replay"
@@ -36,11 +37,11 @@ def after(run_root: bytes) -> bytes:
 def challenge(at: str, run_root: bytes, session: Any = None) -> tuple[str, dict[str, Any]]:
     """The replay challenge (the coin, hex) from the challenger at `at`, in the session the gate's answer `session` names
     (`pouw_h1_challenger.session_of`; its hello carries the answer's secret, and a challenger of another commitment is
-    refused before the coin, `pouw_h1_challenger.connect`), and its record, which carries the session without its secret;
+    refused before the coin, `pouw_h1_window.connect`), and its record, which carries the session without its secret;
     ValueError (a malformed session, another commitment than the answer's or a challenger of another layout) or
     `CoinError` (the challenger's refusal), with the session closed either way."""
     given = PHC.session_of(session)
-    client = remote.RemoteChallenger.connect(at) if given is None else PHC.connect(at, given)
+    client = remote.RemoteChallenger.connect(at) if given is None else PHW.connect(at, given)
     try:
         c = client.commitment
         if c.scheme != SCHEME or not c.family(FAMILY):
