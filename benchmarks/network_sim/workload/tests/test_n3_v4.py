@@ -10,7 +10,7 @@ import random
 import numpy as np
 import pytest
 
-from test_n3_unit import (BLOCK, INGRESS, OTHER, SALTED_B, TAMPERS, data_end, flip, lab_setup, lab_windows, payloads,
+from test_n3_unit import (BLOCK, INGRESS, LAB_B, OTHER, SALTED_B, TAMPERS, data_end, flip, lab_setup, lab_windows, payloads,
                           sim_run)
 from verity.core.protocols.certifier.grid import Reason
 from verity.ml.circuits.defs import bind
@@ -225,7 +225,7 @@ def test_v4_accepts_exactly_where_v3_does_on_the_simulators_windows():
 
 @pytest.fixture(scope="module")
 def lab():
-    return lab_setup(54)
+    return lab_setup(LAB_B)
 
 
 @pytest.mark.parametrize("edit", [
@@ -255,10 +255,11 @@ def test_v4_accepts_exactly_where_v3_does_on_salted_lab_windows(salted_lab):
 
 @pytest.mark.slow
 def test_v4_accepts_exactly_where_v3_does_on_a_lab_whose_outboxes_are_two_rows_deep():
-    """At the lab's MLP width every outbox is one row, so its runs open only slot 0 of a depth-0 tree. At width 32 each
-    unit's outbox is two rows, and later windows' runs start at row 1: the one test of whole windows whose runs open
-    at a private start past 0 in a tree with levels. About 80 s, most of it committing the wider MLP."""
-    lab = lab_setup(54, d=32)
+    """At the lab's MLP width every outbox is one row, so its runs open only slot 0 of a depth-0 tree. At width 8 over
+    32 requests each unit's outbox is two rows, and later windows' runs start at row 1: the one test of whole windows
+    whose runs open at a private start past 0 in a tree with levels. About 80 s, most of it committing the larger
+    MLP."""
+    lab = lab_setup(LAB_B, d=8, requests=32)
     for edit, ok in ((None, True), (lambda e, i: ([flip(e[0], data_end(e[0]))] + e[1:], i), False)):
         setup, windows = lab_windows(lab, edit)
         assert all(x >= 1 for x in setup.layout.fmt.DEPTHS)
@@ -313,8 +314,9 @@ def test_the_demo_window_is_its_reference(demo, demo_cases):
 
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
-    """The salted lab window (B = 96) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
-    It is the one test of v4 with the salt path, one segment and one run. About 7 s after the demo window's test, whose
+    """The salted lab window (B = 240) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
+    It is the one test of v4 with the salt path, two segments and two runs (a request's frame reads the
+    outside host's length and head, then the message). About 7 s after the demo window's test, whose
     traced parts it shares in the suite's one process."""
     salts = payloads(salted_lab)
     setup, windows = lab_windows(salted_lab, salts=salts)
@@ -325,5 +327,5 @@ def test_a_salted_window_is_its_reference(salted_lab):
     moved = copy.deepcopy(honest)
     moved.args["slot"] = 1
     cases = [honest, wrong, moved]
-    assert honest.salted and honest.R == 1
+    assert honest.salted and honest.R == 2
     assert V.evaluate(*cases) == [int(V.reference(x)) for x in cases] == [1, 0, 0]

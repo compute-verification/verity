@@ -27,9 +27,11 @@ refuses a hello that doesn't carry it, so no other process that reaches the port
 `greet` reads the hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases
 nothing.
 
-`RemoteChallenger` is the client's `LiveChallenger`, its `commitment` and `open(label, index, after)`, so `LiveRecord`
-(and a client's seam over it) runs on it unchanged.  It raises `CoinError` on a refusal, a broken stream, or an opening
-that isn't the coin asked for opened against the commitment after `after` (`live_reason`), and refuses every coin after.
+`RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
+`LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
+their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
+raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
+commitment after `after` (`live_reason`), and refuses every coin after.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
@@ -61,6 +63,9 @@ RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, 
 ROOT_BYTES = 64
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
+MAX_BATCH = 64
+"""The most coins `RemoteChallenger.open_many` asks for at once: its frames (about 200 bytes each) are written before
+any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
 SEQUENCE = "a client's frames are hello, then open {label, index, after} per coin, then close"
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
 
@@ -77,9 +82,13 @@ class _Wire:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock = sock
 
-    def send(self, head: dict) -> None:
-        h = json.dumps(head, sort_keys=True, separators=(",", ":")).encode()
-        self.sock.sendall(HEADER.pack(len(h), 0) + h)
+    def send(self, *heads: dict) -> None:
+        """Each of `heads` as a frame, back to back in one write."""
+        out = bytearray()
+        for head in heads:
+            h = json.dumps(head, sort_keys=True, separators=(",", ":")).encode()
+            out += HEADER.pack(len(h), 0) + h
+        self.sock.sendall(out)
 
     def _exact(self, n: int) -> bytes:
         out = bytearray()
@@ -305,11 +314,16 @@ class RemoteChallenger:
         self._wire.sock.close()
         return CoinError(why)
 
-    def _ask(self, head: dict, kind: str, read: Callable[[Any], Any]) -> Any:
+    def _send(self, *heads: dict) -> None:
         if self._ended is not None:
             raise CoinError(f"the challenger's session ended ({self._ended}): a retry never redraws")
         try:
-            self._wire.send(head)
+            self._wire.send(*heads)
+        except OSError as e:
+            raise self._end(f"the stream broke ({e})") from e
+
+    def _reply(self, kind: str, read: Callable[[Any], Any]) -> Any:
+        try:
             reply = self._wire.recv()
         except CoinError as e:
             raise self._end(str(e)) from e
@@ -326,17 +340,36 @@ class RemoteChallenger:
         except CoinError as e:
             raise self._end(f"the challenger's {kind} is malformed: {e}") from e
 
+    def _ask(self, head: dict, kind: str, read: Callable[[Any], Any]) -> Any:
+        self._send(head)
+        return self._reply(kind, read)
+
     def open(self, label: str, index: int, after: bytes) -> LiveOpening:
-        after = bytes(after)
-        opening = self._ask({"type": "open", "label": label, "index": index, "after": after.hex()}, "opening",
-                            LiveOpening.from_json)
-        try:
-            why = live_reason(self.commitment, opening, label, index, after)
-        except CoinError as e:
-            why = str(e)
-        if why is not None:
-            raise self._end(f"the challenger's {label} coin {index}: {why}")
-        return opening
+        return self.open_many([(label, index, after)])[0]
+
+    def open_many(self, requests: Sequence[tuple[str, int, bytes]]) -> list[LiveOpening]:
+        """`open` of each (label, index, after) of `requests` in one round trip: every open frame written back to back,
+        then the replies read in order, each checked as `open` checks its own (`live_reason` against its request).  A
+        refusal, a reply of another form, or a coin that isn't its request's, opened after its `after`, ends the session
+        and raises: none of the batch's openings is returned, and a retry never redraws.  The challenger answers frames
+        in order (`serve`), so its release log is the one the same coins opened one at a time would have written.  At
+        most `MAX_BATCH` coins: their frames are written before any reply is read."""
+        asked = [(label, index, bytes(after)) for label, index, after in requests]
+        if len(asked) > MAX_BATCH:
+            raise ValueError(f"a batch is at most {MAX_BATCH} coins, not {len(asked)}")
+        self._send(*({"type": "open", "label": label, "index": index, "after": after.hex()}
+                     for label, index, after in asked))
+        openings = []
+        for label, index, after in asked:
+            opening = self._reply("opening", LiveOpening.from_json)
+            try:
+                why = live_reason(self.commitment, opening, label, index, after)
+            except CoinError as e:
+                why = str(e)
+            if why is not None:
+                raise self._end(f"the challenger's {label} coin {index}: {why}")
+            openings.append(opening)
+        return openings
 
     def close(self) -> None:
         """End the session: the challenger closes it, and the stream closes."""
@@ -427,6 +460,6 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
     return Ch.session_named(audited, key, session_files(d), verify)
 
 
-__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES", "RemoteChallenger",
-           "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines", "open_session",
-           "released_roots", "serve", "session_files", "trusted_session"]
+__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
+           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
+           "open_session", "released_roots", "serve", "session_files", "trusted_session"]

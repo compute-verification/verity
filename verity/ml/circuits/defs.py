@@ -23,7 +23,7 @@ from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
 from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value, range_widths, remove_axis
+from .types import Array, Record, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
@@ -309,6 +309,7 @@ class SpecializedDefinition(FunctionDefinition):
         self.key = key
         self._body: Body | None = None
         self._port_types: Any = _UNBOUND
+        self._id: str | None = None
 
     @property
     def name(self) -> str:
@@ -325,11 +326,17 @@ class SpecializedDefinition(FunctionDefinition):
 
     @property
     def id(self) -> str:
-        """Function identity = definition + static bindings: `Name_vN{K=..,..}` (bare `Name_vN` if static-free)."""
+        """Function identity = definition + static bindings: `Name_vN{K=..,..}` (bare `Name_vN` if static-free). A complete
+        specialization's is formatted once: its bindings are final (the decoder fills an incomplete one's)."""
         if not self.defn.statics:
             return self.base_id
+        if self._id is not None:
+            return self._id
         parts = [f"{k}={_fmt_static(self.bindings[k])}" for k in self.defn.statics if k in self.bindings]
-        return self.base_id + "{" + ",".join(parts) + "}"
+        out = self.base_id + "{" + ",".join(parts) + "}"
+        if self.complete:
+            self._id = out
+        return out
 
     @property
     def statics(self) -> dict:
@@ -476,16 +483,12 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             if (hi - 1 - off) // L != i:
                 return t, off
             t, off = t.elem, off + i * L
-        elif isinstance(t, (Record, TupleT)):
-            pos = off
-            for ft in (f for _, f in t.fields) if isinstance(t, Record) else t.fields:
-                n = ft.leaves
-                if pos <= lo and hi <= pos + n:
-                    t, off = ft, pos
-                    break
-                pos += n
-            else:
+        elif isinstance(t, (Record, TupleT)) and 0 <= lo - off < t.leaves:
+            starts = field_starts(t)
+            i = field_at(t, lo - off)
+            if hi - off > starts[i + 1]:
                 return t, off
+            t, off = field_types(t)[i], off + starts[i]
         else:
             return t, off
 
@@ -585,9 +588,9 @@ class _Widths:
             first = (pos - off) // L
             bounds = [off + k * L for k in range(first, (pos + n - 1 - off) // L + 2)]
         else:
-            bounds = [off]
-            for ft in (f for _, f in node.fields) if isinstance(node, Record) else node.fields:  # type: ignore[attr-defined]
-                bounds.append(bounds[-1] + ft.leaves)
+            starts = field_starts(node)  # type: ignore[arg-type]
+            first, last = field_at(node, pos - off), field_at(node, pos + n - 1 - off)  # type: ignore[arg-type]
+            bounds = [off + s for s in starts[first:last + 2]]
         for a, b in zip(bounds, bounds[1:]):
             a, b = max(a, pos), min(b, pos + n)
             if a < b:
