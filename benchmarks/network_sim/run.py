@@ -17,11 +17,12 @@ Each step's output is printed and kept in `DIR/<step>.txt`. It refuses to start 
 as lab_run does, and however it ends it leaves the lab up in its default shape with nothing running in it.
 
 Then it reads each step's `summary.json` and writes `DIR/summary.json` and the table `DIR/summary.txt`: each block's
-verdicts under the certifier's audit and the second audit (mockdc's datacenter record check, with the account's charge,
-or lab_run's N3), the median wire lag, the worst proxy tick against its slack, and for each mockdc run its record check
-on every port of the declaration (a fleet's merged ones), and the answers. The verdicts are compared with the expected
-ones (`expected_block`, `expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited
-nonzero or a proxy tick ran past its slack, so the night is its own regression check.
+verdicts under the certifier's audit, the second audit (mockdc's datacenter record check, with the account's charge,
+or lab_run's N3) and N3Window_v5 on every recorded window against the canonical frame templates, the median wire lag,
+the worst proxy tick against its slack, and for each mockdc run its record check on every port of the declaration (a
+fleet's merged ones), and the answers. The verdicts are compared with the expected ones (`expected_block`,
+`expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited nonzero or a proxy tick ran
+past its slack, so the night is its own regression check.
 
     python3 benchmarks/network_sim/run.py --out DIR [--python PY]
 """
@@ -75,25 +76,35 @@ WORKLOAD = {
 WORKLOAD_BLOCKS = ["b0", "b1", "b2", "b3"]
 
 
+def v5(windows: int, *refused: str) -> dict:
+    """N3Window_v5's verdicts on a block's recorded windows (`workload.n3_canonical.summary`)."""
+    return {"windows": windows, "accepted": windows - len(refused), "refused": list(refused)}
+
+
 def expected_block(strategy: str, block: str, salt: bool) -> dict:
     """What mockdc's audits say of a block that plays `strategy`, in `mockdc_verdicts`'s shape: the certifier's refused
     rows, the record check's refusals under the verifier's plan, whether the account is sound and what it charges
     besides timing advice, the same without the plan for a block down for maintenance, whether a block other than the
-    honest one put the honest wire on the fabric, and with `salt` the certifier's salt check, which finds nothing for
-    the window a block is down."""
+    honest one put the honest wire on the fabric, N3Window_v5 on each recorded window (a block down for maintenance
+    records four of the six), and with `salt` the certifier's salt check, which finds nothing for the window a block is
+    down."""
     def refused(w: int, whys, directions=("out",)) -> list[str]:
         return [f"port {block}.cert:{d} [{w * WINDOW}, {(w + 1) * WINDOW}): {why}" for d in directions for why in whys]
 
-    honest = {"strategy": strategy, "certifier": [], "datacenter": [], "sound": True, "charged": ["timing"]}
+    honest = {"strategy": strategy, "certifier": [], "datacenter": [], "sound": True, "charged": ["timing"],
+              "n3_v5": v5(6)}
     e = {"honest": honest,
          "bits": honest | {"wire_is_honests": True},
          "late": honest | {"certifier": [["responses", 0, COVERAGE, COVERAGE]], "datacenter": refused(0, CHEATED),
-                           "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False},
+                           "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False,
+                           "n3_v5": v5(6, f"responses[0] (the record's status is {COVERAGE.removeprefix('status:')})")},
          "extra": honest | {"certifier": [["responses", 2, "mismatch", "mismatch"]], "datacenter": refused(2, CHEATED),
-                            "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False},
+                            "sound": False, "charged": ["timing", "refused"], "wire_is_honests": False,
+                            "n3_v5": v5(6, "responses[2]")},
          "maintenance": honest | {"certifier": [[link, 1, "no-verdict", "no-verdict"] for link in ("responses", "requests")],
                                   "charged": ["timing", "serviced"], "unplanned": refused(1, [DOWN], ("out", "in")),
-                                  "unplanned_sound": False, "unplanned_charged": ["timing", "refused"]}}[strategy]
+                                  "unplanned_sound": False, "unplanned_charged": ["timing", "refused"],
+                                  "n3_v5": v5(4)}}[strategy]
     if salt:
         e = e | {"salt": SALT | {"accepted": False, "violations": [[1, "salt"]], "ingress_salt_frames": [1, 1]}
                  if strategy == "maintenance" else SALT}
@@ -123,7 +134,7 @@ def mockdc_verdicts(entry: dict) -> dict:
     """A block's verdicts in mockdc's `summary.json`."""
     d = entry["datacenter"]
     out = {"strategy": entry["strategy"], "certifier": refused_rows(entry["verdicts"]), "datacenter": d["refused"],
-           "sound": d["account"]["sound"], "charged": charged(d["account"])}
+           "sound": d["account"]["sound"], "charged": charged(d["account"]), "n3_v5": entry.get("n3_v5")}
     if (u := d.get("unplanned")) is not None:
         out |= {"unplanned": u["refused"], "unplanned_sound": u["account"]["sound"],
                 "unplanned_charged": charged(u["account"])}
@@ -245,7 +256,13 @@ def render(summary: dict) -> str:
     def account(a: dict) -> str:
         return f"{a['covert_bits']:.3g} {'sound' if a['sound'] else 'NOT sound'}"
 
-    rows = [("run", "block", "case", "certifier audit", "records / N3", "covert budget (bits)", "wire lag",
+    def window_v5(v: dict | None) -> str:
+        if v is None:
+            return "-"
+        refused = ", ".join(r.split(" (")[0] for r in v["refused"])
+        return f"{v['accepted']}/{v['windows']}" + (f" refused {refused}" if refused else "")
+
+    rows = [("run", "block", "case", "certifier audit", "records / N3", "N3 v5", "covert budget (bits)", "wire lag",
              "worst tick", "")]
     for run, r in summary["runs"].items():
         for b, x in r["blocks"].items():
@@ -258,14 +275,14 @@ def render(summary: dict) -> str:
                     second += f"; unplanned {records(v['unplanned'])}"
                     charge += f"; unplanned {account(x['unplanned_account'])}"
             t = x["tick"]
-            rows.append((run, b, x["case"], certifier(v), second, charge,
+            rows.append((run, b, x["case"], certifier(v), second, window_v5(v.get("n3_v5")), charge,
                          "" if t["lag_ms"] is None else f"{t['lag_ms']:.1f} ms",
                          f"{t['late_ms']:.1f}/{t['slack_ms']:g} ms" + (f", {t['over']} over" if t["over"] else ""),
                          "ok" if x["ok"] else "MISMATCH"))
         if (a := r.get("records")) is not None:
             v = a["verdicts"]
             rows.append((run, "all", f"{len(v['ports'])} ports", "", "records " + records(v["refused"], by_block=True),
-                         account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
+                         "", account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
     widths = [max(len(row[k]) for row in rows) for k in range(len(rows[0]))]
     lines = ["  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip() for row in rows]
     answers = [f"{run.split('/')[1]} " + ("none" if r["answers"] is None else
