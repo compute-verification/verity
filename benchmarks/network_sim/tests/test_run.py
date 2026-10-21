@@ -130,15 +130,15 @@ def fleet_summary(run: str) -> dict:
 
 
 def workload_block(times: tuple[float, float], tamper: str | None = None, verdicts: list | None = None,
-                   n3: list[str] = ()) -> dict:
+                   n3: list[str] = (), window_v5: tuple[str, ...] = ()) -> dict:
     verdicts = verdicts or rows()
     return {"tamper": tamper, "certifier": {"accepted": all(r[2] is None for r in verdicts), "verdicts": verdicts},
-            "n3": {"accepted": not n3, "violations": list(n3)}} | timing(*times)
+            "n3": {"accepted": not n3, "violations": list(n3)}, "n3_v5": v5(8, *window_v5)} | timing(*times)
 
 
-def starved(b: str, first: int) -> list[str]:
+def starved(b: str, first: int, events: int) -> list[str]:
     return ["values " + b + ": the unit committed no values",
-            f"missing {b}:responses: 1 declared events, the first at position {first}",
+            f"missing {b}:responses: {events} declared events, the first at position {first}",
             f"missing {b}:requests: the request of session {b}.1"]
 
 
@@ -151,15 +151,17 @@ def workload_summaries() -> dict[str, dict]:
         "flip-bit": {"blocks": {
             "b0": workload_block(f["b0"]),
             "b1": workload_block(f["b1"], "flip-bit", n3=["content b1:responses: the event at position 0 (message 4) "
-                                                          "isn't the declared one"]),
+                                                          "isn't the declared one"], window_v5=("b1:responses[0]",)),
             "b2": workload_block(f["b2"], n3=["content b2:requests: the request of session b2.0 isn't the declared "
-                                              "one"]),
+                                              "one"], window_v5=("b2:requests[0]",)),
             "b3": workload_block(f["b3"])}, "n3": {"ok": False, "codes": {"content": 2}, "violations": None}} | answers,
         "late": {"blocks": {
-            "b0": workload_block(late["b0"], n3=starved("b0", 6)),
-            "b1": workload_block(late["b1"], n3=starved("b1", 1)),
-            "b2": workload_block(late["b2"], "late", rows(["responses", 0, COVERAGE, COVERAGE]), starved("b2", 0)),
-            "b3": workload_block(late["b3"], n3=starved("b3", 0))},
+            "b0": workload_block(late["b0"], n3=starved("b0", 88, 6), window_v5=("b0:responses[0]",)),
+            "b1": workload_block(late["b1"], n3=starved("b1", 8, 4), window_v5=("b1:responses[0]", "b1:requests[0]")),
+            "b2": workload_block(late["b2"], "late", rows(["responses", 0, COVERAGE, COVERAGE]), starved("b2", 0, 12),
+                                 ("b2:responses[0] (the record's status is coverage-never-established)",
+                                  "b2:requests[0]")),
+            "b3": workload_block(late["b3"], n3=starved("b3", 0, 3))},
             "n3": {"ok": False, "codes": {"missing": 9, "values": 4}, "violations": None},
             "answers": None, "reference": [16, 16]},
     }
@@ -236,9 +238,12 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
                                    "[12000, 18000) 4.8e+12 NOT sound ok")
     assert row["fleet-swapped", "all"] == ("fleet-swapped all 8 ports records refused east.b1 out [12000, 18000); "
                                            "west.b1 out [0, 6000) 4.8e+12 NOT sound ok")
-    assert row["workload/flip-bit", "b2"] == "workload/flip-bit b2 - accepted N3 refused (content) - 5.5 ms 3.6/25 ms ok"
+    assert row["workload/flip-bit", "b2"] == ("workload/flip-bit b2 - accepted N3 refused (content) 7/8 refused "
+                                              "b2:requests[0] 5.5 ms 3.6/25 ms ok")
     assert row["workload/late", "b2"] == ("workload/late b2 late refused responses[0] status:coverage-never-established "
-                                          "N3 refused (missing, values) - 5.5 ms 3.4/25 ms ok")
+                                          "N3 refused (missing, values) 6/8 refused b2:responses[0], b2:requests[0] "
+                                          "5.5 ms 3.4/25 ms ok")
+    assert row["workload/honest", "b3"] == "workload/honest b3 - accepted N3 holds 8/8 10.0 ms 3.9/25 ms ok"
     assert lines[35:] == [
         "",
         "answers: honest [16, 16] equal the reference; flip-bit [16, 16] equal the reference; late none",

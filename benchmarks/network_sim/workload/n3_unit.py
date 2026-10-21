@@ -54,7 +54,8 @@ stream is the segments' XOR. The frame is prefix XOR text << 8p XOR suffix << 8s
 first min(r, B) bytes, and the text the data (RAW) or its base64 (BASE64; `assemble`).
 
 **The outbox** (`outbox_rows`): a unit's outgoing messages in φ's send order (`Phi.send_order`), back to back, each
-message the bytes `framing.encode` packs its crossing values into. Its rows overlap: row q holds bytes
+message the bytes `framing.encode` packs its crossing values into, then the framing bytes the unit sends besides them
+(`Statement.framing`: the lab's request lengths and heads, which public structure fixes). Its rows overlap: row q holds bytes
 qB ... qB + 2B - 1 (zero past the end) for q < k = max(1, ceil(bytes / B)), and zero rows follow up to a power of two.
 A message is then one contiguous range of its source's outbox, and any run of at most B of its bytes lies in one row,
 the row of the run's first byte, so a frame reads it as one segment, one row.
@@ -62,8 +63,8 @@ the row of the run's first byte, so a frame reads it as one segment, one row.
 **Commitments and who registers them.** Each producing unit registers its outbox (`register_outbox`), beside its values,
 under the binding SHA-512(`OUTBOX_LABEL` || program || unit). Its domain id makes its row count public, 2^depth with
 depth = bitlen(k - 1): that is all it discloses of the unit's crossing bytes. That the outbox holds the bytes of the
-unit's committed values, each byte the same in every row that holds it, is not proved here; it needs a proof unit of
-its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
+unit's committed values and its framing, each byte the same in every row that holds it, is not proved here; it needs a
+proof unit of its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
 per (port, frame index) at port * CAP + index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement
 root). The record commitment is N2's, which the firewall registers (`LinkWindows.commit`, `registration`): its root
 alone is public, and the heads, certificates and salts stay behind the firewall. Here `Certifier` stands in for the
@@ -94,7 +95,7 @@ import numpy as np
 from verity.core.protocols.certifier import certificate as CT
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import service as N2
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
+from verity.core.protocols.certifier.active import DATA, HEADER, LAST, LENGTH, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.circuits import boolean as BL
@@ -1440,6 +1441,7 @@ class Statement:
     gates: dict[str, tuple[int, ...]]
     program: bytes
     placement_root: bytes
+    framing: dict[str, bytes] = field(default_factory=dict)
 
     def locate(self, unit: str, gate: int) -> tuple[int, int]:
         """(row, bit offset) of a value the unit holds by the placement, whether or not the unit committed it."""
@@ -1463,14 +1465,18 @@ class Statement:
 
     @cached_property
     def outboxes(self) -> tuple[dict[str, bytes], dict[int, int]]:
-        """Each unit's outbox, its outgoing messages' bytes in send order, and each message's byte offset in its
-        source's."""
+        """Each unit's outbox, its outgoing messages' bytes in send order and then its `framing`, and each message's
+        byte offset in its source's."""
         data: dict[str, bytes] = dict.fromkeys(self.hw.unit_names(), b"")
         base = {}
         for m in self.phi.send_order():
             base[m.stream] = len(data[m.src])
             data[m.src] += self.payload(m)
-        return data, base
+        return {u: x + self.framing.get(u, b"") for u, x in data.items()}, base
+
+    def framing_at(self, unit: str) -> int:
+        """Where the unit's `framing` starts in its outbox."""
+        return len(self.outboxes[0][unit]) - len(self.framing.get(unit, b""))
 
     def message(self, m: F.Message) -> list[tuple]:
         """The message's bits as pieces: one run of its source's outbox."""
@@ -1531,35 +1537,38 @@ def sim_declared(S: Statement) -> dict[str, list[tuple[int, list[tuple]]]]:
     return out
 
 
-def lab_declared(S: Statement, block: str) -> tuple[list, list]:
-    """The block's egress frames (its events in position order) and ingress frames (its requests in session order) as
-    pieces."""
+def lab_framing(lab) -> tuple[bytes, dict[tuple[str, int], int]]:
+    """What the outside host sends on the lab's links besides the messages it relays: each request's length (u32be)
+    and head (`lab.REQUEST`), block by block in session order, and each one's offset by (block, session index)."""
     from . import lab as L
 
-    B = S.phi.frame_bytes
-    lab = L.Lab(S.model, S.hw, S.placement, S.phi.messages, B)
-    messages = {stream: S.message(m) for stream, m in lab.messages.items()}
+    data, at = b"", {}
+    for b in lab.blocks:
+        for s in lab.sessions[b]:
+            at[b, s.index] = len(data)
+            data += LENGTH.pack(lab.request_length(s)) + L.REQUEST.pack(s.index, lab.request_length(s) - L.REQUEST.size)
+    return data, at
+
+
+def lab_declared(S: Statement, lab, block: str, heads: dict[tuple[str, int], int]) -> tuple[list, list]:
+    """The block's egress frames (its events in position order, `active.event` of each chunk) and ingress frames (its
+    requests in session order, `active.request_frames`) as pieces, from the outboxes: a chunk is a run of its
+    message's, and a request is its length and head from the outside host's framing (at `heads` past
+    `Statement.framing_at`) and then its messages' runs."""
+    from . import lab as L
+    from . import n3_canonical as C
+    from .hardware import OUTSIDE
+
+    B, base = S.phi.frame_bytes, S.outboxes[1]
     egress = []
-    for p, (j, m, c) in enumerate(lab.events[block]):
-        nbytes = (m.bits + 7) // 8
-        lo, hi = c * lab.chunk, min((c + 1) * lab.chunk, nbytes)
-        head = b"id: %d\nevent: %d\ndata: " % (p, m.stream)
-        n = len(head) + 4 * -(-(hi - lo) // 3) + 2
-        payload = [const(head), ("b", tuple(_slice(messages[m.stream], 8 * lo, 8 * hi)), hi - lo), const(b"\n\n")]
-        egress.append(_data_frame(DATA, j + 1, payload, n, B))
-    ingress = []
-    room = B - HEADER.size
+    for j, m, c in lab.events[block]:
+        lo, hi = c * lab.chunk, min((c + 1) * lab.chunk, (m.bits + 7) // 8)
+        egress.append(C.event_pieces(m.src, base[m.stream] + lo, hi - lo, B))
+    ingress, framing = [], S.framing_at(OUTSIDE)
     for s in lab.sessions[block]:
-        n_frames = -(-lab.request_length(s) // room)
-        body = sum((m.bits + 7) // 8 for m in s.inbound)
-        request = [const(L.REQUEST.pack(s.index, body))]
-        for m in s.inbound:
-            request += messages[m.stream]
-        total = L.REQUEST.size + body
-        for k in range(n_frames):
-            lo, hi = k * room, min((k + 1) * room, total)
-            ingress.append(_data_frame(LAST if k == n_frames - 1 else DATA, s.stream, _slice(request, 8 * lo, 8 * hi),
-                                       hi - lo, B))
+        runs = [(OUTSIDE, framing + heads[block, s.index], LENGTH.size + L.REQUEST.size)]
+        runs += [(m.src, base[m.stream], (m.bits + 7) // 8) for m in s.inbound]
+        ingress += C.data_pieces(runs, B)
     return egress, ingress
 
 
@@ -1763,8 +1772,12 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
 
     from . import lab as L
 
+    from .hardware import OUTSIDE
+
     S = statement(public, witness)
     B = S.phi.frame_bytes
+    lab = L.Lab(S.model, S.hw, S.placement, S.phi.messages, B)
+    S.framing[OUTSIDE], heads = lab_framing(lab)
     blocks = sorted(S.hw.units)
     kinds = (L.EGRESS, L.INGRESS)
     links = {f"{b}:{k}": (b, d) for b in blocks for d, k in enumerate(kinds)}
@@ -1774,7 +1787,7 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
                       for r in first)  # type: ignore[assignment]
     declared = {}
     for b in blocks:
-        declared[f"{b}:{L.EGRESS}"], declared[f"{b}:{L.INGRESS}"] = lab_declared(S, b)
+        declared[f"{b}:{L.EGRESS}"], declared[f"{b}:{L.INGRESS}"] = lab_declared(S, lab, b, heads)
     setup = Setup.build(S, declared, list(links), links, {p: grids[d] for p, (_, d) in links.items()}, seed,
                         named={p: p.split(":")[1] for p in links}, **({"sync_set": sync_set} if sync_set else {}))
     windows = []
