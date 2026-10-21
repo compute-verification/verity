@@ -32,7 +32,8 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
 LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo",
               "redux": "s_redux", "reduce": "s_reduce", "li": "p_imad_lop3", "imadw": "s_imadw", "lde": "s_lde",
-              "atome": "s_atome", "redg": "s_redg", "atoms": "s_atoms", "lds128": "s_lds128"}
+              "atome": "s_atome", "redg": "s_redg", "atoms": "s_atoms", "lds128": "s_lds128", "sts32": "s_sts32",
+              "sts128": "s_sts128", "stg32": "s_stg32", "stg128": "s_stg128", "isetp": "s_isetp"}
 #: the first letters of a lane loop's counted opcodes (LOP3, IMAD, FFMA, SHFL, HFMA2, LD.E, LDS, ATOM, ATOMS, REDG)
 LANE_OPS = ("I", "F", "L", "S", "H", "A", "R")
 
@@ -110,7 +111,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 def lane_of(name: str) -> str | None:
     m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce|li|lif|"
-                     r"imadw|lde|atome|redg|atoms|lds128)(?:_r\d+)?", name)
+                     r"imadw|lde|atome|redg|atoms|lds128|sts32|sts128|stg32|stg128|isetp)(?:_r\d+)?", name)
     return (m.group(1) or m.group(2)) if m else None
 
 

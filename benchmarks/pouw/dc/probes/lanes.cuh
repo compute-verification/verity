@@ -7,8 +7,11 @@
 // redux: one redux.sync.xor.b32 (the whole warp's XOR in one instruction, sm_80+); reduce: the same by 5 butterfly
 // shuffles and 5 XORs (the fallback). LI-CP-W's per-segment checkpoint is one of these a warp a segment.
 // li: LOP3 and IMAD alternating, LI's op mix; lif: LI with FFMA filler. imadw: mad.wide.u32 (IMAD.WIDE.U32), the 64-bit
-// product and its addend a register pair, so 4 chains.
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_REDUX, L_REDUCE, L_LI, L_LIF, L_IMADW };
+// product and its addend a register pair, so 4 chains. isetp: setp.hi.xor.u32 (ISETP.GT.U32.XOR), 4 predicate chains of
+// 16 compares a trip (isetp_ops), each against its own immediate, each chain's predicate added into its register once a
+// trip so every compare's operand changes every trip (a predicate can't cross an asm statement, so one asm a trip).
+enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_REDUX, L_REDUCE, L_LI, L_LIF, L_IMADW,
+       L_ISETP };
 struct Lane {
   uint32_t r[8];
   float f[8];
@@ -85,11 +88,35 @@ DC_DEV void lane_pair(Lane& l) {
     l.op<Y>((q >> 1) + 4);
   }
 }
+// The isetp lane's trip: chain c's predicate starts at r[c] != 0 (ISETP.NE, not counted), XORs in 16 compares of r[c]
+// against 16 distinct immediates (ISETP.GT.U32.XOR, counted), and is added into r[c] (so the next trip's compares read a
+// changed register). 4 chains, 64 counted compares.
+#define DC_ISP(C, K) "setp.hi.xor.u32 p" #C ",%" #C "," #K ",p" #C ";\n\t"
+#define DC_ISP16(C)                                                                                                   \
+  DC_ISP(C, 0x1357) DC_ISP(C, 0x2468) DC_ISP(C, 0x369c) DC_ISP(C, 0x48d1) DC_ISP(C, 0x5b0e) DC_ISP(C, 0x6d43)         \
+  DC_ISP(C, 0x7f78) DC_ISP(C, 0x91ad) DC_ISP(C, 0xa3e2) DC_ISP(C, 0xb617) DC_ISP(C, 0xc84c) DC_ISP(C, 0xda81)         \
+  DC_ISP(C, 0xecb6) DC_ISP(C, 0xfeeb) DC_ISP(C, 0x11120) DC_ISP(C, 0x12355)
+DC_DEV void isetp_ops(Lane& l) {
+  asm volatile(
+      "{\n\t.reg .pred p0,p1,p2,p3;\n\t.reg .u32 t0,t1,t2,t3;\n\t"
+      "setp.ne.u32 p0,%0,0;\n\tsetp.ne.u32 p1,%1,0;\n\tsetp.ne.u32 p2,%2,0;\n\tsetp.ne.u32 p3,%3,0;\n\t"
+      DC_ISP16(0) DC_ISP16(1) DC_ISP16(2) DC_ISP16(3)
+      "selp.u32 t0,1,2,p0;\n\tselp.u32 t1,1,2,p1;\n\tselp.u32 t2,1,2,p2;\n\tselp.u32 t3,1,2,p3;\n\t"
+      "add.u32 %0,%0,t0;\n\tadd.u32 %1,%1,t1;\n\tadd.u32 %2,%2,t2;\n\tadd.u32 %3,%3,t3;\n\t}"
+      : "+r"(l.r[0]), "+r"(l.r[1]), "+r"(l.r[2]), "+r"(l.r[3]));
+}
+#undef DC_ISP16
+#undef DC_ISP
+
 // R lane ops (the duo lane: R/3 words of three ops each; the LI lane: LI's LOP3 + IMAD pair, R/2 of each; lif: LI with
-// one FFMA filler op in eight, 7 LOP3 + 7 IMAD + 2 FFMA a 16)
+// one FFMA filler op in eight, 7 LOP3 + 7 IMAD + 2 FFMA a 16; isetp: R/64 isetp_ops trips)
 template <int X, int R>
 DC_DEV void lane_ops(Lane& l) {
-  if constexpr (X == L_DUO) {
+  if constexpr (X == L_ISETP) {
+    static_assert(R % 64 == 0, "the isetp lane runs 64 compares a call");
+#pragma unroll
+    for (int q = 0; q < R / 64; q++) isetp_ops(l);
+  } else if constexpr (X == L_DUO) {
     duo_ops<0, R / 3>(l);
   } else if constexpr (X == L_LI) {
     lane_pair<L_LOP3, L_IMAD, R>(l);
@@ -114,8 +141,12 @@ DC_DEV void lane_ops(Lane& l) {
 // stay in L1. Shared accesses go to the block's SX bytes of scratch: an atomic to its warp's own MEM_SX of it, an
 // LDS.128 to a 512-byte line of its own among the trip's R and the parity's two sets (ptxas merges two loads of one
 // address and hoists a load whose address no trip changes), so SX holds a warp's MEM_SX each and 2R lines. A loaded word
-// is XORed into a chain; an atomic XORs a chain into memory.
-enum { M_LDE, M_ATOME, M_REDG, M_ATOMS, M_LDS128 };
+// is XORed into a chain; an atomic XORs a chain into memory. The store lanes write chains: sts32 st.shared.u32 (STS,
+// STS32) and sts128 st.shared.v4.u32 (STS.128, STS128) to the block's scratch, a line of their own among the trip's R and
+// the parity's two sets (128 bytes a line for STS, 512 for STS.128), and stg32 st.global.u32 (STG.E, STG32) and stg128
+// st.global.v4.u32 (STG.E.128, STG128) to the warp's 8 KB of `g` (STG.E.128 a 512-byte line of its 16, so 2R <= 16 lines
+// keeps a trip's stores at distinct addresses: R <= 8 there, or R = 16 with the parity's sets overlapping across trips).
+enum { M_LDE, M_ATOME, M_REDG, M_ATOMS, M_LDS128, M_STS32, M_STS128, M_STG32, M_STG128 };
 constexpr int MEM_WARP_BYTES = 8192, MEM_BLOCK_BYTES = 32 * MEM_WARP_BYTES, MEM_SX = 1024;
 DC_DEV unsigned char* mem_global(unsigned char* g) {
   return g + (size_t)blockIdx.x * MEM_BLOCK_BYTES + (threadIdx.x >> 5) * MEM_WARP_BYTES + (threadIdx.x & 31) * 4;
@@ -129,7 +160,9 @@ DC_DEV uint32_t mem_shared(unsigned char* sx) {
 }
 template <int M, int R, int SX>
 DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sb, int n) {
-  static_assert(M != M_LDS128 || SX / 512 >= 2 * R, "an LDS.128 lane needs two lines of scratch an access");
+  static_assert((M != M_LDS128 && M != M_STS128) || SX / 512 >= 2 * R, "a 128-bit shared lane needs two lines an access");
+  static_assert(M != M_STS32 || SX / 128 >= 2 * R, "an STS lane needs two lines of scratch an access");
+  static_assert(M != M_STG128 || MEM_WARP_BYTES / 512 >= R, "an STG.E.128 lane's trip stores to R distinct lines");
   const uint32_t lane = threadIdx.x & 31, sp = sb + (threadIdx.x >> 5) * MEM_SX;
 #pragma unroll
   for (int q = 0; q < R; q++) {
@@ -154,6 +187,21 @@ DC_DEV void mem_ops(Lane& l, unsigned char* gp, uint32_t sb, int n) {
                    : "r"(sb + (((n & 1) * R + q) % (SX / 512)) * 512 + lane * 16)
                    : "memory");
       x ^= a ^ b ^ c ^ d;
+    }
+    if constexpr (M == M_STS32)
+      asm volatile("st.shared.u32 [%0],%1;" ::"r"(sb + (((n & 1) * R + q) % (SX / 128)) * 128 + lane * 4), "r"(x)
+                   : "memory");
+    if constexpr (M == M_STS128)
+      asm volatile("st.shared.v4.u32 [%0],{%1,%2,%3,%4};" ::"r"(sb + (((n & 1) * R + q) % (SX / 512)) * 512 + lane * 16),
+                   "r"(x), "r"(l.r[(q + 1) & 7]), "r"(l.r[(q + 2) & 7]), "r"(l.r[(q + 3) & 7])
+                   : "memory");
+    if constexpr (M == M_STG32)
+      asm volatile("{\n.reg .u64 a;\ncvta.to.global.u64 a,%0;\nst.global.u32 [a],%1;\n}" ::"l"(p), "r"(x) : "memory");
+    if constexpr (M == M_STG128) {
+      unsigned char* p4 = gp - lane * 4 + lane * 16 + (((n & 1) * R + q) % (MEM_WARP_BYTES / 512)) * 512;
+      asm volatile("{\n.reg .u64 a;\ncvta.to.global.u64 a,%0;\nst.global.v4.u32 [a],{%1,%2,%3,%4};\n}" ::"l"(p4), "r"(x),
+                   "r"(l.r[(q + 1) & 7]), "r"(l.r[(q + 2) & 7]), "r"(l.r[(q + 3) & 7])
+                   : "memory");
     }
   }
 }

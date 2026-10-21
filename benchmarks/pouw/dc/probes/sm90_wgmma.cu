@@ -14,7 +14,8 @@
 // Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
 // duo (the fold's 3 ops a word), imadw (IMAD.WIDE.U32), and the memory lanes lde, atome, redg, atoms and lds128
 // (wgU_ and wgmix_ only: LD.E, ATOM.E, REDG, ATOMS and LDS.128 beside the IGMMA, so the census's issue-only classes get
-// their joint issue lines). Their alone rates and pipe pairs are scalar.cu's.
+// their joint issue lines), the store lanes sts32, sts128, stg32 and stg128 (STS, STS.128, STG.E, STG.E.128) and isetp
+// (ISETP.GT.U32.XOR, wgU_ and wgmix_ only). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -465,7 +466,14 @@ MEM(atome, M_ATOME)
 MEM(redg, M_REDG)
 MEM(atoms, M_ATOMS)
 MEM(lds128, M_LDS128)
+MEM(sts32, M_STS32)
+MEM(sts128, M_STS128)
+MEM(stg32, M_STG32)
 #undef MEM
+OP_KERNEL(wgU_stg128, 384) { wg_until_mem<M_STG128, 16>(a); }
+OP_KERNEL(wgmix_stg128_r16, 256) { wg_mix_mem<M_STG128, 16>(a); }
+OP_KERNEL(wgU_isetp, 384) { wg_until<L_ISETP, 64>(a); }
+OP_KERNEL(wgmix_isetp_r64, 256) { wg_mix<L_ISETP, 64>(a); }
 OP_KERNEL(wgU_mix, 384) { wg_until<L_MIX, 64>(a); }
 OP_KERNEL(wgU_imad, 384) { wg_until<L_IMAD, 64>(a); }
 OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
@@ -582,7 +590,16 @@ static const OpProbe PROBES[] = {
     P_MEM(redg, "REDG*"),
     P_MEM(atoms, "ATOMS*"),
     P_MEM(lds128, "LDS.128"),
+    P_MEM(sts32, "STS"),
+    P_MEM(sts128, "STS.128"),
+    P_MEM(stg32, "STG.E"),
 #undef P_MEM
+    P_UNTIL(wgU_stg128, "STG.E.128=16"),
+    {.name = "wgmix_stg128_r16", .kernel = (const void*)wgmix_stg128_r16, .tpb = 256, .expect = WGI ",STG.E.128=16",
+     .iters = 4096},
+    P_UNTIL(wgU_isetp, "ISETP.GT.U32.XOR=64"),
+    {.name = "wgmix_isetp_r64", .kernel = (const void*)wgmix_isetp_r64, .tpb = 256, .expect = WGI ",ISETP.GT.U32.XOR=64",
+     .iters = 4096},
 #undef P_UNTIL
 #define P_UNTILF(NAME, WPAT, LPAT) \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WPAT ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}

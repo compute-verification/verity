@@ -2,7 +2,8 @@
 // assignment of LOP3, IMAD and LEA.HI; M4d's lanes a SM). One source for every family: build with
 // ../opcode_probe/probe.py build --arch sm_90a | sm_100a | sm_120a; gated and poisoned as every opcode probe (probe.cuh).
 //   s_<lane>            1024 threads (8 warps a SMSP), 64 ops of one lane an iteration (duo: 32 words, 3 ops each; a
-//                       memory lane, lde, atome, redg, atoms or lds128: 32 accesses, LDS.128's 8)
+//                       memory lane, lde, atome, redg, atoms, lds128 or a store lane: 32 accesses, LDS.128's 8,
+//                       STS.128's and STG.E.128's 16; isetp: 64 compares)
 //   p_<x>_<y>           the same with x and y alternating (independent chains): a pair rate above both alone rates
 //                       means x and y issue to different pipes; at the alone rate, they share one
 //   s_<lane>_w<W>       W warps a SMSP: the lane role's warps in sm90_wgmma.cu's wgU_* (W = 1), alone
@@ -59,6 +60,11 @@ OP_KERNEL(s_atome, 1024) { s_mem<M_ATOME>(a); }
 OP_KERNEL(s_redg, 1024) { s_mem<M_REDG>(a); }
 OP_KERNEL(s_atoms, 1024) { s_mem<M_ATOMS>(a); }
 OP_KERNEL(s_lds128, 1024) { s_mem<M_LDS128, 8>(a); }
+OP_KERNEL(s_sts32, 1024) { s_mem<M_STS32>(a); }
+OP_KERNEL(s_sts128, 1024) { s_mem<M_STS128, 16>(a); }
+OP_KERNEL(s_stg32, 1024) { s_mem<M_STG32>(a); }
+OP_KERNEL(s_stg128, 1024) { s_mem<M_STG128, 16>(a); }
+OP_KERNEL(s_isetp, 1024) { s_alone<L_ISETP>(a); }
 OP_KERNEL(p_imad_lop3, 1024) { s_pair<L_IMAD, L_LOP3>(a); }
 OP_KERNEL(p_imad_iadd, 1024) { s_pair<L_IMAD, L_IADD>(a); }
 OP_KERNEL(p_lop3_iadd, 1024) { s_pair<L_LOP3, L_IADD>(a); }
@@ -98,6 +104,11 @@ static const OpProbe PROBES[] = {
     P(s_redg, "REDG*=32"),
     P(s_atoms, "ATOMS*=32"),
     P(s_lds128, "LDS.128=8"),
+    P(s_sts32, "STS=32"),
+    P(s_sts128, "STS.128=16"),
+    P(s_stg32, "STG.E=32"),
+    P(s_stg128, "STG.E.128=16"),
+    P(s_isetp, "ISETP.GT.U32.XOR=64"),
     P(p_imad_lop3, "IMAD=32,LOP3.LUT=32"),
     P(p_imad_iadd, "IMAD=32,I*ADD*=32"),
     P(p_lop3_iadd, "LOP3.LUT=32,I*ADD*=32"),
