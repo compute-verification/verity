@@ -280,8 +280,13 @@ pub fn shadow_pair() -> (ShadowLink, ShadowEnd) {
 impl ShadowEnd {
     /// The shadow's round: hand it to the firewall and wait for its coins (the shadow stops when the firewall has gone).
     pub fn round(&mut self, content: &[u8], n: usize) -> Vec<F128> {
-        self.tx.send((content.to_vec(), n)).ok().and_then(|_| self.rx.recv().ok())
-            .unwrap_or_else(|| panic!("the firewall stopped the shadow opening"))
+        self.try_round(content, n).unwrap_or_else(|| panic!("the firewall stopped the shadow opening"))
+    }
+
+    /// The shadow's round, or None once the firewall has gone.
+    pub fn try_round(&mut self, content: &[u8], n: usize) -> Option<Vec<F128>> {
+        self.tx.send((content.to_vec(), n)).ok()?;
+        self.rx.recv().ok()
     }
 }
 
@@ -928,6 +933,110 @@ impl LeanFinish {
     pub fn rep(&mut self, i: usize, r: usize, body: &[u8]) -> Result<Vec<u8>, String> {
         self.ask(&format!("rep {i} {r}"), body)
     }
+
+    /// Rep `r` of session table `i`'s opening, live (`Finish.openLive`), on the extra claims' points and the algebraic
+    /// phase's coins (`open_body`): each of its rounds goes to `round`, which answers it with the coins the stream answered
+    /// it, or with None to stop the rep (which ends the finish).
+    pub fn open(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>) -> Result<(), String> {
+        self.live(&format!("open {i} {r}"), body, round, &mut |_| Err(refused("the Lean finish sent constraints in an opening"))).map(|_| ())
+    }
+
+    /// Rep `r` of session table `i`'s inner proof, live (`Finish.innerLive`), on its request with the coins of its PIOP and
+    /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, as in
+    /// [`Self::open`]. Its proof file is then [`Self::rep`]'s, on every round's coins.
+    pub fn inner(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
+                 cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<(), String> {
+        self.live(&format!("inner {i} {r}"), body, round, cons).map(|_| ())
+    }
+
+    /// A request whose answer comes after the rounds the finish sends live: `round N LEN` and its bytes, answered `coins N`
+    /// and their words (or `stop`, which the finish refuses), and `cons LEN` and its bytes, answered nothing.
+    fn live(&mut self, head: &str, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
+            cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<Vec<u8>, String> {
+        use std::io::{BufRead, Read, Write};
+        let io = |e: std::io::Error| refused(format!("the Lean finish's {head}: {e}"));
+        writeln!(self.stdin, "{head} {}", body.len()).and_then(|_| self.stdin.write_all(body)).and_then(|_| self.stdin.flush()).map_err(io)?;
+        loop {
+            let mut line = String::new();
+            self.stdout.read_line(&mut line).map_err(io)?;
+            let words: Vec<&str> = line.split_whitespace().collect();
+            let num = |s: &str| s.parse::<usize>().map_err(|_| refused(format!("the Lean finish's {head}: `{}`", line.trim_end())));
+            match words.as_slice() {
+                ["round", n, len] => {
+                    let (n, len) = (num(*n)?, num(*len)?);
+                    let mut c = vec![0u8; len];
+                    self.stdout.read_exact(&mut c).map_err(io)?;
+                    match round(&c, n) {
+                        Some(coins) if coins.len() == n => {
+                            writeln!(self.stdin, "coins {n}").and_then(|_| self.stdin.write_all(&f128_wire(&coins))).map_err(io)?;
+                        }
+                        _ => writeln!(self.stdin, "stop").map_err(io)?,
+                    }
+                    self.stdin.flush().map_err(io)?;
+                }
+                ["cons", len] => {
+                    let mut b = vec![0u8; num(*len)?];
+                    self.stdout.read_exact(&mut b).map_err(io)?;
+                    cons(&b)?;
+                }
+                ["ok", n] => {
+                    let mut out = vec![0u8; num(*n)?];
+                    self.stdout.read_exact(&mut out).map_err(io)?;
+                    return Ok(out);
+                }
+                _ => {
+                    let l = line.trim_end();
+                    return Err(refused(format!("the Lean finish: {}", l.strip_prefix("err ").unwrap_or(if l.is_empty() { "no answer" } else { l }))));
+                }
+            }
+        }
+    }
+}
+
+/// A rep's opening request to `flock-firewall finish` (`Flock.Firewall.Finish.parseOpen`): the extra claims' points and the
+/// algebraic phase's coins, as [`rep_body`] ends.
+#[cfg(feature = "sha512")]
+pub fn open_body(extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Vec<u8> {
+    let mut b = Vec::new();
+    for v in [extras, rounds] {
+        b.extend((v.len() as u64).to_le_bytes());
+        for x in v {
+            b.extend((x.len() as u64).to_le_bytes());
+            b.extend(f128_wire(x));
+        }
+    }
+    b
+}
+
+/// The constraints the Lean finish sends before a rep's inner proof (`Finish.consBytes`): each its name and form.
+#[cfg(feature = "sha512")]
+pub fn parse_cons(b: &[u8]) -> Result<Vec<(String, crate::zk_veil::Lin)>, String> {
+    fn take<'a>(b: &'a [u8], o: &mut usize, n: usize) -> Option<&'a [u8]> {
+        let x = b.get(*o..o.checked_add(n)?)?;
+        *o += n;
+        Some(x)
+    }
+    fn word(x: &[u8]) -> F128 {
+        F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..16].try_into().unwrap()))
+    }
+    fn len(b: &[u8], o: &mut usize) -> Option<usize> {
+        take(b, o, 8).map(|x| u64::from_le_bytes(x.try_into().unwrap()) as usize)
+    }
+    let parsed = (|| -> Option<Vec<(String, crate::zk_veil::Lin)>> {
+        let mut o = 0usize;
+        let n = len(b, &mut o)?;
+        let mut out = Vec::with_capacity(n.min(4096));
+        for _ in 0..n {
+            let k = len(b, &mut o)?;
+            let name = String::from_utf8(take(b, &mut o, k)?.to_vec()).ok()?;
+            let c = word(take(b, &mut o, 16)?);
+            let m = len(b, &mut o)?;
+            let a = take(b, &mut o, m.checked_mul(16)?)?.chunks(16).map(word).collect();
+            out.push((name, crate::zk_veil::Lin { c, a }));
+        }
+        (o == b.len()).then_some(out)
+    })();
+    parsed.ok_or_else(|| refused(format!("the Lean finish's constraints: {} bytes that do not parse", b.len())))
 }
 
 #[cfg(feature = "sha512")]

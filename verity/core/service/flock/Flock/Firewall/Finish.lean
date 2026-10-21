@@ -20,6 +20,9 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   Ligerito, the verifier's own replay, the ring-switch and lane-phase constraints, the inner proof), its proof file
   `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
+* `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the firewall as they come, each
+  waiting for the coins the stream answered it: the opening's, the rounds the Lean frame holds the device's opening rounds
+  to, and the inner proof's, the firewall's own (live PROTOCOL.md §10.1).
 
 * `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
   ≥ 1, which this code draws itself from the operating system at the rep's start and hands the prover (`salts`), and
@@ -321,6 +324,120 @@ def hiSaltsOf (get : USize → IO ByteArray) (t : Tab) : IO (Array ByteArray) :=
 def saltsBytes (s : Array ByteArray) : ByteArray :=
   s.foldl (fun b x => b ++ le64 x.size.toUInt64 ++ x) (le64 s.size.toUInt64)
 
+/-! ## The live rep -/
+
+instance : MonadLift V (ExceptT String IO) := ⟨fun x => ExceptT.mk (pure x)⟩
+
+/-- What a live rep runs in: the coins of every round it has taken, over `IO`, with its refusals. -/
+abbrev LiveM := StateT (Array (Array F128)) (ExceptT String IO)
+
+/-- **A rep's rounds, live** on `ch`: round `k` (the rounds taken so far) by `coins[k]` while the rep's recorded coins last,
+which must hold the round's coin count (its squeeze header's last eight bytes), as `asksOf`. Past them, with `live`, the
+round goes to the firewall as `round N LEN` followed by its `LEN` bytes, `N` its coin count, and is answered `coins N`
+followed by the `16 N` bytes of the coins the stream answered it; any other answer, or a round past them without `live`,
+ends the rep. -/
+def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool) : Asks LiveM where
+  link _ _ := throwThe String "finish: a link message inside a rep"
+  round c := do
+    let got ← get
+    let k := got.size
+    let n := (u64OfLE c (c.size - 8)).toNat
+    let cs ← match coins[k]?, live with
+      | some cs, _ => pure cs
+      | none, false => throwThe String s!"finish: round {k} past the rep's {coins.size} rounds of coins"
+      | none, true => do
+        ch.write ((s!"round {n} {c.size}\n").toUTF8 ++ c)
+        ch.flush
+        let line := (← ch.getLine).replace "\n" ""
+        if line != s!"coins {n}" then
+          throwThe String s!"finish: round {k}, of {n} coins, answered `{line}`"
+        pure (Link.wordsAt (← ch.readExact (16 * n)) 0 n)
+    if cs.size != n then throwThe String s!"finish: round {k} squeezes {n} coins where the rep's coins have {cs.size}"
+    set (got.push cs)
+    return fun i => cs[i]!
+
+/-- The constraints as they go to the firewall: their count, then each as its name's byte count and bytes, its constant and
+its coefficients (a count and the words), every count a `u64le`. -/
+def consBytes (cons : Array (String × Zk.Lin)) : ByteArray :=
+  cons.foldl (fun b (n, l) => b ++ wBytes n.toUTF8 ++ l.c.toBytes ++ wVec F128.toBytes l.a) (wLen cons.size)
+
+/-- **A rep's opening, live**: the rep's PIOP on its recorded coins `coins` (the algebraic phase's, every one of which it
+must take), then the ring switch on `abcClaims ++ extras` (the extra claims at `xs`) and the Ligerito opening
+(`ligeritoPZk`) with every pad zero, levels ≥ 1 under the rep's `hiSalts`, each round sent live (`liveAsks`): the device's
+opening, its level-0 values unmasked, which the Lean frame holds the device's rounds to and masks on release. Nothing it
+reads in the PIOP but the coins shapes a round it sends. -/
+def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
+    (hiSalts : Array ByteArray) (coins : Array (Array F128)) : LiveM Unit := do
+  let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
+  let zero : Nat → F128 := fun _ => 0
+  let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (hiSalts.getD (l - 1) ByteArray.empty)
+  let prog : TMW LiveM Unit := do
+    let (_, zc) ← zerocheckFw (liveAsks ch coins false) t.st.m t.st.digest (flat t.cm0.cap) ByteArray.empty lay zero
+    let (_, lc) ← lincheckFw (liveAsks ch coins false) t.st.fold lay zero zc
+    let k := (← getThe (Array (Array F128))).size
+    if k != coins.size then throwThe String s!"finish: the rep's PIOP took {k} of its {coins.size} rounds of coins"
+    let io := liveAsks ch coins true
+    let claims := abcClaims t.st.m t.st.kLog zc lc ++ claimsOf xs
+    let (_, T, sws) ← ringSwitchP io (fun k => switchVec t.g claims[k]!) claims
+    let _ ← ligeritoPZk io commit t.st.merkle t.sch T t.cm0 t.g (basisVals sws (t.st.m - 7)) lay
+      (Array.replicate lay.len 0) rep t.tPad t.extra t.lanePad salt (fun _ _ => 0)
+  let _ ← prog.run (Transcript.init #[] dom)
+
+/-- **A rep's inner proof, live**: `repFw`'s rep on the request `q`, its PIOP and opening on `q`'s recorded coins (every one
+of which it must take), then its constraints sent to the firewall as `cons LEN` followed by their `LEN` bytes
+(`consBytes`), then the inner proof (`innerP`), each round sent live (`liveAsks`). It speaks on schedule: a constraint that
+fails on the pads stops nothing here (`proofFile` then refuses the rep's file). -/
+def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn) : LiveM Unit := do
+  let (st, sch) := (t.st, t.sch)
+  let lay := Zk.PadLayout.new st.m st.kLog sch.k0
+  let pads := padsOf q.draws
+  let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
+  let extras := claimsOf q.xs
+  let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
+  let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
+  let mk : Nat → F128 := fun i => q.vals[i]! + pads.h[i]!
+  let io := liveAsks ch q.coins false
+  let prog : TMW LiveM Unit := do
+    let (zp, zc) ← zerocheckFw io st.m st.digest (flat t.cm0.cap) ic.root lay mk
+    let (lp, lc) ← lincheckFw io st.fold lay mk zc
+    let claims := abcClaims st.m st.kLog zc lc ++ extras
+    let (ss, T, sws) ← ringSwitchP io (fun k => switchVec t.g claims[k]!) claims
+    let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T t.cm0 t.g (basisVals sws (st.m - 7)) lay pads.h rep t.tPad
+      t.extra t.lanePad salt (fun _ _ => 0)
+    let k := (← getThe (Array (Array F128))).size
+    if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+    let p : Proof := { cap := t.cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp,
+                       ringSwitches := ss, ligerito := lg }
+    let tr' ← get
+    let (rp, _) ← StateT.lift (monadLift ((Zk.replay st lay p ic.root).run (Transcript.init tr'.rounds dom)) :
+      LiveM (Zk.Replayed × Transcript))
+    let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
+    let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
+    let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : LiveM (Array (String × Zk.Lin)))
+    let cons := rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc
+    let b := consBytes cons
+    ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
+    ch.flush
+    let _ ← innerP (liveAsks ch q.coins true) hs lay pads ic zp.finalC cons
+  let _ ← prog.run (Transcript.init #[] dom)
+
+/-- **A rep's opening request**, every byte little-endian: the extra claims (a count, then each as a count and its words)
+and the algebraic phase's coins (a round count, then each round as a count and its words), as `parseRep` reads them;
+nothing after. -/
+def parseOpen (b : ByteArray) : V (Array (Array F128) × Array (Array F128)) := do
+  let rd : Rd (Array (Array F128) × Array (Array F128)) := do
+    let nx ← u64 "the extra claims"
+    let mut xs := #[]
+    for _ in [0:nx] do xs := xs.push (← vecOf "an extra claim")
+    let nk ← u64 "the coins"
+    let mut coins := #[]
+    for _ in [0:nk] do coins := coins.push (← vecOf "a round's coins")
+    if (← get) != b.size then throw s!"finish: {b.size - (← get)} bytes after the opening's request"
+    return (xs, coins)
+  (rd.run' 0).run b
+
 /-! ## Serving it -/
 
 /-- **The finish's requests** on `ch`, at the session's statement (`spec`, its tables' `setups`), each a line `HEAD LEN`
@@ -330,6 +447,11 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   the answer is its root.
 * `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), kept for its proof
   file; the answer is them (`saltsBytes`). A rep's salts are drawn once: asking again is refused.
+* `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
+  (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
+  rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
+* `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
+  proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
   (`proofFile`).
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
@@ -382,6 +504,23 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       match parseRep t s b >>= proofFile t r (spec.domain name r).toUTF8 with
       | .ok p => answer p
       | .error e => return (← refuse e)
+    | ["open", i, r, len] | ["inner", i, r, len] =>
+      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
+      let b ← ch.readExact len
+      let some (some t) := tabs[i]? | return (← refuse s!"a rep of table {i} before its table")
+      let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
+      if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
+      let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
+      let dom := (spec.domain name r).toUTF8
+      let run : V (LiveM Unit) := if line.startsWith "open " then
+          (parseOpen b).map fun (xs, coins) => openLive ch t r dom xs s coins
+        else (parseRep t s b).map (innerLive ch t r dom)
+      match run with
+      | .error e => return (← refuse e)
+      | .ok m =>
+        match ← (m.run' #[]).run with
+        | .ok () => answer ByteArray.empty
+        | .error e => return (← refuse e)
     | _ => return (← refuse s!"a request `{line}`")
   return 0
 

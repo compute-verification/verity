@@ -1307,7 +1307,8 @@ impl RepReq {
 /// stops nothing before the session's `Finish` (§10.1): its reason is kept in `why`, the rep releases the statement's schedule
 /// in the device's place from then on, and the session ends in a stop at `Finish`. `FC_FIREWALL_TAMPER` makes the device's side dishonest
 /// in one named way (the negative controls): `root` (its level-0 root), `witness` (set by the caller: the device proves another
-/// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `algebra` (a masked
+/// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `opening-frame` (the
+/// same message flipped after Rust's checks passed it, so that only the Lean frame's pass decision refuses it), `algebra` (a masked
 /// value, in the frame and the proof alike: the relation check's case), `algebra-proof` (the proof alone) and `shape` (a
 /// value appended to the proof's `round1_ab`, past the ones the firewall compares); `later-NAME` is `NAME` on every table but
 /// a several-table session's first; `cut-MODE` a worker that fails ([`Cut`]).
@@ -1404,8 +1405,10 @@ struct FirewallRep {
     checker: flock_live::firewall::Checker,
     coins: Vec<F128>,
     extras: Option<Vec<Vec<F128>>>,
+    /// the opening's scheduled rounds, the Lean finish's ([`Firewall::start_shadow`]); and its thread, which returns Rust's
+    /// shadow opening, its seconds and the rounds in which it was the Lean finish's
     link: Option<flock_live::firewall::ShadowLink>,
-    shadow: Option<std::thread::JoinHandle<(flock_core::pcs::BatchOpeningProofLigerito, f64)>>,
+    shadow: Option<std::thread::JoinHandle<Result<(flock_core::pcs::BatchOpeningProofLigerito, f64, usize), String>>>,
     t_wait: f64,
     algebra_tampered: bool,
     /// a check failed: every later round that leaves is the statement's scheduled one, never the device's
@@ -1755,29 +1758,36 @@ impl Firewall {
         let t = Instant::now();
         let res = link.check(&c, n);
         r.t_wait += t.elapsed().as_secs_f64();
+        if tamper == "opening-frame" && link.round == 1 {
+            flip_first(&mut c, OP_OBSERVE);
+        }
         res.map(|sched| (c, sched, n))
     }
 
-    /// The opening's first round: the shadow starts on the algebraic phase's coins (the two claim points) and the hook's extra
-    /// points, over the recheck's commitment and the host witness, with the rep's level-0 hiding.
+    /// The opening's first round: the session's Lean finish's opening starts on the algebraic phase's coins and the hook's
+    /// extra points ([`flock_live::firewall::LeanFinish::open`]), its rounds the scheduled ones the Lean frame holds the
+    /// device's to; and Rust's shadow beside it, on the two claim points and the extra points, over the recheck's
+    /// commitment and the host witness, with the rep's level-0 hiding, held to the Lean finish's round for round.
     fn start_shadow(&mut self) -> Result<(), String> {
         use flock_core::lincheck::LincheckCircuit;
+        use flock_live::firewall::refused;
         let st = self.st.clone();
         let r = self.rep.as_mut().unwrap();
-        let extras = r.extras.clone().ok_or_else(|| flock_live::firewall::refused("the opening began before the device's Commit"))?;
-        let (ab, c) = zkv::points_from_coins(&st.r1cs, &r.lay, st.circuit.const_pin_col().is_some(), &r.coins).map_err(flock_live::firewall::refused)?;
+        let extras = r.extras.clone().ok_or_else(|| refused("the opening began before the device's Commit"))?;
+        let body = flock_live::firewall::open_body(&extras, &r.rounds);
+        let (ab, c) = zkv::points_from_coins(&st.r1cs, &r.lay, st.circuit.const_pin_col().is_some(), &r.coins).map_err(refused)?;
         let mut x = vec![zkv::point_parts(&ab).1, zkv::point_parts(&c).1];
         x.extend(extras);
         let pcs = params(st.m, self.lig);
         let cfg = flock_core::pcs::ligerito::zk::prover_config(pcs.ligerito_prover_config().expect("Ligerito config"), r.zk0.queries0);
         let (padding, grinding) = (st.r1cs.padding_spec(), pcs.opening_grinding());
-        let (link, mut end) = flock_live::firewall::shadow_pair();
+        let (mut sl, mut send) = flock_live::firewall::shadow_pair();
         let (z, pd, cm, zk0, pool) = ((*self.z).clone(), self.pd.clone(), self.cm.clone(), r.zk0.clone(), self.pool.clone());
-        r.shadow = Some(std::thread::spawn(move || {
+        let shadow = std::thread::spawn(move || {
             IN_FIREWALL.with(|g| g.set(true));
             let t = Instant::now();
             let open = pool.install(move || {
-                let mut rounds = |c: &[u8], n: usize| end.round(c, n);
+                let mut rounds = |c: &[u8], n: usize| send.round(c, n);
                 let mut fr = Framer { pending: Vec::new(), rounds: &mut rounds };
                 let refs: Vec<&[F128]> = x.iter().map(|v| v.as_slice()).collect();
                 let pre: Vec<Option<&[F128]>> = vec![None; refs.len()];
@@ -1785,6 +1795,46 @@ impl Firewall {
                                                                                                     grinding, Some(&zk0), &mut fr)
             });
             (open, t.elapsed().as_secs_f64())
+        });
+        let (link, mut end) = flock_live::firewall::shadow_pair();
+        let (fin, table, rep) = (self.finish.clone(), self.table, r.rep);
+        r.shadow = Some(std::thread::spawn(move || {
+            let (mut agree, mut differ) = (0usize, None::<String>);
+            let opened = fin.lock().unwrap_or_else(PoisonError::into_inner).open(table, rep, &body, &mut |c: &[u8], n: usize| {
+                let s = sl.next();
+                match &s {
+                    Some((w, k)) if w == c && *k == n => agree += 1,
+                    _ => {
+                        differ.get_or_insert_with(|| format!("opening round {agree}: the Lean finish's round ({} bytes, {n} coins) is not Rust's shadow's ({})",
+                                                             c.len(), s.as_ref().map_or("none".into(), |(w, k)| format!("{} bytes, {k} coins", w.len()))));
+                    }
+                }
+                let coins = end.try_round(c, n)?;
+                sl.answer(&coins);
+                Some(coins)
+            });
+            if sl.next().is_some() {
+                differ.get_or_insert_with(|| format!("opening round {agree}: Rust's shadow goes on past the Lean finish's opening"));
+            }
+            sl.close();
+            let joined = shadow.join();
+            opened.map_err(|e| refused(if e.contains("PROVER-STOPPED: degenerate coins") {
+                format!("the Lean finish's opening refused the rep's coins ({e}) where the Lean frame went on")
+            } else {
+                format!("the Lean finish's opening: {e}")
+            }))?;
+            let (open, t) = joined.map_err(|e| {
+                let m = panic_msg(e);
+                refused(if m.starts_with("PROVER-STOPPED: degenerate coins") {
+                    format!("Rust's opening refused the rep's coins ({m}) where the Lean frame went on")
+                } else {
+                    format!("the firewall's opening did not finish with the device's: {m}")
+                })
+            })?;
+            match differ {
+                Some(d) => Err(refused(d)),
+                None => Ok((open, t, agree)),
+            }
         }));
         r.link = Some(link);
         Ok(())
@@ -1873,17 +1923,8 @@ impl Firewall {
         let t = Instant::now();
         let joined = r.shadow.take().expect("the shadow opening").join();
         r.t_wait += t.elapsed().as_secs_f64();
-        let (open, t_shadow) = match joined {
-            Ok(x) => x,
-            Err(e) => {
-                let m = panic_msg(e);
-                return Err(refused(if m.starts_with("PROVER-STOPPED: degenerate coins") {
-                    format!("Rust's opening refused the rep's coins ({m}) where the Lean frame went on")
-                } else {
-                    format!("the firewall's opening did not finish with the device's: {m}")
-                }));
-            }
-        };
+        let (open, t_shadow, agreed) = joined.map_err(|e| refused(format!("the firewall's opening thread: {}", panic_msg(e))))??;
+        eprintln!("FIREWALL\t{}", json!({"live_opening": {"table": self.table, "rep": r.rep, "rounds": agreed, "shadow_agrees": true}}));
         if let Some((proof, _)) = device.as_ref() {
             check(bincode::serialize(&proof.pcs_open).unwrap() == bincode::serialize(&open).unwrap(),
                   &|| format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open)));
@@ -1915,6 +1956,7 @@ impl Firewall {
         let own = R1csProofLigerito { zerocheck, lincheck, pcs_open: open };
         // firewall_device_rounds: the table's device rounds the firewall was handed so far (FC_FIREWALL_CUT_AT counts them)
         let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round,
+                           "firewall_live_opening_rounds": agreed,
                            "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes, "firewall_failed": r.failed,
                            "firewall_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
         if r.rep == 0 {
