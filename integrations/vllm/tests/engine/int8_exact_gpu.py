@@ -23,8 +23,8 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   batch     (linears) every solo-run row whose x is bitwise a row of the batched run's calls of the same module has the batched
             run's y row, bit for bit.
   attention (attention) the first and last attention layers' first calls, request by request (`int8_attention_gpu`): the served
-            rows against a GPU rerun, the CPU and `fattn_oracle.attention`, `fattn_ref.check` on the GPU's softmax of a row (all
-            bit for bit), and solo requests against the batched ones.  The K scales are the served revision's
+            rows against a GPU rerun, the CPU and `fattn_oracle.attention`, `fattn_ref.check` on the GPU's softmax of a row at
+            every head dimension 128 call (all bit for bit), and solo requests against the batched ones.  The K scales are the served revision's
             (`engine.int8_k_scales`; `VERITY_VLLM_INT8_K_SCALES` names a calibration run's table).  With
             `VERITY_INT8_CREDITED_READ=MODE:PAGED_SO` (`engine.int8_credited_env`) every window is the credited read's, decoded
             by pg_window, and each decode's window is checked against the K and V written in the earlier steps.
@@ -235,6 +235,8 @@ def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
                                    **{k: sum(r.get(k, 0) for r in eq) for k in keys}, **wr,
                                    "defs_evaluated": sum(r["defs_evaluated"] for r in eq),
                                    "windows": sorted({r["window"] for r in eq}),
+                                   "head_dims": sorted({r["head_dim"] for r in eq}),
+                                   "fattn_ref_due": sum(r["head_dim"] == AG.FATTN_REF_HEAD_DIM for r in eq),
                                    "fattn_ref_rows": sum(r["fattn_ref"] is not None for r in eq),
                                    "fattn_ref_failed": sum(r["fattn_ref"] is False for r in eq),
                                    "k_clamped": sum(r["k_clamped"] for r in eq),
@@ -245,7 +247,7 @@ def attention_checks(doc: dict[str, Any], taps: Any, tapped: list[str]) -> bool:
     print(f"[int8] attention totals={json.dumps(t)} batch_vs_solo={json.dumps(b)}", flush=True)
     return bool(t["compared"] and t["prefills"] and t["scale_is_head_dim"] and not any(t[k] for k in keys) and t["defs_evaluated"]
                 and t["written_compared"]
-                and t["fattn_ref_rows"] and not t["fattn_ref_failed"] and b["matched"] == b["requests"] > 0 and not b["mismatch"])
+                and t["fattn_ref_rows"] == t["fattn_ref_due"] and not t["fattn_ref_failed"] and b["matched"] == b["requests"] > 0 and not b["mismatch"])
 
 
 def applied_attention(model: Any, before: dict[str, Any]) -> dict[str, Any]:

@@ -17,6 +17,30 @@
    ]
   },
   {
+   "at": "2026-10-19T22:45:00Z",
+   "by": "vllm-int8-pins",
+   "note": "new entry only (role LLAMA32_1B_INT8, the verity-int8-channel127/v1 recipe pin made from LLAMA32_1B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "repos": [
+    "verity-int8/Llama-3.2-1B-INT8"
+   ]
+  },
+  {
+   "at": "2026-10-19T22:45:00Z",
+   "by": "vllm-int8-pins",
+   "note": "new entry only (role QWEN3_06B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_06B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "repos": [
+    "verity-int8/Qwen3-0.6B-INT8"
+   ]
+  },
+  {
+   "at": "2026-10-19T22:45:00Z",
+   "by": "vllm-int8-pins",
+   "note": "new entry only (role QWEN3_14B_INT8, the verity-int8-channel127/v1 recipe pin made from QWEN3_14B on vy-nebius-1 by run r20261019-222911-ed2c; VLLM-49)",
+   "repos": [
+    "verity-int8/Qwen3-14B-INT8"
+   ]
+  },
+  {
    "at": "2026-10-19T22:30:00Z",
    "by": "vllm",
    "note": "new entry only (role LLAMA31_8B_INT8_V2, the verity-int8-channel127/v2 recipe pin, the LM head int8 too, made from LLAMA31_8B on vy-nebius-2 by run r20261019-222846-9d8f)",
@@ -332,6 +356,222 @@
     "model-00028-of-00030.safetensors": "fb485d738ccf9adefa8af96b31d355fc183d9f39ecd74ebb59e12b6a49a6101c",
     "model-00029-of-00030.safetensors": "f0015038bbf0e6cfa15c43b9adf82acab527da2ba6fd4984f25e83a98dd745bf",
     "model-00030-of-00030.safetensors": "069c5369775e4a8e8642e964f4eb555ff01ecce8840db0a533786086de39aa7d"
+   }
+  },
+  {
+   "config_sha256": "72258ce2eda9daf8883f86b0cac5e64c2ea86d288b5307e0812cca7b15b30d63",
+   "downloaded": false,
+   "files": {
+    "config.json": {
+     "sha256": "72258ce2eda9daf8883f86b0cac5e64c2ea86d288b5307e0812cca7b15b30d63",
+     "size": 1033,
+     "digest_source": "recipe"
+    },
+    "generation_config.json": {
+     "sha256": "282855859ac10d3ccc1ff79fde2f8bf1568734d5d4e0c06f6173121d79b76e56",
+     "size": 230,
+     "digest_source": "base"
+    },
+    "model.safetensors": {
+     "sha256": "154ff7030dced5dd1331bdce23e8199fa4e354ba460846ac5f8ab06514c28049",
+     "size": 1500086416,
+     "digest_source": "recipe"
+    },
+    "special_tokens_map.json": {
+     "sha256": "32f404d626cf7b1b6eea36c241ae7cbd6ec29c777a8701ea48c0fe9ebb94c9b1",
+     "size": 459,
+     "digest_source": "base"
+    },
+    "tokenizer.json": {
+     "sha256": "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b",
+     "size": 17209920,
+     "digest_source": "base"
+    },
+    "tokenizer_config.json": {
+     "sha256": "8ca815f697b8f6953d9bad3130ddd6238b99d36c20fde052cf730207ac0926d4",
+     "size": 50641,
+     "digest_source": "base"
+    }
+   },
+   "int8_of": "unsloth/Llama-3.2-1B",
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800",
+   "note": "made offline by `verity-vllm int8-checkpoint` (verity-int8-channel127/v1) from the unsloth/Llama-3.2-1B pin; no hub repo holds it",
+   "recipe": {
+    "base_repo": "unsloth/Llama-3.2-1B",
+    "base_revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+    "id": "verity-int8-channel127/v1"
+   },
+   "repo": "verity-int8/Llama-3.2-1B-INT8",
+   "resolved_at": "2026-10-19T22:45:00Z",
+   "resolved_by": "vllm-int8-pins",
+   "revision": "15b0976d400d796ee589e7737d03a919526bf800",
+   "role": "LLAMA32_1B_INT8",
+   "safetensors_sha256": {
+    "model.safetensors": "154ff7030dced5dd1331bdce23e8199fa4e354ba460846ac5f8ab06514c28049"
+   }
+  },
+  {
+   "config_sha256": "d99f23d73fea9af73eb29ca474e789ff185401da4f1cd8cbb405c54b4cafc7f5",
+   "downloaded": false,
+   "files": {
+    "config.json": {
+     "sha256": "d99f23d73fea9af73eb29ca474e789ff185401da4f1cd8cbb405c54b4cafc7f5",
+     "size": 871,
+     "digest_source": "recipe"
+    },
+    "generation_config.json": {
+     "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2",
+     "size": 239,
+     "digest_source": "base"
+    },
+    "merges.txt": {
+     "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+     "size": 1671853,
+     "digest_source": "base"
+    },
+    "model.safetensors": {
+     "sha256": "9fa34521b229635b2f508c0db23e4a6c4b92a5850533bc4b91bec07c65653a27",
+     "size": 1064295632,
+     "digest_source": "recipe"
+    },
+    "tokenizer.json": {
+     "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "size": 11422654,
+     "digest_source": "base"
+    },
+    "tokenizer_config.json": {
+     "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
+     "size": 9732,
+     "digest_source": "base"
+    },
+    "vocab.json": {
+     "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+     "size": 2776833,
+     "digest_source": "base"
+    }
+   },
+   "int8_of": "Qwen/Qwen3-0.6B",
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--verity-int8--Qwen3-0.6B-INT8/snapshots/424b8ee06e9404820e531570c50996bd7b3b2c57",
+   "note": "made offline by `verity-vllm int8-checkpoint` (verity-int8-channel127/v1) from the Qwen/Qwen3-0.6B pin; no hub repo holds it",
+   "recipe": {
+    "base_repo": "Qwen/Qwen3-0.6B",
+    "base_revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+    "id": "verity-int8-channel127/v1"
+   },
+   "repo": "verity-int8/Qwen3-0.6B-INT8",
+   "resolved_at": "2026-10-19T22:45:00Z",
+   "resolved_by": "vllm-int8-pins",
+   "revision": "424b8ee06e9404820e531570c50996bd7b3b2c57",
+   "role": "QWEN3_06B_INT8",
+   "safetensors_sha256": {
+    "model.safetensors": "9fa34521b229635b2f508c0db23e4a6c4b92a5850533bc4b91bec07c65653a27"
+   }
+  },
+  {
+   "config_sha256": "6534a4169a32a0de4bae1ebec89a2363c0b4f8b9ab4c04983ea83564c758083a",
+   "downloaded": false,
+   "files": {
+    "config.json": {
+     "sha256": "6534a4169a32a0de4bae1ebec89a2363c0b4f8b9ab4c04983ea83564c758083a",
+     "size": 873,
+     "digest_source": "recipe"
+    },
+    "generation_config.json": {
+     "sha256": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2",
+     "size": 239,
+     "digest_source": "base"
+    },
+    "merges.txt": {
+     "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+     "size": 1671853,
+     "digest_source": "base"
+    },
+    "model-00001-of-00008.safetensors": {
+     "sha256": "c89b2b1ded8851e9050245ac7f5f251c51d46e29dd7d186bb5fce25b3f391296",
+     "size": 2699588976,
+     "digest_source": "recipe"
+    },
+    "model-00002-of-00008.safetensors": {
+     "sha256": "233171a3a87dce9dbd190dd47473bce0214ca1725ddda9744b7b6a5d4694572f",
+     "size": 1983199952,
+     "digest_source": "recipe"
+    },
+    "model-00003-of-00008.safetensors": {
+     "sha256": "31379728c2ca3bda7c0094c04c315d2821ec3538aa0fd6363b5f8193de289769",
+     "size": 1983200040,
+     "digest_source": "recipe"
+    },
+    "model-00004-of-00008.safetensors": {
+     "sha256": "3f01f0e01b808c8bc31024d9b1a7f463339aa002a2289335a4cc3d1d6bf86e2c",
+     "size": 1983200056,
+     "digest_source": "recipe"
+    },
+    "model-00005-of-00008.safetensors": {
+     "sha256": "76c9189c43c8141db7546d37971054ebf50d35f17dadfb2d5c935ae3b92c918b",
+     "size": 1983200056,
+     "digest_source": "recipe"
+    },
+    "model-00006-of-00008.safetensors": {
+     "sha256": "4fc98e861ce62bb70e3ae73b0cf8decf4cac9fb42edc180d0a34ae9e5f63a762",
+     "size": 1983200056,
+     "digest_source": "recipe"
+    },
+    "model-00007-of-00008.safetensors": {
+     "sha256": "1d4bfefb7ad103839855bb62ccae93ab9c8ef6d5357ff9c3ec7bf8a477eb6a06",
+     "size": 1983200056,
+     "digest_source": "recipe"
+    },
+    "model-00008-of-00008.safetensors": {
+     "sha256": "93e434cc5c4f372182a42c3c2cd781aa8a1362e6ea93f9a91d3ba4328c5fc39b",
+     "size": 1734204288,
+     "digest_source": "recipe"
+    },
+    "model.safetensors.index.json": {
+     "sha256": "88bc8e2765287fa72c4ee9d68ba7734e1c9604c3fd3e70717c9c8d494f7504a2",
+     "size": 60924,
+     "digest_source": "recipe"
+    },
+    "tokenizer.json": {
+     "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+     "size": 11422654,
+     "digest_source": "base"
+    },
+    "tokenizer_config.json": {
+     "sha256": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
+     "size": 9732,
+     "digest_source": "base"
+    },
+    "vocab.json": {
+     "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+     "size": 2776833,
+     "digest_source": "base"
+    }
+   },
+   "int8_of": "Qwen/Qwen3-14B",
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--verity-int8--Qwen3-14B-INT8/snapshots/5c026f99a73dc309c8ec65e199275c63dbd690b5",
+   "note": "made offline by `verity-vllm int8-checkpoint` (verity-int8-channel127/v1) from the Qwen/Qwen3-14B pin; no hub repo holds it",
+   "recipe": {
+    "base_repo": "Qwen/Qwen3-14B",
+    "base_revision": "40c069824f4251a91eefaf281ebe4c544efd3e18",
+    "id": "verity-int8-channel127/v1"
+   },
+   "repo": "verity-int8/Qwen3-14B-INT8",
+   "resolved_at": "2026-10-19T22:45:00Z",
+   "resolved_by": "vllm-int8-pins",
+   "revision": "5c026f99a73dc309c8ec65e199275c63dbd690b5",
+   "role": "QWEN3_14B_INT8",
+   "safetensors_sha256": {
+    "model-00001-of-00008.safetensors": "c89b2b1ded8851e9050245ac7f5f251c51d46e29dd7d186bb5fce25b3f391296",
+    "model-00002-of-00008.safetensors": "233171a3a87dce9dbd190dd47473bce0214ca1725ddda9744b7b6a5d4694572f",
+    "model-00003-of-00008.safetensors": "31379728c2ca3bda7c0094c04c315d2821ec3538aa0fd6363b5f8193de289769",
+    "model-00004-of-00008.safetensors": "3f01f0e01b808c8bc31024d9b1a7f463339aa002a2289335a4cc3d1d6bf86e2c",
+    "model-00005-of-00008.safetensors": "76c9189c43c8141db7546d37971054ebf50d35f17dadfb2d5c935ae3b92c918b",
+    "model-00006-of-00008.safetensors": "4fc98e861ce62bb70e3ae73b0cf8decf4cac9fb42edc180d0a34ae9e5f63a762",
+    "model-00007-of-00008.safetensors": "1d4bfefb7ad103839855bb62ccae93ab9c8ef6d5357ff9c3ec7bf8a477eb6a06",
+    "model-00008-of-00008.safetensors": "93e434cc5c4f372182a42c3c2cd781aa8a1362e6ea93f9a91d3ba4328c5fc39b"
    }
   },
   {
