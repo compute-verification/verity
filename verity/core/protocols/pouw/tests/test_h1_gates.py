@@ -106,20 +106,21 @@ def lean_class(fid: str, cls: str, sub: str) -> bool:
 @pytest.mark.slow
 @pytest.mark.parametrize("v", sorted(TILES))
 def test_h1_tile_is_classed(v):
-    """`classed_h1Rows` on the tile's Program, each version on this tree (`TILES`): every class of its census is listed in
-    property/v1's table (`class_of`, an input by its id) but its `BODIES`, and property/v1 refuses no gate of it as
-    unlisted; v1's are Lean's `h1Classes` in theirs (the seeds' `PouwUnitSeeds_v2` and `PouwNoiseBlock_v2`, which `h1Dag`
-    reads as the salt, too). Its dots are on bits, so the pass reads them down to their 1-bit gates and proves no s8-family
-    window of the tile (`family` 0). Slow on a process's first tile (see `test_h1_census`); v3's and v4's catch a
-    primitive of their one stream or dead-tile mask that the registry lacks, which v1 never calls."""
-    doc = tile_census(4, 8, 64, v)
+    """`classed_h1Rows` on the tile's Program, each version on this tree (`TILES`), at 4 × 16, two lanes, so the XOR
+    across lanes (`PouwXor32_v2`) is called: every class of its census is listed in property/v1's table (`class_of`, an
+    input by its id) but its `BODIES`, and property/v1 refuses no gate of it as unlisted; v1's are Lean's `h1Classes` in
+    theirs (the seeds' `PouwUnitSeeds_v2` and `PouwNoiseBlock_v2`, which `h1Dag` reads as the salt, too). Its dots are on
+    bits, so the pass reads them down to their 1-bit gates and proves no s8-family window of the tile (`family` 0). Slow
+    on a process's first tile (see `test_h1_census`); v3's and v4's catch a primitive of their one stream or dead-tile
+    mask that the registry lacks, which v1 never calls."""
+    doc = tile_census(4, 16, 64, v)
     fams = {cl["family"] for cl in doc["classes"].values()}
     assert {f for f in fams if P.class_of(f) is None and input_id(f) is None} == BODIES[v]
     if v == 1:
         lean = re.findall(r'\("([^"]+)", \.(\w+)(?: \.(\w+))?', lean_block("h1Classes"))
         assert len(lean) >= 15 and all(lean_class(*e) for e in lean), [e for e in lean if not lean_class(*e)]
         assert {f for f, cls, _ in lean if cls not in ("input", "const")} | {"PouwUnitSeeds_v2", "PouwNoiseBlock_v2"} <= fams
-    a = P.analyze(tile_program(4, 8, 64, v), doc)
+    a = P.analyze(tile_program(4, 16, 64, v), doc)
     assert "unlisted" not in a.refused, a.refused["unlisted"]
     assert (a.family, a.macs) == (0, 0)
 
