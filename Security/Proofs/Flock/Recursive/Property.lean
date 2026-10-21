@@ -204,8 +204,8 @@ it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `Ses
 `hz`, `hR`, `hS`).
 
 (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
-`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight (ASK-73). -/
+`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor (ASK-73); route
+2C's level (`lamLin2`) is at least 100 there (`RecDeploy.lamLin2_deployed_ge`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

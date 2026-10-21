@@ -756,7 +756,7 @@ coins of their coin kinds in the run's order (`holoCTs`: the link points, then t
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
 `RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape,
-below the 100-bit floor and the `2^-128` target under every weight (ASK-73). -/
+below the 100-bit floor (ASK-73); route 2C's level (`lamLin2`) is at least 100 there (`RecDeploy.lamLin2_deployed_ge`). -/
 def RecursiveAuditC3 : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
 

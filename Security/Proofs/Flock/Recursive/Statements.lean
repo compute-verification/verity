@@ -93,8 +93,8 @@ with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_r
 cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
 computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
 this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about
-65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight
-(ASK-73). This fork form states no bits. -/
+65 bits per SHA-512 call at the deployed shape, below the 100-bit floor (ASK-73); route 2C's level (`lamLin2`) is at least 100
+there (`RecDeploy.lamLin2_deployed_ge`). This fork form states no bits. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: A3
@@ -425,8 +425,8 @@ opens to the right row except with probability at most `4·hidingGap` (`VacuityP
 `shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
 it, not a wrong computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40);
 `EndToEndHidden` avoids this by extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level
-`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight (ASK-73). This fork form states no bits. -/
+`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor (ASK-73); route
+2C's level (`lamLin2`) is at least 100 there (`RecDeploy.lamLin2_deployed_ge`). This fork form states no bits. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)

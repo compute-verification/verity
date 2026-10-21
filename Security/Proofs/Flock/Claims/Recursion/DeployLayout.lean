@@ -240,8 +240,8 @@ theorem ksA_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readab
 
 /-- **`KSFlock` at `deployRec` from V\*'s parts at the registered ports**: `ksA_deployed_concrete` at every inner decoder
 that meets the spec, as `KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the
-deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the
-`2^-128` target under every weight (ASK-73). -/
+deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor (ASK-73);
+route 2C's level (`lamLin2`) is at least 100 there (`RecDeploy.lamLin2_deployed_ge`). -/
 theorem ksFlock_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation)
     (ivScope : Msg → Bool) (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

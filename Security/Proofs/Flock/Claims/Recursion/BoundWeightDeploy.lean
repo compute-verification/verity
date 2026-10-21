@@ -18,7 +18,8 @@ Daniel's ruling (19 Oct, 2:06 PM PDT, ASK-72): the deployed bound record states 
 At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. At the deployed
 shape (one inner table at `m = 35`, `k_log = 24`) the recursion's security level (`Claims.Recursion.lam`) is about 65.2
 bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `128 − log₂(γ_E·c_Be)/2`, the one that
-binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+binds, loses about 4 bits. That is below the 100-bit floor (ASK-73); route 2C's level (`lamLin2`) is at least 100 there
+(`RecDeploy.lamLin2_deployed_ge`).
 -/
 
 namespace RecDeploy
@@ -75,7 +76,8 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
 /-- **The deployed route with (P3) discharged**: `ksBoundRoute` at the deployed bound record (`bdCover`), wherever
 `DE`'s weight is at most the deployed plain record's (the intended choice among them), with (P3) from
 `weightCovers_bdCover`. The other premises are `KSBoundRoute`'s, at `bdCover`. Its level (`Claims.Recursion.lam`) is
-about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target (ASK-73). -/
+about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor (ASK-73); route 2C's level (`lamLin2`) is at
+least 100 there (`RecDeploy.lamLin2_deployed_ge`). -/
 theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

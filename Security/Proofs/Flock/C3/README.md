@@ -10,7 +10,10 @@ circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the 
 
 Its soundness (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`
 (`Security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the
-deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor under every weight (ASK-73).
+deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor (ASK-73). The recursion's level is route 2C's
+(`Claims.Recursion.KSLin2`, `Security/Definitions/Claims/RecursionLin.lean`): its bits `lamLin2` are at least 100 at
+the deployed records (`RecDeploy.lamLin2_deployed_ge`, `Security/Proofs/Flock/Claims/Recursion/LamDeployed.lean`),
+with `KSLin2` there from its named premises (`RecDeploy.ksLin2_deployed_plain`).
 
 What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
 at the honest source, `hbr_honest_src`'s) and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked
