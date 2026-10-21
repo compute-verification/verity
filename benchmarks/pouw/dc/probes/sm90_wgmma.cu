@@ -12,7 +12,9 @@
 //   sync_<form>           the other mma.sync shapes. CUDA 13.0 lowers e4m3 m16n8k32 to 2 HMMA.16816.F32 + 4 FADD (no
 //                         native FP8 mma.sync on sm_90) and s4 m16n8k64 to a CALL into an emulation routine (not timed)
 // Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
-// duo (the fold's 3 ops a word). Their alone rates and pipe pairs are scalar.cu's.
+// duo (the fold's 3 ops a word), imadw (IMAD.WIDE.U32), and the memory lanes lde, atome, redg, atoms and lds128
+// (wgU_ and wgmix_ only: LD.E, ATOM.E, REDG, ATOMS and LDS.128 beside the IGMMA, so the census's issue-only classes get
+// their joint issue lines). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -83,6 +85,57 @@ DC_DEV void wg_until(const OpArgs& a) {
   }
   OP_END_STOP
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
+// wg_until with a memory lane (lanes.cuh's mem_ops, M): the lane warps' R accesses a trip.
+template <int M, int R>
+DC_DEV void wg_until_mem(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  constexpr int SX = 32 * MEM_SX;  // 12 warps' scratch, and 64 LDS.128 lines
+  __shared__ __align__(16) unsigned char sx[SX];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  unsigned char* gp = mem_global(a.g);
+  const uint32_t sb = mem_shared<SX>(sx);
+  OP_BEGIN_STOP
+  if (mma_role) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+  } else {
+    OP_UNTIL(n) { mem_ops<M, R, SX>(l, gp, sb, n); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
+// wg_mix with a memory lane: each warpgroup's 4 wgmma, then R accesses a warp, then the wait (the honest kernel's shape).
+template <int M, int R>
+DC_DEV void wg_mix_mem(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  constexpr int SX = 16 * MEM_SX;
+  __shared__ __align__(16) unsigned char sx[SX];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  unsigned char* gp = mem_global(a.g);
+  const uint32_t sb = mem_shared<SX>(sx);
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F_s8_n256>(d, t);
+    mem_ops<M, R, SX>(l, gp, sb, it);
+    wgmma_wait<0>();
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
 template <int X, int R, class F = F_s8_n256>
@@ -398,7 +451,21 @@ OP_KERNEL(bulkcp, 32) { bulk_solo<BULK_CP>(a); }
 OP_KERNEL(bulkred, 32) { bulk_solo<BULK_RED>(a); }
 JOINT(duo, L_DUO, 96)
 JOINT(duo, L_DUO, 384)
+JOINT(imadw, L_IMADW, 64)
+JOINT(imadw, L_IMADW, 256)
 #undef JOINT
+OP_KERNEL(wgU_imadw, 384) { wg_until<L_IMADW, 64>(a); }
+OP_KERNEL(wgU_imadw_r256, 384) { wg_until<L_IMADW, 256>(a); }
+#define MEM(LN, M)                                                   \
+  OP_KERNEL(wgU_##LN, 384) { wg_until_mem<M, 16>(a); }               \
+  OP_KERNEL(wgU_##LN##_r32, 384) { wg_until_mem<M, 32>(a); }         \
+  OP_KERNEL(wgmix_##LN##_r16, 256) { wg_mix_mem<M, 16>(a); }
+MEM(lde, M_LDE)
+MEM(atome, M_ATOME)
+MEM(redg, M_REDG)
+MEM(atoms, M_ATOMS)
+MEM(lds128, M_LDS128)
+#undef MEM
 OP_KERNEL(wgU_mix, 384) { wg_until<L_MIX, 64>(a); }
 OP_KERNEL(wgU_imad, 384) { wg_until<L_IMAD, 64>(a); }
 OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
@@ -485,6 +552,8 @@ static const OpProbe PROBES[] = {
      .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD*=268,FFMA=24,REDUX*=4", .iters = 4096},
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
+    P_JOINT(imadw, 64, "IMAD.WIDE.U32=64"),
+    P_JOINT(imadw, 256, "IMAD.WIDE.U32=256"),
 #undef P_JOINT
 #define WGI "IGMMA.64x256x32.S8.S8*=4"
 #define P_UNTIL(NAME, LPAT) \
@@ -502,6 +571,18 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
     P_UNTIL(wgU_lif_r256, "LOP3.LUT=112,IMAD=112,FFMA=32"),
     P_UNTIL(wgU_lif_r512, "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTIL(wgU_imadw, "IMAD.WIDE.U32=64"),
+    P_UNTIL(wgU_imadw_r256, "IMAD.WIDE.U32=256"),
+#define P_MEM(LN, PAT)                                                                                    \
+  P_UNTIL(wgU_##LN, PAT "=16"), P_UNTIL(wgU_##LN##_r32, PAT "=32"),                                       \
+      {.name = "wgmix_" #LN "_r16", .kernel = (const void*)wgmix_##LN##_r16, .tpb = 256, .expect = WGI "," PAT "=16", \
+       .iters = 4096}
+    P_MEM(lde, "LD.E*"),
+    P_MEM(atome, "ATOM.E*"),
+    P_MEM(redg, "REDG*"),
+    P_MEM(atoms, "ATOMS*"),
+    P_MEM(lds128, "LDS.128"),
+#undef P_MEM
 #undef P_UNTIL
 #define P_UNTILF(NAME, WPAT, LPAT) \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WPAT ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}

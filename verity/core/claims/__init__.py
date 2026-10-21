@@ -321,8 +321,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
           "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
           "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot alone (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED at the "
-          "measured issue row alone on their measured readings); a reading whose classes have none (sm_120's measured "
+          "class at its issue slot (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED on the measured issue "
+          "row on their measured readings, and on DC-90-ri the JI90 lines too, its instructions timed beside the "
+          "IGMMA, r20261021-070616-d06c); a reading whose classes have none (sm_120's measured "
           "reading) leaves it free. A bulk or TMA instruction of size S counts S/99 KB in sm_120's UTMABIG, at most "
           "its one slot (A5b's count)",
           "A2 dispatch (whitepapers)", "measured"),
@@ -352,8 +353,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
           "the run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py "
           "(the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds) "
-          "and on bit-exact folds by test_lean_headline_dc.py; at DC-90-ri's π* it is false for counted, unbuilt "
-          "memory round-trip folds (RT4-SHEET-13, -14) until the classes no run timed beside an IGMMA have JI90 lines",
+          "and on bit-exact folds by test_lean_headline_dc.py; at DC-90-ri's π* the counted, unbuilt memory "
+          "round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14) price at 1.0245 φ* or more, their classes on "
+          "the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f)",
           "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
