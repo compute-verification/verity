@@ -11058,7 +11058,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Registry": {
-   "digest": "34c46945d0648fdb3601db0885d52ed3f597736490aad915659217d78681898c",
+   "digest": "0cac192d1d4ebe7d382e6630e72c49275a3b50f5e6ccb65bd544125faee4c440",
    "definitions": {
     "Accounting.Gates.Class": "fbc22a2c1fae8184bf3932dc00e980466fc000346f7fe30bff3745694b6f8e75",
     "Accounting.Gates.Class.affine": "291a5bf226e55e5c668cb70e73d5771ac2aaa288c12cf33ba623992c8c83ac2d",
@@ -11068,10 +11068,12 @@
     "Accounting.Gates.Class.gather": "b468f274abe0fb9e5c8a2ddf035f8d9d9d57d9e0b0e5ce7beca7c8f439d68318",
     "Accounting.Gates.Class.input": "817cfefafe298744352f594fd22643cc4378b29f5fbab9e06464bbc4de36cb6a",
     "Accounting.Gates.bf16ToF32Op": "b3405a4846146f55f87aece18f4494631969b9273625eff8610d0ab80d3b5086",
-    "Accounting.Gates.classOf": "8a2e8e6efbf17c481fc786dbfe9079d87eb04afb03f6061fe766e5b9624ca511",
+    "Accounting.Gates.classOf": "175e7ee427ec02f3755f81ee9a35d80adaf13615ab74846aead17c352c69d7f2",
     "Accounting.Gates.families": "dfb46f7c1cb52f844eda2868694b07f7d04d6edbf3b57626a3db4ce29fb1ae43",
-    "Accounting.Gates.registry": "4b0d5794f3121446997f5b73c8a7ebc57d55f29e4022a0c8641a3a29161852b5",
-    "Accounting.Gates.tableReadBits": "214433e54d46a90dbe885f436f3ecca36b89f0ed053fb755442bc635c6080c9a"
+    "Accounting.Gates.numbered": "93dcb39c1bbb6694e874093a2f05e622440d55eb647d2d777cb75ea3395bf2e8",
+    "Accounting.Gates.numeral": "e60186403df5edd56fda63d293e84fce58023c2d30e5704103cc3dfaad1a6b5f",
+    "Accounting.Gates.registry": "f2fc1eaad694a5fe78eaa7907e83fed3a01e60f7c3e7eda19efff47efbe60987",
+    "Accounting.Gates.tableReadBits": "910b13c7bf81cf9efe6f6d863a602f0d3ca4b8d543780aad847da22a62b80f83"
    },
    "guarantees": ["Accounting.SecurityProofs.Gates.Bf16ToF32Affine"]
   },
