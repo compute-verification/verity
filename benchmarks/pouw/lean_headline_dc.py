@@ -72,6 +72,16 @@ from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+MODEL = HERE / "machine_model"
+
+# The readings are the machine model's data: an installed verity_machine_model from another checkout would give that
+# tree's numbers without a word, so this tree's goes first and any other refuses.
+sys.path.insert(0, str(MODEL))
+import verity_machine_model  # noqa: E402
+
+if Path(verity_machine_model.__file__).resolve().parents[1] != MODEL:
+    raise ImportError(f"lean_headline_dc reads {MODEL}'s verity_machine_model, but {verity_machine_model.__file__} "
+                      "was imported first: run it in a fresh interpreter, or put that directory first on sys.path")
 
 
 def _lean_headline():
@@ -470,6 +480,8 @@ def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Re
     fold_d = [{r: load(r, f) for r in pi.rows} for f in folds]
     fill_d = [{r: load(r, nx) for r in pi.rows}] if nx else []
     lam = certificate(_best(pi.rows, Nw, B, int(d.checks), routes, fold_d, fill_d, ln_p))
+    at = lambda cert: _bound_at(cert, routes, fold_d, fill_d, Nw, B, ln_p, int(d.checks))
+    lam = next(({r: Fraction(1)} for r in pi.rows if at({r: Fraction(1)}) <= at(lam)), lam)
     price = lambda dem: sum((x * dem[r] for r, x in lam.items()), Fraction(0))
     wk = min(routes, key=lambda k: price(routes[k]))
     w = price(routes[wk])
@@ -494,6 +506,16 @@ def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Re
                    _Exact(classes, c, list(pi.rows), vec, lists, writers, folds, nwb, nf, nx, ns, skip, lam,
                           flat, B, bound, Nw, int(d.checks), d.L, h.form, list(d.fold_routes), _fold_mix(d, z),
                           _words_mix(d, wb), untimed, q, ln_p))
+
+
+def _bound_at(lam: dict[str, Fraction], words: dict, folds: list, fills: list, Nw: int, B: Fraction, ln_p: Fraction,
+              checks: int) -> Fraction:
+    """The Lean bound at certificate `lam`, exact. The LP's optimum can be a face (DS-90's unfolded branch binds
+    across one): where one row alone attains it, `reading` takes that row, whose proof reads one facet."""
+    price = lambda dem: sum((x * dem[r] for r, x in lam.items()), Fraction(0))
+    w = min(price(v) for v in words.values())
+    Y = (Nw * w + Nw * min(price(f) for f in folds) + min((price(f) for f in fills), default=Fraction(0))) / B
+    return max(1 - Y + Nw * w / B * 41 * LH.LN2 / (ln_p * checks), 1 - Y * (1 - Fraction(41, checks)))
 
 
 def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list,
@@ -575,6 +597,29 @@ def _uniform_words(fam: Family) -> str:
     return "".join(f" and the uniform `{k}` ({om}, a UR pair: RT-HOPPER-7)" for k, om in fam.uniform.items())
 
 
+MOVES = ("-rt3-wideh", "-rt3", "-wideh")          # RT4-SHEET-13's and -14's counted moves of a lane route's LI
+
+
+def _menu_text(names: list[str]) -> str:
+    """The fold menu's programs as the Definitions docstring names them: the bit-exact checkpoint loops, the counted
+    moves of LI on each lane route, and the li-bulk family."""
+    moved = [n for n in names if n.endswith(MOVES)]
+    bulk = [n for n in names if n.startswith("li-bulk")]
+    built = [n for n in names if n not in moved and n not in bulk]
+    text = (f"programs ({', '.join(built)}: the checkpoint's bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and "
+            "RT4-SHEET-7")
+    if not (moved or bulk):
+        return text.replace("programs", "bit-exact programs", 1) + ")"
+    if moved:
+        text += (f"; {', '.join(moved)}: RT4-SHEET-13's and -14's counted folds, each lane route and the fold with LI's "
+                 "64 LOP3 a segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back), its 64 "
+                 "IMAD as IMAD.WIDE, or both")
+    if bulk:
+        text += (f"; {', '.join(bulk)}: li-bulk, li's XOR through the stores, a bulk XOR with the key slab and a load "
+                 "back, at its measured cost and its counted BT1024 and trimmed W = ∞ members, RT4-SHEET-17, -21 and -22")
+    return text + ")"
+
+
 def _writer_lines(x: _Exact) -> str:
     return "\n".join(f"    ({x.classes.index(k)}, {om}){',' if j + 1 < len(x.writers) else ''}  -- {k}"
                      for j, (k, om) in enumerate(x.writers))
@@ -635,10 +680,8 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"({', '.join(k for k in x.vec if k in CATCH_ALLS)}: A6 counts a vector word's instructions in them, and an "
         "instruction no class names, IMAD.WIDE among them, counts in the catch-all, RT4-SHEET-14)"
         + "; the fold routes the design's fold"
-        + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
-           "bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7) on lanes, and alone on the uniform datapath at "
-           "the least "
-           "of their counts; "
+        + (f" and its {len(x.fold_names)} other {_menu_text(x.fold_names)} on lanes, and alone on the uniform datapath "
+           "at the least of their counts; "
            if x.fold_names else " on lanes and alone on the uniform datapath; ")
         + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
