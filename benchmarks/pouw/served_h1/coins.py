@@ -14,11 +14,10 @@
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
   ``--secret-file F`` and ``--commitment HEX`` (``$POUW_CHALLENGER``, ``$POUW_CHALLENGER_SESSION``,
   ``$POUW_CHALLENGER_SECRET_FILE``, ``$POUW_CHALLENGER_COMMITMENT``); an address without its session id, either without
-  the other, or a secret or commitment without both, is refused. The hello carries the secret through
-  ``RemoteChallenger.connect(address, secret)`` (infra's hello secret, RT4-INT-29, in proofs' #2953): on a tree whose
-  `connect` takes none, `open_coins` refuses a session with a secret. The session's layout is the window's live epoch
-  (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the client refuses a
-  commitment of any other, or of another root than the gate's open answered.
+  the other, or a secret or commitment without both, is refused. The hello carries the secret
+  (``RemoteChallenger.connect(address, secret)``, infra's hello secret, RT4-INT-29). The session's layout is the
+  window's live epoch (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the
+  client refuses a commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
   host. `RoundPipe` sends a window's round roots without waiting on each coin (a ring of steps whose units wait on their
   round's coin), every coin still opened after its own root and checked as it comes back. The prover's record says only ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its
@@ -26,32 +25,32 @@
 * **In-process** (no address): `window.live_challenger` in the serving process, on the prover's node. It stays for CPU
   tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not certified)``.
 
-`check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: request.json, the
-reserve's request, and open.json, the open's, beside the challenger's out/ with record.json, key.json and releases.jsonl)
-and the session's entries in the gate's ledger (``ssh GATE ledger``, or infra's published `challenger-ledger head`),
-never the prover's bundle, and verifies the record under the challenger's key from its deployment record
-(``--key-record``, infra's challenger-key/v1, never the ledger's key_sha512) through `remote.trusted_session`; no key is
-pinned in code. It holds (`gate_reasons`): the request, the open, the ledger's one reserve and one open, and the signed
-record's host are the session's; the open binds this session's reserve (its seq) and carries its request; the session
-was opened on the window's root (open.json's and the open entry's ``window.root``); the reserve asked for the signed
-layout; and its reserve is a window of the verifier's period. Then the salt coin after the window's root, round s's coin
-after round s's root for every round the challenger logged, and the draw coin after the root the manifest names. The
-ledger's signatures and chain are infra's reference check (`auditor.verify_ledger`), not repeated here. The key record,
-the window's root and its period are the verifier's to name; while it names any not, the coins are ``off-node HOST
-(checked; key, root, period unanchored)`` (under key.json's own key, the manifest's root, any period), and only with all
-three are they ``off-node HOST (checked)``.
+`check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
+out/, with record.json, key.json, releases.jsonl, hellos.jsonl and challenger.json, its signed close) and every head of
+the auditor's signed ledger it was shown (``ssh GATE ledger``, or infra's published `challenger-ledger head`), never the
+prover's bundle. The session is core's to establish, the one check the auditor host and every verifier run
+(`remote.trusted_session`, through `audited_window`), under the challenger's key from its deployment record
+(``--key-record``, infra's challenger-key/v1, never the ledger's key_sha512; no key is pinned in code): the ledger's
+heads, signatures, chain and entries; the one session it opens on the window's root, binding its reserve and carrying
+its request, by its prover, inside its minutes and its period; its end, closed by its client; and the session's
+record, close, release log and refused hellos the files that end sealed (`challenger.audited_session`,
+`challenger.session_named`). On top of it `check` holds the manifest's session and window to that session's, the open's
+layout to the signed commitment's, and its period to the verifier's; then the salt coin after the window's root, round
+s's coin after round s's root for every round the challenger logged, and the draw coin after the root the manifest
+names. The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
+are ``off-node HOST (checked; key, root, period unanchored)`` (under key.json's own key, the manifest's root, any
+period), and only with all three are they ``off-node HOST (checked)``.
 
     python3 coins.py families --rounds S                        # the challenger's FAMILIES for a window of S rounds
     python3 coins.py open --gate USER@HOST --peer NODE --epoch E --rounds S [--minutes M] --secret-file F
-    python3 coins.py check --challenger-out SESSION_DIR --ledger LEDGER --manifest OUT/manifest.json [--key-record KEY]
-        [--period P] [--root R]
+    python3 coins.py check --challenger-out SESSION_DIR --ledger HEAD [--ledger HEAD ...] --manifest OUT/manifest.json
+        [--key-record KEY] [--period P] [--root R]
 """
 from __future__ import annotations
 
 import argparse
 import collections
 import hashlib
-import inspect
 import json
 import os
 import re
@@ -74,10 +73,6 @@ from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 IN_PROCESS = "in-process (not certified)"
-#: the published session's open request, beside its reserve's request.json
-OPEN = "open.json"
-#: the reserve's request fields, which its open entry carries
-RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
 SSH = ("ssh", "-o", "BatchMode=yes")
@@ -223,7 +218,7 @@ class Coins:
         return self.challenger.open(Wd.DRAW, 0, after)
 
     def close(self) -> None:
-        """End an off-node session: the challenger answers closed and writes its summary."""
+        """End an off-node session: the challenger signs and writes its close (challenger.json), then answers closed."""
         if self.source == "off-node":
             self.challenger.close()
 
@@ -366,14 +361,7 @@ def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[i
             from verity.core.protocols.pouw import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
-    if at.secret is None:
-        client = connect(at.address)
-    elif "secret" in inspect.signature(connect).parameters:
-        client = connect(at.address, at.secret)
-    else:
-        raise Ch.CoinError(f"session {at.id} has a secret its hello must carry, and this tree's "
-                           "remote.RemoteChallenger.connect sends none: that waits on infra's hello secret in "
-                           "sampled_proofs/remote.py (RT4-INT-29, proofs' #2953)")
+    client = connect(at.address, at.secret)
     why = layout_reason(client.commitment, epoch, rounds)
     if why is None and at.commitment is not None and client.commitment.root.hex() != at.commitment:
         why = (f"session {at.id}'s challenger answered the hello with commitment {client.commitment.root.hex()[:16]}…, "
@@ -397,113 +385,84 @@ def _openings(docs: list[dict]) -> list[Ch.LiveOpening]:
     return [Ch.LiveOpening.from_json(d) for d in docs]
 
 
-def published(directory: str | os.PathLike) -> tuple[Path, Path, Path]:
-    """A session as infra's gate publishes it (``fetch SESSION``): `directory` holds request.json (its reserve's
-    request), open.json (its open's) and the challenger's out/, or is that out/.  (out/, request.json, open.json)."""
+def published(directory: str | os.PathLike) -> Path:
+    """The challenger's out/ of a session as infra's gate publishes it (``fetch SESSION``): `directory`'s out/, beside
+    its reserve's request.json and its open's open.json, or `directory` when it is that out/."""
     d = Path(directory)
-    base = d if (d / "out").is_dir() else d.parent
-    return (d / "out" if base == d else d), base / "request.json", base / OPEN
+    return d / "out" if (d / "out").is_dir() else d
 
 
-def ledger_session(ledger: str | os.PathLike, sid: str) -> tuple[dict[str, list[dict]], str | None]:
-    """Session `sid`'s entries in the gate's ledger file `ledger` (``ssh GATE ledger``, or infra's published
-    `challenger-ledger head`), by kind (reserve, open, end), and the period its reserve is a window of: its prover's
-    (``for``, else ``by``) period open at the reserve, None outside one."""
-    kinds: dict[str, list[dict]] = {}
-    current: dict[str, str] = {}
-    period = None
-    for line in Path(ledger).read_text().splitlines():
-        if not line.strip():
-            continue
-        e = json.loads(line)
-        b = e.get("body") or {}
-        if e.get("kind") == "period-open":
-            current[b.get("lane")] = b.get("period")
-        elif e.get("kind") == "period-close":
-            current.pop(b.get("lane"), None)
-        elif e.get("session") == sid:
-            kinds.setdefault(e.get("kind"), []).append(e)
-            if e.get("kind") == "reserve":
-                period = current.get(b.get("for") or b.get("by"))
-    return kinds, period
+def audited_window(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], root: bytes, key: Ch.ChallengerKey
+                   ) -> tuple[Ch.LiveCommitment, dict[str, tuple[bytes, ...]], Ch.Audited, dict[str, dict]]:
+    """Window `root`'s session as core's verifier takes it from the session `directory` (`published`) and every head of
+    the auditor's ledger infra published, `heads`, under the challenger key `key` (`remote.trusted_session`): the coin
+    commitment the challenger signed, the roots its signed release log shows it received, the session the ledger opens
+    on `root` (`challenger.audited_session`), and that session's entries in the ledger by kind.  Raises `CoinError`
+    naming why the ledger or the session is refused."""
+    window = {"root": root.hex()}
+    commitment, roots = R.trusted_session(published(directory), heads, window, key, lms_verify)
+    ledger = Ch.ledger_head([R.ledger_lines(p) for p in heads], key, lms_verify)
+    audited = Ch.audited_session(ledger, window, key, lms_verify)
+    entries = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == audited.session}
+    return commitment, roots, audited, entries
 
 
-def gate_reasons(directory: str | os.PathLike, ledger: str | os.PathLike, sid: str, root: bytes,
-                 commitment: Ch.LiveCommitment, period: str | None = None) -> tuple[dict[str, str | None], dict]:
-    """Why the session `directory` as the gate publishes it (`published`), with its entries in the gate's `ledger`
-    (`ledger_session`), is not session `sid`'s window opened on `root` for `commitment`'s layout, or not a window of
-    `period` when the verifier names one: by name, None where it holds; and what the ledger says, the reserve's,
-    open's and end's seq and the period."""
-    d, req_path, open_path = published(directory)
-    try:
-        req, opened = json.loads(req_path.read_text()), json.loads(open_path.read_text())
-        host = Ch.ChallengerRecord.from_json(json.loads((d / R.RECORD).read_text())).host
-        kinds, held = ledger_session(ledger, sid)
-    except (OSError, ValueError, KeyError, TypeError, Ch.CoinError) as e:
-        return {"session": f"the published session or the gate's ledger is unreadable: {e}"}, {}
-    reserves, opens, ends = (kinds.get(k, []) for k in ("reserve", "open", "end"))
-    if len(reserves) != 1 or len(opens) != 1 or len(ends) > 1:
-        return {"session": f"the gate's ledger holds {len(reserves)} reserve, {len(opens)} open and {len(ends)} end "
-                           f"entries for session {sid}, not one reserve and one open"}, {"period": held}
-    r, o = reserves[0], opens[0]
-    rb, ob = r.get("body") or {}, o.get("body") or {}
-    end = ends[0] if ends else None
-    info = {"reserve": r.get("seq"), "open": o.get("seq"), "end": end and end.get("seq"),
-            "end_complete": end and (end.get("body") or {}).get("complete"), "period": held}
+def ledger_info(audited: Ch.Audited, entries: dict[str, dict]) -> dict:
+    """What the auditor's ledger says of a window's session (`audited_window`): its id and prover, its entries' seqs,
+    whether its end is complete (every family released all its coins), its refused hellos, and the period holding it
+    with that period's cap and circuit."""
+    return {"session": audited.session, "prover": audited.prover,
+            **{k: entries[k]["seq"] if k in entries else None for k in Ch.SESSION_KINDS},
+            "end_complete": entries["end"]["body"].get("complete"), "refused_hellos": audited.refused_hellos,
+            "period": audited.period, "cap": audited.cap, "circuit": audited.circuit}
+
+
+def window_reasons(audited: Ch.Audited, entries: dict[str, dict], commitment: Ch.LiveCommitment, sid: Any,
+                   window: dict, root: bytes, period: str | None) -> dict[str, str | None]:
+    """Why window `root`'s session as the auditor's ledger names it (`audited_window`) is not the one the manifest names
+    (`sid`, its `window`), the open's layout isn't `commitment`'s, or its period isn't `period` when the verifier names
+    one: by name, None where it holds.  The rest of the ledger's rules are core's (`challenger.audited_session`)."""
     lay = {"scheme": commitment.scheme, "epoch": commitment.epoch, "families": [list(f) for f in commitment.families]}
-    asked = {k: req.get(k) for k in RESERVED}
-    seqs = (r.get("seq"), o.get("seq"), ob.get("reserve"))
-    said = (ob.get("window") or {}).get("root") if isinstance(ob.get("window"), dict) else None
-    reasons = {
-        "session": None if (req.get("session") == opened.get("session") == sid
-                            and host == rb.get("host") == ob.get("host") and host.endswith(f".{sid}")) else
-        f"the published request and open are sessions {req.get('session')!r} and {opened.get('session')!r}, and the "
-        f"signed record's host {host} beside the ledger's {rb.get('host')!r}, not session {sid!r}'s",
-        "reserve": None if (all(type(x) is int for x in seqs) and seqs[2] == seqs[0] < seqs[1]
-                            and {k: rb.get(k) for k in RESERVED} == {k: ob.get(k) for k in RESERVED} == asked) else
-        f"session {sid}'s open (seq {o.get('seq')}) binds reserve {ob.get('reserve')!r} and its request, not its "
-        f"reserve (seq {r.get('seq')}) and the request published beside it",
-        "root": None if ob.get("window") == {"root": root.hex()} and opened.get("root") == root.hex() else
-        f"session {sid} was opened on root {str(said)[:16]}… (open.json: {str(opened.get('root'))[:16]}…), not the "
-        f"window's {root.hex()[:16]}…",
-        "request": None if {k: rb.get(k) for k in lay} == lay else
-        f"the reserve asked for {json.dumps({k: rb.get(k) for k in lay})}, not the signed commitment's {json.dumps(lay)}",
-        "period": None if period is None or held == period else
-        f"session {sid}'s reserve is a window of period {held!r}, not {period!r}",
+    asked = {k: entries["open"]["body"].get(k) for k in lay}
+    return {
+        "session": None if sid == audited.session else
+        f"the manifest's session is {sid!r}, not {audited.session}, the one the auditor's ledger opens on the window's "
+        f"root {root.hex()[:16]}…",
+        "window": None if window.get("root") in (None, root.hex()) and window.get("period") in (None, audited.period)
+        else f"the manifest's window {json.dumps(window)} is not the session's (root {root.hex()[:16]}…, period "
+             f"{audited.period!r})",
+        "layout": None if asked == lay else
+        f"session {audited.session}'s open asked for {json.dumps(asked)}, not the signed commitment's {json.dumps(lay)}",
+        "period": None if period is None or audited.period == period else
+        f"session {audited.session} is a window of period {audited.period!r}, not {period!r}",
     }
-    return reasons, info
 
 
 def key_record(path: str | os.PathLike) -> Ch.ChallengerKey:
-    """The challenger's key from its deployment record (infra's challenger-key/v1: H, W, pubkey, pubkey_sha512), the key
-    a verifier holds a session to, never the session's own key.json nor the gate ledger's key_sha512."""
-    doc = json.loads(Path(path).read_text())
-    if not str(doc.get("schema", "")).startswith("challenger-key/"):
-        raise ValueError(f"{path} is not a challenger-key record")
-    key = Ch.ChallengerKey.from_json({"H": doc["H"], "W": doc["W"], "public": doc["pubkey"]})
-    if hashlib.sha512(key.public).hexdigest() != doc["pubkey_sha512"]:
-        raise ValueError(f"{path}'s pubkey is not its pubkey_sha512's")
-    return key
+    """The challenger's key from its deployment record at `path` (infra's challenger-key/v1, read by core's
+    `challenger.key_of_record`), the key a verifier holds a session to, never the session's own key.json nor the
+    ledger's key_sha512."""
+    return Ch.key_of_record(json.loads(Path(path).read_text()))
 
 
-def check(directory: str | os.PathLike, coins: dict, ledger: str | os.PathLike, rounds: list[bytes],
+def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], rounds: list[bytes],
           salts: dict[int, str] | None = None, draw_after: bytes | None = None, key: Ch.ChallengerKey | None = None,
           period: str | None = None, root: bytes | None = None) -> dict:
     """The verifier's check of a window's coins against the session `directory` as infra's gate publishes it
-    (`published`) and its entries in the gate's `ledger`, read from the challenger's own run.  `coins` is the manifest's
-    ``coins`` item (the openings the prover received, the session id and the window's root and period), and the rest is
-    what the verifier recomputes from the window's committed roots: the round roots `rounds` in order, round r's unit
-    salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the draw coin follows (None: the window opened
-    no draw); `key` is the challenger's key from its deployment record (`key_record`), `period` the window's period and
-    `root` the window's root, each None while the verifier names none (`root` then the manifest's).  It holds: key.json
-    is `key`; the record verifies under it (`trusted_session`); the published session and its ledger entries are this
-    session's window, opened on its root (`gate_reasons`); the manifest's window names that root and the reserve's
-    period; the window's commitment is the record's, a live epoch's; the salt coin opened after the window's root; the
-    challenger received exactly `rounds`, and round r's coin opened once after round r's root (`rounds_reason` over the
-    challenger's roots); each salt is `h1tile.live_salt` of the opened coin; the draw coin opened after `draw_after`, or
-    none opened.  ``ok`` only when all hold."""
+    (`published`) and every head of the auditor's ledger infra published, `heads`, read from the challenger's own run.
+    `coins` is the manifest's ``coins`` item (the openings the prover received, the session id and the window's root and
+    period), and the rest is what the verifier recomputes from the window's committed roots: the round roots `rounds` in
+    order, round r's unit salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the draw coin follows
+    (None: the window opened no draw); `key` is the challenger's key from its deployment record (`key_record`), `period`
+    the window's period and `root` the window's root, each None while the verifier names none (`root` then the
+    manifest's).  It holds: key.json is `key`; core's verifier takes the session the ledger opens on the window's root
+    under it (`audited_window`); that session and its period are the manifest's, its open asked for the signed layout,
+    and its period is `period` (`window_reasons`); the window's commitment is the record's, a live epoch's; the salt coin
+    opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
+    r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; the draw
+    coin opened after `draw_after`, or none opened.  ``ok`` only when all hold."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
-    d, _, _ = published(directory)
+    d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}
     try:
@@ -521,23 +480,19 @@ def check(directory: str | os.PathLike, coins: dict, ledger: str | os.PathLike, 
         return {**out, "reason": "the verifier names no window root, and the manifest's window none"}
     root = root if root is not None else bytes.fromhex(window["root"])
     try:
-        commitment, roots = R.trusted_session(d, key, lms_verify)
+        commitment, roots, audited, entries = audited_window(d, heads, root, key)
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
         salt = _openings([coins["salt_coin"]])
         openings = _openings([r["opening"] for r in coins.get("rounds", [])])
         draw = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
-    gate, info = gate_reasons(directory, ledger, str(sid), root, commitment, period)
     got = roots[Wd.ROUND]
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)
     reasons = {
-        **gate,
-        "window": None if window.get("root") in (None, root.hex()) and window.get("period") in (None, info.get("period"))
-        else f"the manifest's window {json.dumps(window)} is not the session's (root {root.hex()[:16]}…, period "
-             f"{info.get('period')!r})",
+        **window_reasons(audited, entries, commitment, sid, window, root, period),
         "commitment": None if mine == commitment else "the window's coin commitment is not the one the challenger signed",
         "epoch": Wd.live_epoch_reason(commitment),
         "salt": (None if roots[Wd.SALT] == (root,) else "the challenger's salt root is not the window's root")
@@ -550,7 +505,7 @@ def check(directory: str | os.PathLike, coins: dict, ledger: str | os.PathLike, 
                  "the challenger's draw roots are not the window's")
         or (Ch.order_reason(commitment, Wd.DRAW, roots[Wd.DRAW], draw) if draw_after is not None else None),
     }
-    out.update(reasons=reasons, ledger=info, root=root.hex(), rounds=len(got), draws=len(roots[Wd.DRAW]),
+    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(roots[Wd.DRAW]),
                commitment=commitment.root.hex())
     out["ok"] = all(v is None for v in reasons.values())
     out["coins"] = (f"off-node {host} (checked{'; ' + ', '.join(loose) + ' unanchored' if loose else ''})"
@@ -577,8 +532,8 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check", help="a window's coins against the challenger's own run")
     c.add_argument("--challenger-out", required=True, help="the session as infra's gate publishes it (request.json, "
                    "open.json and out/), or its out/")
-    c.add_argument("--ledger", required=True, help="the gate's ledger (ssh GATE ledger, or infra's published "
-                   "challenger-ledger head)")
+    c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger as infra published "
+                   "it (ssh GATE ledger, or its published challenger-ledger head); once for each head the verifier holds")
     c.add_argument("--manifest", required=True, help="the window's manifest.json")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1, an art: "
                    "fetched with `research data fetch`)")

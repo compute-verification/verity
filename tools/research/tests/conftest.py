@@ -44,6 +44,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot)
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
+    # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
+    monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor its dispatcher's settings: importing dispatch.py loads $VY_DISPATCH_ROOT/dispatch.env (default
@@ -56,6 +58,12 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
     # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
+    # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
+    monkeypatch.setattr("research.auto._reach", _unreachable)
+
+
+def _unreachable(name: str) -> list[str]:
+    raise RuntimeError(f"a test reaches no machine ({name})")
 
 
 @pytest.fixture(autouse=True)

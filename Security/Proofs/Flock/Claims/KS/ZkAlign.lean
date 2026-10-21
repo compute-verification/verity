@@ -382,6 +382,33 @@ def ZkSlotAlign (x : Claims.Msg) : Prop :=
     SlotRSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!) r.val ℓ.val
       (zkRd hset h0 L hz hk hlay j (.inl (.inl (r, ℓ)))).val (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
+that sets up at a draw, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
+strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
+def ZkSlotAlign (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (r : Fin 2)
+    (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) (u : zkTape x),
+    SlotRSZ execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!) r.val ℓ.val
+      (zkRd hset h0 L hz hk hlay j (.inl (.inl (r, ℓ)))).val (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
 position in the session being `j` (`take_gamesZC_length`). -/
 theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x := by
@@ -390,6 +417,17 @@ theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x
     (h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u)
   rw [take_gamesZC_length] at ha
   exact ha
+
+end Gen
+
+/-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
+position in the session being `j` (`take_gamesZC_length`). -/
+theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x :=
+  Gen.zkForkAlign_of_slot (S := S₀) (x := x) (h := h)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
 premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
@@ -400,5 +438,17 @@ theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → Z
     (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_of_align (fun x hno => zkForkAlign_of_slot (ha x hno)) hc ht hp hpads
+
+end Gen
+
+/-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
+premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
+theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSlotAlign x)
+    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkForkClash x)
+    (ht : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsTauZ i)
+    (hp : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsPadsEvZ i)
+    (hpads : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClashQ x PadsZ) :
+    Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
+  Gen.zk_KS_of_slot (S := S₀) (ha := ha) (hc := hc) (ht := ht) (hp := hp) (hpads := hpads)
 
 end FlockDeploy.KS

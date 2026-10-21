@@ -68,16 +68,35 @@ def test_the_query_refuses_what_it_does_not_describe():
         P.units(Program(bind(other)), q)
 
 
-def test_a_q_call_unit_wider_than_the_literal_limit_or_a_template_of_no_gate_is_refused():
-    """A `Q_call` unit commits at most `UNIT_BITS` bits, counting the constants it holds, and a template has a gate: a
-    template of no gate, and a Call whose first unit at `X = 16` returns 16 bits and holds a constant a later unit reads,
-    are refused; at `X = 8` that constant is in no unit, and the program is taken."""
+XOR64 = PrimitiveDefinition("OneStageTestXor64", 1, (("a", Value(64)), ("b", Value(64))), Value(64),
+                            lambda a, b: a ^ b, register=False)
+#: A template of one batch of `N` 64-bit XORs: an instance returns `64 N` bits.
+WIDE = CompositeDefinition("OneStageTestWide", 0, ("N",),
+                           lambda S: ((("x", Array(S.N, Value(64))), ("y", Array(S.N, Value(64)))), Array(S.N, Value(64))),
+                           lambda B, S, x, y: B.batch(XOR64, x, y, axes=(0, 0)), register=False)
+
+
+def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
+    assert P.UNIT_CLASSES == tuple(16 * 2 ** i for i in range(15)) and P.UNIT_CLASSES[-1] == P.UNIT_CLASS_MAX == 262_144
+    assert [P.unit_class(b) for b in (0, 16, 17, 24, 1024, 1025, 262_144, 262_145)] == \
+        [16, 16, 32, 32, 1024, 2048, 262_144, None]
+
+
+def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
+    """Each unit's committed bits fit a public size class, the least that holds them, and a template has a gate: a
+    template instance of 262,144 bits (the widest class, `Gemm_v2{K=2048,N=16384}`'s in the measured widths) is taken, one
+    of 262,208 bits and one of no gate are refused; a Call whose first unit at `X = 16` returns 16 bits and holds a
+    constant a later unit reads commits 24 bits, class 32, and is taken, as at `X = 8`, where that constant is in no
+    unit."""
     v8x3 = Tuple(Value(8), Value(8), Value(8))
     const = PrimitiveDefinition("OneStageTestConst8", 1, (), Value(8), lambda: 0x5A, register=False)
     empty = bind(CompositeDefinition("OneStageTestEmpty", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                      lambda B, S, x: x[0], register=False))
-    with pytest.raises(P.QueryRefused, match="has no gate"):
-        P.units(P.population_program(empty, 3), P.template_instance_query(empty.id))
+    widest, over = bind(WIDE, N=4096), bind(WIDE, N=4097)
+    assert P.units(P.population_program(widest, 2), P.template_instance_query(widest.id)) == 2
+    for t, why in ((over, "commits 262208 bits, more than the widest class, 262144"), (empty, "has no gate")):
+        with pytest.raises(P.QueryRefused, match=why):
+            P.units(P.population_program(t, 2), P.template_instance_query(t.id))
 
     def held(B, S, x):
         a = B.call(XOR8, x[0], x[1])
@@ -94,8 +113,7 @@ def test_a_q_call_unit_wider_than_the_literal_limit_or_a_template_of_no_gate_is_
                                     register=False))
     prog = Program(bind(CompositeDefinition("OneStageTestSharedProgram", 0, (), lambda S: call.signature(),
                                             lambda B, S, x: B.call(call, x), register=False)))
-    with pytest.raises(P.QueryRefused, match="unit 0 of .* commits 24 bits, more than 16"):
-        P.units(prog, PO.call_query(16))
+    assert P.unit_gates(prog, PO.call_query(16)) == [(2, 5), (5, 6)]
     assert P.unit_gates(prog, PO.call_query(8)) == [(2, 3), (3, 4), (5, 6)]
 
 
@@ -617,15 +635,15 @@ def _core(program, q) -> dict:
 
 
 def test_the_partition_is_cores_on_the_pinned_q_word_vector():
-    """One-stage names any `verity/partition/v1` object as core does, and applies only the template queries."""
+    """One-stage names any `verity/partition/v1` object as core does, and applies the pinned `Q_word` vector as core does:
+    its units, some committing up to `W = 32` bits, fit the public classes."""
     prog = codec.decode_program(json.loads(QWORD["descriptor"]), REGISTRY)
     q = QWORD["object"]["query"]
     obj = P.partition(prog, q)
     assert codec.canonical_json(obj) == codec.canonical_json(QWORD["object"]) == codec.canonical_json(PO.build(prog, q))
     assert P.program_digest(prog) == QWORD["program_digest"] == codec.program_digest(prog)
     assert P.digest(obj) == QWORD["object_digest"] == PO.digest(PO.build(prog, q))
-    with pytest.raises(P.QueryRefused):
-        P.units(prog, q)
+    assert P.units(prog, q) == QWORD["population"] == PO.evaluate(prog, q).population
 
 
 @pytest.mark.parametrize("n", range(len(TEMPLATE["cases"])), ids=[c[0] for c in TEMPLATE["cases"]])

@@ -48,7 +48,7 @@ build reaches it.
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
 only on a Lean error at a position in one of the tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
-`guarantees:` failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
+failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
 yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
 run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
 guarantees by name.
@@ -206,6 +206,24 @@ def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
     links.pop(pkg, None)
 
 
+def read_links(tree: Path) -> dict[str, str]:
+    """The tree's `LINKS`; none when the file is missing or not a JSON object (a write in place that failed after its
+    truncation, on a full disk or a stopped run, left it empty), so each package's dependencies are taken again, as in a
+    new tree."""
+    try:
+        links = json.loads((tree / LINKS).read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+    return links if isinstance(links, dict) else {}
+
+
+def write_links(tree: Path, links: dict[str, str]) -> None:
+    """`LINKS`, replaced whole, so a write that fails (a full disk, a stopped run) leaves the previous file."""
+    tmp = tree / f"{LINKS}.tmp"
+    tmp.write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, tree / LINKS)
+
+
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies."""
@@ -274,7 +292,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     finally:
         AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in cross + fails if f.startswith(("guarantees:", "assumptions:"))]
+    return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
 
 def sandboxed() -> bool:
@@ -387,7 +405,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
-            links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+            links = read_links(tree)
             run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
             out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
             todo, rc = [pkg, *requirers(pkg, pkgs)], 0
@@ -399,7 +417,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
-                (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+                write_links(tree, links)
                 mine_out = out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
                 argv = [sys.executable, str(AUDIT_PY), "--build", "--no-replay", "--no-runs",
                         *(["--update"] if update and p == pkg else []),
@@ -459,7 +477,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
-        links = json.loads((tree / LINKS).read_text()) if (tree / LINKS).is_file() else {}
+        links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
@@ -509,7 +527,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                 compared.append(pkg)
                 log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
         finally:
-            (tree / LINKS).write_text(json.dumps(links, indent=1, sort_keys=True) + "\n")
+            write_links(tree, links)
     log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
         f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
     return 1 if failed else 0

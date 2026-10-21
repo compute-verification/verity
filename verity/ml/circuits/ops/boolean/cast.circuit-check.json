@@ -2,6 +2,9 @@
  "definitions": {
   "Bf16ToF32_v2": {
    "and": 0
+  },
+  "F32ToBf16Rn_v2": {
+   "and": 66
   }
  }
 }

@@ -69,12 +69,13 @@ class Const:
     """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
-    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `shared`: one instance per value for
-    the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces` piece it stands
-    for `count` copies of its instance."""
+    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `bits` a tuple of n values: an
+    `Array<n,Value<width>>` parameter, one instance per value in order (the int8 attention's K scales).  `shared`: one instance per
+    value for the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces` piece
+    it stands for `count` copies of its instance."""
 
     width: int
-    bits: int
+    bits: int | tuple[int, ...]
     name: str = ""
     shared: bool = False
     count: int = 1
@@ -116,6 +117,9 @@ class Collective:
     #: one Compute row over the whole [M,N] partial as M*N words (`Array<W, Array<M*N>>`), the Build's one call per communicator
     #: all-reduce (`vllm_bindings.AllReduceRule`); the peers fields stay one per (request, peer rank)
     flat: bool = False
+    #: the whole call's [M,N] partial when `own` is the row slice of it one request reduces (the Build's one call per request of a
+    #: multi-request launch): the call keeps one (step, k) and one record, which its parts continue in row order
+    call: ViewDesc | None = None
 
 
 @dataclass(frozen=True)
