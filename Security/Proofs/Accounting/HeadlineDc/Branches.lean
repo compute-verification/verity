@@ -141,7 +141,7 @@ theorem folded_of_lower_at {K R T L U F X : Type} [Fintype K] [Fintype R] [Finty
   obtain ⟨-, -, hNw, hB0, -⟩ := hZ'
   obtain ⟨-, -, -, hχ0⟩ := stars_nonneg Z Fl lam hZ h
   obtain ⟨hκ0, -⟩ := Whole.kappa_f_nonneg Z Fl lam h hZ
-  have hjl := (epsJl_le Z Fl lam hκ0 S hS δ' hδ').trans (mul_le_mul_of_nonneg_left ht hκ0)
+  have hjl := (Headline.epsJl_le Z Fl lam hκ0 S hS δ' hδ').trans (mul_le_mul_of_nonneg_left ht hκ0)
   have hLuck : Z.epsLuck Fl lam 0 = 0 := zero_mul _
   have hAdapt : Z.epsAdapt Fl lam 0 = 0 := zero_mul _
   have hκ : Z.kappa Fl lam * t = Z.Nw * Z.wStar lam * t / Z.bnd Fl := by

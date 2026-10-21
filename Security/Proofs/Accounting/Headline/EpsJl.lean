@@ -13,7 +13,7 @@ and the data-centre headlines' folded branch (`HeadlineDc/Branches.lean`) read i
 
 namespace Accounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
+open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
 
 /-- `ε_jl ≤ κ·41·0.6931471808/6400` at `p = 7/8`, `48,000` rounds and `δ′ ≥ 2^-41`, from `ln 2 < 0.6931471808` and
 `ln(8/7) ≥ 2/15`, the first term of `ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. -/
