@@ -99,6 +99,7 @@ import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishPiop
 import Proofs.Flock.Claims.ZK.FinishInner
+import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
