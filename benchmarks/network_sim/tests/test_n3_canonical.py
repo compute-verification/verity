@@ -108,7 +108,9 @@ async def _fake_vllm(reader, writer):
 
 def test_a_live_endpoint_behind_the_shim_is_accepted_on_every_window(m, tmp_path):
     """The live shim (`active_replay.LiveServer`), the path a served vLLM endpoint takes, writes each completion chunk's
-    text as canonical events: with a token of 200 bytes and an empty one in every response, v5 accepts every window."""
+    text as canonical events: with a token of 200 bytes and an empty one in every response, v5 accepts every window.
+    The server's outbox is the shim's own log (`n3_canonical.replay_units`), so this checks that the shim's frames fit
+    the template, not what they carry."""
     doc = m.trace()
     report = calibration.calibrate(doc)
     s = m.ar.Setup(report)
