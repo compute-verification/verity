@@ -105,6 +105,7 @@ import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
+import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -452,12 +453,15 @@ import Proofs.Flock.Claims.ZK.SessionLean
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq` and `ProgReads` are facts about what Rust computes (`Firewall::finish`, `LeanFrame`), `LinkRoundEq` one
+  `FinalRoundEq` is a fact about the proof files the session's Lean finish computes (`Flock.Firewall.Finish`), which
+  `flock-circuit` sends, `ProgReads` one about what Rust hands the frame (`LeanFrame`), `LinkRoundEq` one
   about what the transport hands `Flock.Firewall.Link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`;
   `HelloEq` follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and
   `CoinsRead`) and the `Finish`'s round facts about the session loop
   (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
-  (`LeanRelease.checkIs_coinLayer`).
+  (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
+  `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
+  proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
@@ -520,6 +524,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
   table admits the opened coins no refusal shows, so table `j`'s rep `r`'s check passes at coins that are the opened
   ones through it (**`Claims.ZKMal.Masked.rank_at_admits`**).
+* `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
+  the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
+  (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
+  reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
