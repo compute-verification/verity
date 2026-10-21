@@ -10,19 +10,17 @@ from verity_vllm.store import remote
 
 def session_of(args: Any) -> remote.CommitSession | None:
     """The Commit's session from its options (`pipeline.commit.Options`), or None without ``--remote-verifier``; refused
-    before anything runs where it reads the store in place without session.cu or the Commit has no instrumented run to
-    audit."""
+    before anything runs where the Commit has no instrumented run to audit."""
     if not args.remote_verifier:
         return None
-    if args.remote_paged_lib and not args.remote_session_lib:
-        raise SystemExit("--remote-paged-lib reads the store in place: give --remote-session-lib with it")
     backend_of = None
     if args.remote_session_lib:
         from verity_vllm.store.in_place import InPlaceBackend
-        backend_of = InPlaceBackend.for_commit(args.remote_session_lib, args.remote_paged_lib)
+        backend_of = InPlaceBackend.for_commit(args.remote_session_lib)
     rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None,
                               weight_blocks=args.remote_weight_blocks, kv_lib=args.remote_kv_lib, backend_of=backend_of,
-                              out=args.out, log=lambda m: print(m, flush=True))
+                              out=args.out, step_ms=args.remote_step_ms, filler_gib=args.remote_filler_gib,
+                              log=lambda m: print(m, flush=True))
     if args.only_arm == "control" or args.pairs < 1:
         raise SystemExit("--remote-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
     return rs

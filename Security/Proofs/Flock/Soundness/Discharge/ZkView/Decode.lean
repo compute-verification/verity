@@ -514,7 +514,6 @@ theorem decode_encode : DecodeEncode := by
     exact hp.2.2.1)
   rw [ByteArray.empty_append, ByteArray.append_empty] at h
   unfold Zk.decode
-  rw [show (⟨encZk sh p, 0⟩ : Reader) = ⟨encZk sh p, ByteArray.empty.size⟩ from rfl, h]
-  rfl
+  exact Reader.runAll_of_run h (Nat.zero_add _)
 
 end FlockSoundness.Discharge.ZkView

@@ -28,10 +28,10 @@ CHUNK = 64
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None) -> dict:
+def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None, commit_scheme: str | None = None) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
     ``seed`` draws its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
-    of the toy's ``SiluMul_v1{I=T.I}``."""
+    of the toy's ``SiluMul_v1{I=T.I}``; ``commit_scheme`` the members' (unset = vllm-v1; rows-sha512: a TP rank's, `served_tp`)."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
@@ -52,7 +52,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
         prompts = {"r0": [1, 2], "r1": [5, 3]}
         world = T.Honest(inst, woff, w, prompts)
         bmap, _ = world.bmap_and_reader()
-        com, rc = commit_members(dict(sorted(world.store.items())))
+        com, rc = commit_members(dict(sorted(world.store.items())), commit_scheme=commit_scheme)
     finally:
         T.DH, T.I = dh, i0
 

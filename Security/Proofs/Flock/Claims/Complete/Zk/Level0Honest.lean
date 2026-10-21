@@ -254,7 +254,7 @@ theorem goal_lastZ {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Tran
       gOf (basisAt q e)[y]! = Model.bHat execArith sch.n (bOf b) (q.toList.map gOf ++ Model.bitsK e y))
     {C : Array F256 × LState × Transcript} (hC : C = chals P cf #[] x.2.1 x.2.2 4)
     {F : Array F256} (hF : F = foldKs C.1.toList (embedF g))
-    (hsync₁ : Sync C.2.1.s C.2.1.q (embedF (splitK F)) (liftU (foldKs C.1.toList w)) (x.1.1 - 4))
+    (hsum : gOf C.2.1.s = ∑ y ∈ Finset.range (2 ^ (x.1.1 - 4)), gv F y * gv (foldKs C.1.toList w) y)
     (hyr : P.finalProof.yr = splitK F)
     (hfin : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
       (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) C.2.1
@@ -300,8 +300,6 @@ theorem goal_lastZ {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Tran
     rw [pow_add, Nat.mul_div_cancel _ (by positivity)]
   have hFs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList (embedF g)).size = 2 ^ (x.1.1 - 4) := by
     rw [foldKs_size, embedF_size, hg, Array.length_toList, hch, hlanes, hcols, Nat.add_comm, h16]
-  have hWs : (foldKs (chals P cf #[] x.2.1 x.2.2 4).1.toList w).size = 2 ^ (x.1.1 - 4) := by
-    rw [foldKs_size, hw4, Array.length_toList, hCf.2.2.2.2.2.2.1, Array.size_empty, Nat.zero_add, h16]
   have hrows' : P.finalProof.rows = (positions (sch.levels.getD (sch.levels.size - 1) default)
       (queryCoins P cf (sch.levels.getD (sch.levels.size - 1) default) (chals P cf #[] x.2.1 x.2.2 4).2.1
         (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2))).map
@@ -335,8 +333,7 @@ theorem goal_lastZ {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Tran
       (chals P cf #[] x.2.1 x.2.2 4).2.1
       (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.1))
     _ _ _ _ _ hFs ?_ ?_ fun y hy => ?_
-  · rw [← sum_split _ _ _ hFs hWs]
-    exact hsync₁.sum
+  · exact hsum
   · rw [show (query P cf (sch.levels.getD (sch.levels.size - 1) default) P.finalProof.rows
         (chals P cf #[] x.2.1 x.2.2 4).1 (chals P cf #[] x.2.1 x.2.2 4).2.1
         (ap (fun P' => P.finalProof.yr.foldl (fun P'' w => pF w P'') P') (chals P cf #[] x.2.1 x.2.2 4).2.2)).1.2.2 =

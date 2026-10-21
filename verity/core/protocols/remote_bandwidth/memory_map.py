@@ -75,17 +75,17 @@ step's root and before the next pass's, and a re-key's old index is below the st
 (`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).
 
 Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
-step=s)`, public), and the steps of a session's passes strictly increase.  Its plan is the blocks the circuit reads at
-`s`: with every resident block read, the blocks resident at `s`, registered or written at a step before `s` and not
-freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
+step=s)`, public), and the steps of a session's passes strictly increase.  Its plan holds every complete block the
+circuit reads at `s`, filler beside them allowed: here the blocks resident at `s`, registered or written at a step
+before `s` and not freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
 `Definitions.Accounting.Requirement`).
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
 did and the device has since encoded, and its frees are of blocks whose values the step read last.  `Replay.take(s)`
 is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's `Session.receive(...,
 change=...)`), the blocks appended and released between them, of which a block appended and released in between is in
-neither; it refuses a step at or before one already applied or taken.  That a pass's plan is the blocks the circuit
-reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement, inside zero
-knowledge.
+neither; it refuses a step at or before one already applied or taken.  That a pass's plan holds every complete block
+the circuit reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement,
+inside zero knowledge.
 """
 
 from __future__ import annotations

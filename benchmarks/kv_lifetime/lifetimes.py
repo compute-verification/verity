@@ -12,8 +12,8 @@
 
 A block's content epoch runs from its ALLOC to its eviction (the next ALLOC of the same block, a RESET, or its FREE when
 unhashed); its held segments are the spans some request holds it (ALLOC or HIT to the FREE or CACHE that drops its
-count to zero). Under memory-map/v1 a pass's plan is the blocks its step reads, so only held blocks are ever in a
-plan: a cached block no request holds is resident but credited nothing.
+count to zero). Under memory-map/v1 a pass is credited the bits its step reads, so only held blocks are ever
+credited: a cached block no request holds may be resident and planned, but carries none of the step's reads.
 
 `analyze` turns the events into the distributions the memory-accounting frontier needs, for a block of `block_bytes`:
 

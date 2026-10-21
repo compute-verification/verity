@@ -4,8 +4,9 @@ the model runner share one `Store`), every patch through `verity_vllm.engine.hoo
 ~~~text
 GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
 GPUModelRunner.initialize_kv_cache  after, unless profiling: the KV pool, a region per attention layer, every page filler
-BlockPool.get_new_blocks            after: kv_alloc of the pages it handed out
-BlockPool.free_blocks               after: kv_free of the pages it freed, moved to the back of the free queue (FIFO
+                                    (with kv=False, unregistered)
+BlockPool.get_new_blocks            after: kv_alloc of the pages it handed out (with kv=False, none)
+BlockPool.free_blocks               after: kv_free of the pages it freed (with kv=False, none), moved to the back of the free queue (FIFO
                                     reuse, so a page freed inside a window is reused as late as the pool allows)
 BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
 Scheduler.schedule                  after: a verifier's message since the last pass ends the window, the next
@@ -242,15 +243,17 @@ class Binder:
     (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
     binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
-    unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`)."""
+    unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`).  With ``kv=False``
+    the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
+    writes no registered block, so its `kv_append` only numbers the step; `register_filler` adds the store's filler."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
                  on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
-                 passes: bool = True, weight_blocks: int | None = None) -> None:
-        self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
+                 passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
+        self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
         self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
@@ -265,6 +268,7 @@ class Binder:
         self.slots = 0
         self.tensors: list[tuple[str, Callable[[], Any], tuple]] = []
         self.model: Any = None
+        self.filler: Any = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -295,6 +299,11 @@ class Binder:
         if any(int(k) != slots for k in kbs):
             raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
         pages = int(kv_cache_config.num_blocks)
+        if not self.kv:
+            self.slots = slots
+            storages = {t.untyped_storage().data_ptr(): t.untyped_storage().nbytes() for t in caches}
+            self.unregistered["kv"] = sum(storages.values())
+            return
         flats: dict[int, Any] = {}
         backings, starts, layout = [], [], None
         for i, t in enumerate(caches):
@@ -317,6 +326,20 @@ class Binder:
         self.slots = slots
         self.store.register_kv_pool("kv", backings, layout, block_bytes=self.block_bytes, codec=self.kv_codec,
                                     receipt=self.receipt, encode=False)
+
+    def register_filler(self, nbytes: int, device: Any) -> None:
+        """Register ``nbytes`` of zeros on ``device`` (whole blocks) as the store's filler, one region (kind filler,
+        tier hbm) after the weights: memory the store holds that no step reads or writes."""
+        torch, n = _torch(), nbytes // self.block_bytes
+        if n < 1:
+            raise ValueError(f"filler of {nbytes} bytes holds no {self.block_bytes}-byte block")
+        if self.filler is not None:
+            raise RuntimeError("the store's filler is registered")
+        self.filler = torch.zeros(n * self.block_bytes, dtype=torch.uint8, device=device)
+        self.store.register("filler", "hbm", "filler", TorchBacking(self.filler, self.filler.numel()),
+                            block_bytes=self.block_bytes, codec=IDENTITY, receipt=self.receipt, source="filler:zeros",
+                            encode=False)
+        self._held("filler", lambda: self.filler)
 
     def _held(self, name: str, live: Callable[[], Any]) -> None:
         self.tensors.append((name, live, _where(live())))
@@ -350,7 +373,8 @@ class Binder:
             for b in freed:
                 pool.free_block_queue.remove(b)
             pool.free_block_queue.append_n(freed)
-        self.store.kv_free([b.block_id for b in freed])
+        if self.kv:
+            self.store.kv_free([b.block_id for b in freed])
 
     def on_schedule(self, sched: Any, so: Any) -> None:
         if self.store.in_pass:
@@ -361,7 +385,7 @@ class Binder:
                 self.store.begin_window(m, None if self.windows else self.registration)
                 self._in_window = True
         t = time.perf_counter()
-        apps = self.appends(sched, so)
+        apps = self.appends(sched, so) if self.kv else []
         self.store.counters.add("appends", time.perf_counter() - t)
         s, self.step = self.step, self.step + 1
         self.store.kv_append(apps, s)
@@ -429,7 +453,8 @@ class Binder:
         def get_new(orig):
             def get_new_blocks(pool, n):
                 blocks = orig(pool, n)
-                binder.store.kv_alloc([b.block_id for b in blocks])
+                if binder.kv:
+                    binder.store.kv_alloc([b.block_id for b in blocks])
                 return blocks
             return get_new_blocks
 

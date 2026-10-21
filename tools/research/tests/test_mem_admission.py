@@ -77,15 +77,44 @@ def test_a_run_in_its_own_scope_reads_the_slice_above_it_when_that_has_less_head
     (scope / "memory.current").write_text("0\n")
     (scope / "memory.stat").write_text("inactive_file 0\n")
     monkeypatch.setenv("RESEARCH_CGROUP_DIR", str(scope))
-    r = M.reading()
-    assert (r["limit"], r["in_use"], r["source"]) == (100 * GB, 20 * GB, str(machine["cg"]))
+    s = M.snapshot(machine["ram"])
+    assert (s["limit_gb"], s["in_use_gb"], s["available_gb"], s["source"]) == (100, 20, 50, str(machine["cg"]))
     (machine["cg"] / "memory.max").write_text("max\n")
-    assert M.reading()["source"] == str(scope)
+    s = M.snapshot(machine["ram"])
+    assert (s["source"], s["available_gb"]) == (str(scope), 570), "the scope is then the machine's: the reservations count against it"
+
+
+def test_the_machines_reservations_count_against_the_slice_not_the_runs_own_scope(machine, monkeypatch):
+    """19 Oct, vy-nebius-2: a run's fresh 900 GiB session scope less 1,219 GB of reservations held in other scopes (two check slots'
+    601 GB) read -253 GB and refused every --mem-gb run, with 357 GB left in the 1,600 GiB user slice."""
+    G = M.GB
+    (machine["cg"] / "memory.max").write_text(f"{1718 * G:.0f}\n")
+    (machine["cg"] / "memory.current").write_text(f"{142 * G:.0f}\n")
+    (machine["cg"] / "memory.stat").write_text("inactive_file 0\n")
+    scope = machine["cg"] / "session-148161.scope"
+    scope.mkdir()
+    (scope / "memory.max").write_text(f"{966 * G:.0f}\n")
+    (scope / "memory.current").write_text("0\n")
+    (scope / "memory.stat").write_text("inactive_file 0\n")
+    monkeypatch.setenv("RESEARCH_CGROUP_DIR", str(scope))
+    for slot in ("a", "b"):
+        (machine["ram"] / f"check-{slot}.json").write_text(json.dumps({"owner": "check", "gb": 594.5}))   # 30 + 2 x 594.5 = 1,219
+    s = M.snapshot(machine["ram"])
+    assert (s["source"], s["reserved_gb"], s["available_gb"]) == (str(machine["cg"]), 1219, 357)
+    assert M.admit(128, ramlock_dir=machine["ram"], run_id="r128", run_dir=machine["root"] / "r128")["available_gb"] == 357
+    with pytest.raises(remote.MemoryNotAvailable, match=r"asked 300 GB; available 229 GB = limit 1718 \(v2 "):
+        M.admit(300, ramlock_dir=machine["ram"], run_id="r300", run_dir=machine["root"] / "r300")
+    for f in machine["ram"].glob("*.json"):
+        f.unlink()
+    s = M.snapshot(machine["ram"])
+    assert (s["source"], s["available_gb"]) == (str(scope), 966), "an empty ledger: the run's own cap binds, and says so"
+    assert M.describe(s).startswith(f"available 966 GB = limit 966 (v2 {scope}, this run's own) - in use 0; the machine's {machine['cg']} "
+                                    "leaves 1576 = 1718 - in use 142 - reserved 0")
 
 
 def test_without_a_finite_cgroup_limit_the_reading_is_meminfo(machine):
     (machine["cg"] / "memory.max").write_text("max\n")
-    r = M.reading()
+    (r,) = M.readings()
     assert r["cgroup"] is None and r["limit"] == 924131384 * 1024 and r["in_use"] == (924131384 - 731179236) * 1024
 
 
@@ -213,7 +242,7 @@ def test_active_file_cache_is_reclaimable_and_not_in_use(machine):
     (machine["cg"] / "memory.max").write_text(f"{1500 * G}\n")
     (machine["cg"] / "memory.current").write_text(f"{930 * G}\n")
     (machine["cg"] / "memory.stat").write_text(f"anon {366 * G}\nfile {557 * G}\nshmem {11 * G}\nactive_file {454 * G}\ninactive_file {93 * G}\n")
-    r = M.reading()
+    (r,) = M.readings()
     assert r["in_use"] == (930 - 454 - 93) * G
 
 
