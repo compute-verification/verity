@@ -22,8 +22,9 @@ namespace Flock.Firewall.Level0
 /-- **A table's level 0**: its `m`, level 0 of its `--zk` schedule (`lv`) and `t_pad`; the host's packed witness `g`
 (`2^(lanes + cols)` words); the hiding the loop drew: the four extra lanes (`extra`, `2^cols` words each), every lane's
 padding coefficients (`pads`, `t_pad` each, the witness lanes' then the extra lanes'), and the salts (`salts`, 192 bytes
-for each of the `2^d` tree positions, `salt q`); the padded codeword's `2^d` rows (`Link.rows`) and the root
-(`Link.root`'s: the cap, concatenated). -/
+for each of the `2^d` tree positions, `salt q`); and what level 0 commits of them (`build`, `ofDraws_ok`): the padded
+codeword's `2^d` rows (`Link.rows`), the Merkle tree's layers from the leaves (`layers[0]`) to the cap
+(`layers[d − cap]`, `Link.layer`'s), and the root (`Link.root`'s: the cap, concatenated). -/
 structure Level0 where
   m : Nat
   lv : Level
@@ -33,6 +34,7 @@ structure Level0 where
   pads : Array (Array F128)
   salts : ByteArray
   rows : Array (Array F128)
+  layers : Array (Array ByteArray)
   root : ByteArray
   deriving Inhabited
 
@@ -48,31 +50,108 @@ def Level0.toIn (l : Level0) : Link.In where
   lanePad i k := (l.pads[i]!)[k]!
   salt := l.salt
 
-/-- The OS bytes a table's level 0 draws at `m`: the extra lanes' words, the paddings' and the salts. -/
-def drawBytes (m : Nat) : V Nat := do
-  let (_, nC, nL, tPad, nQ) ← Link.sizes m
-  return 16 * Zk.EXTRA_LANES * nC + 16 * nL * tPad + 192 * nQ
+/-- The layer above `below`: each node `SHA-512(l ‖ r)` of a pair (`Link.layer`'s step). -/
+def up (below : Array ByteArray) : Array ByteArray :=
+  (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)
 
-/-- **A table's level 0** at `m` from its packed witness `g` and the draws' bytes `d` (`drawBytes m`). -/
+/-- A Merkle tree over the leaves `lf q` (`q < 2^d`), `k` layers up: its top layer, and its layers from the leaves to it,
+each hashed once (`tower_fst`, `tower_snd`). -/
+def tower (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray × Array (Array ByteArray)
+  | 0 => let l := Link.layer d lf 0; (l, #[l])
+  | k + 1 => let p := tower d lf k; let t := up p.1; (t, p.2.push t)
+
+theorem layer_succ (d : Nat) (lf : Nat → ByteArray) (h : Nat) : Link.layer d lf (h + 1) = up (Link.layer d lf h) := rfl
+
+theorem tower_fst (d : Nat) (lf : Nat → ByteArray) (k : Nat) : (tower d lf k).1 = Link.layer d lf k := by
+  induction k with
+  | zero => rfl
+  | succ k ih => simp only [tower, ih, layer_succ]
+
+theorem tower_snd (d : Nat) (lf : Nat → ByteArray) (k : Nat) :
+    (tower d lf k).2 = (Array.range (k + 1)).map (Link.layer d lf) := by
+  induction k with
+  | zero => simp [tower, Array.range_succ]
+  | succ k ih => simp only [tower, ih, tower_fst, layer_succ, Array.range_succ, Array.map_push]
+
+/-- **A table's level 0** at level `lv` with `t_pad` paddings, from its packed witness `g` and the drawn hiding: the rows,
+layers and root committed on them, as `Link` commits `toIn` (`build_rows`, `build_layers`, `build_root`). -/
+def build (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128) (extra pads : Array (Array F128)) (salts : ByteArray) :
+    Level0 :=
+  let l : Level0 := { m, lv, tPad, g, extra, pads, salts, rows := #[], layers := #[], root := .empty }
+  let rows := Link.rows lv tPad l.toIn.g l.toIn.extra l.toIn.lanePad
+  let lvs := Link.leaves lv tPad l.toIn
+  let t := tower lv.d (fun q => lvs[q]!) (lv.d - lv.cap)
+  { l with rows, layers := t.2, root := Link.flat t.1 }
+
+/-- The OS bytes level 0 draws at level `lv` with `t_pad` paddings: the extra lanes' words, the paddings' and the
+salts. -/
+def drawSize (lv : Level) (tPad : Nat) : Nat :=
+  16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad + 192 * 2 ^ lv.d
+
+/-- The OS bytes a table's level 0 draws at `m` (`drawSize` at level 0 of its `--zk` schedule). -/
+def drawBytes (m : Nat) : V Nat := do
+  let (s, tPad) ← Zk.schedule m
+  return drawSize (s.levels.getD 0 default) tPad
+
+/-- **A table's level 0** at `m` from its packed witness `g` and the draws' bytes `d` (`drawBytes m`), in
+`Link.parse`'s layout after the witness: the extra lanes, the paddings, the salts. -/
 def ofDraws (m : Nat) (g : Array F128) (d : ByteArray) : V Level0 := do
   let (s, tPad) ← Zk.schedule m
   let lv := s.levels.getD 0 default
-  let (nG, nC, nL, _, nQ) ← Link.sizes m
+  let (nG, nC, nL) := (2 ^ (lv.lanes + lv.cols), 2 ^ lv.cols, 2 ^ lv.lanes + Zk.EXTRA_LANES)
   if g.size != nG then throw s!"level 0: a {g.size}-word witness where m = {m} takes {nG}"
-  let want ← drawBytes m
-  if d.size != want then throw s!"level 0: {d.size} bytes drawn where m = {m} takes {want}"
-  let extra := (Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * nC * e) nC
+  if d.size != drawSize lv tPad then throw s!"level 0: {d.size} bytes drawn where m = {m} takes {drawSize lv tPad}"
   let oP := 16 * Zk.EXTRA_LANES * nC
-  let pads := (Array.range nL).map fun l => Link.wordsAt d (oP + 16 * tPad * l) tPad
-  let salts := d.extract (oP + 16 * nL * tPad) d.size
-  let l : Level0 := { m, lv, tPad, g, extra, pads, salts, rows := #[], root := .empty }
-  let i := l.toIn
-  let rows := Link.rows lv tPad i.g i.extra i.lanePad
-  let k := min lv.d Link.CHUNK
-  let lvs := Link.parRange (fun q => Link.leaf rows[q]! (i.salt q)) (2 ^ (lv.d - k)) (2 ^ k)
-  let root := Link.flat (Link.layer lv.d (fun q => lvs[q]!) (lv.d - lv.cap))
-  if nQ != rows.size then throw s!"level 0: {rows.size} rows where m = {m} has {nQ} tree positions"
-  return { l with rows, root }
+  let l := build m lv tPad g ((Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * nC * e) nC)
+    ((Array.range nL).map fun l => Link.wordsAt d (oP + 16 * tPad * l) tPad) (d.extract (oP + 16 * nL * tPad) d.size)
+  if l.rows.size != 2 ^ lv.d then throw s!"level 0: {l.rows.size} rows where m = {m} has {2 ^ lv.d} tree positions"
+  return l
+
+section
+variable {m : Nat} {lv : Level} {tPad : Nat} {g : Array F128} {extra pads : Array (Array F128)} {salts : ByteArray}
+  {l : Level0}
+
+theorem build_rows (h : l = build m lv tPad g extra pads salts) :
+    l.rows = Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad := by
+  subst h; rfl
+
+theorem build_layers (h : l = build m lv tPad g extra pads salts) :
+    l.layers = (Array.range (l.lv.d - l.lv.cap + 1)).map
+      (Link.layer l.lv.d fun q => (Link.leaves l.lv l.tPad l.toIn)[q]!) := by
+  subst h; exact tower_snd lv.d _ (lv.d - lv.cap)
+
+theorem build_root (h : l = build m lv tPad g extra pads salts) :
+    l.root = Link.flat (Link.cap l.lv l.tPad l.toIn) := by
+  subst h; exact congrArg Link.flat (tower_fst lv.d _ (lv.d - lv.cap))
+
+end
+
+/-- `Link.root` of a table at level 0 of its `--zk` schedule is its cap's, concatenated. -/
+theorem root_of (l : Level0) (s : Schedule) (hz : Zk.schedule l.m = .ok (s, l.tPad))
+    (hl : l.lv = s.levels.getD 0 default) : Link.root l.toIn = Link.flat (Link.cap l.lv l.tPad l.toIn) := by
+  unfold Link.root
+  rw [show l.toIn.m = l.m from rfl, hz, hl]
+
+/-- **What `ofDraws` keeps is what it commits**: a `Level0` it returns is `build` at level 0 of `m`'s `--zk` schedule, so
+its rows, layers and root are `Link`'s of its own inputs (`toIn`), and its root is `Link.root`'s. -/
+theorem ofDraws_ok {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0} (h : ofDraws m g d = .ok l) :
+    l.m = m ∧ l.g = g ∧ (∃ s, Zk.schedule m = .ok (s, l.tPad) ∧ l.lv = s.levels.getD 0 default) ∧
+      l.rows = Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad ∧
+      l.layers = (Array.range (l.lv.d - l.lv.cap + 1)).map
+        (Link.layer l.lv.d fun q => (Link.leaves l.lv l.tPad l.toIn)[q]!) ∧
+      l.root = Link.root l.toIn := by
+  unfold ofDraws at h
+  cases hz : Zk.schedule m with
+  | error e => rw [hz] at h; cases h
+  | ok p =>
+    obtain ⟨s, tPad⟩ := p
+    rw [hz] at h
+    simp only [bind, Except.bind, pure, Except.pure] at h
+    repeat (split at h; · cases h)
+    cases h
+    refine ⟨rfl, rfl, ⟨s, hz, rfl⟩, build_rows rfl, build_layers rfl, ?_⟩
+    rw [root_of _ s hz rfl]
+    exact build_root rfl
 
 /-- **A table's level 0** at `m` from its packed witness `g`, its hiding drawn from `get` in one read. -/
 def draw (get : USize → IO ByteArray) (m : Nat) (g : Array F128) : IO (V Level0) := do
