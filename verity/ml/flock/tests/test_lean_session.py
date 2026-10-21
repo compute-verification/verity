@@ -437,9 +437,12 @@ def test_the_loops_finish_needs_a_statement(loop):
 @pytest.mark.slow
 def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop drew
-    at the table's `m`; its answer is that root. Each rep's salts for levels ≥ 1 it draws itself, once: whole 192-byte
-    leaves a level, fresh for each rep, and a rep asked again, or a rep's request before its salts, is refused."""
-    lp = Loop(Auditor(plain), _args(zk, "pub-16.bin"))
+    at the table's `m`, for a session it still serves; its answer is that root. Each rep's salts for levels ≥ 1 it draws
+    itself, once: whole 192-byte leaves a level, fresh for each rep, and a rep asked again, or a rep's request before its
+    salts, is refused. Once the session that drew the level 0 ends, the loop has freed it, and finish refuses its root."""
+    S = Sessions(_args(zk, "pub-16.bin"))
+    s, name = S.session()
+    lp = S.lp
 
     def finish():
         f = TcpFrame(lp)
@@ -450,13 +453,13 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     assert f.ask("level0 0 64", b"\x01" * 64) == "err finish: table 0's root is no level 0's the session loop drew"
     f.close()
     other = 25
-    _, _, r0 = level0(lp, other, b"\0" * 16 * 2 ** (other - 7))
+    _, _, r0 = level0(lp, other, _zeros(other), name)
     f = finish()
     got = f.ask(f"level0 0 {len(r0)}", r0)
     f.close()
     if isinstance(got, str):
         m = int(re.fullmatch(rf"err finish: a level 0 drawn at m = {other} for a table at m = (\d+)", got)[1])
-        _, _, r0 = level0(lp, m, b"\0" * 16 * 2 ** (m - 7))
+        _, _, r0 = level0(lp, m, _zeros(m), name)
     f = finish()
     assert f.ask(f"level0 0 {len(r0)}", r0) == (f"ok {len(r0)}", r0)
     assert f.ask("rep 0 0 0") == "err table 0 rep 0 before its salts for levels ≥ 1"
@@ -476,6 +479,11 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
         reps.append(levels)
     assert [len(x) for x in reps[0]] == [len(x) for x in reps[1]] and reps[0] != reps[1]
     assert f.ask("salts 0 0 0") == "err table 0 rep 0's salts for levels ≥ 1 were drawn already"
+    f.close()
+    s.close()
+    assert S.ended().startswith("level 0: session 0 ended; ")
+    f = finish()
+    assert f.ask(f"level0 0 {len(r0)}", r0) == "err finish: table 0's root is no level 0's the session loop drew"
     f.close()
     lp.close()
 
