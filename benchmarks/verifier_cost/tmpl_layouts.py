@@ -137,7 +137,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous") -> tuple[np.ndarr
 
 def _chained(c: T.Call, Le: int) -> bool:
     lo, hi = c.base, c.base + c.count * Le
-    return any(ln and sp and at < hi and at + (c.count - 1) * sp + ln > lo for ln, at, sp in c.segs)
+    return any(ln and at < hi and at + (c.count - 1) * sp + ln > lo for ln, at, sp in c.segs)
 
 
 def _bindings(defs, maps, size, kinds, urows) -> dict:
@@ -192,6 +192,7 @@ def order(phi: np.ndarray, flat: T.Flat) -> dict:
     n = len(flat.na)
     distinct = len(np.unique(phi)) == n
     bad = selfs = 0
+    late: list[tuple[int, int]] = []
     step = 1 << 22
     for a in range(0, n, step):
         b = min(n, a + step)
@@ -200,9 +201,27 @@ def order(phi: np.ndarray, flat: T.Flat) -> dict:
         v = flat.refs[lo:hi].astype(np.int64)
         keep = (v != flat.const) & (v != r)
         selfs += int((v == r).sum())
-        bad += int((phi[v[keep]] >= phi[r[keep]]).sum())
+        hit = keep & (phi[v] >= phi[r])
+        bad += int(hit.sum())
+        late += list(zip(r[hit][:8 - len(late)].tolist(), v[hit][:8 - len(late)].tolist()))
     return {"distinct": bool(distinct), "late_refs": bad, "self_refs": selfs,
-            "constant_last": bool(phi[flat.const] == phi.max())}
+            "constant_last": bool(phi[flat.const] == phi.max()), "late": late}
+
+
+def path(t: T.Tmpl, x: int) -> list:
+    """The unit's column ``x`` as the chain of calls it sits in: (definition, call base, count, callee cols, copy,
+    segments) per level, then the definition and local column it is a row of."""
+    out, d = [], t.root
+    while True:
+        D = t.defs[d]
+        hit = next((c for c in D.calls if c.base <= x < c.base + c.count * t.defs[c.e].cols), None)
+        if hit is None:
+            out.append((d, x))
+            return out
+        Le = t.defs[hit.e].cols
+        i, x = divmod(x - hit.base, Le)
+        out.append((d, hit.base, hit.count, Le, i, [s for s in hit.segs][:6], D.cols))
+        d = hit.e
 
 
 def main(argv: list[str]) -> int:
@@ -227,6 +246,7 @@ def main(argv: list[str]) -> int:
             ok &= r["identity"]
         if flat is not None and mode != "today":
             r["order"] = order(phi, flat)
+            r["order"]["late_paths"] = [(path(t, a), path(t, b)) for a, b in r["order"]["late"][:3]]
             ok &= r["order"]["distinct"] and r["order"]["late_refs"] == 0
         r |= {"seconds": round(time.time() - t1, 1),
               "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
