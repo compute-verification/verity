@@ -23,13 +23,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-local macro "lay_omega" : tactic =>
-  `(tactic| (
-    simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc,
-      Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml,
-      Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *
-    omega))
-
 /-! ## Forms and coordinates -/
 
 /-- A masked form is pad-free where its executable value at the pads `h` on `l'` is its value at zero pads on `l`. -/
@@ -133,16 +126,16 @@ theorem masks_of (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (Fi
   refine ⟨fun i hi => ?_, fun i hi => ?_, fun j hj => ?_, ?_, ?_, ?_⟩
   · simp only [zcOf]
     rw [Zerocheck.get_map_range _ hi, Zerocheck.get_map_range _ hi]
-    exact hv _ (by rw [← hE]; lay_omega)
+    exact hv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
   · simp only [zcOf]
     rw [Zerocheck.get_map_range _ hi, Zerocheck.get_map_range _ hi]
-    exact hv _ (by rw [← hE]; lay_omega)
+    exact hv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
   · simp only [zcOf]
     rw [Zerocheck.get_map_range _ (by omega : j < st.m - 6), Zerocheck.get_map_range _ (by omega : j < st.m - 6)]
-    exact Prod.ext (hv _ (by rw [← hE]; lay_omega)) (hv _ (by rw [← hE]; lay_omega))
-  · exact hv (layOf Tz st).fa (by rw [← hE]; lay_omega)
-  · exact hv (layOf Tz st).fb (by rw [← hE]; lay_omega)
-  · exact hv (layOf Tz st).fc (by rw [← hE]; lay_omega)
+    exact Prod.ext (hv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))) (hv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)))
+  · exact hv (layOf Tz st).fa (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
+  · exact hv (layOf Tz st).fb (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
+  · exact hv (layOf Tz st).fc (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
 
 theorem lcr_masks (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (Fin.castAdd 4 i)) :
     ∀ j < st.c.kLog - 6, (lcRoundsOf Tz st v')[j]! =
@@ -151,8 +144,8 @@ theorem lcr_masks (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (F
   intro j hj
   simp only [lcRoundsOf]
   rw [Zerocheck.get_map_range _ hj, Zerocheck.get_map_range _ hj]
-  exact Prod.ext (msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; lay_omega))
-    (msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; lay_omega))
+  exact Prod.ext (msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)))
+    (msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega)))
 
 theorem zp_masks (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (Fin.castAdd 4 i)) :
     ∀ i < 64, (zPartialOf Tz st v')[i]! =
@@ -160,7 +153,7 @@ theorem zp_masks (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (Fi
   intro i hi
   simp only [zPartialOf]
   rw [Zerocheck.get_map_range _ hi, Zerocheck.get_map_range _ hi]
-  exact msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; lay_omega)
+  exact msg_masks Tz st v v' hp hE hvv _ (by rw [← hE]; (simp only [layOf, Zk.PadLayout.new, Zk.PadLayout.fa, Zk.PadLayout.fb, Zk.PadLayout.fc, Zk.PadLayout.lc, Zk.PadLayout.zp, Zk.PadLayout.lgOod, Zk.PadLayout.lgMsg, Zk.PadLayout.lgE, Zk.PadLayout.hab, Zk.PadLayout.ml, Zk.PadLayout.r1ab, Zk.PadLayout.r1c, Zk.PadLayout.len, Zk.PadLayout.tw, Zk.PadLayout.tx, Zk.PadLayout.ty] at *; omega))
 
 /-- **The masked lincheck is the clear one under the pads**, at any clear values. -/
 theorem lcMasks_of (hE : (layOf Tz st).hab = nE) (hvv : ∀ i, v' i = v i + hp (Fin.castAdd 4 i)) :
