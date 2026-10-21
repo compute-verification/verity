@@ -34,8 +34,8 @@ def entropy(seed: int):
 
 
 def challenger_key(seed: int, H: int = 4) -> tuple[lms.PrivateKey, LC.ChallengerKey]:
-    """Key `seed`: 2^H leaves (sixteen by default, four a session: the ledger's open, the record, the close and the
-    ledger's end)."""
+    """Key `seed`: 2^H leaves (sixteen by default, five a reserved session: the ledger's reserve and open, the record, the
+    close and the ledger's end)."""
     k = lms.keygen(lms.Params(64, 4, H), bytes([seed]) * 64)
     return k, LC.ChallengerKey(k.params.W, k.params.H, lms.public_key(k))
 
@@ -46,6 +46,11 @@ def window(seed: int) -> dict:
 
 
 WINDOW = window(0)
+
+
+def session_id(n: int) -> str:
+    """Gate session id `n`, of the form infra's gate gives a reserved session (``s<UTC>-<4 hex>``)."""
+    return f"s20261020T110800Z-{n:04x}"
 
 
 class Gate:
@@ -167,10 +172,12 @@ class Gate:
         except LC.CoinError:
             released = None
         families = self._opens[session]["families"]
+        hellos = out / R.HELLOS
         body = {"rc": 0 if closed else 1, "closed": closed, "files": files,
                 "ended": "closed by the client" if closed else "serve.py exited 1", "released": released,
                 "complete": released is not None and all(released.get(k) == n for k, n in families),
                 "record_leaf": PHC.leaf_of(doc["signature"]), "commitment": record.commitment.root.hex(),
+                "refused_hellos": len(hellos.read_text().splitlines()) if hellos.is_file() else 0,
                 "ended_utc": "2026-10-20T11:08:53Z", **override}
         if type(body["record_leaf"]) is int:
             self._leaf = max(self._leaf, body["record_leaf"] + 1)
@@ -183,7 +190,8 @@ class Gate:
 
 class Ledger:
     """The auditor's ledger at `path`, its entries signed under key `seed` at the next of `leaves` (shared with the
-    challenger's own signatures under that key, of height `H`), naming key `named` in its opens (by default its own)."""
+    challenger's own signatures under that key, of height `H`), naming key `named` in its opens (by default its own);
+    `reserve` reserves a session, whose `open` then binds that reserve (the gate's two-step open)."""
 
     def __init__(self, path: Path, seed: int, leaves: Iterator[int] | None = None,
                  named: LC.ChallengerKey | None = None, H: int = 4) -> None:
@@ -191,6 +199,7 @@ class Ledger:
         self.private, self.key = challenger_key(seed, H)
         self.leaves = itertools.count() if leaves is None else leaves
         self.key_sha512 = hashlib.sha512((named or self.key).public).hexdigest()
+        self._reserves: dict[str, int] = {}
 
     def append(self, kind: str, session: str, body: dict, leaf: int | None = None) -> None:
         q = next(self.leaves) if leaf is None else leaf
@@ -198,9 +207,16 @@ class Ledger:
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
+    def reserve(self, session: str, leaf: int | None = None) -> None:
+        self._reserves[session] = len(self.lines)
+        self.append("reserve", session, {"by": "vllm", "minutes": 10, "started_utc": "2026-10-20T11:08:00Z",
+                                         "expires_utc": "2026-10-20T11:18:00Z", "key_sha512": self.key_sha512}, leaf)
+
     def open(self, session: str, window: dict, leaf: int | None = None) -> None:
+        reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
+                     "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
         self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
-                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm"}, leaf)
+                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
         files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(directory.iterdir()) if p.is_file()}
@@ -215,13 +231,14 @@ class Host:
     """`challenger` in session `session` of `window` (`WINDOW` by default), its record and close signed under key
     `seed` at the next of `leaves` (hosts sharing a key share them) and written to `directory`, serving one client; the
     ledger `ledger` (a new one beside `directory` unless given) opens the session before its record and ends it once
-    `ended`. When `gated` the ledger opens it only at `open`, the gate's open of the reserved session, for the window
-    ``{root}`` the serving side names (an H1 window's open root, `pouw_h1_window.Window`), at the leaf held before the
-    record's, since the ledger's check wants a record's leaf between its session's open's and end's."""
+    `ended`. When `gated` the ledger reserves the session at once (unless not `reserved`) and opens it only at `open`,
+    the gate's open of the reserved session, for the window ``{root}`` the serving side names (an H1 window's open root,
+    `pouw_h1_window.Window`), at the leaf held before the record's, since the ledger's check wants a record's leaf between
+    its session's open's and end's."""
 
-    def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = "s-1",
+    def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = session_id(1),
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
-                 gated: bool = False) -> None:
+                 gated: bool = False, reserved: bool = True) -> None:
         self.directory, self.challenger, self.session_id = directory, challenger, session
         directory.mkdir()
         private, self.key = challenger_key(seed)
@@ -230,6 +247,8 @@ class Host:
         self.window = None if gated else WINDOW if window is None else window
         if self.window is not None:
             self.ledger.open(session, self.window)
+        elif reserved:
+            self.ledger.reserve(session)
         self._open_leaf = next(leaves) if gated else None
         session_ = R.open_session(challenger, self.key, f"{HOST}.{session}",
                                   lambda m: lms.sign_at(private, next(leaves), m).encode(), directory, session)

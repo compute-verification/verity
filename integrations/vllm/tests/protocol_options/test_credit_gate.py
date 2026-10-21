@@ -114,7 +114,7 @@ def _linear_is_the_stand_in(monkeypatch):
 
 AUDITOR = "vy-challenger-1:7811"
 #: the gate's reserve answer for the window's session, and the gate that opens it on the window's open root
-RESERVED = {"session": "s-1"}
+RESERVED = {"session": CH.session_id(1)}
 GATE: dict = {}
 
 
