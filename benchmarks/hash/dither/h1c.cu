@@ -18,8 +18,67 @@
 //                h1c_a_form(3) from h1c_a_call3_k, paired with every message built in registers
 //
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
+// H1C_HB = 1: h1c_build's four kernels hash through Hb (below: the state in registers, the block in shared memory) rather
+// than Hs, the same bytes in the same order.  With it, H1C_LVF = L >= 0 builds every level from L up in one launch (a
+// block a table, h1c_levels), H1C_DOMSEG = 1 the domains in the segments' launch (its first block row), beside them,
+// H1C_MK = 1 a leaf's M_key y from M_key's columns, a block's stage of them in shared memory, not 192 byte-table rows, and
+// H1C_MID = 1 (with H1C_MK) a leaf's x, c, h and frame hashes from the block's snapshots of their messages' constant
+// heads (the table's x header and frame prefix, salt_prefix, leaf_prefix), each taken once a block, and H1C_LVB = 1
+// (with H1C_MK) levels 0 to 6 in the leaves' launch, each block the subtree over its 128 leaves after them, so only
+// the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
+// room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
+// sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
+// block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
+// twice the SMs runs its levels' serial chain in two waves.  H1C_APW = 1: h1c_a_pre_k reads a row's M_key byte-table
+// rows a y word at a time, the word's 8 rows' loads issued before any is folded and y rotated in registers (as hb_mk),
+// rather than one row after another with y indexed at run time.  H1C_SEGMID = 1 (H1C_HB): a segment's first block
+// (stag, j, ns, 8 m_j) is the same in every row of its table, so where a table has at most SEGMID_MAX segments a row, a
+// segments block compresses each of its segments' first blocks once (one lane each) and its threads start from them.
+// H1C_SMINB = B: the segments kernel's registers leave room for B blocks an SM (with H1C_SEGMID it holds 120 registers
+// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).
 #include <cstdint>
 #include <cuda_runtime.h>
+
+#ifndef H1C_HB
+#define H1C_HB 0
+#endif
+#ifndef H1C_LVF
+#define H1C_LVF -1
+#endif
+#ifndef H1C_DOMSEG
+#define H1C_DOMSEG 0
+#endif
+#ifndef H1C_MK
+#define H1C_MK 0
+#endif
+#ifndef H1C_MID
+#define H1C_MID 0
+#endif
+#ifndef H1C_LVB
+#define H1C_LVB 0
+#endif
+#ifndef H1C_LMINB
+#define H1C_LMINB 1
+#endif
+#ifndef H1C_LT
+#define H1C_LT 256
+#endif
+#ifndef H1C_APW
+#define H1C_APW 0
+#endif
+#ifndef H1C_SEGMID
+#define H1C_SEGMID 0
+#endif
+// unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
+#ifdef H1C_SMINB
+#define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
+#else
+#define H1C_SEGS_BOUNDS __launch_bounds__(HT)
+#endif
+static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID),
+              "H1C_LVF, H1C_DOMSEG, H1C_MK and H1C_SEGMID are H1C_HB's");
+static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
+static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -175,6 +234,7 @@ __device__ void hs_row(Hs& s, const H1Tab& T, long long i, int off, int m) {
 
 __host__ __device__ __forceinline__ int nseg_of(int len) { return (len + 1023) / 1024; }
 
+#if !H1C_HB
 extern "C" __global__ void h1c_domains(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= ntab) return;
@@ -344,6 +404,7 @@ extern "C" __global__ void h1c_level(const H1Tab* __restrict__ tabs, int ntab, i
 #pragma unroll
     for (int k = 0; k < 8; ++k) T.root[k] = out[k];
 }
+#endif
 
 // -- a served call's A table in one launch -------------------------------------------------------------------------------
 // The same table as h1c_build's, split by what it reads.  Once a window (h1c_a_init): each segment's first block and x's
@@ -665,6 +726,420 @@ __device__ __forceinline__ void a_leaf(Hb& s, uint8_t* b, const u64* P, long lon
   hb_final<PR>(s, out);
 }
 
+#if H1C_HB
+// h1c_build's kernels on Hb: the same messages as the Hs forms above
+constexpr int HT = 128;  // threads a block
+
+// bytes [off, off + m) of row i; a whole aligned block of the body is compressed from registers
+__device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int off, int m) {
+  int p = off;
+  const int end = off + m;
+  const uint8_t* base = T.data + i * T.stride;
+  while (p < end) {
+    if (s.n == 0 && end - p >= 128 && p + 128 <= T.body && ((reinterpret_cast<uintptr_t>(base + p) & 15) == 0)) {
+      const uint4* q = reinterpret_cast<const uint4*>(base + p);
+      u64 w[16];
+#pragma unroll
+      for (int k = 0; k < 8; ++k) {
+        const uint4 v = q[k];
+        w[2 * k] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
+        w[2 * k + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
+      }
+      sh::sha512_compress(s.h, w);
+      s.tot += 128;
+      p += 128;
+    } else {
+      hb_u8(s, row_byte(T, i, p));
+      ++p;
+    }
+  }
+}
+
+__device__ __forceinline__ void hb_domain(H1Tab& T, u64 st, uint8_t* b) {
+  const H1Dom& D = T.dm;
+  uint8_t d[2][20];
+  int dl[2] = {0, 0};
+  long long jl = D.js_len[0] + D.js_len[1] + D.js_len[2];
+  for (int v = 0; v < D.nval; ++v) {
+    dl[v] = dec(D.va[v] * st + D.vb[v], d[v]);
+    jl += dl[v];
+  }
+  Hb s;
+  hb_init(s, b);
+  hb_bytes(s, D.bind, D.bind_len);
+  hb_be(s, (u64)jl, 8);
+  hb_bytes(s, D.js[0], D.js_len[0]);
+  for (int v = 0; v < D.nval; ++v) {
+    hb_bytes(s, d[v], dl[v]);
+    hb_bytes(s, D.js[v + 1], D.js_len[v + 1]);
+  }
+  u64 binding[8];
+  hb_final(s, binding);
+  hb_init(s, b);
+  hb_frame(s, "domain", 6);
+  hb_be(s, 64, 8);
+  hb_words(s, binding, 8);
+  hb_uint(s, 1);  // owner -1, as _uint(owner + 2)
+  hb_be(s, 64, 8);
+  hb_words(s, D.pos, 8);
+  hb_uint(s, (u64)T.count);
+  hb_final(s, T.dom);
+}
+
+extern "C" __global__ void __launch_bounds__(64) h1c_domains(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step) {
+  __shared__ __align__(16) uint8_t bf[64 * HB];
+  const int t = blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= ntab) return;
+  hb_domain(tabs[t], (u64)(long long)*step, bf + threadIdx.x * HB);
+}
+
+// segment j's first block S(j, ns, m_j), exactly 128 bytes: compressed, s.n = 0
+__device__ __forceinline__ void seg_head(Hb& s, const H1Tab& T, int j, int ns) {
+  hb_bytes(s, HC.stag, HC.stag_len);
+  hb_be(s, (u64)j, 8);
+  hb_be(s, (u64)ns, 8);
+  hb_be(s, 8ull * min(1024, T.len - 1024 * j), 8);
+  hb_zeros(s, 128 - HC.stag_len - 24);
+}
+constexpr int SEGMID_MAX = 16;
+
+// dom = 1 (H1C_DOMSEG): block row 0 is h1c_domains' work, a thread a table, and row y + 1 table y's segments
+extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step,
+                                                   int dom) {
+  __shared__ __align__(16) uint8_t bf[HT * HB];
+  if ((int)blockIdx.y < dom) {
+    const int t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t < ntab) hb_domain(tabs[t], (u64)(long long)*step, bf + threadIdx.x * HB);
+    return;
+  }
+  const H1Tab& T = tabs[blockIdx.y - dom];
+  if (!T.data) return;
+  const int ns = nseg_of(T.len);
+  const long long t0 = (long long)blockIdx.x * blockDim.x, t = t0 + threadIdx.x;
+#if H1C_SEGMID
+  // lane q < ns compresses segment (t0 + q) % ns's first block, which thread t0 + r starts from for r % ns = q
+  __shared__ u64 shd[SEGMID_MAX][8];
+  const bool sharedh = ns <= SEGMID_MAX;
+  if (t0 >= (long long)T.count * ns) return;
+  if (sharedh) {
+    if ((int)threadIdx.x < ns) {
+      Hb s;
+      hb_init(s, bf + threadIdx.x * HB);
+      seg_head(s, T, (int)((t0 + threadIdx.x) % ns), ns);
+#pragma unroll
+      for (int k = 0; k < 8; ++k) shd[threadIdx.x][k] = s.h[k];
+    }
+    __syncthreads();
+  }
+#endif
+  if (t >= (long long)T.count * ns) return;
+  const long long i = t / ns;
+  const int j = (int)(t % ns), off = 1024 * j, m = min(1024, T.len - off);
+  Hb s;
+  hb_init(s, bf + threadIdx.x * HB);
+#if H1C_SEGMID
+  if (sharedh) {
+    const int q = (int)((t - t0) % ns);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) s.h[k] = shd[q][k];
+    s.tot = 128;
+  } else
+#endif
+    seg_head(s, T, j, ns);
+  hb_row(s, T, i, off, m);
+  hb_final(s, T.segs + t * 8);
+}
+
+// H1C_MK: byte table p's row v is the XOR of M_key's columns 8p + s over v's set bits s, column 8p + s its row 1 << s,
+// so M_key y is the XOR of the columns of y's set bits.  The block stages MKW words' columns at a time in bf (every
+// thread of the block, at its barriers), and its threads read each column at one address: a broadcast, 1536 columns
+// from shared memory rather than 192 rows from L2.  y comes back in its order (24 rotations).
+constexpr int MKW = 4;  // y words a stage: 8 MKW positions of 8 columns of 64 bytes
+static_assert(MKW * 8 * 8 * 64 <= HT * HB && 24 % MKW == 0, "a stage fits bf and the stages cover y");
+__device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restrict__ btab, uint8_t* bf, bool real) {
+  uint4* cs = reinterpret_cast<uint4*>(bf);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] = 0;
+#pragma unroll 1
+  for (int wd = 0; wd < 24; ++wd) {
+    if (wd % MKW == 0) {
+      __syncthreads();
+      for (int q = threadIdx.x; q < MKW * 8 * 8 * 4; q += HT) {
+        const int c = q >> 2, p = 8 * wd + (c >> 3);
+        cs[q] = __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + (1u << (c & 7))) * 8) + (q & 3));
+      }
+      __syncthreads();
+    }
+    u64 w = y[0];
+#pragma unroll
+    for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+    y[23] = w;
+    if (!real) continue;
+    const uint4* cw = cs + (wd % MKW) * 64 * 4;
+#pragma unroll 1
+    for (int e = 0; e < 8; ++e) {
+      const u32 v = (u32)(w >> 56);
+      w <<= 8;
+#pragma unroll
+      for (int sb = 0; sb < 8; ++sb) {
+        const u32 m = 0u - ((v >> sb) & 1u);
+        const uint4* q4 = cw + (8 * e + sb) * 4;
+#pragma unroll
+        for (int k = 0; k < 4; ++k) {
+          const uint4 q = q4[k];
+          mk[2 * k] ^= (u64)(q.y & m) << 32 | (q.x & m);
+          mk[2 * k + 1] ^= (u64)(q.w & m) << 32 | (q.z & m);
+        }
+      }
+    }
+  }
+  __syncthreads();
+}
+
+// row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf.  sn (H1C_MID,
+// leaf_head's snapshots) null: every message from its first byte
+constexpr int SNW = 32;  // a snapshot's words: hb_save's 9 and a partial block
+__device__ __forceinline__ void x_head(Hb& s, const H1Tab& T) {
+  hb_bytes(s, HC.qtag, HC.qtag_len);
+  hb_be(s, 8ull * T.len, 8);
+  hb_be(s, (u64)nseg_of(T.len), 8);
+  hb_be(s, 1024, 4);
+  hb_zeros(s, 128 - HC.qtag_len - 20);
+}
+__device__ __forceinline__ void frame_head(Hb& s, const H1Tab& T) {
+  hb_frame(s, "leaf", 4);
+  hb_be(s, 64, 8);
+  hb_words(s, T.dom, 8);
+}
+// snapshot k of table T's constant heads: 0 x's header, 1 salt_prefix, 2 leaf_prefix, 3 the frame leaf's prefix
+__device__ __forceinline__ void leaf_head(const H1Tab& T, int k, uint8_t* b, u64* o) {
+  Hb s;
+  hb_init(s, b);
+  if (k == 0) x_head(s, T);
+  else if (k == 1) hb_words(s, HC.salt_prefix, 16);
+  else if (k == 2) hb_words(s, HC.leaf_prefix, 16);
+  else frame_head(s, T);
+  hb_save(s, o);
+}
+__device__ __forceinline__ void leaf_x(const H1Tab& T, long long i, uint8_t* b, u64 x[8], const u64* sn = nullptr) {
+  const int ns = nseg_of(T.len);
+  Hb s;
+  if (sn) {
+    hb_load(s, sn, b);
+  } else {
+    hb_init(s, b);
+    x_head(s, T);
+  }
+  hb_words(s, T.segs + i * ns * 8, 8 * ns);
+  hb_final(s, x);
+}
+__device__ __forceinline__ void leaf_salt(const H1Tab& T, long long i, const int* __restrict__ step, uint8_t* b,
+                                          u64 y[24]) {
+  uint8_t d[20];
+  int dl = 0;
+  if (T.labs) dl = dec((u64)(long long)*step, d);
+  const int ll = T.lab_len[0] + (T.labs ? dl + T.lab_len[1] : 0);
+  Hb s;
+  for (int cc = 0; cc < 3; ++cc) {
+    hb_init(s, b);
+    hb_bytes(s, HC.head, HC.head_len);
+    hb_be(s, (u64)ll, 4);
+    hb_bytes(s, T.lab[0], T.lab_len[0]);
+    if (T.labs) {
+      hb_bytes(s, d, dl);
+      hb_bytes(s, T.lab[1], T.lab_len[1]);
+    }
+    hb_be(s, (u64)i, 8);
+    hb_u8(s, (u32)cc);
+    hb_final(s, y + 8 * cc);
+  }
+}
+__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
+                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
+  u64 c[8], h[8];
+  Hb s;
+  if (sn) {
+    hb_load(s, sn + SNW, b);
+  } else {
+    hb_init(s, b);
+    hb_words(s, HC.salt_prefix, 16);
+  }
+  hb_words(s, y, 24);
+  hb_final(s, c);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
+  if (sn) {
+    hb_load(s, sn + 2 * SNW, b);
+  } else {
+    hb_init(s, b);
+    hb_words(s, HC.leaf_prefix, 16);
+  }
+  hb_words(s, mk, 8);
+  hb_words(s, c, 8);
+  hb_final(s, h);
+  if (sn) {
+    hb_load(s, sn + 3 * SNW, b);
+  } else {
+    hb_init(s, b);
+    frame_head(s, T);
+  }
+  hb_uint(s, (u64)i);
+  hb_uint(s, (u64)i);
+  hb_be(s, (u64)HC.schema_len, 8);
+  hb_bytes(s, HC.schema, HC.schema_len);
+  hb_be(s, 64, 8);
+  hb_words(s, h, 8);
+  hb_final(s, out);
+}
+
+__device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx);
+
+// H1C_LVB: the levels a leaves block's 128 leaves complete
+constexpr int LVB = 7;
+static_assert(HT == 1 << LVB, "a leaves block is a subtree of LVB levels");
+
+extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1Tab* __restrict__ tabs, int ntab,
+                                                                      const int* __restrict__ step,
+                                                                      const u64* __restrict__ btab) {
+  __shared__ __align__(16) uint8_t bf[HT * HB];
+  const H1Tab& T = tabs[blockIdx.y];
+  const long long width = 1LL << T.depth;
+  const long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  uint8_t* b = bf + threadIdx.x * HB;
+  u64 out[8];
+#if H1C_MK
+  if ((long long)blockIdx.x * blockDim.x >= width) return;
+  if (T.data && (long long)blockIdx.x * blockDim.x < T.count) {
+    // a block with a row leaf: every thread runs hb_mk's barriers, the row leaves' threads hash their salts first
+    const bool real = i < T.count;
+    u64 x[8], y[24], mk[8];
+#if H1C_MID
+    __shared__ u64 sn[4 * SNW];  // lane 0 of warp k writes snapshot k; hb_mk's first barrier publishes them
+    static_assert(HT == 4 * 32, "a warp a snapshot");
+    if ((threadIdx.x & 31) == 0) leaf_head(T, threadIdx.x >> 5, b, sn + SNW * (threadIdx.x >> 5));
+    const u64* snp = sn;
+#else
+    const u64* snp = nullptr;
+#endif
+    if (real) leaf_salt(T, i, step, b, y);
+    hb_mk(y, mk, btab, bf, real);
+    if (real) {
+      leaf_x(T, i, b, x, snp);
+      leaf_out(T, i, b, x, y, mk, out, snp);
+    }
+  }
+  const bool mine = i < width && (i >= T.count || T.data);
+#if !H1C_LVB
+  if (!mine) return;
+#endif
+  if (mine && i >= T.count) {
+#else
+  if (i >= width) return;
+  constexpr bool mine = true;
+  if (i >= T.count) {
+#endif
+    Hb s;
+    hb_init(s, b);
+    hb_frame(s, "pad", 3);
+    hb_be(s, 64, 8);
+    hb_words(s, T.dom, 8);
+    hb_uint(s, (u64)i);
+    hb_final(s, out);
+  } else {
+#if !H1C_MK
+    if (!T.data) return;
+    u64 x[8], y[24], mk[8];
+    leaf_x(T, i, b, x);
+    leaf_salt(T, i, step, b, y);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) mk[k] = 0;
+#pragma unroll
+    for (int wd = 0; wd < 24; ++wd) {
+      const u64 yw = y[wd];
+#pragma unroll
+      for (int e = 0; e < 8; ++e) {
+        const u32 v = (u32)(yw >> (56 - 8 * e)) & 0xFFu;
+        const uint4* q4 = reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + e) * 256 + v) * 8);
+#pragma unroll
+        for (int k = 0; k < 4; ++k) {
+          const uint4 q = __ldg(q4 + k);
+          mk[2 * k] ^= (u64)q.y << 32 | q.x;
+          mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
+        }
+      }
+    }
+    leaf_out(T, i, b, x, y, mk, out);
+#endif
+  }
+  if (mine) {
+#pragma unroll
+    for (int k = 0; k < 8; ++k) T.level[i * 8 + k] = out[k];
+    if (width == 1)
+#pragma unroll
+      for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+  }
+#if H1C_LVB
+  // a table's given leaves are in level 0 before this launch; the barrier publishes the block's own
+  __syncthreads();
+  const int top = min(T.depth, LVB);
+  for (int lv = 0; lv < top; ++lv) {
+    const long long n = HT >> (lv + 1), idx = (long long)blockIdx.x * n + threadIdx.x;
+    if (threadIdx.x < n && idx < (width >> (lv + 1))) hb_node(T, b, lv, idx);
+    __syncthreads();
+  }
+#endif
+}
+
+__device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx) {
+  const long long width = 1LL << T.depth;
+  long long off = 0;
+  for (int e = 0; e < lv; ++e) off += width >> e;
+  const u64* in = T.level + 8 * (off + 2 * idx);
+  u64* o = T.level + 8 * (off + (width >> lv) + idx);
+  Hb s;
+  hb_init(s, b);
+  hb_frame(s, "node", 4);
+  hb_be(s, 64, 8);
+  hb_words(s, T.dom, 8);
+  hb_uint(s, (u64)lv);
+  hb_uint(s, (u64)idx);
+  hb_be(s, 64, 8);
+  hb_words(s, in, 8);
+  hb_be(s, 64, 8);
+  hb_words(s, in + 8, 8);
+  u64 out[8];
+  hb_final(s, out);
+#pragma unroll
+  for (int k = 0; k < 8; ++k) o[k] = out[k];
+  if (lv == T.depth - 1)
+#pragma unroll
+    for (int k = 0; k < 8; ++k) T.root[k] = out[k];
+}
+
+extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restrict__ tabs, int ntab, int lv) {
+  __shared__ __align__(16) uint8_t bf[HT * HB];
+  const H1Tab& T = tabs[blockIdx.y];
+  if (lv >= T.depth) return;
+  const long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= (1LL << T.depth) >> (lv + 1)) return;
+  hb_node(T, bf + threadIdx.x * HB, lv, idx);
+}
+
+// H1C_LVF = L >= 0: a table's levels from L up in one block (LT threads), a barrier between levels, so the levels whose
+// nodes a block covers cost one launch rather than one each
+constexpr int LT = H1C_LT;
+static_assert(LT >= 32 && LT <= 1024 && LT % 32 == 0, "H1C_LT: whole warps, at most 1024 threads");
+extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restrict__ tabs, int ntab, int lv0) {
+  __shared__ __align__(16) uint8_t bf[LT * HB];
+  const H1Tab& T = tabs[blockIdx.x];
+  for (int lv = lv0; lv < T.depth; ++lv) {
+    const long long nodes = (1LL << T.depth) >> (lv + 1);
+    for (long long idx = threadIdx.x; idx < nodes; idx += LT) hb_node(T, bf + threadIdx.x * HB, lv, idx);
+    __syncthreads();
+  }
+}
+#endif
+
 extern "C" __global__ void __launch_bounds__(32) h1c_a_init_k(const H1Tab* __restrict__ tabs, u64* __restrict__ pre, int wpt) {
   __shared__ __align__(16) uint8_t bf[32 * HB];
   __shared__ u64 dg[A_NSEG][8];
@@ -749,6 +1224,31 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
     }
 #pragma unroll
     for (int k = 0; k < 8; ++k) mk[k] = 0;
+#if H1C_APW
+    // 24 rotations bring y back in order for the salt hash below.
+#pragma unroll 1
+    for (int wd = 0; wd < 24; ++wd) {
+      const u64 w = y[0];
+#pragma unroll
+      for (int k = 0; k < 23; ++k) y[k] = y[k + 1];
+      y[23] = w;
+      uint4 q[8][4];
+#pragma unroll
+      for (int e = 0; e < 8; ++e) {
+        const uint4* r =
+            reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + e) * 256 + ((w >> (56 - 8 * e)) & 0xFFu)) * 8);
+#pragma unroll
+        for (int k = 0; k < 4; ++k) q[e][k] = __ldg(r + k);
+      }
+#pragma unroll
+      for (int e = 0; e < 8; ++e)
+#pragma unroll
+        for (int k = 0; k < 4; ++k) {
+          mk[2 * k] ^= (u64)q[e][k].y << 32 | q[e][k].x;
+          mk[2 * k + 1] ^= (u64)q[e][k].w << 32 | q[e][k].z;
+        }
+    }
+#else
     for (int p = 0; p < 192; ++p) {
       const u32 v = (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
       const uint4* e = reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + v) * 8);
@@ -759,6 +1259,7 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
         mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
       }
     }
+#endif
 #pragma unroll
     for (int k = 0; k < 8; ++k) R[SNAP + k] = mk[k];
     hb_load(s, P + A_SPS, b);
@@ -1430,12 +1931,30 @@ extern "C" int h1c_build(const H1Tab* tabs, H1Tab* tabs_dev, int ntab, const int
     }
   }
   if (ntab > 65535) return 99;
+#if H1C_HB
+  const int ds = H1C_DOMSEG && domains && max_segs;
+  if (domains && !ds) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
+  if (max_segs) {
+    const unsigned bx = (unsigned)max((max_segs + 127) / 128, ds ? (long long)(ntab + 127) / 128 : 1LL);
+    h1c_segs<<<dim3(bx, ntab + ds), 128, 0, stream>>>(tabs_dev, ntab, step_dev, ds);
+  }
+#else
   if (domains) h1c_domains<<<(ntab + 63) / 64, 64, 0, stream>>>(tabs_dev, ntab, step_dev);
   if (max_segs) h1c_segs<<<dim3((unsigned)((max_segs + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab);
+#endif
   h1c_leaves<<<dim3((unsigned)((max_width + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, step_dev, btab);
-  for (int lv = 0; lv < max_depth; ++lv) {
+#if H1C_LVB
+  const int lv0 = min(LVB, max_depth);
+#else
+  const int lv0 = 0;
+#endif
+  const int lvf = H1C_LVF < 0 ? max_depth : max(lv0, min(H1C_LVF, max_depth));
+  for (int lv = lv0; lv < lvf; ++lv) {
     const long long nodes = max_width >> (lv + 1);
     h1c_level<<<dim3((unsigned)((nodes + 127) / 128), ntab), 128, 0, stream>>>(tabs_dev, ntab, lv);
   }
+#if H1C_HB
+  if (lvf < max_depth) h1c_levels<<<ntab, LT, 0, stream>>>(tabs_dev, ntab, lvf);
+#endif
   return (int)cudaGetLastError();
 }
