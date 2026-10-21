@@ -47,7 +47,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   ``admission`` is ``per-round`` (`pouw_h1_requests.ADMISSIONS`).
 * **Round values.** Each call's A table (its slots' s8 rows and f32 scales), its served y and its exact z when the run has
   one are hiding tables of the call (``tables`` in its manifest row), so round s's root commits them before round s's
-  coin; round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
+  coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
@@ -654,14 +654,14 @@ class H1Run:
         self._close_rounds(self.steps - 1)
         if self.served is not None:
             self.served.close(self)
-        bound = all("root_a" in self.bound.get(c.index, {}) for c in self.calls if c.m)
+        unbound = RQ.tables_reason(self.salt, self.round_log, self.manifest())
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
                                     "coin_source": self.coin_source, "admission": self.admission,
-                                    "a_roots": "bound" if bound else "unbound: the slot tables name A-table leaves of tables "
-                                                                     "no round root commits"}
+                                    "a_roots": "bound: each call's A table is under its round's root" if unbound is None
+                                    else f"unbound: {unbound}"}
         self.details["static"] = self.static()
         self.details["step_rows"] = self.step_rows()
         self.details["u"] = str(self.utilization())

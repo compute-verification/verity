@@ -390,7 +390,7 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     record = json.loads((tmp_path / PH.CALLS_FILE).read_text())
     assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
     assert record["commitment"]["rounds"] == commitment["rounds"] and record["details"]["requests"]["per_round"] == [1, 2, 0]
-    assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("unbound")
+    assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("bound")
 
 
 def test_the_served_setting_reaches_the_run_and_its_entries_the_commitment():
@@ -776,9 +776,31 @@ def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
     first = next(i for i, c in enumerate(record["calls"]) if c.get("tables"))
     step = record["calls"][first]["step"]
     assert f"step {step}'s calls in the record" in edited(lambda d: d["calls"][first]["tables"].update(a="00" * 64))
+    assert f"of step {step} has no A table root" in edited(lambda d: d["calls"][first].pop("tables"))
+    assert "which no round of the log closes" in edited(lambda d: d["commitment"]["rounds"].pop())
     assert "calls_root is not over" in edited(lambda d: d["commitment"]["served"].update(refused=[]))
     assert "round 1's root is not over" in edited(lambda d: d["commitment"]["rounds"][1].update(root="00" * 64))
     assert "salt can't be derived" in edited(lambda d: d["commitment"].pop("salt_opening"))
+
+
+def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refused(tmp_path, monkeypatch):
+    """A window whose served calls commit no A table has round roots over calls without one, each opened in order before
+    its coin, and a calls_root over the same rows, so its slot tables name A-table leaves that no round root commits: the
+    run says so (``a_roots``) and `manifest_reason` refuses its record."""
+    _host(tmp_path, monkeypatch)
+    real = PH.H1Run._commit_tables
+
+    def bare(self, call, *args):
+        real(self, call, *args)
+        if call.m:
+            self.tables[call.index] = {**self.tables[call.index], "a": None}
+    monkeypatch.setattr(PH.H1Run, "_commit_tables", bare)
+    _commitment, run = _serve_window(_remote(transcript_dir=str(tmp_path / "w")))
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    first = next(c for c in record["calls"] if c["served"])
+    want = f"call {first['index']} of step {first['step']} has no A table root"
+    assert run.details["requests"]["a_roots"].startswith(f"unbound: {want}")
+    assert PHC.manifest_reason(record).startswith(want)
 
 
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after):
