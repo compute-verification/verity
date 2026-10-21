@@ -87,13 +87,13 @@ def drawOf (j : Json) : Except String Json := do
 
 def saltOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null) (saltCheck (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "weights")
-    (← f "requests") (← f "opening"))
+  refusal (fun _ => Json.null) (saltCheck (← f "key") (← f "main") (← f "ledger") (← f "window") (← f "session")
+    (← f "weights") (← f "requests") (← f "opening"))
 
 def roundsOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null)
-    (roundsCheck (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "roots") (← f "openings"))
+  refusal (fun _ => Json.null) (roundsCheck (← f "key") (← f "main") (← f "ledger") (← f "window") (← f "session")
+    (← f "roots") (← f "openings"))
 
 def registeredOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
