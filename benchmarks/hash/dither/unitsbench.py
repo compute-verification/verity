@@ -27,8 +27,9 @@ every record unwritten; then the call's lane table (one hiding leaf a live unit,
 its root against commit.py's over the same records (--lr-cpu-root's linears), and one lane word flipped moving its leaf
 and the root and no other leaf.  Timed beside the units: each call's `units_lr` (records written) and `leaves` (its
 table built), and per step `step_lr` (the 128 launches writing 32 layers' records), `leaves_step` (one h1c_build of the
-step's 128 tables), `step_lr_leaves` (the two in order on one stream) and `overlap` (step_lr with the previous step's
-leaves on a second stream, records in two buffers), against `step`.
+step's 128 tables over the live units, -lrl's), `step_lr_leaves` (the two in order on one stream) and `overlap`
+(step_lr with the previous step's leaves on a second stream, records in two buffers), against `step`; the `_all` arms
+build every unit's table, the dead records zero (-lr's).
 """
 from __future__ import annotations
 
@@ -379,12 +380,15 @@ def main() -> int:
                 arms[(nm, f"units_lr:{name}")] = (lambda c: lambda i: c.run_units_lr(c.lr, c.lstep))(calls[name][nm])
             arms[(names[0], f"leaves:{name}")] = (lambda st: lambda i: H.build(st, s0))(calls[name][names[0]].lset)
         if len(linears) == len(ORDER):
-            # the step's records in two buffers (a layer's own, live units only), each with its set of 128 lane tables
+            # the step's records in two buffers (a layer's own, every unit, the dead ones zero as the units leave them),
+            # each with two sets of 128 lane tables: the live units' (-lrl) and every unit's (-lr)
             c0 = {x: calls[x][names[0]] for x in ORDER}
-            bufs = [[{x: torch.empty((c0[x].live_units, 32, c0[x].words), dtype=torch.int32, device="cuda")
+            bufs = [[{x: torch.zeros((c0[x].units, 32, c0[x].words), dtype=torch.int32, device="cuda")
                       for x in ORDER} for _ in range(args.layers)] for _ in range(2)]
-            sets = [H.set([lane_tab(bufs[q][ly][x], c0[x].live_units, c0[x].words, f"{ly}.{x}")
-                           for ly in range(args.layers) for x in ORDER]) for q in range(2)]
+            cover = {"": lambda x: c0[x].live_units, "_all": lambda x: c0[x].units}
+            sets = {sx: [H.set([lane_tab(bufs[q][ly][x][:n(x)], n(x), c0[x].words, f"{ly}.{x}")
+                                for ly in range(args.layers) for x in ORDER]) for q in range(2)]
+                    for sx, n in cover.items()}
             side = torch.cuda.Stream()
             fork, join = torch.cuda.Event(), torch.cuda.Event()
             for nm in timed:
@@ -393,26 +397,30 @@ def main() -> int:
                         for x in ORDER:
                             c = calls[x][nm]
                             c.run_units_lr(bufs[q][layer][x], c.lstep, b=c.b if layer % 2 == 0 else bcopy[x])
+                arms[(nm, "step_lr")] = step_lr
+                for sx, ss in sets.items():
+                    def both(i, step_lr=step_lr, ss=ss):
+                        step_lr(i)
+                        H.build(ss[0], s0)
 
-                def both(i, nm=nm, step_lr=step_lr):
-                    step_lr(i)
-                    H.build(sets[0], s0)
-
-                def overlap(i, nm=nm, step_lr=step_lr):
-                    main = torch.cuda.current_stream()
-                    fork.record(main)
-                    side.wait_event(fork)
-                    with torch.cuda.stream(side):
-                        H.build(sets[(i + 1) % 2], s0)
-                    step_lr(i, q=i % 2)
-                    join.record(side)
-                    main.wait_event(join)
-                arms[(nm, "step_lr")], arms[(nm, "step_lr_leaves")], arms[(nm, "overlap")] = step_lr, both, overlap
-            arms[(names[0], "leaves_step")] = lambda i: H.build(sets[0], s0)
-            rec = sum(c0[x].live_units * 128 * c0[x].words for x in ORDER) * args.layers
-            segs = sum(c0[x].live_units * ((128 * c0[x].words + 1023) // 1024) for x in ORDER) * args.layers
-            doc["lr_step_bytes"] = {"records_written": rec, "records_read": rec, "segment_digests": 64 * segs,
-                                    "segments": segs, "tables": len(ORDER) * args.layers}
+                    def overlap(i, step_lr=step_lr, ss=ss):
+                        main = torch.cuda.current_stream()
+                        fork.record(main)
+                        side.wait_event(fork)
+                        with torch.cuda.stream(side):
+                            H.build(ss[(i + 1) % 2], s0)
+                        step_lr(i, q=i % 2)
+                        join.record(side)
+                        main.wait_event(join)
+                    arms[(nm, f"step_lr_leaves{sx}")], arms[(nm, f"overlap{sx}")] = both, overlap
+            doc["lr_step_bytes"] = {}
+            for sx, n in cover.items():
+                arms[(names[0], f"leaves_step{sx}")] = (lambda ss: lambda i: H.build(ss[0], s0))(sets[sx])
+                segs = sum(n(x) * ((128 * c0[x].words + 1023) // 1024) for x in ORDER) * args.layers
+                doc["lr_step_bytes"]["live" if not sx else "all"] = {
+                    "records_written": sum(c0[x].live_units * 128 * c0[x].words for x in ORDER) * args.layers,
+                    "records_read": sum(n(x) * 128 * c0[x].words for x in ORDER) * args.layers,
+                    "segment_digests": 64 * segs, "segments": segs, "tables": len(ORDER) * args.layers}
     graphs, per_graph = {}, {}
     for key, fn in arms.items():
         t = one_call_ms(fn)
@@ -442,7 +450,8 @@ def main() -> int:
         if len(lay) == len(ORDER):
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
-        for arm in ("step", "step_lr", "leaves_step", "step_lr_leaves", "overlap"):
+        for arm in ("step", "step_lr", "leaves_step", "step_lr_leaves", "overlap", "leaves_step_all",
+                    "step_lr_leaves_all", "overlap_all"):
             if arm in r:
                 r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
     b0 = res[names[0]]
