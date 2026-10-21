@@ -8,10 +8,11 @@ import Proofs.Accounting.TS.Session.Lanes.Assumptions
 committed rows and one post-draw partials record. Accepted together, they realize the one-unit proof layer
 `Accounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials), at
-`CheckedSessionSound`'s hypotheses at each of the 33 sessions and two named premises: the circuits compute their
-Definitions (`Accounting.Assumptions.TS.LeafChecks`) and the sessions open one leaf, one partials record and the
-verifier's registrations (`Accounting.Assumptions.TS.LeafShared`). Each proof is then accepted with a leaf that fails
-the unit's checks with probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound.
+`CheckedSessionSound`'s hypotheses and flock-verify's complete check at each of the 33 sessions, and two named
+premises: the circuits compute their Definitions at their port rows (`Accounting.Assumptions.TS.LeafChecks`) and the
+sessions open one leaf, one partials record and the verifier's registrations (`Accounting.Assumptions.TS.LeafShared`).
+Each proof is then accepted with a leaf that fails the unit's checks with probability at most `33 δ`: `δ` a session
+from `CheckedSessionSound`, joined by a union bound.
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
 
@@ -30,10 +31,13 @@ receipt `receipt`): given at every one of the 33 sessions `CheckedSessionSound`'
 window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, a circuit that names each port once, every
 unit's served roots registered, a port named `ok` in the circuit and in `own`, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
-`δ ≥ 0`), the 33 circuits computing their Definitions at the decodes `decL`, `decC`
-(`Accounting.Assumptions.TS.LeafChecks`) and the sessions' committed rows being, through the decodes, one leaf, one
-partials record `parts`, the receipt and the verifier's registrations (`Accounting.Assumptions.TS.LeafShared`), each
-proof is accepted with a leaf that fails the unit's served checks on the path with probability at most `33 δ`. -/
+`δ ≥ 0`), at every one of them flock-verify's complete check (`Flock.Registered.checkComplete`, run when the
+`--registered` file sets `complete`: every port of the circuit is a port of `own`, so every port the decodes read is
+registered and opens at its registered root), the 33 circuits computing their Definitions at their port rows through
+the decodes `decL`, `decC` (`Accounting.Assumptions.TS.LeafChecks`) and the sessions' committed rows being, through the
+decodes, one leaf, one partials record `parts`, the receipt and the verifier's registrations
+(`Accounting.Assumptions.TS.LeafShared`), each proof is accepted with a leaf that fails the unit's served checks on the
+path with probability at most `33 δ`. -/
 def LeafLanesSound : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
@@ -52,6 +56,7 @@ def LeafLanesSound : Prop :=
     (∀ x w i k u, (sess x w i k).ServedRegistered u) →
     (∀ x w i k, (∃ q : Fin (sess x w i k).c.ports.size, (sess x w i k).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i k).own, pt.name = ok) →
+    (∀ x w i k, _root_.Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok ()) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) decL decC) →
     Accounting.Assumptions.TS.LeafShared sess decL decC pub parts receipt leaf →

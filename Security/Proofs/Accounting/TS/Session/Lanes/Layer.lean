@@ -18,6 +18,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
   `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]` at its row's and column's scales (`PouwZyCheck_v1{4, 8}`);
 * `CombineView`, `CombineOk`: what the combine reads, and its `ok = 1`: the XOR, in lane order, of the 32 rows is the
   receipt word by word (`xorAll`);
+* `PortRow`, `portRead`: a wire assignment at every bit of every unit's port rows, registered or not, which the
+  circuits' premise reads (`Accounting.Assumptions.TS.LeafChecks`);
 * `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
   partials (#3095's order, the tile unit's receipt as `lane_partials` splits it);
@@ -111,6 +113,22 @@ structure CombineView (nw : ℕ) where
 
 /-- **Combine `ok = 1`**: the rows' XOR, in lane order, is the receipt word by word. -/
 def CombineOk {nw : ℕ} (v : CombineView nw) : Prop := xorAll v.parts = v.receipt
+
+/-- **Wire `g` is a bit of one of unit `u`'s port rows**: its commit string is `u`'s row of some port `q` of the
+circuit, an input port or an output row, not a single gate's own string (`Readers.ofRows`). -/
+def PortRow (s : RowsSession) (u : Fin s.n) (g : Fin s.Circ.N) : Prop :=
+  ∃ q : Fin s.c.ports.size, s.vb.pos g = Sum.inl (u, q)
+
+open Classical in
+/-- **An assignment's port rows**: `vals` at every wire of unit `a` that is a bit of one of `a`'s port rows (`PortRow`),
+registered or not; `none` elsewhere. Where every port is registered it is `rowsReg`
+(`RowsSession.rowsReg_eq_portRead`). -/
+noncomputable def portRead (s : RowsSession) (vals : Fin s.Circ.N → Bool) : ℕ → ℕ → Option Bool :=
+  fun a b =>
+    if h : a < s.n ∧ b < s.Circ.N then
+      if (⟨b, h.2⟩ : Fin s.Circ.N) ∈ s.P.io ⟨a, h.1⟩ ∧ PortRow s ⟨a, h.1⟩ ⟨b, h.2⟩ then some (vals ⟨b, h.2⟩)
+      else none
+    else none
 
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
