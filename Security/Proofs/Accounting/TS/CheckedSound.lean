@@ -73,7 +73,7 @@ theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type) (live : Finset (Fi
     (prob_map _ _ _ _).trans (h τ.1 ω _)
   calc prob p _ τ
       = FlockSoundness.Game.avg fun ω => prob p ((live (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) := rfl
-    _ = FlockSoundness.Game.avg fun _ : L.Ω => (0 : ℝ≥0∞) := congrArg _ (funext h0)
+    _ = FlockSoundness.Game.avg fun _ : L.Ω => (0 : ℝ≥0∞) := congrArg (FlockSoundness.Game.avg (C := L.Ω)) (funext h0)
     _ = 0 := FlockSoundness.Game.avg_const 0
 
 namespace RowsSession
@@ -113,10 +113,10 @@ theorem servedEv_false (hk : s.kd = s.n)
   dsimp only [rowsReg, openedReg, regRead]
   split_ifs with h1 h2
   all_goals first
-    | rfl
     | have hu : (⟨a, h1.1⟩ : Fin s.n) ∈ s.L.draw ω := by rw [s.draw_full hk ω]; exact Finset.mem_univ _
       exact congrArg some (Flock.SecurityProofs.ServedRowsLinked s hN (s.L.draw ω) R o ⟨a, h1.1⟩ hacc hu (hS _)
         (hD _ hu).2 _ h2.1 h2.2)
+    | rfl
 
 /-- **`ServedEv` has probability `0` in the session's game** under full checking, port uniqueness and registered
 served roots. -/
