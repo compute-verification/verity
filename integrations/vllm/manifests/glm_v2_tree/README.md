@@ -229,12 +229,14 @@ vy-glm53-cpu-2's snapshot held for the B1 and B8 Builds of record; `stage_meta` 
 
 A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
 its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, and every later job (`jobs/tree_guard.sh`)
-runs at that commit or at a descendant that changes only `manifests/records.json` and this directory. The Build of record and
+runs at that commit or at a descendant that changes only `manifests/records.json` and this directory, or a file by exactly a
+Commit-only fix the guard names (`COMMIT_FIXES`, the file's blob before and after: a371c5a7f1). The Build of record and
 the Match GPU legs are each their node's first job, so a copy settles the tree: the destination ends with the older of the two,
 and `copy_rowdir.sh` copies nothing (exit 2) unless the newer changes only those since.
 Only the Build and publish read a row's pins, so a moved row's re-pin may land between its Match GPU legs and its Build of
 record. A PR head merged after a row's first job reaches that row only by rerunning it; its later jobs are launched from a
-worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
+worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`). A row's Commit runs at a head that carries
+the COMMIT_FIXES, since a commit before them fails its openings ("Window B").
 
 1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row (the AOT Build of record: predict emit
    refused unless equal to the row's `aot.trace` Build, with its manifest), B1's and the B8 rows' on vy-glm53-cpu-2 ("Builds of
