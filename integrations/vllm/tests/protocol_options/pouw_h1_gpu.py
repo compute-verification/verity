@@ -40,7 +40,7 @@ the auditor's signed ledger (the longest of the heads, each extending the others
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
 (`pouw_h1_challenger.Ledger.newest`), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
 session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
-its coins as one manifest (`pouw_h1.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
+its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
 with the window accepted (`pouw_h1_challenger.period_reason`). The batch workload admits the first prompt alone after the
 batch, so it admits per round; the fill workload admits in round 0 only.
 
@@ -453,8 +453,8 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
                                                                          "refused": list(served.refused)}}
     try:
-        regs = SV.register(h1, directory=tdir)
-        doc["register"] = {"registered": {str(k): SV.file(k) for k in regs}}
+        SV.register(h1, directory=tdir)
+        doc["register"] = {"registered": SV.FILE}
     except ValueError as e:
         doc["register"] = {"refused": str(e)[:2000]}
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
@@ -511,7 +511,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.newest`), the window held to the session it opened for its Commit's root
     (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
-    within). The record is held to its coins as one manifest (`pouw_h1.manifest_reason`), and with `period` the ledger
+    within). The record is held to its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with `period` the ledger
     must credit the lane's period with the window accepted (`pouw_h1_challenger.period_reason`)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocol_options import pouw_h1 as PH
@@ -534,7 +534,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
-    doc["manifest"] = PH.manifest_reason(rec)
+    doc["manifest"] = PHC.manifest_reason(rec)
     if period is not None:
         try:
             newest = PHC.Ledger.newest([PHC.lines_of(p) for p in ledger], key)

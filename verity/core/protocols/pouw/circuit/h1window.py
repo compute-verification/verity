@@ -1,11 +1,15 @@
-"""H1's window as one public Program: every R × C tile of a window's calls is one call of the tile unit at its call's
-contraction K (`h1tile.PouwH1Tile`, one template per distinct K), so the verifier derives the window's units from its own
-copy of the Program under the `Q_template_instances` query of its templates (`query`), and a served path registers the
-trees it commits as the Program's parameters (`one_stage.served.register_served`).
+"""H1's window as one public Program: every R × C tile of a window's calls is one call of its call's contraction K's
+template (`template`: one call of the tile unit, `h1tile.PouwH1Tile`, at that K), so the verifier derives the window's
+units from its own copy of the Program under the `Q_template_instances` query of its templates (`query`), and a served
+path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the window binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
   down_proj's calls, at K the intermediate size, instantiate their own template in the same Program.
+* **Templates.** K's template takes the tile's parameters with its A and B rows named for their K, ``a_k<K>`` and
+  ``b_k<K>`` (`template_params`): `registered.reads` keys a unit's rows by its template's parameter names, so a mixed-K
+  window registers in one read, A row i of K's units under ``a_k<K>[i]``, each port with its own width and domain, and
+  that row's circuit port is ``a_k<K>_<i>`` (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
 * **Fixed slots.** The layout is protocol structure, so no token count becomes public. For each K the window's A rows are
@@ -18,12 +22,13 @@ trees it commits as the Program's parameters (`one_stage.served.register_served`
   ``block M + [R ti, R ti + R)`` of ``a/<K>`` and on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>``, at position its
   number. The Program's result is each call's tiles' outputs in turn (their widths depend on K), and unit u's outputs are
   row u of the window's ``z`` and ``receipt``. `unit_reads` gives, from the Program's own references, the row of each
-  parameter that each of a unit's parameters reads.
+  parameter that each of a unit's template parameters reads.
 * **Names.** Every parameter is named ``prefix`` and its role (`roles`), so a served path can name each after the
   registered value its tree commits.
 """
 from __future__ import annotations
 
+import weakref
 from typing import Any, Callable, Iterable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
@@ -64,6 +69,33 @@ def tile_unit(k: int, tile: tuple[int, int], definition: Any = None) -> Any:
     exact = bind(BG.GemmAccumulatorS8, K=int(k), **BG.GEMM_SM120_S8)
     return bind(definition or H.PouwH1Tile, EXACT=exact, R=int(r), C=int(c),
                 PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
+
+
+def template_params(k: int) -> tuple[str, ...]:
+    """K's template's parameters, in order: the tile's (`TILE_PARAMS`), its A and B rows ``a_k<K>`` and ``b_k<K>``."""
+    return (f"a_k{int(k)}", f"b_k{int(k)}") + SHARED
+
+
+def _template_signature(S: Any) -> tuple:
+    params, ret = S.UNIT.signature()
+    return tuple(zip(template_params(S.K), (t for _name, t in params))), ret
+
+
+def _template_ports(S: Any) -> Any:
+    decl = S.UNIT.defn.ports
+    return decl(S.UNIT.S()) if callable(decl) else decl
+
+
+PouwH1WindowTile = CompositeDefinition(
+    "PouwH1WindowTile", 1, ("UNIT", "K"), _template_signature, lambda B, S, *args: B.call(S.UNIT, *args), register=False,
+    ports=_template_ports,
+    doc="A window's template at contraction K: one call of the tile unit UNIT, its parameters and ports, with its A and B "
+        "rows named a_kK and b_kK.")
+
+
+def template(k: int, unit: Any) -> Any:
+    """K's template over the tile unit ``unit`` (`tile_unit`'s at K, or another of its parameters)."""
+    return bind(PouwH1WindowTile, UNIT=unit, K=int(k))
 
 
 def _rc(S: Any) -> tuple[int, int]:
@@ -154,21 +186,46 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
         if used != list(range(len(used))):
             raise ValueError(f"every A block of K = {k} is read by some call: blocks {used}")
     make = unit or (lambda k: tile_unit(k, (r, c)))
-    tiles = tuple((k, make(k)) for k in sorted(set(ks.values())))
+    units = tuple((k, make(k)) for k in sorted(set(ks.values())))
     shared = None
-    for k, t in tiles:
+    for k, t in units:
         sig = t.signature()[0]
         if tuple(name for name, _t in sig) != TILE_PARAMS or (sig[0][1].n, sig[1][1].n) != (r, c):
             raise ValueError(f"the tile unit at K = {k} is no {r} × {c} tile over {TILE_PARAMS}: {sig}")
         if shared is not None and tuple(t for _n, t in sig[2:]) != shared:
-            raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {tiles[0][0]}")
+            raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {units[0][0]}")
         shared = tuple(t for _n, t in sig[2:])
+    tiles = tuple((k, template(k, t)) for k, t in units)
     return Program(bind(PouwH1Window, TILES=tiles, LINEARS=linears, CALLS=calls, M=int(m), PREFIX=str(prefix)))
 
 
 def query(program: Program) -> dict[str, Any]:
-    """The window's partition query: every instance of each of its tile units (one per K, ascending) one unit."""
+    """The window's partition query: every instance of each of its templates (`template`, one per K, ascending) one unit."""
     return P.template_instances_query([t for _k, t in program.fn.bindings["TILES"]])
+
+
+def window_ports(program: Program) -> dict[str, str]:
+    """The circuit port of each A and B row a unit of the window ``program`` reads, by `unit_reads`' and `registered.reads`'
+    keys, every K's in one statement: K's template's A row i (``a_k<K>[i]``) is port ``a_k<K>_<i>`` and its B row j
+    (``b_k<K>[j]``) ``b_k<K>_<j>``; a lone row, which `registered.reads` keys by the parameter's name (``a_k<K>`` when R = 1,
+    ``b_k<K>`` when C = 1), is row 0's. The separator keeps each K's ports its own: without it ``a_k32[20]`` and
+    ``a_k322[0]`` would share ``a_k3220``, and `registered.reads_file` would merge two reads into one port."""
+    out: dict[str, str] = {}
+    for _k, t in program.fn.bindings["TILES"]:
+        for name, rows in t.signature()[0][:2]:
+            out |= {name: f"{name}_0"} if rows.n == 1 else {f"{name}[{i}]": f"{name}_{i}" for i in range(rows.n)}
+    return out
+
+
+#: each Program's `_inputs` and parameters by name, so a unit's reads cost its parameters, not the window's nodes
+_SCANS: "weakref.WeakKeyDictionary[Program, tuple[dict[int, str], dict[str, Any]]]" = weakref.WeakKeyDictionary()
+
+
+def _scan(program: Program) -> tuple[dict[int, str], dict[str, Any]]:
+    got = _SCANS.get(program)
+    if got is None:
+        got = _SCANS[program] = (_inputs(program), dict(program.fn.signature()[0]))
+    return got
 
 
 def _inputs(program: Program) -> dict[int, str]:
@@ -185,15 +242,15 @@ def _inputs(program: Program) -> dict[int, str]:
 
 
 def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
-    """The rows unit ``u`` of the window's Program reads (``tp`` its template partition, `P.evaluate`'s): for each of the
-    tile's parameters, by row (``a[i]``, ``b[j]``, ``salt``, ``position``, ``roots``), the window's parameter and the row of
-    it, one whole row of its elements; and for each of its outputs (``z``, ``receipt``, after the Program's prefix), row
-    ``u`` of the window's. From the unit's call alone, so a unit costs its parameters at any K."""
+    """The rows unit ``u`` of the window's Program reads (``tp`` its template partition, `P.evaluate`'s): for each of its
+    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, ``salt``, ``position``, ``roots``; `registered.reads`'
+    keys), the window's parameter and the row of it, one whole row of its elements; and for each of its outputs (``z``,
+    ``receipt``, after the Program's prefix), row ``u`` of the window's. From the unit's call alone, so a unit costs its
+    parameters at any K."""
     k, _m = tp.locate(u)
-    node, inputs, out = program.root.body.nodes[k], _inputs(program), {}
-    params = dict(program.fn.signature()[0])
-    for (name, t), arg in zip(node.fn.signature()[0], node.args):
-        rows = [(f"{name}[{i}]", arg[i]) for i in range(t.n)] if name in TILE_PARAMS[:2] else [(name, arg)]
+    (inputs, params), node, out = _scan(program), program.root.body.nodes[k], {}
+    for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], node.args)):
+        rows = [(f"{name}[{i}]", arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
         for key, coll in rows:
             rs = runs(coll.refs)
             if len(rs) != 1 or rs[0][0] != "n" or rs[0][1] not in inputs:

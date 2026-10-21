@@ -1,9 +1,13 @@
 """`circuit.h1window`: a window's Program derives one unit per tile under its templates' instance query, one template per K,
 numbered call by call and row block major, and `unit_reads` gives each unit's rows of the window's parameters from the
 Program's references: its call's A block of its K, its linear's B rows (the same in every step), the salt, its position and
-the roots. A stand-in tile of the H1 tile's parameter shape, its rows and its output as wide as K makes them, keeps the
-Program small; `benchmarks/pouw/tests/test_h1_prove.py` runs the real one."""
+the roots, keyed by its K's template's parameters, so a mixed-K window registers in one `registered.reads`. A stand-in
+tile of the H1 tile's parameter shape, its rows and its output as wide as K makes them, keeps the Program small;
+`benchmarks/pouw/tests/test_h1_prove.py` runs the real one."""
 from __future__ import annotations
+
+import cProfile
+import pstats
 
 import pytest
 
@@ -13,6 +17,7 @@ from verity.ml.circuits.types import Array, Value
 
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 V16 = Value(16)
 XOR16 = PrimitiveDefinition("H1WindowTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
@@ -56,9 +61,15 @@ def _expected(linears, calls, m, tile=TILE):
 
 
 def _reads(want, tile=TILE):
-    return [{**{f"a[{i}]": (f"a/{k}", a0 + i) for i in range(tile[0])}, **{f"b[{j}]": (f"b/{k}", b0 + j) for j in range(tile[1])},
+    return [{**{f"a_k{k}[{i}]": (f"a/{k}", a0 + i) for i in range(tile[0])},
+             **{f"b_k{k}[{j}]": (f"b/{k}", b0 + j) for j in range(tile[1])},
              "salt": ("salt", 0), "position": ("position", u), "roots": ("roots", 0), "z": ("z", u), "receipt": ("receipt", u)}
             for u, (k, a0, b0) in enumerate(want)]
+
+
+def _b0(reads: dict) -> tuple[str, int]:
+    """A unit's read of its first B row, at its K's key."""
+    return next(v for key, v in reads.items() if key.startswith("b_k") and key.endswith("[0]"))
 
 
 def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
@@ -68,8 +79,10 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     tp = P.evaluate(prog, q)
     want = _expected(LINEARS, CALLS, m)
     ids = dict(zip((32, 64), q["params"]["templates"]))
-    assert q["name"] == "Q_template_instances" and q["params"]["templates"] == [P.template_instance_query(unit(k))["params"]
-                                                                                ["template"] for k in (32, 64)]
+    assert q["name"] == "Q_template_instances" and q["params"]["templates"] == [
+        P.template_instance_query(HW.template(k, unit(k)))["params"]["template"] for k in (32, 64)]
+    assert [[n for n, _t in t.signature()[0]] for _k, t in prog.fn.bindings["TILES"]] == [
+        ["a_k32", "b_k32", *HW.SHARED], ["a_k64", "b_k64", *HW.SHARED]]
     assert m == 8 and tp.population == len(want) == 2 * (2 * 2 + 2 * 1 + 2 * 1)
     assert [(tid, first, n) for _k, tid, first, n in tp.ranges] == [(ids[k], u, 1) for u, (k, _a, _b) in enumerate(want)]
     sig = dict(prog.fn.signature()[0])
@@ -78,8 +91,84 @@ def test_a_mixed_k_window_with_shared_b_derives_exactly_each_calls_tiles():
     assert [t.n for t in prog.fn.signature()[1].fields] == [4, 2, 2] * 2
     assert [t.elem.n for t in prog.fn.signature()[1].fields] == [1, 1, 2] * 2
     assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
-    steps = [[HW.unit_reads(prog, tp, u)["b[0]"] for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
+    steps = [[_b0(HW.unit_reads(prog, tp, u)) for u in range(s * len(want) // 2, (s + 1) * len(want) // 2)] for s in (0, 1)]
     assert steps[0] == steps[1], "every step's units read the linears' one copy of B"
+
+
+def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
+    """One `registered.reads` over a window of K = 32 and K = 64 (a/K and b/K each a registered value, a row K/16 words):
+    every unit's A and B rows under its K's template's keys, exactly the rows `unit_reads` gives, and no row for a unit of
+    the other K; and in the ``--registered`` file each K's ports carry their own value's width and domain."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
+    q = HW.query(prog)
+    tp = P.evaluate(prog, q)
+    values = {f"{t}/{k}": k // 16 for k in (32, 64) for t in "ab"}
+    got = G.reads(prog, q, values, {v: G.SCHEMA_V2 for v in values})
+    want = [HW.unit_reads(prog, tp, u) for u in range(tp.population)]
+    assert sorted(got) == sorted([f"a_k{k}[{i}]" for k in (32, 64) for i in range(R)]
+                                 + [f"b_k{k}[{j}]" for k in (32, 64) for j in range(C)])
+    for key, entry in got.items():
+        assert entry["rows"] == [w[key][1] if key in w else None for w in want], key
+        assert all(w[key][0] == entry["value"] for w in want if key in w), key
+    hit = [[r is not None for r in got[f"a_k{k}[0]"]["rows"]] for k in (32, 64)]
+    assert [sum(h) for h in hit] == [12, 4] and all(x != y for x, y in zip(*hit)), "each unit reads one K's rows"
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(values)}
+    ports = G.reads_file(prog, q, values, roots, schemas={v: G.SCHEMA_V2 for v in values})["ports"]
+    a32, a64 = ports["a_k32[0]"], ports["a_k64[0]"]
+    assert (a32["value"], a32["words"], a32["root"], a64["value"], a64["words"], a64["root"]) == (
+        "a/32", 2, roots["a/32"], "a/64", 4, roots["a/64"])
+    assert len({ports[f"{t}_k{k}[0]"]["domain"] for k in (32, 64) for t in "ab"}) == 4
+
+
+def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():
+    """`window_ports` gives each A and B read of a window of K = 32 and K = 322 its own port: without the separator, A row
+    20 at K = 32 (``a_k32[20]``) and A row 0 at K = 322 (``a_k322[0]``) would both be ``a_k3220``, and the ``--registered``
+    file would hold one port for two reads. A tile of one B row reads it under the parameter's name, port row 0's."""
+    tile = (32, 32)
+    prog = HW.program((("q_proj", 32, 32), ("down_proj", 322, 32)), (("q_proj", 0), ("down_proj", 0)), 32, tile,
+                      unit=lambda k: unit(k, tile))
+    q = HW.query(prog)
+    values = {f"{t}/{k}": k // 16 for k in (32, 322) for t in "ab"}
+    schemas = {v: G.SCHEMA_V2 for v in values}
+    reads = G.reads(prog, q, values, schemas)
+    ports = HW.window_ports(prog)
+    assert set(ports) == set(reads) and len(reads) == 2 * (32 + 32)
+    assert len(set(ports.values())) == len(ports)
+    assert (ports["a_k32[20]"], ports["a_k322[0]"], ports["b_k322[31]"]) == ("a_k32_20", "a_k322_0", "b_k322_31")
+    assert len({key.replace("[", "").replace("]", "") for key in reads}) < len(reads), "unseparated, two reads share a port"
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(values)}
+    file = G.reads_file(prog, q, values, roots, ports=ports, schemas=schemas)["ports"]
+    assert sorted(file) == sorted(ports.values())
+    assert all(file[ports[key]]["reads"] == reads[key]["rows"] for key in reads)
+
+    one = HW.program((("q_proj", 32, 2),), (("q_proj", 0),), 2, (2, 1), unit=lambda k: unit(k, (2, 1)))
+    got = G.reads(one, HW.query(one), {"a/32": 2, "b/32": 2}, {"a/32": G.SCHEMA_V2, "b/32": G.SCHEMA_V2})
+    assert set(HW.window_ports(one)) == set(got) and HW.window_ports(one)["b_k32"] == "b_k32_0"
+
+
+def _operations(steps: int) -> int:
+    """The function calls of building a window of `LINEARS` over ``steps`` steps (`program`, `query`, `P.evaluate`) and
+    reading every unit's rows (`unit_reads`)."""
+    calls = tuple((lin, s) for s in range(steps) for lin in ("q_proj", "k_proj", "down_proj"))
+    profile = cProfile.Profile()
+    profile.enable()
+    prog = HW.program(LINEARS, calls, 8, TILE, unit=unit)
+    tp = P.evaluate(prog, HW.query(prog))
+    [HW.unit_reads(prog, tp, u) for u in range(tp.population)]
+    profile.disable()
+    return pstats.Stats(profile).total_calls
+
+
+def test_a_window_and_its_units_reads_cost_linearly_in_its_calls():
+    """Eight times the calls cost at most 8 × 1.5 times the function calls, counted rather than timed. It fails when the
+    window's build re-derives a per-call fact for each tile (the Builder's E_REINTERPRET check of the window's result
+    summing its fields' leaves at each read, `types.field_starts`), or `unit_reads` scans the window's nodes for each unit
+    (`h1window._scan`): either alone grows this window's count 15 to 23 times, and it took an 8B served window of 2,304
+    calls about an hour."""
+    _operations(1)
+    small, large = _operations(8), _operations(64)
+    assert large <= 8 * 1.5 * small, f"{large} calls at 192 window calls, {small} at 24"
 
 
 def test_a_one_k_window_is_h1_proves_every_call_reading_one_a_block():
@@ -89,7 +178,7 @@ def test_a_one_k_window_is_h1_proves_every_call_reading_one_a_block():
     tp = P.evaluate(prog, HW.query(prog))
     want = _expected(linears, calls, 8)
     assert tp.population == len(want) == 8 and len(HW.query(prog)["params"]["templates"]) == 1
-    assert [HW.unit_reads(prog, tp, u)["b[0]"] for u in range(8)] == [("b/32", b) for _k, _a, b in want]
+    assert [HW.unit_reads(prog, tp, u)["b_k32[0]"] for u in range(8)] == [("b/32", b) for _k, _a, b in want]
 
 
 def test_the_parameters_take_the_names_a_served_path_gives_them():
@@ -98,7 +187,8 @@ def test_the_parameters_take_the_names_a_served_path_gives_them():
     assert [n for n, _t in prog.fn.signature()[0]] == ["h1/w/" + r for r in HW.roles((32, 64))]
     assert list(prog.fn.defn.ports(prog.fn.S()).params) == ["h1/w/salt"], "the salt is the units' coin"
     got = HW.unit_reads(prog, tp, 5)
-    assert got["a[1]"] == ("h1/w/a/32", 4 + 1) and got["b[0]"] == ("h1/w/b/32", 16) and got["receipt"] == ("h1/w/receipt", 5)
+    assert got["a_k32[1]"] == ("h1/w/a/32", 4 + 1) and got["b_k32[0]"] == ("h1/w/b/32", 16)
+    assert got["receipt"] == ("h1/w/receipt", 5)
     assert P.program_digest(prog) != P.program_digest(HW.program(LINEARS, CALLS, 8, TILE, unit=unit))
 
 

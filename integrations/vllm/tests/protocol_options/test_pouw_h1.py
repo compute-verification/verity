@@ -761,18 +761,18 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
 
 
 def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
-    """`pouw_h1.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
+    """`pouw_h1_challenger.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
     call's table root, a served tree's entry or a round's root changed is refused."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     _host(tmp_path, monkeypatch)
     _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
     record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
-    assert PH.manifest_reason(record) is None and record["commitment"]["served"]["refused"]
+    assert PHC.manifest_reason(record) is None and record["commitment"]["served"]["refused"]
 
     def edited(edit):
         doc = json.loads(json.dumps(record))
         edit(doc)
-        return PH.manifest_reason(doc)
+        return PHC.manifest_reason(doc)
     first = next(i for i, c in enumerate(record["calls"]) if c.get("tables"))
     step = record["calls"][first]["step"]
     assert f"step {step}'s calls in the record" in edited(lambda d: d["calls"][first]["tables"].update(a="00" * 64))

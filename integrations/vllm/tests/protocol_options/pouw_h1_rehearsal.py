@@ -11,7 +11,7 @@ Program's registered values (`pouw_h1_served.Served`), which ``calls_root`` bind
 it closes the period, takes the ledger (``GATE ledger``), the session's tree (``GATE fetch S``) and the key's pin
 (``GATE pubkey``), and runs the verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``,
-`pouw_h1.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome is in the serve record (its
+`pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome is in the serve record (its
 ``register_served`` reads row/v1 alone until proofs' REGV2 follow-up, so it refuses the v2 trees until then). Then the
 red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of which
 must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before the

@@ -6,8 +6,10 @@ the window is served and drawn: once `run.py` writes the window's public shape (
 the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
 rows, the drawn units' instances in order, and their indices in the Program), and this stages it with C-Flock's
-`UnitStager.stage` under the window's own salts, so the statement's committed rows are the window's leaves. DIR gets
-inst.bin, pub.bin (the prover's) and stage.json, the last one written. WORK/requests/END stops it.
+`UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A and B port's
+table the registered rows its instances read, with their positions and paths, so the statement's committed rows are the
+registered values' and the window's leaves. DIR gets inst.bin, pub.bin (the prover's) and stage.json, the last one
+written. WORK/requests/END stops it.
 
 The stager's check of the outputs against the IR reference (`UnitStager.reference_check`, the Boolean Definition's
 bit-sliced evaluation, hours at K = 4096) is replaced by `h1tile.reference`, the word reference, on each instance's codes,
@@ -103,12 +105,13 @@ def main() -> None:
         out = Path(r["out"])
         z = dict(np.load(r["rows"]))
         rows = {p: z[f"w_{p}"] for p in stager.row_ports}
-        salts = {p.name: [bytes(s) for s in z[f"s_{p.name}"]] for p in stager.ports}
         stager.reference_check = lambda _rows, outs, z=z: check_against_reference(z, outs)
         try:
             if [int(u) for u in r["indices"]] != [int(u) for u in z["units"]]:
                 raise ValueError(f"the request's indices {r['indices']} are not its rows' units {z['units'].tolist()}")
-            got = stager.stage(rows, out, os.urandom(32), salts=salts, indices=r["indices"], set_name=r["set"])
+            st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports], k)
+            got = stager.stage(rows, out, os.urandom(32), salts=st["salts"], indices=r["indices"], set_name=r["set"],
+                               tables=st["tables"], refs=st["refs"], registered=st["registered"])
         except Exception as e:  # noqa: BLE001 - a refused round is reported in its stage.json, and the next one staged
             (out / "stage.json").write_text(json.dumps({"request": req.stem, "error": f"{type(e).__name__}: {e}"}))
             print(f"FAILED {req.stem}: {type(e).__name__}: {e}", flush=True)
@@ -116,6 +119,7 @@ def main() -> None:
         same = {p: bool(np.array_equal(got["outs"][p], z[f"w_{p}"])) for p in ("o0", "o1")}
         rec = {"request": req.stem, "set": r["set"], "units": [int(u) for u in z["units"]], "instances": len(z["units"]),
                "circuit_sha512": got["circuit_sha512"], "ands": got["ands"], "outputs_equal_committed": same,
+               "registered_table_rows": {p: len(e["positions"]) for p, e in st["registered"].items()},
                "seconds": round(time.time() - t1, 1), "maxrss_gb": _rss_gb()}
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print("STAGED " + json.dumps(rec), flush=True)
