@@ -7,6 +7,7 @@
 #   .tgz of those (--send it, then H1_SERVED=inputs/NAME.tgz); a relative path is the run dir's
 # H1_PIN: the SHA-512 of the challenger's public key the verifier pins (never read from the run)
 # H1_DRAW (1): the work law's budget K (1: one unit a K, each template's floor)
+# Then two negatives, each refused: another key's pin, and a draw root the coin didn't follow.
 set -uo pipefail
 export HZ_CONFIGS=served HZ_MEM_GB=16
 # shellcheck source=../hidden_zk/job.sh
@@ -21,4 +22,23 @@ S=$(ls -d "$D"/gate/fetch/*/out | head -1)
 log "served draw: window run $D, session $S"
 "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" \
   --ledger "$D/gate/windows.jsonl" --pin "$PIN" --k "${H1_DRAW:-1}" --out "$OUT/drawn.json" 2>&1 | tee -a "$OUT/job.log"
-exit "${PIPESTATUS[0]}"
+rc=${PIPESTATUS[0]}
+[ "$rc" = 0 ] || exit "$rc"
+"$PY" - "$D/serve/pouw-h1-calls.json" "$W/forged-calls.json" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+r = d["commitment"]["draw"]["root"]
+d["commitment"]["draw"]["root"] = ("0" if r[0] != "0" else "1") + r[1:]
+json.dump(d, open(sys.argv[2], "w"))
+EOF
+neg() {
+  local name=$1; shift
+  if "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --session "$S" --ledger "$D/gate/windows.jsonl" --k "${H1_DRAW:-1}" "$@" \
+      > "$OUT/neg-$name.log" 2>&1; then log "FAIL: $name drew units"; return 1; fi
+  grep -q '^REFUSED' "$OUT/neg-$name.log" || { log "FAIL: $name did not end in a refusal"; tail -3 "$OUT/neg-$name.log"; return 1; }
+  log "negative $name: $(grep '^REFUSED' "$OUT/neg-$name.log" | head -1)"
+}
+ok=0
+neg other-pin --calls "$D/serve/pouw-h1-calls.json" --pin "$(printf '%0128d' 0)" || ok=1
+neg other-draw-root --calls "$W/forged-calls.json" --pin "$PIN" || ok=1
+exit $ok
