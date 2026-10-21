@@ -29,6 +29,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_session`: the challenger's session
+  (`ChallengerSession`): its close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`;
+  `audited_session`, the auditor's ledger; and `trusted_session_of`.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -43,6 +46,7 @@ import SampledProofs.Stream
 import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
+import SampledProofs.ChallengerSession
 
 namespace SampledProofs.Pieces
 
@@ -358,7 +362,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
-   ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece)]
+   ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
+   ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
+   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_session", Challenger.sessionPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

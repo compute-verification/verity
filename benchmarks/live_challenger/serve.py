@@ -1,8 +1,9 @@
 """The proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
-one client session, its record signed with the host's LMS key and written before the first coin opens.
+one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
+log signed when the session ends.
 
-    python3 benchmarks/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON [--epoch E]
-        [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
+    python3 benchmarks/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON --session ID
+        [--epoch E] [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
   `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
@@ -13,13 +14,14 @@ one client session, its record signed with the host's LMS key and written before
 - **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
   answer starts no session.
-- **The session.**  It commits to the layout's coins (`--scheme`, `--epoch`, `--families` as `[[label, count], ...]`),
-  signs and writes `record.json`, `key.json` and the head of `releases.jsonl` to `--out` (`remote.open_session`), and only
-  then listens on 127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it
-  then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for
-  its verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the one client that connects
-  (`remote.serve`), and writes `challenger.json`: the commitment, the host, the coins released by family and how the
-  session ended.
+- **The session.**  `--session` is the id the auditor launched it under, which the auditor's signed ledger opens for
+  its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
+  `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
+  `releases.jsonl` to `--out` (`remote.open_session`), and only then listens on 127.0.0.1:PORT and prints `listening
+  127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it then opens `ssh -R PORT` to that machine of `--peers`
+  (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client
+  connects to.  It serves the one client that connects (`remote.serve`); however the session ends, a tunnel that ends
+  first included, it signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).
 
 Exit 0 when the client closed the session, 1 when it ended otherwise (a refusal, a broken stream, a tunnel that ended
 first), 2 on arguments or a key it refuses.
@@ -96,6 +98,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--port", type=int, required=True)
     p.add_argument("--scheme", required=True)
     p.add_argument("--families", type=json.loads, required=True)
+    p.add_argument("--session", required=True)
     p.add_argument("--epoch", type=int, default=0)
     p.add_argument("--peer")
     p.add_argument("--peers", type=Path, default=Path("/etc/vy/peers"))
@@ -118,15 +121,25 @@ def main(argv: list[str] | None = None) -> int:
         ssh = peer_ssh(args.peers, args.peer) if args.peer else None
         out.mkdir(parents=True, exist_ok=True)
         key, state = load_key(key_dir, params, args.keygen_workers)
-        try:
-            remote.open_session(challenger, ChallengerKey(params.W, params.H, lms.public_key(key)), args.host,
-                                lambda m: lms.sign(key, state, m).encode(), out)
-        finally:
-            state.close()
     except (CoinError, V.LeanError, ValueError, TypeError, OSError, lms.StateError) as e:
         print(f"the challenger refused to start: {e}", file=sys.stderr)
         return 2
+    with state:
+        try:
+            state.start(args.session.encode())
+            session = remote.open_session(challenger, ChallengerKey(params.W, params.H, lms.public_key(key)), args.host,
+                                          lambda m: lms.sign(key, state, m).encode(), out, args.session)
+        except (CoinError, ValueError, OSError, lms.StateError) as e:
+            print(f"the challenger refused to start: {e}", file=sys.stderr)
+            return 2
+        ended = run(args, out, ssh, session)
+    print("ended:", "closed by the client" if ended is None else ended, file=sys.stderr)
+    return 0 if ended is None else 1
 
+
+def run(args: argparse.Namespace, out: Path, ssh: list[str] | None, session: remote.Session) -> str | None:
+    """Listen, open the tunnel, serve the one client and close the session: None when its client closed it, else why
+    it ended."""
     listener = socket.create_server(("127.0.0.1", args.port))
     address = "127.0.0.1:%d" % listener.getsockname()[1]
     print("listening", address, flush=True)
@@ -148,17 +161,16 @@ def main(argv: list[str] | None = None) -> int:
             conn, _ = listener.accept()
             listener.close()
             with conn:
-                ended = remote.serve(conn, challenger, out)
+                return remote.serve(conn, session)
     finally:
         if tunnel is not None:
             tunnel.terminate()
             tunnel.wait()
-    released = {label: len(r) for label, r in remote.released_roots(out / remote.RELEASES, challenger.commitment).items()}
-    (out / "challenger.json").write_text(json.dumps({
-        "commitment": challenger.commitment.to_json(), "host": args.host, "released": released,
-        "ended": "closed by the client" if ended is None else ended}, indent=1) + "\n")
-    print("ended:", "closed by the client" if ended is None else ended, file=sys.stderr)
-    return 0 if ended is None else 1
+    try:
+        remote.close_session(session, ended)
+    except (CoinError, OSError, lms.StateError) as e:
+        return f"{ended}, and the challenger's close went unwritten ({e})"
+    return ended
 
 
 if __name__ == "__main__":
