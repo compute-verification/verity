@@ -47,8 +47,9 @@ It is more than `WidthCoverBound` at `D₀ = D`: that bound reads the certificat
 a use whole is handed some gate of its region, and the derived width needs no such gate.
 
 Kimi K2 at `f = 4`, each counted product's designated output reading all four bits of its FP4 activation, and no three
-gates cutting more than 98% of a layer's updated weights off from them (`D ≈ 8·10⁶`): about 660, from the wiring and
-the two hardness premises, with no width premise. -/
+gates cutting more than 98% of a layer's updated weights off from them (`D ≈ 8·10⁶`): about 660 in scalar operations,
+with `Slowdown`'s corrections for units and `α₀` (docstring arithmetic). It rests on the wiring and the two hardness
+premises, with no width premise. -/
 def CutWidthCoverBound : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D D₀ f : ℕ) (b : ℝ) (𝓘 : Finset (Finset (Fin C.N))),

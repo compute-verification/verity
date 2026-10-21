@@ -21,9 +21,19 @@ Under stronger named premises the factor grows, each variant its own guarantee: 
 `4 b f #P ≤ #𝓘 (k² + 4 b f k)` (`WidthCoverBound`), which also holds with `Width` derived from the wiring
 (`Models.Nci.Guarantees.CoverWidth`).
 
-Kimi K2, at `k = 2·10⁷` bits, `s = 4.52·10¹⁶` gates, `α₀ = 0.147` and `b = 2.5`: the area factor `α₀ s b / k²` is about
-41, the additive one about 166, and the width one at `f = 4` about 660. The certificate holds with `D` about one layer's
-active weights, `4·10⁸`, so `b D ≈ 10⁹` exceeds `k` fifty times.
+Kimi K2 (docstring arithmetic, not Lean), at `k = 2·10⁷` bits, `s = 4.52·10¹⁶`, `α₀ = 0.147` and `b = 2.5`: the area
+factor `α₀ s b / k² = α₀ b (s/k) / k` is about 41, the additive one about 166, and the width one at `f = 4` about 660.
+Three corrections apply to each of them:
+
+* `s/k` is fixed by serving, the work it does per bit it is handed, so each factor falls as `1/k`, one over the longest
+  session a block holds.
+* `s` and `α₀` are counted in scalar operations (`kappa.py`), while the theorem counts Boolean gates. Converting both
+  multiplies each factor by serving's Boolean gates per multiply-add over training's: `1` for equal formats, `0.42` for
+  FP8 serving with BF16 training, `0.23` for FP4 serving with BF16 training (area factor about 9).
+* Counting the backward products into activations (`Wᵀδ`, each with its own use and region, over the same parameters)
+  doubles `α₀` to about `0.30`, and each factor with it.
+
+The certificate holds with `D` about one layer's active weights, `4·10⁸`, so `b D ≈ 10⁹` exceeds `k` fifty times.
 
 Scope. First-layer products, whose activation is a function of the token id, have no certificate and are left out of
 `P`. `UpdateHardness` rules out updates `θ'_l = θ_l + h_l(σ)` with a short `σ`: it needs the run to have drifted from
@@ -89,9 +99,13 @@ def CoverBound : Prop :=
 training computation run as it is), the declared compute `s · #𝓘` of a cover by inference blocks is at least
 `α₀ s b / (k² + b k)` times the baseline: `α₀ n₀ s b / (k² + b k) ≤ s · #𝓘`. It is `CoverBound`, multiplied out.
 
-Kimi K2 (`k = 2·10⁷` bits, `s = 4.52·10¹⁶` gates, `α₀ = 0.147`, `b = 2.5`): about 41. It holds for the counted products
-only: first-layer products are not in `P`, and `UpdateHardness` needs the run to have drifted from `θ` and fails under
-compressed updates such as LoRA. -/
+Kimi K2 (docstring arithmetic, not Lean; `k = 2·10⁷` bits, `s = 4.52·10¹⁶`, `α₀ = 0.147`, `b = 2.5`): about 41, which
+is `α₀ b (s/k) / k` and falls as one over the longest session a block holds, since `s/k` is fixed by serving. `s` and
+`α₀` are counted there in scalar operations, and in Boolean gates the factor is multiplied by serving's gates per
+multiply-add over training's (`1` for equal formats, `0.42` for FP8 serving with BF16 training, `0.23` for FP4 serving
+with BF16 training). Counting the backward products into activations doubles `α₀` to about `0.30`. It holds for the
+counted products only: first-layer products are not in `P`, and `UpdateHardness` needs the run to have drifted from `θ`
+and fails under compressed updates such as LoRA. -/
 def Slowdown : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D n₀ : ℕ) (b α₀ : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
@@ -113,7 +127,7 @@ def AdditiveIntensity : Prop :=
 
 /-- **Cover bound, additive**: under `ConditionalUpdateHardness` and the upstream certificate with `k < b D`, a cover of
 `C` by inference blocks has `4 b · #P ≤ #𝓘 · (k² + 4 b k)`: four times `CoverBound`'s factor for `k ≫ b` (Kimi K2: about
-166). -/
+166 in scalar operations, with `Slowdown`'s corrections for units and `α₀`; docstring arithmetic). -/
 def AdditiveCoverBound : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D : ℕ) (b : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
@@ -136,7 +150,8 @@ def WidthIntensity : Prop :=
 
 /-- **Cover bound, width `f`**: under `ConditionalUpdateHardness`, `Width f` on inference blocks and the upstream
 certificate with `k < b D`, a cover of `C` by inference blocks has `4 b f · #P ≤ #𝓘 · (k² + 4 b f k)` (Kimi K2 at
-`f = 4`: about 660). `CutWidthCoverBound` is this bound with `Width` derived from the activation's cut width. -/
+`f = 4`: about 660 in scalar operations, with `Slowdown`'s corrections for units and `α₀`; docstring arithmetic).
+`CutWidthCoverBound` is this bound with `Width` derived from the activation's cut width. -/
 def WidthCoverBound : Prop :=
   ∀ (C : Circuit) {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin C.N))
     (s k D f : ℕ) (b : ℝ) (𝓘 : Finset (Finset (Fin C.N))),
