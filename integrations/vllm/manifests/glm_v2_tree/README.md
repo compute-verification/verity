@@ -230,6 +230,13 @@ printed "already in" and every bundle "in place", with no 150 GiB fetch. Two ear
 r20261021-114800-b5cd) exited 2 at the input check, before anything ran: the file was sent under another name than `bundles.json`.
 The decision is a FAIL, so nothing is published (`replay_publish.sh` exits with `tp-commit-replay`'s rc 3 before it publishes).
 
+Attempt 5's replay runs on vy-glm53-cpu-2 once e484 ends, not on eu's or vy-nebius-cpu-3's CPUs (circuits, 15:47Z and 16:01Z 21
+Oct). cpu-2's `/workspace/cp/dsv4-ckpt` has a `.verified` from 17 Oct but none of the shards, so `stage_ckpt.sh` stages the
+checkpoint there (864.7 GB, every file checked) once e484, which must not run out of disk, has ended. To make room, `research
+retention rm --approved-by @circuits --ref CIR-25-v2-batch` deleted cpu-2's copy of the v1 rows at 16:33Z (`fs/glm53-m1`'s
+`sweep/`, `sweep-v2/`, `records/` and `unit-rules/`, 319.4 GiB, logged in cpu-2's `deletions.jsonl`; eu's copy went at 00:42Z),
+leaving 822 GiB free. The tool kept `fs/glm53-m1/work` (11 GiB), which holds retained passes.
+
 Both Commits fail the cuBLAS route pin (`integrations/vllm/verity_vllm/check/cublas_route_pin.py`) on every rank. Their Programs bind Definitions only the pin
 binds (B1 rank 0: `CublasSplitKGemmF32Out_v1` 19,200 and `CublasSplitKGemm_v1` 6,027), so each rank's facts of record must be
 the pin's scan's (r20261017-191356-49a9, cuBLAS 120901). But each Commit's engine process had two cuBLAS libraries mapped, the
