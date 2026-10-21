@@ -777,7 +777,10 @@ The session itself goes through Lean: one `flock-firewall session` process (`Flo
 holds the auditor's connection for every session the prover opens to it. It relays the prover's frames, but sends its own
 `Hello` (the Lean `Hello` at the auditor's draw and a nonce it draws from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
-coins, as `coin_tree::Checked` does. A coin it refuses, or one asked for after a refusal, is answered
+coins, as `coin_tree::Checked` does. It asks for each opening at the schedule's place, not the prover's: the session
+stream's at `Commit`, then every round of each rep stream in table order, rep 0's before rep 1's, at the coin counts
+the verifier's replay draws (`Session.planOf`; `flock-firewall session --schedule` prints them). A `Commit` or `Round`
+anywhere else is refused before it reaches the auditor. A coin it refuses, or one asked for after a refusal, is answered
 `Refused("PROVER-STOPPED: …")`. `FC_FIREWALL_SESSION=0`, or `FC_FIREWALL_TRANSCRIPT`, keeps the prover's own connection
 and Rust's checks. `Proof` and `Finish` are still relayed as the prover sends them.
 
