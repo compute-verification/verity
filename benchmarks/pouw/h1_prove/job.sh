@@ -10,13 +10,15 @@
 #      staged, one statement a drawn call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
 #      the window's Program once the commitment gives its shape
 #   3. one loopback --zk session per statement (each drawn call's units, honest the first drawn unit's call; the other
-#      window's unit; honest's units on a tampered A row; the in-proof negatives on honest's units, each also as
+#      window's unit; honest's units on a tampered A row, with their ok rows committed afresh, and on in-z's window
+#      computing ok = 0; the in-proof negatives on honest's units, each also as
 #      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the firewall (FC_FIREWALL=1:
 #      the Lean session loop, its level-0 draw and Lean finish) unless H1_FIREWALL=0
 #   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
-#      reads (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their units derived;
-#      flipped-zy, wrong-receipt, other-window
-#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-d, the record negatives
+#      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
+#      units derived; flipped-zy, wrong-receipt, other-window
+#      REJECT; other-window-own ACCEPT; tampered-a, ok-zero and ok-unregistered REJECT by their registered reads, each
+#      against its own public file; in-receipt, in-d, the record negatives
 #      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
 #      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
