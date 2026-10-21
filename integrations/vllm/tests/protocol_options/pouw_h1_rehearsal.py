@@ -108,7 +108,7 @@ def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
 
 
 def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path) -> int:
-    argv = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--served", "--out", str(out),
+    argv = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", *(["--served"] if a.served else []), "--out", str(out),
             "--challenger", a.at_addr, "--session", json.dumps(reserved), "--gate", shlex.join(gate.argv),
             "--at", a.pin_at, "--by", a.pin_by]
     with open(out.parent / "serve.log", "wb") as log:
@@ -243,7 +243,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.protocol_options import pouw_h1_challenger as PHC
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "period": a.period, "live": a.gate is not None}
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "period": a.period, "live": a.gate is not None, "served": a.served}
     if a.gate is None:
         gdir = Path(tempfile.mkdtemp(prefix="h1-gate-")) / "gate"
         gdir.mkdir()
@@ -315,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--at", help="the challenger's HOST:PORT before the open answers its port (live: 127.0.0.1:7811)")
     ap.add_argument("--key-sha512", help="live: the auditor's pinned public_sha512")
     ap.add_argument("--period", default="vllm-h1-rehearsal")
+    ap.add_argument("--no-served", dest="served", action="store_false",
+                    help="serve without pouw_h1_served.Served (its window Program over the 8B window's 2304 calls takes hours)")
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
     ap.add_argument("--pin-at", default="2026-10-21T00:00:00Z", help="pouw_h1_gpu.py's --at (resolved_at, if a pin is made)")
     ap.add_argument("--pin-by", default="vllm", help="pouw_h1_gpu.py's --by")
