@@ -83,12 +83,12 @@ def diff (t : Tmpl.Tmpl) (n : Net) (circuit : String) : IO Bool := do
         if r == 0 && cnt == want && !same l lv then
           equal := false
           first := first <|> some (cnt - 1, lv, l)
-  let equal := equal && blocks > 0
-  report "diff" t0 ([("equal", toJson equal), ("blocks", toJson blocks)] ++
+  let ok := equal && blocks > 0
+  report "diff" t0 ([("equal", toJson ok), ("blocks", toJson blocks)] ++
     match first with
     | some (i, w, g) => [("first_difference", toJson i), ("unrolled", clip w), ("flat", clip g)]
     | none => [])
-  return equal
+  return ok
 
 def main (args : List String) : IO UInt32 := do
   match args with
