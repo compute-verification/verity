@@ -37,7 +37,9 @@ sent after coin s came back and after the units were launched (the pipe's clock)
 fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's receipt roots), two faults of the order
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
-and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).
+and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  With $DITHER_PARTIALS=1
+the gate's capture also holds option A's prover side (`partials_check`, served_h1/partials.py): drawn leaves' lane
+partials recomputed from the committed A, B, seeds and coin, cpu and gpu alike, each XOR over lanes the served receipt.
 
 -ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
 units' priority) moves round s and step s's units off the steps' path, every value committed
@@ -120,6 +122,7 @@ NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw co
 END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
+PARTIALS_ENV = "DITHER_PARTIALS"        # 1: the gate holds option A's lane partials too (`partials_check`)
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 
 
@@ -870,6 +873,72 @@ def lanes_check(win: SoWindow, g: dict, which: str, salt: bytes) -> dict:
     return doc
 
 
+def partials_check(win: SoWindow, g: dict, salt: bytes, per_call: int = 2) -> dict:
+    """DITHER_PARTIALS=1 (option A's prover side, served_h1/partials.py) on the gate's capture: the step as a partials
+    window (its committed A, A roots, m and salt, the calls' B and B roots), then `per_call` sampled units a call
+    (live or dead): their lane partials on the cpu (receipts.py's chain split by lane) and the gpu (kh_lanes from the
+    served h1u build) byte for byte, each XOR over lanes the committed receipt; every live unit of the step on the gpu,
+    its records' XOR and kh_lanes' receipt the committed one; and on three calls a flipped byte of a sampled leaf's A
+    rows and another coin, each moving the leaf's partials (cpu and gpu alike) off the committed receipt."""
+    import partials as PT
+    s, m, L, t = g["s"], g["m"], win.L, win.t
+    kern = PT.Kernel(DA.SIDE[0].h)
+    step = PT.Step(list(g["a"]), list(g["a_roots"]), m, salt)
+    pw = PT.Window(list(win.wt), list(g["b_roots"]), list(win.offs), win.u_step, {s: step})
+    r = -(-min(m, t) // 32)
+    rcpt = {}
+    for w in range(L):
+        o_, units, nw = win.plan.offs[w]
+        rcpt[w] = g["receipts"][o_:o_ + units * nw].view(units, nw)
+    rng = np.random.default_rng(s + 1)
+    leaves = [PT.Leaf(s, w, int(u)) for w in range(L)
+              for u in rng.choice(win.plan.offs[w][1], size=per_call, replace=False)]
+    cpu = PT.lane_partials_many(pw, leaves)
+    gpu = PT.lane_partials_many(pw, leaves, "gpu", kern)
+    want = {x: rcpt[x.call][x.unit].cpu().numpy().view(np.uint32) for x in leaves}
+    doc: dict = {"leaves_sampled": len(leaves), "dead_sampled": sum(x.unit // (win.nk[x.call][0] // 32) >= r for x in leaves),
+                 "cpu_xor_bad": [[x.call, x.unit] for x, p in zip(leaves, cpu) if not np.array_equal(PT.combine(p), want[x])],
+                 "gpu_xor_bad": [[x.call, x.unit] for x, p in zip(leaves, gpu) if not np.array_equal(PT.combine(p), want[x])],
+                 "cpu_vs_gpu_bad": [[x.call, x.unit] for x, c, q in zip(leaves, cpu, gpu) if c.tobytes() != q.tobytes()],
+                 "words": {str(win.nk[w][1]): pw.words(w) for w in range(L)}}
+    bad, units = [], 0
+    for w in range(L):
+        live = r * (win.nk[w][0] // 32)
+        units += live
+        off = 0
+        for sel, out, rec in PT.gpu_batches(pw, [PT.Leaf(s, w, u) for u in range(live)], kern):
+            x = rec
+            while x.shape[1] > 1:
+                x = x[:, 0::2] ^ x[:, 1::2]
+            ref = rcpt[w][sel[0]:sel[-1] + 1]
+            off += int((x[:, 0] != ref).any(1).sum()) + int((out != ref).any(1).sum())
+        if off:
+            bad.append(w)
+    doc["every_live_unit"] = {"units": units, "xor_or_receipt_bad_calls": bad}
+    tam = {}
+    o, ix, com = g["opening"], g["ix"], g["coins"].commitment
+    coin2 = bytes([o.coin[0] ^ 1]) + bytes(o.coin[1:])
+    for w in sorted({0, 2, L - 1}):
+        ncb = win.nk[w][0] // 32
+        leaf = PT.Leaf(s, w, int(rng.integers(r * ncb)))
+        honest, ref = PT.lane_partials(pw, leaf), rcpt[w][leaf.unit].cpu().numpy().view(np.uint32)
+        a2 = g["a"][w].clone()
+        a2[32 * (leaf.unit // ncb) + 7, 13] ^= 1
+        arms = {"a_byte": PT.Step(step.a[:w] + [a2] + step.a[w + 1:], step.a_roots, m, salt),
+                "coin": PT.Step(step.a, step.a_roots, m, win.HT.live_salt(com, coin2, ix, g["root"]))}
+        row = {}
+        for name, st in arms.items():
+            tw = PT.Window(pw.b, pw.b_roots, pw.offs, pw.u_step, {s: st})
+            c, q = PT.lane_partials(tw, leaf), PT.lane_partials(tw, leaf, "gpu", kern)
+            row[name] = {"moved": not np.array_equal(c, honest), "cpu_is_gpu": c.tobytes() == q.tobytes(),
+                         "xor_off_receipt": not np.array_equal(PT.combine(c), ref)}
+        tam[f"{w}:{leaf.unit}"] = row
+    doc["tamper"] = tam
+    doc["ok"] = (not (doc["cpu_xor_bad"] or doc["gpu_xor_bad"] or doc["cpu_vs_gpu_bad"] or bad)
+                 and all(v for row in tam.values() for arm in row.values() for v in arm.values()))
+    return doc
+
+
 class SoSide(DA.Side):
     """dither-a's serving-stream GEMM state with the forward in the statement's order (no seeds, no units) and the
     units of a step dispatched after its coin (`dispatch`) on a ring of the window's depth (`stash`)."""
@@ -1412,6 +1481,10 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     (fault: the flipped lane word alone; fault_rearly: binding, the chain off; the others: as the gate's)."""
     doc = _check(win, lib_h1o, which, n_cpu_units)
     g = win.caps.get(which, {})
+    if which == "gate" and os.environ.get(PARTIALS_ENV) == "1" and doc.get("complete", True):
+        pc = doc["partials"] = partials_check(win, g, win.HT.live_salt(g["coins"].commitment, g["opening"].coin, g["ix"],
+                                                                       g["root"]))
+        doc["ok"] = doc["ok"] and pc["ok"]
     if not doc.get("complete", True) or "lanes" not in g:
         return doc
     o, ix = g["opening"], g["ix"]
