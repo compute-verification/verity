@@ -178,11 +178,20 @@ the row's records into a temporary dir under `$SW` (`_rowmeta`), which is on ano
 | row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
 |---|---|---|---|---|---|
 | DeepSeek-V4-Pro B1 | r20261020-154507-f208 | r20261021-013752-f5ed (art:5f5d56d8b4fd8a324a16941242765d756952c8aeec3dc56422a0e83353ac461a), of r20261021-013528-0d47: match PASS 03:30Z, 6761 s, every rank's fold, compare and GM-01 and the cross-rank check | r20261021-041858-f624 from 04:19Z, its `vllm.commit` Attempt r20261021-041907-b7a8 (verdict art:01daa488cb9b35fc400c983a2db7ae5d4155e06f8de2b91c6143e02df6a260f6): weights loaded from eu2data in 7.5 min; the driver and all 8 ranks read back 0.88 (`commit/versions.json`); vLLM's sizing line 123.02 GiB, 102.67 GiB weights and non-torch | 2 | FAIL rc 12 at 04:54Z, no `commit/summary.json`: the match oracle (a value disagreement) and the population openings (IndexError). Stopped, not rerun (below) |
-| B1 greedy | r20261020-062246-b987 | Match CPU phase r20261021-001940-db82 running (ranks 0-2 PASS; ranks 6 and 7 last, about 07:45Z) | | | |
+| B1 greedy | r20261020-062246-b987 | r20261021-002121-ef31 (art:630ee63db089112d635a45768487b27c1a2fd31ace6697c88937e3d5b66073c4), of r20261021-001940-db82: match PASS 07:50Z, 26,923 s, every rank's fold, compare and GM-01 and the cross-rank check; its 111 files copied to eu by 08:25Z, all checked | r20261021-082530-c049 from 08:25Z at 5ca9a5818a (tree_guard: "changes only pins, this runbook and COMMIT_FIXES"), its `vllm.commit` Attempt r20261021-082555-c2fa (verdict art:8a9bae5b849ed81765d419ea06386801fe7eba19a044308ffa110e91b6358771): the driver and all 8 ranks read back 0.88; the GPUs held 35.5 min | 1 | PENDING by design (the C2 sampled replay and boundary linkage deferred), rc 0 at 09:27Z: the match oracle PASS on all 8 ranks (5,056 tensors each), value check PASS, weights pin, cross-rank collectives 476 of 476 equal, 512 openings verified, 283,136 fold-match bindings with none bad. Bundles 8 x 7.2 GiB (`bundles.json` in art:41a43881fb83837a0d04a26ec5bfff6015a9256d5399fe07a9d500e54342f156); replay and publish r20261021-092916-8e81 on vy-nebius-cpu-3 |
+| DeepSeek-V4-Pro B1, attempt 3 | r20261020-154507-f208 | r20261021-071904-0dc9 (art:ecd31bd53bfa895ea07a5fbf371e07ab0e82128a9da477d19ad20cae2e5684d8), of r20261021-071645-a966: match PASS 09:10Z, 6647 s, every rank's legs and the cross-rank check | r20261021-092814-0b1c from 09:28Z at dsv4 582c1317f1, attempt 2's `commit/` moved aside to `commit.failed-20261021T092823Z` | 3 | running |
 
 DeepSeek-V4-Pro B1's Commit holds more host memory than `commit.sh`'s `--mem-gb 600` reserves: its cgroup's anonymous memory
-rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside the Match CPU
-phase's 295 GiB, leaving eu about 450 GB. So nothing else is placed on eu beside it, whatever its admission says.
+rose through warm-up at up to 1.6 GiB/s and levelled off at about 800 GiB (about 100 GiB a rank) by 04:37Z, beside B8
+stochastic's Match CPU phase (7676, about 300 GiB then), leaving eu about 450 GB. So nothing else is placed on eu beside it,
+whatever its admission says. 7676's own anonymous memory peaks at 390 GiB in a rank's GM-01 (its 657 GiB peak counts page
+cache), so attempt 3 fits beside it.
+
+B1's replay host is vy-nebius-cpu-3 (the verified checkpoint): its Build of record and the Match's records (220 files and
+`.tree` e2c986e7ba, without the per-rank fold outputs the replay does not read) were copied from cpu-2 at 08:40Z, all checked;
+the Commit's `_rowmeta` brings the row records. `COMMIT_RUN` is the Commit's job (c049), whose `run_record` the publish cites:
+the `vllm.commit` Attempt stores no run record. `BF16_ART` is T1R's bf16 v6 capture r20261021-014319-7d3f
+(art:414f78ffe20a6cb27b61e33fc144f11ebf5680cb1007557802d0a532bbb59afc, `glm53_bf16_gemm_capture`).
 
 DeepSeek-V4-Pro B1's attempt 2 failed twice over, both read from `commit.log` and `commit/finalize_pair0.json`:
 
