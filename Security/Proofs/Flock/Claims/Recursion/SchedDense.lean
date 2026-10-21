@@ -76,7 +76,7 @@ theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h :
   unfold repSched
   cases hrs : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims with
   | none => rw [hrs] at ht; cases ht
-  | some rs => exact ⟨rs, hrs⟩
+  | some rs => exact ⟨rs, rfl⟩
 
 /-- **Flock's plain verifier sets the inner statement up as its files do** (a named premise): at every compiled
 statement the reader reads at public circuits, the verifier holds the inner statement's files (`filesOf`), and Flock's
@@ -107,11 +107,10 @@ theorem schedMatches_dense (hI : InnerSetupIsFiles) : SchedMatches Claims.Recurs
   obtain ⟨-, -, hk6, -, -⟩ := RecScope.statements_ok hss
   obtain ⟨rs, hrs⟩ := repSched_of_statements hss
   have hrs' : RecVStar.repRounds r.shape.m r.shape.kLog r.shape.claims = some rs := by
-    rw [repSched, hh, if_neg Bool.false_ne_true] at hrs
+    unfold repSched at hrs
+    rw [hh] at hrs
     exact hrs
-  obtain ⟨r', hr', hx⟩ := readX_of_parse hst
-  rw [hr] at hr'
-  cases hr'
+  have hx : xIOf x = r.w.inner := by unfold xIOf; rw [hst]; rfl
   refine ⟨r, rs, hr, hrs, ?_⟩
   rw [hx]
   exact k_plain hset (e1.trans hm.symm) (e2.trans hk.symm) (by rw [e4, hpts, hreg]) (by omega) hrs'
