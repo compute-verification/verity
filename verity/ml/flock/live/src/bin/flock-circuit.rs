@@ -1544,7 +1544,8 @@ impl Firewall {
             let mut d = self.draws.lock().unwrap_or_else(PoisonError::into_inner);
             d.shared.lock().unwrap_or_else(PoisonError::into_inner).preset(hi)
                 .map_err(|e| flock_live::firewall::refused(format!("table {} rep {rep}: the Lean finish's salts: {e}", self.table)))?;
-            d.device_trees = 0;
+            // rep 0's level-0 tree is the salt context's first, which hm96 salts with level 0's salts without a draw
+            d.device_trees = usize::from(rep == 0);
         }
         let (st, lay) = (&self.st, zk.lay);
         let (zc, lc) = zkv::from_exposed(&flock_live::firewall::tagged(lay.piop_exposed()), &lay);

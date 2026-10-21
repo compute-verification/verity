@@ -1,7 +1,7 @@
-"""The firewall's final round in Lean, live against replayed: what a firewalled `flock-circuit prove --zk` session's Lean
-finish (`Flock.Firewall.Finish`, the session loop's, `Finish.serveLoop`) wrote while it held the device's opening and the
-inner proof's rounds itself (`open`, `inner`), held byte for byte to `flock-firewall finish` on the requests the session
-dumped (`FC_FINISH_DUMP`).
+"""The firewall's final round in Lean, on what a firewalled `flock-circuit prove --zk` session dumped (`FC_FINISH_DUMP`):
+the session's Lean finish (`Flock.Firewall.Finish`, the session loop's, `Finish.serveLoop`) held the device's opening and
+the inner proof's rounds itself (`open`, `inner`) and wrote each rep's proof file, and `flock-firewall finish` on the
+dumped requests.
 
     python firewall_finish_agree.py --lean flock-firewall --dump DIR --out DIR -- FINISH_ARG...
 
@@ -9,12 +9,13 @@ dumped (`FC_FINISH_DUMP`).
 `table{T}.root` (the root of record, the Lean loop's) and `table{T}.finish_root` (the session's Lean finish's); and per rep
 `R`, `table{T}-rep{R}.req` (`Finish.parseRep`'s request, with the coins of every round the session answered) and
 `table{T}-rep{R}.lean` (the session's Lean finish's proof file, on salts for levels ≥ 1 it drew itself and the prover's
-trees took). Each table's two roots must be one. Then one `flock-firewall finish FINISH_ARG...` process (the session's
-statement: `--circuit`, `--public`, `--draw` its `session.json`, ...) gets every table's request, answered with the root of
-record. Each rep, in a process of its own, after its table and its salts (`salts T R`): its request must give the session's
-proof file byte for byte, and the same request with its passed values moved (`table{T}-rep{R}.vals` says where they sit)
-must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json; exits 1 on any
-disagreement.
+trees took). Each table's two roots must be one, and each rep must have left its proof file (whether the verifier accepts
+the session is `firewall_finish_agree.sh`'s check; a replay cannot repeat the file, whose salts the finish drew from the
+OS). Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw`
+its `session.json`, ...) gets every table's request, answered with the root of record. Each rep's request with its passed
+values moved (`table{T}-rep{R}.vals` says where they sit), in a process of its own after its table and its salts
+(`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json;
+exits 1 on any disagreement.
 """
 from __future__ import annotations
 
@@ -42,15 +43,14 @@ def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]
 STOPPED = "stopped on perturbed values"
 
 
-def rep(lean: str, args: list[str], dump: Path, t: int, r: int, moved: bool) -> tuple[bytes | None, str]:
-    """Rep `r` of table `t` in a process of its own (a refusal ends one), after its table and its salts: its request as the
-    session dumped it, or (`moved`) with every passed value moved by a random word."""
+def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
+    """Rep `r` of table `t` again in a process of its own (a refusal ends one), every passed value moved by a random word: a
+    constraint then fails on the rep's pads, and `finish` must stop with no file (Rust's `constraints_failing_on_pads`)."""
+    off, n = map(int, (dump / f"table{t}-rep{r}.vals").read_text().split())
     req = bytearray((dump / f"table{t}-rep{r}.req").read_bytes())
-    if moved:
-        off, n = map(int, (dump / f"table{t}-rep{r}.vals").read_text().split())
-        rng = random.Random(f"firewall-finish-agree/{t}/{r}")
-        for k in range(16 * n):
-            req[off + k] ^= rng.randrange(256)
+    rng = random.Random(f"firewall-finish-agree/{t}/{r}")
+    for k in range(16 * n):
+        req[off + k] ^= rng.randrange(256)
     p = subprocess.Popen([lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     got, head = ask(p, f"table {t}", (dump / f"table{t}.req").read_bytes())
     if got is not None:
@@ -59,13 +59,6 @@ def rep(lean: str, args: list[str], dump: Path, t: int, r: int, moved: bool) -> 
         got, head = ask(p, f"rep {t} {r}", bytes(req))
     p.stdin.close()
     p.wait()
-    return got, head
-
-
-def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
-    """The rep's passed values moved: a constraint then fails on the rep's pads, and `finish` must stop with no file (Rust's
-    `constraints_failing_on_pads`)."""
-    got, head = rep(lean, args, dump, t, r, moved=True)
     ok = got is None and head.startswith("err PROVER-STOPPED: the constraints ") and head.endswith(" fail on the rep's pads")
     return {"what": f"table {t} rep {r} {STOPPED}", "ok": ok, "lean": head}
 
@@ -95,14 +88,8 @@ def main(argv=None) -> int:
         for f in sorted(a.dump.glob(f"table{t}-rep*.req")):
             r = int(re.fullmatch(rf"table{t}-rep(\d+)\.req", f.name).group(1))
             lp = a.dump / f"table{t}-rep{r}.lean"
-            want = lp.read_bytes() if lp.exists() else None
-            got, head = rep(a.lean, args, a.dump, t, r, moved=False)
-            row = {"what": f"table {t} rep {r} proof file", "ok": want is not None and got == want,
-                   "session": "no file" if want is None else f"{len(want)} bytes",
-                   "replayed": head if got is None else f"{len(got)} bytes"}
-            if got is not None and want is not None and got != want:
-                row["first_diff"] = first_diff(got, want)
-                row["bytes_differing"] = sum(x != y for x, y in zip(got, want)) + abs(len(got) - len(want))
+            row = {"what": f"table {t} rep {r} proof file", "ok": lp.exists(),
+                   "lean": f"{lp.stat().st_size} bytes" if lp.exists() else "no file"}
             rows.append(row)
             ok &= row["ok"]
     p = subprocess.Popen([a.lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)

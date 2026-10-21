@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# The firewall's final round in Lean, live against replayed (firewall_finish_agree.py): one firewalled CPU `prove --zk`
-# session (FC_FIREWALL=1 FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0
-# from the loop, draws each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps
-# each table's roots and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish`
-# on the requests. Run from the source tree's root:
+# The firewall's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
+# FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, draws
+# each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
+# and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;
+# the session's verdict and the Lean verifier's (`flock-verify verify --zk`) on the session must both accept. Run from the
+# source tree's root:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
@@ -50,4 +51,17 @@ $TIME "$O/finish.time" "$PY" "$SRC/verity/ml/flock/verifier/firewall_finish_agre
   -- "${ARGS[@]}" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 log "firewall-finish-agree: exit $rc"
+# the proofs that left are the Lean finish's alone: the session's verifier and the Lean verifier must accept them
+"$PY" -c "import json, sys; v = [json.loads(l[5:]) for l in open(sys.argv[1]) if l.startswith('LIVE\t')]; \
+sys.exit(0 if v and all(x['accepted'] for x in v) else 1)" "$O/prove.out"
+live=$?
+VARGS=(verify --zk --circuit "$D/circuit.txt" --statement verity/flock-circuit --public "$D/pub.bin" --session "$S")
+[ -e "$D/partition.json" ] && VARGS+=(--partition "$D/partition.json")
+"$LEAN" "${VARGS[@]}" > "$O/lean-verify.out" 2> "$O/lean-verify.err"
+"$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
+sys.exit(0 if v and v[0]['accepted'] else 1)" "$O/lean-verify.out"
+lean=$?
+log "the session's verdict: $([ $live = 0 ] && echo accepted || echo NOT accepted); the Lean verifier's: \
+$([ $lean = 0 ] && echo ACCEPT || echo "REJECT $(grep '^VERDICT ' "$O/lean-verify.out" | cut -c1-200)")"
+[ $live = 0 ] && [ $lean = 0 ] || rc=1
 exit $rc
