@@ -81,8 +81,12 @@ share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutatio
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest draws, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live window's
-round roots and coins, and one mutation per refusal (a coin opened twice, one opened before its round's root, a foreign
-epoch's, a seeded epoch's commitment or another layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+round roots and coins, read through the challenger's session (its record and close signed under the window's pinned key,
+its release log, and the auditor's signed ledger opening and ending it for the window), and one mutation per refusal (an
+in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
+end, a second session for the window, roots the challenger's log doesn't show,
+a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
+layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at.
 
 ~~~text

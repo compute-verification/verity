@@ -17,9 +17,10 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
-round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
-for output: null, or the same refusal. Its `salt` against `core_check.salt` likewise, over the live windows' salt coins
-the same module generates (opened after the session's open root, `salt.window_open_root`).
+round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
+ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
+Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates (opened after
+the session's open root, `salt.window_open_root`).
 """
 from __future__ import annotations
 
@@ -246,9 +247,18 @@ def test_rounds(pass_server):
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
     for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
-                 ": coin does not open", ": coin was not opened after", "the verifier's coins are malformed",
+                 ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
-                 "the coin commitment's "):
+                 "the coin commitment's ", "not trusted: no challenger close record",
+                 "not trusted: the challenger record's signature does not verify",
+                 "not trusted: the challenger's release log is not the one its close record signs",
+                 ": a second open for root ", ", not the window's pinned key",
+                 "not trusted: the auditor's ledger has no end for session",
+                 "not trusted: the challenger's release log is not the one the auditor's ledger sealed",
+                 "under verity/challenger-auditor/v#, which names no prover", "'s end of session s# is malformed: ",
+                 "not trusted: the challenger's record is signed at leaf ",
+                 "not trusted: the challenger's refused hellos are not the ",
+                 "the challenger's log shows it received"):
         assert any(part in k for k in ROUNDED), part
 
 

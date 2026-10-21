@@ -98,7 +98,7 @@ def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, s
     reg, N = store.registration, store.registration.blocks
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=samples, delta=delta, window_ns=10, codec=P512)
     clock = a7.Clock()
-    s = C3.Session(p, reg, None, coins.Challenger(reg.digest, 0, p.coins, entropy=a7.Entropy(b"a8 coins %d" % seed)),
+    s = C3.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
                    not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, s.commitment, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []

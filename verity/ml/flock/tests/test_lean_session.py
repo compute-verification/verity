@@ -3,7 +3,8 @@ connection: a prover connects to it as it would to the auditor, and each connect
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
 `Register` and other frames relayed as they are, the `Hello` that leaves the Lean one at the auditor's draw (at the
 fixture's statement, `test_lean_hello.py`'s recorded `Hello` at the loop's nonce) and never the prover's, `Hello`'s
-answer and every coin checked, and every coin after a refusal refused. `flock-circuit`'s firewalled sessions through it
+answer and every coin checked, and every coin after a refusal refused. The loop serves the reps' frames on a port of its
+own, where a frame takes only the coins a session's opening fed it. `flock-circuit`'s firewalled sessions through it
 are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import sys
 import threading
 
 import pytest
+from test_firewall_frame import ALG, LAY, rep_rounds, wire
 from test_lean_hello import (  # noqa: F401
     BIN,
     FIXTURE,
@@ -117,6 +119,10 @@ class Loop:
         assert line.startswith("LISTENING "), (line, self.p.stderr.read().decode() if self.p.poll() is not None else "")
         host, port = line.split()[1].split(":")
         self.addr = (host, int(port))
+        line = self.p.stdout.readline().decode()
+        assert line.startswith("FRAMES "), line
+        host, port = line.split()[1].split(":")
+        self.frames = (host, int(port))
 
     def connect(self) -> socket.socket:
         return socket.create_connection(self.addr)
@@ -220,6 +226,48 @@ def test_sessions_at_once(loop):
     a.close()
     b.close()
     assert sorted(auditor.got, key=len) == sorted([[REGISTER, ping(b"a")], [REGISTER, ping(b"b")]], key=len)
+
+
+class TcpFrame:
+    """A rep's frame on a connection to the loop's frames port, asked as `test_firewall_frame.Frame` asks its own."""
+
+    def __init__(self, lp: Loop):
+        self.s = socket.create_connection(lp.frames)
+        self.r = self.s.makefile("rb")
+
+    def ask(self, line: str, body: bytes = b""):
+        self.s.sendall(line.encode() + b"\n" + body)
+        r = self.r.readline().decode().rstrip("\n")
+        return (r, self.r.read(int(r.split(" ")[1]))) if r.startswith("ok ") else r
+
+    def close(self):
+        self.r.close()
+        self.s.close()
+
+
+def test_a_frame_on_the_loops_port_draws_and_releases_but_takes_no_coins_the_loop_did_not_open(loop):
+    """The loop serves the reps' frames itself: a frame on its frames port starts and releases as `flock-firewall frame`
+    does, but its `coins` are the ones a session's opening fed it, and with no session's `Round` carrying its release
+    there are none, so the coins the request brings are refused and end the rep."""
+    _, lp = loop
+    f = TcpFrame(lp)
+    start = f.ask(json.dumps({"layout": LAY}))
+    assert isinstance(start, tuple) and len(start[1]) == int(start[0].split()[1]), start
+    r0, n = rep_rounds(ALG)[0]
+    out = f.ask(f"round {n} {len(r0)} {len(r0)}", r0 + r0)
+    assert isinstance(out, tuple) and out[0].endswith(" pass"), out
+    assert f.ask(f"coins {n}", wire([2] * n)) == "err coins for a round whose coins the session loop has not opened"
+    assert f.r.readline() == b""
+    f.close()
+
+
+def test_each_frame_draws_its_own(loop):
+    _, lp = loop
+    a, b = TcpFrame(lp), TcpFrame(lp)
+    da, db = a.ask(json.dumps({"layout": LAY})), b.ask(json.dumps({"layout": LAY}))
+    assert da[0] == db[0] and da[1] != db[1]
+    a.close()
+    b.close()
 
 
 @pytest.fixture(scope="module")

@@ -320,6 +320,156 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
+# ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
+
+class _Linear:
+    """A stand-in for vLLM's ``LinearBase``: its weight and its own ``quant_method``, which the PoUW option executes."""
+
+    def __init__(self, weight):
+        self.weight, self.quant_method = weight, types.SimpleNamespace(apply=None)
+
+
+class _Model:
+    def __init__(self, weights):
+        self.layers = [_Linear(weights[w]) for w in sorted(weights)]
+
+    def modules(self):
+        return iter(self.layers)
+
+
+class _Engine:
+    """A stand-in for vLLM's ``llm_engine``: each `step` runs its step's calls, (weight, rows), through the model's linears,
+    as the step's forward does, on rows drawn from `seed`."""
+
+    def __init__(self, model, steps, seed=0):
+        self.model, self.steps, self.rng, self.at = model, steps, np.random.default_rng(seed), 0
+
+    def step(self):
+        for w, m in self.steps[self.at]:
+            layer = self.model.layers[w]
+            x = torch.from_numpy(bf16_words(self.rng, m, layer.weight.shape[1]).view(np.float32).copy()).to(torch.bfloat16)
+            layer.quant_method.apply(layer, x)
+        self.at += 1
+        return []
+
+
+def _served(monkeypatch, kernel, weights, **run):
+    """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
+    with the epoch's coins from a seeded challenger; `run` overrides the device run's buffer sizes."""
+    import functools
+
+    from verity_vllm import protocol_options as PO
+    from verity_vllm.protocol_options import pouw
+    monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
+    if run:
+        monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
+    model = _Model(weights)
+    settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k"}}
+    comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
+    return model, comp, comp.get("pouw")
+
+
+def _per_step(engine, end):
+    """`engine.step` wrapped so that `end` closes each step's pass; each step's commitment, with the bytes it commits (the
+    tile leaves, A's roots and the screen's flags), in order."""
+    from verity_vllm.engine.hooks import Hooks
+    hooks, out = Hooks(), []
+
+    def make(original):
+        def step(*a, **kw):
+            run, got, served = end(original, a, kw)
+            out.append({**got, "leaves": PPD._bytes(run.leaves[:run.nb * got["tiles"]]),
+                        "roots_a": PPD._bytes(run.roots_buf[:run.nb * got["units"]]),
+                        "flags": PPD._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
+            return served
+        return step
+    hooks.wrap(engine, "step", make)
+    return hooks, out
+
+
+def _reach_in(option):
+    """The per-step pass as benchmarks' harness made it before `Option.end_pass` (`verity_bench`'s ``_pass_per_step``): the
+    device run found through the option's private ``release``, a pass begun before each engine step and ended after it."""
+    run = option.release.__self__
+
+    def end(original, a, kw):
+        run.begin()
+        served = original(*a, **kw)
+        return run, run.end(), served
+    return end
+
+
+def _end_pass(option):
+    def end(original, a, kw):
+        served = original(*a, **kw)
+        return option.end_pass.__self__, option.end_pass(), served
+    return end
+
+
+#: engine steps, each its calls (weight, rows): prefill chunks, decodes, a step with no forward, a call over 128 rows
+SERVED_STEPS = [[(0, 40), (1, 40)], [(0, 3), (1, 3)], [], [(1, 130), (0, 17), (1, 17)], [(0, 1), (1, 1)], [(0, 64)]]
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypatch, tmp_path, dev):
+    """The PoUW option's `end_pass` at each engine step's end commits what the harness's reach-in (begin before the step, end
+    after it) committed: per step, the same pass commitment (transcript root, A roots' digest, units, tiles, screened,
+    failing and unsure rows), the same tile leaves, A roots and screen flags.  On ``twin`` the hash kernels run on the host
+    (`TwinDev`), so the roots are real; on ``recording`` nothing is written and only the counts and the flags differ by
+    step.  After close the passes are the steps' own: `end_pass` leaves the next pass open and empty, so `finish` ends
+    nothing twice."""
+    rng = np.random.default_rng(13)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
+    for name, end in (("reach-in", _reach_in), ("end_pass", _end_pass)):
+        kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+        model, comp, option = _served(monkeypatch, kernel, weights)
+        engine = _Engine(model, SERVED_STEPS)
+        hooks, out = _per_step(engine, end(option))
+        for _ in SERVED_STEPS:
+            engine.step()
+        hooks.uninstall()
+        got[name] = out, [dict(p) for p in option.details["passes"]], dict(option.commitment())
+        comp.close()
+        if name == "end_pass":
+            assert len(option.details["passes"]) == len(SERVED_STEPS)
+    (a, a_passes, a_commits), (b, b_passes, b_commits) = got["reach-in"], got["end_pass"]
+    assert [(p["units"], p["tiles"], p.get("screened_rows", 0)) for p in b] == [
+        (2, 6, 80), (2, 6, 6), (0, 0, 0), (3, 6 + 4 + 2, 164), (2, 6, 2), (1, 4, 64)]
+    assert a == b and a_passes == b_passes and a_commits == b_commits
+    if dev == "twin":
+        assert len({p["activation_roots"] for p in b if p["units"]}) == 5
+
+
+def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
+    """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
+    end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
+    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    rng = np.random.default_rng(17)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)]] * 256
+    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    engine = _Engine(model, steps)
+    hooks, out = _per_step(engine, _end_pass(option))
+    for _ in steps:
+        engine.step()
+    hooks.uninstall()
+    comp.close()
+    assert [(p["units"], p["tiles"], p["screened_rows"]) for p in out] == [(2, 24, 400)] * len(steps)
+    assert len(option.details["passes"]) == len(steps)
+    model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
+    engine = _Engine(model, steps)
+    engine.step()
+    with pytest.raises(RuntimeError, match="over its capacity"):
+        engine.step()
+    comp.close()
+
+
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
 
 TWIN = load("simt_twin", KERNEL.parent / "pearl_c" / "simt_twin.py")

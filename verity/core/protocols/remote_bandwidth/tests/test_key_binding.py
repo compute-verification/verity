@@ -73,7 +73,7 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     reg = store.registration
     p = Params(blocks=reg.blocks, deadline_ns=10, windows=1, samples=passes * reg.blocks, delta=1e-6, window_ns=10)
     clock = Clock()
-    s = Session(p, reg, None, coins.Challenger(reg.digest, 0, p.coins, entropy=Entropy(b"coins")), not_before_ns=0,
+    s = Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                 clock=clock)
     prover = audit.Prover(prover_store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     challenge, previous, out = s.start(), reg.digest, []

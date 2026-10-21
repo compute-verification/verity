@@ -25,7 +25,8 @@ harness (`verity/core/difftest`):
 * `salt` (`coins` the challenger's live coin commitment, `session` the session's id, `root` its open root, `weights` and
   `requests` the window's weights' root and round-0 request table's root, `received` the roots its log shows the salt
   coin followed, `opening` the salt coin, each as `core_check.salt` takes it): null, or `{"refused": [code, why]}`.
-* `rounds` (`coins` the challenger's live coin commitment, `roots` the round roots, `openings` the round coins, each as
+* `rounds` (`key` the window's pinned challenger key, `ledger` the auditor's signed ledger's lines, `window` the window's
+  identity, `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
 -/
 
@@ -90,7 +91,9 @@ def saltOf (j : Json) : Except String Json := do
     (← f "received") (← f "opening"))
 
 def roundsOf (j : Json) : Except String Json := do
-  refusal (fun _ => Json.null) (roundsCheck (← get j "coins") (← get j "roots") (← get j "openings"))
+  let f := get j
+  refusal (fun _ => Json.null)
+    (roundsCheck (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "roots") (← f "openings"))
 
 def registeredOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")

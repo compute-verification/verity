@@ -576,9 +576,30 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
 
 #: the refusal each rounds mutation aims at: its code and a part of its reason
 ROUNDS_EXPECT = {
-    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed: "),
-    "seeded-coins": ("coin", "the verifier's coins are malformed: a live coin commitment is"),
-    "not-live": ("coin", "the coin commitment's "), "roots-form": ("rounds", "the round roots are not"),
+    "honest": None, "key-form": ("coin", "the verifier's challenger key is malformed: "),
+    "seeded-coins": ("coin", "not trusted: the challenger record is malformed: a live coin commitment is"),
+    "in-process": ("coin", "not trusted: the challenger record's signature does not verify"),
+    "not-live": ("coin", "the coin commitment's "),
+    "unsigned": ("coin", "not trusted: no challenger close record"),
+    "close-signature": ("coin", "not trusted: the challenger's close record's signature does not verify"),
+    "tampered-log": ("coin", "not trusted: the challenger's release log is not the one its close record signs"),
+    "unclosed": ("coin", "not trusted: the challenger's session ended without its client closing it: "),
+    "no-ledger": ("coin", "not trusted: no auditor's ledger"),
+    "no-session": ("coin", "not trusted: the auditor's ledger opens no challenger session for this window"),
+    "second-session": ("coin", ": a second open for root "),
+    "v1-ledger": ("coin", "under verity/challenger-auditor/v1, which names no prover and seals no refused hellos"),
+    "end-form": ("coin", "not trusted: the auditor's ledger's end of session s-1 is malformed: "),
+    "record-leaf": ("coin", "not trusted: the challenger's record is signed at leaf 8 over commitment "),
+    "hellos": ("coin", "not trusted: the challenger's refused hellos are "),
+    "reused-leaf": ("coin", ", not after the last entry's "),
+    "other-session": ("coin", "not trusted: the challenger's session is s-2, not s-1, the one the auditor's ledger opens"),
+    "other-key": ("coin", ", not the window's pinned key "),
+    "forged-ledger": ("coin", "not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify under "
+                              "the challenger key"),
+    "truncated": ("coin", "not trusted: the auditor's ledger has no end for session s-1: "),
+    "unsealed": ("coin", "not trusted: the challenger's release log is not the one the auditor's ledger sealed"),
+    "rewritten": ("rounds", "the round roots are not the roots the challenger's log shows it received, in order"),
+    "roots-form": ("rounds", "the round roots are not"),
     "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
     "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
     "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
@@ -593,9 +614,13 @@ ROUNDS_EXPECT = {
 
 
 def test_every_rounds_mutation_hits_its_refusal():
-    """`core_check.rounds` accepts an honest live window's round coins and refuses each mutation (a coin opened twice, one
-    opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it aims
-    at."""
+    """`core_check.rounds` accepts an honest live window's round coins, read through the challenger's signed session the
+    auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
+    an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
+    second session for the window's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
+    it didn't seal, roots the challenger didn't receive, a coin opened twice,
+    one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
+    aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
     for name, want in ROUNDS_EXPECT.items():
         for seed in range(6):

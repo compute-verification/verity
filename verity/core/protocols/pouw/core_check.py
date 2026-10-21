@@ -41,8 +41,10 @@ and a replay of a recorded draw `COIN_EARLY` too.  `salt` is the rule on a live 
 challenger's live coin commitment, it opened once, after the window's open root, which the verifier recomputes from the
 window's record and its session (`salt.window_open_root`), and the root the auditor's gate opened that session on.
 `rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
-`sampled_proofs.challenger`): under the challenger's live coin commitment, round r's coin opened once, after the r-th
-round root the verifier recorded.
+`sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
+opens and ends for the window, under the window's pinned key (`challenger.trusted_session_of`), never a commitment the
+prover hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and
+the round roots are the ones its signed log shows it received.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -1276,15 +1278,24 @@ def salt(coins: Any, session: Any, root: Any, weights_root: Any, requests_root: 
     return None if why is None else ("coin", f"the salt's {why}")
 
 
-def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
-    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
-    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
-    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+def rounds(key: Any, ledger: Any, window: Any, session: Any, roots: Any, openings: Any, verify: Ch.Verify
+           ) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins, read through the challenger's own session and never a
+    commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
+    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
+    `key` (its JSON), from that session's files `session` (``{close, hellos, log, record}``;
+    `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after
+    `roots[r]`, the r-th round root (hex), every recorded round's coin opened (`window.rounds_reason`), and the roots are
+    the round roots the challenger's signed log shows it received, in order; else the refusal (``coin`` or ``rounds``,
     and why)."""
     try:
-        c = Ch.LiveCommitment.from_json(coins)
+        k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
-        return "coin", f"the verifier's coins are malformed: {e}"
+        return "coin", f"the verifier's challenger key is malformed: {e}"
+    try:
+        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
     if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
         return "rounds", "the round roots are not a list of SHA-512 digests"
     if not isinstance(openings, list):
@@ -1295,8 +1306,13 @@ def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
             os_.append(Ch.LiveOpening.from_json(o))
         except Ch.CoinError as e:
             return "coin", f"round coin {i}: {e}"
-    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
-    return None if why is None else ("coin", why)
+    rs = tuple(bytes.fromhex(r) for r in roots)
+    why = Wd.rounds_reason(c, list(rs), os_)
+    if why is not None:
+        return "coin", why
+    if received.get(Wd.ROUND, ()) != rs:
+        return "rounds", "the round roots are not the roots the challenger's log shows it received, in order"
+    return None
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
