@@ -16,7 +16,7 @@ def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"
   for l in s.splitOn "\n" do
     if l.startsWith field then
-      return ((l.drop field.length).trimAscii.toString.takeWhile Char.isDigit).toNat!
+      return ((String.ofList ((l.toList.drop field.length).filter Char.isDigit)).toNat?).getD 0
   return 0
 
 def report (phase : String) (t0 : Nat) (extra : List (String × Json) := []) : IO Unit := do
@@ -24,7 +24,7 @@ def report (phase : String) (t0 : Nat) (extra : List (String × Json) := []) : I
   let rss ← statusKb "VmRSS:"
   let hwm ← statusKb "VmHWM:"
   let j := Json.mkObj ([("phase", Json.str phase), ("ms", toJson ((t1 - t0) / 1000000)),
-    ("rss_gb", toJson (Float.ofNat rss / 1048576.0)), ("hwm_gb", toJson (Float.ofNat hwm / 1048576.0))] ++ extra)
+    ("rss_mb", toJson (rss / 1024)), ("hwm_mb", toJson (hwm / 1024))] ++ extra)
   IO.println s!"PHASE {j.compress}"
   (← IO.getStdout).flush
 
@@ -85,12 +85,12 @@ def sectionPhases (lines : Array String) (at_ n : Nat) (name : String) : IO Unit
       | .error e => report "unit.ofRows" t5 [("error", Json.str e)]
 
 def main (args : List String) : IO UInt32 := do
-  let circuit :: public :: rest := args | IO.eprintln "usage: flock-read CIRCUIT PUBLIC [STATEMENT]"; return 2
+  let circuit :: pubPath :: rest := args | IO.eprintln "usage: flock-read CIRCUIT PUBLIC [STATEMENT]"; return 2
   let some tags0 := Tags.find? (rest.headD Tags.circuit.name) | IO.eprintln "unknown statement"; return 2
   let t0 ← IO.monoNanosNow
   let bytes ← IO.FS.readBinFile circuit
   report "read" t0 [("bytes", toJson bytes.size)]
-  let pubB ← IO.FS.readBinFile public
+  let pubB ← IO.FS.readBinFile pubPath
   let t0 ← IO.monoNanosNow
   let pin := Sha512.hash bytes
   if pin.size == 64 then report "sha512" t0 [("pin", Json.str ((hexOf pin).take 16))] else report "sha512" t0
