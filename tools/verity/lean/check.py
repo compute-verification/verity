@@ -2143,8 +2143,18 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
             rc, text = run(argv, pkg, log)
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return rc, text
-    return run(argv, pkg, log)
+            return dev_restore(pkg, rc, text, log)
+    return dev_restore(pkg, *run(argv, pkg, log), log)
+
+
+def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+    """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
+    ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
+    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
+        return rc, text
+    _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg, log.with_name(f"{log.stem}-deps.log"))
+    return rc, text + more
 
 
 def killed(rc: int) -> bool:
