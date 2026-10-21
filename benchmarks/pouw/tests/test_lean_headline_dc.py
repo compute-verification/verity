@@ -49,9 +49,9 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 
 def test_folds_meet_fold_opt_at_pi_star():
     """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
-    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at DS-90's, DS-100's and
-    DC-100-ri's π*, and false at DC-90-ri's for counted, unbuilt memory round-trip folds (RT4-SHEET-13, -14), which
-    this test doesn't build, until the classes no run timed beside an IGMMA have JI90 lines. ♭'s fold meets it, and so
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all four π*: on DC-90-ri the
+    counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which this test doesn't build,
+    price at 1.0245 φ* or more since their classes carry the JI90 lines (r20261021-070616-d06c). ♭'s fold meets it, and so
     does ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That
     fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
     on the sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""

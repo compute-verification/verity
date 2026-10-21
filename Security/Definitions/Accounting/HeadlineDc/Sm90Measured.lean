@@ -9,11 +9,12 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
 * `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 15 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz. `UNLISTED` is A2's catch-all
-  here: every warp instruction no other class prices on DC-90-ri counts there, at the measured issue slot alone. The
-  sheet's classes no run beside DC-90-ri's census timed (DMMA16816, DMMA1684, DMMA1688, DMMA884, HGMMA_BF16_N256_SP,
-  HGMMA_F16_N256_SP, HGMMA_TF32_N256_SP, IGMMA_S8_N256_SP, QGMMA_E4M3_N256_SP, QGMMA_E5M2_N256_SP) are read the same
-  way, at the measured issue slot alone, and are off the writer menu, as they were when the catch-all counted them:
-  `NoSum` carries their words.
+  here: every warp instruction no other class prices on DC-90-ri counts there, at the measured issue slot and the
+  joint-issue lines every timed scalar class carries, since a run timed its instructions beside the tensor. The sheet's
+  classes no run beside DC-90-ri's census timed (DMMA16816, DMMA1684, DMMA1688, DMMA884, HGMMA_BF16_N256_SP,
+  HGMMA_F16_N256_SP, HGMMA_TF32_N256_SP, IGMMA_S8_N256_SP, QGMMA_E4M3_N256_SP, QGMMA_E5M2_N256_SP) are read at the
+  measured issue slot alone, and are off the writer menu, as they were when the catch-all counted them: `NoSum` carries
+  their words.
 * `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` on that machine, its writer kinds honest's form and the uniform `UNI`
   (2, a UR pair: RT-HOPPER-7): the census prices every other tensor form on the joint rows at the scalar coefficient, a
   lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
