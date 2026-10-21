@@ -51,6 +51,10 @@
 //   kh_one_noise(the same), kh_one_units(the same)   kh_one's noise launch and its units launch, apart
 //   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
+//   kh_seeds_at(data, idx, pos, U, seeds, stream)   kh_seeds of U units anywhere: unit u's at position pos[u] from
+//              data's record idx[u] (kh_seeds' data, 30 words a record)
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//              (option A's partials, partials.py; at the end of this file)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -361,6 +365,24 @@ __device__ __forceinline__ u32 ring_xor(const Sm& S, u32 row) {
   return x;
 }
 
+// the lane records (DG, OneOut::lr): a chunk's 32 ring rows (receipt words at .. at + 31) as every lane's own, lane l's
+// at l W + at of the unit's record, thread r writing word at + r of each lane (row r, column l: no bank conflict)
+template <class Sm>
+__device__ __forceinline__ void lane_put(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll 8
+  for (int l = 0; l < 32; ++l) lw[(u64)l * W + at + lane] = S.ring[lane][l];
+}
+
+// the tail's 2 MD ring rows (receipt words at .. at + 2 MD - 1) of every lane
+template <int MD, class Sm>
+__device__ __forceinline__ void lane_tail(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll
+  for (int i = 0; i < 2 * MD; ++i) {
+    const u32 k = 32 * i + lane, l = k / (2 * MD), r = k % (2 * MD);
+    lw[(u64)l * W + at + r] = S.ring[r][l];
+  }
+}
+
 __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u64 base, u32 U, u64* __restrict__ out) {
   const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
   if (u >= U) return;
@@ -371,6 +393,30 @@ __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u6
     msg[0] = pos;
 #pragma unroll
     for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? data[3 * tag + w] : data[3 + w]) ^ pos;
+    msg[28] = 0x8000000000000000ULL;
+    msg[29] = 0;
+    msg[30] = 0;
+    msg[31] = 224 * 8;
+    u64 s[8];
+    sha512_words(msg, 2, s);
+#pragma unroll
+    for (int j = 0; j < 8; ++j) out[16 * (u64)u + 8 * tag + j] = s[j];
+  }
+}
+
+// h1_seeds of units anywhere (kh_seeds_at): unit u at position pos[u], from data's record idx[u]
+__global__ void __launch_bounds__(128) h1_seeds_at(const u64* __restrict__ data, const u32* __restrict__ idx,
+                                                   const u64* __restrict__ at, u32 U, u64* __restrict__ out) {
+  const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= U) return;
+  const u64 pos = at[u];
+  const u64* d = data + 30 * (u64)idx[u];
+#pragma unroll 1
+  for (int tag = 0; tag < 2; ++tag) {
+    u64 msg[32];
+    msg[0] = pos;
+#pragma unroll
+    for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? d[3 * tag + w] : d[3 + w]) ^ pos;
     msg[28] = 0x8000000000000000ULL;
     msg[29] = 0;
     msg[30] = 0;
@@ -461,25 +507,29 @@ struct OneOut {
   u32 M;
   u32 band = 1;         // J10 banded (kh_one_band; measured only): unit (ri, cj)'s rows from its band leader
                         // (ri, (cj / band) band)'s workspace region, its columns from its own
+  u32* lr = nullptr;    // DG (kh_lanes): unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
 };
 
 // PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
-template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false>
+// DG (kh_lanes): the units are the diagonal of gathered A [M, K] and B [M, K], unit u rows 32 u .. of both (N unused),
+// each writing its lane record (OneOut::lr) beside its receipt; no other instantiation writes one.
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
+  static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   constexpr bool PF = WS || H1U_PF;
   constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
-  const u32 ncb = N / 32, units = (M / 32) * ncb;
+  const u32 ncb = DG ? 1 : N / 32, units = (M / 32) * ncb;
   const u32 u = blockIdx.x * WARPS + wp;
   if (u >= units) return;
-  const u32 ri = u / ncb, cj = u % ncb;
+  const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
@@ -518,6 +568,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     return;
   }
+  u32* const lw = DG ? oo.lr + (u64)u * 32 * nwords : nullptr;
   WarpSmem& S = smem[wp];
   const u64* sd = seeds + 16 * (u64)u;
 
@@ -771,6 +822,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     __syncwarp();
     if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    if constexpr (DG) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
 
@@ -850,6 +902,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (DG) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
 #pragma unroll
@@ -1820,6 +1873,13 @@ extern "C" int kh_seeds(const void* data, unsigned long long base, unsigned U, v
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
+extern "C" int kh_seeds_at(const void* data, const void* idx, const void* pos, unsigned U, void* seeds, void* stream) {
+  if (!U) return 0;
+  h1_seeds_at<<<(U + 127) / 128, 128, 0, (cudaStream_t)stream>>>((const u64*)data, (const u32*)idx, (const u64*)pos, U,
+                                                                 (u64*)seeds);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
 extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, unsigned K, const void* seeds, const void* live,
                        void* out, void* stream) {
   if (K % 512) return 2;
@@ -1981,3 +2041,33 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 }
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
+
+// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
+// seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
+// leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes
+// in order (lane 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1)), word 2 s the XOR of its 8 chains' y
+// after set s and 2 s + 1 of their z, so the XOR over a record's lanes is its receipt. The fused h1u, every unit live.
+template <int MD>
+static void launch_lanes(unsigned L, cudaStream_t s, const void* A, const void* B, unsigned K, const void* seeds,
+                         void* out, const OneOut& oo) {
+  carve<h1u<MD, false, false, false, false, true>>();
+  h1u<MD, false, false, false, false, true><<<(L + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(
+      (const int8_t*)A, (const int8_t*)B, 32 * L, 32, K, (const u64*)seeds, nullptr, (u32*)out, nullptr, oo);
+}
+
+extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, const void* seeds, void* out, void* lr,
+                        void* stream) {
+  if (K % 512 || !out || !lr || L > (1u << 26)) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  if (!L) return 0;
+  OneOut oo{};
+  oo.lr = (u32*)lr;
+  cudaStream_t s = (cudaStream_t)stream;
+  if (m == 2)
+    launch_lanes<2>(L, s, A, B, K, seeds, out, oo);
+  else
+    launch_lanes<3>(L, s, A, B, K, seeds, out, oo);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
