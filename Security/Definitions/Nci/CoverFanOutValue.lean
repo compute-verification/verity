@@ -37,8 +37,9 @@ therefore holds an exit of all but `g − 1` of the root's legs, and pays for th
 It is the set-cut form of the red team's per-value width, a max-flow problem per root on the named circuit. The form
 with `f` disjoint paths from each single leg fails for `f ≥ 3` in `silicon/fp4.py`: a product's output bit
 `p[j]^s` feeds one Wallace full adder, whose two outputs cut it. A compressor's two outputs cut at most three products,
-so `g` near `f` suffices, which costs the bound `g − 1` of a root's `d` legs. Kimi K2 at NVFP4 (`f = 4`): every word on
-a key path is at least 4 gates wide (FP32 partial sums, the BF16 residual, the 4-bit code). -/
+so fewer than `f` gates cut off only a few legs; the red team puts `g` near `f`. It costs the bound `g − 1` of a root's
+`d` legs. Kimi K2 at NVFP4 (`f = 4`): every word on a key path is at least 4 gates wide (FP32 partial sums, the BF16
+residual, the 4-bit code). -/
 def PerValueCut (K : Keyed M Tok Val d aOut c V f) (g : ℕ) : Prop :=
   ∀ p ∈ M.P, ∃ r ∈ K.roots, Follows K.key K.stops (K.act p) r ∧
     ∀ G ⊆ K.legs r, g ≤ G.card → ∀ Z ⊆ K.pathGates (K.act p),
