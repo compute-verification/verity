@@ -782,11 +782,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
-        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
+        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
-  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
+  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -796,7 +796,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
     let key := draw.map fun d => (canon d).toOption.getD ""
-    let mut st : Except String (SessionSpec × Array Setup × Lean.Json) := .error "setup: none"
+    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
     match setups.find? (·.1 == key) with
     | some (_, s) => st := s
     | none =>
@@ -835,10 +835,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
-    let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
+    let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]) ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
+      (if opened.isNull then [] else [("openings", opened)]) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []))

@@ -357,4 +357,21 @@ registered root at the position its unit reads, so the instance's output is that
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   Registered.check st.c st.pub registered (Registered.derived st.partition)
 
+/-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
+table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
+the statements; null without registered reads. A produced record holds every session's to its own
+(`SampledProofs.Produced.shared`). -/
+def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
+  match registered with
+  | none => Lean.Json.null
+  | some own => Lean.Json.mkObj (own.toList.map fun reg =>
+      (reg.name, Lean.Json.arr (sts.foldl (fun acc st => acc ++ rowsOf st reg) #[])))
+where
+  rowsOf (st : Stmt) (reg : Registered.Port) : Array Lean.Json :=
+    match Registered.portOf st.c reg.name, st.pub.tables, Registered.entry st.pub reg with
+    | some p, some t, .ok (positions, _) =>
+      (Array.range (t.counts.getD p 0)).map fun r =>
+        Lean.Json.arr #[Lean.toJson (positions.getD r 0), Lean.Json.str (hexOf (Registered.tableRow st.pub t p r))]
+    | _, _, _ => #[]
+
 end Flock
