@@ -74,8 +74,9 @@ round's coin after its root, the draw coin after the manifest root recomputed fr
 each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
 tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
 or the final round) sent after that and before the draw coin, no round after it; and the last step's receipts, from its
-ring slot, against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed; and three steps
-opened from the spill (`open_spill`).  Two end faults, each
+ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
+(`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The draw coin's time is read under the
+round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the draw.  Two end faults, each
 in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
 round and sent in a round after the draw coin: refused on that leaf and that round alone).  An off-node window's
@@ -338,8 +339,7 @@ class SoWindow(DO.Window):
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
         t_mf = time.perf_counter()
-        draw = self.coins.draw(mroot)
-        draw_at = time.monotonic()
+        draw, draw_at = self.pipe.draw(mroot)
         t_draw = time.perf_counter()
         late = None
         if withheld is not None:
@@ -1197,7 +1197,8 @@ class Spill:
     copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
     slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
     pool's chunks are never freed: a window's go back to it at its end, a named or off-node window's after `check_end`
-    (`release`)."""
+    (`release`).  An off-node window's pool is pinned whole when the spill is made, at its open (`reserve`); an
+    in-process arm's grows in sbench's warm-up."""
 
     def __init__(self, win: SoWindow, sd: SoSide, mode: str):
         if mode not in SPILLS:
@@ -1224,6 +1225,38 @@ class Spill:
         self.held: dict[int, dict] = {}
         self.log: list[tuple] = []
         self.unfinished = {"a": 0, "z": 0}
+        self.reserved = None
+        if win.open and not win.end_each and win.end_at is not None:
+            self.reserve(win.end_at - win.s + 1)
+
+    def step_bytes(self, m: int) -> list[int]:
+        """A step's copies at m rows, in `put`'s order: each K's A rows, the scales, under "azy" the z/y records."""
+        sd = self.sd
+        out = [g.shape[0] * m * k for k, g in sd.ring_groups[0].items()]
+        sa = sd.ring_scale[0]
+        out.append(sa.shape[0] * m * sa.element_size())
+        if self.zy:
+            out.append(sum(self.prefix(w, m) for w in range(self.win.L)))
+        return out
+
+    def reserve(self, steps: int) -> None:
+        """An off-node window's pool, pinned when the window opens, before any step it times: the chunks `take` fills
+        with `steps` steps at m = T, the most a step copies.  Refused there when that passes the bound, rather than
+        partway through the window."""
+        at, n = SPILL_CHUNK, 0
+        for b in self.step_bytes(self.win.t) * steps:
+            if at + b > SPILL_CHUNK:
+                n, at = n + 1, 0
+            at += -(-b // 512) * 512
+        if (self.n_chunks + n) * SPILL_CHUNK > self.max_bytes:
+            raise RuntimeError(f"dither-a-so -we: an off-node window of {steps} steps holds up to {n * SPILL_CHUNK >> 30} "
+                               f"GiB of spill at m = {self.win.t}, past {self.max_bytes >> 30} GiB: open a session of "
+                               f"fewer rounds, spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+        t0 = time.perf_counter()
+        self.free += [torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True) for _ in range(n)]
+        self.n_chunks += n
+        self.reserved = {"steps": steps, "m": self.win.t, "chunks": n, "gib": n * SPILL_CHUNK / (1 << 30),
+                         "ms": round(1e3 * (time.perf_counter() - t0), 1)}
 
     def prefix(self, w: int, m: int) -> int:
         """Call w's records' live bytes at m rows: its row blocks below m."""
@@ -1329,7 +1362,7 @@ class Spill:
                "copy_gb_per_s_p50": _q(gbps, 0.5), "host_ms": {"p50": _q(host, 0.5), "max": _q(host, 1.0)},
                "serving_waits_on_unfinished_copy": dict(self.unfinished),
                "pool_gib": self.n_chunks * SPILL_CHUNK / (1 << 30), "chunks_grown": self.grown,
-               "alloc_ms": round(self.alloc_ms, 1)}
+               "alloc_ms": round(self.alloc_ms, 1), "reserved_at_open": self.reserved}
         self.unfinished = {"a": 0, "z": 0}
         self.grown, self.alloc_ms = 0, 0.0
         return doc
@@ -1488,7 +1521,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
     under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
     after that and before the draw coin, no round after it; the final round from the tail's receipt roots; and the last
-    step's receipts against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed; under -we
+    step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -1549,7 +1582,8 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     salt = HT.live_salt(com, o.coin, i, pipe.roots[i])
     a_rows = [unwords(rows[n - 1][8 * w:8 * w + 8]) for w in range(L)]
     a_bad, rr_bad = [], []
-    for w in sorted({0, 2, L - 1}):
+    t_cpu = time.perf_counter()
+    for w in rehashed_calls(L, rec["draw"].coin):
         fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": win.nk[w][1],
               "schema": CM.SCHEMA}
         if CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", last["a"][w].cpu().numpy(),
@@ -1562,6 +1596,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         rrows = CM.receipt_rows(last["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
         if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", u, bytes(rrows[u]))[0] for u in range(units)])[-1][0] != rr[s][w]:
             rr_bad.append(w)
+    doc["rehashed"] = {"calls": len(rehashed_calls(L, rec["draw"].coin)), "cpu_s": round(time.perf_counter() - t_cpu, 2)}
     r = H1R(lib_h1o)
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_rows[w], ">u8"), np.frombuffer(rec["b_roots"][w], ">u8")])
@@ -1595,6 +1630,15 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         doc["conforming"] = bool(base and not order_bad and tail_bad == [s] and late_steps == [s] and after == [li]
                                  and not rc_bad and not a_bad and not rr_bad)
     return doc
+
+
+def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
+    """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
+    four (every linear's shape) and `drawn` the draw coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
+    where all 128 take about 4 s."""
+    h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
+    return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
+                   *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(drawn))})
 
 
 def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
