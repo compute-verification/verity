@@ -27,10 +27,10 @@ v4's statics, inputs and checks, except the outbox's rows, how a read reaches it
   begin with: a fresh member moves them to (the second, its row), a repeat keeps them (`N3Advance`), and a read's
   window is its run's two rows after it, zero for kind 0 (`N3Gate`). Run r's slots open at run_starts[r],
   run_starts[r] + 1, ... in unit run_units[r]'s tree: slot 0 the head's leaf (`N3HidingLeaf` at the start), then its
-  fresh leaves in order (v4's compaction network, each stage only where the next reads: `compaction`), then `run_fill`. So fresh member j's row is row start + j + 1, its
-  q, which its leaf binds, is start + j, and its window rows start + j and start + j + 1. A repeat's leaf is its run's
-  last member's (`N3Carry`), so it has that member's q and window. The head and the fresh leaves fit the unit's tree
-  (`N3RunFits` with one slot more).
+  fresh leaves in order (v4's compaction network, each stage only where the next reads: `compaction`), then
+  `run_fill`. So fresh member j's row is row start + j + 1, its q, which its leaf binds, is start + j, and its window
+  rows start + j and start + j + 1. A repeat's leaf is its run's last member's (`N3Carry`), so it has that member's q
+  and window. The head and the fresh leaves fit the unit's tree (`N3RunFits` with one slot more).
 - **A template** (TPL, `template`): () reads each frame's placement from its descriptor, as v4 does. Otherwise
   (mode, p, s, prefix hex, suffix hex) fixes it for every frame of the window: the frame is prefix XOR text << 8p XOR
   suffix << 8s, the text the stream's first min(r, B) bytes (RAW) or their base64 (BASE64), r the descriptor's
