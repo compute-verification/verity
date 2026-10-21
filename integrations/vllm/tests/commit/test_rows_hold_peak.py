@@ -14,8 +14,9 @@ The bound, for windows of r rows (r = W / ROW_BYTES = 4096 here, so j = 12) and 
 - fixed: the row mask table (8 KiB, on the committer's first step), each window's or fold's top nodes, which keep their last level
   launch's buffer (one 512-byte block at j = 12), and the upper tree over the tops at the step's end: under 64 KiB at 32 windows.
 
-So BOUND = 2 HOLD + 320 r + 64 KiB.  The default hold (1 GiB) does not bind on this step's 8 MiB of h, so the reference holds all of
-it, and with no levels kept all its leaves and their concatenation: its peak passes the bound, as the step's did before the hold.
+So BOUND = 2 HOLD + 320 r + 64 KiB.  The step runs in the GPU's leaf form and in the split form, which reaches the hold + 320 r term
+on any GPU.  The default hold (1 GiB) does not bind on this step's 8 MiB of h, so the reference holds all of it, and with no levels
+kept all its leaves and their concatenation: its peak passes the bound, as the step's did before the hold.
 """
 from __future__ import annotations
 
@@ -78,9 +79,12 @@ def learn(mp, ts: list[tuple[str, torch.Tensor]], retain_levels: bool, *, hold: 
         com.close()
 
 
+@pytest.mark.parametrize("form", ["", "split"], ids=["gpu-form", "split-form"])
 @pytest.mark.parametrize("retain_levels", [False, True], ids=["no-levels", "levels"])
-def test_a_learning_step_past_the_hold_peaks_within_twice_the_hold(monkeypatch, retain_levels):
+def test_a_learning_step_past_the_hold_peaks_within_twice_the_hold(monkeypatch, retain_levels, form):
     monkeypatch.setattr(WR, "WINDOW_MB", str(WINDOW_MB))
+    if form:
+        monkeypatch.setenv("VERITY_ROWS_FORM", form)
     ts = step_tensors()
     small = learn(monkeypatch, ts, retain_levels, hold=HOLD)
     assert small.peak <= BOUND, f"a learning step past rows_hold_bytes={HOLD} peaked at {small.peak} bytes, over the bound {BOUND}"
