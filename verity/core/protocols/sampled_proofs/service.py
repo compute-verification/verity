@@ -620,7 +620,7 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned)
+    #: supplied, pinned, schemas)
     copies: tuple[Any, ...] = ()
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
@@ -1302,13 +1302,13 @@ class Stream:
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
-                 pinned: Mapping[str, str] | None = None) -> Registration:
+                 pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N, the check's query, the selection rule's law,
         `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration copies given
-        here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`, as `registration.check`
-        takes them). Then the receipt. Under
+        here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`, `schemas`, as
+        `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1338,7 +1338,7 @@ class Stream:
             if v.ok:
                 program, earlier = P.population_program(self.unit, n), self._earlier(record, supplied)
                 v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                            work_table, registered, supplied, pinned, self.binding)
+                            work_table, registered, supplied, pinned, self.binding, schemas)
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
                 got.update(program=program, law=law, earlier=earlier)
@@ -1365,7 +1365,7 @@ class Stream:
         self._append(reg)
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table,
-                                    (ports, leaf_layer, anchors, earlier, registered, supplied, pinned)))
+                                    (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas)))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1562,7 +1562,7 @@ class Stream:
         accepted = rec["accepted"]
         if e.read is not None and rec["verifiers"]["agree"]:
             reg = draw.registration
-            ports, leaf_layer, anchors, earlier, registered, supplied, pinned = e.copies
+            ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas = e.copies
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(draw.draw), "read": len(e.read),
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
@@ -1572,7 +1572,7 @@ class Stream:
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
-                      binding=self.binding)
+                      binding=self.binding, schemas=schemas)
             if not v.ok:
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}
