@@ -44,9 +44,12 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
   not Cd inputs: the prover commits them after the draw under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one
-  commitment as a registered port of the verifier's own (lane l at row l, the combine at rows 0 .. 31), since a port
-  ``own`` doesn't name is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at
-  K = 4096), so it is an input, never an output. `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
+  commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
+  at rows 0 .. 31 (#3116's `pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
+  is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
+  input, never an output, and a row of 8 (KS + m) bytes: `lane` and `combine` are staged only at a K whose rows the Lean
+  verifier and C-Flock take (`proved_k`: K >= 448, and not a K whose KS + m is 14 or 15 mod 16, as 896's is).
+  `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
   by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
   row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
   (`h1tile.Layout`) and its keys block l of σ_R's, so its chain's words are the lane's partial as the served receipt XORs
@@ -405,13 +408,42 @@ PouwH1Combine = CompositeDefinition(
         "receipt's.")
 
 
+#: the least K at which a leaf's lanes and combine are proved (`proved_k`)
+LEAST_K = 448
+
+
+def row_fits(bits: int) -> bool:
+    """A row of ``bits`` bits, in whole 16-bit words, is one the Lean verifier's hidden-output scope covers
+    (`Flock.ProvedScope.v2Row`): its bytes fill its compressions' blocks and end, with SHA-512's 17 bytes of padding, in its
+    last block, so its bytes mod 128 are at most 111."""
+    return 2 * -(-int(bits) // 16) % 128 <= 111
+
+
+def proved_k(k: int) -> int:
+    """``k``, if a leaf's lanes and combine can be proved at contraction K; else ValueError. A lane's partial and the
+    receipt are 2 (KS + m) u32, 8 (KS + m) bytes, each a row `row_fits` must take, and they are all the combine reads, so
+    they are at least a block: C-Flock needs a row of the statement that compresses before its last block. `LEAST_K` is
+    the least such K (K = 384's are 112 bytes), and past it a K whose KS + m is 14 or 15 mod 16 is out too (896, 928, ...)."""
+    n = 8 * H.Layout(4, 8, int(k)).sets
+    if n < 128 or not row_fits(8 * n):
+        raise ValueError(f"K = {k}: a lane's partial and the receipt are {n}-byte rows, but C-Flock needs one of the "
+                         f"combine's rows to compress before its last block (at least 128 bytes) and the Lean verifier a "
+                         f"row's bytes to end, with SHA-512's 17 bytes of padding, in its last block (bytes mod 128 at most "
+                         f"111, Flock.ProvedScope.v2Row): K = {LEAST_K} is the least K whose rows fit, and a K whose KS + m "
+                         f"is 14 or 15 mod 16 (896, 928, 1408, ...) has none")
+    return int(k)
+
+
 def lane(tile: Any) -> Any:
-    """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s)."""
+    """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s), at a K `proved_k`
+    takes: the lane a prover stages. A lane at another K (a bits test's) binds the Definition itself."""
+    proved_k(tile.signature()[0][0][1].elem.n)
     return bind(PouwH1LaneZy, TILE=tile)
 
 
 def combine(tile: Any) -> Any:
-    """`PouwH1Combine` over ``tile``, the leaf's H1 tile."""
+    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at a K `proved_k` takes."""
+    proved_k(tile.signature()[0][0][1].elem.n)
     return bind(PouwH1Combine, TILE=tile)
 
 
@@ -493,7 +525,7 @@ def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int])
     return int(out == [v & M32 for v in receipt])
 
 
-__all__ = ["BF16", "F32", "LANE", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1TileZy", "PouwMuxBit",
-           "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check", "combine",
-           "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference", "records",
-           "reference", "unit", "zy_cell"]
+__all__ = ["BF16", "F32", "LANE", "LEAST_K", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1TileZy",
+           "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check",
+           "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference",
+           "proved_k", "records", "reference", "row_fits", "unit", "zy_cell"]

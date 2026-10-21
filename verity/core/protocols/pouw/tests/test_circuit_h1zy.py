@@ -330,9 +330,30 @@ def test_a_lane_reads_its_rows_admit_bits_record_partial_and_index_and_returns_o
     (lambda: _tile(r=8, c=24), "whole bits"),
 ])
 def test_a_lane_or_combine_of_a_leaf_of_one_lane_or_no_whole_index_bits_is_refused(tile, why):
-    for f in (Z.lane, Z.combine):
+    for d in (Z.PouwH1LaneZy, Z.PouwH1Combine):
         with pytest.raises(ValueError, match=why):
-            f(tile()).signature()
+            bind(d, TILE=tile()).signature()
+
+
+def test_a_lane_and_combine_are_staged_only_at_a_k_whose_rows_a_proof_takes():
+    """A partial and the receipt are 8 (KS + m) bytes, and the Lean verifier's rows (`Flock.ProvedScope.v2Row`) end, with
+    SHA-512's 17 bytes of padding, in their last block, so their bytes mod 128 are at most 111; C-Flock needs one of the
+    combine's rows past one block. K = 448 (128 bytes) is the least K that fits (K = 384's rows are 112 bytes), K = 896's
+    240 bytes don't, and the served 4096 and 14336 do. A row is whole 16-bit words, so 881 bits are 112 bytes."""
+    assert [Z.row_fits(8 * n) for n in (0, 110, 112, 126, 128, 238, 240, 1040)] == [True, True, False, False, True, True,
+                                                                                    False, True]
+    assert Z.row_fits(1) and not Z.row_fits(881)
+    fits = [k for k in range(32, 16385, 32) if 8 * H.Layout(4, 8, k).sets >= 128
+            and Z.row_fits(64 * H.Layout(4, 8, k).sets)]
+    assert fits[0] == Z.LEAST_K == 448 and {4096, 14336} <= set(fits) and not {896, 928, 1408} & set(fits)
+    for k in (64, 384, 416, 896, 928):
+        with pytest.raises(ValueError, match="K = 448 is the least"):
+            Z.proved_k(k)
+        for f in (Z.lane, Z.combine):
+            with pytest.raises(ValueError, match=f"K = {k}: a lane's partial and the receipt are"):
+                f(_tile(r=8, c=16, k=k))
+    assert [Z.proved_k(k) for k in (448, 480, 4096, 14336)] == [448, 480, 4096, 14336]
+    assert Z.lane(_tile(r=8, c=16, k=448)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=8, c=16, k=448))
 
 
 def _word_bits(words):
@@ -351,7 +372,7 @@ def test_the_combine_on_bits_is_1_exactly_when_the_partials_xor_to_the_receipt()
     cases = [(parts, receipt), (parts, [*receipt[:7], receipt[7] ^ 1]), (off, receipt)]
     args = [np.array([[x for p in ps for x in _word_bits(p)] for ps, _r in cases], np.uint8),
             np.array([_word_bits(r) for _ps, r in cases], np.uint8)]
-    out = evaluate_bits(Z.combine(_tile(r=8, c=16)), *args).reshape(len(cases))
+    out = evaluate_bits(bind(Z.PouwH1Combine, TILE=_tile(r=8, c=16)), *args).reshape(len(cases))
     assert [int(o) for o in out] == [Z.combine_reference(*c) for c in cases] == [1, 0, 0]
 
 
@@ -406,7 +427,7 @@ def test_a_lane_on_bits_is_its_word_reference(defn):
                      SD.leaves(SALT, True), SD.position_leaves(5, True),
                      SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True), _bits(idx, 16)])
     args = [np.array([r[p] for r in rows], np.uint8) for p in range(9)]
-    got = evaluate_bits(Z.lane(_tile(defn, 8, 16)), *args).reshape(len(cases))
+    got = evaluate_bits(bind(Z.PouwH1LaneZy, TILE=_tile(defn, 8, 16)), *args).reshape(len(cases))
     assert want == [1, 0, 0] * lay.lanes + [1, 1, 1, 0, 0, 0, 0]
     assert [int(o) for o in got] == want
 
@@ -417,7 +438,7 @@ def test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls():
     seed there (a coin and a position port and no sink returned) would see its salt as a computed value, and its own
     seeds' coin port would refuse it. With ok a sink the port rules follow the coin into the lane, and a Program of one call
     passes them, about 35 s: no other test runs the rules over the lane's body (the bits test evaluates it, unchecked)."""
-    lane = Z.lane(_tile(H.PouwH1Tile3, 8, 16))
+    lane = bind(Z.PouwH1LaneZy, TILE=_tile(H.PouwH1Tile3, 8, 16))
     ports = PT.Ports(params={"salt": PT.In(kind="coin"), "position": PT.In(kind="position")}, ret={"ok": PT.Out(sink=True)})
     template = CompositeDefinition("H1ZyTestLaneTemplate", 1, (), lambda S: lane.signature(),
                                    lambda B, S, *args: B.call(lane, *args), conformance="protocol-defined", register=False,
