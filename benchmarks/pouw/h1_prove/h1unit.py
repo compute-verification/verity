@@ -5,7 +5,7 @@ prover and the verifier of `run.py` share.
   Definition the compile pass binds for an s8 grid tile (`h1tile._Unit`). Its statement (`stager`): input rows ``a0..a{R-1}``
   and ``b0..b{C-1}``, one ``hm96-sha512/row/v2`` bit row per A row and B row (8 K bits, the int8 codes' bytes), the public
   row ``pub`` (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and its seed group's
-  roots), and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words),
+  roots; the salt is PoUW's window salt `pouw.salt.pouw_salt`, `unit_salt`), and two output rows, ``z`` (o0: the cells' exact s32 products) and ``receipt`` (o1: CP-W's 2 (KS + m) words),
   each one ``row/v2`` row of exactly its words.
 * **The public row** stands for public input ports, which the Lean verifier refuses as a form its soundness proof does
   not cover (`ProvedScope.statementRules`). Its hm96 salt is public (`pub_salt`), so the verifier computes the row's
@@ -36,6 +36,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 HM96 = hm96.SHA512
@@ -43,7 +44,11 @@ SALT_BYTES = 192
 #: the public row's parameters, in its bit order
 PUBLIC = ("salt", "position", "roots")
 PUB_BITS = 512 + 64 + 1024
-SALT_TAG = b"verity/pouw/h1-prove/salt/v0\0"
+#: STAND-INS for what the network certifier and the window's registration give a certified window, which this harness
+#: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
+STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
+STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
+PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
 PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 
@@ -58,9 +63,18 @@ def tile() -> str:
     return t
 
 
-def unit_salt(coin: bytes) -> bytes:
-    """`pouw.salt`, the units' one coin: SHA-512 of the epoch's opened salt coin under this harness's tag."""
-    return hashlib.sha512(SALT_TAG + bytes(coin)).digest()
+def stand_in_reveal(coin: bytes) -> bytes:
+    """A STAND-IN for the network certifier's salt for the window, its ``reveal(p)`` (`pouw.salt.revealed`), which this
+    harness has no certifier to give: SHA-512 of the epoch's opened salt coin (`pouw.coins`) under this harness's tag.
+    Like the certifier's salt it is the auditor's, drawn before the window and opened only after the window's roots are
+    recorded; unlike it, no certifier signs it or bounds when it is revealed."""
+    return hashlib.sha512(STAND_IN_REVEAL_TAG + bytes(coin)).digest()
+
+
+def unit_salt(reveal: bytes, window: int, stream: bytes = STREAM, prover: bytes = PROVER) -> bytes:
+    """`pouw.salt`, the units' one coin: PoUW's window salt, `pouw.salt.pouw_salt(reveal, window, stream, prover)`, here of
+    the stand-in reveal (`stand_in_reveal`), the epoch's number as the window, and the stand-in stream and prover."""
+    return PS.pouw_salt(reveal, window, stream, prover)
 
 
 def pub_salt(window: str, position: int) -> bytes:
