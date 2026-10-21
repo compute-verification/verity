@@ -357,6 +357,13 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
+def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
+    """The `k` units of `population` a window's draw coin selects, after its registration (hex) was recorded: Lean
+    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the window's name and its registration."""
+    key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
+    return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
+
+
 def cmd_prepare(a) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
@@ -388,8 +395,7 @@ def cmd_prepare(a) -> int:
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    key = derive(do.coin, DRAW_DOMAIN, {"window": w1, "registration": reg.hex()})
-    units = sorted(lean_draw(a.lean, T, a.draw, key.stream("draw", 2 * a.draw * CC.width(T) + 64)))
+    units = draw_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
     u0 = units[0]
     by_call: dict[int, list[int]] = {}
     for u in units:
@@ -656,9 +662,16 @@ def cmd_summarize(a) -> int:
     for s in plan["statements"]:
         t = _time(out / s["tag"] / "prove.time")
         po = out / s["tag"] / "prove.out"
-        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": po.read_text()[-1500:] if po.exists() else None,
-                            "serve": _time(out / s["tag"] / "serve.time")}
+        text = po.read_text(errors="replace") if po.exists() else ""
+        pe = out / s["tag"] / "prove.err"
+        fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
+        proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
+    firewall = a.firewall == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
+    if firewall and not proofs.get("honest", {}).get("firewall_timed"):
+        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
+        ok = False
     for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "ACCEPT" if x == "honest" else "REJECT"}
                                for x in a.controls.split()]:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
@@ -684,7 +697,7 @@ def cmd_summarize(a) -> int:
                        "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), "sessions": (v or {}).get("sessions"),
                        "lean_phases": lean_phases(out / "lean" / f"{c['tag']}.err"), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
-    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok,
+    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok, "firewall": firewall,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile_shape": [R, C],
                "ands": record["circuit"]["ands"], "k_log": record["circuit"]["k_log"],
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],
@@ -740,6 +753,8 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
+    p.add_argument("--firewall", default="0", help="1: the provers ran under the firewall (FC_FIREWALL=1), whose times "
+                                                    "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)
 

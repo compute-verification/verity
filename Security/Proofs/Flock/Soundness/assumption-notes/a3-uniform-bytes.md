@@ -32,7 +32,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
   `KSLin2` at the deployment is not yet established: it takes `HeldB` (false at the deployed V\*, which has no holder of
   round 0's `root_B`) and open premises (`PartChecksB`, `PartOpensB`, `DecompB`, the readers' facts; the full list is
-  `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` is not yet derived from it.
+  `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows from it (`bitsLin2_of_ksLin2`).
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).

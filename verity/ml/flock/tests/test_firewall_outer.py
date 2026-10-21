@@ -82,6 +82,16 @@ def test_an_honest_session_is_accepted_with_nothing_stopped():
     assert not OA.judge("honest", t, {"accepted": False, "released": 0, "why": "x"})[0]
 
 
+def test_a_constraint_row_outside_the_relations_fails_every_case():
+    """The recorder's error for a constraint the Lean finish named outside the statement's relations
+    (`firewall_transcript.rs`) fails the session's expectation whatever the contract says."""
+    t = transcript([{"finish": {}}])
+    t["firewall"]["recorder_errors"] = ["a constraint row lincheck sum not among the relations"]
+    for case in ("honest", "label", "algebra"):
+        ok, why = OA.judge(case, t, {"accepted": True, "released": 1, "why": None})
+        assert not ok and why == "recorder: a constraint row lincheck sum not among the relations"
+
+
 def test_every_session_is_held_to_the_honest_sessions_public_input(tmp_path):
     """`public_input`: the honest sessions' public input, which must be the same in each; a control's may name more, but a
     statement value it gives a name the honest one fixes otherwise, or a relation the honest one lacks, is a miss; and

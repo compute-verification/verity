@@ -11,7 +11,8 @@
 #      the window's Program once the commitment gives its shape
 #   3. one loopback --zk session per statement (each drawn call's units, honest the first drawn unit's call; the other
 #      window's unit; honest's units on a tampered A row; the in-proof negatives on honest's units, each also as
-#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the firewall (FC_FIREWALL=1:
+#      the Lean session loop, its level-0 draw and Lean finish) unless H1_FIREWALL=0
 #   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
 #      reads (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their units derived;
 #      flipped-zy, wrong-receipt, other-window
@@ -24,7 +25,7 @@
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
+#      H1_FIREWALL (1)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
@@ -57,6 +58,14 @@ log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER qua
   echo $! > "$W/stager.pid" )
 STAGER=$(cat "$W/stager.pid")
 setup
+FW=${H1_FIREWALL:-1}
+if [ "$FW" = 1 ]; then
+  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
+    > "$OUT/build-firewall.log" 2>&1
+  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame beside $LEAN"; kill $STAGER; exit 1; }
+  sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+fi
 
 LPY=$(cached venv-layer numpy2.5.3-tokenizers0.22.1 build_layer_venv)/bin/python
 [ -x "$LPY" ] || LPY=$PY
@@ -84,6 +93,17 @@ cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registered.json "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
+# a firewalled prover's Lean Hello sets each session up at the verifier's own statement, partition and window Program (live
+# PROTOCOL.md §10.4); the registered reads are the offline verifier's, outside the session's spec
+VLIMIT=$(declare -f vlimit)
+if [ "$FW" = 1 ]; then
+  export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
+  export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
+  # the firewall's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
+  vlimit() { :; }
+fi
+log "prove: firewall $FW"
 while IFS=$'\t' read -r kind tag D n; do
   [ "$kind" = S ] || continue
   ln -sf "$SW/circuit.txt" "$D/circuit.txt" && cp "$SW/pin.txt" "$D/pin.txt"
@@ -95,6 +115,8 @@ while IFS=$'\t' read -r kind tag D n; do
   unset FC_ZK_SELF_CHECK
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
+unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+eval "$VLIMIT"
 
 # ---- Lean: the plan's checks, then the selftest build's controls on the drawn units' statement ----------------------------
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
@@ -131,7 +153,7 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
   done
 fi
 wait
-"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --firewall "$FW" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 du -sh "$SW/circuit.txt" "$HD/sessions" 2>/dev/null | tee -a "$OUT/job.log"
 log "h1-prove: done (exit $rc)"

@@ -3,13 +3,15 @@ an `act` value, a run input under the root of the round that admits it, committe
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
-  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1.admitting`, the option's wrap of the model runner's
+  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1_hooks.admitting`, the option's wrap of the model runner's
   ``execute_model``, hands those (`new_requests`) and the step's batch order (`batch_order`: Model Runner V2's own, each
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
-  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin. The salt is opened at install, before any
-  admission, so no request entry precedes it.
+  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
+  Round 0's request table comes before the salt: its root is in the window's open root (`salt.window_open_root`, over
+  the weights' root, it and the session), which the gate opens the session on and the salt coin opens after
+  (`pouw_h1.H1Run.open_window`), so its binding reads no salt (`requests_binding`) and every later round's does.
 * **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
   table (`slot_table`, T hm96 leaves) names the request whose row is slot i of step s's A tables, or none (`EMPTY_SLOT`). A
@@ -86,6 +88,7 @@ TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
+OPEN_REQUESTS_TAG = "verity/pouw/h1/requests/round-0/v1"
 SLOTS_TAG = "verity/pouw/h1/slots/v1"
 RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
@@ -103,8 +106,9 @@ def late_admission(r: int) -> str:
             f"so a window admits only in round 0 (the pouw setting 'admission': '{PER_ROUND}' admits in every round)")
 
 
-def requests_binding(salt: bytes, r: int) -> bytes:
-    return tagged(REQUESTS_TAG, salt, r)
+def requests_binding(salt: bytes | None, r: int) -> bytes:
+    """Round r's request table's binding. Round 0's reads no salt, since its root is committed before the salt opens."""
+    return tagged(OPEN_REQUESTS_TAG, 0) if r == 0 else tagged(REQUESTS_TAG, salt, r)
 
 
 def slots_binding(salt: bytes, r: int) -> bytes:
@@ -123,7 +127,7 @@ def slot_owner(leaf: bytes) -> int | None:
     return n - 1 if n else None
 
 
-def request_table(salt: bytes, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
+def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
     """Round r's request table: `rows` (T) hiding leaves, the entries the round admits in admission order, then
     `EMPTY_REQUEST`. Each admitted request schedules a token row in the step that admits it, so a step admits at most T."""
     if len(entries) > rows:
@@ -323,7 +327,8 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
     return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
 
 
-__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "PER_ROUND", "REQUESTS_NONCE", "ROUND0",
+__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
+           "REQUESTS_NONCE", "ROUND0",
            "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
            "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
