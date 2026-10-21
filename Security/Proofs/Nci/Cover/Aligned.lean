@@ -3,8 +3,8 @@ import Proofs.Nci.Cover.Training
 /-!
 # The width variant on whole-word activations, proved
 
-The width bound charges each use of a block's whole products `f` gates of its region. `Width` assumes it of every set of
-at most `s` gates; on a declaration's bit view it holds of the blocks the bound uses, which are whole words
+The width bound charges each use of a block's whole products `f` gates of its region. `Width` assumes it of every
+inference block; on a declaration's bit view it holds of the blocks the bound uses, which are whole words
 (`block c R = wordBits c (R ∪ in(R))`), when the regions are whole words at least `f` bits wide: a block handed a bit of
 such a region (`whole_use_entry`) is handed all of that word's bits (`width_aligned`), so `aligned_charge`.
 
