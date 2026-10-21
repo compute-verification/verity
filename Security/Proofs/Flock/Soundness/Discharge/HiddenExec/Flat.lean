@@ -139,7 +139,7 @@ theorem unitRowsFlat (ht : tags.typed = false)
 
 /-- **The hidden-output headlines' rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then
 `HmOut.checkRows`), all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
-`Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
+`Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row a `v2OutRow` of one output port. -/
 theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
     (h : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c := by
@@ -162,7 +162,7 @@ theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String ×
       exact hr _ (Array.getElem_mem_toList hj)
     have hsz : c.outRowPorts.size = c.outPorts.size := by rw [hrep, Array.size_replicate]
     refine ⟨⟨hrep, fun j hj => ⟨(Hidden.checkRows_out hc (by rw [hsz]; exact hj)).1, ?_⟩⟩, fun p hm => ?_⟩
-    · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec (ho j (by rw [hsz]; exact hj))
+    · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2OutRow_spec (ho j (by rw [hsz]; exact hj))
       rw [Hidden.getElem!_eq_getD']
       exact ⟨hs, hb, h1', h2'⟩
     · rcases h2 p hm with hv | hs

@@ -1665,11 +1665,13 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
    of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
-   `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
-   (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
+   `16 · words` bits whose bytes and SHA-512's 17 bytes of padding end in its `hm96` slot's block, the last
+   compression's block holding the bytes' end and the padding's start when `2 · words mod 128 ≥ 112`
+   (`128 · chunks ≤ 2 · words + 16` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
    row of `16 · words` bits segmented as `HmRow.segShape` cuts it, in its segments' and its outer message's compressions,
    each segment's bytes and SHA-512's 17 bytes of padding ending in its last block (`ProvedScope.segRow`: a segment of
-   `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented and each holding one output port
+   `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented, their bytes reaching their
+   `hm96` slot's block (`128 · chunks ≤ 2 · words`, `ProvedScope.v2OutRow`), and each holding one output port
    (`ProvedScope.bitRows`; refused as `rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one
    chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
    of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
