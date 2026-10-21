@@ -99,6 +99,20 @@ circuit the window's sessions prove, its canonical JSON without annotations (the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
 
+**A session runs main's code** only when the host's pins log records its pin (`pinned_session`, RT4-INT-40).  The open's
+`pinned` is the commit the host's tree was pinned to.  The host keeps an append-only pins log, a line per pin as the
+auditor writes it (`pin_line`):
+
+    pin     = {commit, main, pinned_utc}        commit: the pin; main: the origin/main commit whose history held it
+                                                 when vy-challenger-pin pinned it (each 40 lowercase hex)
+    open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
+
+and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
+verifier's copy of the log (infra's published one, any extension of it) begins with the sealed lines and one of them
+pins the open's commit (`pins_reason`).  Git's commit ids are SHA-1, and no verifier input names main's tip, so the
+verifier checks no ancestry itself: that each pinned commit was in main's history is the auditor-trusted host's word, as
+its pin wrapper checks it against origin/main (`trusted-nebius-host`).
+
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
 `verity.ml.commitments`, so any client calls it as it is.
@@ -204,6 +218,11 @@ HEADS_FORM = "the auditor's published heads are a list of ledgers, each its line
 DESCRIPTOR_FORM = ("the descriptor of the circuit a window's sessions prove is bytes: its canonical JSON without "
                    "annotations, the bytes program_digest hashes")
 HELLOS_FORM = "the challenger's refused hellos are a list of their lines"
+PINS_FORM = ("the host's pins log is a list of its lines, each {commit, main, pinned_utc} as the auditor writes it: "
+             "the commit the host was pinned to and the origin/main commit whose history held it (40 lowercase hex "
+             "each), and when, YYYY-MM-DDTHH:MM:SSZ")
+NO_PINS = ("no pins log: the verifier trusts a challenger session only from a tree the host's pins log records as a "
+           "commit of main's history")
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
 
 
@@ -992,6 +1011,11 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     ledger fails `verify_ledger`, or the window's session is missing, opened under v1, unended, ended unclosed or its end
     names no record leaf, commitment, refused hellos or sealed file the verifier reads, or the period holding the window
     committed no cap or circuit."""
+    return _audited(ledger, window, key, verify)[0]
+
+
+def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tuple[Audited, dict]:
+    """`audited_session`, and the body of the window's open."""
     if not _window(window):
         raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
     windows, periods = _checked(ledger, key, verify)
@@ -1017,7 +1041,7 @@ def audited_session(ledger: Any, window: Any, key: ChallengerKey, verify: Verify
     if name is not None and (p["cap"] is None or p["circuit"] is None):
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
-                   b["refused_hellos"], name, p["cap"], p["circuit"])
+                   b["refused_hellos"], name, p["cap"], p["circuit"]), o["body"]
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
@@ -1119,6 +1143,79 @@ def credited_session(ledger: Any, window: Any, key: ChallengerKey, descriptor: A
     return audited
 
 
+def pin_line(commit: str, main: str, pinned_utc: str) -> str:
+    """The host's pins log line for a pin of `commit`, which origin/main's commit `main` holds in its history, at
+    `pinned_utc` (``YYYY-MM-DDTHH:MM:SSZ``), as the auditor writes it (`ledger_text`); ValueError when it isn't of that
+    form."""
+    line = ledger_text({"commit": commit, "main": main, "pinned_utc": pinned_utc})
+    if _pin(line) is None:
+        raise ValueError(PINS_FORM)
+    return line
+
+
+def pins_seal(pins: Sequence[str]) -> dict:
+    """What an open records of the host's pins log `pins` (its lines) as it stands: ``{lines, sha512}``."""
+    return {"lines": len(pins), "sha512": log_digest(pins)}
+
+
+def _pin(line: Any) -> str | None:
+    """A pins log line's commit when the line is its own `ledger_text` of the pins log's form, else None."""
+    try:
+        e = json.loads(line) if type(line) is str else None
+        if e is None or ledger_text(e) != line:
+            return None
+    except (ValueError, TypeError, RecursionError):
+        return None
+    if not (isinstance(e, dict) and sorted(e) == ["commit", "main", "pinned_utc"] and _digest_hex(e["commit"], 40)
+            and _digest_hex(e["main"], 40) and later(e["pinned_utc"], 0) == e["pinned_utc"]):
+        return None
+    return e["commit"]
+
+
+def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
+    """Why session `session`, whose open's body is `opened`, didn't run main's code by the host's pins log `pins` (its
+    lines, None when the verifier has none): the log malformed, the open sealing none of it, the log not beginning with
+    the lines the open sealed, or none of those lines pinning the open's `pinned`; None when one does."""
+    if pins is None:
+        return NO_PINS
+    if type(pins) is not list:
+        return f"the host's pins log is malformed: {PINS_FORM}"
+    commits = []
+    for i, line in enumerate(pins):
+        commit = _pin(line)
+        if commit is None:
+            return f"the host's pins log line {i} is malformed: {PINS_FORM}"
+        commits.append(commit)
+    seal = opened.get("pins")
+    if not (isinstance(seal, dict) and sorted(seal) == ["lines", "sha512"] and _nat(seal["lines"])
+            and seal["lines"] >= 1 and _digest_hex(seal["sha512"])):
+        return (f"the auditor's ledger's open of session {session} seals no pins log (pins: {{lines, sha512}}): open "
+                "the window on a host whose gate seals its pins log in each open")
+    n = seal["lines"]
+    if len(pins) < n:
+        return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
+                "take infra's newest published pins log")
+    if log_digest(pins[:n]) != seal["sha512"]:
+        return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
+                "edited or rewritten")
+    if opened["pinned"] not in commits[:n]:
+        return (f"session {session} ran commit {opened['pinned']}, which the host's pins log doesn't record as a "
+                "commit of main's history: repin the challenger host to a commit origin/main contains "
+                "(vy-challenger-pin) and rerun the window there")
+    return None
+
+
+def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, verify: Verify) -> Audited:
+    """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
+    log `pins` (its lines; infra's published one) records the open's pin as a commit of main's history (`pins_reason`).
+    Raises `CoinError` naming why, so a session the host ran from any other tree fails closed."""
+    audited, opened = _audited(ledger, window, key, verify)
+    why = pins_reason(audited.session, opened, pins)
+    if why is not None:
+        raise CoinError(why)
+    return audited
+
+
 class LiveChallenger:
     """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
@@ -1211,10 +1308,11 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
-           "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM", "RECORD_ROLE",
+           "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "RECORD_FORM", "RECORD_ROLE",
            "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "key_of_record", "lane_of", "later", "layout_problem",
-           "leaf_of", "ledger_head", "ledger_line",
+           "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_message", "record_reason", "released_roots_of", "root_of", "session_named",
            "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",

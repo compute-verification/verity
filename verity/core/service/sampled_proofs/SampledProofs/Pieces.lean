@@ -30,9 +30,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
-  `challenger_credited`: the challenger's session (`ChallengerSession`): its close as `from_json` reads it, with
-  `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger; `ledger_head`, infra's
-  published heads; `trusted_session_of`; and `credited_session`, a window counted toward its period's circuit.
+  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
+  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
+  `ledger_head`, infra's published heads; `trusted_session_of`; `credited_session`, a window counted toward its period's
+  circuit; and `pinned_session`, a session from a tree the host's pins log records as main's.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -366,7 +367,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
-   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece)]
+   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
+   ("challenger_pinned", Challenger.pinnedPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
