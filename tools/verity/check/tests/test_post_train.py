@@ -114,10 +114,32 @@ def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_me
                         (lane, "r20261019-030000-0004"), (ff, "r20261019-040000-0005"), (ff, "r20261019-005000-0006")):
         assert PT.check_attempt(commit, cwd=repo, attempt=rid) is None, (commit, rid)
     err = capsys.readouterr().err
-    assert f"r20261019-020500-0003 ran on {moved[:12]}, which is neither {merge[:12]} nor the train it merged" in err
+    assert f"r20261019-020500-0003 ran on {moved[:12]}, which is neither {merge[:12]}, the train it merged" in err
     assert "r20261019-040000-0005 ran on no commit its attempt or run record names" in err
     assert f"r20261019-005000-0006 ran on {head[:12]}, which is neither {ff[:12]}" in err, "a train's second parent is a PR head"
     assert err.count("so it is no check of this landing") == 5, "a commit off main is refused before its attempt is read"
+
+
+def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(tmp_path, monkeypatch, capsys):
+    """20 Oct: 6bb53505d9e3 (with #2937) landed with drive's lock commit 616df64f83 on top, and its job labelled nothing: its check
+    ran on the train, the lock commit's parent, which `check_attempt` didn't read."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #1 a change")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m",
+         "Lock records regenerated for #1\n\nChecked: r20261020-152946-96c9 (the Lean check of x, passed by regenerating them)\n"
+         "Regenerated: Security/lean-audit.json")
+    lock = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 later\n\nChecked: r20261020-152946-96c9 (copied)")
+    later = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{later}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(PT, "source_of", {"r20261020-152946-96c9": train}.get)
+    assert PT.check_attempt(lock, cwd=repo, attempt="r20261020-152946-96c9") == "r20261020-152946-96c9"
+    assert PT.check_attempt(later, cwd=repo, attempt="r20261020-152946-96c9") is None, "no Regenerated: line, no lock commit"
 
 
 def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_did_not_land_on(tmp_path, monkeypatch, capsys):

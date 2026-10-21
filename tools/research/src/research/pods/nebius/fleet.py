@@ -7,14 +7,22 @@
                                  memory, idle hours (no GPU at >= 5% and load under a tenth of its cores)
     fleet.py instances           every VM in the tenant's projects as JSON (the control pod's cloud watch reads it)
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
-    fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day), and at
-                                 15:00Z (08:00 PDT) the last 24 h's report to infra's status thread and @top
+    fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
+    fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
+                                 $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at 15:00Z (08:00 PDT) the last
+                                 24 h's report to infra's status thread and @top, and to each lane that owns an idle machine a
+                                 doorbell with only its own machines
 
 Vy-nebius-1 sat ~0% GPU-busy for a week and the H200s had no usage record at all, and the card's daily limit and the tenant's
 quotas stopped launches with no warning (Daniel, 18 Oct 03:53Z). A VM's rate and address come from the machines registry (`research
 pods register`, <notes>/machines.d); one not registered is recorded from the API with rate None. A VM that can't be read is
 recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
 Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them.
+
+The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop (Daniel, 19 Oct
+18:11Z, lane contract v2.19 §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
+unset or unregistered) with its own idle hours. A sample also copies each VM's /etc/research/deadline into its registry entry's
+`deadline` when it changed (one notes sync per pass), which the control pod's wake (wake.py) reads while the VM is stopped.
 """
 from __future__ import annotations
 
@@ -27,6 +35,7 @@ import time
 import tomllib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -37,8 +46,10 @@ JUMP = os.environ.get("FLEET_JUMP", "research@81.85.2.165")        # a private a
 INTERVAL_S, QUOTA_EVERY_S, REPORT_HOUR_UTC = 300, 1800, 15
 BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
 STATUS_THREAD = "1791351683.780959"
+OWNER_DEFAULT = "infra"          # registry.OWNER_DEFAULT (this file runs standalone)
 PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr '\\n' ,); "
          "echo cores=$(nproc); echo load=$(cut -d' ' -f1 /proc/loadavg); "
+         "echo deadline=$(cut -d' ' -f1 /etc/research/deadline 2>/dev/null); "
          "awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{printf \"mem=%d,%d\\n\", (t-a)/1048576, t/1048576}' /proc/meminfo")
 
 
@@ -81,8 +92,9 @@ def parse_probe(text: str) -> dict:
     kv = dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
     gpus = [int(x) for x in kv.get("gpu", "").split(",") if x.strip().isdigit()]
     used, total = (int(x) for x in kv.get("mem", "0,0").split(",")[:2])
+    dl = kv.get("deadline", "").strip()
     return {"gpu_util": gpus, "cores": int(kv.get("cores") or 0), "load": float(kv.get("load") or 0), "mem_used_gib": used,
-            "mem_total_gib": total}
+            "mem_total_gib": total, "deadline": int(dl) if dl.isdigit() else None}
 
 
 def probe(host: str, user: str) -> dict | None:
@@ -115,7 +127,29 @@ def sample(now: float | None = None) -> list[dict]:
     with open(FLEET_DIR / f"samples-{utc(now)[:10].replace('-', '')}.jsonl", "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
+    record_deadlines(rows, reg)
     return rows
+
+
+def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
+    """Copy each read VM's /etc/research/deadline into its registry file's `deadline` where it differs; one notes sync for all."""
+    changed = []
+    for r in rows:
+        if r.get("deadline") is None or r["name"] not in reg or reg[r["name"]].get("deadline") == utc(r["deadline"]):
+            continue
+        f = MACHINES_D / f"{r['name']}.toml"
+        kept = [ln for ln in f.read_text().splitlines() if not ln.startswith("deadline =")]
+        f.write_text("\n".join([*kept, f'deadline = "{utc(r["deadline"])}"']) + "\n")
+        changed.append(r["name"])
+    if changed:
+        sync_registry(f"machines.d: {', '.join(changed)}'s deadline (fleet.py)")
+    return changed
+
+
+def sync_registry(message: str) -> None:
+    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    subprocess.run([str(research), "notes", "sync", "--root", str(MACHINES_D.parent), "--path", MACHINES_D.name, "-m", message],
+                   timeout=300, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def load_samples(start: float, end: float) -> list[dict]:
@@ -168,6 +202,39 @@ def render(rep: list[dict], hours: float, end: float) -> str:
     return "\n".join(lines)
 
 
+def idle_by_lane(rep: list[dict], reg: dict[str, dict]) -> dict[str, list[dict]]:
+    """Each owning lane's machines that sat idle in the report: the registry entry's `lane`, else infra's."""
+    out: dict[str, list[dict]] = {}
+    for r in rep:
+        if r["idle_hours"] > 0:
+            out.setdefault(reg.get(r["name"], {}).get("lane") or OWNER_DEFAULT, []).append(r)
+    return out
+
+
+def render_lane(rows: list[dict], hours: float, end: float) -> str:
+    known = [r for r in rows if r["rate_usd_per_hour"] is not None]
+    usd = sum(r["rate_usd_per_hour"] * r["idle_hours"] for r in known)
+    lines = [f"Your machines sat idle {sum(r['idle_hours'] for r in rows):.1f} h (${usd:,.0f}"
+             + ("" if len(known) == len(rows) else ", plus machines with no rate registered")
+             + f") in the {hours:g} h to {utc(end)}. The lane whose budget line pays for a node stops it when its work there ends; "
+             "infra's idle stop is only a backstop (lane contract v2.19 §3c)."]
+    for r in rows:
+        usd_r = f"${r['rate_usd_per_hour'] * r['idle_hours']:,.0f}" if r["rate_usd_per_hour"] is not None else "$? (no rate registered)"
+        lines.append(f"- {r['name']}: idle {r['idle_hours']} h of {r['hours']} h running, {usd_r}")
+    return "\n".join(lines)
+
+
+def daily(now: float, send: Callable[[list[str], str], None] | None = None) -> None:
+    """The 24 h report to infra's status thread and @top, and each owning lane's idle machines to its inbox."""
+    send = send or post
+    rep = report(load_samples(now - 86400, now), 24)
+    text = render(rep, 24, now)
+    send(["--thread", STATUS_THREAD, "--kind", "fyi"], text)
+    send(["--to", "@top", "--kind", "fyi"], text)
+    for lane, rows in sorted(idle_by_lane(rep, registry()).items()):
+        send(["--to", f"@{lane}", "--kind", "fyi"], render_lane(rows, 24, now))
+
+
 def quota_findings() -> list[dict]:
     out = []
     for q in nb("quotas", "quota-allowance", "list", "--parent-id", TENANT, "--page-size", "999").get("items", []):
@@ -192,10 +259,40 @@ def post(args: list[str], text: str) -> None:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def loop() -> int:
-    last_quota, told, reported = 0.0, set(), ""
-    while True:
-        now = time.time()
+TOLD_KEEP_DAYS = 2
+
+
+def load_told(now: float) -> set[tuple[str, str]]:
+    """The (UTC day, quota key) alerts already posted, from $FLEET_DIR/quota-told-YYYY-MM-DD.json, so a restarted loop doesn't post
+    them again; a day's file older than TOLD_KEEP_DAYS is removed."""
+    told, oldest = set(), utc(now - TOLD_KEEP_DAYS * 86400)[:10]
+    for f in sorted(FLEET_DIR.glob("quota-told-*.json")):
+        day = f.name[len("quota-told-"):-len(".json")]
+        if day < oldest:
+            f.unlink(missing_ok=True)
+            continue
+        try:
+            told |= {(day, k) for k in json.loads(f.read_text())}
+        except (OSError, ValueError) as e:
+            print(f"{utc(now)} {f} unreadable, its alerts may post again: {e}", file=sys.stderr, flush=True)
+    return told
+
+
+def save_told(told: set[tuple[str, str]], day: str) -> None:
+    FLEET_DIR.mkdir(parents=True, exist_ok=True)
+    f = FLEET_DIR / f"quota-told-{day}.json"
+    tmp = f.with_name(f".{f.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(sorted(k for d, k in told if d == day)) + "\n")
+    os.replace(tmp, f)
+
+
+def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep,
+         send: Callable[[list[str], str], None] | None = None, passes: int | None = None) -> int:
+    send = send or post
+    last_quota, told, reported = 0.0, load_told(clock()), ""
+    while passes is None or passes > 0:
+        passes = None if passes is None else passes - 1
+        now = clock()
         try:
             sample(now)
         except Exception as e:  # noqa: BLE001 (a failed pass is logged, the loop goes on)
@@ -212,17 +309,17 @@ def loop() -> int:
                 for key, line in found:
                     if (day, key) not in told:
                         told.add((day, key))
-                        post(["--channel", "agent-alerts", "--kind", "alert"],
+                        save_told(told, day)
+                        send(["--channel", "agent-alerts", "--kind", "alert"],
                              f"Quota at {QUOTA_ALERT:.0%}+: {line}. Ask for a raise now (Nebius console, Administration > Quotas; "
                              f"the card: Daniel), before it stops a launch. (fleet.py quota)")
             except Exception as e:  # noqa: BLE001
                 print(f"{utc(now)} quota failed: {e}", file=sys.stderr, flush=True)
         if datetime.fromtimestamp(now, timezone.utc).hour == REPORT_HOUR_UTC and reported != day:
             reported = day
-            text = render(report(load_samples(now - 86400, now), 24), 24, now)
-            post(["--thread", STATUS_THREAD, "--kind", "fyi"], text)
-            post(["--to", "@top", "--kind", "fyi"], text)
-        time.sleep(max(1.0, INTERVAL_S - (time.time() - now)))
+            daily(now, send)
+        sleep(max(1.0, INTERVAL_S - (clock() - now)))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -232,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     rp = sub.add_parser("report")
     rp.add_argument("--hours", type=float, default=24)
     rp.add_argument("--now", default=None)
+    rp.add_argument("--lanes", action="store_true", help="each owning lane's doorbell instead of the whole report")
     sub.add_parser("instances")
     sub.add_parser("quota")
     sub.add_parser("loop")
@@ -240,7 +338,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(sample(), indent=1))
     elif a.cmd == "report":
         end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if a.now else time.time()
-        print(render(report(load_samples(end - a.hours * 3600, end), a.hours), a.hours, end))
+        rep = report(load_samples(end - a.hours * 3600, end), a.hours)
+        if a.lanes:
+            for lane, rows in sorted(idle_by_lane(rep, registry()).items()):
+                print(f"--to @{lane}\n{render_lane(rows, a.hours, end)}\n")
+        else:
+            print(render(rep, a.hours, end))
     elif a.cmd == "instances":
         print(json.dumps(instances()))
     elif a.cmd == "quota":

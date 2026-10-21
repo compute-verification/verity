@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import email.message
+import http.client
 import http.server
 import io
 import itertools
@@ -549,6 +550,46 @@ def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
     broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]
     slack.Slack(None).call("chat.postMessage", channel=COORD, text="after the burst")
     assert waits == [2.0, float(slack.RATE_WAIT_MAX_S)] and broker.state.messages[COORD][-1]["text"] == "after the burst"
+
+
+def test_a_read_cut_short_reset_or_timed_out_is_retried_with_backoff_and_fails_clearly_once_retries_run_out(monkeypatch):
+    """The control pod's agent-watch relay died twice on 19 Oct when conversations.replies came back truncated
+    (http.client.IncompleteRead, which is no OSError, so it escaped as a traceback instead of a SlackError)."""
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
+    fails = [http.client.IncompleteRead(b"x" * 10, 90), ConnectionResetError(104, "reset"),
+             urllib.error.URLError(TimeoutError("timed out"))]
+
+    def transport(url, data, headers):
+        if fails:
+            raise fails.pop(0)
+        return {"ok": True, "messages": [{"ts": "1.0"}]}
+
+    api = slack.Slack("xoxb-dummy", transport=transport)
+    assert api.call("conversations.replies", channel=COORD, ts="1.0")["messages"] == [{"ts": "1.0"}]
+    assert waits == [2.0, 4.0, 8.0]
+
+    waits.clear()
+    fails[:] = [http_error(502, "")] + [http.client.IncompleteRead(b"", 5)] * 3
+    with pytest.raises(slack.SlackError, match=re.escape("conversations.history: IncompleteRead: ") + ".*after 4 tries"):
+        api.call("conversations.history", channel=COORD)
+    assert waits == [2.0, 4.0, 8.0]
+
+
+@pytest.mark.parametrize("fail", [http.client.IncompleteRead(b"", 5), urllib.error.URLError(TimeoutError("timed out")),
+                                  http_error(503, "")])
+def test_a_write_cut_short_is_not_retried_since_slack_may_have_taken_it(monkeypatch, fail):
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
+    sent = []
+
+    def transport(url, data, headers):
+        sent.append(url)
+        raise fail
+
+    with pytest.raises(slack.SlackError, match=r"^chat\.postMessage: "):
+        slack.Slack("xoxb-dummy", transport=transport).call("chat.postMessage", channel=COORD, text="once")
+    assert len(sent) == 1 and waits == []
 
 
 def test_a_long_running_client_gets_a_new_identity_once_the_broker_rejects_its_cached_one(broker, monkeypatch):
@@ -2942,7 +2983,8 @@ def test_notion_page_id_reads_each_url_shape_and_nothing_else():
 def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fake, registry, routes_dirs, notion, capsys, monkeypatch):
     """An ask lives in one record, and answered is that record's state: a handle's linked ask by its Linear issue, whatever its
     thread shows; Daniel's card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
-    for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unanswered."""
+    for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unchecked,
+    neither answered nor unanswered: a missing key is one finding, not a false alert per ask (INF-150)."""
     from research import linear
     inbox(fake, routes_dirs, "proofs")
     linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
@@ -2968,7 +3010,7 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now, "--json")
     rep = json.loads(out)
     un, ans = {x["ts"]: x for x in rep["unanswered"]}, {x["ts"]: x for x in rep["answered"]}
-    assert rc == 0 and set(un) == {backlog["ts"], silent["ts"], waiting["ts"], lost["ts"]}
+    assert rc == 0 and set(un) == {backlog["ts"], silent["ts"], waiting["ts"]} and [x["ts"] for x in rep["unchecked"]] == [lost["ts"]]
     assert set(ans) == {moved["ts"], reacted["ts"], approved["ts"], revising["ts"]}
     assert [un[backlog["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-1", "in Backlog, no comment but the asker's"]
     assert [ans[moved["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-2", "left Backlog (started)"]
@@ -2978,12 +3020,17 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
                                  "state": "Status Waiting on Daniel"}
     assert (ans[approved["ts"]]["ref"], ans[approved["ts"]]["state"]) == (URL_B, "Status Approved")
     assert (ans[revising["ts"]]["ref"], ans[revising["ts"]]["by"], ans[revising["ts"]]["state"]) == (URL_C, "proofs", "Status Revising")
-    assert un[lost["ts"]]["state"].startswith(f"unreadable (GET {slack.NOTION_API}/pages/{PAGE_D}: Notion can't see it")
+    assert rep["unchecked"][0]["state"].startswith(f"unreadable (GET {slack.NOTION_API}/pages/{PAGE_D}: Notion can't see it")
     rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now)
     assert rc == 0 and "answered: 4 ask(s), by their record: 1 on Linear, 2 on Notion, 1 on Slack (no record)" in out
     assert f"UNANSWERED {backlog['ts']} by @infra to @proofs" in out and "): Linear PRF-1 in Backlog, no comment but the asker's" in out
     assert f"UNANSWERED {waiting['ts']} by @memory-accounting to @daniel" in out and f"): Notion page {URL_A} Status Waiting on Daniel" in out
     assert f"UNANSWERED {silent['ts']} by @infra to @proofs" in out and "): Slack, no record: no reply or reaction" in out
+    assert "UNCHECKED: 1 ask(s) whose record can't be read: unreadable (GET" in out
+    monkeypatch.delenv("LINEAR_API_KEY")
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    assert backlog["ts"] not in {x["ts"] for x in rep["unanswered"]}, "a Linear issue nobody can read is not a false unanswered"
+    assert {backlog["ts"], moved["ts"], lost["ts"]} <= {x["ts"] for x in rep["unchecked"]}
 
 
 def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,

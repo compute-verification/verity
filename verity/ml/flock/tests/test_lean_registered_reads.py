@@ -226,7 +226,17 @@ def test_the_ports_rows_are_the_registered_rows(staged):
         if want is None:
             assert code == 0, (name, out)
         else:
-            assert code == 1 and f"port cs's rows are 64 u16 words, not {VALUE}'s registered {want}" in out, (name, out)
+            assert code == 1 and f"port cs's rows are 1024 bits (64 u16 words), not {VALUE}'s registered {want}" in out, (name, out)
+
+
+def test_a_row_v1_port_is_refused_a_bit_row_registration(staged):
+    """cs is a `hm96-sha512/row/v1` port: a reads file that names its value's rows in another format (`row_schema`) is
+    refused before any row is opened, since its root's leaves are framed under that format."""
+    public = _stage(staged, "honest-v2")
+    for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        code, out = _statement(staged, public, _own(staged, f"own-{schema[-6:].replace('/', '-')}",
+                                                    lambda ps, schema=schema: ps["cs"].update(row_schema=schema)))
+        assert code == 1 and (f"port cs is a {G.SCHEMA} row, and {VALUE}'s registered rows are {schema} rows") in out, out
 
 
 def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):
@@ -453,7 +463,9 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
     honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
     refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
-    under one that moves every position."""
+    under one that moves every position. Upstream's seed-injection build has no zk patch, so the session's plain files are
+    upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under `--upstream-plain`
+    (§8.1)."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
@@ -461,7 +473,7 @@ def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     def verify(session: str, own: Path) -> dict:
         p = subprocess.run([str(BIN), "verify", "--statement", f"{UPSTREAM_STATEMENT}+seed-injection", "--circuit",
                             str(rope / "stage" / "circuit.txt"), "--public", str(rope / "registered" / "pub-8.bin"), *bound,
-                            "--registered", str(own), "--session", str(rope / "vectors" / session)],
+                            "--registered", str(own), "--upstream-plain", "--session", str(rope / "vectors" / session)],
                            capture_output=True, text=True, check=False)
         (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         return line

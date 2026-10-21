@@ -1,6 +1,6 @@
 """proved_ticks at the hand-checked point, H1 + fx1 on DS-120: ♭ is an IMMA.16832, 1/39 LDSM_X4 and fx1's 8 ALU and
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
-unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
+unit is (1 − 5.860%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
 places PoUW's compiled Program is its tiles' `z` products, a linear's each at the tile's K, of the int8 products census/v1
 and Lean's `h1Rows` count there, r·c·(2K + 32m) a tile (benchmarks/datacenter's test of that Program credits this figure
 as the block's compute)."""
@@ -26,7 +26,7 @@ SECOND = 4096 * 4 * 188 * 2430e6
 
 def test_the_sheet_is_h1_fx1_on_ds120():
     assert (S.family, S.vector, S.design, S.sms, S.fmax_mhz) == ("sm_120", "DS-120", "dither-c-peel-fx1", 188, 2430)
-    assert P.SHEET_EPS == 0.00599
+    assert P.SHEET_EPS == 0.0586
 
 
 def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
@@ -36,7 +36,7 @@ def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
 
 
 def test_a_gpu_second_of_linears_is_one_minus_eps_of_b_flat_seconds():
-    assert P.proved_block_ticks({"mac:linears": SECOND}, S, P.SHEET_EPS, 1.0) == pytest.approx(0.99401 * 17.097571,
+    assert P.proved_block_ticks({"mac:linears": SECOND}, S, P.SHEET_EPS, 1.0) == pytest.approx(0.9414 * 17.097571,
                                                                                                  abs=1e-6)
     assert P.proved_block_ticks({"mac:linears": SECOND}, S, 0.0, 1.0) == pytest.approx(17.097571, abs=1e-6)
 
@@ -70,7 +70,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
     block = {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}
     assert P.placed(block, grid) == {"mac:linears": 4096} and P.units(P.placed(block, grid), S) == 1
     assert P.proved_block_ticks(P.placed(block, grid), S, P.SHEET_EPS, 1e-3) == pytest.approx(
-        0.99401 * 17.097571 / (4 * 188 * 2430e3), rel=1e-7)
+        0.9414 * 17.097571 / (4 * 188 * 2430e3), rel=1e-7)
     with pytest.raises(ValueError, match="isn't eps1-sm120-h1fx1's"):
         P.placed({"mac:int8": 1, "mac:bf16": 1}, grid)
     for wrong in ({"mac:int8": 4096}, {"mac:int8": 2 * block["mac:int8"]}, {}):
@@ -106,16 +106,34 @@ def test_a_tiles_products_are_lean_h1_rows_and_placed_credits_z_at_its_k(r, c, k
     assert P.placed({"mac:int8": 3 * products}, {t: 3}) == {"mac:linears": 3 * linears}
 
 
+#: (r, c, K): every product census/v1 counts in the one-stream tile (`PouwH1Tile_v3`), the lanes' segment dots' alone
+TILE_ROWS_V3 = {(4, 8, 64): 4096, (4, 16, 64): 8192, (4, 8, 96): 5120}
+
+
+@needs_h1
+@pytest.mark.parametrize("r,c,k", TILE_ROWS)
+def test_a_one_stream_tiles_products_are_its_lanes_and_placed_credits_z_at_its_k(r, c, k):
+    """v3's z is recombined from the lanes' folded words, so its tile has `h1Rows`' products less z's own, and `placed`
+    credits the same z products, r·c·K, as v1's tile."""
+    linears, products = TILE_ROWS[(r, c, k)]
+    t = P.Tile(r, c, k, r * c, 3)
+    assert t.products == TILE_ROWS_V3[(r, c, k)] == h1_rows()[(r, c, k)] - linears and t.linears == linears
+    assert P.placed({"mac:int8": t.products}, {t: 1}) == {"mac:linears": linears}
+    with pytest.raises(ValueError, match="aren't its H1 tiles'"):
+        P.placed({"mac:int8": products}, {t: 1})
+
+
 def test_lean_h1_rows_are_the_three_rows():
     assert set(h1_rows()) == set(TILE_ROWS)
 
 
 @needs_h1
 @pytest.mark.slow
+@pytest.mark.parametrize("version", [1, 3])
 @pytest.mark.parametrize("r,c,k", TILE_ROWS)
-def test_placed_on_a_tiles_program_reads_census_v1(r, c, k):
+def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     """The tile's Program, read as the datacenter reads a block (`logical.work`'s `mac:int8`, here census/v1's products by
-    class), is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
+    class), on v1 and on the one stream v3, is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
     from verity.core.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.census import PRODUCTS, census
@@ -124,9 +142,10 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k):
     from verity.ml.circuits.program import Program
 
     exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
-    program = Program(bind(H.PouwH1Tile, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c))))
+    defn = {1: H.PouwH1Tile, 3: H.PouwH1Tile3}[version]
+    program = Program(bind(defn, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c))))
     doc = census(program)
     int8 = sum(cl["instances"] * PRODUCTS.get(cl["family"], 0) for cl in doc["classes"].values())
-    assert P.tiles(program) == {P.Tile(r, c, k, r * c): 1}
-    assert int8 == TILE_ROWS[(r, c, k)][1] and doc["totals"]["served_macs"] == doc["totals"]["tail_atoms"] == 0
+    assert P.tiles(program) == {P.Tile(r, c, k, r * c, version): 1}
+    assert int8 == (TILE_ROWS[(r, c, k)][1] if version == 1 else TILE_ROWS_V3[(r, c, k)]) and doc["totals"]["served_macs"] == doc["totals"]["tail_atoms"] == 0
     assert P.placed({"mac:int8": int8}, P.tiles(program)) == {"mac:linears": TILE_ROWS[(r, c, k)][0]}

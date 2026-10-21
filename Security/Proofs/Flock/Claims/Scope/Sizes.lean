@@ -70,7 +70,7 @@ theorem inScope_iff_scope (rel : Parsed → Relation) {p : Parsed} (hp : Parses 
 `m < 22`. -/
 theorem sizesOk_of_verify {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
     (h : Flock.verify spec tabs record proofs = .ok ()) : ProvedScope.sizesOk false (tabs.map Setup.m) = .ok () := by
-  unfold Flock.verify at h
+  unfold Flock.verify Flock.verifyFiles at h
   dsimp only at h
   by_cases c0 : (tabs.size != spec.tables.size || tabs.size == 0) = true
   · rw [ite_eq_left c0] at h; obtain ⟨_, h0, _⟩ := Refine.ebind_ok h; cases h0

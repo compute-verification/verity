@@ -19,9 +19,13 @@
   "Flock.Test.Part",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.RegFormats",
+  "Flock.Test.RegRows",
+  "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
   "Flock.Test.Wires",
   "Flock.Test.TableCap",
+  "Flock.Test.ProofCanon",
   "VStar"
  ],
  "exempt": {

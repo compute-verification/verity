@@ -5,7 +5,7 @@ from cluster import cpuset
 from cluster.model import Allocation, Cluster, Gpu, Job, Node, Share, Workstream
 
 T0 = 1_790_000_000
-PRIO = {"service": 1000, "timed": 900, "session": 700, "capture": 600, "work": 500, "bench": 300, "dev": 100, "fill": 10}
+PRIO = {"service": 1000, "timed": 900, "session": 700, "gate": 650, "capture": 600, "work": 500, "bench": 300, "dev": 100, "fill": 10}
 
 
 def node(name: str, owner: str, *, gpus: int = 8, memory: int = 256, stops_at: int | None = None, drain_s: int = 0,

@@ -27,7 +27,9 @@ serve           honest, beside the backend's own serving (`backend.serving`: a n
                 write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
                 its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
                 one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
-                window with a root is the next window's first, so the allowance covers a read, not a step
+                window with a root is the next window's first, so the allowance covers a read, not a step; paced, a
+                pass is its coin's window's from the coin's arrival, its step inside it, so the allowance covers both
+                (the backend's calibration counts the step)
 servedrop:K     serve, but the first K blocks appended (1 by default) are not held, as kvdrop's
 kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes skip the free fence: a write lands in
                 a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
@@ -759,7 +761,8 @@ class ProverSide:
             if ahead is not None:
                 n = trace.take(t)
             elif serve:
-                start = clock()
+                # Paced, a pass starts at its coin's arrival (`start`), as any paced pass does.
+                start = clock() if cap == math.inf or start is None else start
                 trace.advance(t)
                 t, i, after, start = moved(t, i, after, start)
             else:
@@ -779,6 +782,7 @@ class ProverSide:
         backend.begin_window(take(wire.coin_of(coin0["coin"])), self.registration.digest)
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
+        pass_steps: list[list[int]] = []
         depth = 1 if ahead is not None or serve else 2
         misread = getattr(backend, "misread", None)
 
@@ -799,12 +803,15 @@ class ProverSide:
                 self.misread[(x.t, x.i)] = got
             self.conn.send(msg)
             passes.append((x.t, x.i, x.start, seen, clock()))
+            pass_steps.append([x.t, x.i, x.step])
 
         def flush(x: _Pass) -> dict | None:
             """x's appends not yet sent, sent together and each answered with its coin in turn, under which the backend
             encodes its blocks, so x waits one round trip however many steps it covers: None, or the session's `end`
-            if it came first."""
+            if it came first (an `end` already drained into `pending`, behind a coin, gets no `appended` either)."""
             nonlocal sent_appends
+            if (gone := next((m for m, _, _ in pending if m["type"] == "end"), None)) is not None:
+                return gone
             todo = trace.appends[sent_appends:x.upto[0]]
             for a in todo:
                 self.conn.send({"type": "append", "root": a.root.hex(), "count": a.count})
@@ -917,7 +924,7 @@ class ProverSide:
                "dropped": dropped.tolist() if len(dropped) <= DROPPED_LISTED else None, "dropped_count": len(dropped),
                "failure_on_dropped": bool(hits(dropped, [self.block(failure["t"], *at)])[0]) if at else None,
                "accepted": ended["accepted"], "failure": failure, "passes": [per_window[tt] for tt in range(W)],
-               "pass_host_ns": [seen - start for _, _, start, seen, _ in passes],
+               "pass_host_ns": [seen - start for _, _, start, seen, _ in passes], "pass_steps": pass_steps,
                "gap_host_ns": [sent - seen for _, _, _, seen, sent in passes], "discarded": discarded,
                "opened": self.opened, "warmup": self.warmup, "device": device}
         if trace is not None:

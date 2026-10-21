@@ -363,7 +363,7 @@ def recInnerInput (args : List String) : IO (Except String (Option RecVStar.Inne
 /-- `--rec-part J`: which of V*'s statements the verifier holds this session for, `J` indexing `RecVStar.statements` at the
 verifier's own inner shape from 0 (the list `rec-statements` prints): the levels first, `L<level>` as `J = level`, then the
 algebra's parts, `alg/p<j>` as `J = levels + j`, then candidate 3's: RecSparse (`sparse`), R's levels (`stacked/L<level>`)
-and R's opening's parts (`stacked/open/p<j>`). -/
+and R's opening's parts (`stacked/open/p<j>`), then last the table's level-0 cap (`cap`). -/
 def recPartInput (args : List String) : Except String (Option Nat) :=
   match argOf args "--rec-part" with
   | none => .ok none
@@ -643,7 +643,7 @@ verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one wi
 values its own `--registered F` (`Registered.check`), a circuit with public input ports its own `--public-inputs F`, and
 a public file whose header names an identifier its own `--identifier F` (§16.10), one of V*'s statements its own inner
 shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`, V*'s, and no lookup table is held), which of V*'s statements the session is `--rec-part J` (`J` indexing the list `rec-statements`
-prints from 0: the levels, then the algebra's parts) and its own bindings `--rec-bindings F` (from
+prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`; or, with the session, `rec-coins`'s record
 of what that check reads of them, `--rec-inner-coins`), and a statement reading a `rec-c<k>` the
@@ -653,7 +653,9 @@ coin server's record of the inner session whose `c_k` its rows must be (`--rec-i
 `rec-residuals/…` or `rec-sparse/…` unit) needs the inner transcript, whose link points the inner session's record must
 hold (`RecVStar.innerLink`); a circuit-table level's `out` reads `rec-top-L<l>` at each opening's node (`RecCoins.checkLink`)
 and its rows are the tops the coin server recorded (`RecVStar.checkTopRows`), whose rounds and sizes are the inner
-shape's schedule's (`RecVStar.checkLinkRounds`). At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
+shape's schedule's (`RecVStar.checkLinkRounds`). The table's level-0 cap statement (`rec-cap/n<N>`, the list's last) reads
+`rec-top-L0` at every node in order and V*'s zero rows (`RecCoins.checkCap`), and needs the inner transcript, whose
+`root_B` its rows are. At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
 the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
 Each DIR holds `session.json`
@@ -666,12 +668,17 @@ session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner`
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), all after
 every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
-none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
+none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
+`--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
+deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1), so each rep is decoded from the file then
+the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
+refused where the other is pinned. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
+  let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
@@ -679,6 +686,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let zk := args.contains "--zk"
   if zk && (argOf args "--coins").isSome then
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
+  if zk && tags.upstreamPlain then
+    IO.eprintln "verify --zk: a --zk session's files are the zk patch's, so --upstream-plain (upstream's plain files) does not apply"; return 2
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
     return 2
@@ -807,7 +816,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       let (record, proofs) ← files
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
-      if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
+      if zk then Zk.verify spec tabs record proofs
+      else if stmtTags.upstreamPlain then verifyFiles (plainBytes true) spec tabs record proofs
+      else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw
@@ -841,7 +852,8 @@ Its verifier-registered values are checked against the verifier's coins (`RecCoi
 reads: the inner statement and session (`--rec-inner-public` and its three, or `--rec-inner-coins`), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
-tops (`RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
+tops (`RecCoins.checkLink`). The level-0 cap statement (`rec-cap/n<N>`) is checked against its registered reads and
+the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
@@ -907,9 +919,11 @@ def statementCmd (args : List String) : IO UInt32 := do
       if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
       if recLink.isSome then RecVStar.checkTopRows st registered recLink
       let u := st.c.unit.name
-      if recCoins.isSome || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
+      let cap := (VStar.capParams u).isSome
+      if recCoins.isSome || cap || (c3.isSome && ((RecCoins.stackedParams u).isSome || (RecOpening.params u).isSome)) then
         RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
-      if recCoins.isSome then RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
+      if recCoins.isSome || cap then
+        RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"

@@ -9,7 +9,8 @@
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
-                                                 # on whole cores of its own, waiting on the node while none are free
+                                                 # on whole cores of its own, waiting on the node while none are free; or, when it starts
+                                                 # sooner there, a slot of vy-nebius-cpu-1's research pool (research/auto.py)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -56,7 +57,7 @@
                                                  # exists, 5 no stock, 2 failed); the lease armed at boot and over ssh (pods/lease.py)
   research pods extend TARGET --hours H | lease TARGET   # push the pod's lease to at least now + H / show it
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
-  research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
+  research pods unpreserved <machine|pod-id> [--older-min N]   # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
   research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
   research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
@@ -191,7 +192,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
-                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
+                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
+                         "a slot of vy-nebius-cpu-1's research pool when it starts sooner there (research/auto.py)")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -223,9 +225,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
-                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
+                         "on cores no check slot holds; `proofs`): the run takes a slot there and its cwd is its source, or "
                          "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock); "
-                         "its --timeout counts from taking the slot, after a wait of up to an hour for one")
+                         "its --timeout counts from taking the slot, after a wait of up to --pool-wait for one")
+    ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
+                    help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -307,6 +311,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
+        harness_opts = _auto_spill(ns, harness_opts)
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -331,14 +336,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             return 2
         try:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
-            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout)
+            wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
+            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
         if timeout:
-            harness_opts = [*harness_opts, "--timeout", f"{slot_only.POOL_WAIT_S + timeout:g}"]
+            harness_opts = [*harness_opts, "--timeout", f"{wait_s + timeout:g}"]
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
-                  f"up to {slot_only.POOL_WAIT_S // 60} min for one, then exits 75 without running", file=sys.stderr)
+                  f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
             # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
@@ -847,6 +853,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
+        shipped = getattr(a, "tree_sha", None)
+        if hint and shipped and hint.get("commit") != shipped:   # a launcher that read its checkout before shipping: only the sha is known
+            hint = {"commit": shipped}
         conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
                              source_hint=hint, dirty_capture=capture)
         if tool is not None:
@@ -962,15 +971,6 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
               file=sys.stderr)
 
 
-def _source_identity_hint(git_dir: Path) -> dict | None:
-    from . import env as E
-
-    src = E.source_conditions(git_dir)
-    if not src.get("source.commit"):
-        return None
-    return {"commit": src["source.commit"], "tree": src["source.tree"], "dirty": src["source.dirty"], "dirty_digest": src["source.dirty_digest"]}
-
-
 GPU_WAIT_MIN = 120
 # a queued job's thread pools take its --cpus, as a pod's take its quota (pod_bootstrap.sh): left alone, BLAS and OpenMP start one
 # thread per host core inside a scope of a few CPUs. The job's own --env still decides.
@@ -979,10 +979,13 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
-#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml).
-#: Not node 1, whose CPUs trains and lanes' direct runs already oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and
-#: proofs' Lean slots have reserved (03:01Z).
-AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
+#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
+#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs trains and lanes' direct runs
+#: already oversubscribe (top, 02:53Z).
+AUTO_KIND = "agent-test"
+#: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
+#: pool slot must give for the run to spill there
+AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_MIN = 4, 16, 60
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
@@ -992,6 +995,8 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
+    from .auto import AUTO_NODE, AUTO_PROJECT
+
     if not ns.source:
         top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if top.returncode != 0:
@@ -1004,8 +1009,32 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
-    print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
+
+
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
+    """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
+    a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
+    kind's time as its --timeout. The harness options it runs with."""
+    from . import auto
+
+    cpus = ns.cpus or AUTO_CPUS
+    mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
+    target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
+    if why is None:
+        target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+    if target is None:
+        print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
+        return harness_opts
+    machine, pool = target
+    if remote.flag_value(harness_opts, "--timeout") is None:
+        harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
+    ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
+    ns.cpus = ns.max_min = ns.mem_gb = ns.question = ns.disk_gb = None     # the slot's cores and mem= are the run's
+    ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
+    print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
+    return harness_opts
 
 
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
@@ -1127,10 +1156,6 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
-    if ns.source:
-        hint = _source_identity_hint(Path(ns.source).expanduser())   # a shipped `git archive` has no .git: the machine gets what git knew here
-        if hint:
-            harness_args += ["--source-identity", json.dumps(hint, sort_keys=True)]
     custody = ns.custody_r2 is not False
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
@@ -1272,7 +1297,9 @@ def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
                                                                      "workload's process group and its whole cgroup scope, recorded as a "
                                                                      "manual cancel; the runner SIGKILLs what is left 20 s later "
-                                                                     "(remote.cancel)")
+                                                                     "(remote.cancel). A run that hasn't started, held on "
+                                                                     "its machine (disk-hold, cpu-hold), is withdrawn: its hold "
+                                                                     "ends and refused.json records it Withdrawn")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
@@ -1286,8 +1313,11 @@ def cmd_cancel(argv: list[str]) -> int:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
     if out.get("withdrawn"):
-        print(f"research cancel: {run_dir.name}: withdrawn from its {out['hold']} before its runner started (SIGTERM to pid {out['pid']}); "
-              f"refused.json records fault Withdrawn; {out['released']}")
+        holds = ", ".join(f"research {h['hold']} pid {h['pid']}" for h in out["holds"])
+        print(f"research cancel: {run_dir.name}: withdrawn before it started: SIGTERM to its hold ({holds}), recorded as a manual "
+              f"cancel; refused.json records it {(out.get('refused') or {}).get('fault')}")
+        if out.get("released"):
+            print(f"research cancel: {run_dir.name}: removed what its launch staged: {', '.join(out['released'])}")
         return 0
     if not out["delivered"]:
         print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
@@ -1303,6 +1333,11 @@ def cmd_cancel(argv: list[str]) -> int:
     if scope.get("runner_kills_after_s") is not None:
         print(f"research cancel: {run_dir.name}: the runner SIGKILLs what is left of the run {scope['runner_kills_after_s']:g} s after the "
               f"SIGTERM and records it in status.json (`scope_end`)")
+    elif scope.get("cancel_killed_after_s") is not None:
+        left = scope.get("left") or []
+        print(f"research cancel: {run_dir.name}: {scope.get('why')}, so the cancel SIGKILLed what was left of the run "
+              f"{scope['cancel_killed_after_s']:g} s after the SIGTERM ({(scope.get('SIGKILL') or {}).get('n', 0)} process(es)); "
+              + (f"still there: {', '.join(left)}" if left else "none is left") + f"; status.json `scope_end` {scope.get('status_json')}")
     if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
         print(f"research cancel: {run_dir.name} {ran}")
     return 0

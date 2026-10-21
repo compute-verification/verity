@@ -189,7 +189,10 @@ def test_reads_come_from_the_verifiers_own_program():
     assert G.reads(prog, Q, {"W": 2, "x": 2}) == {"x": {"value": "x", "rows": list(range(6))}, "w": {"value": "W", "rows": list(POS)}}
     assert G.reads(prog, Q, {}) == {}
     assert G.shape(prog, "W", 2) == 5
-    for bad in ({"W": 1}, {"W": 3}, {"V": 2}):
+    # rows of one leaf: w is an array of two whole rows, each read at its own key (a circuit without ports w[0] and w[1]
+    # refuses the reads file that names them)
+    assert G.reads(prog, Q, {"W": 1}) == {f"w[{j}]": {"value": "W", "rows": [2 * p + j for p in POS]} for j in range(2)}
+    for bad in ({"W": 3}, {"V": 2}):
         with pytest.raises(ValueError):
             G.reads(prog, Q, bad)
 
@@ -210,6 +213,137 @@ def test_a_read_that_is_not_one_whole_row_is_refused():
 
     with pytest.raises(ValueError, match="in another unit"):
         G.reads(_program(body=mixed), Q, {"W": 2})
+
+
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+@pytest.mark.parametrize("word_bits", [16, 32])
+def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, word_bits):
+    """A value a bit-row port reads is committed in that port's format: each row the bit row of its leaves (`row_words`
+    unpadded, little-endian), `x` its `sha512/row/v2` or `sha512/row-seg/v1` digest, each leaf framed under the port's
+    schema, so the root differs from the `row/v1` root of the same rows and salts, and a read opens it only in its format.
+    The domain is the same in every format."""
+    from verity.ml.commitments.rowleaf import bit_row, row_leaf, sha512_row_seg_digest, sha512_row_v2_digest
+
+    prog = P.program_digest(_program(w=word_bits))
+    rows = [[0x3727C5AC & ((1 << word_bits) - 1), 0x3E38AA3B & ((1 << word_bits) - 1)], [5, 6], [7, 8]]
+    salts = [bytes([r + 1]) * 192 for r in range(3)]
+    reg = G.Registered.commit(prog, "W", rows, salts, word_bits, schema)
+    v1 = G.Registered.commit(prog, "W", rows, salts, word_bits)
+    inst = hm96.SHA512
+    words = G.row_words(rows[0], word_bits, schema)
+    assert len(words) == 2 * word_bits // 16, "a bit row is its leaves' bits, no whole-block padding"
+    data, n = bit_row((words, 16))
+    assert n == 2 * word_bits and data == b"".join(int(v).to_bytes(word_bits // 8, "little") for v in rows[0])
+    digest = sha512_row_v2_digest(data, n) if schema == G.SCHEMA_V2 else sha512_row_seg_digest(data, n)
+    assert G.row_digest(rows[0], word_bits, schema) == digest
+    assert reg.bcs[0] == inst.commit_string(inst.default_key, digest, salts[0])
+    assert reg.domain.domain_id == v1.domain.domain_id and reg.root != v1.root
+    assert reg.levels[0][1] == row_leaf(reg.domain, 1, inst.tree_leaf(inst.default_key, reg.bcs[1]), schema)
+    for r in range(3):
+        assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), schema)
+        assert not G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r))
+        other = G.SCHEMA_SEG if schema == G.SCHEMA_V2 else G.SCHEMA_V2
+        assert not G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), other)
+    assert reg.schema == schema and "row_schema" not in reg.entry(), "the registration's entry is the same in every format"
+    with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
+        G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
+
+
+def test_the_verifiers_reads_file_names_a_bit_row_values_format():
+    """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
+    file is the bytes it was. A bit row is its leaves' bits: W's two 8-bit leaves are one u16 word of a `row/v2` row, where
+    a `row/v1` row gives each its own word."""
+    prog = _program()
+    reg = _registered(prog)
+    v1 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
+    for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        doc = G.reads_file(prog, Q, {"W": 1}, {"W": reg.root.hex()}, schemas={"W": schema})
+        assert doc["ports"]["w"] == {**v1["ports"]["w"], "words": 1, "row_schema": schema,
+                                     "domain": G.domain(P.program_digest(prog), "W", 1, 5).domain_id.hex()}
+        assert list(doc["ports"]["w"])[-2:] == ["row_schema", "reads"]
+        with pytest.raises(ValueError, match="10 leaves are not rows of 2 .4 of its leaves in a"):
+            G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": schema})
+    assert G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": G.SCHEMA}) == v1
+    with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
+        G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
+
+
+XOR1 = PrimitiveDefinition("RegisteredTestXor1", 1, (("a", Value(1)), ("b", Value(1))), Value(1), lambda a, b: a ^ b,
+                           register=False)
+#: an A row of K = 64 int8 codes, its bits one-bit leaves: a `row/v2` row of K/2 = 32 u16 words
+K = 64
+A_ROW = Array(8 * K, Value(1))
+#: a tile reading R = 2 rows of A (H1's tile unit: its parameter `a`, the circuit's ports `a0` and `a1`)
+TILE = bind(CompositeDefinition("RegisteredTestTile", 0, (), lambda S: ((("a", Array(2, A_ROW)),), Value(1)),
+                                lambda B, S, a: B.call(XOR1, a[0][0], a[1][0]), register=False))
+QT = P.template_instance_query(TILE.id)
+
+
+def _tiles(rows=lambda A, B, u: A[2 * u:2 * u + 2]) -> Program:
+    """Two tiles over A's four rows, unit u reading `rows(A, B, u)` (default rows 2u and 2u + 1); B is another value of A's
+    shape."""
+    def sig(S):
+        return (("A", Array(4, A_ROW)), ("B", Array(4, A_ROW))), Array(2, Value(1))
+
+    return Program(bind(CompositeDefinition("RegisteredTestTiles", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(TILE, rows(A, B, u))
+                                                                                        for u in range(2)]),
+                                            register=False)))
+
+
+def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
+    """A `row/v2` row of `words` leaves of `word_bits` holds `words * word_bits` bits, as many of the parameter's leaves as
+    they fill (`row_leaves`): K int8 codes as one-bit leaves are K/2 = 32 u16 words, 8K leaves a row, so A is 4 rows
+    under its domain of 32 words, the one H1's served tree commits under; a `row/v1` row keeps one parameter leaf a word."""
+    prog = _tiles()
+    assert G.row_leaves(prog, "A", K // 2, G.SCHEMA_V2) == G.row_leaves(prog, "A", K // 2, G.SCHEMA_SEG) == 8 * K
+    assert G.row_leaves(prog, "A", K // 2) == K // 2 and G.shape(prog, "A", K // 2) == 4 * 8 * K // (K // 2)
+    assert G.shape(prog, "A", K // 2, G.SCHEMA_V2) == 4
+    assert G.registered_entries(prog, {"A": K // 2}, {"A": G.SCHEMA_V2})["A"] == {
+        "leaves": 4, "words": K // 2, "word_bits": 16, "domain": G.domain(P.program_digest(prog), "A", K // 2, 4).domain_id.hex()}
+    assert G.registered_entries(prog, {"A": K // 2})["A"]["leaves"] == 64, "row/v1 is counted as it was"
+    with pytest.raises(ValueError, match="leaves are not rows of 33"):
+        G.shape(prog, "A", 33, G.SCHEMA_V2)
+
+
+def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
+    """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): unit u's rows 2u
+    and 2u + 1. The reads file names each as a port of A, in A's row format, with its own positions; a parameter that is
+    exactly one row keeps its name."""
+    prog = _tiles()
+    want = {"a[0]": {"value": "A", "rows": [0, 2]}, "a[1]": {"value": "A", "rows": [1, 3]}}
+    assert G.reads(prog, QT, {"A": K // 2}, {"A": G.SCHEMA_V2}) == want
+    assert G.reads(prog, QT, {"A": 8 * K}) == want, "row/v1 rows of one word a leaf, the same rows"
+    rows = [[(17 * r + j) & 0xFFFF for j in range(K // 2)] for r in range(4)]
+    reg = G.Registered.commit(P.program_digest(prog), "A", rows, schema=G.SCHEMA_V2)
+    doc = G.reads_file(prog, QT, {"A": K // 2}, {"A": reg.root.hex()}, ports={"a[0]": "a0", "a[1]": "a1"},
+                       schemas={"A": G.SCHEMA_V2})
+    port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
+            "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
+        for u, r in enumerate(reads):
+            assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
+            assert not G.verify_read(reg.domain, reg.root, reads[1 - u], reg.bcs[r], reg.path(r), G.SCHEMA_V2)
+    crossed = _tiles(lambda A, B, u: coll_concat(Array(2, A_ROW), [A[3 - u], A[u]]))
+    assert G.reads(crossed, QT, {"A": K // 2}, {"A": G.SCHEMA_V2}) == {"a[0]": {"value": "A", "rows": [3, 2]},
+                                                                  "a[1]": {"value": "A", "rows": [0, 1]}}
+
+
+def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():
+    """Each element is one whole row of the one value: elements straddling two rows, or a row of A beside a row of B,
+    are no public read."""
+    def straddle(A, B, u):
+        flat = [A[r][j] for r in range(4) for j in range(8 * K)]
+        return coll_concat(Array(2, A_ROW), flat[8 * K * u + 4 * K:8 * K * u + 4 * K + 16 * K])
+
+    with pytest.raises(ValueError, match="nor an array of whole rows"):
+        G.reads(_tiles(straddle), QT, {"A": K // 2}, {"A": G.SCHEMA_V2})
+    mixed = _tiles(lambda A, B, u: coll_concat(Array(2, A_ROW), [A[u], B[u]]))
+    with pytest.raises(ValueError, match="nor an array of whole rows"):
+        G.reads(mixed, QT, {"A": K // 2, "B": K // 2}, {"A": G.SCHEMA_V2, "B": G.SCHEMA_V2})
+    with pytest.raises(ValueError, match="nor an array of whole rows"):
+        G.reads(_tiles(), QT, {"A": K // 2})
 
 
 def test_the_verifiers_reads_file():
@@ -629,6 +763,44 @@ def test_r7_holds_a_pinned_value_to_its_pin():
     v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
     with pytest.raises(ValueError):
         R.check(v1, **{**check, "registered": None, "supplied": None}, pinned={})
+
+
+def test_r7_reuses_an_earlier_outputs_commitment():
+    """A value that is an output of an earlier run (`outputs`, the NCI baseline's `output` provenance) takes that run's
+    port: its entry has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under
+    the earlier run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the
+    log doesn't hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record
+    is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    part = P.partition(prog, Q)
+    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
+                                                               "domain": dom},
+                                              {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
+                       {**SERVED, "row": 6}, registered=[reg.entry()])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    out = {"W": {"record": R.digest(earlier), "port": "prev.out"}}
+    assert R.check(rec, prog, Q, **kw, outputs=out).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-domain", "R7-held")
+    assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out).codes == ("R7-held",)
+    assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
+    for bad in ({"record": "ee" * 64, "port": "prev.out"}, {"record": R.digest(earlier), "port": "nope"},
+                {"record": R.digest(earlier), "port": "short"}, {"record": R.digest(rec), "port": "prev.out"}):
+        assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    for bad in ({"x": out["W"]}, {"W": {**out["W"], "record": "EE" * 64}}, {"W": {**out["W"], "extra": 1}},
+                {"W": {"record": R.digest(earlier)}}, {"W": {**out["W"], "port": 1}}, {"W": "prev.out"}, ["W"]):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs=bad)
+    with pytest.raises(ValueError):
+        R.check(rec, prog, Q, **kw, outputs=out, pinned={"W": "cd" * 64})
+    reads = G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64}, domains={"W": dom})["ports"]
+    assert {e["domain"] for e in reads.values()} == {dom}
+    assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
 #: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)

@@ -144,8 +144,8 @@ def main(args: Options) -> None:
     kw.update(parse_engine_args(args.engine_arg))
     observer = not (args.no_observer or args.census)
     with_extension = observer or args.census
-    if with_extension:
-        kw["worker_extension_cls"] = EXTENSION
+    if ext := TT.extension(target, EXTENSION if with_extension else None):
+        kw["worker_extension_cls"] = ext
     mode = "control" if args.no_observer else ("census" if args.census else "capture")
     print(f"[tp2] mode={mode} tp={args.tp} case={case} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     t0 = time.perf_counter()
@@ -160,7 +160,7 @@ def main(args: Options) -> None:
                             "engine_core_class": f"{type(core).__module__}.{type(core).__name__}" if core is not None else None,
                             "executor_class": f"{type(executor).__module__}.{type(executor).__name__}" if executor is not None else None,
                             "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "env_flags": env_flags,
-                            "in_process_runner": None, "ranks": None}
+                            "effective_execution": va.effective_execution_doc(llm), "in_process_runner": None, "ranks": None}
     try:
         prof.get_model_runner(llm)
         topo["in_process_runner"] = True

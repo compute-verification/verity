@@ -136,6 +136,51 @@ def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_res
     assert st["unregistered_bytes"] == 2 * 32 * 4 + 64 * 32 * 4 - registered
 
 
+def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_reaches_a_kv_page():
+    """The Commit's session (`Binder(kv=False)`): the KV pool is counted unregistered, the filler is its own region,
+    no registered byte is a KV cache's, and a step that writes KV (its appends, its frees) writes no registered block:
+    the memory map numbers the step and records no line."""
+    s = Store()
+    b = Binder(s, passes=False, kv=False)
+    r = runner()
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    b.register_filler(3 * 4096 + 5, "cpu")
+    st = b.stats()
+    assert [x.kind for x in s.layout().regions] == ["weights", "filler"] and s._pool is None
+    assert st["bytes_by_kind"] == {"weights": 64 * 32 * 4, "filler": 3 * 4096}
+    assert st["unregistered_bytes"] == 2 * 32 * 4 + 3 * 2 * PAGES * 2048 == 2 * 32 * 4 + b.unregistered["kv"]
+    kv = [(c.untyped_storage().data_ptr(), c.untyped_storage().data_ptr() + c.untyped_storage().nbytes())
+          for c in r.kv_caches]
+    for x in s.layout().regions:
+        flat = s.backing(x.name).flat
+        lo, hi = flat.data_ptr(), flat.data_ptr() + flat.numel()
+        assert all(hi <= a or z <= lo for a, z in kv), f"{x.name} holds KV cache bytes"
+    with pytest.raises(RuntimeError, match="filler is registered"):
+        b.register_filler(4096, "cpu")
+    m = s.record_memory_map(registration=bytes(range(64)))
+    page = Block(1)
+    page.ref_cnt = 1
+    stm = SimpleNamespace(req_to_blocks={"a": [page]})
+    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
+                            requests={"a": SimpleNamespace(num_computed_tokens=SLOTS)})
+    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": SLOTS}))
+    r.kv_caches[0][:, 1] = 1.5
+    b.end()
+    page.ref_cnt = 0
+    b.on_free(SimpleNamespace(free_block_queue=Queue([Block(2), page])), [page])
+    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
+    b.end()
+    assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
+    with pytest.raises(RuntimeError, match="no KV pool"):
+        s.kv_append([Append(1, 0, 1)], 2)
+
+
+def memory_map_lines(m) -> list:
+    from verity.core.protocols.remote_bandwidth import memory_map
+    return list(memory_map.parse(m.text().splitlines(keepends=True))[1])
+
+
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     s = Store()
     b = Binder(s, block_bytes=1024)

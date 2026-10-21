@@ -305,13 +305,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
           "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
-          "sheet's, and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
+          "sheet's, the H200's 1980 MHz is EPS1 DC's measured f_max at default clocks (its sheet quotes TOPS at "
+          "1830 MHz), and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
           "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
     Entry("accounting-sheet-dispatch", "assumption",
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
           "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
           "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot alone (sm_120's NOROW); a device whose classes have none leaves it free",
+          "class at its issue slot alone (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED at the "
+          "measured issue row alone on their measured readings); a reading whose classes have none (sm_120's measured "
+          "reading) leaves it free. A bulk or TMA instruction of size S counts S/99 KB in sm_120's UTMABIG, at most "
+          "its one slot (A5b's count)",
           "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
@@ -321,7 +325,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "throughput", "A4 pipe (Programming Guide)", "measured"),
     Entry("accounting-sheet-smem", "assumption",
           "A5 SMEM: shared memory serves one request per SM clock, its distinct banks together (32 banks × 4 B = 128 "
-          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width",
+          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width; "
+          "A5b, which no vendor document states: a bulk or TMA instruction holds its size S of bank bytes at that "
+          "rate, what it reads or writes on one side of a block's shared memory (RT4-SHEET-1's fold on the bulk engine)",
           "A5 shared memory (Programming Guide)", "measured"),
     Entry("accounting-sheet-words", "assumption",
           "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
@@ -333,8 +339,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
           "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
-          "(RT2-LOGIC-1's IMAD rotate); the sm_120 headlines ask it only at their own certificate π*, N the words the "
-          "run folds (FoldOptFoldedAt), an open conjecture that test_lean_headline.py tests on bit-exact folds",
+          "(RT2-LOGIC-1's IMAD rotate) and an ALU fold of ♭'s IMADs on the H200's and B200's readings (RT3-LOGIC-6); "
+          "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
+          "the run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py "
+          "(the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds) "
+          "and on bit-exact folds by test_lean_headline_dc.py",
           "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
@@ -370,10 +379,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "sm_120 headlines take the two alone as named premises: binding in its fork form at "
-          "δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, which share "
-          "w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, with "
-          "probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's soundness at "
+          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
+          "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
+          "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
+          "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
           "δ_ZK), which C-Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
@@ -386,6 +396,32 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "are free witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) "
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
+    Entry("accounting-ts-accepted-live", "assumption",
+          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
+          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
+          "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
+          "binding is stated", "TS accepted live", "standard"),
+    Entry("accounting-ts-window-law", "assumption",
+          "The proof service's draws and audit coins are the window's live coins: at each round and proof, given what "
+          "the path fixes before the session (its setting and its prover), the session's coins are the path's next "
+          "coins, fresh and uniform. This rests on five facts: a refused session is never rerun on a fresh draw (no "
+          "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
+          "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
+          "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
+          "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
+          "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
+          "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
+    Entry("accounting-ts-served-checks", "assumption",
+          "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
+          "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
+          "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
+    Entry("accounting-ts-served-roots-linked", "assumption",
+          "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
+          "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",

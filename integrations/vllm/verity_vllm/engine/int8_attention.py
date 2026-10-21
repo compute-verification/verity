@@ -45,6 +45,9 @@ TOP = E.TOP
 MAX_KEYS = E.MAX_K
 #: cuBLASLt (sm_120) refuses an s8 product whose k is an odd multiple of 8 up to 120 at n = 128 and m not a multiple of 64
 K_ALIGN = 16
+#: and, for every k below 128 and every m, one whose n is an odd multiple of 8 from 40 (r20261019-230516-524d): a head dim 64
+#: window of 33..40 keys
+N_ALIGN = 16
 LUT_SIZE = 256
 #: fattn_ref.py's table: LUT[t] = rint(127 2^(-t/16)), t in 0..255
 LUT = np.rint(127.0 * np.exp2(-np.arange(LUT_SIZE) / 16.0)).astype(np.int64)
@@ -76,10 +79,10 @@ def fixed_point_a(s_q: torch.Tensor, s_k: torch.Tensor, scale: float) -> torch.T
 
 def int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """a b^T (int32) of integer-valued a [m, k] and b [n, k] within int8, exactly: k padded with zeros to a multiple of
-    K_ALIGN, n to a multiple of 8 and m to `int8_exact.MIN_ROWS` (``torch._int_mm``'s shape rules on CUDA)."""
+    K_ALIGN, n to a multiple of N_ALIGN and m to `int8_exact.MIN_ROWS` (``torch._int_mm``'s shape rules on CUDA)."""
     n, k = b.shape
     a8 = F.pad(a.to(torch.int8), (0, -k % K_ALIGN)).contiguous()
-    b8 = F.pad(b.to(torch.int8), (0, -k % K_ALIGN, 0, -n % 8)).contiguous()
+    b8 = F.pad(b.to(torch.int8), (0, -k % K_ALIGN, 0, -n % N_ALIGN)).contiguous()
     return E.int_mm(a8, b8)[:, :n]
 
 

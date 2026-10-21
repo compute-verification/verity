@@ -39,9 +39,18 @@ route to the operand luck, not a premise here.
 
 FOLD-OPT is asked at the statement's own `π*` (`FoldOptFoldedAt`), the one certificate the proof prices at
 (RT2-LOGIC-1, note:20261019T1140Z-draft-rt2-logic). At every certificate (`FoldOptFolded`) it is false for a
-bit-exact fold: the IMAD rotate costs 20 a unit against the menu's 16 at DS-120's `π*`, and 14 against 16 halfway
-between issue and the LOP pipe. At `π*` it is a conjecture (`shape.conjectures`), which
-`benchmarks/pouw/tests/test_lean_headline.py` tests on the bit-exact fold variants, the rotate among them.
+bit-exact fold: the IMAD rotate costs 20 issue slots a unit against the menu's 16, and 14 against 16 halfway between
+issue and the LOP pipe. At `π*` it is a conjecture (`shape.conjectures`), checked within a stated menu by
+`benchmarks/pouw/tests/test_lean_headline.py`, at both headlines' `π*`:
+
+* fx1's lane fold and its uniform route, the Lean menu itself (`Sm120.h1fx1.folds`);
+* the bit-exact lane folds `FOLDS`: the IMAD, funnel and shift rotates and the IMAD.WIDE forms;
+* the bulk-reduction floors, the exporter's `BULK_FLOORS` (sheet only): fx1's step `u = y ⊕ d′ ⊕ k` as two bulk
+  reductions a word, `d′` moved by STS.128 or STG.256 and the reductions into global or shared memory;
+* RT4-SHEET's twelve whole-block folds on the bulk engine (`fold_bulk.cu`, `fixtures/fold_bulk_loops.json`, sheet
+  only), fbw4096_K4_BT256 among them.
+
+A fold outside that menu isn't checked: FOLD-OPT says nothing is cheaper, and the menu is what has been tried.
 
 Fold skippers are charged (RT-COMPOSE's B1, RT-HEADLINE §3). FOLD-OPT is per word folded (ASK-6 = A):
 each run's fold is priced at the words it folds, `(1 − Σ_w e_w/S)·N_w`, where `Uf : Unfolded` gives each round's
@@ -59,7 +68,7 @@ The `2^-40` event is split in two: binding and soundness cost at most `2^-41` ov
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
 `√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2).
 
-The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
+The unfolded branch binds on sm_120's sheet (`5.860%`); on sm_120's measured vector the folded branch binds
 (`0.591%`). The proof service's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness
 (`ProofSoundAt`, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning
 (`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks of #2417 recompute
@@ -69,8 +78,8 @@ over `Definitions/` (RT2-LOGIC-2).
 The statements:
 
 * `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: under its
-  premises, A2u among them (below), outside an event of probability at most `2^-40` every accepted window of 48,000
-  equal live rounds runs at least `1 − 0.656%` of its credit.
+  premises, A2u and A5b among them (below), outside an event of probability at most `2^-40` every accepted window of
+  48,000 equal live rounds runs at least `1 − 5.860%` of its credit.
 * `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3s-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: under its
   premises, outside an event of probability at most `2^-40` every accepted window of 48,000 equal live rounds runs at
   least `1 − 0.591%` of its credit. The `9/8` floors are assumed, not proved: at A6's proved `½` floor the same bound
@@ -78,8 +87,9 @@ The statements:
 
 The window is in the statements' type: `Sm120.checks = 48,000` equal live rounds, one check a round, so neither says
 anything about a window of another shape. The ε needs that many rounds. The same two branches with `S` rounds in place
-of 48,000 give ε < 1% only from 9,496 rounds (sheet) and 8,320 (measured), and exceed 100% up to 40 rounds (sheet)
-and 41 (measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
+of 48,000 give ε < 1% only from 8,320 rounds on the measured vector, and on the sheet never: there ε falls to 5.779%,
+`1 − N_w(w* + φ*)/B_♭`, and is under 6% only from 17,460 rounds. Both exceed 100% up to 40 rounds (sheet) and 41
+(measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
 RT-INT-1 (note:20261019T0528Z-draft-rt-int) finds the same kind of floor on Compose's live line: ε < 1% there needs
 at least 10,552 equal live rounds a window, whatever the draw. The windows run so far have at most 18 rounds.
 
@@ -106,6 +116,19 @@ RT2-120-4 (note:20261019T1115Z-draft-rt2-120) puts uniform chains beside a satur
 a SMSP: over 279 measurements (r20261019-120714-132b) no kernel's total rate exceeds 1 (max 0.9999), so A2u holds at
 saturation, and nothing dual issues.
 
+It rests on A5b too (`SheetSmem`): a bulk or TMA instruction holds its size `S` of shared-memory bank bytes at A5's
+rate, counted `S/99 KB` in UTMABIG (`loads.bulk_counts`), which no vendor document states either. Without it DS-120
+charges a bulk reduction one issue slot and no other row, and RT4-SHEET-1 (note:20261019T2300Z-draft-rt4-sheet) is a
+bit-exact fold below the menu: fold_bulk.cu's fbw4096_K4_BT256 (r20261019-234605-a812), fx1's fold with its XOR on
+the bulk engine, costs 15.766 issue slots a unit against 16 at the issue facet, and its full-work run loads DS-120's
+most-loaded row at 0.982 of ♭. The floor that moves `d′` by STG.256 loads no DS-120 row above the menu's fold and is
+below it on issue (13.5) and the LOP pipe (8 to 16), so no certificate with weight on issue prices it at `φ*` without
+the bytes. With A5b, `π*` takes 197/3761 on DS_smem, the least weight at which every bulk-reduction floor costs
+`N_w φ*` (the STS.128 one exactly), and the ε is 5.860% where the issue facet alone gave 0.656%. No census program
+exceeds 1 on DS_smem with A5b, and R6r's measured row already charges TMAred512 its 512 B. Even so the sheet admits a
+run at 0.989 of ♭ (fbw on part of the words, the lane fold on the rest, on any bulk-byte reading), so no sheet ε
+below 1.06% can hold; VF3s-16's `ROW_L2RD` loads fbw at 5.78 of ♭, so its real time doesn't come near.
+
 sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which doesn't price duo's `IMAD.HI.U32` rotate
 route on the FMA pipe (RT-LOGIC-10).
 -/
@@ -115,39 +138,42 @@ namespace Accounting.Guarantees.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **sm_120's headline at the data sheet**, under full checking with live coins. On DS-120's machine (`Sm120.sheet`),
-H1 + fx1's TS model (`Sm120.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm120.flat`), at the issue
-facet's certificate (`Sm120.piStar`), over a window of `Sm120.checks = 48,000` equal live rounds on any finite coins
-`Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window,
-if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded at `π*` prices every run's fold at the
-words it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
-(`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
-premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
-most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), two runs off one
-commitment open it differently with probability at most `δ_fork` a round (`BindingForkAt`, binding at `√δ_fork`), every
-proof is sound up to `δ_ZK` (`ProofSoundAt`), the relations pin every committed value (`ProofsPin`) and E1(c) holds
-(`RightFixed`), then outside an event of probability at most `2^-40` every accepted
-window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
+H1 + fx1's TS model (`Sm120.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm120.flat`), at its certificate
+(`Sm120.piStar`: 3564/3761 on issue, 197/3761 on shared memory), over a window of `Sm120.checks = 48,000` equal live
+rounds on any finite coins `Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most
+`2^-41` over the window, if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded at `π*` prices
+every run's fold at the words it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose
+openings are pinned (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view
+(`OperandHMu`, the first luck premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and
+whose whole-unit luck is at most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs'
+(`Of`), two runs off one commitment open it differently with probability at most `δ_fork` a round (`BindingForkAt`,
+binding at `√δ_fork`), every proof is sound up to `δ_ZK` (`ProofSoundAt`), the relations pin every committed value
+(`ProofsPin`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
+window's time is at least `1 − 5860/100000` (`1 − 5.860%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
 The bound is per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
-least `1 − 0.656%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
+least `1 − 5.860%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
 host deduction and every billable GPU on the node credited each window (RT-SCOPE, #2681).
 
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
-48,000 its two branches give ε < 1% only from 9,496 rounds (Compose's live line only from 10,552: RT-INT-1), and the
-windows run so far have at most 18.
+48,000 its two branches never give ε < 5.779%, and under 6% only from 17,460 rounds (Compose's live line is under 1%
+only from 10,552: RT-INT-1); the windows run so far have at most 18.
 
-The bound is tight to its own floor: `N_w(w* + φ*)` is 17.000 issue slots a unit against `B_♭ = 17.0976`, so the ε
-holds only while a cheater's accepted program costs at least `(1 − 0.656%)·B_♭/(1 − 41/S) = 16.99993` a unit, and its
-margin is FOLD-OPT's (RT2-120-2, note:20261019T1115Z-draft-rt2-120). A6's `SheetWords` sums over the design's `vec`,
-CUDA's lane classes and the 64-bit ones (ALU64, CVT64, DMUL, IMADW, MOV64), so a run that heads vector words with
-IMAD.WIDE meets it (RT2-120-6).
+The bound is tight to its own floor: `N_w(w* + φ*)` is `17·3564/3761 = 16.1095` a unit at `π*` against
+`B_♭ = 17.0976` (`B_♭` and the credit don't move with `π*`), so the ε holds only while a cheater's accepted program
+costs at least `(1 − 5.860%)·B_♭/(1 − 41/S) = 16.1094` a unit at `π*`, and its margin is FOLD-OPT's (RT2-120-2,
+note:20261019T1115Z-draft-rt2-120). `π*`'s DS_smem weight is A5b's (above): fbw4096_K4_BT256 costs 16.79 a unit at
+`π*` against `N_w φ* = 15.162`. A6's `SheetWords` sums over the design's `vec`, CUDA's lane classes and the 64-bit
+ones (ALU64, CVT64, DMUL, IMADW, MOV64), so a run that heads vector words with IMAD.WIDE meets it (RT2-120-6).
 
-This ε rests on A2u: A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no vendor
-document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a measured
-uniform-pipe row and 100% with none (RT-MACHINE-4). Measured, it holds at saturation: beside a saturating vector
-stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). A2's catch-all
-counts an instruction the 122 classes don't name in `NOROW`, at its issue slot alone, so no instruction is free at
-`π*`, where every class costs one slot; no coefficient the bound reads moves (RT2-HOPPER-2). -/
+This ε rests on A2u and A5b. A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which
+no vendor document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a
+measured uniform-pipe row and 100% with none (RT-MACHINE-4). Measured, it holds at saturation: beside a saturating
+vector stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). A2's
+catch-all counts an instruction the 122 classes don't name in `NOROW`, at its issue slot alone, so no instruction is
+free at `π*`: a count of any class costs at least 3564/3761 there, and a bulk instruction is `S/99 KB` of a UTMABIG
+count (RT2-HOPPER-2). A5b (`SheetSmem`) holds a bulk or TMA instruction's size `S` in the banks at A5's 32 B an
+SMSP-cycle (above). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),
@@ -157,10 +183,10 @@ def Sm120SheetHeadline : Prop :=
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) → (∀ x, SheetWords Sm120.model (Pl.run x)) →
     (∀ x, SheetSemantics Sm120.model (Pl.run x)) →
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
-      (onFacet Sm120.piStar)) →
+      Sm120.piStar) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → BindingForkAt pf δfork → ProofSoundAt pf δzk → ProofsPin pf → RightFixed Pl pf Sm120.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 5860 / 100000) ≤
       (1 / 2) ^ 40
 
 /-- **sm_120's headline on its measured vector**, under full checking with live coins. On VF3s-16's machine

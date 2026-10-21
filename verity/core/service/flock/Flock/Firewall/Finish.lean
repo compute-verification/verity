@@ -17,7 +17,7 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
 * `switchVec`: claim `k`'s switched vector from the packed table's bits (`FlockComplete.switchVec` on the trace).
 * `repFw`: the rep (`FlockComplete.repPZk`'s order: the PIOP, the ring switch on `abcClaims ++ extras`, the masked
   Ligerito, the verifier's own replay, the ring-switch and lane-phase constraints, the inner proof), its proof file
-  `encZk` at `shapeZk`. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
+  `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
 
 `flock-firewall finish` serves it (`cmd`) on the statement of `flock-verify verify --zk` (`Witness.setupOf`).
@@ -140,10 +140,19 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
   let eY := eqTable (c.x.extract 1 c.x.size)
   (Array.range 128).map fun v => sumF eY.size fun y => if (g[y]!).bit v then eY[y]! else 0
 
+/-- `c + Σ a_i h_i` at the pads `h`, over `min |a| |h|` terms (`zk_veil::Lin::eval`). -/
+def linAt (l : Zk.Lin) (h : Array F128) : F128 :=
+  (Array.range (min l.a.size h.size)).foldl (fun acc i => acc + l.a[i]! * h[i]!) l.c
+
+/-- The names of the constraints `cons` that fail on the pads `h` (`zk_veil::failing`). -/
+def failingOn (cons : Array (String × Zk.Lin)) (h : Array F128) : Array String :=
+  (cons.filter fun c => linAt c.2 h != 0).map (·.1)
+
 /-- **The firewall's proof of one rep** of the packed table `g` committed as `cm0`, as rep `rep` of a stream whose
 transcript starts at `dom`: the passed values `vals` (by pad index) masked by the rep's pads `pads` committed as `ic`, the
 statement's extra claims `extras`, the table's extra lanes and paddings, levels ≥ 1 committed by `commit` under `salt`,
-every grinding nonce `0`. -/
+every grinding nonce `0`. A constraint that fails on the pads stops the rep before its inner proof, and no file leaves
+(`zk_finish`'s `constraints_failing_on_pads`, which stops the session at its `Finish`). -/
 def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (vals : Array F128) (extra lanePad : Nat → Nat → F128)
@@ -164,8 +173,10 @@ def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat 
   let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
   let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
   let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
-  let inner ← innerP io hs lay pads ic zp.finalC
-    (rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
+  let cons := rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc
+  let fails := failingOn cons pads.h
+  if !fails.isEmpty then throw s!"{Frame.STOP}the constraints {", ".intercalate fails.toList} fail on the rep's pads"
+  let inner ← innerP io hs lay pads ic zp.finalC cons
   return { proof := p, level0 := zl, inner }
 
 /-- **A rep's rounds answered by its coins**: round `k` (counted from `0` in the state) by `coins[k]`, which must hold the
