@@ -86,4 +86,22 @@ def why (p : Public) (f : Json := file) : String :=
   "registered reads: port a0: table row 0 does not open h1/a's registered root at position 0"
 #guard !passes (pub [0, 2] [1, 3] (value := "h1/b"))
 
+/-! A port named twice: `Json.parse` keeps one of the two, so the file reads as naming it once (here as one port, `a1`'s
+reads under `a0`); `flock-verify` refuses the text first (`Registered.dupKey`). -/
+
+/-- The file with port `a1` renamed `a0`: `a0` twice. -/
+def twice : String := file.compress.replace "\"a1\":" "\"a0\":"
+
+#guard ((Lean.Json.parse twice).toOption.bind fun j => (Registered.ofJson j).toOption).map (·.size) == some 1
+#guard Registered.dupKey twice == some "\"a0\""
+#guard Registered.dupKey file.compress == none
+#guard Registered.dupKey (file.pretty) == none
+-- a key as `Json.parse` decodes it: an escape names the same key
+#guard Registered.dupKey "{\"a0\": 1, \"a\\u0030\": 2}" == some "\"a\\u0030\""
+-- one key in two objects, keys inside strings, and values that are strings are no duplicate
+#guard Registered.dupKey "{\"a\": {\"x\": 1}, \"b\": {\"x\": 2}, \"c\": [{\"x\": 1}, {\"x\": 2}]}" == none
+#guard Registered.dupKey "{\"a\": \"a\", \"b\": \"}{,\\\"a\\\":\", \"c\": [\"a\", \"a\"]}" == none
+#guard Registered.dupKey "{\"r\": [{\"k\": 1, \"k\": 2}]}" == some "\"k\""
+#guard Registered.dupKey "{\"p\": {\"a\": {\"root\": \"00\", \"leaves\": 1, \"root\": \"01\"}}}" == some "\"root\""
+
 end Flock.Test.RegRows
