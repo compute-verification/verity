@@ -471,14 +471,18 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     assert not [k for k in b.objects if k.endswith(C.RECORD)]
 
 
-def test_a_different_record_already_published_is_refused(s3, tmp_path):
+def test_a_second_build_of_a_published_commit_keeps_the_first_record(s3, tmp_path):
+    """A rerun of one commit whose build isn't byte-identical (Security on vy-nebius-1, 21 Oct) neither replaces the
+    published record nor fails the publish: the first build stays, and the run says so."""
     b, url = s3
     r, rev = repo(tmp_path)
     s = stage(tmp_path)
     C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    first = {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)}
     (s / "bb.ltar").write_bytes(b"another build")
-    with pytest.raises(C.CacheError, match="already published with other contents"):
-        C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    said = []
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=said.append) == "kept"
+    assert {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)} == first and "kept it" in said[0]
 
 
 def test_the_read_key_cannot_write(s3, tmp_path):
