@@ -4,7 +4,8 @@ batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v1``
 circuit's lowering or digest changes.
 
 A Definition's argument bit is a constant or a linear form over the caller's committed bits, as the unrolled lowering
-carries it. The callee is lowered once per *pattern* of its argument bits: each constant and its value, and each form as
+carries it. The callee is lowered once per *pattern* of its arguments: which argument positions name one gate (a caller
+may pass a gate twice, and the callee's body reads that), each constant bit and its value, and each form as
 the set of distinct caller bits (the callee's inputs, numbered by first appearance) it sums plus its constant, so the
 constant folding and the free XORs the unrolled lowering does across a call boundary are kept. A form over more than
 ``support`` bits is committed by the callee (one row, ``A = form, B = 1``); a returned bit is a constant, or a form over
@@ -101,9 +102,11 @@ class _Lowerer:
     def call(self, C: Circuit, fc: FunctionCall, wires: dict) -> tuple:
         """Lower call ``fc`` of the Definition being lowered on C: its specialization once per pattern, one placed copy,
         its returns' words set."""
-        words = [wires[a] for a in dict.fromkeys(fc.args)]
+        first: dict[int, int] = {}
+        shape = tuple(first.setdefault(a, len(first)) for a in fc.args)
+        words = [wires[a] for a in first]
         pat, label_vars = _pattern(words)
-        key = (fc.fn.id, len(fc.args), pat)
+        key = (fc.fn.id, shape, pat)
         sp = self.specs.get(key) or self._lower(fc, key, pat, len(label_vars))
         blk = _Block(len(C.kind), key, label_vars)
         C.blocks.append(blk)
