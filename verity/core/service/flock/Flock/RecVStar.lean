@@ -170,10 +170,18 @@ def candidate3Statements (i : Inner) : Except String (Array VStar.Stmt) := do
       VStar.Stmt.recOpenStacked l (2 ^ lv.lanes) (lv.d - lv.cap) lv.q
     pure (#[sparse] ++ levels ++ (← openingParts r))
 
-/-- **Candidate 3's V* list holds every statement its session needs**: with the sparse phase (`i.sparse`), a RecSparse
-statement at its shape; with R (`i.stacked`), each of R's levels at `fast100(m)` and R's opening, every part of it at R's
-shape. A list missing any of them is refused by name. -/
-def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+/-- **The sparse phase is a holo session's**: RecSparse reads `h`, the table's round `hRound`, which a rep sends only
+where its circuits are private (`holoRepRounds`), so an inner shape naming a RecSparse shape (`rec-inner --sparse`) at
+public circuits is refused. -/
+def checkSparseHolo (i : Inner) : Except String Unit :=
+  match i.sparse with
+  | some sp => if i.holo then .ok () else
+      .error (s!"the inner shape names a RecSparse shape ({RecSparse.unitName sp}) at public circuits: the sparse " ++
+        "phase reads h, which only a holo inner session (rec-inner --hide) sends")
+  | none => .ok ()
+
+/-- Candidate 3's V* list against its inner shape (`checkCandidate3`'s list checks). -/
+def checkCandidate3Lists (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
   if let some sp := i.sparse then
     if !ss.any (fun | .sparse sh _ => sh == sp | _ => false) then
       throw s!"candidate 3's V* list has no RecSparse statement ({RecSparse.unitName sp}), and the inner shape names its sparse phase"
@@ -188,6 +196,13 @@ def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := 
       if let .opening m c .. := s then
         if m != r.m || c != r.claims then
           throw s!"candidate 3's V* list: {s.name} opens R at (m {m}, claims {c}), not at R's shape (m {r.m}, claims {r.claims}, META's {STACKED_SHAPE_KEY})"
+
+/-- **Candidate 3's V* list holds every statement its session needs**: a sparse phase (`i.sparse`) only at private
+circuits (`checkSparseHolo`), and with it a RecSparse statement at its shape; with R (`i.stacked`), each of R's levels at
+`fast100(m)` and R's opening, every part of it at R's shape. A list missing any of them is refused by name. -/
+def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  checkSparseHolo i
+  checkCandidate3Lists i ss
 
 /-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
 commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/

@@ -10,10 +10,9 @@ is `RecVStar.repRounds`. This file computes its size, `(m − 6) + (k_log − 6)
 claims (`flockRepRounds_eq`). So at an inner statement that sets up as one table whose `m`, `k_log` and claims are the
 verifier's shape's, the plain verifier's count is `2 + 2R` (`k_plain`).
 
-What `SchedMatches` at the dense form still needs is that link: the plain verifier sets the inner statement up as one
-table (`FlockDeploy.setupOf false`), and the verifier's own inner shape (`readX`'s `shape`, the `--rec-inner` line) has
-that table's `m`, `k_log` and claims. `readX` reads both and compares neither, and `verify --rec-inner` takes its
-`--rec-inner` line as the verifier's own word, so the link is a refusal the verifier does not yet make.
+`SchedDense.lean` links the two at the dense form: the verifier's setup holds its own inner shape to the inner
+statement's files (`RecSetup.checkShape`), and the plain verifier's one table is the files' under a named premise
+(`InnerSetupIsFiles`).
 -/
 
 namespace RecDeploy
