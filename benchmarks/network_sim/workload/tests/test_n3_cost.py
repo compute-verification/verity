@@ -68,6 +68,6 @@ def test_a_v5_window_composed_from_its_parts_is_its_traced_size():
     for port in ("p0", "p1"):
         rows += C.checked(narrow, rec, [2, 3], 2, False, memo, R=2, v5=c.templates[port], FB=fc.B)
     rows += C.checked(f._replace(B=96, P=1, Q=1), rec, [3], 2, True, memo, R=2, v5=c.templates["p0"], FB=128)
-    assert [r["ands"] for r in rows] == [4_682_146, 6_414_577, 9_153_174, 6_853_588, 3_400_517, 4_737_407, 5_153_557,
-                                         7_239_462, 6_074_576, 7_418_123, 6_074_962, 7_418_702, 7_080_356, 8_760_324,
+    assert [r["ands"] for r in rows] == [4_682_146, 6_414_577, 9_152_142, 6_853_072, 3_400_517, 4_737_407, 5_153_557,
+                                         7_239_462, 6_074_576, 7_417_091, 6_074_962, 7_417_670, 7_080_356, 8_760_324,
                                          7_080_744, 8_760_906, 6_837_418]

@@ -36,6 +36,18 @@ def test_two_rows_of_v5s_outbox_are_v4s_row(n):
     assert b"".join(v5).rstrip(b"\0") == data and len(v5) & (len(v5) - 1) == 0
 
 
+@pytest.mark.parametrize("T, S", [(1, 1), (2, 1), (8, 3), (8, 4), (9, 8), (35, 7), (35, 35)])
+def test_a_compaction_stage_computes_only_the_positions_the_next_reads(T, S):
+    stages, v4 = V5.compaction(T, S), V4.compaction(T, S)
+    assert [w for _, w in stages] == [w for _, w in v4]
+    for b, (ps, _) in enumerate(stages):
+        want = range(min(S, T)) if b == len(stages) - 1 else sorted(
+            {q for p in stages[b + 1][0] for q in (p, p + (2 << b)) if q < T})
+        assert ps == list(want) and len(ps) <= v4[b][0]
+    if S >= T:
+        assert [len(ps) for ps, _ in stages] == [T] * len(stages)
+
+
 @pytest.mark.parametrize("R, tpl", [(0, ()), (1, (0, 9, 14, "", "")), (1, (1, 9, 17, "", "")),
                                     (1, (1, 9, 14, "", "0a0a0a"))],
                          ids=["no-runs", "mode-0", "s-past-the-frame", "suffix-past-the-frame"])

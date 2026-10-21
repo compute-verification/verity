@@ -27,7 +27,7 @@ v4's statics, inputs and checks, except the outbox's rows, how a read reaches it
   begin with: a fresh member moves them to (the second, its row), a repeat keeps them (`N3Advance`), and a read's
   window is its run's two rows after it, zero for kind 0 (`N3Gate`). Run r's slots open at run_starts[r],
   run_starts[r] + 1, ... in unit run_units[r]'s tree: slot 0 the head's leaf (`N3HidingLeaf` at the start), then its
-  fresh leaves in order (v4's compaction network), then `run_fill`. So fresh member j's row is row start + j + 1, its
+  fresh leaves in order (v4's compaction network, each stage only where the next reads: `compaction`), then `run_fill`. So fresh member j's row is row start + j + 1, its
   q, which its leaf binds, is start + j, and its window rows start + j and start + j + 1. A repeat's leaf is its run's
   last member's (`N3Carry`), so it has that member's q and window. The head and the fresh leaves fit the unit's tree
   (`N3RunFits` with one slot more).
@@ -338,6 +338,18 @@ def _sizes(S) -> tuple:
     return f, n, T, min(T + 1, 1 << f.DB), V4._zw(T + 1)
 
 
+def compaction(T: int, S: int) -> list[tuple[list[int], int]]:
+    """Each stage b of a run's compaction network over its T reads into S slots, as (positions, W): the positions a
+    slot below S still reads, from the last stage back (stage b's position p reads stage b - 1's p and p + 2^b), and
+    the elements' width, as `n3_v4.compaction`'s. With S below T, a stage skips the positions between the ones read."""
+    n = (T - 1).bit_length()
+    need, out = set(range(min(S, T))), []
+    for b in reversed(range(n)):
+        out.append((sorted(need), 1 + n - b + 512))
+        need |= {p + (1 << b) for p in need if p + (1 << b) < T}
+    return out[::-1]
+
+
 def _window_params(S) -> list[tuple[str, object]]:
     f, n, T, Sr, _ = _sizes(S)
     FB = _frame_bytes(S, f)
@@ -416,7 +428,7 @@ def _body_window(B, S, *args):
         fresh = a["fresh"]
         zero_digest = U._coll(DIGEST, K.bits(0, 512))
         zero_row = U._coll(Array(W, BIT), K.bits(0, W))
-        stages = V4.compaction(T, Sr - 1)
+        stages = compaction(T, Sr - 1)
         nz = len(stages)
         windows: list[list[Coll]] = [[] for _ in range(T)]
         for r in range(S.R):
@@ -441,13 +453,15 @@ def _body_window(B, S, *args):
                                   rleaves[t].reshape(Array(512, BIT)), m, name="rows").reshape(DIGEST)
                 z = B.call(bind(V4.N3Skip, W=ZW), z, sel, name="rows")
             oks.append(Coll(Array(T, BIT), concat(carried)))
-            for b, (npos, w) in enumerate(stages):
+            at = dict(enumerate(elems))
+            for b, (ps, w) in enumerate(stages):
                 s, invalid = 1 << b, U._coll(Array(w, BIT), K.bits(0, w))
-                stay = Coll(Array(npos, Array(w, BIT)), concat([e.refs for e in elems[:npos]]))
-                inc = Coll(Array(npos, Array(w, BIT)),
-                           concat([(elems[p + s] if p + s < len(elems) else invalid).refs for p in range(npos)]))
+                stay = Coll(Array(len(ps), Array(w, BIT)), concat([at[p].refs for p in ps]))
+                inc = Coll(Array(len(ps), Array(w, BIT)),
+                           concat([(at[p + s] if p + s < T else invalid).refs for p in ps]))
                 out = B.batch(bind(V4.N3CompactStep, W=w), stay, inc, axes=(0, 0), name="rows")
-                elems = [out[p] for p in range(npos)]
+                at = {p: out[i] for i, p in enumerate(ps)}
+            elems = [at[j] for j in range(Sr - 1)]
             valid = Coll(Array(Sr - 1, BIT), concat([elems[j].refs.slice(0, 1) for j in range(Sr - 1)]))
             packed = Coll(Array(Sr - 1, Array(512, BIT)), concat([elems[j].refs.slice(1, 513) for j in range(Sr - 1)]))
             fill = a["run_fill"][r].reshape(Array(Sr - 1, Array(512, BIT)))

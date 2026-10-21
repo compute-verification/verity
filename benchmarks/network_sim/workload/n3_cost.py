@@ -143,7 +143,7 @@ def composed_v5(f: U.Format, N: int, G: int, salted: bool, rec: U.Shape, R: int,
         per_run = (pick + leaf + T * (a(bind(V4.N3Carry)) + a(bind(V4.N3Skip, W=zw)) + a(bind(V5.N3Advance, W=W))
                                       + a(bind(U.N3Gate, W=2 * W)))
                    + (T - 1) * a(bind(U.N3Mux, W=512))
-                   + sum(npos * a(bind(V4.N3CompactStep, W=w)) for npos, w in V4.compaction(T, Sr - 1))
+                   + sum(len(ps) * a(bind(V4.N3CompactStep, W=w)) for ps, w in V5.compaction(T, Sr - 1))
                    + (Sr - 1) * a(bind(U.N3Mux, W=512)) + a(bind(V4.N3Range, S=Sr, D=f.DB))
                    + a(bind(V4.N3RunRoot, DEPTHS=f.DEPTHS)) + a(bind(V4.N3RunFits, DEPTHS=f.DEPTHS, T=T + 1, S=Sr)))
         out["row_reads"] = T * per_read + R * per_run
