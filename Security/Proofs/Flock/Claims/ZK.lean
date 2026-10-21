@@ -90,6 +90,7 @@ import Proofs.Flock.Claims.ZK.FrameOpen
 import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
+import Proofs.Flock.Claims.ZK.FrameState
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -606,9 +607,14 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`L0Sent`, `l0Sent_ood`, `l0Sent_lane`, `l0Sent_pair`, `l0Sent_zero`), which the frame releases as the body at the
   pads (`L0Sent.release`, `L0Sent.roundHonest`, `L0Sent.roundFrames`); both openings, cut (`ligeritoPZk_cutL0_live`).
 * `FramePhase`: level 0's phase labels. The opening's label starts level 0's masked phase and its round leaves as it
-  came (`label_open`, `roundFree_open`; the binding, `openBind`, `LeanRelease.release_openBind`); level 0's closing
-  label, with every masked value absorbed and the `ρ` coins taken, ends it, the frames after it leaving as they came
-  (`label_close`, `roundFree_close`, `LeanRelease.release_close`).
+  came (`label_open`, `roundFree_open`; the binding, `openBind`, `roundFree_openBind`, `LeanRelease.release_openBind`);
+  level 0's closing label, with every masked value absorbed and the `ρ` coins taken, ends it, the frames after it
+  leaving as they came (`label_close`, `roundFree_close`, `LeanRelease.release_close`).
+* `FrameState`: the frame's state across level 0's opening, under the transport's trust that within a rep its state
+  after a round is the frame's own step's (`LeanRelease.ProgFollows`; `answered_of_roundFree`). The binding starts level
+  0's phase at the algebraic phase's position (`answered_openBind`), each masked round moves it by its values
+  (`answered_l0`), the pair's sums reach the layout's end and take `ρ_0` (`answered_l0_last`, `answer_rho_first`), and
+  `ρ_1`'s round takes `ρ_1` (`answered_rho1`), the state the closing round reads.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).

@@ -10,8 +10,8 @@ Level 0's masked phase starts at the opening's label (`LABEL_OPEN`) and ends at 
 * **The opening's label** (`label_open`, `roundFree_open`): after the algebraic phase's opening and before level 0
   closes, at a Ligerito rep outside a masked phase, the frame releases the frames before it as they came and the label,
   then the squeeze, and starts level 0's masked phase (`on`, `l0`) at its position.
-* **The opening's binding** (`openBind`, `LeanRelease.release_openBind`): `ligeritoPZk`'s first round (the basis
-  label, `T`, level 0's cap and the opening's label, with `z`'s squeeze) leaves as it came.
+* **The opening's binding** (`openBind`, `roundFree_openBind`, `LeanRelease.release_openBind`): `ligeritoPZk`'s first
+  round (the basis label, `T`, level 0's cap and the opening's label, with `z`'s squeeze) leaves as it came.
 * **Level 0's closing label** (`label_close`, `roundFree_close`, `LeanRelease.release_close`): inside level 0's phase
   with every masked value absorbed and its four `ρ` coins taken, the frame releases the label, then the frames after it
   as they came and the squeeze, and ends level 0's phase.
@@ -72,6 +72,39 @@ theorem roundFree_open (c : Cfg) (s : Masker) (pre : List Frame) (k : UInt8) (n 
 def openBind (T : F128) (cap : ByteArray) : List Frame :=
   [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap, .label _root_.Flock.Zk.LABEL_OPEN.toUTF8]
 
+/-- **The opening's binding round**: outside a masked phase, after the algebraic phase's opening and before level 0
+closes, at a Ligerito rep, the frame releases the binding and `z`'s squeeze of `n` coins as they came, and starts level
+0's masked phase at the state's position. -/
+theorem roundFree_openBind (c : Cfg) (s : Masker) (T : F128) (cap : ByteArray) (n : ℕ) (hon : s.on = false)
+    (hd : s.done = true) (hlig : c.lig = true) (hl0 : s.doneL0 = false) (hi : s.inner = none)
+    (hcap : cap.size < 2 ^ 64) (hn0 : n ≠ 0) (hn : n < 2 ^ 64) :
+    ∃ out fr, roundFree c s (ByteArray.mk (encs (openBind T cap) ++ (Frame.sq 2 n).enc).toArray) n =
+        .ok (out, { s with on := true, l0 := true, owed := some n }, fr) ∧
+      out.data.toList = encs (openBind T cap) ++ (Frame.sq 2 n).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_open c s
+    [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] 2 n hon hd hlig hl0 hi
+    (by
+      intro f hf
+      simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hf
+      rcases hf with rfl | rfl | rfl | rfl
+      · show "flock-ligerito-basis-f256-split-v0".toUTF8.size < 2 ^ 64; decide
+      · trivial
+      · exact hcap
+      · show _root_.Flock.Zk.LABEL_OPEN.toUTF8.size < 2 ^ 64; decide)
+    (by
+      intro f hf
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
+      rcases hf with rfl | rfl | rfl
+      · show plainLabel "flock-ligerito-basis-f256-split-v0".toUTF8; unfold plainLabel; decide
+      · trivial
+      · trivial)
+    (.inl rfl) (fun h => hn0 h.1) hn
+  rw [show openBind T cap = [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] ++
+      [.label _root_.Flock.Zk.LABEL_OPEN.toUTF8] from rfl]
+  refine ⟨out, fr, hr, ?_⟩
+  rw [ho]
+  simp only [maskFrames]
+
 /-! ## Level 0's closing label -/
 
 /-- **Level 0's closing label ends its masked phase**: inside level 0's phase with every masked value of the layout
@@ -127,28 +160,9 @@ theorem release_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (
     (hcap : cap.size < 2 ^ 64) (hn0 : L.coins x h.length ≠ 0) (hn : L.coins x h.length < 2 ^ 64) :
     L.release x ρ h st (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc) =
       0 :: (encs (openBind T cap) ++ (Frame.sq 2 (L.coins x h.length)).enc) := by
-  obtain ⟨out, fr, hr, ho⟩ := roundFree_open (L.cfg x ρ h) { m with stopped := st }
-    [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] 2 (L.coins x h.length) hon hd hlig hl0
-    hi
-    (by
-      intro f hf
-      simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hf
-      rcases hf with rfl | rfl | rfl | rfl
-      · show "flock-ligerito-basis-f256-split-v0".toUTF8.size < 2 ^ 64; decide
-      · trivial
-      · exact hcap
-      · show _root_.Flock.Zk.LABEL_OPEN.toUTF8.size < 2 ^ 64; decide)
-    (by
-      intro f hf
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
-      rcases hf with rfl | rfl | rfl
-      · show plainLabel "flock-ligerito-basis-f256-split-v0".toUTF8; unfold plainLabel; decide
-      · trivial
-      · trivial)
-    (.inl rfl) (fun h => hn0 h.1) hn
-  rw [show openBind T cap = [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap] ++
-      [.label _root_.Flock.Zk.LABEL_OPEN.toUTF8] from rfl, release_of_roundFree L x ρ h st _ hA rfl hr, ho]
-  simp only [maskFrames]
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_openBind (L.cfg x ρ h) { m with stopped := st } T cap _ hon hd hlig hl0 hi
+    hcap hn0 hn
+  rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
 
 /-- **The release of level 0's closing round**: where the frame takes the coins before it inside level 0's phase with
 every masked value absorbed and its `ρ` coins taken, the release is the closing label, the frames `post` after it as
