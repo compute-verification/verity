@@ -18,18 +18,6 @@ build's), and the step's units stream: 32 layers x the four calls' units in orde
 (`step`, 128 launches, what the served units stream runs apart from the z tables). --profile skips the timing and runs
 each gated build's four calls once between torch.cuda.profiler.start and stop (for ncu --profile-from-start off),
 and writes its gates to units-prof.json.
-
---lr --h1c LIBH1C (option B's lane records, each build with kh_one_units_lr): gated on every linear under 0xA5 over the
-records: the XOR over lanes of every live unit's record equal to its receipt, the receipts equal to kh_one_units', the
-sampled units' records against receipts.py's chain split by lane (`call_receipts(lanes=True)`, on the CPU), no live
-record word left 0xA5 and every dead unit's record untouched, the no-write control (the lane step's F_NW_UNITS) leaving
-every record unwritten; then the call's lane table (one hiding leaf a live unit, `dither_a.LR_KIND`) built by libh1c,
-its root against commit.py's over the same records (--lr-cpu-root's linears), and one lane word flipped moving its leaf
-and the root and no other leaf.  Timed beside the units: each call's `units_lr` (records written) and `leaves` (its
-table built), and per step `step_lr` (the 128 launches writing 32 layers' records), `leaves_step` (one h1c_build of the
-step's 128 tables over the live units, -lrl's), `step_lr_leaves` (the two in order on one stream) and `overlap`
-(step_lr with the previous step's leaves on a second stream, records in two buffers), against `step`; the `_all` arms
-build every unit's table, the dead records zero (-lr's).
 """
 from __future__ import annotations
 
@@ -49,7 +37,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(HERE.parents[2]))
-import h1c as HC
 import receipts as RC
 from h1bench import auto_j
 from h1ubench import call_data, digest
@@ -58,8 +45,6 @@ from hb_kbench import LINEARS, POISON, Clock, capture, inputs, one_call_ms, w_se
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 ORDER = ("qkv", "o", "gate_up", "down")
-# dither_a's lane tables (-lr): their kind, and F_FAULT's lane
-LR_KIND, LR_LANE, F_NW_UNITS = "lane-receipts", 5, 4
 
 
 class Lib:
@@ -72,9 +57,6 @@ class Lib:
         h.kh_seeds.argtypes = [vp, ctypes.c_ulonglong, u32, vp, vp]
         h.kh_one_noise.argtypes = one
         h.kh_one_units.argtypes = one
-        self.lr = hasattr(h, "kh_one_units_lr")
-        if self.lr:
-            h.kh_one_units_lr.argtypes = one[:-1] + [vp, vp, vp]
         h.kh_words.restype = u32
         h.kh_words.argtypes = [u32]
         h.kh_noise_blocks.restype = u32
@@ -133,11 +115,6 @@ class Call:
         if rc := self.lib.h.kh_one_units(*self._args(self.a.shape[0] if rows is None else rows, b)):
             raise RuntimeError(f"kh_one_units rc {rc}")
 
-    def run_units_lr(self, lr: torch.Tensor, lstep: torch.Tensor, b: torch.Tensor | None = None) -> None:
-        a = self._args(self.a.shape[0], b)
-        if rc := self.lib.h.kh_one_units_lr(*a[:-1], lstep.data_ptr(), lr.data_ptr(), a[-1]):
-            raise RuntimeError(f"kh_one_units_lr rc {rc}")
-
     def poison(self) -> None:
         self.out.fill_(POISON)
         self.ws.fill_(0xA5)
@@ -183,74 +160,6 @@ def gate(c: Call, picks: list[int], ref_t: torch.Tensor, base_out: torch.Tensor 
     return r
 
 
-def lane_tab(buf: torch.Tensor, units: int, words: int, linear: str):
-    """The call's lane table: one hiding leaf a live unit, its row the unit's 32 lanes' words in lane order."""
-    fields = {"window": "unitsbench", "step": 0, "linear": linear, "units": units, "words": words, "lanes": 32,
-              "schema": HC.CM.SCHEMA}
-    return HC.Tab(HC.Dom(LR_KIND, fields, units, {"step": (1, 0)}), units, data=buf.view(torch.uint8),
-                  stride=128 * words, body=128 * words, length=128 * words, lab=("l/", f"/{linear}"))
-
-
-def lr_gate(c: Call, name: str, picks: list[int], H, key: bytes, cpu_root: bool, base_out: torch.Tensor) -> dict:
-    """--lr's gate on one call (the module docstring); leaves the call's records, flagless step and lane set on it."""
-    W, lu, nu = c.words, c.live_units, c.units
-    c.lr = torch.empty((nu, 32, W), dtype=torch.int32, device="cuda")
-    c.lstep = torch.zeros(4, dtype=torch.int32, device="cuda")
-    c.poison()
-    c.lr.fill_(POISON)
-    c.seed()
-    c.noise()
-    c.run_units_lr(c.lr, c.lstep)
-    torch.cuda.synchronize()
-    x = c.lr[:lu, 0].clone()
-    for ln in range(1, 32):
-        x ^= c.lr[:lu, ln]
-    r = {"xor_vs_receipt_bad_words": int((x != c.out[:lu]).sum()),
-         "receipts_vs_base_bad_words": int((c.out != base_out).sum()),
-         "live_poison_left": int((c.lr[:lu] == POISON).sum()), "dead_touched": int((c.lr[lu:] != POISON).sum())}
-    ref = RC.call_receipts(RC.Call(c.a, c.b), c.salt, c.base, *c.roots, only=picks, lanes=True)
-    got = c.lr[torch.tensor(picks, device="cuda")].cpu().numpy().view(np.uint32)
-    r["lanes_vs_cpu_bad_words"] = int((got != ref).sum())
-    rec = c.lr.clone()
-    ctl = c.lstep.clone()
-    ctl[3] = F_NW_UNITS
-    c.lr.fill_(POISON)
-    c.run_units_lr(c.lr, ctl)
-    torch.cuda.synchronize()
-    r["control_written_words"] = int((c.lr != POISON).sum())
-    c.lr.copy_(rec)
-    c.lset = H.set([lane_tab(c.lr, lu, W, name)])
-    s0 = torch.zeros(1, dtype=torch.int32, device="cuda")
-    H.build(c.lset, s0)
-    torch.cuda.synchronize()
-    root = HC.unwords(c.lset.root(0))
-    lv = c.lset.level[c.lset.level_off[0]:c.lset.level_off[0] + 8 * lu].view(lu, 8)
-    leaves = lv.clone()
-    r["root_vs_cpu"] = None
-    if cpu_root:
-        d = c.lset.tabs[0].dom.at(0)
-        rows = rec[:lu].cpu().numpy().view(np.uint8).reshape(lu, 128 * W)
-        r["root_vs_cpu"] = lane_root_cpu(d, key, f"l/0/{name}", rows) == root
-    u_t = picks[len(picks) // 2]
-    c.lr[u_t, LR_LANE, 0] ^= 1
-    H.build(c.lset, s0)
-    torch.cuda.synchronize()
-    moved = (lv != leaves).any(dim=1).nonzero().flatten().tolist()
-    r["tamper"] = {"unit": u_t, "lane": LR_LANE, "leaves_moved": moved[:8],
-                   "root_moved": HC.unwords(c.lset.root(0)) != root}
-    c.lr[u_t, LR_LANE, 0] ^= 1
-    r["ok"] = (r["xor_vs_receipt_bad_words"] == 0 and r["receipts_vs_base_bad_words"] == 0
-               and r["live_poison_left"] == 0 and r["dead_touched"] == 0 and r["lanes_vs_cpu_bad_words"] == 0
-               and r["control_written_words"] == 0 and r["root_vs_cpu"] in (None, True)
-               and moved == [u_t] and r["tamper"]["root_moved"])
-    return r
-
-
-def lane_root_cpu(d, key: bytes, label: str, rows: np.ndarray) -> bytes:
-    CM = HC.CM
-    return CM.levels(d, [CM.leaf(d, key, label, i, bytes(rows[i]))[0] for i in range(len(rows))])[-1][0]
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lib", action="append", required=True, metavar="NAME=PATH")
@@ -263,12 +172,7 @@ def main() -> int:
     ap.add_argument("--layers", type=int, default=32)
     ap.add_argument("--linears", default=",".join(ORDER))
     ap.add_argument("--profile", action="store_true")
-    ap.add_argument("--lr", action="store_true")
-    ap.add_argument("--h1c", help="--lr's libh1c.so")
-    ap.add_argument("--lr-cpu-root", default="o,down", help="--lr: the linears whose lane-table root commit.py rehashes")
     args = ap.parse_args()
-    if args.lr and not args.h1c:
-        ap.error("--lr needs --h1c LIBH1C")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     doc_path = out / ("units-prof.json" if args.profile else "units.json")
@@ -283,11 +187,6 @@ def main() -> int:
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "served_h1/receipts.py",
            "linears": {}}
     T, M = args.t, args.m
-    if args.lr:
-        lr_key = rng.randbytes(32)
-        H = HC.H1C(args.h1c, lr_key)
-        cpu_root = set(args.lr_cpu_root.split(","))
-        doc["lr"] = {"h1c": args.h1c, "kind": LR_KIND, "cpu_root": sorted(cpu_root)}
     linears = [x for x in ORDER if x in args.linears.split(",")]
     calls: dict = {}
     bcopy: dict = {}
@@ -318,21 +217,6 @@ def main() -> int:
             print(json.dumps({"linear": name, "lib": nm, "gate": g}), flush=True)
             if not g["ok"]:
                 failed.add(nm)
-        if args.lr:
-            t0 = time.time()
-            d["lr_gates"] = {}
-            for nm, c in cs.items():
-                if not c.lib.lr:
-                    d["lr_gates"][nm] = {"ok": False, "why": "no kh_one_units_lr"}
-                    failed.add(nm)
-                    continue
-                g = d["lr_gates"][nm] = lr_gate(c, name, picks, H, lr_key, name in cpu_root, base_out)
-                print(json.dumps({"linear": name, "lib": nm, "lr_gate": g}), flush=True)
-                if not g["ok"]:
-                    failed.add(nm)
-            W = first.words
-            d["lr_bytes"] = {"record": 128 * W, "records": L * 128 * W, "segs": L * ((128 * W + 1023) // 1024),
-                             "gate_s": round(time.time() - t0, 2)}
         calls[name] = cs
         for c in cs.values():
             c.full()
@@ -373,54 +257,6 @@ def main() -> int:
                         c = calls[name][nm]
                         c.run_units(b=c.b if layer % 2 == 0 else bcopy[name])
             arms[(nm, "step")] = step
-    if args.lr:
-        s0 = torch.zeros(1, dtype=torch.int32, device="cuda")
-        for name in linears:
-            for nm in timed:
-                arms[(nm, f"units_lr:{name}")] = (lambda c: lambda i: c.run_units_lr(c.lr, c.lstep))(calls[name][nm])
-            arms[(names[0], f"leaves:{name}")] = (lambda st: lambda i: H.build(st, s0))(calls[name][names[0]].lset)
-        if len(linears) == len(ORDER):
-            # the step's records in two buffers (a layer's own, every unit, the dead ones zero as the units leave them),
-            # each with two sets of 128 lane tables: the live units' (-lrl) and every unit's (-lr)
-            c0 = {x: calls[x][names[0]] for x in ORDER}
-            bufs = [[{x: torch.zeros((c0[x].units, 32, c0[x].words), dtype=torch.int32, device="cuda")
-                      for x in ORDER} for _ in range(args.layers)] for _ in range(2)]
-            cover = {"": lambda x: c0[x].live_units, "_all": lambda x: c0[x].units}
-            sets = {sx: [H.set([lane_tab(bufs[q][ly][x][:n(x)], n(x), c0[x].words, f"{ly}.{x}")
-                                for ly in range(args.layers) for x in ORDER]) for q in range(2)]
-                    for sx, n in cover.items()}
-            side = torch.cuda.Stream()
-            fork, join = torch.cuda.Event(), torch.cuda.Event()
-            for nm in timed:
-                def step_lr(i, nm=nm, q=0):
-                    for layer in range(args.layers):
-                        for x in ORDER:
-                            c = calls[x][nm]
-                            c.run_units_lr(bufs[q][layer][x], c.lstep, b=c.b if layer % 2 == 0 else bcopy[x])
-                arms[(nm, "step_lr")] = step_lr
-                for sx, ss in sets.items():
-                    def both(i, step_lr=step_lr, ss=ss):
-                        step_lr(i)
-                        H.build(ss[0], s0)
-
-                    def overlap(i, step_lr=step_lr, ss=ss):
-                        main = torch.cuda.current_stream()
-                        fork.record(main)
-                        side.wait_event(fork)
-                        with torch.cuda.stream(side):
-                            H.build(ss[(i + 1) % 2], s0)
-                        step_lr(i, q=i % 2)
-                        join.record(side)
-                        main.wait_event(join)
-                    arms[(nm, f"step_lr_leaves{sx}")], arms[(nm, f"overlap{sx}")] = both, overlap
-            doc["lr_step_bytes"] = {}
-            for sx, n in cover.items():
-                arms[(names[0], f"leaves_step{sx}")] = (lambda ss: lambda i: H.build(ss[0], s0))(sets[sx])
-                segs = sum(n(x) * ((128 * c0[x].words + 1023) // 1024) for x in ORDER) * args.layers
-                doc["lr_step_bytes"]["live" if not sx else "all"] = {
-                    "records_written": sum(c0[x].live_units * 128 * c0[x].words for x in ORDER) * args.layers,
-                    "records_read": sum(n(x) * 128 * c0[x].words for x in ORDER) * args.layers,
-                    "segment_digests": 64 * segs, "segments": segs, "tables": len(ORDER) * args.layers}
     graphs, per_graph = {}, {}
     for key, fn in arms.items():
         t = one_call_ms(fn)
@@ -450,10 +286,8 @@ def main() -> int:
         if len(lay) == len(ORDER):
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
-        for arm in ("step", "step_lr", "leaves_step", "step_lr_leaves", "overlap", "leaves_step_all",
-                    "step_lr_leaves_all", "overlap_all"):
-            if arm in r:
-                r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
+        if "step" in r:
+            r["step_ms"] = round(r["step"]["median_us"] / 1e3, 3)
     b0 = res[names[0]]
     for nm in timed[1:]:
         r = res[nm]

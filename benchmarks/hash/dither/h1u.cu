@@ -361,24 +361,6 @@ __device__ __forceinline__ u32 ring_xor(const Sm& S, u32 row) {
   return x;
 }
 
-// the lane records (OneOut::lr): a chunk's 32 ring rows (receipt words at .. at + 31) as every lane's own, lane l's at
-// l W + at of the unit's record, thread r writing word at + r of each lane (row r, column l: no bank conflict)
-template <class Sm>
-__device__ __forceinline__ void lane_put(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
-#pragma unroll 8
-  for (int l = 0; l < 32; ++l) lw[(u64)l * W + at + lane] = S.ring[lane][l];
-}
-
-// the tail's 2 MD ring rows (receipt words at .. at + 2 MD - 1) of every lane
-template <int MD, class Sm>
-__device__ __forceinline__ void lane_tail(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
-#pragma unroll
-  for (int i = 0; i < 2 * MD; ++i) {
-    const u32 k = 32 * i + lane, l = k / (2 * MD), r = k % (2 * MD);
-    lw[(u64)l * W + at + r] = S.ring[r][l];
-  }
-}
-
 __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u64 base, u32 U, u64* __restrict__ out) {
   const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
   if (u >= U) return;
@@ -479,14 +461,7 @@ struct OneOut {
   u32 M;
   u32 band = 1;         // J10 banded (kh_one_band; measured only): unit (ri, cj)'s rows from its band leader
                         // (ri, (cj / band) band)'s workspace region, its columns from its own
-  u32* lr = nullptr;    // kh_one_lr: live unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
-  const int* lrs = nullptr;  // the step whose F_NW_UNITS leaves every record unwritten
 };
-
-// unit u's lane record, null where none is written
-__device__ __forceinline__ u32* lane_rec(const OneOut& oo, u32 u, u32 nwords) {
-  return oo.lr && !(oo.lrs[3] & F_NW_UNITS) ? oo.lr + (u64)u * 32 * nwords : nullptr;
-}
 
 // PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
@@ -543,7 +518,6 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     return;
   }
-  u32* const lw = lane_rec(oo, u, nwords);
   WarpSmem& S = smem[wp];
   const u64* sd = seeds + 16 * (u64)u;
 
@@ -797,7 +771,6 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     __syncwarp();
     if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
-    if (lw) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
 
@@ -877,7 +850,6 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
-  if (lw) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
 #pragma unroll
@@ -969,7 +941,6 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     }
     return;
   }
-  u32* const lw = wp ? nullptr : lane_rec(oo, u, nwords);
   const u32* wsu = ws + 16ull * 32 * (rb + cb) * u;
   const u32* wsr = ws + 16ull * 32 * (rb + cb) * (ri * ncb + cj / oo.band * oo.band);
   const u32 pp = wp - 1, pi = 32 * pp + lane;
@@ -1231,7 +1202,6 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         if (j == 15) {
           __syncwarp();
           if (rcpt) o[32 * (sg >> 4) + lane] = ring_xor(S, lane);
-          if (lw) lane_put(S, lw, nwords, 32 * (sg >> 4), lane);
           __syncwarp();
         }
       }
@@ -1367,7 +1337,6 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
-  if (lw) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (RO) return;
 #pragma unroll
   for (int mt = 0; mt < 2; ++mt)
@@ -1901,19 +1870,18 @@ template <bool PL, int PART = 0>
 static int one_call(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                     const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                     const float* sa, const float* sw, const int* step, unsigned M, void* stream, unsigned band = 1,
-                    int mode = 0, void* lr = nullptr, const int* lrs = nullptr) {
+                    int mode = 0) {
 #if H1U_SPLIT
   return 2;
 #endif
   if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J) || (H1K_RONLY && PL) || (PART && !ws)) return 2;
   if (!band || mode < 0 || mode > 2 || (band > 1 || mode) && !ws) return 2;
-  if (lr && (!lrs || PL || band > 1)) return 2;
   const int m = n_digits((int)(K / 32));
   if (m != 2 && m != 3) return 2;
   const unsigned units = (rows / 32) * (N / 32);
   if (!units) return 0;
   cudaStream_t s = (cudaStream_t)stream;
-  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M, band, (u32*)lr, lrs};
+  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M, band};
   if (ws) {
     const bool noise = PART != 2 && mode != 1, run_units = PART != 1 && mode != 2;
     const unsigned nb = kh_noise_blocks(K);
@@ -1954,29 +1922,6 @@ extern "C" int kh_one_units(const void* A, const void* B, unsigned rows, unsigne
                             const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
                             const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
   return one_call<false, 2>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
-}
-
-// Option B's lane records (dither-a -lr): kh_one and kh_one_units with every live unit's 32 lanes' words as well, unit
-// u's record at lr + 32 u kh_words(K) u32: lane l's 2 (KS + m) words at l kh_words(K) of it, lanes in order (lane 4 g + q
-// holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1)), word 2 s the XOR of its 8 chains' y after set s and
-// 2 s + 1 of their z, so a receipt word is the XOR of the lanes' (and still written as kh_one's). A dead unit's record
-// is not written, nor any where lstep's flags have F_NW_UNITS.
-extern "C" int kh_one_lr(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
-                         const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
-                         const float* sa, const float* sw, const int* step, unsigned M, const int* lstep, void* lr,
-                         void* stream) {
-  if (!lr) return 2;
-  return one_call<false>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, 1, 0, lr,
-                         lstep);
-}
-
-extern "C" int kh_one_units_lr(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
-                               const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
-                               const float* sa, const float* sw, const int* step, unsigned M, const int* lstep,
-                               void* lr, void* stream) {
-  if (!lr) return 2;
-  return one_call<false, 2>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, 1, 0,
-                            lr, lstep);
 }
 
 // kh_one with the peel (PL): z = A B^T and y = dequant(z), today's y, the receipts unchanged

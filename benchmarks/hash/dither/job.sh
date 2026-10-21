@@ -22,8 +22,7 @@
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 #   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
-#            receipts.py and the base's every word, then timed: each call's units and the step's 128); with
-#            UNITS_LR=NAME (an h1c build shipped, e.g. h1c_kch) also --lr, the lane records and their tables
+#            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
@@ -159,8 +158,6 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); ul+=" --lib ${v#h1u_}=$f"
       done
       [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
-      # UNITS_LR=NAME: --lr, the lane records' tables built by $LIBS/NAME.so (an h1c build)
-      [ -n "${UNITS_LR:-}" ] && { NEED+=("$UNITS_LR"); ul+=" --lr --h1c $LIBS/$UNITS_LR.so"; }
       if [ "$b" = units ]; then
         CMDS+=("$PY $HERE/unitsbench.py$ul --out $OUT ${BENCH_ARGS:-}")
       else
