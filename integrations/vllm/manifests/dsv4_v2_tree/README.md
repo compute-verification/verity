@@ -184,9 +184,10 @@ Then:
    2. run window A's `match_gpu.sh` and the CPU phase's `match_cpu.sh` (steps 1 and 2);
    3. run window B's `commit.sh`.
 
-   In the Commit's `commit/summary.json`, each rank's `match_oracle.<r>.schedule_replay` must be non-null, with `missing` 0,
-   and the oracle must PASS. A null means no schedule was replayed. A nonzero `routing_differs` means a call routed otherwise
-   than the capture's, and its first [step, module] is named in `routing_differs_first`.
+   In the Commit's `commit/summary.json`, each rank's `match_oracle.<r>.schedule_replay` must count `replayed` calls, with
+   `missing` 0, and the oracle must PASS. `{"armed": false, "why": ...}` means the capture recorded no schedule, and null means
+   the rank had no align source. A nonzero `routing_differs` means a call routed otherwise than the capture's, and its first
+   [step, module] is named in `routing_differs_first`.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
