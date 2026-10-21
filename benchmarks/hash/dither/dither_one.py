@@ -87,6 +87,7 @@ class Window:
     """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
+    group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
@@ -97,8 +98,22 @@ class Window:
         self.wt = [REG[w][1].weight for w in range(L)]
         self.sw = [REG[w][1].weight_scale.reshape(-1) for w in range(L)]
         self.nk = [(int(x.shape[0]), int(x.shape[1])) for x in self.wt]
-        self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
-        self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
+        if self.group_slots:
+            # the calls' A slots as views of one buffer a K (`slot_groups`) and their scales of one (`scale_all`), so a
+            # step's slots copy or clear in a launch a K
+            ks = sorted({k for _, k in self.nk})
+            self.slot_groups = {k: torch.zeros(sum(kk == k for _, kk in self.nk), t, k, dtype=torch.int8, device=dev)
+                                for k in ks}
+            at = dict.fromkeys(ks, 0)
+            self.slot = []
+            for _, k in self.nk:
+                self.slot.append(self.slot_groups[k][at[k]])
+                at[k] += 1
+            self.scale_all = torch.zeros(L, t, dtype=torch.float32, device=dev)
+            self.scale = list(self.scale_all.unbind(0))
+        else:
+            self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
+            self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
         self.z = [torch.zeros(t, n, dtype=torch.int32, device=dev) for n, _ in self.nk]
         self.live = torch.zeros(t // 32, dtype=torch.uint8, device=dev)
         self.admit = torch.zeros(t // 16 * 2, dtype=torch.uint8, device=dev)
@@ -300,6 +315,11 @@ class Window:
         if name is not None:
             torch.cuda.nvtx.range_push(PHASE_RANGE + name)
 
+    def poisoned(self) -> list:
+        """What a captured step's `before` fills with 0xA5."""
+        return (self.slot + self.scale + self.z + list(self.ydump or [])
+                + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
+
     def _a_step(self) -> None:
         a = self.pre["a"]
         rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
@@ -317,8 +337,7 @@ class Window:
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
                           | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0)
                           | (F_FAULT_Y if name == "fault_y" else 0))
-            self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
-                         + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
+            self._poison(self.poisoned())
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m

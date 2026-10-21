@@ -717,10 +717,15 @@ def stats(win: DO.Window):
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
-def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3) -> dict:
-    """`which`'s capture against references other than the served kernels (the module docstring's list)."""
+def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
+          r_round: dict | None = None) -> dict:
+    """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
+    docstring's list).  `r_round` ({"s", "leaves", "root"}: dither_so's round s + D - 1) is the round that carries the
+    capture's receipts when that is not the capture's own: its receipt-step leaf and its root are checked there
+    (round's "receipt_step" and "receipt_root"), and the capture's own round's receipt-step leaf, an earlier step's
+    receipts, is read as recorded; "fault_rr" then wants that round refused."""
     from verity_vllm.engine import int8_exact as E
-    g = win.caps.get(which, {})
+    g = win.caps.get(which, {}) if g is None else g
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
@@ -786,10 +791,13 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         doc["y_served_vs_dump_bad"] = dump_bad if g["y"] is not None else None
         if which == "fault_y":
             doc["fault_y_bad"] = fy_bad[:4]
+    rleaf = None
     if "receipt-step" in kinds:
         # RT4-INT-13: the receipt roots under the round; three calls' roots rehashed from the captured receipts
         r_dev = [unwords(g["r_roots"][8 * w:8 * w + 8]) for w in range(L)]
-        step_cpu["receipt-step"] = CM.step_root(CM.domain(f_step, L, "receipt-step"), r_dev)
+        rs = s if r_round is None else r_round["s"]
+        rleaf = CM.step_root(CM.domain({"window": W, "step": rs, "linears": L}, L, "receipt-step"), r_dev)
+        step_cpu["receipt-step"] = rleaf if r_round is None else g["leaves"][kinds.index("receipt-step")]
         rr_bad = []
         for w in sorted({0, 2, L - 1}):
             o_, units, nw = win.plan.offs[w]
@@ -804,6 +812,14 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                        [step_cpu[k] for k in kinds])
     doc["round"] = {**{k.replace("-", "_"): step_cpu[k] == g["leaves"][i] for i, k in enumerate(kinds)},
                     "root": rnd == g["root"]}
+    doc["step_roots"] = {k: v.hex() for k, v in step_cpu.items()}
+    if r_round is not None and rleaf is not None:
+        ri, lv = kinds.index("receipt-step"), list(r_round["leaves"])
+        doc["round"]["receipt_step"] = rleaf == lv[ri]
+        lv[ri] = rleaf
+        doc["round"]["receipt_root"] = CM.step_root(CM.domain(
+            {"window": W, "step": r_round["s"], "leaves": DO.round_leaves(kinds)}, len(kinds), "round"), lv) == r_round["root"]
+        doc["receipt_round"] = r_round["s"]
     # z = A B^T by int_mm on the committed A, zero past m; the served y = dequant(z); under "zy" the leaf's y = dequant
     # of the leaf's z (0 past m) = the served y
     z_bad, y_bad, yleaf_bad = [], [], []
@@ -869,8 +885,9 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         return doc
     if which == "fault_rr":
         # the round recorded without the receipt roots: refused on its receipt-step leaf and root alone
-        others = all(v for k, v in doc["round"].items() if k not in ("receipt_step", "root"))
-        doc["conforming"] = (not doc["round"]["receipt_step"] and not doc["round"]["root"] and others and rest_ok
+        rr = "root" if r_round is None else "receipt_root"
+        others = all(v for k, v in doc["round"].items() if k not in ("receipt_step", rr))
+        doc["conforming"] = (not doc["round"]["receipt_step"] and not doc["round"][rr] and others and rest_ok
                              and y_match and y_ok and not doc["a_roots_bad"] and not doc["admit_roots_bad"]
                              and not doc["z_roots_bad"] and not doc.get("receipt_roots_bad"))
         doc["ok"] = commits_ok and doc["conforming"]
