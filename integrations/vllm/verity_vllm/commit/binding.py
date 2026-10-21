@@ -106,10 +106,13 @@ def _numel(shape: Iterable[int]) -> int:
 # ---------------------------------------------------------------------- the binding map
 
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
-                      request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int = 256,
+                      request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int | None = None,
                       weight_registration: dict | None = None, collector: dict | None = None,
                       binder: Any = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
+
+    A leaf index is in the unit of the layout's own leaves, each meta's `chunk` (the committer's: 256 B under vllm-v1, rows-sha512's
+    4 KiB rows), the index `open` and `identity_of` read; a `chunk` passed that differs from a meta's is refused.
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
@@ -133,6 +136,10 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 seen[m.name] += 1
         for m, (op, member, k, how) in zip(metas, bound):
             numel = _numel(m.shape)
+            leaf = int(m.chunk)
+            if chunk is not None and int(chunk) != leaf:
+                raise ValueError(f"build_binding_map: chunk={chunk} but {m.name} (step {step}) is laid out in {leaf}-byte leaves; "
+                                 f"pass the committer's chunk or none")
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
             rr = (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
@@ -173,7 +180,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                 entries.append({
                     "identity": identity_dict(identity(program_digest, rid, step, k_r, op_r, member_r, lo, hi, rank)),
                     "kind": "leaf", "step_root": step_root, "layout": layout_version, "chunk": int(m.chunk),
-                    "leaf_lo": int(off // chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // chunk + 1),
+                    "leaf_lo": int(off // leaf), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // leaf + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": how} if how not in ("label", "slot") else {}),
