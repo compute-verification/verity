@@ -88,6 +88,7 @@ import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks
 import Proofs.Flock.Claims.Recursion.VStarBDeploy
+import Proofs.Flock.Claims.Recursion.KSLin2Staged
 import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Claims.Recursion.DeployChecked
