@@ -1,20 +1,23 @@
 """The replay row kernels of DeepSeek-V4-Pro's served rows that no other module evaluates, one per Definition family, each the numpy
-twin its Definition is held to: `mhc_twin` (the six mHC families), `dsv4_compressor_twin` (the head-512 compressed rows), and the
-hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the twins' leading token axis is 1, and each
-Tuple's fields are ports "0", "1", ... in the Definition's return order.  The twins are checked word for word against their
-Definitions (tests/program/test_mhc.py, the kernel self-check), and on the H200 by the captures `EVALUATOR_PROVENANCE` names.
+twin its Definition is held to: `mhc_twin` (the six mHC families), `dsv4_compressor_twin` (the head-512 compressed rows),
+`flashmla_twin` / `flashmla_prefill_twin` (the sparse FP8 decode, the prefill and its workspace gather), `dsv4_qnorm_insert_twin`
+(the query norm and KV insert), and the hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the
+twins' leading token axis is 1, and each Tuple's fields are ports "0", "1", ... in the Definition's return order.  The twins are
+checked word for word against their Definitions (tests/program/test_mhc.py, the kernel self-check), and on the H200 by the
+captures `EVALUATOR_PROVENANCE` names.  A FlashMLA row whose DOT is not the Hopper k16 step the twins model is declined by name.
 The row kernels register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+import json
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
 from verity_vllm.program.kernels.ir_rows import f64_statics
-from verity_vllm.program.kernels.kernel_registry import Declined
+from verity_vllm.program.kernels.kernel_registry import Declined, prim_static
 
 #: the vocabularies of the served `GatherI32x{V}_v1` rows (DeepSeek-V4-Pro's hash router reads tid2eid at its vocabulary)
 GATHER_VOCABS = (129280,)
@@ -39,6 +42,17 @@ EVALUATORS = {
                               "Dsv4MlaC128Column_v1 per column, Dsv4MlaNormRopeQuant_v1{128,D,QB,EPS}) -> NoPE e4m3 bytes, RoPE bf16, e8m0 scales",
     **{f"GatherI32x{v}_v1": f"column[token] of the {v} committed i32 words, 0xFFFFFFFF for a token outside [0, {v}) "
                             f"(GatherI32x{v}_v1, registry.dsv4_decode_indices.gather_i32: a lookup, no arithmetic)" for v in GATHER_VOCABS},
+    "FlashMlaDecode_v1": "verity_vllm.program.kernels.flashmla_twin.decode (FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: "
+                         "each row's FlashMlaRowValid_v1 and FlashMlaKvRow_v1, then per head FlashMlaSplit_v1 over each split's 64-row "
+                         "blocks and FlashMlaCombine_v1 with the sink; DOT the Hopper k16 step) -> NH x (DN + DR) bf16",
+    "FlashMlaPrefill_v1": "verity_vllm.program.kernels.flashmla_prefill_twin.prefill (FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}: each "
+                          "row's FlashMlaPrefillValid_v1 and masking, then per head FlashMlaPrefillHead_v1's block pairs and the sink; "
+                          "DOT the Hopper k16 step) -> NH x D bf16",
+    "FlashMlaGatherRow_v1": "verity_vllm.program.kernels.flashmla_prefill_twin.gather_rows (FlashMlaGatherRow_v1{DN,DR,QT}: "
+                            "Bf16MulBf16(F2fpBf16(E4m3ToF32(nope[d])), E8m0ShlBf16(scale[d / QT])), then the RoPE words) -> DN + DR bf16",
+    "Dsv4QNormRopeKvInsert_v1": "verity_vllm.program.kernels.dsv4_qnorm_insert_twin.insert (Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,"
+                                "EPS}: Dsv4QNormRope_v1 per live head, the padded heads +0, Dsv4KvRopeQuant_v1 of the kv row) -> q_out "
+                                "NHP x (DN + DR) bf16, the NoPE e4m3 bytes, the scale bytes and pad, the RoPE bf16",
 }
 
 _MHC_PROVENANCE = {
@@ -69,11 +83,44 @@ _COMPRESSOR_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/dsv4_compressor.py (the reference; the twin is checked against it, never the other way round)",
 }
 
+_FLASHMLA_PROVENANCE = {
+    "property": "dsv4_flashmla_capture (verity-vllm/dsv4-flashmla-capture/v1), tests/properties/dsv4_flashmla_capture_gpu.py",
+    "run": "r20261013-115825-52cf",
+    "art": "art:b937e7c8f60098ab98711b04f2180fe1c70b179aba05dacd3fd5dfb50cb50974",
+    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80 vendoring FlashMLA 6bc49418",
+    "captured_utc": "2026-10-13",
+    "cases": "decode swa, c4, c128, lone, batch and edge at the token's SPLITS; every gathered workspace row; the prefill cases at "
+             "the token's NP (16 heads padded to 64, the 128-token window, the sink)",
+    "tests": ["tests/program/test_flashmla.py, tests/program/test_flashmla_prefill.py (the twins against registry.flashmla and "
+              "registry.flashmla_prefill)",
+              "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
+              "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
+    "definitions": "verity_vllm/program/registry/flashmla.py, flashmla_prefill.py (the reference; the twins are checked against them, "
+                   "never the other way round)",
+}
+
+_INSERT_PROVENANCE = {
+    "property": "dsv4_qnorm_insert_capture (verity-vllm/dsv4-qnorm-insert-capture/v1), tests/properties/dsv4_qnorm_insert_capture_gpu.py",
+    "run": "r20261013-205619-f8bf",
+    "art": "art:b460c496817d865da135f44c882eae879f27a82cc5e59ae864ab4a4e66388819",
+    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
+    "captured_utc": "2026-10-13",
+    "cases": "every word of the q the fused q-norm / RoPE / KV-quant insert returns and every byte it writes to the fp8_ds_mla cache "
+             "at 16 query heads of 512 padded to 64",
+    "tests": ["tests/program/test_dsv4_qnorm_insert.py (the twin against registry.dsv4_qnorm_insert)",
+              "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
+              "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
+    "definitions": "verity_vllm/program/registry/dsv4_qnorm_insert.py (the reference; the twin is checked against it, never the other "
+                   "way round)",
+}
+
 #: family -> what pinned its twin to the H200 (a family absent here has no hardware-specific semantics)
 PROVENANCE = {
     **{f: _MHC_PROVENANCE for f in ("MhcPost_v1", "MhcFusedPostPre_v1", "MhcPostPreTf32_v1", "MhcPreBroadcast_v1",
                                      "MhcResidualBroadcast_v1", "HcHead_v1")},
     "Dsv4MlaCompressC4_v1": _COMPRESSOR_PROVENANCE, "Dsv4MlaCompressC128_v1": _COMPRESSOR_PROVENANCE,
+    **{f: _FLASHMLA_PROVENANCE for f in ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1")},
+    "Dsv4QNormRopeKvInsert_v1": _INSERT_PROVENANCE,
 }
 
 
@@ -198,6 +245,76 @@ def gather_i32(V: int, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> di
     return {"0": np.array([col[t] if 0 <= t < V else 0xFFFFFFFF], dtype=np.uint32)}
 
 
+def _i32(a: np.ndarray, n: int) -> np.ndarray:
+    """n committed i32 words, whether they arrive as int32 or as their u32 bits, as u32 bits."""
+    return (_words(a, n, np.int64) & 0xFFFFFFFF).astype(np.uint32)
+
+
+def _hopper_dot(family: str, statics: dict[str, Any]) -> None:
+    from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
+    dot = prim_static(statics, "DOT", family)
+    if dot != HopperBF16WgmmaDot16.id:
+        raise Declined(f"{family}: no twin for DOT={dot} (the twins model {HopperBF16WgmmaDot16.id})")
+
+
+def _splits(v: Any) -> tuple[int, ...]:
+    """SPLITS as the spec text spells it (`[0,1,2,3,4]`) or as a binding holds it."""
+    return tuple(int(s) for s in (json.loads(v) if isinstance(v, str) else v))
+
+
+def flashmla_decode(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}(q, nope, scale, rope, idx, swa_len[, extra_len], sink)` -> NH x (DN +
+    DR) bf16 words, head-major."""
+    from verity_vllm.program.kernels import flashmla_twin as FT
+    f = "FlashMlaDecode_v1"
+    _hopper_dot(f, statics)
+    S = f64_statics(statics)
+    NH, NW, DN, DR, QT, BN = (int(S[k]) for k in ("NH", "NW", "DN", "DR", "QT", "BN"))
+    sp = _splits(S["SPLITS"])
+    N = sp[-1] * BN
+    lens = 2 if N > NW else 1
+    if len(ops) != 6 + lens:
+        raise Declined(f"{f}: the row wires {len(ops)} args, the Definition takes {6 + lens}")
+    out = FT.decode(_bf16(ops[0], NH, DN + DR), _words(ops[1], N * DN, np.uint8).reshape(N, DN),
+                    _words(ops[2], N * (DN // QT), np.uint8).reshape(N, DN // QT), _bf16(ops[3], N, DR), _i32(ops[4], N),
+                    [_i32(ops[5 + j], 1) for j in range(lens)], _f32(ops[5 + lens], NH), SPLITS=sp, NW=NW, QT=QT, BN=BN,
+                    SCALE=float(S["SCALE"]))
+    return _ports(np.asarray(out).astype(np.uint16))
+
+
+def flashmla_prefill(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`FlashMlaPrefill_v1{NH,NP,D,BN,DOT,SCALE}(q, kv, idx, len, skv, sink)` -> NH x D bf16 words, head-major."""
+    from verity_vllm.program.kernels import flashmla_prefill_twin as FP
+    _hopper_dot("FlashMlaPrefill_v1", statics)
+    S = f64_statics(statics)
+    NH, NP, D, BN = (int(S[k]) for k in ("NH", "NP", "D", "BN"))
+    N = 2 * NP * BN
+    out = FP.prefill(_bf16(ops[0], NH, D), _bf16(ops[1], N, D), _i32(ops[2], N), _i32(ops[3], 1), _i32(ops[4], 1), _f32(ops[5], NH),
+                     BN=BN, SCALE=float(S["SCALE"]))
+    return _ports(np.asarray(out).astype(np.uint16))
+
+
+def flashmla_gather_row(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`FlashMlaGatherRow_v1{DN,DR,QT}(nope, scale, rope)` -> DN + DR bf16 words."""
+    from verity_vllm.program.kernels import flashmla_prefill_twin as FP
+    DN, DR, QT = (int(statics[k]) for k in ("DN", "DR", "QT"))
+    out = FP.gather_rows(_words(ops[0], DN, np.uint8).reshape(1, DN), _words(ops[1], DN // QT, np.uint8).reshape(1, DN // QT),
+                         _bf16(ops[2], 1, DR), QT)
+    return _ports(np.asarray(out).astype(np.uint16))
+
+
+def dsv4_qnorm_rope_kv_insert(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}(q, kv, cs)` -> ports 0 (q_out, NHP x (DN + DR) bf16), 1 (DN e4m3 bytes), 2 (DN /
+    QB + 1 scale bytes, the pad last) and 3 (DR bf16)."""
+    from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as QI
+    S = f64_statics(statics)
+    NH, NHP, DN, DR, QB = (int(S[k]) for k in ("NH", "NHP", "DN", "DR", "QB"))
+    q, nope, scale, rope = QI.insert(_bf16(ops[0], NH, DN + DR), _bf16(ops[1], DN + DR), _f32(ops[2], DR), NHP=NHP, DR=DR, QB=QB,
+                                     EPS=float(S["EPS"]))
+    return _ports(np.asarray(q).astype(np.uint16), np.asarray(nope).astype(np.uint8), np.asarray(scale).astype(np.uint8),
+                  np.asarray(rope).astype(np.uint16))
+
+
 #: family -> (row kernel, the ports it returns in the Definition's return order)
 ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = {
     "MhcPost_v1": (mhc_post, ("0",)),
@@ -209,6 +326,10 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "Dsv4MlaCompressC4_v1": (dsv4_mla_compress_c4, ("0", "1", "2")),
     "Dsv4MlaCompressC128_v1": (dsv4_mla_compress_c128, ("0", "1", "2")),
     **{f"GatherI32x{v}_v1": (lambda statics, ops, _v=v: gather_i32(_v, statics, ops), ("0",)) for v in GATHER_VOCABS},
+    "FlashMlaDecode_v1": (flashmla_decode, ("0",)),
+    "FlashMlaPrefill_v1": (flashmla_prefill, ("0",)),
+    "FlashMlaGatherRow_v1": (flashmla_gather_row, ("0",)),
+    "Dsv4QNormRopeKvInsert_v1": (dsv4_qnorm_rope_kv_insert, ("0", "1", "2", "3")),
 }
 
 
@@ -227,10 +348,24 @@ def _sample_gather(V: int) -> Callable[..., list[np.ndarray]]:
     return sample
 
 
+def _sample_flashmla(family: str) -> Callable[..., list[np.ndarray]]:
+    from verity_vllm.program.kernels import flashmla_prefill_twin as FP
+    from verity_vllm.program.kernels import flashmla_twin as FT
+    return {"FlashMlaDecode_v1": FT._sample_decode, "FlashMlaPrefill_v1": FP._sample_prefill,
+            "FlashMlaGatherRow_v1": FP._sample_gather}[family]
+
+
+def _sample_insert() -> Callable[..., list[np.ndarray]]:
+    from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as QI
+    return QI._sample_insert
+
+
 SAMPLES: dict[str, Callable[[], Callable[..., list[np.ndarray]]]] = {
     "Dsv4MlaCompressC4_v1": lambda: _sample_compress("Dsv4MlaCompressC4_v1"),
     "Dsv4MlaCompressC128_v1": lambda: _sample_compress("Dsv4MlaCompressC128_v1"),
     **{f"GatherI32x{v}_v1": (lambda _v=v: _sample_gather(_v)) for v in GATHER_VOCABS},
+    **{f: (lambda _f=f: _sample_flashmla(_f)) for f in ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1")},
+    "Dsv4QNormRopeKvInsert_v1": _sample_insert,
 }
 
 
@@ -239,12 +374,24 @@ def check_targets(family: str) -> list:
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import dsv4_compressor as C
     from verity_vllm.program.registry import dsv4_decode_indices as DI
+    from verity_vllm.program.registry import dsv4_qnorm_insert as QI
+    from verity_vllm.program.registry import flashmla as FM
+    from verity_vllm.program.registry import flashmla_prefill as FP
     from verity_vllm.program.registry import mhc as M
+    from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
     eps = 1e-6
     fuse = dict(REPEAT=2, EPS=eps, HC_EPS=eps)
     if family.startswith("GatherI32x"):
         return [DI.gather_i32(int(family[len("GatherI32x"):-len("_v1")]))]
+    attn = dict(DOT=HopperBF16WgmmaDot16, SCALE=32 ** -0.5)
+    decode = dict(NH=2, DN=16, DR=16, QT=16, BN=16, **attn)
     return {
+        "FlashMlaDecode_v1": [bind(FM.FlashMlaDecode, SPLITS=(0, 1, 2), NW=16, **decode),
+                              bind(FM.FlashMlaDecode, SPLITS=(0, 2), NW=32, **decode)],
+        "FlashMlaPrefill_v1": [bind(FP.FlashMlaPrefill, NH=2, NP=1, D=32, BN=16, **attn),
+                               bind(FP.FlashMlaPrefill, NH=1, NP=2, D=32, BN=16, **attn)],
+        "FlashMlaGatherRow_v1": [bind(FP.FlashMlaGatherRow, DN=32, DR=16, QT=16)],
+        "Dsv4QNormRopeKvInsert_v1": [bind(QI.Dsv4QNormRopeKvInsert, NH=2, NHP=4, DN=48, DR=16, QB=16, EPS=eps)],
         "MhcPost_v1": [bind(M.MhcPost, HC=4, N=8), bind(M.MhcPost, HC=2, N=4)],
         "MhcFusedPostPre_v1": [bind(M.MhcFusedPostPre, HC=2, H=32, NS=2, TH=4, TN=1, **fuse)],
         "MhcPostPreTf32_v1": [bind(M.MhcPostPreTf32, HC=2, H=64, NS=2, TN=2, **fuse)],
