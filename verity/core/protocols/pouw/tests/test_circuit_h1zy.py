@@ -245,20 +245,21 @@ def _lane_rows(lay, ln, a, b, sa, sw):
 def test_a_lanes_cells_are_kernels_lane_and_the_lanes_cover_the_leaf_once():
     """At the served 32 × 32 leaf, lane l = 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1) (kernels'
     ``lane_partials``, #3095), its cells by row slot then column slot (`lane_cells`), and the lanes' cells are the leaf's once
-    each; its index is 5 bits."""
+    each; its index is the low 5 bits of a 16-bit word."""
     lay = H.Layout(32, 32, 64)
     for ln in range(32):
         g, q = ln >> 2, ln & 3
         assert Z.lane_cells(lay, ln) == [32 * (g + 8 * s) + 2 * q + 8 * (t >> 1) + (t & 1) for s in range(4) for t in range(8)]
     assert sorted(u for ln in range(32) for u in Z.lane_cells(lay, ln)) == list(range(1024))
-    assert (Z.lane_bits(32, 32), Z.lane_bits(8, 16), Z.lane_bits(8, 8)) == (5, 2, 1)
+    assert (Z.lane_bits(32, 32), Z.lane_bits(8, 16), Z.lane_bits(8, 8)) == (5, 2, 1) and Z.LANE.n == 16
 
 
 def test_a_lane_on_words_checks_its_committed_partial_and_its_own_cells():
     """`lane_reference`: lane l's honest partial (`lane_partial`) is `h1tile.lane_partials`' l, and ok is 1 on it and the
     honest record; one bit of the partial off, or a cell of its own off the record's dequant, makes ok 0, and one of
-    another lane's cells leaves it 1 (that lane's check refuses it). A dead leaf's partials are zero, its record z = 0 and
-    y = dq(0, +0, s_w), and its live partials make ok 0. The combine is 1 exactly when the partials XOR to the receipt."""
+    another lane's cells leaves it 1 (that lane's check refuses it); an index past the leaf's lanes makes ok 0, and one past
+    16 bits is refused. A dead leaf's partials are zero, its record z = 0 and y = dq(0, +0, s_w), and its live partials make
+    ok 0. The combine is 1 exactly when the partials XOR to the receipt."""
     rng = random.Random(41)
     a, b, sa, sw = _unit_rows(rng, 8, 16)
     lay, live = H.Layout(8, 16, 64), [1] * 8
@@ -275,6 +276,10 @@ def test_a_lane_on_words_checks_its_committed_partial_and_its_own_cells():
             bad = (zy[0], list(zy[1]))
             bad[1][Z.lane_cells(lay, other)[7]] ^= 1
             assert Z.lane_reference(*rows, live, bad, parts[ln], SALT, 5, ROOTS, ln, (8, 16)) == want
+        for idx in (ln + lay.lanes, ln | 1 << 15):
+            assert Z.lane_reference(*rows, live, zy, parts[ln], SALT, 5, ROOTS, idx, (8, 16)) == 0
+    with pytest.raises(ValueError, match="16-bit word"):
+        Z.lane_reference(*_lane_rows(lay, 0, a, b, sa, sw), live, zy, parts[0], SALT, 5, ROOTS, 1 << 16, (8, 16))
     receipt = H.reference(a, b, SALT, 5, ROOTS)[1]
     assert Z.combine_reference(parts, receipt) == 1
     assert Z.combine_reference(parts, [receipt[0] ^ 1, *receipt[1:]]) == 0
@@ -297,15 +302,17 @@ def test_a_lane_on_words_checks_its_committed_partial_and_its_own_cells():
 def test_a_lane_reads_its_rows_admit_bits_record_partial_and_index_and_returns_ok(k, words):
     """At the served 32 × 32 leaf: the lane's 4 A and 8 B rows, the leaf's 32 admit bits and 6,144-byte record, its
     committed ``partials`` row of 2 (KS + m) words (#3095's 260 at K = 4096, 902 at K = 14336), the tile's salt, position
-    and roots and a 5-bit index, and its one output ``ok``, a sink, so the lane is no seed (`ports._coin_role`); the
-    combine reads the 32 ``partials`` rows and the receipt and returns one ``ok``."""
+    and roots and its index, one 16-bit word (a public row of whole 16-bit words), and its one output ``ok``, a sink, so
+    the lane is no seed (`ports._coin_role`); the combine reads the 32 ``partials`` rows and the receipt and returns one
+    ``ok``."""
     t = _tile(H.PouwH1Tile, 32, 32, k)
     lane, comb = Z.lane(t), Z.combine(t)
     params, ret = lane.signature()
     receipt = t.signature()[1].fields[1][1]
     assert [(n, tp.leaves) for n, tp in params] == [
         ("a", 4 * (8 * k + 32)), ("b", 8 * (8 * k + 32)), ("admit", 32), ("zy", 8 * 6144), ("partials", 32 * words),
-        *((n, tp.leaves) for n, tp in t.signature()[0][2:]), ("lane", 5)]
+        *((n, tp.leaves) for n, tp in t.signature()[0][2:]), ("lane", 16)]
+    assert sum(tp.leaves for n, tp in params if n in ("salt", "position", "roots", "lane")) % 16 == 0
     assert params[0][1].elem == Z.ROW(k) and params[3][1] == Z.RECORD(32, 32) and params[4][1] == receipt
     assert ret.fields == (("ok", Z.BIT),) and receipt.n == words
     decl = lane.defn.ports(lane.S())
@@ -358,9 +365,10 @@ def test_a_lane_on_bits_is_its_word_reference(defn):
     """`PouwH1LaneZy` over an 8 × 16 leaf at K = 64 (4 lanes, a 2-bit index) on bits, every case at once, about 50 s: ok is
     `lane_reference`'s for each lane on the honest record and partial (1), with one of its own cells off (0) and with one
     bit of its partial off (0); with another lane's cell off (1); with one row admitted, not the lane's (1); on a dead leaf
-    with its zero partial (1) or its ungated one (0); and on a live leaf with a zero partial (0). It is the only test of the
-    lane's gates: the mux trees that pick its noise blocks' counters, its keys' block and its cells by the public index, its
-    noise at the leaf's offsets, and the admit gate on the partial it checks."""
+    with its zero partial (1) or its ungated one (0); on a live leaf with a zero partial (0); and on lane 1's honest rows
+    at indices 5 and 1 + 2^15, past the leaf's lanes (0). It is the only test of the lane's gates: the mux trees that pick
+    its noise blocks' counters, its keys' block and its cells by the public index's low bits, the bound on its high bits,
+    its noise at the leaf's offsets, and the admit gate on the partial it checks."""
     rng = random.Random(43)
     a, b, sa, sw = _unit_rows(rng, 8, 16)
     lay, live = H.Layout(8, 16, 64), [1] * 8
@@ -387,17 +395,19 @@ def test_a_lane_on_bits_is_its_word_reference(defn):
     cases += [(0, full, live, cell_off(3), parts[0]), (1, full, [0, 0, 0, 0, 0, 0, 0, 1], zy, parts[1]),
               (2, (empty, [0] * 8), [0] * 8, zy0, zeros), (3, (empty, [0] * 8), [0] * 8, zy0, dead[3]),
               (0, full, live, zy, zeros)]
+    index = [c[0] for c in cases] + [1 + lay.lanes, 1 | 1 << 15]
+    cases += [(1, full, live, zy, parts[1])] * 2
     want, rows = [], []
-    for ln, (aa, ss), admit, rec, partial in cases:
+    for (ln, (aa, ss), admit, rec, partial), idx in zip(cases, index, strict=True):
         ra, rb, ras, rbs = _lane_rows(lay, ln, aa, b, ss, sw)
-        want.append(Z.lane_reference(ra, rb, ras, rbs, admit, rec, partial, SALT, 5, ROOTS, ln, (8, 16)))
+        want.append(Z.lane_reference(ra, rb, ras, rbs, admit, rec, partial, SALT, 5, ROOTS, idx, (8, 16)))
         rows.append([_row_bits(ra, ras), _row_bits(rb, rbs), list(admit),
                      _word_bits(rec[0]) + [x for v in rec[1] for x in _bits(v, 16)], _word_bits(partial),
                      SD.leaves(SALT, True), SD.position_leaves(5, True),
-                     SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True), _bits(ln, 2)])
+                     SD.leaves(ROOTS[0], True) + SD.leaves(ROOTS[1], True), _bits(idx, 16)])
     args = [np.array([r[p] for r in rows], np.uint8) for p in range(9)]
     got = evaluate_bits(Z.lane(_tile(defn, 8, 16)), *args).reshape(len(cases))
-    assert want == [1, 0, 0] * lay.lanes + [1, 1, 1, 0, 0]
+    assert want == [1, 0, 0] * lay.lanes + [1, 1, 1, 0, 0, 0, 0]
     assert [int(o) for o in got] == want
 
 
