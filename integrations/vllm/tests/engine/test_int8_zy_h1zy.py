@@ -412,9 +412,11 @@ def test_cuda_served_y_and_records_are_the_definition_on_the_edge_call(record_pr
     """The served op on CUDA (`int8_fused.product_zy` at `_plan`'s config) on the edge call: every record parses as
     `h1zy.RECORD` into the exact z and the Definition's y (words and bits), the served y is its live rows, and every unit
     passes `h1zy.check` (the unit's ok bit on words) against the exact z and its rows' and columns' scales."""
+    from verity_vllm.engine import int8_fused as F
     xq, sa, w, sw, rows = _tensors("cuda")
     y, zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)
     torch.cuda.synchronize()
+    record_property("config", str(F.pick(xq.shape[0], w.shape[0], xq.shape[1])))
     z, sas, want = edge_expected()
     sw_bits = edge_call()[3]
     zr, yr = pin(*_host(y, zy), z, sas, sw_bits, want)
@@ -470,7 +472,9 @@ def test_cuda_random_calls_at_llamas_linears_are_the_definition(linear, m, scale
         g = np.random.default_rng(m * 7 + n)
         sa, sw = (f32_tensor((g.integers(0, 2, c) << 31) | (g.integers(0x30, 0xD0, c) << 23) | g.integers(0, 1 << 23, c)).cuda()
                   for c in (m, n))
+    from verity_vllm.engine import int8_fused as F
     y, zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)
+    record_property("config", str(F.pick(m, n, k)))
     slots = torch.zeros((rows, k), dtype=torch.float64, device="cuda")
     slots[:m] = xq.double()
     z = (slots @ w.double().t()).to(torch.int64).cpu().numpy()
