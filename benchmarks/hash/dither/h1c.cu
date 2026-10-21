@@ -34,6 +34,8 @@
 // rather than one row after another with y indexed at run time.  H1C_SEGMID = 1 (H1C_HB): a segment's first block
 // (stag, j, ns, 8 m_j) is the same in every row of its table, so where a table has at most SEGMID_MAX segments a row, a
 // segments block compresses each of its segments' first blocks once (one lane each) and its threads start from them.
+// H1C_SMINB = B: the segments kernel's registers leave room for B blocks an SM (with H1C_SEGMID it holds 120 registers
+// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -66,6 +68,9 @@
 #endif
 #ifndef H1C_SEGMID
 #define H1C_SEGMID 0
+#endif
+#ifndef H1C_SMINB
+#define H1C_SMINB 1
 #endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID),
               "H1C_LVF, H1C_DOMSEG, H1C_MK and H1C_SEGMID are H1C_HB's");
@@ -796,8 +801,8 @@ __device__ __forceinline__ void seg_head(Hb& s, const H1Tab& T, int j, int ns) {
 constexpr int SEGMID_MAX = 16;
 
 // dom = 1 (H1C_DOMSEG): block row 0 is h1c_domains' work, a thread a table, and row y + 1 table y's segments
-extern "C" __global__ void __launch_bounds__(HT) h1c_segs(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step,
-                                                         int dom) {
+extern "C" __global__ void __launch_bounds__(HT, H1C_SMINB) h1c_segs(H1Tab* __restrict__ tabs, int ntab,
+                                                                    const int* __restrict__ step, int dom) {
   __shared__ __align__(16) uint8_t bf[HT * HB];
   if ((int)blockIdx.y < dom) {
     const int t = blockIdx.x * blockDim.x + threadIdx.x;
