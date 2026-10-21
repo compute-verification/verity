@@ -354,3 +354,19 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
                         window_root=WINDOWS[1], held=["W"])
     with pytest.raises(ValueError, match="held values"):
         register_served(prog, Q, [ServedTree.of(xs[1])], window_root=WINDOWS[1], held=["W"])
+
+
+def test_a_served_tree_cannot_hold_itself_across_windows():
+    """PRF-127: which values are held across windows is the verifier's (`held`), never the served tree's. A per-window tree
+    committed under the window-independent domain, as if held, is refused under the window's root, and the `--registered`
+    file names each port's domain as the verifier derived it, with no window root or held values of its own."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = G.Registered.commit(d, "W", TABLE)
+    unwindowed = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))])
+    with pytest.raises(ValueError, match="registered-value domain"):
+        register_served(prog, Q, [ServedTree.of(unwindowed), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    x = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=WINDOWS[0])
+    sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
+    assert set(sr.file) == {"format", "ports"}
+    assert all("held" not in e and "window_root" not in e for e in sr.ports.values())

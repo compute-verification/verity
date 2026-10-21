@@ -2843,6 +2843,17 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
         assert codes(b) == "reject"
         assert codes({**b, "params": {**b["params"], "held": ["D", "W"]}}) == ([] if again == plain["registered"]
                                                                                 else ["R7-domain", "R7-held"])
+    # the window root and held values are the verifier's, never the record's: a record whose window names another root
+    # or holds D gets the codes it gets without them, and one carrying them as keys of its own is refused by its form
+    claims = {"window_root": EARLIER_WROOT, "held": ["D", "W"]}
+    for b in (a, replay, moved):
+        claimed = copy.deepcopy(b)
+        claimed["record"]["window"] = {**claimed["record"]["window"], **claims}
+        assert codes(claimed) == codes(b)
+    for k, v in claims.items():
+        assert codes({**a, "record": {**rec, k: v}}) == ["keys"]
+        assert codes({**a, "record": {**rec, "registered": [{**rec["registered"][0], k: v}, rec["registered"][1]]}}) == [
+            "R7-registered"]
 
 
 def test_a_root_with_a_trailing_newline_is_refused(pieces):

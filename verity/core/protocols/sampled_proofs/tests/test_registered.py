@@ -537,6 +537,32 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
     assert port["domain"] == second.domain_id.hex()
 
 
+def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
+    """PRF-127: R7 reads the window's open root and the values held across windows from the verifier alone (the challenger's
+    signed open, and the window Program the period commits), never from the record. A record whose window names another
+    root or holds x gets the verdict it gets without them; a record or entry carrying them as keys of its own is refused
+    by its form."""
+    prog = _program()
+    d = P.program_digest(prog)
+    w = _registered(prog)
+    plain, kw = _windows(prog, [G.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
+    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    recs, _ = _windows(prog, xs, w)
+    claims = {"window_root": WINDOWS[0], "held": ["x", "W"]}
+    claimed = lambda rec: {**rec, "window": {**rec["window"], **claims}}  # noqa: E731
+    with pytest.raises(ValueError, match=r"registered values \['x'\].*`window_root`"):
+        R.check(claimed(plain[1]), prog, Q, **kw, log=plain[:1], held=["W"])
+    win = {"window_root": WINDOWS[1], "held": ["W"], "log": recs[:1]}
+    for rec in (recs[1], {**recs[1], "registered": [xs[0].entry(), w.entry()]},
+                {**recs[1], "registered": [G.Registered.commit(d, "x", X_ROWS).entry(), w.entry()]}):
+        assert R.check(claimed(rec), prog, Q, **kw, **win).codes == R.check(rec, prog, Q, **kw, **win).codes
+    assert R.check(recs[1], prog, Q, **kw, **win).ok
+    for k, v in claims.items():
+        assert R.check({**recs[1], k: v}, prog, Q, **kw, **win).codes == ("keys",)
+        entries = [{**xs[1].entry(), k: v}, w.entry()]
+        assert R.check({**recs[1], "registered": entries}, prog, Q, **kw, **win).codes == ("R7-registered",)
+
+
 def _prefixed(prefix: str) -> Program:
     """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
     carries its window's prefix."""
