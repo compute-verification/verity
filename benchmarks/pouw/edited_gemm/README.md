@@ -18,16 +18,13 @@ not saturation).
   1.22× / 2.07× / 3.29× over the no-fold GEMM, the R = 1 floor +22 %, latency-bound at the current occupancy (note §7).
 
 - **Binding.** The same-word R-round fold binds every committed word for every R under `key_ok_r11`, proved exhaustively
-  in FOLD's depth-R check (`benchmarks/pouw/edited_gemm/egemm_depthr_check.py` on branch `cursor/fold-dial-ea24`, which
-  lands against `main`). Even depth (R ≥ 2) and the fractional round need the KJ19 clause (`key_ok_r11`) added to
-  `egemm.cu`'s key derivation, which currently uses `key_ok_r9` — a claim for the coordinator.
+  in FOLD's depth-R check (`egemm_depthr_check.py`). Even depth (R ≥ 2) and the fractional round need the KJ19 clause
+  (`key_ok_r11`) added to `egemm.cu`'s key derivation, which currently uses `key_ok_r9` — a claim for the coordinator.
 
 ## Pending (verifier-replay at R > 1)
 
 For the receipt to stay verifier-replayable at R > 1 the CPU reference `egemm_ref.py` must mirror the same loop (one
 `for _ in range(EG_ROUNDS)` around the `xorin_step` call in `xin13_receipts`, and the two lines in `xin_receipts`,
-reading `EG_ROUNDS` from the environment). That mirror is **not** in this change: `egemm_ref.py` is independently broken
-on this branch — it imports `derive` from `benchmarks/pouw/e2e_slice/`, which no longer exists (its symbols moved to
-`harness/` / `stage_ovl/eref.py`) — so the kernel owner should land the one-line mirror together with the `derive` fix.
-At `EG_ROUNDS == 1` the receipt is unchanged, so the default served path is already replayable; the device gate
-(`device_ok` + `control_rejected`) covers correctness at R > 1 until the host reference is restored.
+reading `EG_ROUNDS` from the environment). That mirror is **not** in this change. At `EG_ROUNDS == 1` the receipt is
+unchanged, so the default served path is already replayable; the device gate (`device_ok` + `control_rejected`) covers
+correctness at R > 1 until the host reference mirrors it.
