@@ -6,6 +6,7 @@ import Proofs.Nci.Cover.Width
 import Proofs.Nci.Cover.Witness
 import Proofs.Nci.Cover.Bits
 import Proofs.Nci.Cover.AtMost
+import Proofs.Nci.Cover.Sum
 
 /-!
 # Proofs of the cover theorem
@@ -14,5 +15,6 @@ import Proofs.Nci.Cover.AtMost
 block pays for the products it finishes (`Charge`), the area bound (`Area`), its additive and width variants
 (`Additive`, `Width`), and the non-vacuity witness (`Witness`). `Bits` translates a declaration's gates to the bits the
 cover theorem counts: the block of a set of gates, what it computes and what it is handed. `AtMost` gives the per-block
-bounds on blocks of at most `s` gates, from the guarantees at the block's own size.
+bounds on blocks of at most `s` gates, from the guarantees at the block's own size, and `Sum` adds them over a division
+at the NCI policy's rate.
 -/
