@@ -28,7 +28,9 @@ memory classes having no line on either row). At `π*` the same fold costs far m
 22571 against 1066.7 (DS-100), 2069 against 125.3 (DC-90-ri) and 16936 against 1064.0 (DC-100-ri); on DS-90's
 `π*` an IMAD costs 1 and its 32 ALU 32, on DS-100's ⅔ and 42⅔. At `π*` it is a conjecture (`shape.conjectures`), which
 `benchmarks/pouw/tests/test_lean_headline_dc.py` tests on ♭'s fold and that one, and in which every fold route prices
-each class it issues above 0.
+each class it issues above 0. It is open at DS-90's, DS-100's and DC-100-ri's `π*`. At DC-90-ri's it is false for
+counted, unbuilt memory round-trip folds (RT4-SHEET-13, -14; `Sm90MeasuredHeadline`) until the classes no run timed
+beside an IGMMA have measured joint-issue lines.
 
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
 `√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2). The proof
@@ -82,7 +84,7 @@ Per device:
   carries SHFL's joint issue lines there; RT4-SHEET-9's unlisted instructions count in it. Without
   ffill in ♭, `setup`'s floor program on DC-90-ri writes all but 0.047% of the words on the IGMMA, those on the
   design's dp4a baseline, and `Sm90Measured.flat` is that floor, its shares exact (`B_♭` 191.31 a unit, binding on
-  `JPA90_0`; the machine model's reading is 1.820% at `q = ½`). It is over 1%;
+  `JPA90_0`; the machine model's reading is 1.833% at `q = ½`). It is over 1%;
   crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
   instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
   0.858% on DS-90, 0.605% on DC-90-ri. DS-90's `f_max` (1980 MHz) is EPS1 DC's measured f_max at default clocks; the
@@ -211,8 +213,16 @@ chains) of the credit `T_cred = B_♭/f_max`. The folded branch binds, at exactl
 unfolded gives 1.8363268%. ATOME32 is priced at the measured issue slot alone, since no run has timed ATOM.E
 (RT4-SHEET-12). FOLD-OPT's premise has no slack; the reading reaches its 3% target with every fold route 1.67%
 cheaper. FOLD-OPT at `π*` is false for a memory round trip's XOR: an ATOM.E.XOR and a load back, counted but not
-built, fold a word at 0.5038 `φ*` (RT4-SHEET-13), so the statement says nothing about a run that folds that way;
-that run's most-loaded row still holds the conclusion (+0.072 on issue).
+built, fold a word at 0.5038 `φ*` (RT4-SHEET-13), so the statement says nothing about a run that folds that way.
+With only the XOR moved, the run's most-loaded row still holds the conclusion (+0.072 on issue). Mixed with
+IMAD.WIDE it doesn't (RT4-SHEET-14): IMAD.WIDE's low word does li's multiply, and no census class prices it, so it
+counts in `UNLISTED`, 0.0036 at `π*` against IMAD's 0.9788. A counted, unbuilt fold that moves part of li's XORs to
+the round trip and part of its multiplies to IMAD.WIDE prices at 0.86 `φ*` with ptxas's forced overhead and 0.72 `φ*`
+in hand-written SASS, and every model row of its run is under `(1 − 1.9075%)·B_♭`: at most 0.9062·B_♭ and 0.8123·B_♭.
+The statement says nothing about such runs, and the machine model's rows don't hold its conclusion for them. The
+cause is the classes no run timed beside an IGMMA (`UNLISTED`, ATOME32 and the other issue-only classes): they carry
+no joint-issue line, and `π*` is 96.7% JI90_0. The gap stands until their measured JI90 lines land. DS-90, DS-100
+and DC-100-ri price the catch-all at an IMAD's cost, so neither move gains there.
 `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Two of
 them would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
 H200's probes gives about 1.64% in the machine model at #2699's earlier design, and DMMA, which at the scalar
