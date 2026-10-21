@@ -24,11 +24,12 @@ each connection is one session, relayed on a connection of its own to the audito
   for the live session the request names (by its coin tree's root, `Level0.nameOf`). A `Commit`'s roots leave only as
   roots drawn for its own session, each at its table's `m` (`Level0.commit`). Every level 0 drawn for a session, bound
   or not, is gone when it ends (`Level0.Registry.close`).
-* `Finish` leaves only once the schedule's last opening has (`State.request`). What it carries is `Firewall::finish`'s
-  (ZKFIN's), relayed as it is. Its proof files are the loop's own finish's, a connection to the frames port
+* `Finish` leaves only once the schedule's last opening has (`State.request`), relayed as it is. The proof files the
+  prover sends before it are the loop's own finish's, a connection to the frames port
   (`Finish.serveLoop`): it reads each table's level 0 from the loop's `Level0` of the table's root, and draws each rep's
   salts for levels ≥ 1 itself, which the prover's trees then take.
-* Every other frame is relayed as it is. For now that is `Proof`, which `Firewall::finish` decides.
+* Every other frame is relayed as it is. For now that is `Proof`, carrying a rep's proof file as the finish computed it;
+  the prover sends none where a check failed or a constraint fails on the pads.
 
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
 coin after a refused one reaches the prover. `kind` and `State` are pure; `cmd` only

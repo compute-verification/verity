@@ -826,13 +826,13 @@ C3_SPARSE = (1, 12, 1, 0)
 
 
 def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
-        coins: bool = False, verify: bool = False) -> str:
+        coins: bool = False, verify: bool = False, claims: int = 8) -> str:
     """`statement` (or `verify` on a session) at the inner statement's inner shape with the RecSparse shape ``sparse``, on an
     empty outer circuit, which candidate 3's inner checks precede: its refusal at setup."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     inner = tmp_path / "inner.json"
-    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": 8, "regions": 3,
+    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": claims, "regions": 3,
                                  **({"sparse": list(sparse)} if sparse else {})}))
     session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
     if coins:
@@ -895,3 +895,22 @@ def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
     assert _c3(tmp_path, C3_SPARSE, circuit=tmp_path / "no-unit.txt") == (
         "setup: rec-coins: the inner session: the inner statement: not one unit range of vus_per_block x units_per_vu (a "
         "power of two) units")
+
+
+def _off_files(m: int, claims: int) -> str:
+    return (f"setup: rec-inner: the verifier's inner shape (m {m}, k_log 22, regions 3, claims {claims}) is not the inner "
+            "statement's (m 27, k_log 22, regions 3, claims 8), which its files (--rec-inner-circuit, --rec-inner-public, "
+            "--rec-inner-partition) set up")
+
+
+def test_the_verifiers_inner_shape_is_the_inner_statements_where_it_holds_its_files(built, tmp_path):
+    """`RecSetup.checkShape`, at every recursive session's setup that holds the inner statement's files, dense or not: the
+    inner shape's `m`, `k_log`, regions and claims are the ones the files set the inner statement up at (two link points,
+    so claims 8 over 3 regions), the shape link `SchedMatches` at the dense form reads. A dense shape off the files' `m`
+    is refused, as is one whose claims are off, which candidate 3's own check on the statement (`checkInnerStmt`, the
+    `m`, `k_log` and regions) passes; a dense shape without the files has nothing to compare."""
+    assert _c3(tmp_path, None) == NOT_A_CIRCUIT
+    assert _c3(tmp_path, None, m=26) == _off_files(26, 8)
+    assert _c3(tmp_path, None, m=26, verify=True) == _off_files(26, 8)
+    assert _c3(tmp_path, C3_SPARSE, claims=10) == _off_files(27, 10)
+    assert _c3(tmp_path, None, m=26, files=False) == NOT_A_CIRCUIT

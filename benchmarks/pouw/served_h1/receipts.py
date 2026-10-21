@@ -1,5 +1,3 @@
-# Verbatim copy of compute accounting's benchmarks/pouw/served_h1/receipts.py at origin/cursor/serve-h1-ea24 8d04cd79db, the
-# H1 + fx1 reference the dither kernels are gated against (not edited; CA's file stays the source).
 """`eps1-sm120-h1fx1`'s unit (`pouw.circuit.h1tile`) as a side computation on a served int8 call, vectorized over the call's
 r × c tiles in torch, bit for bit `h1tile.reference`'s receipt.
 
@@ -253,18 +251,22 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
 
 
 def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int,
-              gated: bool = True) -> tuple[list[int], list[int]]:
-    """`h1tile.reference` on unit u of the call: (z, receipt); `gated=False`, a dead tile's receipt as its noise gives it."""
+              gated=None) -> tuple[list[int], list[int]]:
+    """`h1tile.reference` on unit u of the call: (z, receipt); `gated`, the tile's 32 admit bits, is `PouwH1Tile_v4`'s
+    input (a dead tile, every bit 0, has the zero receipt), None the ungated unit (a dead tile's receipt as its noise gives
+    it)."""
     i, j = call.units[u]
     a = (call.a[R * i:R * i + R].to(torch.int64).cpu() & 0xFF).tolist()
     b = (call.b[C_ * j:C_ * j + C_].to(torch.int64).cpu() & 0xFF).tolist()
-    return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=gated)
+    bits = None if gated is None else [int(x) for x in np.asarray(gated, dtype=np.uint8)]
+    return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=bits)
 
 
 def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
                    chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
-    """The call's receipts under its admit bits: a live unit's (a selected slot among its rows) is `h1tile`'s, a dead
-    unit's the canonical empty receipt (zero words) with no noise derived; and the live units."""
+    """The call's receipts under its admit bits, `PouwH1Tile_v4`'s (a tile's live bit is the OR of its 32 rows' admit
+    bits, the bits the tally reads): a live unit's is `h1tile`'s, whatever its rows' bytes, a dead unit's the canonical
+    empty receipt (zero words) with no noise derived; and the live units."""
     live = [ri * (call.b.shape[0] // C_) + cj for ri in range(call.a.shape[0] // R)
             if bool(np.asarray(admit[R * ri:R * ri + R]).any()) for cj in range(call.b.shape[0] // C_)]
     out = np.zeros((len(call.units), 2 * layout(call.a.shape[1]).sets), dtype=np.uint32)
@@ -274,12 +276,9 @@ def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, roo
 
 
 def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
-    """Unit u's receipt under the call's admit bits: `h1tile.reference`'s when a slot of its rows is selected, else zero
-    words (which `PouwH1Tile_v2` gives a tile of all-zero rows, the canonical empty rows)."""
+    """Unit u's receipt under the call's admit bits: `PouwH1Tile_v4`'s on its tile's 32 bits (`reference(gated=...)`)."""
     i, _ = call.units[u]
-    if bool(np.asarray(admit[R * i:R * i + R]).any()):
-        return reference(call, salt, base, root_a, root_b, u)[1]
-    return [0] * (2 * layout(call.a.shape[1]).sets)
+    return reference(call, salt, base, root_a, root_b, u, gated=np.asarray(admit)[R * i:R * i + R])[1]
 
 
 __all__ = ["Call", "Cubin", "LANES", "call_receipts", "gated_receipts", "gated_reference", "layout", "noise_blocks",
