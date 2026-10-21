@@ -106,6 +106,10 @@ import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishStop
+import Proofs.Flock.Claims.ZK.FinishStopAt
+import Proofs.Flock.Claims.ZK.FinishSwSrc
+import Proofs.Flock.Claims.ZK.FinishRows
+import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.HelloLean
 import Proofs.Flock.Claims.ZK.SessionLean
 
@@ -516,7 +520,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
   returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
   same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
-  are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
+  below `h_ab` are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
   and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
   firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
@@ -528,6 +532,19 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
   reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
+* `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
+  seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
+  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
+* `FinishSwSrc`: the switched prover's rep source, `tabSrcCut` of the switched cut at the workers' values
+  (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
+  `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
+  (**`Masked.swCutE_masked_of_rowsAt`**).
+* `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
+  the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
+  rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
+* `FinishZc`: the masked zerocheck's and lincheck's proofs. Answered by `asksCut` with room for their asks, the cut's
+  zerocheck and lincheck return the masked values `mk` at the layout's indices as their proofs
+  (**`Claims.ZKServer.zerocheckCut_proof`**, **`Claims.ZKServer.lincheckCut_proof`**).
 * `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
   `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
   2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
