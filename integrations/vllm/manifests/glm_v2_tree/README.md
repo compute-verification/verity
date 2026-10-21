@@ -163,6 +163,10 @@ Qwen and Llama snapshots). r20261021-040920-b9af hashed every file of the pin ag
 
 The Commits' row dirs stay at their paths on eu's `/workspace`, which the Commit records and its replay reads (916 GiB free
 at DeepSeek-V4-Pro's start). `/workspace/extra` (2 TiB, infra 01:55Z 21 Oct) takes B32's legs and the room the B8 Commits need.
+B32's legs run with `ROW_ON=/workspace/extra gpu_batch.sh a vy-glm53-eu <B32>`: `match_gpu.sh` binds
+`/workspace/extra/circuits/glm-v2/rows/<B32>` at the row's path (`model.sh` `row_on`, an absent or empty row dir only), and the
+capture waits for its 1100 GiB on the row dir's own disk. A bound row's Commit on eu needs one fix first: `commit.sh` hard-links
+the row's records into a temporary dir under `$SW` (`_rowmeta`), which is on another disk.
 
 | row | `BUILD_RUN` | `MATCH_RUN` | Commit | attempt | result |
 |---|---|---|---|---|---|
@@ -226,7 +230,7 @@ worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 2. Window A (`gpu_batch.sh a [NODE] [ROW]`, NODE vy-glm53-eu by default, vy-glm53-h8 or any vy-glm53-* 8x H200 node): the four
    rows' Match GPU legs (`match_gpu.sh`), in value order (B1 greedy, B8 greedy, B8 stochastic, B32) so a short window lands the
    most. On a preemptible node an evicted leg reruns with `gpu_batch.sh a NODE ROW`, which moves the evicted `match/` aside (a
-   `match/` whose legs ended is refused). A row's capture also waits for its room on `/workspace` (`DISK_NEED_GIB`, from the v1
+   `match/` whose legs ended is refused). A row's capture also waits for its room on the row dir's disk (`DISK_NEED_GIB`, from the v1
    captures: B1 104 GiB, B8 greedy 312, B8 stochastic 341, B32 about 1100 scaled), checked once the GPUs are free; eu had 477
    GiB free at window A's start, which holds B1's and B8 greedy's, so the later rows' legs start once room is made. Each leg's
    engines read `gpu_memory_utilization` back from their `vllm_config`, the driver and each rank (the no-observer control: the

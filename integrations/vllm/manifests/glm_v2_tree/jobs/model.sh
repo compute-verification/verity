@@ -5,7 +5,7 @@
 # Build records and the capture registers: DeepSeek-V4's mHC broadcast), DERIVE_GB (a request derive's measured peak, where
 # `row_records.derive_bytes` plans too little), CENSUS (VERITY_BUILD_CENSUS) and the defaults of REF and SW (its v2 tree and
 # row dirs).  `ckpt_bind` serves
-# LOCAL_CK at FS_CK when it is verified; `stage_meta PY` puts the pin's non-shard files at SNAP from the hub, each checked against
+# LOCAL_CK at FS_CK when it is verified; `row_on ROOT` keeps the row dir on another disk at its path; `stage_meta PY` puts the pin's non-shard files at SNAP from the hub, each checked against
 # checkpoints.json's sha256.
 case ${ROW:?ROW} in
   glm53__*) ROLE=GLM53 REPO=zai-org/GLM-5.3 REV=aca966e4e02791568aa6a4ced368624b3d897f42 WHAT=GLM-5.3
@@ -42,6 +42,13 @@ ckpt_bind() {
   if mountpoint -q "$FS_CK"; then echo "checkpoint: local verified copy bound over $FS_CK"
   elif [ -L "$FS_CK" ]; then echo "checkpoint: $FS_CK links the local verified copy $(readlink "$FS_CK")"
   else echo "checkpoint: $FS_CK read over the shared fs"; fi
+}
+
+row_on() {  # row_on ROOT: the row dir kept on another disk, ROOT/circuits/$V2/rows/$ROW, bound at $SW/$ROW, the path every job
+  local src=$1/circuits/$V2/rows/$ROW d=$SW/$ROW  # and the Commit's replay read; binds an absent or empty row dir only
+  if mountpoint -q "$d"; then echo "row dir: $(findmnt -no SOURCE "$d") bound at $d"; return 0; fi
+  [ -z "$(ls -A "$d" 2>/dev/null)" ] || { echo "row dir: $d already holds files, so ROW_ON=$1 cannot bind it"; return 2; }
+  mkdir -p "$src" "$d" && sudo -n mount --bind "$src" "$d" && echo "row dir: $src bound at $d"
 }
 
 stage_meta() {  # stage_meta PY: the pin's non-shard files at SNAP (none of the shards) and META_EXTRA's, refused unless each is its sha256

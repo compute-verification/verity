@@ -14,7 +14,8 @@
 # post_load_tensors applies False), so nothing is copied to the node before window A.  DeepSeek-V4-Pro's do (its mHC broadcast,
 # model.sh POST_LOAD): its Build of record goes to the node before window A (copy_rowdir.sh with build_record.sh's rowdir.sha256),
 # and match_gpu.sh refuses the legs without it.
-# env: [MODEL=glm53], [LOG=/tmp/$MODEL-v2-gpu-batch.log], [RESEARCH="uv run --frozen --no-sync research"].
+# env: [MODEL=glm53], [LOG=/tmp/$MODEL-v2-gpu-batch.log], [RESEARCH="uv run --frozen --no-sync research"],
+#      [ROW_ON=ROOT: window A's row dirs kept on another disk at their paths (match_gpu.sh)].
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 read -r -a R <<<"${RESEARCH:-uv run --frozen --no-sync research}"
@@ -55,7 +56,7 @@ case "${1:-}" in
     node "${2:-$EU}"
     [ -z "${3:-}" ] || { v2_row "$3"; ROWS=("$3"); }
     for row in "${ROWS[@]}"; do
-      sub "match-gpu $row" --mem-gb 400 --timeout 3h -- env ROW="$row" bash "$J/match_gpu.sh"
+      sub "match-gpu $row" --mem-gb 400 --timeout 3h -- env ROW="$row" ${ROW_ON:+ROW_ON="$ROW_ON"} bash "$J/match_gpu.sh"
     done
     ;;
   t1r)
