@@ -34,12 +34,16 @@ memory classes having no line on either row). At `π*` the same fold costs far m
 (DC-100-ri); on DS-90's
 `π*` an IMAD costs 1 and its 32 ALU 32, on DS-100's ⅔ and 42⅔. At `π*` it is a conjecture (`shape.conjectures`), which
 `benchmarks/pouw/tests/test_lean_headline_dc.py` tests on ♭'s fold and that one, and in which every fold route prices
-each class it issues above 0 but at the twin's. It is open at all five `π*`. On DC-90-ri the counted, unbuilt memory
-round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which undercut `φ*` while their classes had no joint-issue
-line, price at 1.0245 `φ*` or more since the H200 timed those classes beside the IGMMA (`Sm90MeasuredHeadline`). The
-twin's `π*` has no weight on the issue row, so the classes priced on it alone (ISETP and the untimed stores STS32,
-STS128, STG32 and STG128, which CP_SEG4, CP_SEG4U, the CP_ATS loops and CP_XT issue) are free there, and those mixes
-were priced at DC-90-ri's `π*` only: FOLD-OPT at the twin's `π*` is the weaker conjecture.
+each class it issues above 0 but at the twin's. It is open at the other four `π*`. On DC-90-ri the counted, unbuilt
+memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which undercut `φ*` while their classes had no
+joint-issue line, price at 1.0245 `φ*` or more since the H200 timed those classes beside the IGMMA
+(`Sm90MeasuredHeadline`). FOLD-OPT at the twin's `π*` doesn't follow from FOLD-OPT at DC-90-ri's, and one of those folds
+breaks it. The twin's `π*` has no weight on the issue row and 0.33 on JPA90_0, which prices only ALU and the IGMMA: the
+classes priced on the issue row alone (ISETP and the untimed stores STS32, STS128, STG32 and STG128, which CP_SEG4,
+CP_SEG4U, the CP_ATS loops and CP_XT issue) are free there, and an ALU costs 2.000000001 IMADs, ATOME32s or UNLISTEDs.
+So RT4-SHEET-13's k = 2 round trip on CP_RED8 (LI's LOP3s as one ATOM.E.XOR and one LD.E back) prices at
+`φ*·(1 − 3.32·10⁻¹⁰)` there (HB-PROOF's M1). A run folding by it doesn't beat the twin's bound, but the twin is silent
+on it (`Sm90MeasuredI3Headline`).
 
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
 `√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2). The proof
@@ -284,10 +288,17 @@ nothing else, the case those heads break. ¾ is the least round floor at which t
 `q > 0.6347`, and the same 0.805% at every `q` from about 0.7495 up (sm_120's measured headline reads `9/8`, the
 machine model `1.22`). At ¾ the lane route no longer writes words at the IGMMA's rate on JI90_0, so `π*` puts 0.33 on
 ♭'s facet JPA90_0 and ♭'s fold is `φ*`, the price of CP_RED8 and the generic CP_RED8; `w*` is still honest's IGMMA.
-`B_♭`, ♭ and the menu are `Sm90MeasuredHeadline`'s. FOLD-OPT at this `π*` is open and weaker than at DC-90-ri's: `π*`
-has no issue weight, so ISETP and the untimed stores (STS32, STS128, STG32, STG128) are free at it, and the counted
-round-trip folds with IMAD.WIDE (RT4-SHEET-13, -14) are unpriced here. FOLD-OPT's premise has no slack; the reading's
-against 1% is 0.29%. Cite it with its premise: DC-90-ri 0.805% under (I3) at ¾; 1.53% at the proved ½ floor. -/
+`B_♭`, ♭ and the menu are `Sm90MeasuredHeadline`'s. FOLD-OPT at this `π*` doesn't follow from FOLD-OPT at DC-90-ri's,
+and one counted fold breaks it. `π*` has no issue weight, so ISETP and the untimed stores (STS32, STS128, STG32, STG128)
+are free at it, and its JPA90_0 weight prices only ALU and the IGMMA, so an ALU costs 2.000000001 IMADs, ATOME32s or
+UNLISTEDs (an IMAD.WIDE costs exactly an IMAD, as at DC-90-ri's `π*`). RT4-SHEET-13's k = 2 round trip on CP_RED8 (LI's
+LOP3s as one ATOM.E.XOR and one LD.E back; counted, not built) prices at `φ*·(1 − 3.32·10⁻¹⁰)` (HB-PROOF's M1), so this
+statement is silent on a run folding by it. That run doesn't beat 0.805%: its most-loaded row, JI90_0, carries 1.325
+`B_♭` against the line at 0.992 `B_♭`; k = 3 prices at 1.32 `φ*`. No certificate gives FOLD-OPT a 1% margin over
+RT4-SHEET-13's and -14's folds on CP_RED8 and keeps this reading under 1%: with that margin the least bound is 1.030%,
+and the most margin under 1% is 0.87% (r20261021-144920-540e). FOLD-OPT is asked with no slack (`μ_f = 0`); under 1%
+the reading could take `μ_f` up to 0.29%. Cite it with its premise: DC-90-ri 0.805% under (I3) at ¾; 1.53% at the
+proved ½ floor. -/
 def Sm90MeasuredI3Headline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δfork δzk : ℝ),
