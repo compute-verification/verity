@@ -27,7 +27,9 @@
 // (with H1C_MK) levels 0 to 6 in the leaves' launch, each block the subtree over its 128 leaves after them, so only
 // the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
 // room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
-// sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).
+// sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
+// block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
+// twice the SMs runs its levels' serial chain in two waves.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -51,6 +53,9 @@
 #endif
 #ifndef H1C_LMINB
 #define H1C_LMINB 1
+#endif
+#ifndef H1C_LT
+#define H1C_LT 256
 #endif
 static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK), "H1C_LVF, H1C_DOMSEG and H1C_MK are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
@@ -1073,7 +1078,8 @@ extern "C" __global__ void __launch_bounds__(HT) h1c_level(const H1Tab* __restri
 
 // H1C_LVF = L >= 0: a table's levels from L up in one block (LT threads), a barrier between levels, so the levels whose
 // nodes a block covers cost one launch rather than one each
-constexpr int LT = 256;
+constexpr int LT = H1C_LT;
+static_assert(LT >= 32 && LT <= 1024 && LT % 32 == 0, "H1C_LT: whole warps, at most 1024 threads");
 extern "C" __global__ void __launch_bounds__(LT) h1c_levels(const H1Tab* __restrict__ tabs, int ntab, int lv0) {
   __shared__ __align__(16) uint8_t bf[LT * HB];
   const H1Tab& T = tabs[blockIdx.x];
