@@ -100,11 +100,11 @@ for b in "$D"/commit/replay_bundle_p*_rank*; do
 done
 M=$(mktemp -d "$SW/.rowmeta.XXXXXX")
 (cd "$D" && find . -type f -not -path './build/*' -not -path './aot_trace/*' -not -path './match/capture/*' -not -path './match/control/*' \
-   -not -path './match/fold_match.failed-*/*' -not -path './commit/replay_bundle_*' -not -path './commit.failed-*/*' -not -name manifest.json \
+   -not -path './match.*/*' -not -path './match/fold_match.failed-*/*' -not -path './commit/replay_bundle_*' -not -path './commit.failed-*/*' -not -name manifest.json \
    -not -regex './match/fold_match/rank[0-9]*/\(instances\.jsonl\|accesses\.jsonl\.gz\|program\.json\)' -print0 | xargs -0 cp --parents -l -t "$M")
 echo "rowmeta: $(find "$M" -type f | wc -l) files, $(du -sh --apparent-size "$M" | cut -f1)"
 art=$("$RB" data put --kind vllm-row-meta/v1 --tree "$M" --preserve \
-      --meta "{\"row\": \"$ROW\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"attempt\": $ATTEMPT, \"tree\": \"$REF@$TREE_SHA\", \"what\": \"the row dir's records less the Build, the capture planes, the folds' instances and the replay bundles\"}" \
+      --meta "{\"row\": \"$ROW\", \"commit_run\": \"$RESEARCH_RUN_ID\", \"attempt\": $ATTEMPT, \"tree\": \"$REF@$TREE_SHA\", \"what\": \"the row dir's records less the Build, the capture planes, a moved-aside Match, the folds' instances and the replay bundles\"}" \
       2>>"$OUT/bundles_put.log" | grep -oE 'art:[0-9a-f]{64}' | tail -1)
 rm -rf "$M"
 [ -n "$art" ] || { echo "rowmeta: research data put failed (bundles_put.log)"; prc=5; }
