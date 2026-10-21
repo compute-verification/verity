@@ -1,10 +1,16 @@
 """H1's z/y records checked in the tile unit (RT4-INT-33): the served `verity_int8::scaled_mm_zy` commits each R × C
-unit's record (#3053's z table, kernels' #3018), and `PouwH1TileZy` reads its unit's record as a registered input and proves
-both halves, so `Accounting.Served.ValueChecked`'s product and dequant are a proof's and not the fused kernel's word.
+unit's record (#3053's z table, kernels' #3018), and `PouwH1TileZy` reads its unit's record as an input and checks both
+halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by the unit, under Served's checked-record form
+(pending), rather than taken on the fused kernel's word.
 
 * **The record** of a unit is its exact s32 z_u = A_u B_uᵀ over the whole K, its cells row-major, then
   y_u = dq(z_u, s_a, s_w) in bf16, row-major, little-endian (`int8_exact.zy_records`; 6,144 bytes at the served 32 × 32).
-  As the unit's ``zy`` it is one bit row of 48 R C bits, `RECORD`'s leaves: z's R C words, then y's.
+  As the unit's ``zy`` it is one bit row of 48 R C bits, `RECORD`'s leaves: z's R C words, then y's. It is a run input,
+  committed in its call's z table under round s's root before round s's coin, not a registered value
+  in the declared circuit's sense, which is committed before coin 0.
+* **Types.** A record's z words are s32 (`S32`, two's complement, [-2^31, 2^31 - 1]) and a row's codes s8 (`S8`): an
+  extractor that read z as u32 would see z mod 2^32, and the product of a negative dot would fail. The circuit's types are
+  bits either way; the names say how each word reads.
 * **The dequant** is the served order, `int8_exact.dequantize` and the fused kernel's epilogue:
   y = RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), the activation scale first, with no bias add. PoUW's `NcpDequant` (and
   `reference.dequant`) is another function: bf16(RN32(RN32(s · t) · RN32(z))) + bias multiplies the scales together first,
@@ -19,11 +25,14 @@ both halves, so `Accounting.Served.ValueChecked`'s product and dequant are a pro
 * **The unit** `PouwH1TileZy_v1{TILE}` is ``(a: R rows, b: C rows, zy, salt, position, roots) -> {receipt, ok}``: TILE, the
   H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid), on the rows' codes gives z and the receipt; `PouwZyCheck_v1`
   holds the record to them, ``ok`` 1 exactly when every cell's record z is z and its record y is `PouwZyDequant_v2` of z at
-  its row's s_a and its column's s_w. z is no output: the record, a registered input, is where the served values are
-  committed, so the unit returns the receipt and one bit.
-* **ok** is read through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`),
-  so a proof the verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant
-  has no accepted proof.
+  its row's s_a and its column's s_w. Every cell is dequantized, a padded row's too: an empty slot's y is dq(0, +0, s_w),
+  which is +0 only for a finite positive s_w (0x8000 for a negative one, 0x7FFF for an infinite or NaN one), so no cell's
+  y is taken to be zero. The z and y the unit computes are inner words: the served values are the record's, committed
+  before the coin, and a proof's outputs are committed after it, so the unit returns the receipt and one bit.
+* **ok** is a check word, no served value (no ``outZ``, ``outY`` or ``served`` role; Served's ``check`` class, pending), read
+  through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`), so a proof the
+  verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
+  accepted proof.
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), and `reference` the unit on
 words, ``(receipt, ok)``.
@@ -47,20 +56,20 @@ from verity.ml.circuits.types import Array, Record, Value
 from . import h1tile as H
 
 BIT = BL.BIT
-I8, U32, BF16 = Array(8, BIT), Array(32, BIT), Array(16, BIT)
-F32 = U32
+#: an s8 code, an s32 product, an f32 scale and a bf16 output, each its bits
+S8, S32, F32, BF16 = Array(8, BIT), Array(32, BIT), Array(32, BIT), Array(16, BIT)
 M32 = (1 << 32) - 1
 
 
 def ROW(k: int) -> Record:
-    """An A or B row of the unit: K int8 codes, then the row's f32 scale (8 K + 32 bits, the codes' bytes then the scale's,
+    """An A or B row of the unit: K s8 codes, then the row's f32 scale (8 K + 32 bits, the codes' bytes then the scale's,
     little-endian)."""
-    return Record(("codes", Array(int(k), I8)), ("scale", F32))
+    return Record(("codes", Array(int(k), S8)), ("scale", F32))
 
 
 def RECORD(r: int, c: int) -> Record:
     """A unit's z/y record: its R C cells' s32 z, row-major, then their bf16 y (48 R C bits)."""
-    return Record(("z", Array(int(r) * int(c), U32)), ("y", Array(int(r) * int(c), BF16)))
+    return Record(("z", Array(int(r) * int(c), S32)), ("y", Array(int(r) * int(c), BF16)))
 
 
 # -- the dequant --------------------------------------------------------------------------------------------------------------
@@ -79,7 +88,7 @@ def PouwZyDequantWord(B, S, z, sa, sw):
     return B.call(P.F2fpBf16, B.call(F.F32MulV2, B.call(F.F32MulV2, B.call(P.S32ToF32Rn, z), sa), sw))
 
 
-@composite("PouwZyDequant", 2, [], lambda S: ((("z", U32), ("sa", F32), ("sw", F32)), BF16),
+@composite("PouwZyDequant", 2, [], lambda S: ((("z", S32), ("sa", F32), ("sw", F32)), BF16),
            conformance="protocol-defined: PouwZyDequant_v1 on bits")
 def PouwZyDequant(B, S, z, sa, sw):
     """`F2fpBf16_v2(F32Mul_v4(F32Mul_v4(S32ToF32Rn_v2(z), sa), sw))`: `PouwZyDequant_v1` on bits, the epilogue of
@@ -102,7 +111,7 @@ PouwZyCellWord = PrimitiveDefinition("PouwZyCell", 1, (("zr", Value(32)), ("yr",
 PouwZyCell = definition("PouwZyCell", 2,
                         lambda C_, zr, yr, z, y: [and_reduce(C_, [NOT(p ^ q) for p, q in zip(list(zr) + list(yr),
                                                                                              list(z) + list(y))])],
-                        (("zr", U32), ("yr", BF16), ("z", U32), ("y", BF16)), BIT, word=PouwZyCellWord,
+                        (("zr", S32), ("yr", BF16), ("z", S32), ("y", BF16)), BIT, word=PouwZyCellWord,
                         conformance="protocol-defined", doc="zr = z and yr = y, on bits: PouwZyCell_v1")
 PouwAndBitWord = PrimitiveDefinition("PouwAndBit", 1, (("a", Value(1)), ("b", Value(1))), Value(1),
                                      lambda a, b: a & b & 1, conformance="protocol-defined")
@@ -112,7 +121,7 @@ PouwAndBit = definition("PouwAndBit", 2, lambda C_, a, b: [C_.AND(a[0], b[0])], 
 
 def _check_signature(S: Any) -> tuple:
     n = S.R * S.C
-    return (("zy", RECORD(S.R, S.C)), ("z", Array(n, U32)), ("sa", Array(S.R, F32)), ("sw", Array(S.C, F32))), BIT
+    return (("zy", RECORD(S.R, S.C)), ("z", Array(n, S32)), ("sa", Array(S.R, F32)), ("sw", Array(S.C, F32))), BIT
 
 
 def _refuse_rc(b: dict) -> str | None:
@@ -206,9 +215,9 @@ def _sx(v: int, bits: int) -> int:
 
 def records(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int],
             sw: Sequence[int]) -> tuple[list[int], list[int]]:
-    """A unit's honest record on words, what `scaled_mm_zy` writes for its rows: z, each cell's exact A Bᵀ (s32, as u32
-    encodings), and y, each cell's `dequant` at its row's s_a and its column's s_w (bf16 encodings), both row-major. ``a``
-    and ``b`` are int8 code rows (encodings), ``sa`` and ``sw`` f32 encodings."""
+    """A unit's honest record on words, what `scaled_mm_zy` writes for its rows: z, each cell's exact A Bᵀ (s32, its
+    two's-complement word), and y, each cell's `dequant` at its row's s_a and its column's s_w (bf16 encodings), both
+    row-major. ``a`` and ``b`` are s8 code rows (encodings), ``sa`` and ``sw`` f32 encodings."""
     z = [sum(_sx(x, 8) * _sx(w, 8) for x, w in zip(ai, bj)) & M32 for ai in a for bj in b]
     return z, [dequant(z[i * len(b) + j], sa[i], sw[j]) for i in range(len(a)) for j in range(len(b))]
 
@@ -223,11 +232,11 @@ def check(zr: Sequence[int], yr: Sequence[int], z: Sequence[int], sa: Sequence[i
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
               zy: tuple[Sequence[int], Sequence[int]], salt: bytes, position: int, roots: tuple[bytes, bytes],
               stream: bool = False) -> tuple[list[int], int]:
-    """The unit on words: (receipt, ok) for A's rows and B's rows (int8 encodings), their scales (f32 encodings), the record
-    ``zy`` (z u32 encodings, y bf16 encodings, row-major), the salt, position and roots; ``stream``: over v3 (`h1tile`)."""
+    """The unit on words: (receipt, ok) for A's rows and B's rows (s8 encodings), their scales (f32 encodings), the record
+    ``zy`` (z s32 words, y bf16 encodings, row-major), the salt, position and roots; ``stream``: over v3 (`h1tile`)."""
     z, receipt = H.reference(a, b, salt, position, roots, stream=stream)
     return receipt, check(zy[0], zy[1], z, sa, sw)
 
 
-__all__ = ["BF16", "F32", "PouwAndBit", "PouwH1TileZy", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord",
+__all__ = ["BF16", "F32", "S32", "S8", "PouwAndBit", "PouwH1TileZy", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord",
            "RECORD", "ROW", "TILES", "check", "dequant", "records", "reference", "unit", "zy_cell"]

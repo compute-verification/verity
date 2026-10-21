@@ -275,7 +275,7 @@ def plus_one(words: np.ndarray, bits: int = 32) -> np.ndarray:
 
 
 def _with_z(priv: dict, com: dict, u: int, z: list[int]) -> np.ndarray:
-    """Unit u's record with z ``z`` (u32 encodings) and y its dequant at the unit's scales."""
+    """Unit u's record with z ``z`` (s32 words) and y its dequant at the unit's scales."""
     _a, _b, sa, sw = _rows(priv, com, u)
     z = np.array([v - (1 << 32) if v >> 31 else v for v in (int(x) & U.M32 for x in z)], np.int64).reshape(R, C)
     return U.record_words(z, U.dequant(z, np.asarray(sa)[:, None], np.asarray(sw)[None, :]))

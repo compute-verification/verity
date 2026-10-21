@@ -315,13 +315,13 @@ def test_a_unit_whose_shared_parameters_differ_by_k_is_refused():
 
 
 def _z_alone(r: int, c: int) -> Record:
-    return Record(("z", Array(r * c, Z.U32)))
+    return Record(("z", Array(r * c, Z.S32)))
 
 
 @pytest.mark.parametrize("name,sig,why", [
     ("H1WindowTestZAlone", lambda S: _tile_sig(S, record=_z_alone), "a record of z alone leaves the served y unproved"),
     ("H1WindowTestYAlone", lambda S: _tile_sig(S, record=lambda r, c: Record(("y", Array(r * c, Z.BF16)))), "512-bit record"),
-    ("H1WindowTestCodesOnly", lambda S: _tile_sig(S, row=lambda k: Array(k, Z.I8)), "and the row's f32 scale"),
+    ("H1WindowTestCodesOnly", lambda S: _tile_sig(S, row=lambda k: Array(k, Z.S8)), "and the row's f32 scale"),
     ("H1WindowTestZOut", lambda S: _tile_sig(S, out=("z", "receipt")), "not \\('receipt', 'ok'\\)"),
 ])
 def test_a_unit_that_doesnt_prove_its_record_against_its_scaled_rows_is_refused(name, sig, why):

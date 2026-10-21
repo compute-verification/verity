@@ -23,8 +23,8 @@ derives the window's units from its own copy of the Program under the `Q_templat
   each linear's n rows once (a whole number of C): every call of a linear, in any step, reads the same rows, so a window
   of S steps registers Σn weight rows, not S × Σn. ``zy`` is one record per unit (`h1zy.RECORD`, 48 R C bits: its cells'
   s32 z, row-major, then their bf16 y), row u unit u's, the served ``scaled_mm_zy`` record of its tile (a padded row's
-  cells z = 0 and y = +0). ``salt`` is the units' one coin, ``position`` one row per unit (its number), and ``roots`` the
-  window's seed-group roots.
+  cells z = 0 and y = dq(0, +0, s_w), which is +0 only for a finite positive s_w). ``salt`` is the units' one coin,
+  ``position`` one row per unit (its number), and ``roots`` the window's seed-group roots.
 * **Units** are the tiles, call by call and row block major. Tile ``(c, ti, tj)`` is the unit on rows
   ``block M + [R ti, R ti + R)`` of ``a/<K>``, on rows ``[C tj, C tj + C)`` of its linear's in ``b/<K>`` and on row u of
   ``zy``, at position u, its number. The Program's result is each call's tiles' outputs in turn (their widths depend on
