@@ -1,14 +1,12 @@
-"""Produced values: a value one statement of a session outputs and another reads, committed after the draw, each read
-opened against the one root it was output under (PRF-134; a served H1 leaf proved as its lanes and a combine,
-`pouw.circuit.h1lane`).
+"""Produced values: a value committed after the draw that several statements of a session read, each read opened
+against the one root the record names (PRF-134: a served H1 leaf proved as its 32 lanes and a combine, which share the
+leaf's lane partials, `pouw.leaf_lanes`).
 
-A *produced value* is a field of a template's result that another unit of the same Program reads: H1's lane partials,
-each lane unit's ``partial``, which the combine unit reads as its parameter ``p``; or the whole result of a template that
-returns no record, named by the template's id: H1's leaf seeds, ``PouwUnitSeeds_v2``, which every lane reads as its
-``seeds``. Its row ``r`` is the field of the ``r``-th unit (in population order) whose template returns it; the rows are committed as a registered value's
-(`registered.Registered.commit`, in the row format of the ports that hold them), after the draw, since they are outputs
-of the drawn units' statements, whose inputs were committed before it. They stay hidden: the statements commit them under
-the produced tree's salts, and only the units' check bits leave.
+A *produced value* is rows the prover computes after the draw from what it committed before it (H1's partials: lane l's
+share of the leaf's receipt, row l), committed as a registered value's rows are (`registered.Registered.commit`, in the
+row format of the ports that read them) under its own domain. It is never a statement's output: outputs are public and at
+most 16 bits, and a partial is 8,320 bits at K = 4096. It stays hidden: the statements read it as inputs under the tree's
+hiding salts, and only their check bits leave.
 
 * **The domain** (`domain`) is a registered value's (`registered.domain`) with ``"produced": D`` in its binding, D the
   digest of the registration record whose draw the values follow (`registration.digest`): a produced tree opens under no
@@ -17,16 +15,12 @@ the produced tree's salts, and only the units' check bits leave.
 * **The record** (`record`, `FORMAT`), fixed after the draw and before any session that reads the values:
   ``{"format", "registration": D, "draw": the draw's digest, "produced": [{"value", "root", "leaves", "words", "domain"}
   ...]}`` (``"word_bits"`` beside an entry whose leaves are not 16 bits). `check` holds it to the verifier's registration
-  digest, its draw's and its own entries (`entries`, its shape of each value from its own Program, `values`): its codes
-  ``P-keys``, ``P-format``, ``P-registration``, ``P-draw``, ``P-produced``, ``P-values`` and, per value, ``P-root``,
-  ``P-leaves``, ``P-words``, ``P-word_bits``, ``P-domain``.
-* **The reads** (`reads`) are the verifier's own, from its Program's cut between units: the producing unit's result field
-  is its output row, which the statement opens at row ``r`` (an output row's registered port, §16.13); a consuming unit's
-  parameter, or element ``name[i]`` of an array parameter, whose leaves are exactly row ``r``'s output leaves reads row
-  ``r``. A read of part of a row, or of leaves of two rows, is refused (`ValueError`): a read at a position the verifier
-  doesn't derive is no public read. Swapping two rows of the tree moves no read, so each producer's output no longer
-  opens at its row; a consumer that reads every row (H1's combine, an XOR) still opens them all, so the producers'
-  openings are what refuse a swap.
+  digest, its draw's and its own entries (`entry`, each value's shape as the protocol states it): its codes ``P-keys``,
+  ``P-format``, ``P-registration``, ``P-draw``, ``P-produced``, ``P-values`` and, per value, ``P-root``, ``P-leaves``,
+  ``P-words``, ``P-word_bits``, ``P-domain``.
+* **The reads** are the protocol's (H1's: `pouw.leaf_lanes.reads`), each a ``--registered`` port (`port`) at the row the
+  verifier derives: a read at a position the verifier doesn't derive is no public read. Rows swapped in the tree open at
+  no read's position under the root, and a row of another tree opens under no root the record names.
 * **The opened roots** (`opened`): the roots the verifiers of record report opening the sessions' reads of the produced
   values against (`audit.session_registered`, unfiltered) must each be the record's: ``P-opened`` otherwise, a produced
   value not opened included.
@@ -36,13 +30,8 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Sequence
 
-from verity.ml.circuits.codec import descriptor_id
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.circuits.partition_object import TemplatePartition
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Record
 
-from . import partition as P
 from . import registered as G
 
 FORMAT = "verity/registration/produced/v0"
@@ -72,138 +61,26 @@ def record(registration: str, draw: str, produced: Sequence[Mapping[str, Any]]) 
     return {"format": FORMAT, "registration": registration, "draw": draw, "produced": [dict(e) for e in produced]}
 
 
-def _row_leaves(t: Any, words: int, schema: str) -> tuple[int, int]:
-    """(word_bits, leaves of ``t`` in one row of ``words``) for a field of type ``t``: `registered.width`'s and
-    `registered.row_leaves`' rules on a result field."""
-    w = t.homogeneous_width()
-    if w is None or not 0 < w <= max(G.WIDTHS):
-        raise ValueError(f"a produced value's leaves are one width of at most {max(G.WIDTHS)} bits, not {sorted(t.width_set())}")
-    b = 16 * -(-w // 16)
-    if G._schema(schema) == G.SCHEMA:
-        return b, int(words)
-    if words * b % w:
-        raise ValueError(f"a {schema} row of {words} {b}-bit leaves is no whole number of {w}-bit leaves")
-    return b, words * b // w
+def entry(program: str, value: str, leaves: int, words: int, registration: str,
+          word_bits: int = G.WORD_BITS) -> dict[str, Any]:
+    """The verifier's own ``{"leaves", "words", "word_bits", "domain"}`` of the produced value ``value``, ``leaves`` rows
+    of ``words`` leaves of ``word_bits``, as the protocol states its shape: what `check` holds the record's entry to."""
+    return {"leaves": int(leaves), "words": int(words), "word_bits": int(word_bits),
+            "domain": domain(program, value, words, leaves, word_bits, registration).domain_id.hex()}
 
 
-def _producers(program: Program, tp: TemplatePartition, values: Mapping[str, int],
-               schemas: Mapping[str, str]) -> tuple[dict[str, list], dict[str, int]]:
-    """Per value, ``(unit, its field's output gates)`` of each producing unit in population order; per value its
-    `word_bits`."""
-    nodes = program.root.body.nodes
-    rows: dict[str, list] = {v: [] for v in values}
-    bits: dict[str, int] = {}
-    for u in range(tp.population):
-        k, _m = tp.locate(u)
-        ret = nodes[k].fn.signature()[1]
-        fields = ret.fields if isinstance(ret, Record) else ((descriptor_id(nodes[k].fn), ret),)
-        outs, at = tp.outputs(u), 0
-        for name, t in fields:
-            gates, at = outs[at:at + t.leaves], at + t.leaves
-            if name not in values:
-                continue
-            b, per = _row_leaves(t, values[name], schemas.get(name, G.SCHEMA))
-            if per != t.leaves:
-                raise ValueError(f"unit {u}: its {name!r} is {t.leaves} leaves, not one row of {per}")
-            if bits.setdefault(name, b) != b:
-                raise ValueError(f"{name!r} is {bits[name]}-bit leaves in one template and {b}-bit in another")
-            rows[name].append((u, gates))
-    missing = [v for v in values if not rows[v]]
-    if missing:
-        raise ValueError(f"no unit returns {missing}: a produced value is a template's result field, or the whole result of "
-                         f"a template that returns no record, named by the template's id")
-    return rows, bits
-
-
-def entries(program: Program, query: Mapping[str, Any], values: Mapping[str, int], registration: str,
-            schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    """The verifier's own ``{value: {"leaves", "words", "word_bits", "domain"}}`` of the produced values ``values``
-    (``{result field: words}``), from its own Program and query: ``leaves`` the units that return the field."""
-    tp = P.evaluate(program, query)
-    if not isinstance(tp, TemplatePartition):
-        raise ValueError("a produced value is a template query's instances' output")
-    rows, bits = _producers(program, tp, values, dict(schemas or {}))
-    prog = P.program_digest(program)
-    return {v: {"leaves": len(rows[v]), "words": int(w), "word_bits": bits[v],
-                "domain": domain(prog, v, w, len(rows[v]), bits[v], registration).domain_id.hex()} for v, w in values.items()}
-
-
-def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
-          schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    """Every unit's reads of the produced values, `registered.reads`' form ``{key: {"value", "rows"}}`` (``rows`` one entry
-    per unit, None where the unit doesn't read it): each producing unit's field ``value`` under the key ``value`` (its
-    output row), and each consuming unit's parameter ``name``, or element ``name[i]`` of an array parameter, whose leaves
-    are exactly a producing unit's field (the row that unit produced)."""
-    tp = P.evaluate(program, query)
-    if not isinstance(tp, TemplatePartition):
-        raise ValueError("a produced value is a template query's instances' output")
-    rows, _bits = _producers(program, tp, values, dict(schemas or {}))
-    owner: dict[int, tuple[str, int, int]] = {}
-    out: dict[str, dict[str, Any]] = {}
-    for v, rs in rows.items():
-        entry_ = out.setdefault(v, {"value": v, "rows": [None] * tp.population})
-        for r, (u, gates) in enumerate(rs):
-            entry_["rows"][u] = r
-            for j, g in enumerate(gates):
-                owner[g] = (v, r, j)
-    nodes = program.root.body.nodes
-
-    def row_of(gates: list[int]) -> tuple[str, int] | None:
-        hits = [owner.get(g) for g in gates]
-        if not any(hits):
-            return None
-        v, r, _j = hits[0] if hits[0] is not None else (None, -1, -1)
-        if v is None or hits != [(v, r, j) for j in range(len(gates))] or len(gates) != len(rows[v][r][1]):
-            raise ValueError("a read of part of a produced row, or of leaves of two rows: no public read")
-        return v, r
-
-    for u in range(tp.population):
-        k, _m = tp.locate(u)
-        gates, at = tp.inputs(u), 0
-        for name, t in nodes[k].fn.signature()[0]:
-            s, at = gates[at:at + t.leaves], at + t.leaves
-            if not any(g in owner for g in s):
-                continue
-            try:
-                got = {name: row_of(s)}
-            except ValueError:
-                if not (isinstance(t, Array) and t.n > 1):
-                    raise ValueError(f"unit {u}: parameter {name!r} is not one whole produced row, nor an array of them") from None
-                w = t.elem.leaves
-                got = {f"{name}[{i}]": row_of(s[i * w:(i + 1) * w]) for i in range(t.n)}
-            for key, vr in got.items():
-                if vr is None:
-                    raise ValueError(f"unit {u}: {key!r} of an array of produced rows reads none")
-                e = out.setdefault(key, {"value": vr[0], "rows": [None] * tp.population})
-                if e["value"] != vr[0] or key in values:
-                    raise ValueError(f"{key!r} reads {vr[0]!r} and {e['value']!r}: one key, one read")
-                e["rows"][u] = vr[1]
-    return out
-
-
-def reads_ports(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
-                registration: str, ports: Mapping[str, str] | None = None,
-                schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    """The Lean verifier's ``--registered`` ports of the produced values (`registered.reads_file`'s ``ports`` form): per
-    read (`reads`) its port (``ports`` maps a read's key to its circuit port when they differ: a producer's field to its
-    output row, ``o<j>``), the value, its root from ``roots`` (the produced record's, which `check` accepted), rows, width,
-    domain and row format, and each unit's row."""
-    mine = entries(program, query, values, registration, schemas)
-    out: dict[str, dict[str, Any]] = {}
-    for key, r in reads(program, query, values, schemas).items():
-        port = (ports or {}).get(key, key)
-        if port in out:
-            raise ValueError(f"port {port!r} names two reads: each read is its own port")
-        e = mine[r["value"]]
-        out[port] = {"value": r["value"], "root": roots[r["value"]], "leaves": e["leaves"], "words": e["words"],
-                     "word_bits": e["word_bits"], "domain": e["domain"],
-                     **G.schema_entry((schemas or {}).get(r["value"], G.SCHEMA)), "reads": list(r["rows"])}
-    return out
+def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = G.SCHEMA) -> dict[str, Any]:
+    """The Lean verifier's ``--registered`` port (`registered.reads_file`'s form) reading ``value`` at ``rows`` (one per
+    unit, None where the unit doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
+    registration) and ``root`` the accepted record's."""
+    return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
+            "word_bits": int(e.get("word_bits", G.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),
+            "reads": list(rows)}
 
 
 def check(rec: Any, registration: str, draw: str, mine: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
     """The produced record's failure codes against the verifier's registration digest, its draw's digest and its own
-    entries (`entries`' ``{value: {"leaves", "words", "word_bits", "domain"}}``): empty when it holds."""
+    entries (`entry`'s ``{value: {"leaves", "words", "word_bits", "domain"}}``): empty when it holds."""
     if not isinstance(rec, dict) or sorted(rec) != sorted(KEYS):
         return ("P-keys",)
     codes: list[str] = []
@@ -255,4 +132,4 @@ def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] 
     return () if all(got.get(v) == r for v, r in want.items()) else ("P-opened",)
 
 
-__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "commit", "domain", "entries", "opened", "reads", "reads_ports", "record"]
+__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "commit", "domain", "entry", "opened", "port", "record"]

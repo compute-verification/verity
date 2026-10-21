@@ -1,7 +1,8 @@
 /-
-Produced values (`one_stage/produced.py`, PRF-134): a value one statement of a session outputs and another reads,
-committed after the draw, each read opened against the one root it was output under. H1's leaf proves its seeds, lanes
-and combine as one statement each (`pouw.circuit.h1lane`): the seed pair and the lanes' partials are produced values.
+Produced values (`one_stage/produced.py`, PRF-134): rows the prover computes after the draw from what it committed
+before it, committed under hiding leaves and read as inputs by several statements of a session, each read opened against
+the one root the record names. They are never outputs. H1's drawn leaf is proved as its 32 lanes and their combine
+(`pouw.leaf_lanes`), which share the leaf's lane partials (`partials`, row l lane l).
 
 * `domain`: a registered value's (`Registered.domainBound`) with `"produced": D` in its binding, D the digest of the
   registration record whose draw the values follow, so a produced tree opens under no other registration's domain and a
@@ -12,8 +13,8 @@ and combine as one statement each (`pouw.circuit.h1lane`): the seed pair and the
 * `opened`: the roots the verifiers of record report opening the produced values against (`Record.sessionRegistered`)
   must each be the accepted record's (`P-opened`).
 
-The verifier's own entries and every read are derived from its Program in Python (`produced.entries`, `produced.reads`),
-as the registered values' reads are (`registered.reads_file`); Flock's `--registered` opens them (`Flock.Registered`).
+The verifier's own entries and every read are the protocol's, in Python (`produced.entry`, `pouw.leaf_lanes.reads`);
+Flock's `--registered` opens them (`Flock.Registered`).
 -/
 import SampledProofs.Registered
 
