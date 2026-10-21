@@ -415,7 +415,7 @@ its links (above), whatever N3 costs there.
 At the shape of llama8b-node1's served rows (`SERVED`, from run `r20261006-035423-2cd5`: T = 600 buckets of 100 ms,
 slots of 4,096 bytes, 1,440 windows a day, busy egress link-windows of 34,499 and 35,386 frames, and 21,372 ingress
 frames for 715,340 egress), each part is traced at its statics and no served value is read: AND counts at the served
-shape, not a run on served traffic (run `r20261021-004009-19d6`, at ec1e547ab4). Egress port-windows are
+shape, not a run on served traffic (run `r20261021-020337-2a6e`, at 17ddf3f34a). Egress port-windows are
 unsalted with one segment a frame and ingress ones salted with two, as the lab's are, and an event's JSON is guessed at
 256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees. At
 one window's, every outbox has 2^16 rows and the layout two ports of 2^16 positions, the least that hold a busy
@@ -557,7 +557,7 @@ slot past the tree and five more); holds `N3Range` to its tree at every start; a
 on the demo and a salted window. Runs of several rows are only the demo's and that lab's, and that v4 refuses whatever
 v3 refuses on other windows rests on each leaf's binding under SHA-512, not on a proof.
 
-A busy link-window at the served shape, one lever at a time (run `r20261021-004009-19d6`; composed as v3's counts are,
+A busy link-window at the served shape, one lever at a time (run `r20261021-020337-2a6e`; composed as v3's counts are,
 egress reads in one run and salted ingress ones in two). Each lever replaces one disjoint part group with v4's, so the
 gains add. The floor is N2's frames root, about 35 compressions a frame, which v4 leaves as v3's.
 
@@ -579,5 +579,5 @@ the rows' digests are 44% of v4, half of that hashing the overlapping rows' byte
 reads 8%, frames 8% and the hiding leaves 8%. The canonical protocol's fixed fields would leave a frame its frames
 root and one row's digest and leaves, about 2.2 times the floor, or 1.95 with rows of the raw bytes behind base64:
 estimated, not built. Hashing each byte once in N2's root and once in the outbox makes about twice the floor this
-shape's limit. Each run past the first adds 6.33B to a busy egress window, a range over 35,386 slots whatever the
+shape's limit. Each run past the first adds 6.32B to a busy egress window, a range over 35,386 slots whatever the
 run's length, so v4's rows beat v3's up to 14 runs at one window's depths and 24 at a day's.
