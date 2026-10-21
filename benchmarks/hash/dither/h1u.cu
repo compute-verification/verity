@@ -25,8 +25,10 @@
 //              blocks t = lane RB + c, the columns' 32 RB + lane CB + c), its 16 words to the caller's workspace
 //   h1u<WS>    h1u reading those blocks instead of hashing them
 // Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
-// the fused form with H1U_PF), in a ring of H1U_PD register sets; H1U_L2PF also prefetches into L2 the A and B lines 16
-// segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the warps a CTA (one a unit).
+// the fused form with H1U_PF), in a ring of H1U_PD register sets (H1U_RING = 1: H1U_PD + 1 sets, each segment's load
+// going to the set the segment before it read, so a load never waits on the copy out of its set); H1U_L2PF also
+// prefetches into L2 the A and B lines 16 segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the
+// warps a CTA (one a unit).
 // H1U_SPLIT builds h1p in h1u's place: a pair of warps a unit, for calls whose units leave most of the GPU idle (decode).
 // Warp p of the pair multiplies n-tiles p and p + 2 (T and Y), so it holds exactly the entries chains 4 p .. 4 p + 3 absorb
 // (key t = 2 i + p), and folds those; it hashes (or loads) one of the chunk's two blocks a lane, p = 0 the rows', p = 1 the
@@ -67,6 +69,9 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_PD
 #define H1U_PD 1
 #endif
+#ifndef H1U_RING
+#define H1U_RING 0
+#endif
 #ifndef H1U_L2PF
 #define H1U_L2PF 0
 #endif
@@ -92,13 +97,14 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_RONLY
 #define H1K_RONLY 0
 #endif
-// H1K_PD = D: h1k's producers load their A and B words D rounds ahead, a ring of D register sets (h1k<4> runs one CTA an
+// H1K_PD = D >= 1: h1k's producers load their A and B words D rounds ahead in a ring of D + 1 register sets, round r's
+// load going to the set round r - 1 read; 0 keeps one set, copied out and reloaded a round ahead (h1k<4> runs one CTA an
 // SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise blocks, loaded at its first round, are stored
 // at its second round's end rather than its first's, so a round hides their load. H1K_L2PF = S: the producer whose
 // segment is S segments before a 128-byte line's first prefetches that line of the unit's 32 B rows into L2 (A's rows,
 // every unit's of the row block, stay in L2)
 #ifndef H1K_PD
-#define H1K_PD 1
+#define H1K_PD 0
 #endif
 #ifndef H1K_NXD
 #define H1K_NXD 0
@@ -113,8 +119,9 @@ constexpr int WARPS = H1U_WARPS;
 #endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
-static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
-static_assert(H1K_PD >= 1 && H1K_PD <= 4, "h1k's ring: 1 to 4 rounds ahead");
+static_assert(16 % (H1U_PD + H1U_RING) == 0, "a chunk's 16 segments are whole rings of H1U_PD (+ 1 with H1U_RING) sets");
+static_assert(!H1U_RING || !H1U_SPLIT, "H1U_RING is h1u's ring; h1p keeps H1U_PD sets");
+static_assert(H1K_PD >= 0 && H1K_PD <= 3, "h1k's ring: 0 (one set) to 3 rounds ahead");
 static_assert(H1K_L2PF % 4 == 0, "h1k's L2 prefetch distance is whole 128-byte lines of segments");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
@@ -361,7 +368,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
   constexpr bool PF = WS || H1U_PF;
-  constexpr int PD = H1U_PD;
+  constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
@@ -471,8 +478,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
-  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % PD
-  uint2 pa[PD][4], pb[PD][4];
+  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % NS
+  uint2 pa[NS][4], pb[NS][4];
   const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
@@ -548,16 +555,23 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
 #pragma unroll 1
-    for (u32 j0 = 0; j0 < 16; j0 += PD) {
+    for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
-      for (int jj = 0; jj < PD; ++jj) {
+      for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
         if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
           prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
-        if (PF) {
+        if (PF && H1U_RING) {
+          if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+#pragma unroll
+          for (int r = 0; r < 4; ++r) {
+            ca[r] = pa[jj][r];
+            cw[r] = pb[jj][r];
+          }
+        } else if (PF) {
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -921,16 +935,17 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       b[r] = ld2<H1U_L2HINT>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
-  // round r's segment in ring slot r % H1K_PD
-  uint2 pa[H1K_PD][4], pb[H1K_PD][4];
+  // round r's segment in ring slot r % NS, loaded KD rounds ahead
+  constexpr int KD = H1K_PD ? H1K_PD : 1, NS = H1K_PD ? H1K_PD + 1 : 1;
+  uint2 pa[NS][4], pb[NS][4];
   if (wp) {
 #pragma unroll
-    for (int d = 0; d < H1K_PD; ++d)
+    for (int d = 0; d < KD; ++d)
       if (KP * d + pp < ks) load_seg(KP * d + pp, pa[d], pb[d]);
   }
   const u32 R = ks / KP;
   uint4 nv[KNI];
-  const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4]) {
+  const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4], uint2(&na)[4], uint2(&nb)[4]) {
     if (wp) {
       if (r < R) {
         const u32 sg = KP * r + pp, blk = sg >> 4, j = sg & 15;
@@ -940,12 +955,13 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         const bool sx = H1K_NXD ? r >= 1 && ((KP * (r - 1)) & 15) == 0 && blk + 1 < chunks : nx;
         if (nx) load_noise(blk + 1, nv);
         uint2 ca[4], cw[4];
+        if (H1K_PD && sg + KP * KD < ks) load_seg(sg + KP * KD, na, nb);
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
           ca[i] = ra[i];
           cw[i] = rb4[i];
         }
-        if (sg + KP * H1K_PD < ks) load_seg(sg + KP * H1K_PD, ra, rb4);
+        if (!H1K_PD && sg + KP < ks) load_seg(sg + KP, ra, rb4);
         if (H1K_L2PF && ((sg + H1K_L2PF) & 3) == 0 && sg + H1K_L2PF < ks)
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + H1K_L2PF));
         const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][0][0][0]);
@@ -1055,10 +1071,10 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     __syncthreads();
   };
 #pragma unroll 1
-  for (u32 r0 = 0; r0 <= R; r0 += H1K_PD) {
+  for (u32 r0 = 0; r0 <= R; r0 += NS) {
 #pragma unroll
-    for (int d = 0; d < H1K_PD; ++d)
-      if (r0 + d <= R) run_round(r0 + d, pa[d], pb[d]);
+    for (int d = 0; d < NS; ++d)
+      if (r0 + d <= R) run_round(r0 + d, pa[d], pb[d], pa[(d + KD) % NS], pb[(d + KD) % NS]);
   }
   // the producers' Y, Cw and Pz to warp 0 as sums
   if (wp) {
