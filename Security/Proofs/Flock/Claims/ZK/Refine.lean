@@ -62,10 +62,11 @@ opening that fails (`strat_eval_cons`).
   deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`
   is Rust's `Firewall::finish`), the transport
   requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`) and hands the frame a rep
-  state and coins read from the coins the openings open (`ReadsCoins`, Rust's `LeanFrame`), the `Finish` is one past the
+  state and coins read from the coins the openings open (`ReadsCoins`: the state, `ProgReads`, Rust's `LeanFrame`; the
+  coins, `CoinsRead`), the `Finish` is one past the
   last coin, and the coin check reads the session's `Hello` with the tape's nonce (`HelloParses`). At the session loop
-  (`flock-firewall session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow` and the `Finish`'s
-  round are theorems; under `coin_tree::Checked` `ReqsFollow` is a trust, and `HelloParses` follows from `HelloEq` and
+  (`flock-firewall session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow`, `CoinsRead` and the
+  `Finish`'s round are theorems; under `coin_tree::Checked` `ReqsFollow` is a trust, and `HelloParses` follows from `HelloEq` and
   `HelloDParses` (`helloParses_of_helloEq`). From them `CheckIs` is proved (`LeanRelease.checkIs_coinLayer`, by
   `CoinOpen.coinLayer_verdict`), and the
   stop rule and both its Props (`rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The rest is the tables' side:
@@ -328,9 +329,7 @@ theorem frameAnswer_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : 
   unfold frameAnswer
   cases h.getLast? with
   | none => rfl
-  | some p =>
-    obtain ⟨_, cs⟩ := p
-    exact answer_ofDraws _ _ _ _ _ _ _
+  | some _ => exact answer_ofDraws _ _ _ _ _ _ _
 
 /-- On the histories the transport's coin check passes at both tapes, the coins the frame takes are the same. -/
 theorem answered_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg))
@@ -663,20 +662,30 @@ theorem ownRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) �
 
 /-! ## The stops of a transport that reads only the coins -/
 
-/-- **The transport reads the history only through the decoded coins** at `x`, up to the protocol's last coin and on
-the histories its check passes: after every history past `Hello` of at most `refK x` openings that the transport's
-coin check passes at the tape `ρ` (`opens`), the round's rep's state is `pc x` of the coins the openings open, and the
-coins it hands the frame from the last answer are `cc x` of them. Past the check's refusal the transport hands the
-frame nothing, so the premise says nothing there. A named hypothesis, one of the transport's trusts: the rep's state
-(`prog`) and the coins (`coinsOf`) are what Rust feeds `flock-firewall frame`, the per-rep `LeanFrame` (`firewall.rs`,
-whose `coins` hands the frame `coins N`) driven by `flock-circuit` at the coins `coin_tree::Checked` read from the
-answers, which the release takes as given. -/
-def ReadsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
-    (pc : Msg → List S.Coin → Masker) (cc : Msg → List S.Coin → Array _root_.Flock.F128) (x : Msg) : Prop :=
+/-- **The rep's state reads the history only through the decoded coins** at `x`, up to the protocol's last coin and on
+the histories its check passes: after every history past `Hello` of at most `refK x` openings that the transport's coin
+check passes at the tape `ρ` (`opens`), the round's rep's frame state is `pc x` of the coins the openings open. Past the
+check's refusal the transport hands the frame nothing, so the premise says nothing there. A named hypothesis, one of the
+transport's trusts: the frame's state (`prog`) is what Rust's requests to it make it (`LeanFrame`, `firewall.rs`: the
+earlier rep's coins, `prior`, and the device and scheduled rounds `flock-circuit` hands it), which the release takes as
+given. The coins the frame takes are `CoinsRead`, a theorem at the session loop (`LeanRelease.loop_coinsRead`). -/
+def ProgReads (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (pc : Msg → List S.Coin → Masker) (x : Msg) : Prop :=
   ∀ (ρ : S.refP.Nonce × S.refP.Rand) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)), ops.length ≤ refK x →
     L.opens x ρ ((m₀, ρ₀) :: ops) = true →
-    L.prog x ((m₀, ρ₀) :: ops) = pc x (ops.map fun p => S.decOf p.2) ∧
-    ∀ a b, ((m₀, ρ₀) :: ops).getLast? = some (a, b) → L.coinsOf b = cc x (ops.map fun p => S.decOf p.2)
+    L.prog x ((m₀, ρ₀) :: ops) = pc x (ops.map fun p => S.decOf p.2)
+
+/-- **The coins the frame takes are a function of the decoded coins** at `x`: after every history past `Hello`, `cc x`
+of the coins its openings open. -/
+def CoinsRead (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (cc : Msg → List S.Coin → Array _root_.Flock.F128) (x : Msg) : Prop :=
+  ∀ (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)), L.coinsOf x ((m₀, ρ₀) :: ops) = cc x (ops.map fun p => S.decOf p.2)
+
+/-- **The transport reads the history only through the decoded coins** at `x`: the frame's state (`ProgReads`) and the
+coins it takes (`CoinsRead`). -/
+def ReadsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (pc : Msg → List S.Coin → Masker) (cc : Msg → List S.Coin → Array _root_.Flock.F128) (x : Msg) : Prop :=
+  ProgReads S L pc x ∧ CoinsRead S L cc x
 
 /-- **The frame's refusal at the coins `cs`** under the transport's reading `pc`, `cc`: whether it refuses `cc x cs` at
 the state `pc x cs` and the layout of round `cs.length + 1`'s rep, at any draws (`answer_ofDraws`). -/
@@ -707,16 +716,16 @@ theorem refusesCoins_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (
     (hT : ReadsCoins S L pc cc x) (ρ : S.refP.Nonce × S.refP.Rand) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
     (hl : ops.length ≤ refK x) (ho : L.opens x ρ ((m₀, ρ₀) :: ops) = true) :
     L.refusesCoins x ρ ((m₀, ρ₀) :: ops) = L.refuseOf pc cc x (ops.map fun p => S.decOf p.2) := by
-  obtain ⟨hp, hc⟩ := hT ρ m₀ ρ₀ ops hl ho
+  have hp := hT.1 ρ m₀ ρ₀ ops hl ho
+  have hc := hT.2 m₀ ρ₀ ops
   unfold refusesCoins
   rw [L.answered_of_opens x ρ _ ho]
   unfold frameAnswer refuseOf
   cases hg : ((m₀, ρ₀) :: ops).getLast? with
   | none => simp at hg
   | some p =>
-    obtain ⟨a, b⟩ := p
     dsimp only
-    rw [hp, hc a b hg]
+    rw [hp, hc]
     exact congrArg (fun r : Except String Masker => match r with | .ok _ => false | .error _ => true)
       (answer_cfg L x ρ ((m₀, ρ₀) :: ops) (pc x (ops.map fun p => S.decOf p.2))
         (cc x (ops.map fun p => S.decOf p.2)) ((ops.map fun p => S.decOf p.2).length + 1) (by simp))
@@ -915,7 +924,8 @@ a theorem:
 * the firewall's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `flock-firewall link`'s roots, which
   `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: Rust's `Firewall::finish`);
 * the transport hands the frame a rep state and coins that are functions `pc`, `cc` of the coins the openings open, on
-  the histories its check passes (`LeanRelease.ReadsCoins`: Rust's `LeanFrame`);
+  the histories its check passes (`LeanRelease.ReadsCoins`: the state, `ProgReads`, is Rust's `LeanFrame`; the coins,
+  `CoinsRead`, the session loop's own, `loop_coinsRead`);
 * the `Finish` is one past the last coin (`L.last`, the transport's schedule).
 From them the release's coin check is the session's (`LeanRelease.checkIs_coinLayer`, from `CoinOpen.coinLayer_verdict`,
 at `LeanRelease.helloParses_of_helloEq`), the stop rule is the frame's refusal under the transport's reading
