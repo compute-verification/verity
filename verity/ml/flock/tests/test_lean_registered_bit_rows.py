@@ -240,7 +240,8 @@ def test_a_row_of_another_value_is_refused(one_value):
 
 def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
     """A JSON parser keeps one of two equal keys: a file naming cs twice, the first under another root, would read as the
-    honest file. flock-verify refuses the text, naming the key, as it does a port's key named twice."""
+    honest file. flock-verify refuses the text, naming the key, as it does a port's key named twice: exit 2, a verifier
+    input it can't read, as any malformed `--registered` file."""
     good = {p: json.dumps(e) for p, e in one_value.own["ports"].items()}
     bad = json.dumps({**one_value.own["ports"]["cs"], "root": one_value.regs["again"].root.hex()})
     for name, ports, key in (("cs-twice", f'"cs": {bad}, "cs": {good["cs"]}, "x": {good["x"]}', '"cs"'),
@@ -249,6 +250,6 @@ def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
         own.write_text(f'{{"format": "{G.READS}", "ports": {{{ports}}}}}')
         assert json.loads(own.read_text())["ports"].keys() == {"cs", "x"}
         code, out = _statement(one_value, own)
-        assert code == 1 and f"registered reads: an object of the file names the key {key} twice" in out, (name, out)
+        assert code == 2 and f"registered reads: an object of the file names the key {key} twice" in out, (name, out)
     code, out = _statement(one_value, one_value.dir / "own.json")
     assert code == 0, out
