@@ -153,11 +153,11 @@ theorem lincheckCut_fold {c : CircuitFold} {m : ℕ} {lay : Zk.PadLayout} {mk : 
   obtain ⟨a, t₁, l₁, h1, h⟩ := run_bind_ok h
   obtain ⟨-, rfl, -⟩ := sampleP_cut_inv coin h1
   obtain ⟨_, _, _, -, h⟩ := run_bind_ok h
-  obtain ⟨_, _, _, hfull, -⟩ := run_bind_ok h
   rcases e : c.fold (coin l.size 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) with err | w
-  · simp only [e] at hfull
-    rw [Flock.Firewall.Finish.throw_run_go] at hfull
-    cases hfull
+  · simp only [e] at h
+    obtain ⟨_, _, _, hthrow, -⟩ := run_bind_ok h
+    rw [Flock.Firewall.Finish.throw_run_go] at hthrow
+    cases hthrow
   · exact ⟨w, rfl⟩
 
 end Asks

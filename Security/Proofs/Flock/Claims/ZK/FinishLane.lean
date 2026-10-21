@@ -102,11 +102,10 @@ theorem laneRunR {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (hle
     have hood' : (Composed.layOf Tz st).lgOod 0 < (Composed.layOf Tz st).len :=
       hb (by simp only [_root_.Flock.Zk.PadLayout.lgOod, _root_.Flock.Zk.PadLayout.hab]; omega)
     have h := claim0R hlen _ (ix_val Tz st hlen hood') rec.target lg.oodValues[0]! rec.ood[0]!.1
-    have e1 : ∀ g : Fin (Composed.layOf Tz st).nOod0 → 𝕂, ∑ i, g i = g ⟨0, Nat.zero_lt_one⟩ :=
-      fun g => Fin.sum_univ_one g
     refine rel2_congr h ?_
     simp only [Composed.laneRun]
-    rw [e1, hT, hβ ⟨0, Nat.zero_lt_one⟩, hood]
+    erw [Fin.sum_univ_one]
+    rw [hT, hβ ⟨0, Nat.zero_lt_one⟩, hood]
     all_goals rfl
   | succ k ih =>
     have hk' : k < Tz.sch.k0 := hk
