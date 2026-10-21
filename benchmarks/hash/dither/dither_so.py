@@ -1,7 +1,7 @@
 """dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
 `dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we]`, labelled by their z commitment as every
-dither-a arm (`dither_a.form_of`, RT4-INT-39 as narrowed 14:37Z): all -zy, so form=ASK-71 A (provisional), since the served
-epilogue commits #3018's per-unit z/y records under round s's root before coin s.
+dither-a arm (`dither_a.form`, RT4-INT-39 as narrowed 14:44Z): all -zy in the -so order, so form=ASK-71 A (provisional),
+since the served epilogue commits #3018's per-unit z/y records under round s's root before coin s.
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
 after it, beside a later step's forward; their receipts go under a later round.  Step s, in order:
@@ -680,6 +680,8 @@ def rounds_of() -> int:
 class SoSide(DA.Side):
     """dither-a's serving-stream GEMM state with the forward in the statement's order (no seeds, no units) and the
     units of a step dispatched after its coin (`dispatch`) on a ring of the window's depth (`stash`)."""
+
+    in_order = True
 
     def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
         if unit not in DA.KONE or ao not in AO:
