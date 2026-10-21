@@ -31,7 +31,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
 With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
 each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
-(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic.
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
+root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
+fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -46,8 +48,12 @@ session's record is the Lean's (`Pair.record`), and its ledger reads that record
 books (its coins, its plans, when the next boundary leaves) and is the reference: an event, a window's verdict or a
 record field on which the two differ refuses the session at that window as `disagreement`. Under `lean` it checks no
 openings and takes the Lean's window verdicts; under `both` it checks every window's openings too, beside the Lean,
-and a window's two verdicts are set on the two sessions at once. Under `python` there is no Lean process and
-`audit.Session` decides. `--close` closes a registration in both registries alike.
+and a window's two verdicts are held to each other. Under `python` there is no Lean process and `audit.Session`
+decides. `--close` closes a registration in both registries alike. While a session runs the driver doesn't wait on
+the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
+openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
+verdict, never a coin, a root's intake, a boundary or a draw. A session is accepted only once every one of its
+Lean answers has come and agreed.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -513,11 +519,18 @@ class Pair:
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
     releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
-    close and an append's coin with the append."""
+    close and an append's coin with the append.
+
+    The driver never waits on the Lean for an event the books take: it acts on the books' result and the Lean's
+    answer is held to it as it comes (`_answered`), a different one refusing the session at that event's window
+    (`caught_up`) before any later verdict, rejection or record is taken. The Lean's session is a function of the
+    events in order with their clock readings, so its answers are the ones it would give were each waited on. An
+    event the books reject or refuse is waited on, behind every one before it."""
 
     def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.Transcript | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
+        self.late: tuple | None = None
         self.frames: dict[int, list[bytes]] = {}
         if self.lean is not None:
             got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
@@ -543,9 +556,25 @@ class Pair:
                    f"Lean {lean}, Python {python}")
         return v
 
+    def _answered(self, t: int, event: str, lean: dict, python: dict) -> None:
+        """The Lean's answer to an event the driver acted on, on the Lean's reader thread: the first that differs from
+        the books' is kept for `caught_up`, and the session's loop woken to apply it."""
+        if lean != python and self.late is None:
+            self.late = (t, event, lean, python)
+            self.v.inbox.put(({"type": "lean-disagree", "k": self.k}, b"", self.v.clock.now()))
+
+    def caught_up(self) -> audit.Verdict | None:
+        """The first event the Lean answered otherwise than the books, applied as `disagreement` (`_disagree`): its
+        rejection, or None. The Lean answers in order and each answer is held to the books' before the next is read,
+        so once the driver holds any answer, every event before it that disagreed is here."""
+        if self.late is None or self.disagreement is not None:
+            return None
+        return self._disagree(*self.late)
+
     def _step(self, t: int, event, python, as_json, *, clocked: bool = False, coin=None):
         """`python()` on the books and `event()` through the Lean: `python()`'s return, or the disagreement's
         rejection (None as the second value)."""
+        self.caught_up()
         if self.disagreement is not None:
             raise audit.SessionError("the session ended: the verifiers disagree")
         ev = event() if self.lean is not None or self.case is not None else None
@@ -568,10 +597,17 @@ class Pair:
         if self.lean is None:
             return out, True
         c = coin(out) if coin is not None else None
-        lean = self._lean({"op": "event", "node": self.node, "session": self.k, "event": ev,
-                           "coin": None if c is None else c.hex()})
+        request = {"op": "event", "node": self.node, "session": self.k, "event": ev,
+                   "coin": None if c is None else c.hex()}
+        where = t if type(t) is int and t >= 0 else self.s.filling
+        if got != lv.REFUSED and not isinstance(out, audit.Verdict):
+            self.lean.send(request, answered=lambda lean: self._answered(where, ev["kind"], lean, got))
+            return out, True
+        lean = self._lean(request)
+        if (v := self.caught_up()) is not None:
+            return v, False
         if lean != got:
-            return self._disagree(t if type(t) is int and t >= 0 else self.s.filling, ev["kind"], lean, got), False
+            return self._disagree(where, ev["kind"], lean, got), False
         if got == lv.REFUSED:
             raise audit.SessionError("refused by both verifiers")
         return out, True
@@ -617,10 +653,12 @@ class Pair:
 
     def openings(self, t: int, body: bytes) -> None:
         """One frame of window t's openings to the Lean, kept there until the window is verified."""
-        try:
-            self.lean.call({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body)
-        except lv.LeanError as e:
-            self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {e}")
+        def answered(got: dict) -> None:
+            if "error" in got:
+                self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {got['error']}")
+
+        self.lean.send({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body,
+                       answered)
 
     def keep(self, t: int, body: bytes) -> None:
         """One frame of window t's openings, kept for the transcript until the window's verdict is set."""
@@ -632,14 +670,24 @@ class Pair:
         if self.case is not None:
             self.case.verify(t, self.frames.pop(t, []))
 
-    def verify(self, t: int, check: int) -> bool:
-        """Window t's frames checked on the Lean's threads as check `check`: False where it refuses to."""
-        got = self._lean({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check})
-        return got == {"spawned": True}
+    def passes_ended(self) -> None:
+        """The prover's passes are over: the transcript may write the openings it held back."""
+        if self.case is not None:
+            self.case.passes_ended()
 
-    def settle(self, check: int) -> dict:
-        """Check `check`'s verdict applied to the Lean's session: its result, the openings it read and its ns."""
-        return self._lean({"op": "settle", "id": check})
+    def verify(self, t: int, check: int, refused) -> None:
+        """Window t's frames checked on the Lean's threads as check `check`, whose end comes as a `lean-done`;
+        `refused(answer)` called on the Lean's reader thread where it refuses to start it."""
+        self.lean.send({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check},
+                       answered=lambda got: None if got == {"spawned": True} else refused(got))
+
+    def settle(self, check: int, answered=None) -> dict | None:
+        """Check `check`'s verdict applied to the Lean's session, behind every event before it: its result, the
+        openings it read and its ns, returned, or given `answered`, passed to it on the Lean's reader thread."""
+        if answered is None:
+            return self._lean({"op": "settle", "id": check})
+        self.lean.send({"op": "settle", "id": check}, answered=answered)
+        return None
 
     def judge(self, t: int, lean: dict, python: dict | None) -> dict:
         """Window t's verdict, `{"accepted", "failure", "at"}`, from the Lean's settled result and the books' verdict
@@ -675,15 +723,18 @@ class Pair:
                 self._fail_books(failure)
             return
         got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        self.caught_up()
+        if self.disagreement is not None:
+            return
         if failure is not None:
             if self.s.outcome is None:
                 self._fail_books(failure)
-            if got.get("outcome") is None and self.disagreement is None:
+            if got.get("outcome") is None:
                 self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": str(failure["failure"])})
             return
         mine = {"outcome": self.s.outcome, "record": lv.summary_json(self.s.record()) if self.s.outcome == "accepted"
                 else None}
-        if got != mine and self.disagreement is None:
+        if got != mine:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
     def record(self) -> audit.Record:
@@ -794,7 +845,8 @@ class Verifier:
                 return head, body, stamp
             if head["type"] == "lost":
                 raise wire.Closed(head["why"])
-            if head["type"] not in ("root", "append", "openings", "closed", "checks", "checked", "lean-done"):
+            if head["type"] not in ("root", "append", "openings", "closed", "checks", "checked", "lean-done",
+                                    "lean-settled", "lean-disagree"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
@@ -894,8 +946,9 @@ class Verifier:
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
         checked: dict[int, dict] = {}
-        lean_ready: dict[int, tuple[int | dict, int]] = {}
+        lean_ready: dict[int, tuple[int | dict, int, bool]] = {}
         lean_checks: dict[int, int] = {}
+        settling: set[int] = set()
         frames: dict[int, int] = {}
         draws_at: dict[int, int] = {}
         parts: dict[int, list] = {}
@@ -910,15 +963,36 @@ class Verifier:
             return {"t": v.window, "failure": v.failure, "at": v.at}
 
         def decide(t: int) -> None:
-            """Window t's verdict once each verifier it waits on has checked the window: the Python's result
-            (`checked`) set on the books and the Lean's (`lean_ready`) settled on its session at one moment, so
-            neither session moves on a verdict the other hasn't had (`Pair.judge`). Nothing once the session has a
-            failure."""
-            nonlocal failure
+            """Window t's verdict once each verifier it waits on has checked the window (`settled`). The Lean settles
+            a check that accepted behind the events sent so far, the books taking its verdict when its answer comes
+            (`lean-settled`): an accepted window is nothing any event reads. One that rejected is waited on, so
+            neither session moves on a rejection the other hasn't had. Nothing once the session has a failure."""
             py, ln = checked.get(t), lean_ready.get(t)
-            if (failure is not None or t in verdicts or (self.verdict != "lean" and py is None)
+            if (failure is not None or t in verdicts or t in settling or (self.verdict != "lean" and py is None)
                     or (self.lean is not None and ln is None)):
                 return
+            if self.lean is None:
+                settled(t, None, None)
+                return
+            check_id, latency, accepted = lean_ready.pop(t)
+            if type(check_id) is not int:
+                settled(t, check_id, latency)
+            elif accepted:
+                settling.add(t)
+                session.settle(check_id, lambda res, t=t, latency=latency: self.inbox.put(
+                    ({"type": "lean-settled", "k": k, "t": t, "res": res, "latency": latency}, b"", self.clock.now())))
+            else:
+                settled(t, session.settle(check_id), latency)
+
+        def settled(t: int, res: dict | None, latency: int | None) -> None:
+            """Window t's verdict: the Python's result (`checked`) set on the books and the Lean's settled result
+            (`res`) held to it (`Pair.judge`); an event before it that the two answered differently refuses the
+            session first."""
+            nonlocal failure
+            if self.lean is not None and (v := session.caught_up()) is not None:
+                failure = {"t": v.window, "failure": v.failure, "at": v.at}
+                return
+            py = checked.get(t)
             mine = None
             if py is not None:
                 try:
@@ -930,8 +1004,6 @@ class Verifier:
                 verdicts[t] = {"t": t, **mine, "cpu_ns": py["cpu_ns"], "openings": py["count"],
                                "checked_ns": py["checked_ns"]}
             else:
-                check_id, latency = lean_ready.pop(t)
-                res = session.settle(check_id) if type(check_id) is int else check_id
                 verdicts[t] = {"t": t, **session.judge(t, res, mine), "cpu_ns": py["cpu_ns"] if py else 0,
                                "openings": py["count"] if py else res.get("openings"),
                                "checked_ns": max(latency, py["checked_ns"]) if py else latency,
@@ -947,8 +1019,9 @@ class Verifier:
             ids = [head["id"]] if head["id"] in lean_checks else list(lean_checks) if head["id"] is None else []
             for check_id in ids:
                 t = lean_checks.pop(check_id)
-                lean_ready[t] = (check_id if head["id"] is not None else {"error": "the process ended"},
-                                 stamp - draws_at[t])
+                ready = (lv.REFUSED if "refused" in head else check_id) if head["id"] is not None else \
+                    {"error": "the process ended"}
+                lean_ready[t] = (ready, stamp - draws_at[t], head["accepted"])
                 decide(t)
 
         def close(t: int) -> None:
@@ -991,6 +1064,9 @@ class Verifier:
             if item is None:
                 if sent < W:
                     bound()
+                    while failure is None and K is not None and drawn < sent and len(session.windows[drawn].roots) >= K:
+                        close(drawn)
+                        drawn += 1
                 else:
                     close(drawn)
                     drawn += 1
@@ -1014,7 +1090,7 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
                     break
                 arrivals[t].append(stamp)
-                while drawn < t and failure is None:
+                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
                     close(drawn)
                     drawn += 1
             elif kind == "append":
@@ -1041,11 +1117,9 @@ class Verifier:
                     frames[t] = frames.get(t, 0) + 1
                     if frames[t] == head["parts"]:
                         self._check += 1
-                        if session.verify(t, self._check):
-                            lean_checks[self._check] = t
-                        else:
-                            lean_ready[t] = (lv.REFUSED, stamp - draws_at[t])
-                            decide(t)
+                        lean_checks[self._check] = t
+                        session.verify(t, self._check, lambda got, c=self._check: self.inbox.put(
+                            ({"type": "lean-done", "id": c, "accepted": False, "refused": got}, b"", self.clock.now())))
                 if self.verdict == "lean":
                     continue
                 if self.checks is None:
@@ -1083,17 +1157,27 @@ class Verifier:
                 decide(head["t"])
             elif kind == "lean-done":
                 lean_done(head, stamp)
+            elif kind == "lean-settled" and head["k"] == k:
+                settling.discard(head["t"])
+                if failure is None:
+                    settled(head["t"], head["res"], head["latency"])
+            elif kind == "lean-disagree" and head["k"] == k:
+                if (v := session.caught_up()) is not None:
+                    failure = {"t": v.window, "failure": v.failure, "at": v.at}
             elif kind == "closed":
                 self.clock.idle()
+                session.passes_ended()
             elif kind == "lost":
                 raise wire.Closed(head["why"])
         self.jobs.join()
         lost = None
-        while lean_checks:
+        while lean_checks or settling:
             item = self.inbox.get()
             head, _, stamp = item
             if head["type"] == "lean-done":
                 lean_done(head, stamp)
+            elif head["type"] == "lean-settled" and head["k"] == k:
+                settling.discard(head["t"])
             elif head["type"] == "lost":
                 lost = item
         if lost is not None:
@@ -1104,7 +1188,7 @@ class Verifier:
             if failure is None:
                 failure = {"t": max(0, len(session.windows) - 1), "failure": "coins", "at": None}
         session.end(failure)
-        for check_id, _ in lean_ready.values():
+        for check_id, *_ in lean_ready.values():
             if type(check_id) is int:
                 session.settle(check_id)
         if failure is None and session.disagreement is not None:

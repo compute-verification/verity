@@ -102,7 +102,7 @@ class _Auditor:
     def heads(self, lines=None):
         self._heads += 1
         path = self.tmp / f"windows-{self._heads}.jsonl"
-        path.write_bytes(b"".join(ln + b"\n" for ln in (self.gate.lines if lines is None else lines)))
+        path.write_text("".join(ln + "\n" for ln in (self.gate.lines if lines is None else lines)))
         return [path]
 
 
@@ -221,7 +221,7 @@ def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
     why = _reason(auditor, records, roots, sid, heads=cut)
     assert why.startswith(f"the Commit's challenger session is not trusted: the auditor's ledger has no end for session {sid}")
     assert _reason(auditor, records, roots, sid, heads=[*cut, *auditor.heads()]) is None
-    forked = [*auditor.gate.lines[:-1], auditor.gate.lines[-1].replace(b'"rc":0', b'"rc":2')]
+    forked = [*auditor.gate.lines[:-1], auditor.gate.lines[-1].replace('"rc":0', '"rc":2')]
     assert "not trusted" in _reason(auditor, records, roots, sid, heads=[*auditor.heads(forked), *auditor.heads()])
 
 

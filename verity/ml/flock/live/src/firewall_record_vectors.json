@@ -1,6 +1,6 @@
 {
  "kind": "firewall/v0/vectors",
- "about": "verity_flock.firewall (Python) and flock_live::release (Rust) each run every case's ops on an empty state directory, and must give its results and its record.jsonl byte for byte",
+ "about": "verity_flock.firewall (Python) and core_firewall (Lean) each run every case's ops from an empty record, and must give its results and its record.jsonl byte for byte",
  "cases": [
   {
    "name": "rules-1-2",

@@ -1029,7 +1029,8 @@ class UnitStager:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
     def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-              indices: Sequence[int] | None = None, set_name: str | None = None) -> dict:
+              indices: Sequence[int] | None = None, set_name: str | None = None, tables: dict | None = None,
+              refs: dict | None = None, registered: dict | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
         ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
@@ -1037,7 +1038,9 @@ class UnitStager:
         matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
         (its units are ``0 .. n``). ``set_name``: the round's input set (the header's ``set``), else the stager's, which its
         frame domains and salts bind; a template's units split across statements (a statement's shape caps its instances) are
-        one set per statement on the one circuit."""
+        one set per statement on the one circuit. ``tables``, ``refs`` and ``registered``: a shared-row file's, as
+        `circuit.write` takes them (every input row's table and each instance's ref into it, whose rows must be ``rows``;
+        the rows of registered values with their positions and paths), ``salts`` then one per table row."""
         if (indices is None) == self.bound:
             raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
         iset = self.iset if set_name is None else SimpleNamespace(**{**vars(self.iset), "name": set_name})
@@ -1050,14 +1053,20 @@ class UnitStager:
         at = np.cumsum([0] + self.out_words)
         outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(self.out_words))}
         self.reference_check(rows, outs)
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key), **(salts or {})}
+        if tables is not None:
+            for r, *_ in self.in_rows:
+                if not np.array_equal(np.asarray(tables[r], dtype=np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], dtype=np.uint16)):
+                    raise ValueError(f"{self.name}: port {r}'s table rows at the instances' refs are not their rows")
+        table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
+        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
         FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
-                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices])
+                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
+                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered)
         counts = self.low.layout.counts
         return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}

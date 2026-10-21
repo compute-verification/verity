@@ -8,7 +8,7 @@ and its served C2 replay challenge after each run's root of record.
   root v2, `tp.run_root`), it opens that session on it (``open --session S --root R``): the gate signs the open entry
   binding the session to the root before the challenger serves a coin, and refuses a second session for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (``ssh -R`` from the auditor host), refuses one whose coin
-  commitment isn't the gate's answer before its first coin (`pouw_h1_challenger.connect`), and for run i opens coin i of
+  commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of
   each family in `FAMILIES` after run i's root (`Session.draw`); it closes the session after its last run. The draws
   derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
   (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
@@ -41,6 +41,7 @@ from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, live_reason
 
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_window as PHW
 
 SCHEME = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
@@ -85,10 +86,10 @@ class Gate:
 
 
 def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
-    """`pouw_h1_challenger.connect`, retried while the auditor host's ``ssh -R`` to this machine comes up."""
+    """`pouw_h1_window.connect`, retried while the auditor host's ``ssh -R`` to this machine comes up."""
     for i in range(tries):
         try:
-            return PHC.connect(at, given)
+            return PHW.connect(at, given)
         except (ConnectionRefusedError, socket.timeout):
             if i == tries - 1:
                 raise

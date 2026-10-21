@@ -4,7 +4,18 @@ import PouwCheck.Pass
 import SampledProofs.ChallengerSession
 
 /-!
-# A live window's round coins (`core_check.py`, "a live window's round coins")
+# A live window's salt and round coins (`core_check.py`, "a live window's salt and round coins")
+
+`saltCheck` is `core_check.salt`. It reads the window's coins and roots through the challenger's own session as
+`roundsCheck` does, never ones the prover hands in: the one session the auditor's signed v2 ledger opens and ends closed
+for the window under the window's pinned challenger key (`SampledProofs.Challenger.auditedSession` and `sessionNamed`).
+S is the session the ledger's signed reserve entry names (a session opened without one is refused) and R the root its
+signed open entry opened S on; R is `windowOpenRoot` of the window's weights' root, its round-0 request table's root and
+S; the session's log shows R, alone, as what its salt coin followed; and under the commitment the session signed, a live
+epoch's, the salt coin is the epoch's `pouw/salt` coin 0, opened after R (`SampledProofs.Challenger.liveReason`). A
+refusal is `coin` (the key, the session or the coin rule's, in the challenger's words) or `salt` (a session opened
+without a reserve, the roots not of their form, the open root another window's, or a log that shows another root), with
+Python's words.
 
 `roundsCheck` is `core_check.rounds`. It reads the challenger's coins only through the challenger's own session, never a
 commitment the prover hands in: the one session the auditor's signed v2 ledger opens and ends closed for the window
@@ -21,7 +32,38 @@ challenger didn't receive), with Python's words.
 namespace PouwCheck
 
 open Lean (Json)
-open SampledProofs.Challenger (ChallengerKey LiveOpening trustedSessionOf)
+open SampledProofs.Challenger (ChallengerKey LiveOpening auditedSession ledgerEntry? sessionNamed trustedSessionOf)
+
+/-- `core_check.NO_RESERVE`, `SALT_FORM`, `OTHER_WINDOW` and `NOT_RECEIVED`: the reasons of a `salt` refusal. -/
+def NO_RESERVE : String :=
+  "the auditor's ledger opens the window's session without reserving it: a window's open root binds the session a " ++
+    "signed reserve entry names"
+def SALT_FORM : String := "the window's weights' root and its round-0 request table's root are not SHA-512 digests"
+def OTHER_WINDOW : String :=
+  "the session's open root is not the window's: salt.window_open_root of its weights' root, its round-0 " ++
+    "request table's root and the session"
+def NOT_RECEIVED : String :=
+  "the challenger's log does not show the window's open root as the one root its salt coin followed"
+
+/-- `core_check.salt`: none when `opening` is the window's salt coin, opened after the window's own open root, its
+session S and open root R the ones the auditor's signed reserve and open entries name and its coins and log the
+challenger's session's, else the refusal. -/
+def saltCheck (key ledger window session weights requests opening : Json) : R Unit := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  let (a, c, received) ← (auditedSession ledger window k >>= fun a => (a, ·) <$> sessionNamed a k session).mapError
+    fun e => ("coin", s!"the challenger's session is not trusted: {e}")
+  if let some why := PouwWindow.liveEpochReason c then coin why
+  let lines := (match ledger with | .arr ls => ls.toList | _ => [])
+  let named := (lines.filterMap ledgerEntry?).filter (·.session == a.session)
+  let (some reserve, some opened) := (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"))
+    | throw ("salt", NO_RESERVE)
+  let some r := hex? (get (get opened.body "window") "root") | throw ("salt", NO_RESERVE)
+  let digest := fun (j : Json) => if (str? j).any isHexDigest then hex? j else none
+  let (some w, some t) := (digest weights, digest requests) | throw ("salt", SALT_FORM)
+  if windowOpenRoot w t reserve.session != r then throw ("salt", OTHER_WINDOW)
+  unless (received.lookup PouwWindow.SALT).getD [] == [r] do throw ("salt", NOT_RECEIVED)
+  let o ← (LiveOpening.ofJson opening).mapError fun e => ("coin", s!"the salt's {e}")
+  if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
 
 /-- `core_check.rounds`: none when `openings` are the window's round coins over `roots`, read through the challenger's
 session, else the refusal. -/

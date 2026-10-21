@@ -737,6 +737,61 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
+    (`audit.Session.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
+    last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
+    not one root or a deadline later."""
+    (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
+    assert r["accepted"]
+    assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
+
+
+def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challengers_log():
+    """`auditor_line.auditor_seen`: group g's coin at challenge coin g's release, and its last root at the first request
+    on the challenger's log that names the root openings coin g was asked after. On a log that is the verifier's stamps
+    shifted, the line's groups are the verifier's; a later openings request lengthens them by as much; and an earlier
+    request naming that root, σ_(g+2)'s at k = 1, is the one read."""
+    import json
+
+    import auditor_line as al
+
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    seen = r["windows_seen"]
+    n, R, A = len(seen), [w["released_ns"] for w in seen], [w["arrivals_ns"][-1] for w in seen]
+
+    def log(late: int, named: bool) -> list[str]:
+        lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
+        for g in range(n):
+            for label, after, at in (("challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
+                                     ("openings", f"{g:0128x}", A[g] + late)):
+                lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
+                                         "received_at": at + 100}))
+                lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
+                                         "released_at": at + 101}))
+        return lines
+
+    def lmax(s: dict) -> list[int]:
+        return [x["l_max_ns"] for x in verifier.recorded_paced(s, got["reg"], host_bytes=0)["stretches"]]
+
+    shifted, how = al.auditor_seen(log(0, False), seen)
+    assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
+    assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
+    assert how == {"last_root_first_named_by": {"openings": n}}
+    assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
+    late, _ = al.auditor_seen(log(3, False), seen)
+    assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
+    named, how = al.auditor_seen(log(3, True), seen)
+    assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
+                                                 + [[A[g] + 103] for g in (n - 2, n - 1)])
+    assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
+    with pytest.raises(ValueError, match="not one of each for each of"):
+        al.auditor_seen(log(0, False)[:-4], seen)
+
+
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
     """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
@@ -943,11 +998,15 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
-    def wrong(self, check):
-        res = settle(self, check)
+    def changed(res):
         if res.get("accepted") != 1:
             return res
         return {"failure": "receipt", "window": 1, "at": [0, 0], "openings": res["openings"], "ns": res["ns"]}
+
+    def wrong(self, check, answered=None):
+        if answered is None:
+            return changed(settle(self, check))
+        return settle(self, check, lambda res: answered(changed(res)))
 
     monkeypatch.setattr(verifier.Pair, "settle", wrong)
     closed = []
@@ -1025,10 +1084,95 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
     assert r["disagreement"]["event"] == "record"
 
 
-def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
+LEAN = verifier.lv.Lean
+
+
+class HeldLean(LEAN):
+    """The Lean process with every request from its first event on held back until `release` (the test calls it as
+    the prover's passes end): a Lean as slow to answer and to check as can be. A request the driver waits on while
+    they're held is noted in `waited`, and releases them."""
+
+    made: list[HeldLean] = []
+
+    def __init__(self, exe, done) -> None:
+        self.hold, self.held, self.waited, self.holding, self.released = threading.Lock(), [], [], False, False
+        super().__init__(exe, done)
+        HeldLean.made.append(self)
+
+    def _put(self, request, body, answered) -> None:
+        with self.hold:
+            self.holding = self.holding or request["op"] == "event"
+            if self.holding and not self.released:
+                self.held.append((request, body, answered))
+                return
+        super()._put(request, body, answered)
+
+    def call(self, request, body=b""):
+        with self.hold:
+            waiting = self.holding and not self.released
+            if waiting:
+                self.waited.append(request["op"])
+        if waiting:
+            self.release()
+        return super().call(request, body)
+
+    def release(self) -> None:
+        with self.hold:
+            self.released = True
+            for item in self.held:
+                super()._put(*item)
+            self.held.clear()
+
+
+@pytest.fixture
+def held_lean(monkeypatch):
+    """Every Lean process the test starts is a `HeldLean`, released as the prover says its passes are done."""
+    HeldLean.made = []
+    idle = PassClock.idle
+
+    def released(self) -> None:
+        for lean in HeldLean.made:
+            lean.release()
+        idle(self)
+
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    monkeypatch.setattr(PassClock, "idle", released)
+    return HeldLean.made
+
+
+SCHEDULE = ("released_ns", "boundary_ns", "deadline_ns", "passes", "arrivals_ns", "slack_ns", "draws_sent_ns")
+
+
+@pytest.mark.parametrize("defer_openings", [True, False])
+def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw(monkeypatch, held_lean,
+                                                                                     defer_openings):
+    """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
+    first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
+    beside them (`--overlap-openings`), a paced session runs the schedule it runs with a Lean that answers at once,
+    every coin, boundary, root and draw at the same tick, and is still accepted only on the Lean's verdict of each of
+    its windows and its record."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    monkeypatch.setattr(verifier.lv, "Lean", LEAN)
+    (plain,), _ = run("honest", paces=[pace], defer_openings=defer_openings)
+    monkeypatch.setattr(verifier.lv, "Lean", HeldLean)
+    (r,), (pr,) = run("honest", paces=[pace], defer_openings=defer_openings)
+    assert len(held_lean) == 1 and held_lean[0].waited == [] and held_lean[0].released
+    assert r["accepted"] and pr["accepted"] and r["disagreement"] is None and r["verdict"] == "lean"
+    assert len(r["lean_check_ns"]) == r["windows"] == 12 and all(type(x) is int and x > 0
+                                                                for x in r["lean_check_ns"].values())
+    assert [{k: w[k] for k in SCHEDULE} for w in r["windows_seen"]] == \
+        [{k: w[k] for k in SCHEDULE} for w in plain["windows_seen"]]
+    assert r["record"]["public"]["pace"] == plain["record"]["public"]["pace"]
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
     reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
-    at that window as `disagreement`."""
+    at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
+    if not held:
+        monkeypatch.setattr(verifier.lv, "Lean", LEAN)
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     event = verifier.lv.receive_event
 
