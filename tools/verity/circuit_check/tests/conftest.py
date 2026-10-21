@@ -30,8 +30,10 @@ from circuit_check import units as UN
 WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
 
 #: where `check`'s circuit-check keeps the catalog bindings' records (`--cache cache_dir()/circuit-check --catalog-units`, with
-#: `cache_dir` of tools/verity/check/common.py)
-RECORDS = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / "circuit-check"
+#: `cache_dir` of tools/verity/check/common.py at its default), or `CIRCUIT_CHECK_RECORDS`: not `CHECK_CACHE`, which the suite
+#: guard points at an empty directory of its own (`HOST_CACHES`).  A record counts only for inputs identical to the ones it was
+#: made from, and the targets made from it are held to it, so it changes how long the catalog takes, not what it holds.
+RECORDS = Path(os.environ.get("CIRCUIT_CHECK_RECORDS") or Path.home() / ".cache" / "verity-check" / "circuit-check")
 
 
 def worker_slot_gb(env: Mapping[str, str], worker_gb: float = WORKER_GB) -> int | None:
@@ -85,7 +87,8 @@ def _from_records(cache: Path) -> Catalog | None:
     to its record's descriptor, as `cli._planned` holds the targets it makes; None when no record counts or one is stale."""
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
-        mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")} | {"CIRCUIT_CHECK_REPORT"})
+        mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
+                   | {"CIRCUIT_CHECK_REPORT", "CIRCUIT_CHECK_RECORDS"})
         try:
             plan = UN.plan(cache, cli.REPO)
             if plan is None:
