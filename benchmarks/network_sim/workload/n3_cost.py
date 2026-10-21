@@ -309,10 +309,11 @@ def canonical_geometry(f: U.Format, N: int, salted: bool, rec: U.Shape, tpl: tup
     return out
 
 
-EGRESS_ROWS = (64, 16, 256)
+EGRESS_ROWS = (64, 16, 256, 512)
 """Lever 4's egress outbox rows, in bytes (the first; the others its sensitivity): a served egress frame is one token's
-event (`network_traces/record.py`), so its data is one token's text, and rows that hold one are enough. Ingress frames
-are a prompt's bytes packed whole, and keep rows of B."""
+event (`network_traces/record.py`), so its data is one token's text, and rows that hold one are enough (512 hold any
+token of GLM-5.3's vocabulary, whose longest is 512 bytes and 124 of 154,820 longer than 64). Ingress frames are a
+prompt's bytes packed whole, and keep rows of B."""
 
 
 def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] = (1, 2),

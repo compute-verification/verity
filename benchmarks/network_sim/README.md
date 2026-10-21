@@ -569,9 +569,10 @@ variant keeps.
 | Frame j reads row j, no descriptors | estimated | 147.5B | 2.00 | 147.6B | 2.00 |
 
 Lever 1 rests on nothing new: v5 accepts exactly where v4 does on every window the tests cover, and refuses what v4
-refuses elsewhere by each leaf's binding under SHA-512, as v4 does. Lever 2 rests on a canonical framing the
-certifier doesn't have yet, each port's frames one public template; N3 checks the template itself, so its verdict
-takes no new assumption, and the framing owes completeness. Lever 4 rests on that framing and on every egress frame's
-data being at most 64 bytes, one token's text. Egress rows of 16 and 256 bytes give 1.67 and 1.76. Each lever's
-mechanism, what the certifier's framing must change, the tests (`workload/tests/test_n3_v5.py`) and circuit-check:
-note:network-accounting/20261021T0520Z-finding-n3-v5-levers.
+refuses elsewhere by each leaf's binding under SHA-512, as v4 does. Lever 2 rests on a canonical framing the certifier
+doesn't have yet, each port's frames one public template; N3 checks the template itself, so its verdict takes no new
+assumption, and the framing owes completeness. Lever 4 rests on that framing and on every egress frame's data being at
+most 64 bytes, one token's text, a longer one cut over frames. Egress rows of 16, 256 and 512 bytes give 1.67, 1.76 and
+1.84; 512 hold any token of GLM-5.3's vocabulary (the one on the node), so a framing that cuts no token is 1.84. Each
+lever's mechanism, what the certifier's framing must change, the tests (`workload/tests/test_n3_v5.py`) and
+circuit-check: note:network-accounting/20261021T0520Z-finding-n3-v5-levers.
