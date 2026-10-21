@@ -43,10 +43,12 @@
 # the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as they
 # are, under ROLE=both too: with `--challenger serve --challenger-key DIR` each session's coins come from the
 # challenger's own process, `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under
-# out/challenger. A registration left live by a run that ended early refuses the node until CLOSE=NODE_HEX closes it
-# (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or python; default verifier.py's,
-# lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds the Lean verifier with elan's
-# `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
+# CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
+# python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)

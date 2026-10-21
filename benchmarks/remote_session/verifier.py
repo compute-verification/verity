@@ -57,10 +57,12 @@ keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill):
 0.6 GB of JSON.
 
 A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
-(`--challenger local`, the default), or from `benchmarks/live_challenger/serve.py`, started for the session on this
-machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`). Either way
-each coin is asked for after the root it follows, the Lean takes it with the event that released it, and once the
-session ends what the challenger signed holds the session's coins (`Session.released_reason`): a session whose coins
+(`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
+machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
+auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
+window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
+it with the event that released it, and once the session ends what the challenger signed holds the session's coins
+(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
 fail it is refused as `coins`, the reason in its `challenger`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
@@ -69,6 +71,8 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--registry REGISTRY.json] [--verdict lean|both|python] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                       [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+                        --challenger-period P [--challenger-minutes M]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -703,7 +707,7 @@ class Verifier:
                  ingress_bytes_per_s: float = 0.0, verdict: str = VERDICT, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
-                 challenger: challengers.Local | challengers.Serve | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
                  appends: int = coins.APPENDS) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
@@ -1335,12 +1339,22 @@ def main() -> int:
                          "charges (`paced_line`): the node's disks, and its boundary links to drop Identity")
     ap.add_argument("--challenger", default="local", choices=challengers.KINDS,
                     help="where each session's coins come from (`challengers`): a challenger in this process (local, "
-                         "the default), or serve.py started for the session on this machine (serve), its out/ under "
-                         "OUT/challenger and its record and release log checked when the session ends")
+                         "the default), serve.py started for the session on this machine (serve), or the auditor "
+                         "host's challenger through its gate (gate), its out/ under OUT/challenger and its record "
+                         "and release log checked when the session ends")
     ap.add_argument("--challenger-key", type=Path, metavar="DIR",
                     help="serve's LMS key directory, outside OUT (made there on first use)")
     ap.add_argument("--challenger-params", metavar="W,H",
                     help="serve's LMS width and height for a key it makes (default lms.DEPLOYED's)")
+    ap.add_argument("--challenger-ssh", metavar="WORDS",
+                    help="gate: ssh's options and destination for the auditor host, the lane's gate key among them "
+                         "(-i KEY research@HOST)")
+    ap.add_argument("--challenger-peer", metavar="NAME", help="gate: this machine's name in the host's /etc/vy/peers")
+    ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
+    ap.add_argument("--challenger-period", metavar="P",
+                    help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
+                    help="gate: each session's reserve, the most it serves")
     ap.add_argument("--appends", type=int, default=coins.APPENDS,
                     help="each session's append coins, the most appends it takes (`coins.families`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
@@ -1376,8 +1390,13 @@ def main() -> int:
     if a.out is None:
         ap.error("--out is required")
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
+        ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
+                 f"{challengers.GATE_PORTS.stop - 1}), which the host's ssh -R binds on this machine")
     try:
-        challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params)
+        challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
+                                    ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
+                                    period=a.challenger_period, minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     save_registry(a.registry, registry)
