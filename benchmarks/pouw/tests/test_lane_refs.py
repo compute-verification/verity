@@ -2,11 +2,12 @@
 every leaf's `partials.lane_partials` equals `h1tile.lane_partials(..., gated=admit)` and `h1zy.lane_partial` lane by
 lane, over live and dead leaves and leaves whose admitted rows lie outside some lanes' rows (m = 32 r + j, 0 < j < 8:
 lanes g >= j hold no admitted row and are ungated all the same), and the references' XOR is the served receipt.  A
-mismatch is reported by leaf, lane and word.  `lane_refs.served` (the gate's check under DITHER_LANE_REFS=1) runs on a
-capture of the gate's shape.  Where PARTIALS_LIB names an h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at
-m = 2 and 3 (job.sh's partials bench)."""
+mismatch is reported by leaf, lane and word.  `lane_refs.served` (the gate's check under DITHER_LANE_REFS) runs on a
+capture of the gate's shape, checked in place and through a saved capture as after serving.  Where PARTIALS_LIB names an
+h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at m = 2 and 3 (job.sh's partials bench)."""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import types
@@ -91,9 +92,8 @@ def test_a_mismatch_names_its_leaf_lane_and_word(monkeypatch):
     assert bad["admitted"] == 3 and bad["lane_has_admitted_row"] is False
 
 
-def test_served_on_a_gate_shaped_capture():
-    """`served`'s plumbing on a capture shaped as dither_one's gate's: the calls' receipts flat in plan order, every call
-    sampled live and dead, and the step's own operands at m = 33, 35, 39."""
+def _gate_capture():
+    """A capture shaped as dither_one's gate's: the calls' receipts flat in plan order."""
     nk = [(64, 512), (32, 1024), (32, 512), (64, 512)]  # the partly steps' calls: 0, 2, the widest K's first (1), the last
     win = _window(nk, {7: 32})
     st = win.steps[7]
@@ -107,12 +107,36 @@ def test_served_on_a_gate_shaped_capture():
     dwin = types.SimpleNamespace(t=T, L=len(nk), wt=win.b, offs=win.offs, u_step=win.u_step, nk=nk,
                                  plan=types.SimpleNamespace(offs=offs))
     g = {"s": 7, "m": 32, "a": st.a, "a_roots": st.a_roots, "b_roots": win.b_roots, "receipts": flat}
-    doc = LR.served(dwin, g, st.salt, workers=1)
-    assert doc["ok"], doc
-    assert (doc["real"]["live"], doc["real"]["dead"], doc["real"]["reference_xor_vs_receipt_bad"]) == (4, 4, [])
-    assert sorted(doc["partly"]) == ["33", "35", "39"]
-    assert all(x["partly_admitted"] == x["leaves"] == 4 for x in doc["partly"].values())
-    assert [doc["partly"][m]["lanes_without_an_admitted_row"] for m in ("33", "35", "39")] == [4 * 28, 4 * 20, 4 * 4]
+    return dwin, g, st.salt
+
+
+def _served_ok(doc):
+    gs = doc["groups"]
+    assert doc["ok"] and doc["mismatches"] == 0, doc["first_mismatches"]
+    assert (gs["real"]["live"], gs["real"]["dead"], gs["real"]["reference_xor_vs_receipt_bad"]) == (4, 4, [])
+    assert sorted(gs) == ["partly:33", "partly:35", "partly:39", "real"]
+    assert [gs[f"partly:{m}"]["lanes_without_an_admitted_row"] for m in (33, 35, 39)] == [4 * 28, 4 * 20, 4 * 4]
+    assert all(gs[g]["partly_admitted"] == gs[g]["leaves"] == 4 for g in gs if g != "real")
+
+
+def test_served_on_a_gate_shaped_capture():
+    """`served`'s plumbing: every call sampled live and dead with its committed receipt, and the step's own operands at
+    m = 33, 35, 39, checked here."""
+    doc = LR.served(*_gate_capture())
+    assert doc["here_ok"] and doc["leaves"] == 20
+    _served_ok(doc)
+
+
+def test_a_saved_capture_is_checked_after_serving(tmp_path):
+    """`served` with a path saves the records (the gate's daemon process can't spawn the references' pool), and
+    `lane_refs.py CAPTURE` checks them after serving, the same verdict."""
+    path = tmp_path / "capture.npz"
+    here = LR.served(*_gate_capture(), path=path)
+    assert here["ok"] and here["captured"] == str(path) and "groups" not in here
+    recs = LR.load(path)
+    assert len(recs) == 20 and all(r["a"].dtype == np.uint8 and r["a"].shape == (32, r["k"]) for r in recs)
+    assert LR.main([str(path), "--workers", "1", "--out", str(tmp_path / "doc.json")]) == 0
+    _served_ok(json.loads((tmp_path / "doc.json").read_text()))
 
 
 @pytest.mark.skipif(not (torch.cuda.is_available() and os.environ.get("PARTIALS_LIB")),
@@ -125,4 +149,4 @@ def test_gpu_rows_are_serve_regs_lane_rows():
               for rb in (0, 1)]
     doc = LR.compare(win, leaves, kern)
     assert doc["ok"], doc["first_mismatches"]
-    assert doc["backends"] == ["cpu", "gpu"] and (doc["dead"], doc["partly_admitted"]) == (2, 4)
+    assert doc["backends"] == ["cpu", "gpu", "lane_partial"] and (doc["dead"], doc["partly_admitted"]) == (2, 4)
