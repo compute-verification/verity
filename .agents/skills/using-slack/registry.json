@@ -10,6 +10,9 @@
     }
   ],
   "collaborators": [],
+  "external_posters": [
+    "Codex"
+  ],
   "channels": {
     "agent-coordination": {
       "id": "C0C5RCXL66N",
@@ -231,6 +234,7 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
         "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",

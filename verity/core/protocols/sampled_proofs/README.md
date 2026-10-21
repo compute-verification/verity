@@ -220,9 +220,21 @@ only inside a proof (`one_stage.registered`).
   when it registers values, so v1's bytes are unchanged. R7 (`check`, with the verifier's own `registered = {parameter:
   words}`): the values are exactly the verifier's, each with a SHA-512 hex root and the verifier's integer leaf count,
   words, width (`R7-word_bits`, which also refuses a `"word_bits": 16` written out) and domain (`registered_entries`,
-  from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
-  the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
-  default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
+  from its own program), and a value an earlier record of the log registered under the domain it takes now keeps that
+  record's root (`held_roots`, keyed by value and domain): the log is the only place the verifier holds roots, so a
+  value is committed once a domain whatever the caller passes. 16 is the default, so a 16-bit value's domain, entry and
+  root are what they were before `word_bits`.
+- Per-window values (`check(..., window_root=, held=)`, `register_served`'s too): a window-independent Program
+  registers each window's values under the same names. The verifier takes the window's open root R from the
+  challenger's signed open of that window (never from the record), and every registered value's domain binding adds
+  `"window": R` (`registered.domain`, Lean `Registered.domainAt`) but the ones it holds across windows: `held` (the
+  weights), and its pinned, supplied and output values. So an honest second window's values are held to nothing the
+  first registered, and a root of an earlier window opens under no domain R7 takes (`R7-domain` when the entry names
+  the earlier domain; under the new domain no registered read of it opens). A verifier that names no R takes every
+  domain as before, and fails closed: it refuses its own inputs (ValueError, Lean `OneStage.paramsOfJson`, naming
+  `window_root` and `held`) when a value it doesn't hold across windows was registered by an earlier record under the
+  domain it takes now (`registration.unwindowed`), so a fixed-name Program's second window needs R, while a Program
+  whose per-window values take fresh names (the window-prefixed form) needs none.
 - Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
   itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K

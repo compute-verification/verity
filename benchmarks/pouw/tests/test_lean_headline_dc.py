@@ -48,11 +48,13 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 
 
 def test_folds_meet_fold_opt_at_pi_star():
-    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, an open conjecture under Security/lean-audit.json's
-    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies: ♭'s fold meets it, and so does ♭'s fold
-    with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That fold is why
-    FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD on the
-    sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""
+    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all four π*: on DC-90-ri the
+    counted, unbuilt memory round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14), which this test doesn't build,
+    price at 1.0245 φ* or more since their classes carry the JI90 lines (r20261021-070616-d06c). ♭'s fold meets it, and so
+    does ♭'s fold with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That
+    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
+    on the sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""
     for fam in H.FAMILIES:
         s = H.reading(fam, fam.sheet).data
         pipe = dict(zip(s.classes, s.sheet["pipe"]))
@@ -76,7 +78,9 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     address (ATOM.E, bit-exact on the H200 and the B200, r20261020-031119-3113 and r20261020-031119-013a), and π*
     prices each class each of them issues
     above 0, so no route folds for free at the certificate FOLD-OPT is asked at. Each reading's catch-all is priced at
-    its issue slot alone: the sheet's at DS_issue, the measured reading's on the measured issue row (DC-CENSUS-13)."""
+    its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row (DC-CENSUS-13) and,
+    once a run has timed its instructions beside the tensor, the joint-issue lines every timed scalar class carries
+    (DC-90-ri: LD.E and IMAD.WIDE, r20261021-070616-d06c)."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             x = H.reading(fam, v).data
@@ -85,19 +89,23 @@ def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
             assert not free, (fam.ns, v, free)
         k = H.CATCH_ALL[fam.key]
         assert H.reading(fam, fam.sheet).data.c[k] == {"DS_issue": 1}, (fam.ns, k)
-        k = H.CATCH_ALL[fam.measured]
-        assert H.reading(fam, fam.measured).data.c[k] == {"issue": 1}, (fam.ns, k)
+        k, c = H.CATCH_ALL[fam.measured], H.reading(fam, fam.measured).data.c
+        joint = {r: v for r, v in c[H.SCALAR_REF].items() if H.JOINT_ISSUE.fullmatch(r)}
+        assert c[k] in ({"issue": 1}, {"issue": 1, **joint}), (fam.ns, k)
+        if fam.measured == "DC-90-ri":
+            assert joint and all(c[x] == {"issue": 1, **joint} for x in (k, "ATOME32")), (fam.ns, c[k], c["ATOME32"])
 
 
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
-    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds by CP_ATS8
-    and the generic CP_RED8 (ATOME32 at the issue row alone, RT4-SHEET-12) and heads under 0.1% of the words on dp4a,
-    the rest on the IGMMA, so the measured file states its own word production; the reading is over 1%
-    (RT-HB-HEAD-1)."""
+    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads every
+    word on the IGMMA, as the sheet's does, and folds by the generic CP_RED2 and CP_RED8 alone: ATOME32 and REDUX carry
+    the joint-issue lines their runs measured (r20261021-070616-d06c, r20261021-074303-da7f), so the uniform and
+    shared-memory checkpoints no longer undercut them. The reading is over 1% (RT-HB-HEAD-1)."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound
     assert H.reading(H.SM90, "DC-90-ri", full=True).bound > 0.1
-    dp4a = re.search(r"\(dp4a\) on (\d\.\d+)", r.data.words_mix)
-    assert dp4a and 0 < float(dp4a[1]) < 0.001 and "def flatWords" in H.render_measured(H.SM90, r, s)
+    assert r.data.words_mix == s.data.words_mix and "def flatWords" not in H.render_measured(H.SM90, r, s)
+    assert re.fullmatch(r"the fold routes' cheapest mix, by share of the words: cp-red2-generic 0\.\d+, "
+                        r"cp-red8-generic 0\.\d+", r.data.fold_mix), r.data.fold_mix
