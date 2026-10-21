@@ -7,13 +7,15 @@ import Properties.Accounting.Served
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
 
-`TieCommits` goes class by class: a registered value's commit coin is `0`; an A row's or a `y` row's is its round,
-which is its first reader's, since only its own call reads it (`firstRead_cases`), or below the draw when nothing does
-(`round_lt`); a `zTree` `z` word's is its round, the floor of its cut; a receipt's or `perCall`'s
-`y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
+`TieCommits` goes class by class, every class but the receipt in `LayerCommitted`'s first case: a registered value's
+commit coin is `0`; an A row's or a `y` row's is its round, which is its first reader's, since only its own call reads
+it (`firstRead_cases`), or below the draw when nothing does (`round_lt`); a `zTree` `z` word's is its round, the floor
+of its cut; `perCall`'s `z` or `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an
+inner value's is its cut. A receipt is in the second case: a computed value (`Tie.computed`), committed by the draw
+(`Tie.receipt`), and only gates of its own unit read it (`Tie.readers`; each reader is a gate, `reads_lt`).
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
 `SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
-round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
+round, which `Wf` puts below it (an input has no second case). `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
 `epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
 release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
 with gates (one call, its coin, an A row and a receipt reading both), so `TieCommits` isn't true only of the empty
@@ -36,6 +38,13 @@ window that met `CreditTie` before the restatement: `witTwice_notValueChecked` (
 s8 and so no scales; `witRaw_notValueChecked` (RT4-LOGIC-15), a raw product `w = 0 + 1·z` served as a `y` word. The
 last two are refused at one typed input, `witX3` (`s_a = 3`, every other word `2`), whose values `decide +kernel`
 computes.
+
+`witTieRing`: a ring of depth `D = 6` is tied, a `zTree` window of eight steps whose step `s` receipt is committed under
+round `s + 5`'s root, the last five steps' in the manifest before the draw; step `0`'s receipt is cut at coin `1` and
+committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case covers it, and the window is in
+Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`). `witCross_notTie`: a receipt that a
+gate of another unit reads, committed at the draw, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
+too (`witCross_notLayerCommitted`).
 -/
 
 namespace Properties.Served
@@ -111,27 +120,39 @@ theorem round_le_cut_of_none {ι : Type} {Cd : Declared ι} {ℓ : ℕ} (hb : Cd
   simp only [Declared.cutOf, hb]
   exact le_max_left _ _
 
+/-- A gate that reads a value is a gate of the circuit. -/
+theorem reads_lt {ι : Type} {Cd : Declared ι} {i j : ℕ} (h : Cd.Reads j i) : j < Cd.dag.length := by
+  by_contra hge
+  have hnone : Cd.dag[j]? = none := List.getElem?_eq_none (by omega)
+  unfold Declared.Reads at h
+  rw [hnone] at h
+  simp at h
+
 theorem tieCommits : TieCommits := by
   intro ι L F Cd cls T ℓ hW
   obtain ⟨hlt, hnc⟩ := hW
   have hround := T.round _ (T.inRange ℓ hlt)
   cases hk : cls ℓ with
   | coin => exact absurd ((T.coin ℓ hlt).1 hk) hnc
-  | inner => exact le_of_eq (T.inner ℓ hlt hk)
+  | inner => exact Or.inl (le_of_eq (T.inner ℓ hlt hk))
   | registered =>
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
+    left
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk]
     simp [commitCoin]
   | act =>
+    left
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inl hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | served =>
+    left
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inr hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | outZ =>
+    left
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     by_cases hF : F = .perCall
     · subst hF
       have hn := T.noised ℓ hlt (Or.inr ⟨Or.inl hk, rfl⟩)
@@ -141,8 +162,9 @@ theorem tieCommits : TieCommits := by
     · rw [commitCoin_outZ hF]
       exact round_le_cut_of_none hb
   | outY =>
+    left
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]) (by simp [hk]), hk, ← hround]
     by_cases hF : F = .perCall
     · subst hF
       have hn := T.noised ℓ hlt (Or.inr ⟨Or.inr hk, rfl⟩)
@@ -152,12 +174,8 @@ theorem tieCommits : TieCommits := by
     · rw [commitCoin_outY hF]
       exact round_le_cut_of_none hb
   | receipt =>
-    have hb := T.computed ℓ hlt (by simp [hk])
-    have hn := T.noised ℓ hlt (Or.inl hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
-    show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
-    simp only [Declared.cutOf, hb]
-    exact le_max_of_le_right hn
+    exact Or.inr ⟨T.computed ℓ hlt (by simp [hk]), (T.receipt ℓ hlt hk).2,
+      fun j hR => T.readers ℓ hlt hk j (reads_lt hR) hR⟩
 
 theorem tieLive : TieLive := by
   intro ι K Sc L F Cd cls T u _ hw
@@ -209,11 +227,13 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
     simp [Declared.binding, hnone] at hb
   have hW : Cd.Writes ℓ := ⟨hlt, by rw [hb]; simp⟩
   have h1 : Cd.commitRound ℓ = Cd.rounds := by simpa [hb] using hd ℓ hW
-  have h2 := hLC ℓ hW
   have h3 : Cd.cutOf ℓ = Cd.firstRead ℓ := by simp [Declared.cutOf, hb]
   obtain ⟨j', hj', _, h⟩ := firstRead_of_reads Cd hj hR
   have hr := hW2 _ (hW1 j' hj').1
-  omega
+  rcases hLC ℓ hW with h2 | ⟨hn, -⟩
+  · omega
+  · rw [hb] at hn
+    cases hn
 
 /-! ## A tied circuit with gates -/
 
@@ -272,6 +292,8 @@ theorem witTie : Tie witLayout .beside witCircuit witCls where
   forms := by decide +kernel
   linked := fun _ _ _ => trivial
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 /-- The witness's receipt is committed at coin `1`, its cut, the round after the coin it reads. -/
@@ -325,6 +347,8 @@ theorem witTieCall : Tie witLayout .perCall witCircuitCall witClsCall where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨2, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 /-- The `perCall` witness's `y` is committed at coin `1`, its cut, after the coin it reads. -/
@@ -593,6 +617,8 @@ theorem witTieZ : Tie witLayout .zTree witZ witZCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witZ_layerCommitted : LayerCommitted witZ :=
@@ -763,6 +789,8 @@ theorem witTieP : Tie witLayout .perCall witP witPCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨103, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witP_layerCommitted : LayerCommitted witP :=
@@ -974,6 +1002,8 @@ theorem witTieTwice2 : Tie witLayout2 .zTree witTwice witTwiceCls where
     · exact ⟨68, by decide +kernel, by decide +kernel, by decide +kernel⟩
     · exact ⟨104, by decide +kernel, by decide +kernel, by decide +kernel⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
   inner := by decide +kernel
 
 /-- The call has two units, the window's population is two, and the circuit declares exactly those two, each receipt's
@@ -1035,6 +1065,8 @@ theorem witTieWS : Tie witLayout .zTree witWS witZCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witWS_typed : Accounting.Gates.Typed witWS.dag witX3 := typed_of_all witX3 (by decide +kernel)
@@ -1096,6 +1128,8 @@ theorem witTieRaw : Tie witLayout .zTree witRaw witRawCls where
   forms := by decide +kernel
   linked := fun _ _ _ => ⟨68, by decide +kernel, by decide +kernel, rfl⟩
   commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
   inner := by decide +kernel
 
 theorem witRaw_typed : Accounting.Gates.Typed witRaw.dag witX3 := typed_of_all witX3 (by decide +kernel)
@@ -1126,5 +1160,132 @@ theorem witRaw_notValueChecked (L : Layout) : ¬ ValueChecked L witDq witRaw wit
 
 theorem witRaw_notCreditTie : ¬ CreditTie witLayout .zTree witDq witRaw witRawCls := fun h =>
   witRaw_notValueChecked witLayout h.2
+
+/-! ## A ring of depth six, and a receipt another unit reads -/
+
+/-- `witLayout` over eight steps: eight calls, one a step, and eight rounds in a form of a round a step. -/
+def witLayout8 : Layout := { witLayout with steps := 8 }
+
+/-- Step `s`'s gates in the ring witness, from gate `4s`: its round's coin, an A row (a run input), the served `z`
+(reading the A row, no coin) and the receipt (reading the coin and the A row). -/
+def witRingStep (s : ℕ) : Accounting.Gates.Dag Unit :=
+  [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+    witGate (.affine 0 [1]) [4 * s + 1] true, witGate (.affine 0 [1, 1]) [4 * s, 4 * s + 1] true]
+
+/-- `witLayout8` in `zTree` in a ring of depth `D = 6`: step `s` is call `s`, round `s` and unit `s`; its A row and
+`z` are committed under round `s`'s root, before its coin, and its receipt under round `s + 5`'s, steps `3`–`7`'s in
+the manifest before the draw (coin `8`). -/
+def witRing : Declared Unit where
+  dag := (List.range 8).flatMap witRingStep
+  calls := 8
+  call := fun i => i / 4
+  rounds := 8
+  round := fun c => c
+  coinMode := fun _ => .live
+  commitRound := fun i => if i % 4 = 3 then min (i / 4 + 5) 8 else i / 4
+  seedNames := fun _ _ => false
+  units := 8
+  unit := fun i => i / 4
+
+/-- `witRing`'s classes: each step's coin, A row, `z` and receipt. -/
+def witRingCls (i : ℕ) : Cls :=
+  if i % 4 = 0 then .coin else if i % 4 = 1 then .act else if i % 4 = 2 then .outZ else .receipt
+
+/-- Each receipt's unit has its `z`, the gate before it. -/
+theorem witRing_links : ∀ i, i < witRing.dag.length → witRingCls i = .receipt →
+    i - 1 < witRing.dag.length ∧ witRingCls (i - 1) = .outZ ∧ witRing.unit (i - 1) = witRing.unit i := by
+  decide +kernel
+
+/-- **A ring of depth six is tied**: each step's receipt is committed under round `s + 5`'s root, or the manifest, after
+its round's coin and by the draw, and no gate reads it. -/
+theorem witTieRing : Tie witLayout8 .zTree witRing witRingCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := by decide +kernel
+  inRange := by decide +kernel
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun i hi hr =>
+    ⟨i - 1, (witRing_links i hi hr).1, Or.inl (witRing_links i hi hr).2.1, (witRing_links i hi hr).2.2⟩
+  commit := by decide +kernel
+  receipt := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
+  inner := by decide +kernel
+
+/-- Step `0`'s receipt reads coin `0`, so it is cut at coin `1`, the next round's, and committed at coin `5`, under
+round `5`'s root: past its cut, so only `LayerCommitted`'s second case covers it. -/
+theorem witRing_late : witRing.Writes 3 ∧ witRing.cutOf 3 = 1 ∧ witRing.commitRound 3 = 5 :=
+  ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
+
+theorem witRing_layerCommitted : LayerCommitted witRing :=
+  tieCommits Unit witLayout8 .zTree witRing witRingCls witTieRing
+
+theorem witRing_wf : witRing.Wf := by
+  have hcoin : ∀ i, i < witRing.dag.length → ∀ j, j < witRing.dag.length → witRing.binding i = some .coin →
+      witRing.Reads j i → witRing.round (witRing.call i) = witRing.round (witRing.call j) := by
+    unfold Declared.Reads; decide +kernel
+  exact ⟨by decide +kernel, by decide +kernel, fun _ _ _ _ h => h, fun i j hi hj hb hR => hcoin i hi j hj hb hR,
+    by decide +kernel⟩
+
+/-- Every kind credited, its operand luck pinned (`0`), its receipt luck and guess bound `½`. -/
+noncomputable def witScheme : Scheme Unit where
+  floor := fun _ => ⟨fun _ => 0, fun _ => 0, fun _ => 0, fun _ => 0⟩
+  credited := fun _ => true
+  span := fun _ => 0
+  form := fun _ => .pinned
+  mu := fun _ => 0
+  rB := fun _ => 1 / 2
+  guess := fun _ => 1 / 2
+  seedRate := fun _ => 0
+  wholeRate := fun _ => 0
+
+theorem witScheme_luckProved : witScheme.LuckProved := fun _ => by norm_num [witScheme, LuckForm.value]
+
+/-- **The ring of depth six is in Compose's scope**, at any positive `δ_s`. -/
+theorem witRing_scope {δs : ℝ} (hδs : 0 < δs) : Scope witScheme witRing δs :=
+  tieScope Unit Unit witScheme witLayout8 .zTree witRing witRingCls δs witTieRing witRing_wf hδs witScheme_luckProved
+
+/-- `witLayout` over two steps: two calls and two rounds in a form of a round a step. -/
+def witLayout2s : Layout := { witLayout with steps := 2 }
+
+/-- Two steps in `beside`, step `s` call, round and unit `s`: step `0`'s coin, A row and receipt (gates 0–2), and step
+`1`'s (3–5), whose receipt reads step `0`'s receipt too. Step `0`'s receipt is committed at the draw, coin `2`, after
+its reader's coin `1`. -/
+def witCross : Declared Unit where
+  dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+    witGate (.affine 0 [1, 1]) [0, 1] true, witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+    witGate (.affine 0 [1, 1, 1]) [3, 4, 2] true]
+  calls := 2
+  call := fun i => i / 3
+  rounds := 2
+  round := fun c => c
+  coinMode := fun _ => .live
+  commitRound := fun i => if i = 2 ∨ i = 5 then 2 else i / 3
+  seedNames := fun _ _ => false
+  units := 2
+  unit := fun i => i / 3
+
+/-- `witCross`'s classes: each step's coin, A row and receipt. -/
+def witCrossCls (i : ℕ) : Cls :=
+  if i % 3 = 0 then .coin else if i % 3 = 1 then .act else .receipt
+
+/-- **A receipt that another unit reads isn't tied**: step `0`'s receipt (gate 2), read by step `1`'s (gate 5, unit
+`1`) and committed after that reader's coin, fails `Tie.readers`. -/
+theorem witCross_notTie : ¬ Tie witLayout2s .beside witCross witCrossCls := fun T =>
+  absurd (T.readers 2 (by decide +kernel) (by decide +kernel) 5 (by decide +kernel)
+    (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
+
+/-- **Nor does it meet `LayerCommitted`**: its cut is coin `1`, the next round's, before its commit coin `2`, and a
+gate of another unit reads it. -/
+theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
+  rcases h 2 ⟨by decide +kernel, by decide +kernel⟩ with h1 | ⟨-, -, h2⟩
+  · exact absurd h1 (by decide +kernel)
+  · exact absurd (h2 5 (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
 
 end Properties.Served

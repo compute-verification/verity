@@ -19,7 +19,9 @@ program `p` and query:
   salt is opened after the weights' root (`PouwCommit.epochSalt`), and the draw after the transcript's
   (`PouwCommit.drawCoin` at `PouwCommit.drawAfter`). So a registered input is committed before coin `0`, and every
   other value the prover writes before the draw, coin `rounds`. Under that schedule `Accounting.Compose.LayerCommitted`
-  fails wherever a value's IR cut is before the draw, which is why the live statements credit nothing on today's code;
+  fails wherever a value's IR cut is before the draw and it isn't a computed value only its own unit reads (every run
+  input any gate reads, `Properties.Served.SeededScheduleNotLive`), which is why the live statements credit nothing
+  on today's code;
   the seeded statements' binding layer (`Declared.atDraw`) cuts every value at the draw, no earlier than this;
 * **seed preimages**: what the code's seeds name (`Declared.seedNames`). Each unit's seed is `seeds.PouwSeed` of the
   salt, its position and its seed group's `pouw.roots` slot; the salt's derivation reads the weights' root
