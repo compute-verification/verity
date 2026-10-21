@@ -586,7 +586,8 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
             "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain, "retain_exclude": sorted(excl)}
 
 
-def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0) -> dict[str, Any]:
+def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0,
+                     chunk: int = GPU_CHUNK_BYTES) -> dict[str, Any]:
     """Upper bound of the bytes ONE engine step binds into the arena, from the acquired-module set (the required-value manifest of the
     native path: forward outputs of ACQUIRE_CLASSES, per token) and the workload envelope (`batch`, `max_prompt`, `max_new`,
     `max_num_batched_tokens`, `max_model_len`).  Prefill: the admitted prompt tokens of one step (<= max_num_batched_tokens, <= B x max
@@ -641,14 +642,14 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         else:
             w = hidden * 2
         per_token += w
-        per_step += GPU_CHUNK_BYTES
+        per_step += chunk
         cls = next((c for c in ("LogitsProcessor", "Sampler", "VocabParallelEmbedding", "RMSNorm", "RotaryEmbedding", "Attention", "SiluAndMul",
                                 "LinearBase") if c in names), "other")
         widths[cls] = widths.get(cls, 0) + w
     moe_pt = moe_bytes_per_token(model, moe_layers)
     if moe_pt:
         per_token += moe_pt
-        per_step += moe_layers * 6 * GPU_CHUNK_BYTES
+        per_step += moe_layers * 6 * chunk
         widths["MoeBlock"] = moe_pt
     B = max(1, int(envelope.get("batch") or 1))
     max_prompt = max(1, int(envelope.get("max_prompt") or 1))
@@ -710,6 +711,15 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
 
 def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
+
+
+def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
+    bad: dict[str, tuple[int, int]] = {}
+    for src in srcs:
+        names, mine = src.split_step_names(names, step, padding_only)
+        bad.update(mine)
+    return names, bad
 
 
 _MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
@@ -861,8 +871,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             hidden_m1 = any("Hidden" in type(s).__name__ for s in getattr(self, "sources", []))
         backend = "fa3" if any(type(s).__name__ in ("HiddenM1SourceFA3", "NativeHiddenM1SourceFA3") for s in getattr(self, "sources", [])) else "fa2"
         moe_src = next((s for s in getattr(self, "sources", []) if getattr(s, "short_name", "") == "moe"), None)
+        chunk = self.chunk if self.gpu_tree else GPU_CHUNK_BYTES
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
-                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
+                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0), chunk=chunk)
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
         extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
@@ -883,8 +894,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
         if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * chunk
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * chunk
             rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
                                     "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill
@@ -2070,11 +2081,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # covered, the sampler-ids identity present -- a step that drops one identity's ⊥ still FAILS by name.  Never a relabel: the
         # padding's words are checked == bot by `padding_steps.padded_population`, its placement by the composition check.
         padded_run = bool(getattr(self, "_padding", None))
-        padding_only_steps: list[int] = []
-        padding_tensors_n = 0
+        padding_only_steps, padding_tensors_n = [], 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
+        cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
         own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
         moe_of = self._moe_layer_of()
 
@@ -2082,7 +2092,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
         # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
+        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
@@ -2150,7 +2160,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity

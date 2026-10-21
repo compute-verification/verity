@@ -43,9 +43,11 @@ def run_failing(com, sched):
     return rc
 
 
-@pytest.mark.parametrize("scheme", [None, R.NAME], ids=["vllm-v1", "rows-sha512"])
-def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, scheme):
-    com = WR.committer(monkeypatch, retain_levels=False, bounded=True, commit_scheme=scheme)
+@pytest.mark.parametrize("scheme,retain", [(None, "none"), (R.NAME, "host")], ids=["vllm-v1", "rows-sha512"])
+def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, scheme, retain):
+    """Under rows-sha512 a learning step that keeps no bytes copies nothing to host (each window is hashed in place to its h), so it
+    has no budget to outgrow and is committed (test_windowed_rows_sha512); one that keeps its bytes is copied to transient blocks."""
+    com = WR.committer(monkeypatch, retain=retain, retain_levels=False, bounded=True, commit_scheme=scheme)
     try:
         com.learn_only = False                     # a record run whose plans were never pre-learned
         rc = run_failing(com, WR.SCHED)

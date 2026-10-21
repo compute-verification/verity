@@ -150,7 +150,7 @@ FAMILIES = (
     Family("H200", "sm_90", "LI-CP-W redux L32, ffill at p = 1 (DC-90-ri, decisions 98 and 99)",
            "dither-2s-licpw-redux-p1-l32", "DC-90-ri",
            "H200", 5.40, "vy-dc-h200: $5.40/h, one GPU with its host (measured price)",
-           served=0.1044, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
+           served=0.0979, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
     Family("B200", "sm_100", "LI-CP-W redux L32, ♭ without LDTM, the fold the checks read (DC-100-ri)",
            "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
            "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",

@@ -4,7 +4,7 @@
 What `service.Stream` decides of each op on its own, around the checks whose verifiers of record are their own pieces
 (`Service.checkPublic`, `Registration.check`, `Select.select`, `Draw.checkDraw`, `Service.checkVerdicts`, `Record.record`,
 `Run.run`): the failure budget, the registrations open at once, the epoch's salt and registration deadline, and each
-registration's once-only orders (drawn, interiors, session, delivered, final) and proof deadline. `run` decides one op on
+registration's once-only orders (drawn, session, delivered, final) and proof deadline. `run` decides one op on
 what the rules hold of the stream (a `State`) and gives what they hold after it, as `service._step` does. The stream holds
 its state of record from these outputs alone, from the empty state.
 
@@ -15,7 +15,7 @@ and an op that reads an entry the state doesn't hold is an error. As JSON:
 * `size`, the registrations received; `opened`, those without a final outcome, in the order received; `failures`;
 * `salted_at`, the salt's release or null; `ended`, null or the late registration's readings `{received_at, salted_at}`;
 * `halted`, null or the cause of the halt of the stream's operator (`Fleet`, R5-all);
-* `entries`, in order, each `{order, registration, draw, proved, drawn_at, interior, delivered, session, final}`: `draw`
+* `entries`, in order, each `{order, registration, draw, proved, drawn_at, delivered, session, final}`: `draw`
   null until drawn, then with `proved` and `drawn_at`, and `session` null or the covered draws of the session over it.
 
 An op is an object with `op` and the fields it reads:
@@ -23,7 +23,6 @@ An op is an object with `op` and the fields it reads:
 * `ready`; `salt` `{at}`; `salt_released` `{released_at, now}`;
 * `register` `{received_at, checks, registration}`;
 * `select` `{order, registration, checks, draw, proved, at}`;
-* `interiors` `{order, registration, draw, checks}`;
 * `session` `{draws}`, each draw `[order, registration, draw]`;
 * `deliver` `{order, registration, draw, sessions, now}`, and `deliver_session` `{stream, draws, sessions, now}`;
 * `outcome` `{order, registration, draw, now, verdicts, accepted}`;
@@ -70,24 +69,22 @@ def float? : Json → Option Float
 /-- A reading as written, where it is one. -/
 def reading? (j : Json) : Option Json := (float? j).map fun _ => j
 
-/-- The stream's public parameters: its failure budget, its rounds, whether its rule is two-stage, its check's deadlines
-(seconds on the challenger's clock) and its digest. -/
+/-- The stream's public parameters: its failure budget, its rounds, its check's deadlines (seconds on the
+challenger's clock) and its digest. -/
 structure Params where
   budget : Nat
   rounds : Nat
-  twoStage : Bool
   registrationDeadline : Option Float
   proofDeadline : Float
   stream : String
 
 def Params.ofJson (j : Json) : V Params := do
-  if keys? j != some #["budget", "proof_deadline", "registration_deadline", "rounds", "stream", "two_stage"] then
-    throw "params are exactly {budget, rounds, two_stage, registration_deadline, proof_deadline, stream}"
+  if keys? j != some #["budget", "proof_deadline", "registration_deadline", "rounds", "stream"] then
+    throw "params are exactly {budget, rounds, registration_deadline, proof_deadline, stream}"
   let some budget := nat? (getD j "budget") | throw "a failure budget is a positive integer"
   if budget == 0 then throw "a failure budget is a positive integer"
   let some rounds := nat? (getD j "rounds") | throw s!"a session covers 1 to {ROUNDS} rounds"
   if rounds == 0 || rounds > ROUNDS then throw s!"a session covers 1 to {ROUNDS} rounds"
-  let .bool twoStage := getD j "two_stage" | throw "two_stage is a boolean"
   let some pd := float? (getD j "proof_deadline") | throw "a proof deadline is a positive number of seconds"
   if !(pd > 0) then throw "a proof deadline is a positive number of seconds"
   let rd ← match getD j "registration_deadline" with
@@ -96,7 +93,7 @@ def Params.ofJson (j : Json) : V Params := do
       | some d => if d > 0 then pure (some d) else throw "a registration deadline is a positive number of seconds"
       | none => throw "a registration deadline is a positive number of seconds"
   let .str stream := getD j "stream" | throw "stream is the stream's digest"
-  return { budget, rounds, twoStage, registrationDeadline := rd, proofDeadline := pd, stream }
+  return { budget, rounds, registrationDeadline := rd, proofDeadline := pd, stream }
 
 /-- A covered draw: its registration's order (none where it isn't a natural number) and token, and the draw's token. -/
 abbrev Covered := Option Nat × String × String
@@ -115,7 +112,6 @@ structure Entry where
   draw : Option String := none
   proved : Nat := 0
   drawnAt : Option Json := none
-  interior : Bool := false
   delivered : Bool := false
   session : Option (Array Covered) := none
   final : Bool := false
@@ -154,19 +150,18 @@ private def ascending : List Nat → Bool
   | _ => true
 
 def Entry.ofJson (j : Json) : V Entry := do
-  if keys? j != some #["delivered", "draw", "drawn_at", "final", "interior", "order", "proved", "registration", "session"]
-  then throw "an entry is exactly {order, registration, draw, proved, drawn_at, interior, delivered, session, final}"
+  if keys? j != some #["delivered", "draw", "drawn_at", "final", "order", "proved", "registration", "session"]
+  then throw "an entry is exactly {order, registration, draw, proved, drawn_at, delivered, session, final}"
   let some order := nat? (getD j "order") | throw "an entry's order is a natural number"
   let some registration := str? (getD j "registration") | throw "an entry's registration is a token"
   let draw ← nullOr (getD j "draw") str? "an entry's draw is null or a token"
   let some proved := nat? (getD j "proved") | throw "an entry's proved is a count"
   let drawnAt ← nullOr (getD j "drawn_at") reading? "an entry's drawn_at is null or a reading"
-  let some interior := bool? (getD j "interior") | throw "an entry's interior is a boolean"
   let some delivered := bool? (getD j "delivered") | throw "an entry's delivered is a boolean"
   let session ← nullOr (getD j "session") (fun | .arr cs => cs.mapM covered? | _ => none)
     "an entry's session is null or its covered draws"
   let some final := bool? (getD j "final") | throw "an entry's final is a boolean"
-  return { order, registration, draw, proved, drawnAt, interior, delivered, session, final }
+  return { order, registration, draw, proved, drawnAt, delivered, session, final }
 
 def State.ofJson (j : Json) : V State := do
   if keys? j != some #["ended", "entries", "failures", "halted", "opened", "salted_at", "size"] then
@@ -189,7 +184,7 @@ def State.ofJson (j : Json) : V State := do
 
 def Entry.toJson (e : Entry) : Json := Json.mkObj [
   ("order", Lean.toJson e.order), ("registration", .str e.registration), ("draw", (e.draw.map .str).getD .null),
-  ("proved", Lean.toJson e.proved), ("drawn_at", e.drawnAt.getD .null), ("interior", .bool e.interior),
+  ("proved", Lean.toJson e.proved), ("drawn_at", e.drawnAt.getD .null),
   ("delivered", .bool e.delivered), ("session", (e.session.map fun cs => Json.arr (cs.map Covered.toJson)).getD .null),
   ("final", .bool e.final)]
 
@@ -311,18 +306,6 @@ def select (op : Json) : M Decision := do
   put { e with draw := some draw, proved := proved, drawnAt := some at_ }
   return .ok Json.null
 
-def interiors (p : Params) (op : Json) : M Decision := do
-  if !p.twoStage then no "rule"
-  let e ← entryOf op
-  drawn op e
-  if e.final then no "final"
-  if e.delivered then no "delivered"
-  if e.interior then no "interior-registered"
-  if e.proved == 0 then no "interior-empty"
-  if let some cs ← codes op "checks" then stop (.refused cs)
-  put { e with interior := true }
-  return .ok Json.null
-
 def draws (op : Json) : M (Array Covered) := do
   let .arr ds := getD op "draws" | bad "draws are a list"
   ds.mapM fun d => match covered? d with
@@ -330,7 +313,6 @@ def draws (op : Json) : M (Array Covered) := do
     | none => bad "a covered draw is [order, registration, draw]"
 
 def session (p : Params) (op : Json) : M Decision := do
-  if p.twoStage then no "rule"
   let ds ← draws op
   if ds.size == 0 || ds.size > p.rounds then no "rounds"
   for (o, r, d) in ds do
@@ -357,7 +339,6 @@ def deliver (p : Params) (op : Json) : M Decision := do
   if e.session.isSome then no "covered"
   if !sessionsOk op then no "sessions"
   let isLate ← late p e (← reading op "now").2
-  if !isLate && p.twoStage && !e.interior && e.proved > 0 then no "interior"
   let e := { e with delivered := true }
   put e
   if isLate then
@@ -421,11 +402,10 @@ def halt (op : Json) : M Decision := do
     return .ok (natsJson s.opened)
 
 def OPS : Array String :=
-  #["ready", "salt", "salt_released", "register", "select", "interiors", "session", "deliver", "deliver_session",
-    "outcome", "halt"]
+  #["ready", "salt", "salt_released", "register", "select", "session", "deliver", "deliver_session", "outcome", "halt"]
 
 def opsMsg : String :=
-  "an op is one of ready, salt, salt_released, register, select, interiors, session, deliver, deliver_session, outcome, halt"
+  "an op is one of ready, salt, salt_released, register, select, session, deliver, deliver_session, outcome, halt"
 
 /-- The op `name`'s own rule. -/
 def act (p : Params) (op : Json) : String → M Decision
@@ -443,7 +423,6 @@ def act (p : Params) (op : Json) : String → M Decision
     return .ok Json.null
   | "register" => register p op
   | "select" => select op
-  | "interiors" => interiors p op
   | "session" => session p op
   | "deliver" => deliver p op
   | "deliver_session" => deliverSession p op

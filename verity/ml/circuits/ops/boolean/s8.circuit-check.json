@@ -26,6 +26,9 @@
   },
   "S8Dot_v2{K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
    "and": 8326
+  },
+  "S8Matmul_v2{N=3,K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
+   "and": 24978
   }
  }
 }
