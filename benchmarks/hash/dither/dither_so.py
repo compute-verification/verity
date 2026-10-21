@@ -52,6 +52,31 @@ round s as built from the ring once forward s + 1 had started (a captured step's
 give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
 serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
+A window's open and end (RT4-INT-37; served_h1's window close, since dither-a has none).  Every window opens with the salt
+coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
+in process the epoch root), then the epoch round (round 0) over the B tables' roots.  Without -we a window has no end: its
+last D - 1 steps' receipts lie under no round, and its last D - 2 steps' units never run.  With -we
+(`-so<D>[-ov|-ov1|-ovp]-we`) each window ends (`SoWindow.end`) after its last step S - 1: the remaining coins awaited and
+the tail's units run (steps S - D + 2 to S - 1; under -ov the dispatcher's, drained), the receipt-tail roots of steps
+S - D + 1 to S - 1 (each the tree over a step's receipt-table roots, its domain naming that step) under one final round
+sent after the last step's coin, whose coin comes back; then the manifest root, the tree over every round root of the
+window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
+round leaves and every call's A, admit, z, y and receipt roots under them; then the draw coin opened after the manifest
+root, and the session closed.  In process the window ends after each of sbench's generates (and a new one opens at the
+next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
+session's window ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
+every family releases all its coins.  `check_end` holds an ended window to: the salt coin after the window's root, every
+round's coin after its root, the draw coin after the manifest root recomputed from the rounds the challenger received;
+each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
+tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
+or the final round) sent after that and before the draw coin, no round after it; and the last step's receipts, from its
+ring slot, against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed.  Two end faults, each
+in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
+its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
+round and sent in a round after the draw coin: refused on that leaf and that round alone).  An off-node window's
+manifest (`dither_manifest`: every round's root and leaves, the final round, the manifest root, the coins) goes to
+$DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's own run.
+
     import dither_so as SO
     SO.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="hbr", h1u="h1u_kr.so", ao="m", pt=True, depth=4)
     llm = LLM(model=int8_exact_checkpoint, ...)
@@ -62,18 +87,21 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import hashlib
+import os
 import queue
 import threading
 import time
 import traceback
 
+import numpy as np
 import torch
 import triton
 
 import dither_a as DA
 import dither_fused as DF
+import dither_manifest as MF
 import dither_one as DO
-from dither_fused import CO, Call, unwords, words
+from dither_fused import CM, CO, H1R, Call, unwords, words
 from hb_side import auto_j
 
 LIB_ENV = DA.LIB_ENV
@@ -84,6 +112,20 @@ OV_ORDER = ("-ov: round s built beside forward s + 1 from ring copies taken afte
 # the faults of the order last: fault_zlate moves round s + 1's z/y leaves, so the step after it is no capture's
 CAPTURES = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_rearly", "fault_zlate")
 CAPTURES_OV = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_ring", "fault_rearly", "fault_zlate")
+END_ORDER = ("-we: at the window's end the tail's units after their coins, their receipt-tail roots under one final round "
+             "sent after the last coin, the manifest root over every round root, then the draw coin after it")
+NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens (RT4-INT-37); rows pending"
+END_FAULTS = ("fault_tail", "fault_late_receipt")
+MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
+ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
+MF_CHUNK = 64                           # manifest rows a pinned host chunk
+
+
+def end_steps(depth: int) -> int:
+    """An end fault's window: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
+    return 2 * depth + 2
+
+
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
@@ -99,26 +141,246 @@ class SoWindow(DO.Window):
     depth = 2
     a_once = False
     overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
+    window_end = False  # -we: each window ends (`end`)
 
     def __init__(self, *args, **kwargs):
         if self.depth < 2:
             raise ValueError(f"dither-a-so's ring depth is at least 2, not {self.depth}")
-        super().__init__(*args, **kwargs)
-        self.pipe = CO.RoundPipe(self.coins, time.monotonic)
-        # the gate's generation runs past its last capture until that step's receipts are in a round
-        self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
+        # the window's own state (`_start` sets it at each open, the first from `_epoch` at the build)
+        self.k, self.open, self.s0, self.prepared = -1, False, 0, None
+        self.next_end: tuple | None = None
+        self.end_name = self.end_fault = self.end_at = None
+        self.end_each = False
+        self.ends: list[dict] = []
+        self.ends_from = 0
+        self.end_recs: dict[str, dict] = {}
+        self.mf_chunks: list[torch.Tensor] = []
+        self.mf_pool: list[torch.Tensor] = []
+        self.starts_ms: list[float] = []
+        self.rtts: list[float] = []
         self.cap_of: dict[int, str] = {}
         self.m_of: dict[int, int] = {}
         self.stashed: set[int] = set()
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
-        self.rtt_from = 1
-        # `stats` holds each opening received since its last call to `live_reason` (the pipe's reader does too, off the
-        # node; in process nothing else does)
-        self.order_from, self.order_why = 0, None
+        self.order_why = None
+        super().__init__(*args, **kwargs)
+        # the gate's generation runs past its last capture until that step's receipts are in a round
+        self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
         self.t_b0 = self.t_after_end = 0.0
+
+    def _epoch(self) -> None:
+        self._start()
+
+    def _start(self) -> None:
+        """A window opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
+        opened after the window's root, the epoch round (round 0) over the B tables' roots, and the round pipe; under -we
+        its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` window's."""
+        from verity.core.protocols.pouw.circuit import h1tile as HT
+        t0 = time.perf_counter()
+        self.HT = HT
+        at = CO.session()
+        if at is not None and self.k >= 0:
+            raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
+                               f"step {self.s - 1}; a window after it needs a session of its own (more rounds: "
+                               f"${ROUNDS_ENV})")
+        coins = self.prepared if self.prepared is not None else CO.open_coins(at, 1, rounds_of())
+        self.prepared = None
+        self.k += 1
+        self.s0 = self.s
+        self.coins, self.rounds = coins, coins.rounds
+        broots = [unwords(self.bset.root(w)) for w in range(self.L)]
+        self.epoch_root = CM.step_root(CM.domain({"window": self.window, "linears": self.L}, self.L, "b-step"), broots)
+        self.open_root = CO.stand_in_root(at.id) if at is not None else self.epoch_root
+        self.salt_open = coins.salt(self.open_root)
+        opening = self.rounds.record(self.epoch_root)
+        self.salt_bytes = HT.live_salt(coins.commitment, opening.coin, 0, self.epoch_root)
+        self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
+        self.pipe = CO.RoundPipe(coins, time.monotonic)
+        self.layout_rounds = coins.commitment.family(CO.Wd.ROUND)
+        self.end_each = self.window_end and at is None
+        name, fault, steps = self.next_end or ("live" if at is not None else None, None, None)
+        self.next_end = None
+        self.end_name, self.end_fault = name, fault
+        last = self.s0 + self.layout_rounds - 3
+        self.end_at = (min(last, self.s0 + steps - 1) if steps else last) if self.window_end else None
+        self.disp_at: dict[int, float] = {}
+        self.salt_of: dict[int, bytes] = {}
+        self.cap_at: dict[int, str] = {}
+        self.rtt_from, self.order_from = 1, 0
+        self.zlate = None
+        if self.overlap and DA.SIDE:
+            DA.SIDE[0].ov.zlate = None
+        self.open = True
+        self.starts_ms.append(1e3 * (time.perf_counter() - t0))
+
+    def prepare(self) -> None:
+        """In process, the next window's challenger made now, outside a timed generate (its commitment over 16384 rounds
+        takes 1.7 s), as infra's gate makes an off-node session's before its window."""
+        if not self.open and self.prepared is None and CO.session() is None:
+            self.prepared = CO.open_coins(None, 1, rounds_of())
+
+    def arm_end(self, name: str, fault: str | None = None, steps: int | None = None) -> None:
+        """The next window opened is `name`'s: its end kept for `check_end`, under `fault` (one of END_FAULTS), and with
+        `steps` it ends at its steps-th step."""
+        if fault is not None and fault not in END_FAULTS:
+            raise ValueError(f"dither-a-so: an end fault is one of {END_FAULTS}, not {fault!r}")
+        self.next_end = (name, fault, steps)
+
+    def ix(self, s: int) -> int:
+        """Step s's round: its index in its window's round coins (round 0 the epoch round)."""
+        return s - self.s0 + 1
+
+    def steps_left(self) -> int:
+        return self.end_at - self.s + 1 if self.open and self.end_at is not None else 0
+
+    def put_row(self, s: int, mid, rnd) -> None:
+        """Under -we, step s's manifest row on the current stream once its round is built: each round leaf's per-call
+        roots (mid's leaves) and the round's leaves, to pinned host memory without a wait."""
+        if not self.window_end:
+            return
+        c, o = divmod(s - self.s0, MF_CHUNK)
+        L8, nr = 8 * self.L, len(self.round_kinds)
+        while len(self.mf_chunks) <= c:
+            self.mf_chunks.append(self.mf_pool.pop() if self.mf_pool else
+                                  torch.empty((MF_CHUNK, (nr + 1) * L8), dtype=torch.int64).pin_memory())
+        row = self.mf_chunks[c][o]
+        for i, off in enumerate(mid.level_off):
+            row[i * L8:(i + 1) * L8].copy_(mid.level[off:off + L8], non_blocking=True)
+        ro = rnd.level_off[0]
+        row[nr * L8:nr * L8 + 8 * nr].copy_(rnd.level[ro:ro + 8 * nr], non_blocking=True)
+
+    def units(self, j: int) -> float:
+        """Step j's units once its coin is back (`SoSide.dispatch`, under its coin's salt; fault_rearly's under the coin
+        before), unless fault_tail drops the window's last step's; when the coin came back (perf_counter)."""
+        i = self.ix(j)
+        t0 = time.perf_counter()
+        opening = self.pipe.opening(i)
+        t_coin = time.perf_counter()
+        self.coin_waits.append(1e3 * (t_coin - t0))
+        name = self.cap_of.get(j)
+        if name == "fault_rearly":
+            held = self.pipe.opening(i - 1)
+            salt = self.HT.live_salt(self.coins.commitment, held.coin, held.index, self.pipe.roots[i - 1])
+        else:
+            salt = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, self.pipe.roots[i])
+        g = self.caps.get(name) if name is not None else None
+        if g is not None:
+            g.update(opening=opening, salt_used=salt, coin_got_at=self.pipe.got_at.get(i), dispatched_at=time.monotonic())
+        m = self.m_of.pop(j)
+        if j == self.end_at and self.end_fault == "fault_tail":
+            return t_coin
+        self.salt_of[j] = salt
+        self.disp_at[j] = time.monotonic()
+        self.phase("units_dispatch")
+        DA.SIDE[0].dispatch(j, salt, m, g)
+        return t_coin
+
+    def end(self) -> dict | None:
+        """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
+        final round, its coin back, the manifest root, the draw coin after it, the session closed."""
+        if not self.open:
+            return None
+        sd: SoSide = DA.SIDE[0]
+        W, L, D, s0, s1 = self.window, self.L, self.depth, self.s0, self.s
+        if s1 == s0:
+            return self.close()
+        t0 = time.perf_counter()
+        if self.overlap:
+            pending = s1 - 1 - sd.ov.dispatched_upto
+            sd.ov.drain()
+        else:
+            pending = len(self.stashed)
+            for j in sorted(self.stashed):
+                self.stashed.discard(j)
+                self.units(j)
+            self.phase(None)
+        t_units = time.perf_counter()
+        torch.cuda.synchronize()
+        t_sync = time.perf_counter()
+        tail = list(range(max(s0, s1 - D + 1), s1))
+        rr = {}
+        for j in tail:
+            sd.dispatched.pop(j, None)
+            self.cap_of.pop(j, None)
+            x = sd.rroots[j % D].cpu()
+            rr[j] = [unwords(x[8 * w:8 * w + 8]) for w in range(L)]
+        leaves = [MF.tail_leaf(W, j, rr[j]) for j in tail]
+        withheld = None
+        if self.end_fault == "fault_late_receipt":
+            withheld, leaves[-1] = leaves[-1], bytes(64)
+        froot = MF.final_root(W, tail, leaves)
+        t_rr = time.perf_counter()
+        i_f = self.pipe.send(froot)
+        if i_f != self.ix(s1):
+            raise RuntimeError(f"window {self.k}'s final round went out as round {i_f}, not {self.ix(s1)}")
+        self.pipe.opening(i_f)
+        t_final = time.perf_counter()
+        mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
+        t_mf = time.perf_counter()
+        draw = self.coins.draw(mroot)
+        draw_at = time.monotonic()
+        t_draw = time.perf_counter()
+        late = None
+        if withheld is not None:
+            late = self.pipe.send(MF.late_root(W, tail[-1], withheld))
+            self.pipe.opening(late)
+        self._harvest()
+        self.pipe.close()
+        t_end = time.perf_counter()
+        self.open = False
+        n = s1 - s0
+        e = {"k": self.k, "name": self.end_name, "fault": self.end_fault, "s0": s0, "steps": n, "tail": len(tail),
+             "units_pending_at_end": pending, "final_index": i_f, "end_ms": 1e3 * (t_end - t0),
+             "split_ms": {"tail_units": 1e3 * (t_units - t0), "tail_sync": 1e3 * (t_sync - t_units),
+                          "receipt_tail_roots": 1e3 * (t_rr - t_sync), "final_round": 1e3 * (t_final - t_rr),
+                          "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_draw - t_mf),
+                          "close": 1e3 * (t_end - t_draw)}}
+        e["amortized_ms_per_step"] = e["end_ms"] / n
+        self.ends.append(e)
+        live = self.coins.source == "off-node"
+        rows = torch.cat(self.mf_chunks)[:n].numpy() if self.mf_chunks and (self.end_name or live) else None
+        self.mf_pool.extend(self.mf_chunks)
+        self.mf_chunks = []
+        rec = {"k": self.k, "fault": self.end_fault, "s0": s0, "s1": s1, "tail": tail, "rr": rr, "final_leaves": leaves,
+               "withheld": withheld, "i_f": i_f, "late_index": late, "mroot": mroot, "draw": draw, "draw_at": draw_at,
+               "pipe": self.pipe, "coins": self.coins, "open_root": self.open_root, "salt_open": self.salt_open,
+               "rows": rows, "disp_at": self.disp_at, "salt_of": self.salt_of, "cap_at": self.cap_at,
+               "b_roots": [unwords(self.bset.root(w)) for w in range(L)]}
+        if self.end_name is not None:
+            p = (s1 - 1) % D
+            rec["last"] = {"a": [x.clone() for x in sd.ring_slot[p]], "sa": [x.clone() for x in sd.ring_scale[p].unbind(0)],
+                           "receipts": self.plan.out.clone(), "m": self.m_last}
+            self.end_recs[self.end_name] = rec
+        if live and os.environ.get(MANIFEST_ENV):
+            e["manifest"] = write_manifest(self, rec, os.environ[MANIFEST_ENV])
+        return e
+
+    def close(self) -> dict | None:
+        """At the arm's stop: an open window with steps ended under -we, else its rounds drained and its coins closed."""
+        if not self.open:
+            return None
+        if self.window_end and self.s > self.s0:
+            return self.end()
+        self.drain()
+        self._harvest()
+        self.pipe.close()
+        self.open = False
+        return None
+
+    def _harvest(self) -> None:
+        """The round trips and the order of each coin come back since the last harvest of this window's pipe."""
+        pipe = self.pipe
+        n = len(pipe.openings)
+        self.rtts += [1e3 * (pipe.got_at[i] - pipe.sent_at[i]) for i in range(self.rtt_from, n)
+                      if i in pipe.got_at and i in pipe.sent_at]
+        self.rtt_from = n
+        for i in range(self.order_from, n):
+            if self.order_why is None:
+                self.order_why = CO.Ch.live_reason(self.coins.commitment, pipe.openings[i], pipe.label, i, pipe.roots[i])
+        self.order_from = n
 
     def host_ms(self) -> dict:
         t_end = time.perf_counter()
@@ -143,10 +405,13 @@ class SoWindow(DO.Window):
 
     def before(self, m: int) -> None:
         self.t_b0 = time.perf_counter()
+        if not self.open:
+            self._start()
         super().before(m)
-        self.m_of[self.s] = m
+        self.m_of[self.s] = self.m_last = m
         if self.cap is not None:
-            self.cap_of[self.s] = self.cap
+            self.cap_of[self.s] = self.cap_at[self.s] = self.cap
+            self.caps[self.cap].update(k=self.k, pipe=self.pipe, coins=self.coins, ix=self.ix(self.s))
         if self.overlap and DA.SIDE:
             DA.SIDE[0].ov.forward_starts(self.s)
 
@@ -205,7 +470,7 @@ class SoWindow(DO.Window):
         o = pre["mid"].level_off[kinds.index("receipt-step")]
         lv = pre["mid"].level[o:o + 8 * self.L]
         j = s - d
-        p = sd.dispatched.pop(j, None)
+        p = sd.dispatched.pop(j, None) if j >= self.s0 else None
         waited = p is not None
         if p is None:
             lv.zero_()
@@ -231,19 +496,20 @@ class SoWindow(DO.Window):
             rl[8 * yi:8 * yi + 8].copy_(self.zlate[1])
             self.zlate = None
         self.c.build(pre["round"], self.stepv[0:1])
+        self.put_row(s, pre["mid"], pre["round"])
         self.phase("root_read")
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
         self.phase("record_host")
         i = self.pipe.send(root)
-        if i != s + 1:
-            raise RuntimeError(f"step {s}'s round went out as round {i}, not {s + 1}")
+        if i != self.ix(s):
+            raise RuntimeError(f"step {s}'s round went out as round {i}, not {self.ix(s)}")
         t_sent = time.perf_counter()
         bad = sd.ybad.nonzero().flatten().tolist()
         if bad:
             sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
         prev = self.cap_of.get(s - 1)
-        late = self.cap_of.pop(j, None) if j >= 0 else None
+        late = self.cap_of.pop(j, None) if j >= self.s0 else None
         if (cap in self.caps) or (late in self.caps) or (prev == "fault_zlate" and prev in self.caps):
             leaves = [unwords(pre["round"].leaf(0, k)) for k in range(len(kinds))]
             if cap in self.caps:
@@ -267,21 +533,7 @@ class SoWindow(DO.Window):
         t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
             self.stashed.discard(ju)
-            opening = self.pipe.opening(ju + 1)
-            t_coin = time.perf_counter()
-            self.coin_waits.append(1e3 * (t_coin - t_wait))
-            name = self.cap_of.get(ju)
-            if name == "fault_rearly":
-                held = self.pipe.opening(ju)
-                salt = self.HT.live_salt(self.coins.commitment, held.coin, held.index, self.pipe.roots[ju])
-            else:
-                salt = self.HT.live_salt(self.coins.commitment, opening.coin, opening.index, self.pipe.roots[ju + 1])
-            g = self.caps.get(name) if name is not None else None
-            if g is not None:
-                g.update(opening=opening, salt_used=salt, coin_got_at=self.pipe.got_at.get(ju + 1),
-                         dispatched_at=time.monotonic())
-            self.phase("units_dispatch")
-            sd.dispatch(ju, salt, self.m_of.pop(ju), g)
+            t_coin = self.units(ju)
             t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
@@ -295,8 +547,13 @@ class SoWindow(DO.Window):
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.s += 1
         self.steps += 1
-        if self.s + 1 >= DF.ROUNDS:
-            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+        self._step_end(s)
+
+    def _step_end(self, s: int) -> None:
+        if s == self.end_at:
+            self.end()
+        elif self.ix(self.s) >= self.layout_rounds:
+            raise RuntimeError(f"the window's {self.layout_rounds} rounds are spent")
 
     def _after_ov(self) -> None:
         """-ov's step end: step s's ring copies on the serving stream (once the rings' last readers are past them), a
@@ -343,8 +600,7 @@ class SoWindow(DO.Window):
                             "between_ms": 1e3 * (t_end - t_fwd), **self.host_ms()})
         self.s += 1
         self.steps += 1
-        if self.s + 1 >= DF.ROUNDS:
-            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+        self._step_end(s)
 
     def stats(self) -> dict:
         ov = DA.SIDE[0].ov if self.overlap and DA.SIDE else None
@@ -357,33 +613,53 @@ class SoWindow(DO.Window):
                     ph.update(ov.ph_units.pop(s, {}))
         doc = super().stats()
         pipe = self.pipe
-        n = len(pipe.openings)
-        rtt = sorted(1e3 * (pipe.got_at[i] - pipe.sent_at[i]) for i in range(self.rtt_from, n)
-                     if i in pipe.got_at and i in pipe.sent_at)
-        self.rtt_from = n
+        if self.open:
+            self._harvest()
+        rtt, self.rtts = sorted(self.rtts), []
         waits, self.coin_waits = sorted(self.coin_waits), []
-        for i in range(self.order_from, n):
-            if self.order_why is None:
-                self.order_why = CO.Ch.live_reason(self.coins.commitment, pipe.openings[i], pipe.label, i, pipe.roots[i])
-        self.order_from = n
         sent = list(pipe.roots)
-
-        def q(xs: list, f: float):
-            return round(xs[min(len(xs) - 1, int(f * len(xs)))], 3) if xs else None
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
                      else "per call, in the forward", "coins": self.coins.label, "coins_record": self.coins.record(),
-                     "coin_rtt_ms": {"n": len(rtt), "p50": q(rtt, 0.5), "p90": q(rtt, 0.9), "max": q(rtt, 1.0)},
-                     "coin_wait_ms": {"n": len(waits), "p50": q(waits, 0.5), "p90": q(waits, 0.9), "max": q(waits, 1.0)},
-                     "order_reason": self.order_why, "coins_back": n, "rounds_sent": len(sent),
+                     "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
+                     "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
+                     "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
+                     "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
-                     "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest()}
+                     "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
+                     "window_end": self.end_stats()}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
                                     "serving_stream_priority": torch.cuda.current_stream().priority}
         return doc
+
+    def end_stats(self) -> dict:
+        """The windows ended since the last call: each end's time (in the generate that served its last step), split,
+        and over its steps."""
+        if not self.window_end:
+            return {"on": False, "status": NO_END}
+        ends, self.ends_from = self.ends[self.ends_from:], len(self.ends)
+        starts, self.starts_ms = sorted(self.starts_ms), []
+        ms = sorted(e["end_ms"] for e in ends)
+        split = {k: _q(sorted(e["split_ms"][k] for e in ends), 0.5) for k in (ends[0]["split_ms"] if ends else ())}
+        return {"on": True, "order": END_ORDER, "windows_ended": len(ends), "steps": [e["steps"] for e in ends],
+                "end_ms": {"n": len(ms), "p50": _q(ms, 0.5), "max": _q(ms, 1.0)}, "split_ms_p50": split,
+                "amortized_ms_per_step": [round(e["amortized_ms_per_step"], 4) for e in ends],
+                "start_ms": {"n": len(starts), "p50": _q(starts, 0.5), "max": _q(starts, 1.0)},
+                "ends": [{k: e[k] for k in ("k", "name", "fault", "s0", "steps", "tail", "units_pending_at_end",
+                                            "final_index")} for e in ends[-4:]]}
+
+
+def _q(xs: list, f: float):
+    return round(xs[min(len(xs) - 1, int(f * len(xs)))], 3) if xs else None
+
+
+def rounds_of() -> int:
+    """A window's round coins: the session's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
+    DF.ROUNDS."""
+    return int(os.environ.get(ROUNDS_ENV) or DF.ROUNDS)
 
 
 class SoSide(DA.Side):
@@ -745,7 +1021,7 @@ class Ov:
         with self.phase("ov_round"), torch.cuda.stream(ts):
             o = st["mid"].level_off[self.ri]
             lv = st["mid"].level[o:o + 8 * L]
-            if j < 0:
+            if j < win.s0:
                 lv.zero_()
             else:
                 sd.dispatched.pop(j, None)
@@ -769,6 +1045,7 @@ class Ov:
             c.build(st["round"], stepv)
             self.root_host.copy_(st["round"].roots[0:8], non_blocking=True)
             self.ev["t1"][e].record(ts)
+            win.put_row(s, st["mid"], st["round"])
             self.done.record(ts)
         with self.phase("ov_root_wait"):
             self.done.synchronize()
@@ -776,15 +1053,15 @@ class Ov:
         root = unwords(self.root_host)
         with self.phase("ov_send"):
             i = win.pipe.send(root)
-        if i != s + 1:
-            raise RuntimeError(f"step {s}'s round went out as round {i}, not {s + 1}")
+        if i != win.ix(s):
+            raise RuntimeError(f"step {s}'s round went out as round {i}, not {win.ix(s)}")
         t_sent = time.perf_counter()
         bad = self.ybad_host.nonzero().flatten().tolist()
         if bad:
             sd.y_refused.append({"s": s, "capture": cap, "calls": len(bad)})
         caps = win.caps
         prev = win.cap_of.get(s - 1)
-        late = win.cap_of.pop(j, None) if j >= 0 else None
+        late = win.cap_of.pop(j, None) if j >= win.s0 else None
         if (cap in caps) or (late in caps) or (prev == "fault_zlate" and prev in caps):
             with torch.cuda.stream(ts):
                 rv, mv, yu = st["round"].level.cpu(), st["mid"].level.cpu(), st["yu"].roots.cpu()
@@ -832,22 +1109,27 @@ class Ov:
 
     def _units(self, s: int) -> None:
         win, sd, pipe = self.win, self.sd, self.win.pipe
+        i = win.ix(s)
         t0 = time.perf_counter()
         with self.phase("ov_coin_wait"):
-            opening = pipe.opening(s + 1)
+            opening = pipe.opening(i)
         t_coin = time.perf_counter()
         win.coin_waits.append(1e3 * (t_coin - t0))
         name = win.cap_of.get(s)
         if name == "fault_rearly":
-            held = pipe.opening(s)
-            salt = win.HT.live_salt(win.coins.commitment, held.coin, held.index, pipe.roots[s])
+            held = pipe.opening(i - 1)
+            salt = win.HT.live_salt(win.coins.commitment, held.coin, held.index, pipe.roots[i - 1])
         else:
-            salt = win.HT.live_salt(win.coins.commitment, opening.coin, opening.index, pipe.roots[s + 1])
+            salt = win.HT.live_salt(win.coins.commitment, opening.coin, opening.index, pipe.roots[i])
         g = win.caps.get(name) if name is not None else None
         if g is not None:
-            g.update(opening=opening, salt_used=salt, coin_got_at=pipe.got_at.get(s + 1), dispatched_at=time.monotonic())
-        with self.phase("ov_units_dispatch"):
-            sd.dispatch(s, salt, win.m_of.pop(s), g)
+            g.update(opening=opening, salt_used=salt, coin_got_at=pipe.got_at.get(i), dispatched_at=time.monotonic())
+        m = win.m_of.pop(s)
+        if not (s == win.end_at and win.end_fault == "fault_tail"):
+            win.salt_of[s] = salt
+            win.disp_at[s] = time.monotonic()
+            with self.phase("ov_units_dispatch"):
+                sd.dispatch(s, salt, m, g)
         self.ph_units[s] = {"coin_wait_ms": 1e3 * (t_coin - t0), "dispatch_ms": 1e3 * (time.perf_counter() - t_coin)}
         self._set(dispatched_upto=s)
 
@@ -863,18 +1145,20 @@ def side() -> SoSide:
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
-          ov: int = 0, serve_prio: bool = False) -> None:
+          ov: int = 0, serve_prio: bool = False, window_end: bool = False) -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
     calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
-    priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire)."""
+    priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire).
+    `window_end`: -we, each window ends (`SoWindow.end`)."""
     global CAPTURES
     if unit not in DA.KONE or ao not in AO or depth < 2 or ov < 0:
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio)
+    CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
+    SoWindow.window_end = window_end
     if ov:
         CAPTURES = CAPTURES_OV
     if serve_prio:
@@ -903,12 +1187,12 @@ def check(win: SoWindow, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3
     need = ("a", "receipts", "opening", "late_root")
     if any(k not in g for k in need):
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
-    s, pipe, com = g["s"], win.pipe, win.coins.commitment
+    s, pipe, com, ix = g["s"], g["pipe"], g["coins"].commitment, g["ix"]
     o, i, li = g["opening"], g["index"], g["late_index"]
-    why = CO.Ch.live_reason(com, o, pipe.label, s + 1, g["root"])
-    salt = win.HT.live_salt(com, o.coin, s + 1, g["root"])
-    order = {"round": i, "coin": s + 1, "receipts_round": li,
-             "coin_after_its_round_root": why is None and i == s + 1, "coin_reason": why,
+    why = CO.Ch.live_reason(com, o, pipe.label, ix, g["root"])
+    salt = win.HT.live_salt(com, o.coin, ix, g["root"])
+    order = {"window": g["k"], "round": i, "coin": ix, "receipts_round": li,
+             "coin_after_its_round_root": why is None and i == ix, "coin_reason": why,
              "roots_sent_are_captured": len(pipe.roots) > li and pipe.roots[i] == g["root"] and pipe.roots[li] == g["late_root"],
              "receipts_round_after_coin": (li > i and g["coin_got_at"] is not None
                                            and g["coin_got_at"] <= g["dispatched_at"] <= pipe.sent_at.get(li, -1.0)),
@@ -990,3 +1274,180 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
         v["ov_ok"] = bool(gate["ov"].get("covers_forward_s") and gate["ov"].get("after_forward_next_start"))
         v["ok"] = v["ok"] and v["ov_ok"] and any(x.get("which") == "fault_ring" for x in more)
     return v
+
+
+# -- the window's end ----------------------------------------------------------------------------------------------------------
+
+def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
+    """Ended window `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
+    recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
+    under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
+    after that and before the draw coin, no round after it; the final round from the tail's receipt roots; and the last
+    step's receipts against h1r v1 under its coin's salt, three calls' A tables and receipt tables rehashed.  Under
+    fault_tail and fault_late_receipt, ``conforming`` holds when it is refused exactly where its fault is."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    rec = win.end_recs.get(name)
+    if rec is None or rec.get("rows") is None or "last" not in rec:
+        return {"which": name, "ok": False, "complete": False, "why": f"no ended window {name!r} with its rows"}
+    pipe, com, rows, kinds = rec["pipe"], rec["coins"].commitment, rec["rows"], win.round_kinds
+    W, L, D, key, t = win.window, win.L, win.depth, win.key, win.t
+    s0, s1, i_f, li, draw_at = rec["s0"], rec["s1"], rec["i_f"], rec["late_index"], rec["draw_at"]
+    nr, L8, n, caps = len(kinds), 8 * L, s1 - s0, rec["cap_at"]
+    doc: dict = {"which": name, "fault": rec["fault"], "complete": True, "window": rec["k"], "s0": s0, "steps": n,
+                 "depth": D, "tail": rec["tail"], "final_index": i_f, "late_index": li}
+    mroot = MF.manifest_root(W, rec["k"], rec["open_root"], s0, s1, list(pipe.roots[:i_f + 1]))
+    salt_why = CO.Ch.live_reason(com, rec["salt_open"], CO.Wd.SALT, 0, rec["open_root"])
+    draw_why = CO.Ch.live_reason(com, rec["draw"], CO.Wd.DRAW, 0, mroot)
+    coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
+             "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
+             "draw_after_manifest_root": draw_why is None and mroot == rec["mroot"], "draw_reason": draw_why,
+             "rounds_cover_steps": i_f == n + 1 and len(rows) == n}
+    coins["ok"] = bool(coins["salt_after_window_root"] and coins["rounds_reason"] is None
+                       and coins["draw_after_manifest_root"] and coins["rounds_cover_steps"])
+    doc["coins"] = coins
+    bad = []
+    for r in range(n):
+        s, row = s0 + r, rows[r]
+        leaves = [unwords(row[nr * L8 + 8 * i:nr * L8 + 8 * i + 8]) for i in range(nr)]
+        for i, kd in enumerate(kinds):
+            if MF.step_leaf(W, s, kd, [unwords(row[i * L8 + 8 * w:i * L8 + 8 * w + 8]) for w in range(L)]) != leaves[i]:
+                bad.append((s, kd))
+        if MF.round_root(W, s, kinds, leaves) != pipe.roots[r + 1]:
+            bad.append((s, "round"))
+    want = {(s + d, k) for s, c in caps.items() if c == "fault_zlate" for d in (0, 1) for k in ("z-step", "y-step")}
+    doc["rounds_recomputed"] = {"steps": n, "bad": [list(b) for b in bad if b not in want][:8],
+                                "expected_bad": sorted(map(list, want)), "expected_found": want <= set(bad)}
+    order_bad = []
+    for s in range(s0, s1):
+        i = s - s0 + 1
+        ri = i + D - 1 if s + D - 1 < s1 else i_f
+        got, disp, sent = pipe.got_at.get(i), rec["disp_at"].get(s), pipe.sent_at.get(ri)
+        if not (got is not None and disp is not None and sent is not None and got <= disp <= sent < draw_at):
+            order_bad.append(s)
+    after = sorted(i for i, x in pipe.sent_at.items() if x >= draw_at)
+    salts_bad = []
+    for s, salt in rec["salt_of"].items():
+        o = pipe.opening(s - s0 + 1, wait=False)
+        if o is None or salt != HT.live_salt(com, o.coin, s - s0 + 1, pipe.roots[s - s0 + 1]):
+            salts_bad.append(s)
+    rearly = sorted(s for s, c in caps.items() if c == "fault_rearly")
+    tail, rr = rec["tail"], rec["rr"]
+    want_leaves = [MF.tail_leaf(W, j, rr[j]) for j in tail]
+    tail_bad = [j for j, a, b in zip(tail, want_leaves, rec["final_leaves"]) if a != b]
+    final_ok = MF.final_root(W, tail, rec["final_leaves"]) == pipe.roots[i_f]
+    late_steps = [j for j, a in zip(tail, want_leaves)
+                  if li is not None and MF.late_root(W, j, a) == pipe.roots[li] and pipe.sent_at[li] >= draw_at]
+    # the last step: its receipts (the units' last output) against h1r v1 on its ring slot's A under its coin's salt
+    last, s, i = rec["last"], s1 - 1, n
+    o, m = pipe.opening(i, wait=False), last["m"]
+    salt = HT.live_salt(com, o.coin, i, pipe.roots[i])
+    a_rows = [unwords(rows[n - 1][8 * w:8 * w + 8]) for w in range(L)]
+    a_bad, rr_bad = [], []
+    for w in sorted({0, 2, L - 1}):
+        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": win.nk[w][1],
+              "schema": CM.SCHEMA}
+        if CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", last["a"][w].cpu().numpy(),
+                       last["sa"][w].cpu().numpy()).root != a_rows[w]:
+            a_bad.append(w)
+        o_, units, nw = win.plan.offs[w]
+        fr = {"window": W, "step": s, "linear": w, "module": win.names[w], "base": s * win.u_step + win.offs[w],
+              "units": units, "words": nw, "schema": CM.SCHEMA}
+        rd = CM.domain(fr, units, "receipts")
+        rrows = CM.receipt_rows(last["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
+        if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", u, bytes(rrows[u]))[0] for u in range(units)])[-1][0] != rr[s][w]:
+            rr_bad.append(w)
+    r = H1R(lib_h1o)
+    live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
+    roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_rows[w], ">u8"), np.frombuffer(rec["b_roots"][w], ">u8")])
+                              .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
+    plan = r.plan([Call(last["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
+    r.launch(plan, torch.from_numpy(words(salt)).to(win.dev), version=1)
+    torch.cuda.synchronize()
+    rc_bad = []
+    for w in range(L):
+        o_, units, nw = win.plan.offs[w]
+        if (plan.receipts(w) != last["receipts"][o_:o_ + units * nw].view(units, nw)).any():
+            rc_bad.append(w)
+    doc.update(order_bad=order_bad[:8], order_bad_n=len(order_bad), rounds_after_draw=after, salts_bad=salts_bad[:8],
+               salts_expected_bad=rearly, tail_leaves_bad=tail_bad, final_root_ok=final_ok,
+               receipts_after_draw=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
+               receipts_vs_h1r_bad=rc_bad[:8], receipts_vs_h1r_bad_n=len(rc_bad))
+    base = (coins["ok"] and not doc["rounds_recomputed"]["bad"] and doc["rounds_recomputed"]["expected_found"]
+            and sorted(salts_bad) == rearly and final_ok)
+    doc["ok"] = bool(base and not order_bad and not after and not tail_bad and not late_steps and not rc_bad
+                     and not a_bad and not rr_bad)
+    if rec["fault"] == "fault_tail":
+        # the last step's units dropped: refused on its order and every call's receipts, the rest kept
+        doc["conforming"] = bool(base and order_bad == [s] and not after and not tail_bad and not late_steps
+                                 and len(rc_bad) == L and not a_bad)
+    elif rec["fault"] == "fault_late_receipt":
+        # the last step's receipt-tail root withheld from the final round and sent after the draw coin: refused on that
+        # leaf and that round alone
+        doc["conforming"] = bool(base and not order_bad and tail_bad == [s] and late_steps == [s] and after == [li]
+                                 and not rc_bad and not a_bad and not rr_bad)
+    return doc
+
+
+def end_verdict(docs: dict) -> dict:
+    """The window end's verdict: the gate's ended window passes and each end fault's window is refused where its fault
+    is; a live window's alone when it is the arm's one window."""
+    v: dict = {"order": END_ORDER}
+    if "end_gate" in docs:
+        v["gate_ok"] = bool(docs["end_gate"].get("ok"))
+        for f in END_FAULTS:
+            x = docs.get(f, {})
+            v[f"{f}_refused"] = bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
+        v["ok"] = v["gate_ok"] and all(v[f"{f}_refused"] for f in END_FAULTS)
+    else:
+        v["live_ok"] = bool(docs.get("live", {}).get("ok"))
+        v["ok"] = v["live_ok"]
+    return v
+
+
+def end_gate(win: SoWindow, generate) -> None:
+    """The end faults, each in a window of its own `end_steps` steps that ends on its own inside `generate(n)`."""
+    n = end_steps(win.depth)
+    for f in END_FAULTS:
+        win.arm_end(f, f, n)
+        generate(n + 2)
+
+
+def end_checks(win: SoWindow, lib_h1o: str) -> dict:
+    """Every named ended window's `check_end` and their verdict (`end_verdict`); their records released."""
+    names = [x for x in ("end_gate", *END_FAULTS, "live") if x in win.end_recs]
+    with torch.inference_mode():
+        docs = {x: check_end(win, x, lib_h1o) for x in names}
+    docs["verdict"] = end_verdict(docs)
+    win.end_recs.clear()
+    torch.cuda.empty_cache()
+    return docs
+
+
+def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
+    """An off-node window's manifest (`dither_manifest`): its window, coins in `coins.check`'s form, every round root,
+    each step's round leaves and unit salt (a fault_rearly capture's apart, under its name), the final round, the
+    manifest root; its per-call roots to the temporary directory."""
+    import tempfile
+    pipe, coins, rows, kinds = rec["pipe"], rec["coins"], rec["rows"], win.round_kinds
+    s0, s1, i_f, nr, L8 = rec["s0"], rec["s1"], rec["i_f"], len(kinds), 8 * win.L
+    caps = rec["cap_at"]
+    salts = {str(s - s0 + 1): x.hex() for s, x in rec["salt_of"].items() if caps.get(s) != "fault_rearly"}
+    rearly = {str(s - s0 + 1): x.hex() for s, x in rec["salt_of"].items() if caps.get(s) == "fault_rearly"}
+    doc = {"schema": MF.SCHEMA, "window": win.window, "index": rec["k"], "depth": win.depth, "first": s0,
+           "steps": s1 - s0, "linears": win.L, "round_kinds": list(kinds),
+           "open_root": rec["open_root"].hex(),
+           "open_root_is": CO.STAND_IN if coins.source == "off-node" else "the epoch root (in process)",
+           "b_roots": [x.hex() for x in rec["b_roots"]],
+           "rounds": [x.hex() for x in pipe.roots[:i_f + 1]],
+           "round_leaves": [[unwords(rows[r][nr * L8 + 8 * i:nr * L8 + 8 * i + 8]).hex() for i in range(nr)]
+                            for r in range(s1 - s0)],
+           "final": {"index": i_f, "tail": rec["tail"], "leaves": [x.hex() for x in rec["final_leaves"]]},
+           "manifest_root": rec["mroot"].hex(), "salts": salts, "salts_fault_rearly": rearly,
+           "captures": {str(s): c for s, c in sorted(caps.items())},
+           "coins": {**coins.record(), "window": {"root": rec["open_root"].hex()},
+                     "commitment": coins.commitment.to_json(), "salt_coin": rec["salt_open"].to_json(),
+                     "rounds": [{"round": i, "root": pipe.roots[i].hex(), "opening": pipe.opening(i, wait=False).to_json()}
+                                for i in range(i_f + 1)],
+                     "draw_coin": rec["draw"].to_json(), "draw_after": rec["mroot"].hex()}}
+    return MF.write(out_dir, coins.session.id if coins.session else f"k{rec['k']}", doc, rows.tobytes(),
+                    tempfile.gettempdir())

@@ -85,7 +85,13 @@ Arms:
                  -ov last (-ov1: a ring of one step; -ovp: the engine on a stream above the trees' and the units'
                  priority), round s's trees build beside step s + 1's forward from ring copies
                  of what forward s wrote and step s's units go out as soon as coin s is back; its gate adds that round s
-                 covers forward s's values while built once forward s + 1 had started, and fault_ring
+                 covers forward s's values while built once forward s + 1 had started, and fault_ring.  With -we
+                 last, each window ends (`SoWindow.end`: the tail's units after their coins, their receipts under a
+                 final round, the manifest root, the draw coin after it): in process at the end of each generate,
+                 inside its time (the next window's challenger made after it), its gate adds the ended window's
+                 checks and two end faults (fault_tail, fault_late_receipt, `dither_so.check_end`); off the node the
+                 session's one window ends at its layout's last step (DITHER_CHALLENGERS' "rounds"), served there at
+                 the arm's stop, its manifest in OUT (`dither_manifest`) and its checks in stop.json
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -114,7 +120,8 @@ so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
-"commitment": HEX}}``, each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
+"commitment": HEX, "rounds": R}}``, each its own from infra's gate, `coins.py open` (R its --rounds, the layout a
+dither_so window takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
 $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
@@ -362,11 +369,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         import dither_so as SO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
-        unit, ao, pt, depth, ov, serve_prio = DITHER_SO[arm]
+        unit, ao, pt, depth, ov, serve_prio, we = DITHER_SO[arm]
         a = engine_args(gpu_mem)
         SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth, ov=ov,
-                 serve_prio=serve_prio)
+                 serve_prio=serve_prio, window_end=we)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = SO.CAPTURES
@@ -382,11 +389,12 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
 # -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
-# engine serving on a stream above the trees' and the units' priority
-DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}": (unit, ao, pt, d, r, sp)
+# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`)
+DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we)
              for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)
-             for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))}
+             for v, r, sp in (("", 0, False), ("-ov", 2, False), ("-ov1", 1, False), ("-ovp", 2, True))
+             for e, we in (("", False), ("-we", True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
@@ -428,12 +436,29 @@ GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each di
 
 def close_coins() -> None:
     """End this worker's window's off-node coin session, if it has one: the challenger answers closed (after every
-    round a `coins.RoundPipe` sent has its coin back, and a dither_so -ov window's rounds and units drained)."""
+    round a `coins.RoundPipe` sent has its coin back, and a dither_so -ov window's rounds and units drained; a dither_so
+    window closes itself, `SoWindow.close`, ending it under -we)."""
     for name in ("dither_fused", "dither_one"):
         win = getattr(sys.modules.get(name), "WIN", None)
-        if win is not None:
+        if win is not None and hasattr(win, "close"):
+            win.close()
+        elif win is not None:
             getattr(win, "drain", lambda: None)()
             (getattr(win, "pipe", None) or win.coins).close()
+
+
+def fill_end(llm, gen) -> dict:
+    """A -we arm's off-node window served to its layout's last step at the stop (one request a generate, its prompt one
+    step's prefill, so a generate of n tokens is n steps), where it ends on its own; then its `check_end`."""
+    win, mod = getattr(llm, "dither_win", None), getattr(llm, "dither_mod", None)
+    if win is None or not getattr(win, "window_end", False) or win.end_each or not win.open:
+        return {}
+    t0, s0 = time.perf_counter(), win.s
+    while win.open:
+        n = win.steps_left()
+        gen(["Count to ten."], n - 8 if n > 16 else 1)
+    return {"fill_steps": win.s - s0, "fill_s": round(time.perf_counter() - t0, 1),
+            "end": mod.end_checks(win, os.environ[mod.LIB_ENV]), "stats": llm.dither_stats()}
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
@@ -445,6 +470,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             os.environ["POUW_CHALLENGER_SECRET_FILE"] = at["secret_file"]
         if at.get("commitment"):
             os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
+        if at.get("rounds"):
+            os.environ["DITHER_ROUNDS"] = str(at["rounds"])
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -464,10 +491,19 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
+        # a -we arm's in-process window ends with each generate, inside its time; the next one's challenger is made after
         sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
+        win = getattr(llm, "dither_win", None)
+        we = win is not None and getattr(win, "end_each", False)
         t = time.perf_counter()
         outs = llm.generate(reqs, sp, use_tqdm=False)
-        return time.perf_counter() - t, outs
+        if we:
+            with torch.inference_mode():
+                win.end()
+        dt = time.perf_counter() - t
+        if we:
+            win.prepare()
+        return dt, outs
 
     def serve(cmd: dict) -> None:
         if cmd["op"] == "warm":
@@ -482,12 +518,15 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
+            we = win is not None and getattr(win, "end_each", False)
             if win is not None:
                 if mod is DF:
                     win.arm(B)
                     win.price_y = True
                 else:
                     win.arm(B)
+                if we:
+                    win.arm_end("end_gate")
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
                 torch.cuda.synchronize()
@@ -517,6 +556,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:]))
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
+                    if we:
+                        # the gate's window ended with its generate; the end faults each in a window of their own
+                        mod.end_gate(win, lambda n: gen(ps, n))
+                        res["end"] = mod.end_checks(win, lib)
+                        res["verdict"]["end"] = res["end"]["verdict"]
+                        res["verdict"]["ok"] = res["verdict"]["ok"] and res["end"]["verdict"]["ok"]
                 res["check_s"] = round(time.perf_counter() - t0, 1)
                 # the captures sit outside vLLM's memory budget; released, the next arm's gate has their room
                 win.caps = {}
@@ -553,8 +598,16 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     while True:
         cmd = conn.recv()
         if cmd["op"] == "stop":
-            close_coins()
-            conn.send({"stopped": True})
+            res = {"stopped": True}
+            try:
+                res.update(fill_end(llm, gen))
+            except Exception as e:  # noqa: BLE001
+                res["error"] = f"stop: {type(e).__name__}: {e}"
+            try:
+                close_coins()
+            except Exception as e:  # noqa: BLE001
+                res["close_error"] = f"{type(e).__name__}: {e}"
+            conn.send(res)
             return
         try:
             serve(cmd)
@@ -598,6 +651,7 @@ def main() -> int:
         os.environ[OWN_BATCH_ENV] = "1"
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    os.environ["DITHER_MANIFEST_DIR"] = str(out)
     import tempfile
     scratch = Path(a.scratch or tempfile.mkdtemp(prefix="sbench."))
     arms = a.arms.split(",")
@@ -691,6 +745,15 @@ def main() -> int:
                     vs_rep0.setdefault(arm, []).append(token_diff(ref_tokens[(r, arm)], ref_tokens[(0, arm)]))
     for arm in arms:
         conns[arm].send({"op": "stop"})
+    # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
+    stops = {}
+    for arm in arms:
+        try:
+            stops[arm] = conns[arm].recv()
+        except EOFError:
+            stops[arm] = {"error": "stop: the worker exited"}
+        print(json.dumps({"stop": arm, **{k: v for k, v in stops[arm].items() if k != "stats"}}), flush=True)
+    (out / "stop.json").write_text(json.dumps(stops, indent=1, default=str) + "\n")
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
@@ -711,6 +774,8 @@ def main() -> int:
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
+    summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
+                             "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
     return rc
