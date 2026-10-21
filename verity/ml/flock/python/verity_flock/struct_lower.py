@@ -12,7 +12,7 @@ Definitions) and differs from the unrolled unit only by those commits and the fo
 :func:`count` returns the unrolled totals (multiplied through the calls, not unrolled) and the template's size: its
 Definitions and their own rows and references.
 
-    python -m verity_flock.struct_lower K [R C]   # the H1 tile unit (benchmarks/pouw/h1_prove/h1unit.Shape)
+    python -m verity_flock.struct_lower K [R C] [--flat]   # the H1 tile unit (benchmarks/pouw/h1_prove/h1unit.Shape)
 """
 from __future__ import annotations
 
@@ -203,6 +203,26 @@ def count(target) -> dict:
             "patterns": {f: n for f, n in sorted(by_fn.items(), key=lambda kv: -kv[1])[:8]}}
 
 
+def flat(target) -> dict:
+    """``target``'s unrolled lowering (:func:`ir_lower.lower`), counted as :func:`count` counts a specialization, its
+    returns committed as :func:`count` commits the root's."""
+    _prog, root = IL.standalone(target)
+    C = Circuit()
+    outs = IL.lower(C, target, [C.input(f"in{a}", IL._width(root.circuit.gate(a).prim)) for a in root.args])
+    used = [b if b.is_const() or (len(b.s) == 1 and b.c == 0) else C.commit([b])[0] for w in outs for b in w]
+    C.output("used", used)
+    t = {"rows": 0, "commits": 0, "lookups": 0, "asserts": len(C.asserts), "refs": 0}
+    for v in C.live():
+        if C.kind[v] == "and":
+            a, b = C.data[v]
+            t["rows"] += 1
+            t["refs"] += len(a.s) + len(b.s)
+            t["commits"] += b is ONE
+        elif C.kind[v] == "lookup":
+            t["lookups"] += 1
+    return {"flat": t}
+
+
 def main(argv: list[str]) -> int:
     import resource
     from pathlib import Path
@@ -211,10 +231,12 @@ def main(argv: list[str]) -> int:
     sys.path[:0] = [str(h1), str(h1.parent / "hidden_zk")]
     import h1unit as U
 
+    mode = flat if "--flat" in argv else count
+    argv = [a for a in argv if a != "--flat"]
     k = int(argv[0])
     shape = U.Shape(k, *map(int, argv[1:3])) if len(argv) >= 3 else U.Shape(k)
     t0 = time.time()
-    out = count(shape.unit())
+    out = mode(shape.unit())
     out |= {"k": k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
