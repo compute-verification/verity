@@ -1,6 +1,6 @@
 //! The firewall's send check on the outer `--zk` prover (PROTOCOL.md §10.1): every live round the device frames is held to
-//! the statement's skeleton in the algebraic phase, and byte for byte to an opening the firewall computes itself (the shadow,
-//! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
+//! the statement's skeleton in the algebraic phase, and byte for byte to the opening the session's Lean finish computes (the
+//! shadow, `Flock.Firewall.Finish.openLive`, in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
 //! `FIREWALL-REFUSED: <what>` reason, and nothing of the refused round leaves: the rep goes on releasing the statement's
 //! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`. So does
 //! a worker that fails ([`run_worker`]: an error, a panic, silence past the deadline): a rep's end never depends on its worker.
@@ -257,7 +257,8 @@ impl Checker {
 }
 
 /// The firewall's end of the shadow opening's lock-step: each of the shadow's rounds, to compare with the device's, and the coins
-/// back. The shadow ([`ShadowEnd`] in a [`Framer`]) runs on its own thread.
+/// back. The shadow ([`ShadowEnd`]: the thread that relays the Lean finish's `open` rounds, [`LeanFinish::open`]) runs on its
+/// own thread.
 pub struct ShadowLink {
     rx: Receiver<(Vec<u8>, usize)>,
     tx: Option<Sender<Vec<F128>>>,
@@ -280,8 +281,13 @@ pub fn shadow_pair() -> (ShadowLink, ShadowEnd) {
 impl ShadowEnd {
     /// The shadow's round: hand it to the firewall and wait for its coins (the shadow stops when the firewall has gone).
     pub fn round(&mut self, content: &[u8], n: usize) -> Vec<F128> {
-        self.tx.send((content.to_vec(), n)).ok().and_then(|_| self.rx.recv().ok())
-            .unwrap_or_else(|| panic!("the firewall stopped the shadow opening"))
+        self.try_round(content, n).unwrap_or_else(|| panic!("the firewall stopped the shadow opening"))
+    }
+
+    /// The shadow's round, or None once the firewall has gone.
+    pub fn try_round(&mut self, content: &[u8], n: usize) -> Option<Vec<F128>> {
+        self.tx.send((content.to_vec(), n)).ok()?;
+        self.rx.recv().ok()
     }
 }
 
@@ -411,8 +417,8 @@ pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T
 }
 
 /// Frames every call as the device prover's challenger does (`FsChallenger` under its live hook) and hands each round to
-/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), and the firewall's
-/// shadow opening frames its rounds through it for the comparison.
+/// `rounds` at its squeeze: M1's CPU prover takes the device path's host side through it (`FC_ZK_FRAMED`), as does the
+/// firewalled CPU device.
 pub struct Framer<'a> {
     pub pending: Vec<u8>,
     pub rounds: &'a mut (dyn FnMut(&[u8], usize) -> Vec<F128> + Send),
@@ -927,6 +933,129 @@ impl LeanFinish {
     /// Rep `r` of session table `i`, on its request (`rep_body`): the rep's proof file.
     pub fn rep(&mut self, i: usize, r: usize, body: &[u8]) -> Result<Vec<u8>, String> {
         self.ask(&format!("rep {i} {r}"), body)
+    }
+
+    /// Rep `r` of session table `i`'s opening, live (`Finish.openLive`), on the extra claims' points and the algebraic
+    /// phase's coins (`open_body`): each of its rounds goes to `round`, which answers it with the coins the stream answered
+    /// it, or with None to stop the rep (which ends the finish).
+    pub fn open(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>) -> Result<(), String> {
+        self.live(&format!("open {i} {r}"), body, round, &mut |_| Err(refused("the Lean finish sent constraints in an opening"))).map(|_| ())
+    }
+
+    /// Rep `r` of session table `i`'s inner proof, live (`Finish.innerLive`), on its request with the coins of its PIOP and
+    /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, as in
+    /// [`Self::open`]. Its proof file is then [`Self::rep`]'s, on every round's coins.
+    pub fn inner(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
+                 cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<(), String> {
+        self.live(&format!("inner {i} {r}"), body, round, cons).map(|_| ())
+    }
+
+    /// A request whose answer comes after the rounds the finish sends live: `round N LEN` and its bytes, answered `coins N`
+    /// and their words (or `stop`, which the finish refuses), and `cons LEN` and its bytes, answered nothing.
+    fn live(&mut self, head: &str, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,
+            cons: &mut dyn FnMut(&[u8]) -> Result<(), String>) -> Result<Vec<u8>, String> {
+        use std::io::{BufRead, Read, Write};
+        let io = |e: std::io::Error| refused(format!("the Lean finish's {head}: {e}"));
+        writeln!(self.stdin, "{head} {}", body.len()).and_then(|_| self.stdin.write_all(body)).and_then(|_| self.stdin.flush()).map_err(io)?;
+        loop {
+            let mut line = String::new();
+            self.stdout.read_line(&mut line).map_err(io)?;
+            let words: Vec<&str> = line.split_whitespace().collect();
+            let num = |s: &str| s.parse::<usize>().map_err(|_| refused(format!("the Lean finish's {head}: `{}`", line.trim_end())));
+            match words.as_slice() {
+                ["round", n, len] => {
+                    let (n, len) = (num(*n)?, num(*len)?);
+                    let mut c = vec![0u8; len];
+                    self.stdout.read_exact(&mut c).map_err(io)?;
+                    match round(&c, n) {
+                        Some(coins) if coins.len() == n => {
+                            writeln!(self.stdin, "coins {n}").and_then(|_| self.stdin.write_all(&f128_wire(&coins))).map_err(io)?;
+                        }
+                        _ => writeln!(self.stdin, "stop").map_err(io)?,
+                    }
+                    self.stdin.flush().map_err(io)?;
+                }
+                ["cons", len] => {
+                    let mut b = vec![0u8; num(*len)?];
+                    self.stdout.read_exact(&mut b).map_err(io)?;
+                    cons(&b)?;
+                }
+                ["ok", n] => {
+                    let mut out = vec![0u8; num(*n)?];
+                    self.stdout.read_exact(&mut out).map_err(io)?;
+                    return Ok(out);
+                }
+                _ => {
+                    let l = line.trim_end();
+                    return Err(refused(format!("the Lean finish: {}", l.strip_prefix("err ").unwrap_or(if l.is_empty() { "no answer" } else { l }))));
+                }
+            }
+        }
+    }
+}
+
+/// A rep's opening request to `flock-firewall finish` (`Flock.Firewall.Finish.parseOpen`): the extra claims' points and the
+/// algebraic phase's coins, as [`rep_body`] ends.
+#[cfg(feature = "sha512")]
+pub fn open_body(extras: &[Vec<F128>], rounds: &[Vec<F128>]) -> Vec<u8> {
+    let mut b = Vec::new();
+    for v in [extras, rounds] {
+        b.extend((v.len() as u64).to_le_bytes());
+        for x in v {
+            b.extend((x.len() as u64).to_le_bytes());
+            b.extend(f128_wire(x));
+        }
+    }
+    b
+}
+
+/// The constraints the Lean finish sends before a rep's inner proof (`Finish.consBytes`): each its name and form.
+#[cfg(feature = "sha512")]
+pub fn parse_cons(b: &[u8]) -> Result<Vec<(String, crate::zk_veil::Lin)>, String> {
+    fn take<'a>(b: &'a [u8], o: &mut usize, n: usize) -> Option<&'a [u8]> {
+        let x = b.get(*o..o.checked_add(n)?)?;
+        *o += n;
+        Some(x)
+    }
+    fn word(x: &[u8]) -> F128 {
+        F128::new(u64::from_le_bytes(x[..8].try_into().unwrap()), u64::from_le_bytes(x[8..16].try_into().unwrap()))
+    }
+    fn len(b: &[u8], o: &mut usize) -> Option<usize> {
+        take(b, o, 8).map(|x| u64::from_le_bytes(x.try_into().unwrap()) as usize)
+    }
+    let parsed = (|| -> Option<Vec<(String, crate::zk_veil::Lin)>> {
+        let mut o = 0usize;
+        let n = len(b, &mut o)?;
+        let mut out = Vec::with_capacity(n.min(4096));
+        for _ in 0..n {
+            let k = len(b, &mut o)?;
+            let name = String::from_utf8(take(b, &mut o, k)?.to_vec()).ok()?;
+            let c = word(take(b, &mut o, 16)?);
+            let m = len(b, &mut o)?;
+            let a = take(b, &mut o, m.checked_mul(16)?)?.chunks(16).map(word).collect();
+            out.push((name, crate::zk_veil::Lin { c, a }));
+        }
+        (o == b.len()).then_some(out)
+    })();
+    parsed.ok_or_else(|| refused(format!("the Lean finish's constraints: {} bytes that do not parse", b.len())))
+}
+
+/// The rows the Lean finish adds to the replay's (`Finish.repCons`): the ring switch's, then level 0's lane phase.
+pub const RING_SWITCH: [&str; 2] = ["ring switch ab", "ring switch c"];
+pub const LANE_PHASE: [&str; 2] = ["ligerito lane phase (c0)", "ligerito lane phase (c1)"];
+
+/// The Lean finish's constraints (`parse_cons`) held to the statement's relations, name for name and in order: the replay's
+/// (`replay`), the ring switch's and, under Ligerito, level 0's lane phase. The inner proof's batching coins go one to a
+/// constraint and the recorder's relations go by these names, so any other sequence is refused.
+#[cfg(feature = "sha512")]
+pub fn relations_held(cons: &[(String, crate::zk_veil::Lin)], replay: &[&str], ligerito: bool) -> Result<(), String> {
+    let lane: &[&str] = if ligerito { &LANE_PHASE } else { &[] };
+    let want: Vec<&str> = replay.iter().chain(&RING_SWITCH).chain(lane).copied().collect();
+    let got: Vec<&str> = cons.iter().map(|c| c.0.as_str()).collect();
+    if got == want {
+        Ok(())
+    } else {
+        Err(refused(format!("the Lean finish's constraints {got:?} are not the statement's relations {want:?}")))
     }
 }
 
@@ -1489,6 +1618,23 @@ mod tests {
                 link.check(&device, rep[at].1).is_ok()
             };
             assert_eq!(got, c["pass"].as_bool().unwrap(), "{}", c["case"]);
+        }
+    }
+
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn lean_constraints_are_held_to_the_relations_name_for_name() {
+        let lin = || crate::zk_veil::Lin { c: F128::ZERO, a: vec![F128::ONE] };
+        let named = |ns: &[&str]| ns.iter().map(|n| (n.to_string(), lin())).collect::<Vec<_>>();
+        let replay = ["zerocheck final a·b", "zerocheck c_eval", "lincheck"];
+        let honest = [&replay[..], &RING_SWITCH, &LANE_PHASE].concat();
+        assert_eq!(relations_held(&named(&honest), &replay, true), Ok(()));
+        assert_eq!(relations_held(&named(&honest[..5]), &replay, false), Ok(()));
+        let renamed = [&replay[..2], &["lincheck sum"], &RING_SWITCH, &LANE_PHASE].concat();
+        let swapped = [&replay[..], &["ring switch c", "ring switch ab"], &LANE_PHASE].concat();
+        for bad in [renamed, swapped, honest[..6].to_vec(), [&honest[..], &["extra"]].concat()] {
+            let e = relations_held(&named(&bad), &replay, true).unwrap_err();
+            assert!(e.starts_with("FIREWALL-REFUSED: the Lean finish's constraints"), "{e}");
         }
     }
 }
