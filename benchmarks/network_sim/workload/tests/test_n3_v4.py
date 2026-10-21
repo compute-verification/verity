@@ -315,7 +315,8 @@ def test_the_demo_window_is_its_reference(demo, demo_cases):
 @pytest.mark.slow
 def test_a_salted_window_is_its_reference(salted_lab):
     """The salted lab window (B = 240) as v4: honest, with a wrong salt payload, and with the salt frame's slot moved.
-    It is the one test of v4 with the salt path, one segment and one run. About 7 s after the demo window's test, whose
+    It is the one test of v4 with the salt path, two segments and two runs (a request's frame reads the
+    outside host's length and head, then the message). About 7 s after the demo window's test, whose
     traced parts it shares in the suite's one process."""
     salts = payloads(salted_lab)
     setup, windows = lab_windows(salted_lab, salts=salts)
@@ -326,5 +327,5 @@ def test_a_salted_window_is_its_reference(salted_lab):
     moved = copy.deepcopy(honest)
     moved.args["slot"] = 1
     cases = [honest, wrong, moved]
-    assert honest.salted and honest.R == 1
+    assert honest.salted and honest.R == 2
     assert V.evaluate(*cases) == [int(V.reference(x)) for x in cases] == [1, 0, 0]
