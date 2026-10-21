@@ -17,10 +17,9 @@ conditions, each of which holds:
    something the prover chooses.
 3. SHA-512 is collision resistant, as hm96 rows in frame-v3-sha512 trees already assume.
 
-Two gaps keep the network audit from being zero-knowledge, and nothing may call it that until both are closed (the
-README states them too):
-- **N2 compares the certified egress digest with the Program's grid in the clear**, which reads witness. It goes when
-  N3 runs on every link-window (NET-38) and N2 switches to `check_link(grid=False)`.
+N2 no longer compares the grid in the clear: `LinkWindows.verify` runs `check_link(grid=False)` (NET-38), and the
+network claim is counts only until N3 is a proof-service unit on every window (ASK-70, counts-first). Two gaps keep the
+count check from being zero-knowledge, and nothing may call it that until both are closed (the README states them too):
 - **The host checks the certificate's signature over an unsalted record digest**, a hash of witness: the record's
   counts and an unsalted root of its raw frames. It goes when the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖
   R)` (NET-42):
@@ -28,6 +27,9 @@ README states them too):
   - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
   - the host's LMS check then reads only the public fields (key id, session, link, direction, window) and that hiding
     digest.
+- **N2's unit isn't proved yet:** its verifier of record runs `head_check.reference` on the host over the opening. When
+  it is proved, the head-check gate binds `NetworkHeadCheck_v1`'s circuit digest and a proof of any other circuit is
+  refused (NET-43).
 
 ## The certifier (`grid`)
 
@@ -536,10 +538,45 @@ them.
     is more than `reveal_deadline` past p's end (`Proxy(reveal_deadline=…)`, one PoUW window by default), so a
     registration made after the window's work gets no salt and that work is timed; for a PoUW window whose salt was
     never drawn; and for one whose salt it has revealed already, so a second registration naming p, by another stream
-    or epoch, gets none. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
-    called on the auditor's side: by the verifier, or by the proof service's challenger, which is the auditor's too
-    (#2573). Exposed beyond the auditor's hosts, it would need an authenticated caller or a receipt signed under LMS
-    (`lms.DEPLOYED`, n = 64), the repository's one signature scheme.
+    or epoch, gets none. Nothing else publishes the salt.
+  - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
+    certifier runs on the link, off the prover's node, and the proof service's challenger (#2573), which is the
+    auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
+    prover's configuration, and `trusted-nebius-host` covers that record's custody. Each proxy draws a run id at
+    construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
+    default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
+    the auditor starts the proxy, since a restart draws a new one. The record, not a signed `hello`, because a hello
+    would either let any caller spend the certifier's LMS leaves or need a signed request of its own, and the record
+    is already where the client gets the certifier's key. With the keys, `reveal(p, registration, request)` and
+    `committed(p, registration, request)` take only a request the challenger signed under `challenger_key` (LMS:
+    `lms.DEPLOYED`, n = 64) over `reveal_request_message(key_id, run_id, link, p, digest, what)`: the tag
+    `verity-network-certifier/reveal-request/v1`, then u16be len(key_id) ‖ key_id, the certifier signer's, the run id
+    (32 bytes), u16be len(link) ‖ link, the certifier's ingress link, u64be p, u32be len(digest) ‖ digest, the
+    registration's, and u8 len(what) ‖ what, `salt` or `weights`. A request that doesn't verify is refused
+    (`RuntimeError`) before anything else is read, and spends nothing: no third party can spend p's one reveal, a
+    request for another certifier or another run is never taken, and since the digest binds the registration's record,
+    a registration counts only if the challenger signed it, whatever its receipt. The answer is a `Revealed(window,
+    value, signature, key_id, run_id)`, signed by the certifier's own key (`signer`, the network certifier's, as its
+    `Issuer` signs with) over `reveal_response_message`, the request's fields then u32be len(value) ‖ value under
+    `verity-network-certifier/reveal-response/v1`. `Revealed.verify(key, run_id, link, digest, what)` holds only if it
+    names that key's id and that run and the signature verifies, so a consumer can key p on the certifier run, (key
+    id, run id, link), which `Proxy.certifier_run` and `RemoteCertifier.certifier_run` give alike (link is the ingress
+    link the messages bind): two proxies with one link name, whose p's collide, or two runs of one certifier, never
+    answer for each other. A signer that refuses leaves p's reveal spent and gives nothing. The salt needs
+    authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
+    `pouw.salt` as a public input, so nothing is encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on
+    the path, it costs the window as dropping the answer would; so does a request copied off the path and sent
+    first, which spends the reveal on a salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both
+    calls beside `run`, one JSON line per request and per answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer, link, run_id)` is
+    the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
+    `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
+    refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
+    unchanged. What still rests on `trusted-nebius-host` is the certifier's key custody, its signing key and leaf state
+    on its host (`LmsSigner`, one leaf at a time across the threads that share it) and its word on what it signs, and
+    the deployment record's custody: the keys and the run id it gives each side. The challenger's key is the
+    auditor's, on its own host. A proxy with neither key is the in-process call the tests and replays make
+    (`reveal(p, registration)`, which returns the salt): it takes no request, and holds only while called on the
+    auditor's side.
   - **The audit's read** (`check_salts(audit, link, records, windows, salts, pouw_window=k, salt_bits=…)`). PoUW
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing

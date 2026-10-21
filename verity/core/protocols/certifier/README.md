@@ -31,9 +31,14 @@ A spec-level reference for network accounting's timing channel:
   end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
   reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
   signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
-  (`Proxy.committed(p, registration)`). A proxy back
-  from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
-  Program's at position p, and carries nothing from before: a window it was down for has no record.
+  (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the challenger's key
+  from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
+  for the certifier's key id and run (`Proxy.run_id`, 32 bytes drawn at construction) and answer an `active.Revealed`
+  the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
+  to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
+  once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
+  back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
+  the Program's at position p, and carries nothing from before: a window it was down for has no record.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
@@ -77,11 +82,11 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 ## Not yet zero-knowledge
 
-Every protocol is to be zero-knowledge, and the network audit isn't yet. Nothing may call it zero-knowledge until both
-of these gaps are closed:
-- **N2's grid comparison.** `service.LinkWindows.verify` compares each certified egress digest with the Program's grid
-  in the clear (`check_link` with `grid` on), and that reads witness. It goes once N3 runs on every link-window
-  (NET-38): N2 then switches to `check_link(grid=False)`.
+Every protocol is to be zero-knowledge, and the network audit isn't yet. Its claim today is counts only: N2 holds each
+window's per-bucket counts to the occupancy profile on every link-window, beside the proved timing bound, while N3, the
+content check, is the design (Daniel's provisional call on ASK-70, 19 Oct). N2 no longer compares the grid in the clear
+(`LinkWindows.verify` runs `check_link(grid=False)`, NET-38). Nothing may call the count check zero-knowledge until
+these are closed:
 - **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
   counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
   is NET-42:
@@ -89,5 +94,8 @@ of these gaps are closed:
     per record and handed to the prover as witness only;
   - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
   - the host's LMS check then reads only public fields and that hiding digest.
+- **N2's unit isn't proved yet.** `LinkWindows.verify`, the verifier of record, runs `head_check.reference` on the
+  host over the opening, so it reads the heads. When the unit is proved, its head-check gate must bind
+  `NetworkHeadCheck_v1`'s circuit digest, and the verifier must refuse a proof of any other circuit (NET-43).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

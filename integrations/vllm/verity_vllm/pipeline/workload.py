@@ -41,7 +41,8 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world
+from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
+                                rows_of_record)
 from verity_vllm.engine import served
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
@@ -55,6 +56,9 @@ SAMPLING = {
 }
 NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
+#: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
+INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
+                         "registered as vLLM's CUSTOM backend")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -337,13 +341,14 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         variants[variant] = SAMPLING[variant]
     horizon = max(int(r["arrive_step"]) + int(r["max_tokens"]) for r in reqs)
     total_prompt = sum(int(r["prompt_len"]) for r in reqs)
+    of_record = p["row_id"] in rows_of_record()
     doc = {
         "schema": SCHEMA, "model": hf_repo, "case": case,
         "engine": {"revision": revision, "vllm": VLLM,
                    "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
         "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
-        "sampling": {"variant": variant, "seed": None, "n": 1},
+        "sampling": {"variant": variant, "seed": None, "n": 1, **({"ignore_eos": True} if of_record else {})},
         "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
@@ -358,7 +363,8 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
         "note": (f"R12 sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
-                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."),
+                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
+                 + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
     }
     doc["sweep"]["lengths_only"] = tok is None
     if n:
@@ -450,6 +456,10 @@ def main(a: Options) -> int:
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
+    reasons = dict(r.partition("=")[::2] for r in a.reason)
+    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
+        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
@@ -463,10 +473,8 @@ def main(a: Options) -> int:
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
-    reasons = dict(r.partition("=")[::2] for r in a.reason)
-    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
-        return 2
+        if "attention" in tp.int8_parts:
+            reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
     if reasons:
         doc["engine"]["reasons"] = reasons
     if tok is not None:

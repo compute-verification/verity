@@ -1790,6 +1790,22 @@ impl Instances {
         self.rows.is_some() || self.tables.as_ref().is_some_and(|t| t.rows.is_some())
     }
 
+    /// The verifier's own public file of this registered population: the header (`rows` false) and the public bytes after
+    /// the rows and salts, which this file drops (`verity_flock.circuit.stage(..., public_only=True)`).
+    pub fn public_file(&self) -> Result<Vec<u8>, String> {
+        if self.population.is_some() {
+            return Err("a drawn statement's public file is its population's".into());
+        }
+        let mut b = serde_json::to_vec(&self.header).map_err(|e| format!("header: {e}"))?;
+        b.push(b'\n');
+        b.extend(self.bcs.iter().flatten());
+        if let Some(t) = &self.tables {
+            b.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
+        b.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
+        Ok(b)
+    }
+
     /// Every instance's input rows, instance-major, ports side by side (a shared-row file's gathered by its refs), then every
     /// instance's public input words (u16 LE, as [`Stmt::unit_inputs`] reads them); `None`: the verifier's file.
     pub fn instance_rows(&self, c: &Composite) -> Option<Vec<u8>> {

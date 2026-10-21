@@ -100,6 +100,61 @@ def test_an_unreadable_untracked_file_drops_the_capture_and_keeps_the_digest(tmp
     assert not cap.exists(), "a capture missing a hashed file would not reproduce the digest"
 
 
+def test_a_commit_landing_during_the_read_is_read_again_never_recorded_dirty_with_the_empty_digest(tmp_path, monkeypatch):
+    """r20261019-180708-c2a5: HEAD and status were read before a lane's commit landed and `git diff HEAD` after it, so the record
+    named the parent, dirty, with sha256(b"").  The diff is now against the commit read, and a read HEAD moved during is taken again."""
+    r = _repo(tmp_path)
+    (r / "a.lean").write_text("theorem a : 1 = 1 := rfl\n")
+    real, landed = E._git, []
+
+    def git(args, root, **kw):
+        if args[0] == "diff" and not landed:
+            _git(r, "commit", "-q", "-am", "landed")
+            landed.append(True)
+        return real(args, root, **kw)
+
+    monkeypatch.setattr(E, "_git", git)
+    cap = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=cap)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=r, capture_output=True, text=True, check=True).stdout.strip()
+    assert landed and (c["source.commit"], c["source.dirty"], c["source.dirty_digest"]) == (head, False, None)
+    assert not cap.exists(), "the first read's capture is not this source's"
+
+
+def test_a_head_that_never_settles_is_unknown_not_guessed(tmp_path, monkeypatch):
+    r = _repo(tmp_path)
+    real, n = E._git, iter(range(100))
+    monkeypatch.setattr(E, "_git", lambda args, root, **kw: f"{next(n):040x}" if args == ["rev-parse", "HEAD"] else real(args, root, **kw))
+    c = E.source_conditions(r)
+    assert [c[f"source.{k}"] for k in ("commit", "tree", "dirty", "dirty_digest")] == [None] * 4
+
+
+def test_an_index_only_change_is_clean(tmp_path):
+    """`git status` lists a change staged and then undone in the working tree, but no byte the run reads differs from the commit's:
+    the source is clean, so a dirty source's digest is never sha256(b"")."""
+    r = _repo(tmp_path)
+    (r / "a.lean").write_text("staged\n")
+    _git(r, "add", "a.lean")
+    (r / "a.lean").write_text("theorem a : True := trivial\n")
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=r, capture_output=True, text=True, check=True).stdout.strip()
+    cap = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=cap)
+    assert (c["source.dirty"], c["source.dirty_digest"]) == (False, None) and not cap.exists()
+
+
+def test_an_untracked_nested_repository_is_in_the_digest_and_keeps_the_tree(tmp_path):
+    """An untracked directory git lists whole (`sub/`, a nested repository) is not a file: its name enters the digest, so the source
+    is dirty with a digest that is not sha256(b""), and the capture is dropped, since it could not hold the directory's bytes."""
+    r = _repo(tmp_path)
+    (r / "sub").mkdir()
+    _git(r / "sub", "init", "-q")
+    (r / "sub" / "f").write_text("f\n")
+    cap = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=cap)
+    assert c["source.dirty"] is True and c["source.dirty_digest"] not in (None, E.EMPTY_DIGEST, "too-large")
+    assert c["source.dirty_digest"] == hashlib.sha256(b"sub/\0\0").hexdigest() and not cap.exists()
+
+
 def test_the_runner_moves_the_capture_into_the_run_dir_and_names_it_in_job_json(tmp_path):
     from research import cli
 

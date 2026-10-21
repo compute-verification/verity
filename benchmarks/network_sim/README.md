@@ -389,13 +389,10 @@ frames root and the head's opening (v2: the stand-in's digest and opening).
 | Lab: b0's responses, window 0 (6 frames) | 1,483,550,450 | 56,473,643 | 25,976,556 | 8,298,180 | 8,675,448 | 13,523,424 |
 
 The simulator's windows run from 3.4M to 10.2M (v2: 5.0M to 12.7M) and the lab's from 10.7M to 56.5M (v2: 31.1M to
-1.48B). At the lab's largest window v3 is 26 times smaller:
-
-- Row reads fall from 1.31B to 26.0M. A 4,096-byte frame reads one segment, one 8,192-byte row, instead of up to 255
-  scattered value rows. Each read is 4.33M ANDs, most of it the row's 65 compressions.
-- Descriptor reads fall from 31.9M to 8.3M: a descriptor is 383 bits, not v2's 69,920 bits of masks.
-- Frames fall from 124M to 8.7M: one shift a segment (0.92M at 4,096 bytes) replaces the compaction.
-- The record rises from 11.7M to 13.5M, nearly all of it N2's frames root, which v2's stand-in didn't compute.
+1.48B). At the lab's largest window v3 is 26 times smaller: a 4,096-byte frame reads one 8,192-byte row (4.33M ANDs,
+most of it the row's 65 compressions) instead of up to 255 scattered value rows, a descriptor is 383 bits instead of
+69,920 bits of masks, and one shift a segment (0.92M) replaces the compaction. The record rises from 11.7M to 13.5M,
+nearly all of it N2's frames root, which v2's stand-in didn't compute.
 
 The demo stays the size v2 was. At 16 bytes a row read is mostly the hm96 leaf and the path, and one 32-byte outbox row
 costs what one 256-bit value row did. Rows of B bytes, two per segment, were measured and set aside: they make the demo
@@ -417,28 +414,35 @@ its links (above), whatever N3 costs there.
 
 At the shape of llama8b-node1's served rows (`SERVED`, from run `r20261006-035423-2cd5`: T = 600 buckets of 100 ms,
 slots of 4,096 bytes, 1,440 windows a day, busy egress link-windows of 34,499 and 35,386 frames, and 21,372 ingress
-frames for 715,340 egress), each part is traced at its statics and no served value is read. Egress port-windows are
+frames for 715,340 egress), each part is traced at its statics and no served value is read: AND counts at the served
+shape, not a run on served traffic (run `r20261021-020337-2a6e`, at 17ddf3f34a). Egress port-windows are
 unsalted with one segment a frame and ingress ones salted with two, as the lab's are, and an event's JSON is guessed at
-256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees; at
-a day's, every outbox has 2^26 rows and the layout two ports of 2^26 positions.
+256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees. At
+one window's, every outbox has 2^16 rows and the layout two ports of 2^16 positions, the least that hold a busy
+window's 35,386 frames. At a day's, 2^26 rows and two ports of 2^26. The lab's layout of 2^6 positions doesn't hold a
+busy window, so its rows price a window the service refuses (`Window.why`).
 
 | Depths | Egress frames | Ingress frames | N3 egress | N3 ingress | N3 a link-window | N3 a day, one link | N3 ÷ N2 |
 |---|---|---|---|---|---|---|---|
-| Lab's | 34,499 | 1,031 | 325.6B | 15.2B | 340.8B | 4.91 × 10^14 | 89,879 |
-| Lab's | 35,386 | 1,057 | 334.0B | 15.6B | 349.6B | 5.03 × 10^14 | 92,188 |
-| A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 163,424 |
-| A day's | 35,386 | 1,057 | 607.5B | 28.2B | 635.7B | 9.15 × 10^14 | 167,623 |
+| Lab's | 34,499 | 1,031 | 325.6B | 15.2B | 340.8B | 4.91 × 10^14 | 89,869 |
+| Lab's | 35,386 | 1,057 | 334.0B | 15.6B | 349.6B | 5.03 × 10^14 | 92,178 |
+| One window's | 34,499 | 1,031 | 475.6B | 22.3B | 497.9B | 7.17 × 10^14 | 131,287 |
+| One window's | 35,386 | 1,057 | 487.8B | 22.8B | 510.7B | 7.35 × 10^14 | 134,660 |
+| A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 163,414 |
+| A day's | 35,386 | 1,057 | 607.4B | 28.2B | 635.6B | 9.15 × 10^14 | 167,612 |
 
 N2 is 5.46 × 10^9 ANDs a day on one link. N3 is linear in the frames: a least-squares line through each ladder (7
-points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths and
-17.2M at a day's, and 14.8M and 26.7M an ingress frame, with the largest residual 3.0%. At the lab's depths a busy
-egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and 7% frames; at a day's,
-the deeper trees make it 50% row reads and 29% descriptor reads.
+points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths, 13.8M
+at one window's and 17.2M at a day's, and 14.7M, 21.6M and 26.7M an ingress frame, with the largest residual 3.0%. At
+the lab's depths a busy egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and
+7% frames; at a day's, the deeper trees make it 50% row reads and 29% descriptor reads. `N3Window_v4` (below) brings a
+busy link-window to 320.1B.
 
 `composed` equals the whole trace (`checked`) at the served format, at the lab's depths, on unsalted one-segment
-windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64. The run's next check, a salted
-window of 257 frames, was killed at the run's 32 GiB memory cap, so the busy windows, and every count at a day's depths,
-are composed only. `workload/tests/test_n3_cost.py` holds `composed` to the trace at the demo's format.
+windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64 (run `r20261019-171031-6fa8`, at
+8450bbaa73). That run's next check, a salted window of 257 frames, was killed at its 32 GiB memory cap, so the busy
+windows, and every count at one window's and a day's depths, are composed only. `workload/tests/test_n3_cost.py` holds
+`composed` to the trace at the demo's format.
 
 The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) check the following:
 
@@ -476,8 +480,8 @@ The evaluations, `python -m workload.n3_unit sim` and `lab`:
 `python -m workload.n3_unit circuit-check --parts --out FILE` runs circuit-check's checks on the demo format's SHA-free
 parts: `N3Frame` (12,448 gates; lowered to C-Flock, 4,983 ANDs) and `N3Seg` (3,882 gates, 1,524 ANDs). In 71 s it finds
 no failures and no dead or redundant gates, and warns only that neither has pinned counts. Without `--parts` it also
-checks the whole window, which wasn't run for v3: v2's window, of the same size, took 42 minutes, nearly all of it
-circuit-check's reference evaluator running 67.4M gates on four vectors.
+checks the whole window. `python -m workload.n3_v4 circuit-check --out FILE [--window]` checks v4's new parts and,
+with `--window`, its window; the gaps below are v4's too.
 
 Its gaps:
 
@@ -524,13 +528,56 @@ Open items:
   that opens the layout at the position after the port's last recorded frame and shows that the descriptor there is
   the invalid one.
 - **What the size class discloses.** FMT gives the run's widest prefix and suffix, the most segments any frame reads,
-  and each unit's outbox depth; G gives the most segments of the port's frames. A port's occupancy already bounds the
+  and each unit's outbox depth; G gives the most segments of the port's frames, and v4's R (below) the most runs its
+  reads need. A port's occupancy already bounds the
   bytes it carried, but a depth is per unit, which is new where one port carries several units' traffic. Padding every
   outbox to the run's deepest would hide the depths at no cost in the unit, which climbs the deepest tree's levels for
   every unit's row; it costs only larger trees to register.
 - **The order of frames from several sources.** The lab's order is fixed by the Program (events by position, requests
   by session). Traffic whose interleaving the prover chooses needs that order as witness, checked in the unit.
-- **Further cuts.** A window's descriptors sit at consecutive public positions, so one multiproof over at ... at + n − 1
-  would share their paths' upper levels, about n + DL node hashes instead of n·DL. Descriptor reads are 61% of the
-  simulator's largest window. N2's frames root is the record's largest part in the lab: 33 compressions a 4,096-byte
-  frame, fill included, plus the tree's nodes. It is N2's tree, so the unit can't skip the fill.
+- **Further cuts.** What is left after `N3Window_v4`, below, is under its table. N2's frames root, fill included, is
+  the floor: it is N2's tree, so the unit can't skip the fill.
+
+### N3Window_v4: the openings as runs
+
+`workload/n3_v4.py` builds `N3Window_v4{FMT, N, G, SALTED, REC, R}`: v3's parts, with two openings as runs (each
+check: the module's docstring); v3 stays. A window's n descriptors, at public positions at, ..., at + n − 1,
+open as one run (`N3Range`): each node above them is hashed once, with each level's two boundary siblings as witness,
+where v3 climbs DL levels a descriptor, and the run mustn't wrap the layout (`N3Fits`; the service builds no window
+that does). Its rows open in R runs at private starts: each read is fresh or repeats the one before it in its run, a
+compaction network puts a run's fresh leaves in its first slots, and the run opens min(T, 2^DB) slots of one unit's
+tree (`N3RunRoot`, `N3RunFits`). A leaf binds its position and domain id, so a row out of place doesn't open. R is
+public, the size class's as G is (`runs_of`, the stretches of one unit's outbox the port's reads need): 1 on every
+port the tests build but the demo's, which reads two units' outboxes.
+
+`workload/tests/test_n3_v4.py` (19 quick and 7 slow, about 3 minutes) holds v4's reference to v3's on the demo's
+thirteen cases, the simulator's windows and tampers, the lab's honest, edited, extra-frame and salted windows, and a lab
+whose outboxes are two rows deep; refuses cheating run witnesses (a skipped row, another unit's row, a wrong start, a
+slot past the tree and five more); holds `N3Range` to its tree at every start; and holds the circuit to its reference
+on the demo and a salted window. Runs of several rows are only the demo's and that lab's, and that v4 refuses whatever
+v3 refuses on other windows rests on each leaf's binding under SHA-512, not on a proof.
+
+A busy link-window at the served shape, one lever at a time (run `r20261021-020337-2a6e`; composed as v3's counts are,
+egress reads in one run and salted ingress ones in two). Each lever replaces one disjoint part group with v4's, so the
+gains add. The floor is N2's frames root, about 35 compressions a frame, which v4 leaves as v3's.
+
+| Depths | Frames, egress and ingress | v3 | Lever 1: descriptors as one run | Lever 2: rows as runs too (v4) | Floor | ÷ floor: v3, lever 1, v4 |
+|---|---|---|---|---|---|---|
+| One window's | 34,499 and 1,031 | 497.9B | 403.0B (−94.9B) | 312.1B (−90.8B) | 72.1B | 6.91, 5.59, 4.33 |
+| One window's | 35,386 and 1,057 | 510.7B | 413.3B (−97.3B) | 320.1B (−93.2B) | 73.9B | 6.91, 5.59, 4.33 |
+| A day's | 34,499 and 1,031 | 619.7B | 464.8B (−154.9B) | 312.4B (−152.5B) | 72.1B | 8.60, 6.45, 4.33 |
+| A day's | 35,386 and 1,057 | 635.6B | 476.8B (−158.8B) | 320.4B (−156.4B) | 73.9B | 8.60, 6.45, 4.33 |
+
+v4 is 4.33 times the floor at both depths, since a run climbs its tree once rather than once a read: 8.62M ANDs an
+egress frame at one window's depths and 8.63M at a day's (v3: 13.8M and 17.2M). It has no unit at the lab's depths,
+which don't hold the window; against v3's 349.6B there it is 8.4% lower. `composed_v4` equals v4's trace at one
+window's depths at 2, 3 and 64 frames, egress and salted, and at the demo's format (`workload/tests/test_n3_cost.py`);
+the busy windows are composed only.
+
+What is left, lever 3 (parts and estimates: note:network-accounting/20261021T0130Z-finding-n3-v4-levers):
+the rows' digests are 44% of v4, half of that hashing the overlapping rows' bytes twice, and segments 11%, descriptor
+reads 8%, frames 8% and the hiding leaves 8%. The canonical protocol's fixed fields would leave a frame its frames
+root and one row's digest and leaves, about 2.2 times the floor, or 1.95 with rows of the raw bytes behind base64:
+estimated, not built. Hashing each byte once in N2's root and once in the outbox makes about twice the floor this
+shape's limit. Each run past the first adds 6.32B to a busy egress window, a range over 35,386 slots whatever the
+run's length, so v4's rows beat v3's up to 14 runs at one window's depths and 24 at a day's.

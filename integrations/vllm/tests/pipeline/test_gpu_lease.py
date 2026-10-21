@@ -157,6 +157,36 @@ def test_a_commit_that_exits_holding_its_lease_keeps_it_until_its_gpu_is_empty(t
     assert "nothing is left on the leased GPU" in log.read_text() and "(2 look(s) occupied)" in log.read_text()
 
 
+@pytest.mark.parametrize("looks,n,waited,left", [
+    ([[]], 3, 0, []),                                                     # nothing else on the leased GPUs
+    ([["GPU-5"], ["GPU-5"], []], 3, 2, []),                               # a cancelled Commit's engine workers leave after two looks
+    ([None], 3, 0, []),                                                   # nvidia-smi can't say: the engine's own check stands
+    ([["GPU-5"]] * 5, 3, 3, ["GPU-5"]),                                   # still there after the last look
+])
+def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, looks, n, waited, left):
+    seq, slept = iter(looks), []
+    monkeypatch.setattr(GL, "on_gpus", lambda uuids: next(seq))
+    assert GL._foreign(["GPU-5"], slept.append, n) == (waited, left) and slept == [GL.CLEAR_EVERY_S] * waited
+
+
+def test_a_commit_whose_leased_gpu_stays_occupied_ends_by_name_and_gives_the_lease_back(tmp_path):
+    """r20261019-001854-76c1: a cancelled Commit's engine workers outlived its lease, and the next Commit's engine found its GPUs full."""
+    fake_smi(tmp_path, ["GPU-5"] * 4)
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": fake_lease(tmp_path)}
+    GL.hide_devices(env)
+    cmd = commit("raise AssertionError('acquired')\n")
+    cmd[2] = cmd[2].replace("GL.acquire()", "GL.CLEAR_LOOKS, GL.CLEAR_EVERY_S = 2, 0\nGL.acquire()")
+    log = tmp_path / "commit.log"
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        with open(log, "a") as f:
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+
+    rc, _ = GL.run(str(tmp_path), str(log), cmd, 600, env, run_tl)
+    assert rc == 1 and "still lists another process on the leased GPU(s) ['GPU-5'] after 2 look(s)" in log.read_text(), log.read_text()
+    assert "acquired" not in log.read_text() and released(tmp_path / "5.lock")
+
+
 def test_a_commit_that_touched_cuda_before_its_lease_takes_none(tmp_path, monkeypatch):
     env = {"GPU_LEASE": "/l/missing-gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started"), "CUDA_VISIBLE_DEVICES": ""}
     monkeypatch.setattr(GL, "cuda_initialised", lambda: True)

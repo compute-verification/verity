@@ -1,3 +1,4 @@
+import VStar.Cap
 import VStar.Parts
 
 /-!
@@ -14,6 +15,9 @@ Candidate 3's session adds, under `stage --sparse` (`rec_vstage.stage_sparse`, `
 (`RecOpen{LANES, H}` over `q` instances, named `rec-open-stacked/l<LANES>-h<H>` so that no name is both one of R's levels
 and one of the table's: `stacked/L<level>`), and each part of R's registered opening (`InnerRepCheck{S}` at R's
 opening-only shape, one instance, `rec-opening/m<m>-c<claims>-p<j>`: `stacked/open/p<j>`).
+
+Every session ends with `RecCap` over the `2^cap₀` nodes of the table's level-0 cap (`rec-cap/n<N>`: `cap`,
+`capStatement`), which holds each node of `root_B`'s cap at a fixed row whatever the coins draw.
 -/
 
 namespace VStar
@@ -26,6 +30,7 @@ inductive Stmt where
   | recOpenStacked (level LANES H n : Nat)
   | sparse (sh : Flock.RecSparse.Shape) (hRound : Nat)
   | opening (m c j : Nat) (S : Flock.RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat)
+  | cap (N : Nat)
   deriving Inhabited
 
 def recOpenSub (LANES H : Nat) : Sub :=
@@ -63,6 +68,7 @@ def Stmt.name : Stmt → String
   | .recOpenStacked _ L H _ => recOpenStackedName L H
   | .sparse sh _ => Flock.RecSparse.unitName sh
   | .opening m c j .. => Flock.RecOpening.unitName m c j
+  | .cap N => capName N
 
 def Stmt.instances : Stmt → Nat
   | .recOpen _ _ _ n => n
@@ -70,6 +76,7 @@ def Stmt.instances : Stmt → Nat
   | .recOpenStacked _ _ _ n => n
   | .sparse .. => 2
   | .opening .. => 1
+  | .cap N => N
 
 def Stmt.dir : Stmt → String
   | .recOpen level .. => s!"L{level}"
@@ -77,6 +84,7 @@ def Stmt.dir : Stmt → String
   | .recOpenStacked level .. => s!"stacked/L{level}"
   | .sparse .. => "sparse"
   | .opening _ _ j .. => s!"stacked/open/p{j}"
+  | .cap _ => "cap"
 
 def Stmt.sub : Stmt → Sub
   | .recOpen _ L H _ => recOpenSub L H
@@ -85,6 +93,7 @@ def Stmt.sub : Stmt → Sub
   | .sparse sh _ => sparseSub sh
   | s@(.opening _ _ _ _ ports _) =>
     { id := s.name, template := "rec-residuals", inputs := ports.map (·.1) ++ ["v"], outputs := ["out"] }
+  | .cap N => capSub N
 
 def Stmt.unit : Stmt → Except String UnitC
   | .recOpen _ L H _ => recOpenUnit L H
@@ -92,6 +101,7 @@ def Stmt.unit : Stmt → Except String UnitC
   | .recOpenStacked _ L H _ => do pure { ← recOpenUnit L H with name := recOpenStackedName L H }
   | .sparse sh _ => sparseUnit sh
   | s@(.opening _ _ _ S ports nv) => pure (openingUnit s.name S ports nv)
+  | .cap N => pure (capUnit N)
 
 /-- V*'s statements over an inner session of shape `sh`, in `stage`'s order. -/
 def statements (sh : Algebra.Shape) : Except String (Array Stmt) := do
@@ -104,5 +114,12 @@ def statements (sh : Algebra.Shape) : Except String (Array Stmt) := do
   for j in [0:ps.size] do
     out := out.push (.inner j s!"rec-residuals/m{sh.m}-k{sh.kLog}-c{sh.claims}-p{j}" ps[j]!)
   pure out
+
+/-- The level-0 cap's statement over an inner session of shape `sh`: `RecCap` over the `2^cap₀` nodes of `root_B`, `cap₀`
+the cap of `fast100(m)`'s level 0. -/
+def capStatement (sh : Algebra.Shape) : Except String Stmt := do
+  let s ← sh.sched
+  let some lv := s.levels[0]? | throw s!"the inner session's schedule (m {sh.m}) has no level 0"
+  pure (.cap (2 ^ lv.cap))
 
 end VStar
