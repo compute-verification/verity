@@ -78,6 +78,13 @@ Arms:
                  the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
                  their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
                  seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
+    dither-a-so  dither-a-hbk-zy and dither-a-hbr-zy in the statement's order (RT4-INT-12, `dither_so`): the forward
+                 computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step s's
+                 seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
+                 receipts under round s + D - 1: dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 8), -aom
+                 the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
+                 beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
+                 separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -105,10 +112,11 @@ arm's step by part, its between-step phases by their NVTX ranges).  nsys's captu
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
-(DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F}}``,
-each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION and
-$POUW_CHALLENGER_SECRET_FILE), one session a window, opened at the window's build and closed at the arm's stop; without
-one they are in-process, and the arm's stats say ``coins: in-process (not certified)``.
+(DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
+"commitment": HEX}}``, each its own from infra's gate, `coins.py open`, else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
+$POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
+hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
+``coins: in-process (not certified)``.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -352,6 +360,22 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         # the y-only floor commits no z, so it has no window gate: its gate is its tokens (TOKENS_ONLY)
         llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), (win if z != "none" else None), DA
         return llm
+    if arm in DITHER_SO:
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+        import dither_one as DO
+        import dither_so as SO
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        unit, ao, pt, depth = DITHER_SO[arm]
+        a = engine_args(gpu_mem)
+        SO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
+                 h1u=os.environ["HB_H1U_KSPLIT" if unit == "hbk" else "HB_H1U_KRONLY"], ao=ao, pt=pt, depth=depth)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        win = DO.hook(llm)
+        win.captures = SO.CAPTURES
+        llm.dither_stats, llm.dither_win, llm.dither_mod = SO.stats(win), win, SO
+        return llm
     raise ValueError(arm)
 
 
@@ -361,13 +385,16 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for o, ao in (("", ""), ("-ao", "a"), ("-aos", "as"), ("-aom", "m"), ("-aoms", "ms"), ("-aomn", "mn"))
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
+DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}": (unit, ao, pt, d)
+             for unit in ("hbk", "hbr") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
+             for p, pt in (("", False), ("-pt", True)) for d in range(2, 9)}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
           "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
           "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
-          "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in DITHER_A}}
+          "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in (*DITHER_A, *DITHER_SO)}}
 # an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
 TOKENS_ONLY = {"exact-fused", "stock-percall", *(x for x, (_, z, *_) in DITHER_A.items() if z == "none")}
 def token_diff(a: list, b: list) -> dict:
@@ -393,19 +420,20 @@ def pick_of(arm: str) -> str | None:
     only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
     return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F}}: each dither arm's window its own challenger session off
-# the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION and POUW_CHALLENGER_SECRET_FILE), since every arm's engine, and so
-# its window, lives through the whole run
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}: each dither arm's window its own
+# challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
+# POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
 
 def close_coins() -> None:
-    """End this worker's window's off-node coin session, if it has one: the challenger answers closed."""
+    """End this worker's window's off-node coin session, if it has one: the challenger answers closed (after every
+    round a `coins.RoundPipe` sent has its coin back)."""
     for name in ("dither_fused", "dither_one"):
         win = getattr(sys.modules.get(name), "WIN", None)
         if win is not None:
-            win.coins.close()
+            (getattr(win, "pipe", None) or win.coins).close()
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
@@ -415,6 +443,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         os.environ["POUW_CHALLENGER"], os.environ["POUW_CHALLENGER_SESSION"] = at["address"], at["session"]
         if at.get("secret_file"):
             os.environ["POUW_CHALLENGER_SECRET_FILE"] = at["secret_file"]
+        if at.get("commitment"):
+            os.environ["POUW_CHALLENGER_COMMITMENT"] = at["commitment"]
     import torch
     from vllm import SamplingParams
     if arm.startswith("dither"):
@@ -463,7 +493,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.synchronize()
                 torch.cuda.profiler.start()
                 torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
-            t, outs = gen(ps, GATE_TOKENS)
+            # a window whose captures' receipts go under later rounds (dither_so) runs that many steps more
+            t, outs = gen(ps, GATE_TOKENS + getattr(win, "gate_extra", 0))
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.nvtx.range_pop()
