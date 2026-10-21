@@ -1178,7 +1178,8 @@ struct FirewallDraws {
 
 /// `FC_FINISH_DUMP=DIR`: each firewalled table's request to `flock-firewall finish` and the root the Lean link answered
 /// (`table{T}.req`, `table{T}.root`, `T` the session's table), and each rep's request (`Flock.Firewall.Finish.parseRep`)
-/// beside the proof file Rust's `zk_finish` computed (`table{T}-rep{R}.req`, `.proof`): `firewall_finish_agree`'s inputs.
+/// beside the proof file Rust's `zk_finish` computed (`table{T}-rep{R}.req`, `.proof`), and where the request's passed values
+/// sit (`.vals`: their byte offset and word count): `firewall_finish_agree`'s inputs.
 fn finish_dump() -> Option<std::path::PathBuf> {
     std::env::var_os("FC_FINISH_DUMP").map(Into::into)
 }
@@ -1228,11 +1229,14 @@ impl RepReq {
         flock_live::firewall::rep_body(pads, salts, &self.vals, &self.extras, &self.hi_salts, &self.rounds)
     }
 
-    /// Under `FC_FINISH_DUMP`, writes the request `body` and Rust's proof file `proof`.
+    /// Under `FC_FINISH_DUMP`, writes the request `body`, Rust's proof file `proof` and where the passed values sit in `body`.
     fn dump(&self, body: &[u8], proof: &[u8]) {
         let Some(dir) = &self.dump else { return };
+        let after = 16 * self.vals.len() + 8 + self.extras.iter().map(|x| 8 + 16 * x.len()).sum::<usize>() + self.hi_salts.len()
+            + 8 + self.rounds.iter().map(|c| 8 + 16 * c.len()).sum::<usize>();
+        let vals_at = format!("{} {}\n", body.len() - after, self.vals.len());
         let stem = format!("table{}-rep{}", self.table, self.rep);
-        for (ext, bytes) in [("req", body), ("proof", proof)] {
+        for (ext, bytes) in [("req", body), ("proof", proof), ("vals", vals_at.as_bytes())] {
             let p = dir.join(format!("{stem}.{ext}"));
             std::fs::write(&p, bytes).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
         }
