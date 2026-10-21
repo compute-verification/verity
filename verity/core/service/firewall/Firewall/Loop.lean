@@ -63,7 +63,7 @@ def sleepUntilMs (t : Nat) : IO Unit := do
 def hold (dir : System.FilePath) (s part : String) : IO Flock.Firewall.Session.Hold := do
   let slot ← IO.mkRef (none : Option IO.FS.Handle)
   let seated ← IO.mkRef (none : Option Admitted)
-  let stopped := fun (why : String) => withRecord dir (stopAt · s part why)
+  let recordStop := fun (why : String) => withRecord dir (stopAt · s part why)
   let told := fun (why : String) => s!"{why}: recursive session {s} stopped at {part}"
   pure {
     admit := do
@@ -95,10 +95,10 @@ def hold (dir : System.FilePath) (s part : String) : IO Flock.Firewall.Session.H
         if let some t := a.releaseMs then sleepUntilMs t
         pure none
       | .stop why | .refused why =>
-        stopped why
+        recordStop why
         pure (some (told why))
     sent := fun v => discard <| withRecord dir (settle · s part (v.mapError (s!"the firewall's fault ({·})")))
-    cut := stopped
+    cut := recordStop
     leave := do
       if let some h ← slot.get then h.unlock
       slot.set none
