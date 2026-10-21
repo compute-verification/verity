@@ -335,7 +335,9 @@ its window's root is refused. On the auditor's host the session is the one windo
 ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
 period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
 (period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
-keep the coins it likes (RT4-INT-17).
+keep the coins it likes (RT4-INT-17). Each entry that read takes names the tree the host ran, which must be one commit
+of main's first-parent history for the whole session, as the verifier's own copy (`coins.trusted`'s `main`) lists it
+(RT4-INT-40).
 
 The verifier releases \(\sigma_0\) at the session's start (`Session.start`). At window \(t\)'s end it sends the boundary
 message, which is \(\sigma_{t+1}\), or the close after the last window (`Session.boundary`). Each is one-way: no round

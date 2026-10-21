@@ -261,9 +261,15 @@ products, keyed by a coin the prover could not see when it committed. `core_chec
 the auditor's signed ledger opens and ends closed for the window under the window's pinned challenger key
 (`challenger.trusted_session_of`, Lean `SampledProofs.Challenger.trustedSessionOf`): the record, on the host the ledger
 opened the session on, and the close signed under that key, the release log the close signs and the ledger's end sealed,
-and the round roots that log shows the challenger received, in order. Coins a prover's own in-process challenger drew,
-an unsigned or tampered log, a ledger signed under another key or cut before the session's end, and a second session for
-the window are refused. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+and the round roots that log shows the challenger received, in order. Every ledger entry the read takes (the session's
+reserve, open and end, and its period's open and close) names the tree the host ran (`pinned`), and each must be a
+commit of the verifier's own copy of main's first-parent history (`main`, `git rev-list --first-parent origin/main` in
+the auditor's checkout), one commit for the whole session (RT4-INT-40): a commit is in main's first-parent history only
+once main's check passed on it, so a branch head, even one that lands later, isn't. Coins a prover's own in-process
+challenger drew, an unsigned or tampered log, a ledger signed under another key or cut before the session's end, a
+second session for the window, a host that ran a commit outside main's first-parent history or was repinned
+mid-session, and a verifier with no copy of main are refused. Not yet: the host's pins log (infra's next bundle), which
+would also hold each entry to a logged interval of that commit. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
 
 ## Registered weights (`registration`)
