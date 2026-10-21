@@ -9,6 +9,8 @@ PINS_ONLY='^integrations/vllm/manifests/(records\.json$|glm_v2_tree/|dsv4_v2_tre
 # calls `build_binding_map`, and the Match's `logical_request` is unchanged. 190ee66678: each request's call-boundary spelling in its
 # own Program order; only the Commit builds a `Binder`. fb04c6ead0 (#3118): the replay refuses a Definition the Build of record did
 # not bind (`check.replay.definitions`); only the Commit's replay and `tp-commit-replay` read it, neither the Build nor publish.
+# dac6fa0e36 (#3130): before grading, that replay self-checks each graded family's row kernel against its Definition
+# (`definitions.kernel_refusal`, `kernel_registry.check`); `check` is new, and no other function of `kernel_registry` changes.
 COMMIT_FIXES='integrations/vllm/verity_vllm/commit/binding.py 986fe71aa64a28158d0eb79f126ad061c9a284de 308391e05e6376641d6f5c1819706cdcfce9b30e
 integrations/vllm/tests/commit/test_binding_negatives.py f8e60d391a898a68ad4e80bcf23a244a7ce8ae2b 12ffd26912b4539a47b51d9c2eab8f606214964b
 integrations/vllm/verity_vllm/query/manifest/bind.py b9d3ec27ec5b7659948f05e246da4b187bdafddd 4797d292d6c7d142f3814230dda1cdb4ceb02320
@@ -20,7 +22,13 @@ integrations/vllm/verity_vllm/pipeline/cpu_replay.py e6c427b8a9cfc9d9eaedc8b2205
 integrations/vllm/verity_vllm/pipeline/deferred_rows.py 0813fc8d218f2a38c72cb25f2a23499626b8d727 fa2df7ad0ef275b5bb69479dd7f5c2f5a1469b29
 integrations/vllm/verity_vllm/pipeline/replay_plan.py fb940d0a601d33f38c91f48bdc5ce6aa2963cd7d af48e07500db28e53a0c71cf1336d211d9a282f7
 integrations/vllm/verity_vllm/pipeline/tp/rank_replay.py 0d0dd867c71745b446e5d5de2a0b05895cde1d86 dfd9d14bc94f95f8fed97109dced1d67cf2fb4cb
-integrations/vllm/verity_vllm/pipeline/tp/serving_rows.py 28253606f628a40d983847178b1c90baa3041bf6 ee0f6a80db17fe58af54fe0cfe1671780a6a0439'
+integrations/vllm/verity_vllm/pipeline/tp/serving_rows.py 28253606f628a40d983847178b1c90baa3041bf6 ee0f6a80db17fe58af54fe0cfe1671780a6a0439
+integrations/vllm/tests/check/test_replay_definitions.py - 9a27de6c6431bdbd095370b7eedc9b75d14b8066
+integrations/vllm/tests/check/test_replay_definitions.py 5ac6073ea2c71562d7b78b97003ebea309c4d250 9a27de6c6431bdbd095370b7eedc9b75d14b8066
+integrations/vllm/verity_vllm/check/replay/definitions.py - eaaf3b5433581e410f301cec059d9079d38878b8
+integrations/vllm/verity_vllm/check/replay/definitions.py 60c2c5431b7d0f2f2640770bf6acaa02c63907d7 eaaf3b5433581e410f301cec059d9079d38878b8
+integrations/vllm/verity_vllm/program/kernels/kernel_registry.py 483bb39df5eae54507e51b087c3aa49425ce813e dab120fb8d11b8a5b50a96ce35e01ae7091facfc
+integrations/vllm/tests/program/test_kernel_self_check.py 9ea1481e226f26b17058ed848fbdff97244e5f55 7343c33b1362a3b74258a381dcf7623ff060ba45'
 _blob() {  # _blob SHA PATH: PATH's blob at SHA, `-` when SHA holds no PATH
   git -C "$TREE" rev-parse -q --verify "$1:$2" || echo -
 }
