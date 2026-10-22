@@ -77,7 +77,7 @@ import Proofs.Flock.Soundness.ExecPlacement
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.ExecRowsAt
 import Proofs.Flock.Soundness.TmplFoldRef
-import Proofs.Flock.Soundness.TmplFoldClassOk
+import Proofs.Flock.Soundness.TmplFoldPos
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
