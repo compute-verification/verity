@@ -931,11 +931,14 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         if len(fields) != len(args) - 6 or not set(fields) <= set(PERIOD_FIELDS):
             raise Refused(f"period: {args}")
         given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
-        M = registry()
-        try:
-            registered = M.resolve(M.read(host.models), circuit, given.pop("model", None), given.pop("weights_root", None))
-        except M.Refused as e:
-            raise Refused(str(e)) from None
+        model, root = given.pop("model", None), given.pop("weights_root", None)
+        registered = None
+        if model is not None or root is not None:
+            M = registry()
+            try:
+                registered = M.resolve(M.read(host.models), circuit, model, root)
+            except M.Refused as e:
+                raise Refused(str(e)) from None
         if registered is not None:
             given["weights_root"] = registered["weights_root"]
             given["model"] = {"name": registered["model"], "checkpoint_sha512": registered["checkpoint_sha512"]}
