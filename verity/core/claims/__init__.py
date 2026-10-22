@@ -224,6 +224,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
+    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
+    # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
+    # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before
+    # its read (red team 3's H2). Falsified by a delivery slower than the ceiling, measured on the server's certified
+    # egress links
+    Entry("latency-ceiling", "assumption",
+          "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
+          "the stated ceiling of its send, and nothing between them holds a value longer",
+          "Latency ceiling", "measured"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
@@ -284,10 +293,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "sm_120's measured headline takes it at q = q_T = 9/8, ClassPSlots' slots once writers create at most 15 "
           "incidences, a cap nothing proves: its 0.591% rests on that. At A6's ½ floor, which Lean proves from A6 "
           "(SheetScalarRouteHalf), the same bound is 7.791% (10.24% on VF3r-16; r20261019-172339-a93b). The H200's "
-          "twin headline on DC-90-ri (Sm90MeasuredI3Headline) takes it at q = q_T = ¾, beside the proved ½ floor "
+          "twin headline on DC-90-ri (Sm90MeasuredI3Headline) takes it at q = q_T = 3/5, beside the proved ½ floor "
           "(Sm90MeasuredHeadline), not in its place: ClassPSlots counts a slot a word but takes a writer's slot as "
-          "writing nothing else, which a 64-bit head writing two words a lane (IMAD.WIDE, DFMA) breaks. Cite it with "
-          "its premise: DC-90-ri 0.805% under (I3) at ¾; 1.53% at the proved ½ floor",
+          "writing nothing else, which a 64-bit head writing two words a lane (IMAD.WIDE, DFMA) breaks. Both are "
+          "over 1%. Cite it with its premise: DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; "
+          "credit against the built ♭, the cheater priced at every known fold, counted ones included",
           "SCALAR-ROUTE", "conjectured"),
     Entry("accounting-ts-side-units", "assumption",
           "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),

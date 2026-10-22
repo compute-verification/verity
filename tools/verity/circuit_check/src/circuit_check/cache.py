@@ -1983,6 +1983,18 @@ def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | Non
     return _digests(root, got, fresh=True)
 
 
+def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
+    (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
+    those modules' import closures, its own units by digest, and what the process read outside every recording."""
+    units = tuple(units)
+    fr = Frame()
+    for u in units:
+        if u in _PRODUCED:
+            fr.merge(_PRODUCED[u], defs=False)
+    return attributed(fr, units, roots)
+
+
 def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
     every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
@@ -2028,4 +2040,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
            "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "untraced", "version"]
+           "unit_files", "unit_reads", "untraced", "version"]

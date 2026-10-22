@@ -27,6 +27,11 @@
 * `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
   seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R, decision 121).
 * `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W (decision 104).
+* `h1window`: an H1 window as one public Program of those tiles in fixed slots (`PouwH1Window`), the tile R × C a
+  parameter and one tile template per distinct K (`PouwH1WindowTile`, its A and B rows ``a_k<K>`` and ``b_k<K>``),
+  each linear's B rows registered once for all its calls; its template-instance partition derives its units, and
+  `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K window in one
+  read.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

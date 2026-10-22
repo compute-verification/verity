@@ -490,7 +490,7 @@ theorem sm90Sheet_meets :
       Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm90.model.Nw ∧
       ∀ x, Pl.accepts x :=
-  sheet_meets Sm90.sheet Sm90.model Sm90.checks 19 0 (Sparse.counts (Sm90.d2s.folds.getD (0 : Fin 14).val []))
+  sheet_meets Sm90.sheet Sm90.model Sm90.checks 19 0 (Sparse.counts (Sm90.d2s.folds.getD (0 : Fin 56).val []))
     Sm90.lamStar (Nat.cast_pos.mpr (by decide))
     (fun p => by cases p <;> norm_num [Sm90.sheet, SheetDataQ.sheet, Sm90.ds90, Sm90.Pipe.width])
     (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
@@ -509,11 +509,11 @@ theorem sm90Measured_meets :
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧
       RightFixed Pl pf Sm90Measured.model.Nw ∧ ∀ x, Pl.accepts x :=
   measured_meets Sm90Measured.machine Sm90Measured.model Sm90.checks 0 0
-    (Sparse.counts (Sm90Measured.d2s.folds.getD (0 : Fin 14).val [])) Sm90Measured.lamStar
+    (Sparse.counts (Sm90Measured.d2s.folds.getD (0 : Fin 56).val [])) Sm90Measured.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm90MeasuredI3Headline`'s hypotheses hold together at an honest play** on one-bit coins: as
-`sm90Measured_meets`, at (I3)'s floors `q = q_T = ¾`, which the run meets since it heads no vector or table word. -/
+`sm90Measured_meets`, at (I3)'s floors `q = q_T = 3/5`, which the run meets since it heads no vector or table word. -/
 theorem sm90MeasuredI3_meets :
     ∃ (Pl : Play Bool Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
@@ -527,7 +527,7 @@ theorem sm90MeasuredI3_meets :
       pf.Of Pl ∧ BindingForkAt pf δfork ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧
       RightFixed Pl pf Sm90MeasuredI3.model.Nw ∧ ∀ x, Pl.accepts x :=
   measured_meets_i3 Sm90Measured.machine Sm90MeasuredI3.model Sm90.checks 0 0
-    (Sparse.counts (Sm90MeasuredI3.d2s.folds.getD (0 : Fin 14).val [])) Sm90MeasuredI3.lamStar
+    (Sparse.counts (Sm90MeasuredI3.d2s.folds.getD (0 : Fin 56).val [])) Sm90MeasuredI3.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
 /-- **`Sm100SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA

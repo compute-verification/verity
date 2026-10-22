@@ -62,7 +62,7 @@ theorem sparse_ne_names (sh : RecSparse.Shape) :
     (∀ m k c j : ℕ, RecSparse.unitName sh ≠ s!"rec-residuals/m{m}-k{k}-c{c}-p{j}") ∧
     (∀ L H, RecSparse.unitName sh ≠ VStar.recOpenStackedName L H) ∧
     (∀ m c j, RecSparse.unitName sh ≠ RecOpening.unitName m c j) ∧
-    (∀ N, RecSparse.unitName sh ≠ VStar.capName N) := by
+    (∀ l N, RecSparse.unitName sh ≠ VStar.capName l N) := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> intros <;> intro h <;>
     have h := congrArg (fun s : String => s.toList.take 5) h <;>
     simp only [RecSparse.unitName, VStar.recOpenStackedName, RecOpening.unitName, VStar.capName, String.toList_append,
@@ -151,12 +151,11 @@ theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
     {s : VStar.Stmt} (hs : s ∈ ss) {sh : RecSparse.Shape} (hn : RecSparse.unitName sh = s.name) :
     i.sparse = some sh := by
   obtain ⟨n1, n2, n3, n4, n5⟩ := sparse_ne_names sh
-  obtain ⟨vsh, A, C, N, hA, hC, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
   rotate_left
-  · simp only [List.mem_toArray, List.mem_singleton] at hs
-    subst hs
-    exact absurd hn (n5 _)
+  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
+    exact absurd hn (n5 _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs

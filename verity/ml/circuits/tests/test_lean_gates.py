@@ -1,9 +1,9 @@
 """The circuit model (`Accounting.Gates`: `intervals`, `census`, `classOf`, `units`) held to the Python it states.
 
 Security/Proofs/Accounting/Gates/Rows.lean carries rows the kernel evaluates the model on (`s8Rows`, `censusRows`,
-`classRows`, `familyRows`, `tableReadRows`, `unitsRows`, `tableUnitsRows`), and each test here recomputes its rows from the
-Python: `s8.no_wrap`'s `T_t` and `D_g`, census/v1 of the same Program (with property/v1's units of it), property/v1's
-`class_of` and `gather` with circuits' input ids, and property/v1's units of a Program built gate for gate.
+`classRows`, `h1ClassRows`, `familyRows`, `tableReadRows`, `unitsRows`, `tableUnitsRows`), and each test here recomputes its
+rows from the Python: `s8.no_wrap`'s `T_t` and `D_g`, census/v1 of the same Program (with property/v1's units of it),
+property/v1's `class_of` and `gather` with circuits' input ids, and property/v1's units of a Program built gate for gate.
 """
 
 from __future__ import annotations
@@ -28,9 +28,6 @@ ROWS = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Accounting
 S8T, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
 #: the s8 family's word steps, s8·s8 and u8·s8
 DOT = {False: prims.BlackwellS8ImmaDot32, True: prims.BlackwellU8S8ImmaDot32}
-#: ids whose family prefix Lean's `classOf` classes and property/v1's full patterns refuse: a `_v2` of a gather, an input,
-#: a field extraction and a table read, and a gather with no column size. Lean is the looser side here.
-LEAN_LOOSER = {"GatherBf16x16_v2", "Input8_v2", "BitAtx32_v2", "GatherF32xQ_v1", "TableRead16x4_v2"}
 
 
 def lean_rows(name: str) -> list:
@@ -159,16 +156,12 @@ def py_class(fid: str) -> tuple[str, int]:
     return c or "unlisted", 0
 
 
-@pytest.mark.parametrize("rows", ["classRows", "familyRows", "tableReadRows"])
+@pytest.mark.parametrize("rows", ["classRows", "h1ClassRows", "familyRows", "tableReadRows"])
 def test_class_of_is_property_v1s(rows):
-    """`classOf_classRows`, `classOf_familyRows`, `classOf_tableReadRows`: Lean's class of each id is property/v1's, but
-    for the ids in `LEAN_LOOSER`, which property/v1 refuses and Lean's family prefixes class."""
+    """`classOf_classRows`, `classOf_h1ClassRows`, `classOf_familyRows`, `classOf_tableReadRows`: Lean's class of each
+    id, or its refusal, is property/v1's (full patterns on both sides: a family's prefix, a numeral and `_v1`)."""
     lean = {fid: (tag, k) for fid, tag, k in lean_rows(rows)}
-    py = {fid: py_class(fid) for fid in lean}
-    looser = lean.keys() & LEAN_LOOSER
-    assert {f: py[f] for f in looser} == dict.fromkeys(looser, ("unlisted", 0))
-    assert all(lean[f][0] != "unlisted" for f in looser)
-    assert {f: py[f] for f in lean.keys() - looser} == {f: lean[f] for f in lean.keys() - looser}
+    assert {fid: py_class(fid) for fid in lean} == lean
 
 
 # -- units against property/v1 --------------------------------------------------------------------------------------------

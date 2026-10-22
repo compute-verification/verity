@@ -386,6 +386,28 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
 
 
+def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
+    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
+    measured from the merge-base."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    fork = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b" / "tests" / "test_b.py").write_text("def test_b():\n    assert True\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "main moves b")
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "topic", fork)
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "the branch moves a")
+    assert S.merge_base(main) == fork and S.merge_base(fork) == fork
+    pkgs = S.members()
+    assert [s.name for s in S.touched(S.discover(), pkgs, S.merge_base(main), S.worktree(), S.locked())] == ["a"]
+    assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
+
+
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
     """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
     then lets it read Markdown (test_guard.py holds the others to reading none)."""
