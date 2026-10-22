@@ -1395,6 +1395,7 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
       (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ)),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      link.size = min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX →
       placeholder spec sts k link = .ok (c', t, dom, xs, hi) → schedSoFar t (k % 2) dom xs hi cr = .ok sched →
       i < sched.size → (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD i 0 = (sched.getD i (.empty, 0)).2)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
@@ -1444,9 +1445,14 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       have := locate_lt (roundsOf spec sts) 0 q hqs
       rw [hki] at this
       simpa [roundsOf] using this
+    have hls : (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
+        min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+      cases h1 with
+      | nil => simp at hq
+      | cons p h2 => simp [wordsAt, FlockDeploy.Coin.vals]
     exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
       hn hlq hp hd hrs hlt (fun sched' hs' hlt' =>
-        (loopNr_succ hx hki hqs).trans (hC s0 spec sts k (j + 1) _ c' t dom xs hi _ sched' hx hk hph hs' hlt'))
+        (loopNr_succ hx hki hqs).trans (hC s0 spec sts k (j + 1) _ c' t dom xs hi _ sched' hx hk hls hph hs' hlt'))
   · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
       hrep hex
 
