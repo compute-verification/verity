@@ -55,7 +55,8 @@ each coin.
   the segments and its domain's pads. So the rows a unit reads are the ones fixed before each round's coin. The z and y
   records are not yet bound to the round roots.
 * **The weights are registered before the salt** (`_weights`, a step `window` doesn't compose yet): each K's
-  ``…/b/<K>``, the B rows (int8 codes and their s_w) of the window's linears of that K, is registered once, and
+  ``<PREFIX>b/<K>``, all the B rows (int8 codes and their s_w) of the window's linears of that K, is registered once
+  under the registered domain of its name and the window's circuit, binding no window, and
   `weights_root` of their roots is the weights' root the window's open root binds (`salt.window_open_root`, with its
   round-0 request table's root and its session), which its salt coin opens after. So a B row the prover changes after
   the salt, its codes or its s_w, is refused.
@@ -76,6 +77,7 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
@@ -90,7 +92,8 @@ LEVELS = 64
 #: an A value's rows: the verifier hashes each pad past them, at most as many again
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-_DIGITS = re.compile(r"[0-9]+")
+#: a contraction K in a registered value's name: a canonical decimal, no leading zero
+_DIGITS = re.compile(r"[1-9][0-9]*")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -821,14 +824,15 @@ def _segments(a: Any) -> dict[str, list[tuple[int, int, bytes]]] | None:
 
 
 def is_a(value: Any) -> bool:
-    """A registered A value: a name whose last two parts are ``a`` and a contraction (``…/a/<K>``)."""
+    """A registered A value: a name whose last two parts are ``a`` and a contraction (``…/a/<K>``, K a canonical
+    decimal)."""
     parts = value.split("/") if isinstance(value, str) else []
     return len(parts) >= 2 and parts[-2] == "a" and bool(_DIGITS.fullmatch(parts[-1]))
 
 
 def is_held(value: Any) -> bool:
     """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
-    (``…/b/<K>``, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
+    (``…/b/<K>``, K a canonical decimal, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
     among them, is the window's own."""
     parts = value.split("/") if isinstance(value, str) else []
     return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
@@ -903,6 +907,8 @@ WINDOW_ROOT_FORM = "the window is not {root}, its open root a SHA-512 digest (12
 REQUESTS_FORM = "the window's round-0 request table's root is not a SHA-512 digest (128 lowercase hex)"
 SESSION_FORM = ("the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of "
                 "[A-Za-z0-9._:-], the first alphanumeric)")
+CIRCUIT_FORM = ("the window's circuit is not its descriptor's SHA-512 (128 lowercase hex) and its PREFIX (a string of "
+                "printable ASCII but \" and \\)")
 OTHER_WEIGHTS = ("the window's registered weights are not the ones its open root binds: weights_root of each K's …/b/<K> "
                  "root, its round-0 request table's root and its session are not its open root (salt.window_open_root), "
                  "so a B row, its codes or its s_w, is not the one registered before the window's salt. Register each "
@@ -918,16 +924,31 @@ def weights_root(roots: dict[int, bytes]) -> bytes:
     return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
 
 
-def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
+def b_words(k: int) -> int:
+    """A B row's 16-bit words: its K int8 codes, then the 4 bytes of its f32 s_w (`h1zy.ROW`, `registered.bytes_leaves`)."""
+    return (k + 5) // 2
+
+
+def other_weights_entry(v: str, k: int, n: int) -> str:
+    return (f"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's {{value, root, "
+            f"leaves, words, domain}}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {b_words(k)} "
+            f"16-bit words (K codes then s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the "
+            "SHA-512 of its descriptor), binding no window (registered.domain)")
+
+
+def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any, program: Any, prefix: Any
              ) -> tuple[bytes | None, tuple[str, str] | None]:
     """The weights' root the window registered and None; or None and the refusal (``weights`` or ``layout``, and why).
-    `entries` (the window's registered entries, ``{value, root, …}``) must register each K of the window's `layout`
-    (`strata`) once as ``…/b/<K>``, and no other K, and `weights_root` of their roots, the window's round-0 request
-    table's root `requests` (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as
-    `core_check.salt` reads it) must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin
-    opens only after that root, so every code and s_w of a B row a drawn unit opens at its ``…/b/<K>`` root was fixed
-    before the window's salt, and a window whose B rows differ from the ones it opened on is refused. A step `window`
-    doesn't compose yet: its evidence carries no round-0 request table's root."""
+    `entries` (the window's registered entries, ``{value, root, …}``) must register, for each K of the window's
+    `layout` (`strata`), exactly ``<prefix>b/<K>`` (`prefix` its descriptor's ``PREFIX``) once, and no other ``…/b/<K>``;
+    each such entry must be the registration of all of K's B rows (K's linears' n in turn, each `b_words(K)` words),
+    under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
+    (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
+    (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt` reads it)
+    must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin opens only after that root,
+    so every code and s_w of a B row a drawn unit opens at its ``…/b/<K>`` root was fixed before the window's salt, and
+    a window whose B rows differ from the ones it opened on is refused. A step `window` doesn't compose yet: its
+    evidence carries no round-0 request table's root."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("weights", why)
 
@@ -939,10 +960,15 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
         return no(REQUESTS_FORM)
     if not (type(session) is str and PS.SESSION.fullmatch(session)):
         return no(SESSION_FORM)
+    if _digest(program) is None or not _printable(prefix):
+        return no(CIRCUIT_FORM)
     _ss, why = strata(layout)
     if why is not None:
         return None, why
-    ks = {k for _name, k, _n in layout["linears"]}
+    rows: dict[int, int] = {}
+    for _name, k, n in layout["linears"]:
+        rows[k] = rows.get(k, 0) + n
+    names = {f"{prefix}b/{k}": k for k in rows}
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return no(ENTRIES_FORM)
     roots: dict[int, bytes] = {}
@@ -950,21 +976,24 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
         v = e.get("value")
         if not is_held(v):
             continue
-        k = int(v.split("/")[-1])
-        if k not in ks:
-            return no(f"the window registers weights {v} of K = {k}, which no linear of its circuit has: it registers "
-                      "each of its K's B rows as …/b/<K>, and no other")
+        if v not in names:
+            return no(f"the window registers weights {v}, which is not {prefix}b/<K> of a K of its circuit: it "
+                      f"registers each of its K's B rows as {prefix}b/<K> ({prefix} its descriptor's PREFIX), and no "
+                      "other …/b/<K>")
+        k, n = names[v], rows[names[v]]
         if k in roots:
             return no(f"the window registers K = {k}'s weights twice ({v}): each K's B rows are one registered value "
-                      "…/b/<K>")
+                      f"{prefix}b/<K>")
         h = _digest(e.get("root"))
-        if h is None:
-            return no(f"registered weights {v}'s entry has no root (a SHA-512 digest)")
+        if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == n and type(e["leaves"]) is int
+                and e["words"] == b_words(k) and type(e["words"]) is int
+                and e["domain"] == G.domain(program, v, b_words(k), n).domain_id.hex()):
+            return no(other_weights_entry(v, k, n))
         roots[k] = h
-    for k in sorted(ks):
+    for k in sorted(rows):
         if k not in roots:
-            return no(f"the window registers no weights …/b/{k} of K = {k}: each K's B rows, their codes and s_w, are "
-                      "registered under the weights' root its open root binds, before its salt")
+            return no(f"the window registers no weights {prefix}b/{k} of K = {k}: each K's B rows, their codes and s_w, "
+                      "are registered under the weights' root its open root binds, before its salt")
     w = weights_root(roots)
     if PS.window_open_root(w, t, session) != r:
         return no(OTHER_WEIGHTS)
@@ -973,6 +1002,6 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
 
 __all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
            "PERIOD_KEYS", "RECORD", "ROUND_TAG", "SCHEMA", "TILE_FN", "VERDICTS", "WEIGHTS_TAG", "WINDOW_FN",
-           "WINDOW_KEYS", "call_work", "calls_root", "committed_k", "cover", "draw_root", "drawn", "established", "is_a",
+           "WINDOW_KEYS", "b_words", "call_work", "calls_root", "committed_k", "cover", "draw_root", "drawn", "established", "is_a",
            "is_held", "law", "layout_of", "merkle_depth", "period", "period_credit", "round_root", "strata", "tree_root",
            "weights_root", "window"]

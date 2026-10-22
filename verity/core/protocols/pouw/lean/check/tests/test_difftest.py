@@ -303,7 +303,7 @@ def test_credit(pass_server):
     then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
     didn't commit, a window's round log the challenger never received, B rows other than the ones a window's open root
-    binds, and every other refusal of `credit.window`, `credit.period_credit` and the steps they run or will."""
+    binds or registered under another domain, name or rows, and every other refusal of `credit.window`, `credit.period_credit` and the steps they run or will."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
@@ -347,6 +347,8 @@ def test_credit(pass_server):
                  "a-link a-link: the window registers no A value", "which is no registered A value",
                  "weights weights: the window's registered weights are not the ones its open root binds",
                  "weights weights: the window registers no weights", "weights weights: the window registers K = #",
+                 "'s entry is not the registration of K = #'s B rows", "which is not h#/w-#/b/<K> of a K of its circuit",
+                 "weights weights: the window's circuit is not its descriptor's SHA-#",
                  "window rounds: the round roots are not the roots the challenger's log shows it received",
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",

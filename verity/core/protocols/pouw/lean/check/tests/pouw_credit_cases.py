@@ -50,11 +50,14 @@ SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal bloc
 tree other than the one the rounds committed (RT4-INT-34), rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms.
 
-A `weights` case is a window's layout, its registered entries (each K's ``…/b/<K>``, among its A values and z tables),
-its round-0 request table's root and its session, and the window's open root over `credit.weights_root` of the
-``…/b/<K>`` roots, that root and the session (`salt.window_open_root`). Its mutations register a B value other than the
-one the open root binds (another code or s_w), open the window on another request table's root or session or another
-root, register a K's B value twice, never or of a K the layout lacks, and break the forms.
+A `weights` case is a window's layout, its circuit (its descriptor's SHA-512 and PREFIX), its registered entries (each
+K's ``<PREFIX>b/<K>`` under its registered domain, among its A values, z tables and names that are no weights: a
+non-canonical K, ``b/032`` or one past Python's ``int`` digit limit), its round-0 request table's root and its session,
+and the window's open root over `credit.weights_root` of the ``…/b/<K>`` roots, that root and the session
+(`salt.window_open_root`). Its mutations register a B value other than the one the open root binds (another code or
+s_w), open the window on another request table's root or session or another root, register a K's B value twice, never,
+of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, a
+window's, other rows') or keys, and break the forms.
 
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_credit.py` holds each
 mutation to the refusal it aims at.
@@ -71,6 +74,7 @@ import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 
@@ -867,21 +871,29 @@ A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra"
                 "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form"]
 
 
+def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
+    return {"value": v, "root": _hex(rng), "leaves": n, "words": Cr.b_words(k),
+            "domain": G.domain(program, v, Cr.b_words(k), n).domain_id.hex()}
+
+
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `weights` case: a window's registered weights under its open root, then mutation `name`."""
     lay = layout(rng)
-    prefix = rng.choice(["", "h1/w-3/"])
-    ks = sorted({k for _name, k, _n in lay["linears"]})
-    entries = [{"value": f"{prefix}b/{'0' if rng.random() < 0.1 else ''}{k}", "root": _hex(rng), "leaves": rng.randint(1, 64),
-                "words": k // 2 + 2, "domain": _hex(rng)} for k in ks]
+    program, prefix = _hex(rng), rng.choice(["", "h1/w-3/"])
+    rows: dict[int, int] = {}
+    for _name, k, n in lay["linears"]:
+        rows[k] = rows.get(k, 0) + n
+    entries = [_b_entry(program, f"{prefix}b/{k}", k, n, rng) for k, n in sorted(rows.items())]
+    b = list(entries)
+    lone = ["a/32@0", "zy@0", "b/x", f"b/0{min(rows)}", "b/" + "0" * 5000 + "1"]
     entries += [{"value": f"{prefix}{v}", "root": _hex(rng)}
-                for v in [*(f"a/{k}" for k in ks), "a/32@0", "zy@0", "b/x"][:rng.randint(0, len(ks) + 3)]]
+                for v in [*(f"a/{k}" for k in rows), *lone][:rng.randint(0, len(rows) + len(lone))]]
     rng.shuffle(entries)
     requests, session = _hex(rng), rng.choice(["s-1", "a.b_c:d-9", "7"])
-    b = [e for e in entries if Cr.is_held(e["value"])]
-    roots = {int(e["value"].split("/")[-1]): bytes.fromhex(e["root"]) for e in b}
+    roots = {k: bytes.fromhex(e["root"]) for k, e in zip(sorted(rows), b)}
     window = {"root": PS.window_open_root(Cr.weights_root(roots), bytes.fromhex(requests), session).hex()}
     e = rng.choice(b)
+    k = next(kk for kk in rows if e["value"] == f"{prefix}b/{kk}")
     match name:
         case "honest":
             pass
@@ -896,9 +908,27 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
         case "missing":
             entries.remove(e)
         case "twice":
-            entries.append({**e, "value": rng.choice([e["value"], f"x/{e['value']}"]), "root": _hex(rng)})
+            entries.append({**e, "root": _hex(rng)})
         case "foreign":
             entries.append({"value": f"{prefix}b/{rng.choice([1, 2, 31, 128])}", "root": _hex(rng)})
+        case "other-prefix":
+            entries.append({**e, "value": rng.choice(["x/", "h1/w-4/", "h1/w-3/h1/w-3/"]) + e["value"]})
+        case "other-leaves":
+            e["leaves"] = rng.choice([e["leaves"] + 1, e["leaves"] - 1, float(e["leaves"]), True, None])
+        case "other-words":
+            e["words"] = rng.choice([e["words"] + 1, k // 2, k, str(e["words"])])
+        case "other-domain":
+            e["domain"] = rng.choice([_hex(rng)[:64], G.domain(_hex(rng), e["value"], e["words"], e["leaves"]).domain_id.hex(),
+                                      G.domain(program, e["value"], e["words"], e["leaves"], window=_hex(rng)).domain_id.hex(),
+                                      G.domain(program, e["value"], e["words"], e["leaves"] + 1).domain_id.hex(), None])
+        case "entry-form":
+            got = rng.choice(["extra", "drop", "bits"])
+            if got == "extra":
+                e["row_schema"] = "x"
+            elif got == "bits":
+                e["word_bits"] = 16
+            else:
+                del e[rng.choice(["leaves", "words", "domain"])]
         case "root-form":
             e["root"] = rng.choice([None, "zz", e["root"].upper(), 5])
         case "window-form":
@@ -907,15 +937,22 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
             requests = rng.choice([None, "zz", requests.upper(), 5])
         case "session-form":
             session = rng.choice([None, "", "-s", "s/1", "x" * 65, 5, "\u015b"])
+        case "circuit-form":
+            if rng.random() < 0.5:
+                program = rng.choice([None, "zz", program.upper(), program[:64], 5])
+            else:
+                prefix = rng.choice([None, 5, "a\"b/", "a\\b/", "\u015b/", "tab\t/"])
         case "layout-form":
             lay = rng.choice([None, {**lay, "m": 0}, {k: v for k, v in lay.items() if k != "tile"}])
         case "entries-form":
             entries = rng.choice([None, entries + [5], {"0": entries}])
         case _:
             raise ValueError(name)
-    return {"window": window, "layout": lay, "entries": entries, "requests": requests, "session": session}
+    return {"window": window, "layout": lay, "entries": entries, "requests": requests, "session": session,
+            "program": program, "prefix": prefix}
 
 
 WEIGHTS_NAMES = ["other-root", "other-requests", "other-session", "other-window", "missing", "twice", "foreign",
-                 "root-form", "window-form", "requests-form", "session-form", "layout-form", "entries-form"]
-WEIGHTS_KEYS = ("window", "layout", "entries", "requests", "session")
+                 "other-prefix", "other-leaves", "other-words", "other-domain", "entry-form", "root-form", "window-form",
+                 "requests-form", "session-form", "circuit-form", "layout-form", "entries-form"]
+WEIGHTS_KEYS = ("window", "layout", "entries", "requests", "session", "program", "prefix")

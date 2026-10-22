@@ -105,9 +105,12 @@ A_LINK_EXPECT = {
 }
 WEIGHTS_EXPECT = {
     "other-root": Cr.OTHER_WEIGHTS, "other-requests": Cr.OTHER_WEIGHTS, "other-session": Cr.OTHER_WEIGHTS,
-    "other-window": Cr.OTHER_WEIGHTS, "missing": "the window registers no weights …/b/", "twice": "'s weights twice",
-    "foreign": "which no linear of its circuit has", "root-form": "has no root (a SHA-512 digest)",
-    "window-form": Cr.WINDOW_ROOT_FORM, "requests-form": Cr.REQUESTS_FORM, "session-form": Cr.SESSION_FORM,
+    "other-window": Cr.OTHER_WEIGHTS, "missing": "the window registers no weights ", "twice": "'s weights twice",
+    "foreign": "b/<K> of a K of its circuit", "other-prefix": "b/<K> of a K of its circuit",
+    "other-leaves": "'s entry is not the registration of K = ", "other-words": "'s entry is not the registration of K = ",
+    "other-domain": "'s entry is not the registration of K = ", "entry-form": "'s entry is not the registration of K = ",
+    "root-form": "'s entry is not the registration of K = ", "window-form": Cr.WINDOW_ROOT_FORM,
+    "requests-form": Cr.REQUESTS_FORM, "session-form": Cr.SESSION_FORM, "circuit-form": Cr.CIRCUIT_FORM,
     "entries-form": Cr.ENTRIES_FORM,
 }
 
@@ -569,8 +572,9 @@ def test_a_window_registering_the_weights_its_open_root_binds_is_credited_its_ro
     for seed in range(20):
         d = cases.weights_instance(random.Random(f"honest/{seed}"))
         w, refused = Cr._weights(*(d[k] for k in cases.WEIGHTS_KEYS))
-        assert refused is None and Cr.weights_root({int(e["value"].split("/")[-1]): bytes.fromhex(e["root"])
-                                                    for e in d["entries"] if Cr.is_held(e["value"])}) == w, refused
+        held = {e["value"]: bytes.fromhex(e["root"]) for e in d["entries"] if Cr.is_held(e["value"])}
+        assert refused is None and Cr.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
+        assert {v.removeprefix(d["prefix"]) for v in held} == {f"b/{k}" for _n, k, _r in d["layout"]["linears"]}
 
 
 @pytest.mark.parametrize("name", cases.WEIGHTS_NAMES)
@@ -599,16 +603,16 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     registers the weights (`registered.Registered`, the domain that binds no window, salts drawn once), folded by
     `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
     code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
-    salt."""
+    salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""
     m = HW.slot(5, h1.TILE)
     prog = HW.program(h1.LINEARS, h1.CALLS, m, h1.TILE, unit=h1.unit)
     digest, rng = P.program_digest(prog), random.Random(7)
     lay = {"calls": [list(x) for x in h1.CALLS], "linears": [list(x) for x in h1.LINEARS], "m": m, "tile": list(h1.TILE)}
     rows = {k: [r for name, kk, n in h1.LINEARS if kk == k for r in _b_rows(rng, n, k)] for k in (32, 64)}
 
-    def commit(k: int, b: list[tuple[list[int], float]]) -> G.Registered:
-        return G.Registered.commit(digest, f"b/{k}", [_b_row(c, sw) for c, sw in b], G.supplied_salts(digest, f"b/{k}", len(b)),
-                                   schema=G.SCHEMA_V2)
+    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> G.Registered:
+        return G.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
+                                   G.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
 
     reg = {k: commit(k, b) for k, b in rows.items()}
     assert [r.leaves for r in reg.values()] == [24, 8] and all(r.window is None for r in reg.values())
@@ -616,11 +620,16 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     w = Cr.weights_root({k: r.root for k, r in reg.items()})
     window = {"root": PS.window_open_root(w, bytes.fromhex(requests), session).hex()}
     entries = [r.entry() for r in reg.values()]
-    assert Cr._weights(window, lay, entries, requests, session) == (w, None)
+    assert Cr._weights(window, lay, entries, requests, session, digest, "") == (w, None)
     j = rng.randrange(24)
     codes, sw = rows[32][j]
     for changed in ((codes, sw * 2), ([codes[0] ^ 1, *codes[1:]], sw)):
         other = commit(32, rows[32][:j] + [changed] + rows[32][j + 1:])
         assert other.root != reg[32].root
-        got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session)
+        got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.OTHER_WEIGHTS)), changed
+    for other in (commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
+        w2 = Cr.weights_root({32: other.root, 64: reg[64].root})
+        window2 = {"root": PS.window_open_root(w2, bytes.fromhex(requests), session).hex()}
+        got = Cr._weights(window2, lay, [other.entry(), entries[1]], requests, session, digest, "")
+        assert got == (None, ("weights", Cr.other_weights_entry("b/32", 32, 24))), other.leaves

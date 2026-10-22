@@ -8,6 +8,7 @@ import PouwWindow.Draw
 import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
+import SampledProofs.Registered
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
@@ -44,7 +45,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   the period's committed circuit (`creditedSession`) and credited.
 * `Internal.aLink` is `credit._a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
-* `Internal.weights` is `credit._weights`: each K's `…/b/<K>` (`isHeld`) registered once, and `weightsRoot` of their
+* `Internal.weights` is `credit._weights`: each K's `<PREFIX>b/<K>` registered once, all of K's B rows under the
+  registered domain of its name and the window's circuit, binding no window, and `weightsRoot` of their
   roots, the window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows,
   codes and s_w, were fixed before its salt. `window` doesn't compose it yet.
 
@@ -521,18 +523,21 @@ def segments? (a : Json) : Option Segments :=
     | _ => none
   else none
 
-/-- `credit.is_a`: a name whose last two parts are `a` and a contraction (`…/a/<K>`). -/
+/-- `credit._DIGITS`: a contraction K in a registered value's name, a canonical decimal (no leading zero). -/
+def canonicalK (k : String) : Bool := !k.isEmpty && k.all Char.isDigit && !k.startsWith "0"
+
+/-- `credit.is_a`: a name whose last two parts are `a` and a contraction (`…/a/<K>`, K a canonical decimal). -/
 def isA : Json → Bool
   | .str v => match (v.splitOn "/").reverse with
-    | k :: "a" :: _ => !k.isEmpty && k.all Char.isDigit
+    | k :: "a" :: _ => canonicalK k
     | _ => false
   | _ => false
 
-/-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`); every other value a window registers
-is its own. -/
+/-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
+value a window registers is its own. -/
 def isHeld : Json → Bool
   | .str v => match (v.splitOn "/").reverse with
-    | k :: "b" :: _ => !k.isEmpty && k.all Char.isDigit
+    | k :: "b" :: _ => canonicalK k
     | _ => false
   | _ => false
 
@@ -617,6 +622,9 @@ def REQUESTS_FORM : String := "the window's round-0 request table's root is not 
 def SESSION_FORM : String :=
   "the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of " ++
   "[A-Za-z0-9._:-], the first alphanumeric)"
+def CIRCUIT_FORM : String :=
+  "the window's circuit is not its descriptor's SHA-512 (128 lowercase hex) and its PREFIX (a string of printable " ++
+  "ASCII but \" and \\)"
 def OTHER_WEIGHTS : String :=
   "the window's registered weights are not the ones its open root binds: weights_root of each K's …/b/<K> root, its " ++
   "round-0 request table's root and its session are not its open root (salt.window_open_root), so a B row, its " ++
@@ -628,20 +636,36 @@ def weightsRoot (roots : List (Nat × ByteArray)) : ByteArray := weightsRootAt 6
 
 def weightsRefuse {α : Type} (why : String) : R α := throw ("weights", why)
 
-/-- `credit._weights`: the weights' root the window registered, each K of its layout's `…/b/<K>` once and no other K,
-when `weightsRoot` of their roots, its round-0 request table's root `requests` and its session `session` are its open
-root (`windowOpenRoot`); else the refusal (`weights` or `layout`). -/
-def Internal.weights (window layout entries requests session : Json) : R ByteArray := do
+/-- `credit.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
+def bWords (k : Nat) : Nat := (k + 5) / 2
+
+def otherWeightsEntry (v : String) (k n : Nat) : String :=
+  s!"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's \{value, root, " ++
+  s!"leaves, words, domain}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {bWords k} " ++
+  s!"16-bit words (K codes then s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the " ++
+  "SHA-512 of its descriptor), binding no window (registered.domain)"
+
+/-- `credit._weights`: the weights' root the window registered, exactly `<prefix>b/<K>` for each K of its layout once
+and no other `…/b/<K>`, each the registration of K's B rows under `SampledProofs.Registered.domain` of its name and
+the circuit `program`, binding no window, when `weightsRoot` of their roots, its round-0 request table's root
+`requests` and its session `session` are its open root (`windowOpenRoot`); else the refusal (`weights` or
+`layout`). -/
+def Internal.weights (window layout entries requests session program prefix_ : Json) : R ByteArray := do
   let some r := digest? (get window "root") | weightsRefuse WINDOW_ROOT_FORM
   let some t := digest? requests | weightsRefuse REQUESTS_FORM
   let .str s := session | weightsRefuse SESSION_FORM
   unless sessionId? s do weightsRefuse SESSION_FORM
+  let (some _, .str pre) := (digest? program, prefix_) | weightsRefuse CIRCUIT_FORM
+  unless _root_.PouwCheck.plain pre do weightsRefuse CIRCUIT_FORM
+  let prog := (str? program).getD ""
   discard <| strata layout
-  let ks : List Nat := match get layout "linears" with
-    | .arr xs => (xs.toList.filterMap fun x => match x with
-        | .arr #[_, k, _] => nat? k
-        | _ => none).eraseDups
+  let lins : List (Nat × Nat) := match get layout "linears" with
+    | .arr xs => xs.toList.filterMap fun x => match x with
+        | .arr #[_, k, n] => do pure (← nat? k, ← nat? n)
+        | _ => none
     | _ => []
+  let rows : List (Nat × Nat) := (lins.map (·.1)).eraseDups.map fun k =>
+    (k, (lins.filter (·.1 == k)).foldl (fun a x => a + x.2) 0)
   let .arr es := entries | weightsRefuse ENTRIES_FORM
   unless es.all isObj do weightsRefuse ENTRIES_FORM
   let mut roots : List (Nat × ByteArray) := []
@@ -649,20 +673,22 @@ def Internal.weights (window layout entries requests session : Json) : R ByteArr
     let v := get e "value"
     if isHeld v then
       let name := (str? v).getD ""
-      let k := (((name.splitOn "/").getLast?.getD "").toNat?).getD 0
-      unless ks.contains k do
-        weightsRefuse (s!"the window registers weights {name} of K = {k}, which no linear of its circuit has: it " ++
-          "registers each of its K's B rows as …/b/<K>, and no other")
+      let some (k, n) := rows.find? (fun (k, _) => s!"{pre}b/{k}" == name)
+        | weightsRefuse (s!"the window registers weights {name}, which is not {pre}b/<K> of a K of its circuit: it " ++
+            s!"registers each of its K's B rows as {pre}b/<K> ({pre} its descriptor's PREFIX), and no other …/b/<K>")
       if (roots.lookup k).isSome then
         weightsRefuse (s!"the window registers K = {k}'s weights twice ({name}): each K's B rows are one registered " ++
-          "value …/b/<K>")
-      let some h := digest? (get e "root")
-        | weightsRefuse s!"registered weights {name}'s entry has no root (a SHA-512 digest)"
+          s!"value {pre}b/<K>")
+      let d ← (SampledProofs.Registered.domain prog name (bWords k) n 16).mapError fun why => ("weights", why)
+      let some h := digest? (get e "root") | weightsRefuse (otherWeightsEntry name k n)
+      unless keys e == some ["domain", "leaves", "root", "value", "words"] && nat? (get e "leaves") == some n
+          && nat? (get e "words") == some (bWords k) && str? (get e "domain") == some (Flock.hexOf d) do
+        weightsRefuse (otherWeightsEntry name k n)
       roots := roots ++ [(k, h)]
-  for k in ks.mergeSort do
+  for k in (rows.map (·.1)).mergeSort do
     unless (roots.lookup k).isSome do
-      weightsRefuse (s!"the window registers no weights …/b/{k} of K = {k}: each K's B rows, their codes and s_w, " ++
-        "are registered under the weights' root its open root binds, before its salt")
+      weightsRefuse (s!"the window registers no weights {pre}b/{k} of K = {k}: each K's B rows, their codes and " ++
+        "s_w, are registered under the weights' root its open root binds, before its salt")
   let w := weightsRoot roots
   unless windowOpenRoot w t s == r do weightsRefuse OTHER_WEIGHTS
   pure w
