@@ -46,7 +46,10 @@ the A and B rows, admit bits, record, partials row, salt, position, roots and la
 opens at its registered root is `LeafLanesSound`'s complete check (`Flock.Registered.checkComplete`), from which
 `RowsSession.rowsReg_eq_portRead` proves the registered reads are the port rows. What stays assumed is that the circuit
 file a session's flock-verify reads computes its Definition, read through the decodes: the Lean has no lowering of a
-Definition to a circuit, and the session's relation (`CheckedRel`) is that circuit's own evaluation.
+Definition to a circuit, and the session's relation (`CheckedRel`) is that circuit's own evaluation. The circuit's input
+wires follow `PouwWindow.Lanes.wireOf?`'s map (#3180, `class_statement.unit_lowering`'s order: the input rows one after
+another, wire `w` the port, row bit and field `wireOf?` gives), which makes the port rows `decL` and `decC` read the
+Definition's inputs; that the circuit file lays its inputs out so is part of this premise until TMPL1's templated read.
 `dq` is the Program's dequant on words (`PouwZyDequant_v2`'s word view) and `part` the honest lane partial
 (`h1zy.lane_partial`'s u32 words, #3095's order: sets `T_0..T_{KS-1}`, `O′`, `D_1..D_{m-1}`, words `2s` the set's
 y-XOR and `2s + 1` its z-XOR). -/
