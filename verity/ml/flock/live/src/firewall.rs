@@ -798,7 +798,7 @@ mod tests {
         let mut g = Gate::new(Recorder::default());
         g.release = Some(release);
         let coin = masked_round(&mut g, 10);
-        assert_eq!((g.inner.items, coin), (direct.items, F128::new(0x5eed_0001, 0x1234_5678_9abc_def0)), "the release reaches the stream");
+        assert_eq!((&g.inner.items, coin), (&direct.items, F128::new(0x5eed_0001, 0x1234_5678_9abc_def0)), "the release reaches the stream");
         assert!(g.release.is_none(), "a release is used once");
         let release = framed(|f| { f.pending.clear(); masked_round(f, 10); }).remove(0).0;
         let mut g = Gate::new(Recorder::default());
