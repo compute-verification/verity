@@ -130,7 +130,7 @@ theorem fold_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P
   refine congrArg₂ (· + ·) ((refVal_place t lays { alpha, lw, rho, r, qc := posOf t lays ((t.defs.getD t.root default).cols - 1) }
     (posMap t lays) s hk hfit _ _ 0 0 1 [] htree).trans rfl) ?_
   unfold rowShare termA termB
-  simp only [List.toList_toArray, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
   rw [hk]
   split_ifs
   · simp only [FoldPt.e, FoldPt.g, of_mul, of_add, ← one_eq]
