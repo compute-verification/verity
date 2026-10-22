@@ -227,15 +227,15 @@ namespace RecDeploy
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin)
 
-/-- **The coin a round's answer is**: the coin whose bytes it is, where it is a message. -/
-noncomputable def coinOf : Out → Coin
-  | .msg bs => Function.invFun Coin.bytes bs
+/-- **The coin a round's answer is**: the coin whose bytes it is (`coinOf`), where it is a message. -/
+noncomputable def outCoin : Out → Coin
+  | .msg bs => coinOf bs
   | _ => default
 
 /-- **The record's round of an inner round** `(m, o)`, which drew `n` values: the message as its one commit string
 (none where it is empty), the coin's first `n` values, and the rest `a`'s. -/
 noncomputable def roundOf (a : Flock.RecRecord.Round) (n : ℕ) (mo : Msg × Out) : Flock.RecRecord.Round :=
-  { a with commits := if mo.1 = [] then [] else [mo.1], n, coins := ((coinOf mo.2).vals n).toList }
+  { a with commits := if mo.1 = [] then [] else [mo.1], n, coins := ((outCoin mo.2).vals n).toList }
 
 /-- **The coin server's transcript as its record**: at a compiled statement `x`, the inner rounds as the record's
 rounds (`roundOf`), round `i` drawing `nOf x i` values with its other fields `aux x i`, then the record's other
@@ -262,7 +262,7 @@ theorem readsBack_recTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Bring
   intro x _ _ _ Ω P ω r hacc
   obtain ⟨xr, hx⟩ := run_acc_readX H IV b.st x P ω r hacc
   refine ⟨((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).mapIdx fun i mo =>
-    (mo.1, (coinOf mo.2).vals (nOf x i)), ?_, ?_, ?_⟩
+    (mo.1, (outCoin mo.2).vals (nOf x i)), ?_, ?_, ?_⟩
   · rw [hb]
     simp only [recRead, recTr, Array.toList_toArray, Flock.RecRecord.readRecord_recordW, Option.map_some]
     congr 1
@@ -279,8 +279,7 @@ theorem readsBack_recTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Bring
     obtain ⟨a, ha⟩ := run_inner H IV b.st x P ω r hx (i := i) (by simp only [kS]; omega) hl.1
     have hm : ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))[i]? = some (a, .msg (coinSeq r i).bytes) := by
       rw [List.getElem?_take_of_lt hl.2, ha]
-    have hc : coinOf (.msg (coinSeq r i).bytes) = coinSeq r i :=
-      Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective _
+    have hc : outCoin (.msg (coinSeq r i).bytes) = coinSeq r i := coinOf_bytes _
     rw [List.getD_eq_getElem?_getD, List.getElem?_mapIdx, hm]
     simp only [Option.map_some, Option.getD_some, hc]
     unfold Drawn
