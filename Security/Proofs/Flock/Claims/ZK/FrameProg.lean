@@ -141,6 +141,84 @@ theorem run_append (c : Cfg) : ∀ (st : _root_.Flock.Firewall.Frame.State) (l�
     · simp
     · exact run_append c _ l₁ l₂
 
+/-- **A rep's requests up to its scheduled round `j`**, the scheduled rounds themselves in the device's place: the
+earlier rep's coins `prior`, then each round before `j` with its coins `cr`, then round `j` (`reqs_take`). -/
+def schedReqs (prior : Array F128) (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) (j : ℕ) :
+    List _root_.Flock.Firewall.Frame.Req :=
+  (if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+    (List.range j).flatMap (fun k =>
+      [.round (sched.getD k (.empty, 0)).2 (sched.getD k (.empty, 0)).1 (.sched (sched.getD k (.empty, 0)).1),
+        .coins (.ok (cr.getD k #[]))]) ++
+    [.round (sched.getD j (.empty, 0)).2 (sched.getD j (.empty, 0)).1 (.sched (sched.getD j (.empty, 0)).1)]
+
+theorem schedReqs_succ (prior : Array F128) (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) (j : ℕ) :
+    schedReqs prior sched cr (j + 1) = schedReqs prior sched cr j ++
+      [.coins (.ok (cr.getD j #[])),
+        .round (sched.getD (j + 1) (.empty, 0)).2 (sched.getD (j + 1) (.empty, 0)).1
+          (.sched (sched.getD (j + 1) (.empty, 0)).1)] := by
+  unfold schedReqs
+  rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
+  simp only [List.append_assoc, List.cons_append, List.nil_append]
+
+theorem schedReqs_congr (prior : Array F128) {sched sched' : Array (ByteArray × ℕ)} {cr cr' : Array (Array F128)}
+    {j : ℕ} (hs : ∀ k, k ≤ j → sched.getD k (.empty, 0) = sched'.getD k (.empty, 0))
+    (hc : ∀ k, k < j → cr.getD k #[] = cr'.getD k #[]) :
+    schedReqs prior sched cr j = schedReqs prior sched' cr' j := by
+  unfold schedReqs
+  rw [flatMap_range_congr fun k hk => by rw [hs k (Nat.le_of_lt hk), hc k hk], hs j (Nat.le_refl j)]
+
+/-- **A rep's frame state after its scheduled round `j`**: `Frame.run` over its requests up to it (`schedReqs`), where
+the rep's schedule so far has it. -/
+theorem repState_at (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (j : ℕ)
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hj : j < sched.size) :
+    repState c t rep dom xs hi cr0 cr ns (j + 1) =
+      let r := _root_.Flock.Firewall.Frame.run c {}
+        (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j)
+      if r.2 then {} else r.1.m := by
+  unfold repState
+  rw [hal]
+  simp only [bind, Except.bind, hs, pure, Except.pure]
+  rw [show ∀ p : ℕ, p + 2 * (j + 1) - 1 = p + 2 * j + 1 from fun p => by omega, reqs_take _ _ _ _ _ hj]
+  rfl
+
+/-- **A rep's frame state one round on**: where its rounds' coins `cr` cover its scheduled round `j` and the schedule
+so far has round `j + 1`, its state after round `j + 1` on one more round's coins is its state after round `j`, then
+the coins of round `j`, then round `j + 1`, the scheduled round in the device's place. -/
+theorem repState_succ (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (a : Array F128)
+    (j : ℕ) {alg sched sched' : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hs' : schedSoFar t rep dom xs hi (cr.push a) = .ok sched')
+    (hcr : cr.size = j + 1) (hj : j + 1 < sched.size) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (j + 2) =
+      let r := _root_.Flock.Firewall.Frame.run c {}
+        (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j)
+      if r.2 then {} else
+        let r' := _root_.Flock.Firewall.Frame.run c r.1
+          [.coins (.ok (cr.getD j #[])),
+            .round (sched.getD (j + 1) (.empty, 0)).2 (sched.getD (j + 1) (.empty, 0)).1
+              (.sched (sched.getD (j + 1) (.empty, 0)).1)]
+        if r'.2 then {} else r'.1.m := by
+  obtain ⟨u, rfl⟩ := schedSoFar_snoc t rep dom xs hi cr a hs hs'
+  have hj' : j + 1 < (sched ++ u).size := by rw [Array.size_append]; omega
+  rw [repState_at c t rep dom xs hi cr0 (cr.push a) ns (j + 1) hal hs' hj']
+  have hcg : schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) (sched ++ u) (cr.push a)
+      (j + 1) = schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr (j + 1) := by
+    refine schedReqs_congr _ (fun k hk => ?_) (fun k hk => ?_)
+    · simp only [Array.getD_eq_getD_getElem?, Array.getElem?_append_left (show k < sched.size by omega)]
+    · simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, show k ≠ cr.size by omega, ↓reduceIte]
+  dsimp only
+  rw [hcg, schedReqs_succ, run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j) = R
+  obtain ⟨S, b⟩ := R
+  cases b <;> rfl
+
 end Loop
 
 end Claims.ZKServer
