@@ -12,7 +12,7 @@ the firewall's stop, `rowsAt_of_cons`, reads their constants too).
 * **`replay_rows`**: the five rows, whatever the Ligerito constraints after them.
 * **`zcOf_eq`**, **`lcRoundsOf_eq`**, **`zPartialOf_eq`**: the view's masked proof is the one the cut's zerocheck and
   lincheck return (`Claims.ZKServer.zerocheckCut_proof`, `lincheckCut_proof`) at masked values that are the view's below
-  `h_ab`.
+  `zp 64`, the PIOP's words.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -80,15 +80,18 @@ variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (v : Fin nE 
 theorem hab_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).hab := by
   simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
 
+theorem zp64_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).zp 64 := by
+  simp only [Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
+
 /-- **`zcOf` is the proof the cut's zerocheck returns** (`Claims.ZKServer.zerocheckCut_proof`) at masked values `g`
-that are the view's below `h_ab`. -/
-theorem zcOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+that are the view's below `zp 64`. -/
+theorem zcOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     zcOf Tz st v = ⟨(Array.range 64).map fun i => g ((layOf Tz st).r1ab i),
       (Array.range 64).map fun i => g ((layOf Tz st).r1c i),
       FlockComplete.Replay.pushes (fun j => (g ((layOf Tz st).ml j 0), g ((layOf Tz st).ml j 1))) (st.m - 6),
       g (layOf Tz st).fa, g (layOf Tz st).fb, g (layOf Tz st).fc⟩ := by
-  have hfa := hab_gt_fa Tz st
-  have hml : ∀ j < st.m - 6, ∀ t < 2, (layOf Tz st).ml j t < (layOf Tz st).hab := fun j hj t ht => by
+  have hfa := zp64_gt_fa Tz st
+  have hml : ∀ j < st.m - 6, ∀ t < 2, (layOf Tz st).ml j t < (layOf Tz st).zp 64 := fun j hj t ht => by
     simp only [Zk.PadLayout.ml, Zk.PadLayout.fa, layOf, Zk.PadLayout.new] at hfa ⊢; omega
   unfold zcOf
   congr 1
@@ -108,12 +111,12 @@ theorem zcOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
   · exact hg _ (by simp only [Zk.PadLayout.fc]; omega)
 
 /-- **`lcRoundsOf` is the rounds the cut's lincheck returns** (`Claims.ZKServer.lincheckCut_proof`) at masked values
-`g` that are the view's below `h_ab`. -/
-theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+`g` that are the view's below `zp 64`. -/
+theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     lcRoundsOf Tz st v =
       FlockComplete.Replay.pushes (fun j => (g ((layOf Tz st).lc j 0), g ((layOf Tz st).lc j 1))) (st.c.kLog - 6) := by
-  have hlc : ∀ j < st.c.kLog - 6, ∀ t < 2, (layOf Tz st).lc j t < (layOf Tz st).hab := fun j hj t ht => by
-    simp only [Zk.PadLayout.hab, Zk.PadLayout.zp, Zk.PadLayout.lc, layOf, Zk.PadLayout.new]; omega
+  have hlc : ∀ j < st.c.kLog - 6, ∀ t < 2, (layOf Tz st).lc j t < (layOf Tz st).zp 64 := fun j hj t ht => by
+    simp only [Zk.PadLayout.zp, Zk.PadLayout.lc, layOf, Zk.PadLayout.new]; omega
   unfold lcRoundsOf
   refine Array.ext (by simp [FlockComplete.Replay.pushes_size]) fun j h1 h2 => ?_
   have hj : j < st.c.kLog - 6 := by simpa using h1
@@ -122,13 +125,13 @@ theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
   rw [hg _ (hlc j hj 0 (by omega)), hg _ (hlc j hj 1 (by omega))]
 
 /-- **`zPartialOf` is the `z_partial` the cut's lincheck returns** at masked values `g` that are the view's below
-`h_ab`. -/
-theorem zPartialOf_eq (hg : ∀ k < (layOf Tz st).hab, (msgAt v k).val = g k) :
+`zp 64`. -/
+theorem zPartialOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     zPartialOf Tz st v = (Array.range 64).map fun i => g ((layOf Tz st).zp i) := by
   unfold zPartialOf
   exact Array.map_congr_left fun i hi => hg _ (by
     rw [Array.mem_range] at hi
-    simp only [Zk.PadLayout.zp, Zk.PadLayout.hab]; omega)
+    simp only [Zk.PadLayout.zp]; omega)
 
 end ViewProof
 
