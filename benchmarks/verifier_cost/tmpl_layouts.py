@@ -29,12 +29,16 @@ reads the flat unit (``--unroll``: the template's own unroll, for a structural t
 checks, under each layout's map, that the columns are distinct and every row reads only earlier columns (its own self
 row for an input, and the constant, excepted). Option (iv) is ``interleaved`` with fallback ``interleave``, lenient
 (``strict`` false) and strict. ``--modes`` picks layouts by name, ``today``, ``pow2``, ``interleaved/contiguous``,
-``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv``, ``iv/strict`` and ``iv/hybrid``. ``--digest`` adds each map's digest,
+``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv``, ``iv/strict``, ``iv/hybrid`` and ``iv/hybrid/T`` (hybrid
+aligned to each power of two over 2^T, `layout`'s ``coarse``). ``memo``: the keys and reads of a fold memoized by
+Definition, lane scale and start residue (`_memo`); ``gaps_by_def``: where the alignment rows go, with each Definition's
+name from ``TMPL.names.json`` (`struct_lower` writes it) when there is one. ``--digest`` adds each map's digest,
 which `flock-tmpl layout` (`Flock.TmplLayout`) prints for its own.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import numpy as np
@@ -85,12 +89,14 @@ def _slot_log(useful: int) -> int:
 
 
 def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = False,
-           hybrid: bool = False) -> tuple[np.ndarray, dict]:
+           hybrid: bool = False, coarse: int = 0) -> tuple[np.ndarray, dict]:
     """The map from the unit's columns to the layout's, and the layout's statistics. ``strict``: each interleaved region
     and each single copy starts at a multiple of its Definition's size rounded up to a power of two (times 2^m), so the
     region's high bits are the Definition's own columns plus an aligned offset and its fold is computed once. ``hybrid``:
     strict for a Definition the call tree reaches on more than one path (a run counted once), lenient for the rest, which
-    are folded once anyway; ``summary`` is then what a fold that summarizes each Definition once per lane scale reads."""
+    are folded once anyway; ``summary`` is then what a fold that summarizes each Definition once per lane scale reads.
+    ``coarse`` = t aligns those to their power of two over 2^t instead (never below their own alignment), so a
+    memoized fold (``memo``) keeps at most 2^t residues of each per lane scale."""
     defs = t.defs
     ins_g, outs_g = _groups(t.groups)
     in_end = (ins_g[-1][0] + ins_g[-1][1]) * WORD if ins_g else 0
@@ -106,6 +112,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
     size, align = [0] * len(defs), [1] * len(defs)
     rnd, gap = [0] * len(defs), [0] * len(defs)  # rows each definition adds: copies rounded up, alignment gaps
     kinds: list[list[tuple]] = [[] for _ in defs]  # per def: (call, kind, 2^m)
+    place: list[list[tuple]] = [[] for _ in defs]  # per def: (call, kind, 2^m, stride, start)
     gaps: list[dict[int, int]] = [{} for _ in defs]  # per def: the alignment gap before each callee's placements
     alias = _aliases(t) if mode == "interleaved" else [{} for _ in defs]
     st = {"runs": 0, "fixed_runs": 0, "lanes_runs": 0, "chained_runs": 0, "rows_lanes": 0, "rows_chained": 0,
@@ -150,12 +157,12 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
             elif mode == "today":
                 kind, S, nb = "contig", size[e], pos
             elif c.count == 1:
-                a = _pow2(size[e]) if whole[e] else align[e]
+                a = max(align[e], _pow2(size[e]) >> coarse) if whole[e] else align[e]
                 kind, S, nb = "contig", size[e], _up(pos, a)
                 al = max(al, a)
             elif mode == "interleaved" and (fallback == "interleave" or not _chained(c, Le, D, alias[d])):
                 M = 1 << _log(c.count)
-                a = M * (_pow2(size[e]) if whole[e] else align[e])
+                a = M * (max(align[e], _pow2(size[e]) >> coarse) if whole[e] else align[e])
                 kind, S, nb = "lanes", M, _up(pos, a)
                 al = max(al, a)
                 st["lanes_runs"] += 1
@@ -190,6 +197,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                 pos = nb + (c.count - 1) * S + size[e]
                 rd += (c.count - 1) * (S - size[e]) + c.count * rnd[e]
             kinds[d].append((c, kind, M))
+            place[d].append((c, kind, M, S, nb))
             x = c.base + width
         seq(x, L)
         maps[d], size[d], align[d], rnd[d] = m, pos, al, rd
@@ -215,18 +223,21 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                           "refs": sum(own[e] * ctx[e] for e in range(len(defs))),
                           "pairs": sum(ctx[d] * sum(c.count * defs[c.e].ins for c in D.calls) for d, D in enumerate(defs)),
                           "pairs_runs": sum(ctx[d] * sum(defs[c.e].ins for c in D.calls) for d, D in enumerate(defs))}
-        inst = [0] * len(defs)
-        inst[t.root] = 1
-        for d in range(len(defs) - 1, -1, -1):
-            for c in defs[d].calls:
-                inst[c.e] += inst[d] * c.count
-        pad = [0] * len(defs)
-        for d in range(len(defs)):
-            for e, g in gaps[d].items():
-                pad[e] += inst[d] * g
-        top = sorted(range(len(defs)), key=lambda e: -pad[e])[:8]
-        out["summary"]["gaps_by_def"] = [{"def": e, "rows": pad[e], "size": size[e], "pow2": _pow2(size[e]), "whole": whole[e],
-                                          "paths": paths[e], "instances": inst[e]} for e in top if pad[e]]
+    inst = [0] * len(defs)
+    inst[t.root] = 1
+    for d in range(len(defs) - 1, -1, -1):
+        for c in defs[d].calls:
+            inst[c.e] += inst[d] * c.count
+    pad = [0] * len(defs)
+    for d in range(len(defs)):
+        for e, g in gaps[d].items():
+            pad[e] += inst[d] * g
+    top = sorted(range(len(defs)), key=lambda e: -pad[e])[:12]
+    out["gaps_by_def"] = [{"def": e, "rows": pad[e], "size": size[e], "pow2": _pow2(size[e]), "cols": defs[e].cols,
+                           "whole": whole[e], "paths": paths[e], "instances": inst[e]} for e in top if pad[e]]
+    if mode == "interleaved":
+        g = [(max(align[e], _pow2(size[e]) >> coarse) if whole[e] else align[e]).bit_length() - 1 for e in range(len(defs))]
+        out["memo"] = _memo(defs, t.root, place, size, own, maps, g)
     if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
@@ -234,6 +245,101 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
         if fallback == "contiguous":
             out["chained_split"] = _split(t, kinds, urows, size, alias, n)
     return maps[t.root], out
+
+
+def _memo(defs, root: int, place, size, own, maps, g) -> dict:
+    """What a fold memoized by (Definition, lane scale, its start mod B) reads, B its laid-out size rounded up to a power
+    of two: below B a placed Definition's rows are its start's residue plus its own columns, one carry into the bits
+    above, so its fold is one summary per key. A lane run's start is a multiple of 2^m (lenient aligns it to 2^m times
+    its callee's alignment), so its copy bits stay clean and the callee's key is the start over 2^m, at scale + m.
+    ``split``: the fold that keys by (Definition, scale) alone, its table at the starts' alignment, ``g`` (log2) or
+    finer."""
+    B = [_pow2(s) for s in size]
+    keys: list[set[tuple[int, int]]] = [set() for _ in defs]
+    keys[root] = {(0, 0)}
+    unclean = 0
+    for d in range(len(defs) - 1, -1, -1):
+        for s, r in keys[d]:
+            for c, kind, M, S, nb in place[d]:
+                e = c.e
+                if kind == "lanes":
+                    q, z = divmod(r + nb, M)
+                    unclean += z != 0
+                    keys[e].add((s + M.bit_length() - 1, q % B[e]))
+                else:
+                    v = (r + nb + np.arange(c.count, dtype=np.int64) * S) % B[e]
+                    keys[e].update((s, x) for x in v.tolist())
+    n = [len(k) for k in keys]
+    ctx = [len({s for s, _ in k}) for k in keys]
+    beta = [b.bit_length() - 1 for b in B]
+    # split: a (Definition, scale) whose starts are multiples of 2^a there is walked once into a table over its rows'
+    # and references' positions above 2^a, and each placement combines the table, at most 4^(beta - a) entries; or,
+    # where that isn't fewer (or it is placed once), each placement walks it directly: its own refs and its calls'
+    # placements
+    # placements; an input's reads are its (input, chunk) entries, paired copy by copy where a table is combined
+    a_min: list[dict[int, int]] = [{} for _ in defs]
+    for e, k in enumerate(keys):
+        for s, r in k:
+            a_min[e][s] = min(a_min[e].get(s, g[e]), ((r & -r).bit_length() - 1) if r else g[e], beta[e])
+    npl: dict[tuple[int, int], int] = {}
+    for d in range(len(defs)):
+        for s in a_min[d]:
+            for c, kind, M, S, nb in place[d]:
+                k2 = (c.e, s + M.bit_length() - 1 if kind == "lanes" else s)
+                npl[k2] = npl.get(k2, 0) + (1 if kind == "lanes" else c.count)
+    cost: dict[tuple[int, int], int] = {}
+    vin: dict[tuple[int, int], np.ndarray] = {}  # (input << 32 | chunk), its rows' input reads
+    tabled: set[tuple[int, int]] = set()
+    tables = table_refs = pairs = spans = 0
+    for e in range(len(defs)):
+        D = defs[e]
+        L, K = D.cols, D.cols + D.ins
+        rc = [(maps[e][col], x - L) for col, ra, rb in D.rows for x in ra + rb if L <= x < K]
+        rpos = np.array([p for p, _ in rc], np.int64)
+        rin = np.array([i for _, i in rc], np.int64)
+        binds = []
+        for c, kind, M, S, nb in place[e]:
+            j = np.arange(c.count, dtype=np.int64)[:, None]
+            vs = [_seg_refs(sg, j) for sg in c.segs if sg[0] * sg[3]]
+            binds.append(np.concatenate(vs, axis=1) if vs else np.zeros((c.count, 0), np.int64))
+        for s, a in a_min[e].items():
+            direct, ent = own[e], [(rin << 32) | (rpos >> a)]
+            for (c, kind, M, S, nb), bd in zip(place[e], binds):
+                k2 = (c.e, s + M.bit_length() - 1 if kind == "lanes" else s)
+                p = 1 if kind == "lanes" else c.count
+                direct += p * cost[k2]
+                v = vin[k2]
+                if k2 in tabled:
+                    pairs += c.count * len(v)
+                if not len(v):
+                    continue
+                ac = a_min[k2[0]][k2[1]]
+                ic, hc = v >> 32, v & 0xFFFFFFFF
+                jj = np.arange(c.count, dtype=np.int64)[:, None]
+                start = nb + jj if kind == "lanes" else nb + jj * S
+                pos = start + (hc << ac)[None, :] * (M if kind == "lanes" else 1)
+                spans += int(ac + (M.bit_length() - 1 if kind == "lanes" else 0) > a)
+                w = bd[:, ic]
+                ok = (w >= L) & (w < K)
+                ent.append(((w[ok] - L) << 32) | (pos[ok] >> a))
+            vin[(e, s)] = np.unique(np.concatenate(ent))
+            comb = 4 ** (beta[e] - a)
+            if npl.get((e, s), 1) > 1 and comb < direct:
+                cost[(e, s)] = comb
+                tabled.add((e, s))
+                tables += 1
+                table_refs += direct
+            else:
+                cost[(e, s)] = direct
+    top = sorted(range(len(defs)), key=lambda e: -n[e] * own[e])[:8]
+    return {"keys": sum(n), "contexts": sum(ctx), "max_keys": max(n), "unclean_lanes": unclean,
+            "split": {"total": cost[(root, 0)] + table_refs + pairs, "tables": tables, "table_refs": table_refs,
+                      "pairs": pairs, "coarser_children": spans, "placements": sum(npl.values()),
+                      "max_t": max(beta[e] - a for e in range(len(defs)) for a in a_min[e].values())},
+            "refs": sum(n[e] * own[e] for e in range(len(defs))),
+            "pairs": sum(n[d] * sum(c.count * defs[c.e].ins for c in D.calls) for d, D in enumerate(defs)),
+            "pairs_runs": sum(n[d] * sum(defs[c.e].ins for c in D.calls) for d, D in enumerate(defs)),
+            "by_def": [{"def": e, "keys": n[e], "contexts": ctx[e], "own": own[e], "size": size[e]} for e in top]}
 
 
 def _reads(c: T.Call, D: T.Def, al: dict[int, set[int]]):
@@ -490,12 +596,20 @@ def main(argv: list[str]) -> int:
     t = T.parse(open(a.tmpl).read())
     print("PARSED " + json.dumps({"seconds": round(time.time() - t0, 1), "defs": len(t.defs)}), flush=True)
     flat = T.read_flat(a.flat)[0] if a.flat else T.unroll(t) if a.unroll else None
+    names_at = a.tmpl + ".names.json"
+    names = json.load(open(names_at)) if os.path.exists(names_at) else None
     ok = True
     for name in a.modes.split(","):
-        mode, fb, strict = MODES[name]
+        base, _, tc = name.partition("/hybrid/")
+        coarse = int(tc) if tc else 0
+        hybrid = bool(tc) or name.endswith("/hybrid")
+        mode, fb, strict = MODES[base + "/hybrid" if tc else name]
         t1 = time.time()
-        phi, r = layout(t, mode, fb or "contiguous", strict, hybrid=name.endswith("/hybrid"))
-        r["hybrid"] = name.endswith("/hybrid")
+        phi, r = layout(t, mode, fb or "contiguous", strict, hybrid=hybrid, coarse=coarse)
+        r["hybrid"], r["coarse"] = hybrid, coarse
+        if names:
+            for x in r.get("gaps_by_def", []) + r.get("memo", {}).get("by_def", []):
+                x["name"] = names[x["def"]]
         if mode == "today":
             r["identity"] = bool((phi == np.arange(len(phi))).all())
             ok &= r["identity"]
