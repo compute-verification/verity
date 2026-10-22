@@ -53,7 +53,8 @@ class Host:
     def __init__(self, root: Path) -> None:
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-        self.host = A.Host(root=root / "var", peers=root / "peers")
+        (root / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-21T00:00:00Z") + "\n")
+        self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
         public = (self.host.key / "public").read_bytes()
         self.pin = hashlib.sha512(public).hexdigest()
