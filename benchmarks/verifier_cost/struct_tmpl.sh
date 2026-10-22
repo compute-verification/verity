@@ -5,7 +5,8 @@
 # Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
 # --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
 # template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl); after --layouts, each later shape's
-# template gets tmpl_layouts.py's today and option (iv) layouts, lenient and strict (layouts-SHAPE.jsonl). Run from a clone:
+# template gets tmpl_layouts.py's today and option (iv) layouts, lenient and strict (layouts-SHAPE.jsonl), and the Lean
+# layout's (`flock-tmpl layout`, lean-layout-SHAPE.jsonl), whose column maps must agree with them. Run from a clone:
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
 # $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
@@ -71,10 +72,20 @@ while [ $# -gt 0 ]; do
     grep -E 'Maximum resident|Elapsed' "$O/unroll-time-$tag.txt"
   fi
   if [ $layouts = 1 ]; then
-    /usr/bin/time -v uv run python benchmarks/verifier_cost/tmpl_layouts.py "$t" --modes today,iv,iv/strict \
+    /usr/bin/time -v uv run python benchmarks/verifier_cost/tmpl_layouts.py "$t" --modes today,iv,iv/strict --digest \
       > "$O/layouts-$tag.out" 2> "$O/layouts-time-$tag.txt" || { tail -40 "$O/layouts-time-$tag.txt" >&2; exit 1; }
     grep '^LAYOUT ' "$O/layouts-$tag.out" | sed 's/^LAYOUT //' | tee "$O/layouts-$tag.jsonl" | cut -c1-400
     grep -E 'Maximum resident|Elapsed' "$O/layouts-time-$tag.txt"
+    /usr/bin/time -v "$X" layout "$t" > "$O/lean-layout-$tag.out" 2> "$O/lean-layout-time-$tag.txt" \
+      || { cat "$O/lean-layout-$tag.out" "$O/lean-layout-time-$tag.txt" >&2; exit 1; }
+    grep '^PHASE ' "$O/lean-layout-$tag.out" | sed 's/^PHASE //' | tee "$O/lean-layout-$tag.jsonl"
+    python3 - "$O/layouts-$tag.jsonl" "$O/lean-layout-$tag.jsonl" <<'EOF' || exit 1
+import json, sys
+py = {r["strict"]: r["digest"] for r in map(json.loads, open(sys.argv[1])) if r.get("fallback") == "interleave"}
+ln = {r["phase"]: r.get("digest") for r in map(json.loads, open(sys.argv[2]))}
+bad = [m for m, s in (("iv", False), ("iv/strict", True)) if py.get(s) is None or py.get(s) != ln.get(m + "/map")]
+sys.exit(f"Tmpl.layout's map is not tmpl_layouts.py's: {bad}" if bad else 0)
+EOF
   fi
   grep -E 'Maximum resident|Elapsed' "$O"/{struct,read}-time-$tag.txt
   [ "$(stat -c %s "$t")" -lt 1000000000 ] && mv "$t" "$O/" || rm -f "$t"

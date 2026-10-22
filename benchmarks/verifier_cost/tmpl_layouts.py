@@ -29,7 +29,8 @@ reads the flat unit (``--unroll``: the template's own unroll, for a structural t
 checks, under each layout's map, that the columns are distinct and every row reads only earlier columns (its own self
 row for an input, and the constant, excepted). Option (iv) is ``interleaved`` with fallback ``interleave``, lenient
 (``strict`` false) and strict. ``--modes`` picks layouts by name, ``today``, ``pow2``, ``interleaved/contiguous``,
-``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv`` and ``iv/strict``.
+``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv`` and ``iv/strict``. ``--digest`` adds each map's digest,
+which `flock-tmpl layout` (`Flock.TmplLayout`) prints for its own.
 """
 from __future__ import annotations
 
@@ -425,6 +426,14 @@ def path(t: T.Tmpl, x: int) -> list:
         d = hit.e
 
 
+def digest(phi: np.ndarray) -> str:
+    """``h ← h · 1000003 + phi[x]`` over the columns, mod 2^64: `flock-tmpl layout`'s digest of `Tmpl.posMap`."""
+    n = len(phi)
+    with np.errstate(over="ignore"):
+        pw = np.concatenate([np.ones(1, np.uint64), np.cumprod(np.full(max(n - 1, 0), 1000003, np.uint64))])
+        return str(int((phi.astype(np.uint64) * pw[::-1]).sum(dtype=np.uint64)))
+
+
 MODES = {"today": ("today", None, False), "pow2": ("pow2", None, False),
          "interleaved/contiguous": ("interleaved", "contiguous", False), "interleaved/pow2": ("interleaved", "pow2", False),
          "interleaved/contiguous/strict": ("interleaved", "contiguous", True), "iv": ("interleaved", "interleave", False),
@@ -441,6 +450,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--flat", metavar="CIRCUIT", help="check each layout's order on the flat unit")
     ap.add_argument("--unroll", action="store_true", help="check each layout's order on the template's unroll")
     ap.add_argument("--modes", default=",".join(MODES), help="layouts, comma-separated: " + ", ".join(MODES))
+    ap.add_argument("--digest", action="store_true", help="each map's digest, as `flock-tmpl layout` prints it")
     a = ap.parse_args(argv)
     t0 = time.time()
     t = T.parse(open(a.tmpl).read())
@@ -458,6 +468,8 @@ def main(argv: list[str]) -> int:
             r["order"] = order(phi, flat)
             r["order"]["late_paths"] = [(path(t, a), path(t, b)) for a, b in r["order"]["late"][:3]]
             ok &= r["order"]["distinct"] and (fb == "interleave" or r["order"]["late_refs"] == 0)
+        if a.digest:
+            r["digest"] = digest(phi)
         r |= {"seconds": round(time.time() - t1, 1),
               "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
         print("LAYOUT " + json.dumps(r), flush=True)

@@ -1,6 +1,9 @@
-import Flock.Tmpl
+import Flock.TmplLayout
 
 /-!
+`flock-tmpl layout TMPL`: `Tmpl.layout`, option (iv) lenient and strict, its size and the time it takes (O(description)),
+then the reference column map `Tmpl.posMap` and its digest (`h ← h · 1000003 + pos` over the columns, mod 2^64), which
+`tmpl_layouts.py --digest` computes on its own map.
 `flock-tmpl read TMPL`, `flock-tmpl unroll TMPL` and `flock-tmpl diff TMPL CIRCUIT`: the templated unit's read
 (`Flock.Tmpl.parse`, its text's read, line split and form checks, O(description)), the read then `Tmpl.unroll` (the flat
 net, through `Net.ofRows`'s matrices and checks: what a verifier that unrolls would hold), and the difftest of its unroll against the circuit file's flat unit:
@@ -114,4 +117,23 @@ def main (args : List String) : IO UInt32 := do
       report "unroll" t0 [("useful", toJson n.useful), ("nnz", toJson ((n.a.data.size + n.b.data.size) / 4)),
         ("unit_log", toJson n.unitLog)]
       return if ← diff t n circuit then 0 else 1
-  | _ => IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT"; return 2
+  | ["layout", tp] =>
+    let some t ← readTmpl tp | return 1
+    let mut ok := true
+    for strict in [false, true] do
+      let name := if strict then "iv/strict" else "iv"
+      let t0 ← IO.monoNanosNow
+      match Tmpl.layout t strict with
+      | .error e => report name t0 [("error", Json.str e)]; ok := false
+      | .ok lays =>
+        let L := lays.getD t.root default
+        report name t0 [("useful", toJson L.size), ("slot_log", toJson (max 7 (log2ceil L.size))),
+          ("align", toJson L.align)]
+        let t0 ← IO.monoNanosNow
+        let m := Tmpl.posMap t lays
+        let h := m.foldl (fun h p => h * 1000003 + p.toUInt64) (0 : UInt64)
+        report (name ++ "/map") t0 [("digest", Json.str s!"{h.toNat}"), ("columns", toJson m.size)]
+    return if ok then 0 else 1
+  | _ =>
+    IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | flock-tmpl layout TMPL"
+    return 2
