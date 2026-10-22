@@ -52,8 +52,8 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
-                                                            registration as R)
+from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, produced as PD,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -672,12 +672,29 @@ def domain(j):
     if not (isinstance(j, dict) and isinstance(j.get("program"), str) and isinstance(j.get("value"), str)
             and all(_nat(j.get(k)) for k in ("words", "leaves", "word_bits"))):
         raise D.Reject("program or value is not a string, or words, leaves or word_bits not a natural number")
-    if "window" in j and j["window"] is None:
-        raise D.Reject("the window is not 64 bytes of hex")
+    for k in ("window", "produced"):
+        if k in j and j[k] is None:
+            raise D.Reject(f"the {k} is not 64 bytes of hex")
     try:
-        return G.domain(j["program"], j["value"], j["words"], j["leaves"], j["word_bits"], j.get("window")).domain_id.hex()
+        return G.domain(j["program"], j["value"], j["words"], j["leaves"], j["word_bits"], j.get("window"),
+                        j.get("produced")).domain_id.hex()
     except ValueError as e:
         raise D.Reject(str(e)) from None
+
+
+def produced(j):
+    j = _json(j)
+    if not (isinstance(j, dict) and isinstance(j.get("registration"), str) and isinstance(j.get("draw"), str)):
+        raise D.Reject("registration or draw is not a string")
+    mine, opened = j.get("mine"), j.get("opened")
+    if not isinstance(mine, dict) or not all(
+            isinstance(e, dict) and all(_nat(e.get(k)) for k in ("leaves", "words", "word_bits"))
+            and isinstance(e.get("domain"), str) for e in mine.values()):
+        raise D.Reject("mine is not {value: leaves, words and word_bits and a string domain}")
+    if opened is not None and not isinstance(opened, dict):
+        raise D.Reject("opened is not an object")
+    codes = list(PD.check(j.get("record"), j["registration"], j["draw"], mine))
+    return {"codes": codes, "opened": None if codes else list(PD.opened(j["record"], opened))}
 
 
 def check_draw(j):
@@ -1759,11 +1776,87 @@ def _domains(widths):
 
 DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(
     _domains([16, 32]), st.builds(lambda d, w: {**d, "window": w}, _domains([16, 32]), st.sampled_from([WROOT, EARLIER_WROOT])),
+    st.builds(lambda d, r: {**d, "produced": r}, _domains([16, 32]), st.sampled_from([WROOT, "c3" * 64])),
+    st.builds(lambda d, r, w: {**d, "produced": r, "window": w}, _domains([16, 32]),
+              st.sampled_from([WROOT, WROOT.upper(), WROOT[:-2], None, 5]), st.sampled_from([WROOT, WROOT[:-2]])),
     _domains([16, 32]), st.one_of(st.builds(lambda d, w: {**d, "window": w}, _domains([16, 32]),
                         st.sampled_from([WROOT.upper(), WROOT[:-2], "", None, 5, WROOT + "\n"])),
     _domains([0, 8, 24, 48]),
     st.builds(lambda k, v: {"leaves": 3, "program": "p", "value": "W", "word_bits": 16, "words": 2, k: v},
               st.sampled_from(["leaves", "program", "value", "word_bits", "words"]), JSON), JSON)), package=PACKAGE)
+PRODUCED_REG, PRODUCED_DRAW, PRODUCED_OTHER = "c3" * 64, "d4" * 64, "e0" * 64
+
+
+def _produced_case(names, sizes, roots) -> dict:
+    """An honest produced record over values ``names`` (``sizes``: (leaves, words, word_bits) each), the verifier's own
+    entries and the roots its verifiers of record opened: `produced.check` and `produced.opened` both empty."""
+    prog = REGISTERED_SETUPS[0].sha512
+    mine = {v: {"leaves": n, "words": w, "word_bits": b, "domain": PD.domain(prog, v, w, n, b, PRODUCED_REG).domain_id.hex()}
+            for v, (n, w, b) in zip(names, sizes)}
+    es = [{"value": v, "root": r, "leaves": m["leaves"], "words": m["words"], "domain": m["domain"],
+           **({} if m["word_bits"] == 16 else {"word_bits": m["word_bits"]})} for (v, m), r in zip(mine.items(), roots)]
+    return {"record": PD.record(PRODUCED_REG, PRODUCED_DRAW, es), "registration": PRODUCED_REG, "draw": PRODUCED_DRAW,
+            "mine": mine, "opened": {e["value"]: e["root"] for e in es}}
+
+
+def _entry(c, x):
+    return c["record"]["produced"][x % len(c["record"]["produced"])]
+
+
+#: one change each to an honest case: (name, change, the code it reaches)
+PRODUCED_CHANGES = [
+    ("keys", lambda c, x: c["record"].pop("draw"), "P-keys"),
+    ("extra key", lambda c, x: c["record"].update(window=None), "P-keys"),
+    ("format", lambda c, x: c["record"].update(format="verity/registration/produced/v1"), "P-format"),
+    ("registration", lambda c, x: c.update(registration=PRODUCED_OTHER), "P-registration"),
+    ("draw", lambda c, x: c["record"].update(draw=PRODUCED_OTHER), "P-draw"),
+    ("not a list", lambda c, x: c["record"].update(produced={}), "P-produced"),
+    ("an entry's extra key", lambda c, x: _entry(c, x).update(row_schema="hm96-sha512/row/v2"), "P-produced"),
+    ("a value twice", lambda c, x: c["record"]["produced"].append(dict(_entry(c, x))), "P-values"),
+    ("a value missing", lambda c, x: c["record"]["produced"].pop(x % len(c["record"]["produced"])), "P-values"),
+    ("a value not the verifier's", lambda c, x: _entry(c, x).update(value="other"), "P-values"),
+    ("a value not a string", lambda c, x: _entry(c, x).update(value=x), "P-values"),
+    ("a root in capitals", lambda c, x: _entry(c, x).update(root=_entry(c, x)["root"].upper()), "P-root"),
+    ("a short root", lambda c, x: _entry(c, x).update(root=_entry(c, x)["root"][:-2]), "P-root"),
+    ("leaves", lambda c, x: _entry(c, x).update(leaves=_entry(c, x)["leaves"] + 1), "P-leaves"),
+    ("leaves as a bool", lambda c, x: _entry(c, x).update(leaves=True), "P-leaves"),
+    ("words", lambda c, x: _entry(c, x).update(words=_entry(c, x)["words"] + 1), "P-words"),
+    ("another registration's domain", lambda c, x: _entry(c, x).update(domain=PD.domain(
+        REGISTERED_SETUPS[0].sha512, _entry(c, x)["value"], _entry(c, x)["words"], _entry(c, x)["leaves"],
+        _entry(c, x).get("word_bits", 16), PRODUCED_OTHER).domain_id.hex()), "P-domain"),
+    ("a registered value's domain", lambda c, x: _entry(c, x).update(domain=G.domain(
+        REGISTERED_SETUPS[0].sha512, _entry(c, x)["value"], _entry(c, x)["words"], _entry(c, x)["leaves"],
+        _entry(c, x).get("word_bits", 16)).domain_id.hex()), "P-domain"),
+    ("16 named", lambda c, x: _entry(c, x).update(word_bits=16), "P-word_bits"),
+    ("32 unnamed", lambda c, x: [m.update(word_bits=32) for m in c["mine"].values()], "P-word_bits"),
+    ("a value opened at another root", lambda c, x: c["opened"].update({_entry(c, x)["value"]: PRODUCED_OTHER}),
+     "P-opened"),
+    ("a value not opened", lambda c, x: c["opened"].pop(_entry(c, x)["value"]), "P-opened"),
+    ("a value opened under two roots", lambda c, x: c["opened"].update({_entry(c, x)["value"]: None}), "P-opened"),
+    ("no verdict reports", lambda c, x: c.update(opened=None), "P-opened"),
+    ("another value opened too", lambda c, x: c["opened"].update(other=PRODUCED_OTHER), None),
+]
+PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "é"]
+
+
+@st.composite
+def produced_cases(draw) -> dict:
+    names = draw(st.lists(st.sampled_from(PRODUCED_NAMES), min_size=1, max_size=3, unique=True))
+    sizes = [(draw(st.integers(1, 40)), draw(st.integers(1, 9)), draw(st.sampled_from([16, 16, 32]))) for _ in names]
+    c = _produced_case(names, sizes, [draw(st.sampled_from(["a1", "b2", "0f"])) * 64 for _ in names])
+    for _ in range(draw(st.integers(0, 2))):
+        _name, change, _code = draw(st.sampled_from(PRODUCED_CHANGES))
+        try:
+            change(c, draw(st.integers(0, 3)))
+        except (KeyError, IndexError, ZeroDivisionError, AttributeError, TypeError):
+            pass
+    return c
+
+
+PRODUCED = D.Port(PIECES, "produced", produced, st.one_of(
+    produced_cases(), produced_cases(), st.builds(lambda c, x: {**c, "record": x}, produced_cases(), JSON),
+    st.builds(lambda c, k, x: {**c, k: x}, produced_cases(), st.sampled_from(["mine", "opened", "registration", "draw"]),
+              JSON), JSON), package=PACKAGE)
 CHECK_DRAW = D.Port(PIECES, "check_draw", check_draw, st.one_of(
     st.builds(lambda a, dn, other: {"draw": a["evidence"]["draw"], "law": other or a["record"]["law"],
                                     "population": a["record"]["population"] + dn},
@@ -2538,6 +2631,7 @@ pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+              (PRODUCED, 500),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
@@ -2738,6 +2832,20 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_every_produced_code_is_reached(pieces):
+    """Each named change to an honest produced record, Lean and Python agreeing on its codes: each reaches its own code,
+    and the honest record none, so every code `produced.check` and `produced.opened` give is reached."""
+    honest = _produced_case(["partial", "PouwUnitSeeds_v2"], [(32, 16, 16), (1, 64, 16)], ["a1" * 64, "b2" * 64])
+    assert D.replay(PRODUCED, honest, pieces) == ("output", D.canonical({"codes": [], "opened": []}))
+    for name, change, code in PRODUCED_CHANGES:
+        c = copy.deepcopy(honest)
+        change(c, 0)
+        kind, out = D.replay(PRODUCED, _json(c), pieces)
+        got = json.loads(out)
+        assert kind == "output" and (code in got["codes"] or code in (got["opened"] or []) if code else got == {
+            "codes": [], "opened": []}), (name, kind, out)
 
 
 def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):

@@ -1,7 +1,9 @@
 import Std.Data.HashMap
+import Flock.Program
 import PouwCommit.Frame
 import PouwCheck.Json
 import PouwCheck.Pass
+import PouwCheck.Rounds
 import PouwWindow.Draw
 import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
@@ -13,7 +15,13 @@ import SampledProofs.PyJson
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
 
-* `credited` is `credit.credited`: each manifest row (the window's calls, in order) carries its call's verdict as
+**`window` and `periodCredit` are the only entries.** On one window's evidence and one round log, `window` runs every
+step and credits only when all of them accept; `periodCredit` runs it on each window of a closed, complete period. The
+steps are `Internal` (`credit.py`'s underscored ones), which only the difftest reaches, so no caller credits a window with
+a step skipped: `Internal.credited` returns the credit bits whatever the proofs' outcome, and `Internal.aLink` trusts the
+round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the ones the challenger received.
+
+* `Internal.credited` is `credit._credited`: each manifest row (the window's calls, in order) carries its call's verdict as
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
   `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
@@ -22,13 +30,19 @@ it, string for string:
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
   open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
   over the window's credited work at `DELTA` (`PouwWindow.epsAt` at the window's inputs), which `periodCredit` reports.
-* `outcome` is `credit.outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept, else the
-  whole window is refused (no partial credit). `window` is `credit.window`: `credited`, then `outcome` under the served
-  window's arguments (the stream its root, the registration its draw root, the receipt `{"receipts": …}`).
+* `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
+  SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
+  template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
+  instances of K's template in order. Never a layout the window's evidence hands in.
+* `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
+  else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
+  on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
+  its descriptor, then `Internal.outcome`'s rule under the served window's arguments (the stream its root, the
+  registration its draw root, the receipt `{"receipts": …}`).
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
   the period's committed circuit (`creditedSession`) and credited.
-* `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
+* `Internal.aLink` is `credit._a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
@@ -78,9 +92,8 @@ def DRAW_ARGS : String :=
   "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
   "printable ASCII strings"
 def WINDOW_KEYS : List String :=
-  ["calls", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
-def PERIOD_KEYS : List String :=
-  ["calls", "descriptor", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
+  ["calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window"]
+def PERIOD_KEYS : List String := WINDOW_KEYS
 def WINDOWS_FORM : String :=
   "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate PERIOD_KEYS ++ "}, " ++
   "in its close's order"
@@ -142,8 +155,9 @@ def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) 
   | none => h
   | some s => Flock.Sha512.hash (h ++ s)
 
-/-- `credit.credited`: the credited calls' indices, else the refusal. -/
-def credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
+/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
+until every other step accepts. -/
+def Internal.credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let (c, received) ← (trustedSessionOf ledger window k session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
@@ -262,6 +276,141 @@ def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Str
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
+def SCHEMA : String := "verity-ir/descriptor/v1"
+def WINDOW_FN : String := "PouwH1Window_v3"
+def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
+def TILE_FN : String := "PouwH1WindowTile_v1"
+def SHARED : List String := ["zy", "salt", "position", "roots"]
+def DESCRIPTOR_FORM : String :=
+  "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
+  "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
+def NOT_WINDOW : String :=
+  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
+  "CALLS=…,M=…,PREFIX=…}, each binding canonical JSON, its TILES [[K, {\"fn\": template}], ...] by ascending K and " ++
+  "its PREFIX a string (h1window.program's Program)"
+def BODY : String :=
+  "the window's circuit's units are not its record's tiles: its root's nodes other than its inputs are not, in " ++
+  "order, each of its CALLS' (M/R)·(n/C) instances of K's template, each node a call of it or a batch of at least " ++
+  "one (h1window.program's body)"
+
+def noTemplate (k : Nat) : String :=
+  s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
+  s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then " ++
+  ", ".intercalate SHARED ++ ", at the same R × C at every K"
+
+/-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
+Python's `canonical_json`), so every reading of it is the same. -/
+def loads? (text : String) : Option Json :=
+  match Json.parse text with
+  | .ok j => match SampledProofs.PyJson.canonical j with
+    | .ok s => if s == text then some j else none
+    | .error _ => none
+  | .error _ => none
+
+/-- `credit._tile`: the R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or none when it is not
+`h1window.template`'s. -/
+def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat) := do
+  guard (isObj dj && get dj "form" == Json.str "composite" && get dj "id" == Json.str TILE_FN)
+  let b := get dj "bindings"
+  let body := get dj "body"
+  guard (keys b == some ["K", "UNIT"] && nat? (get b "K") == some k && isObj body)
+  let .ok u := SampledProofs.PyJson.canonical (get b "UNIT") | none
+  guard (tid == s!"{TILE_FN}\{UNIT={u},K={k}}")
+  let .arr ps := get body "params" | none
+  let ps ← ps.toList.mapM fun (p : Json) => (match p with
+    | .arr a => (match a.toList with
+      | [n, t] => some (n, t)
+      | _ => none)
+    | _ => none)
+  guard (ps.map (·.1) == ([s!"a_k{k}", s!"b_k{k}"] ++ SHARED).map Json.str)
+  let rows ← (ps.take 2).mapM fun ((_, t) : Json × Json) => (match t with
+    | .arr a => (match a.toList with
+      | [.str "Array", n, _] => (nat? n).filter (1 ≤ ·)
+      | _ => none)
+    | _ => none)
+  match rows with
+  | [r, c] => some (r, c)
+  | _ => none
+
+/-- `credit._runs`: `(template, count)` pairs with adjacent ones of one template merged. -/
+def runs (xs : List (String × Nat)) : List (String × Nat) :=
+  (xs.foldl (fun acc (t, n) => match acc with
+    | (u, m) :: rest => if u == t then (t, m + n) :: rest else (t, n) :: acc
+    | [] => [(t, n)]) []).reverse
+
+/-- `credit.layout_of`: the layout (`{calls, linears, m, tile}`, `strata`'s) of the H1 window whose circuit's
+descriptor is `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's `circuit` is the
+SHA-512 of), else the refusal (`layout`). The calls, linears and slot are its program function's record (`WINDOW_FN`'s
+`CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows give R and C, and
+the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a
+call one instance and a batch its members, as the template query counts units. Its cost is the descriptor's bytes,
+never the gates its nodes unroll to. -/
+def layoutOf (descriptor : ByteArray) : R Json := do
+  let some d := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
+  let defs := get d "definitions"
+  let (.str schema, .arr cs, .str fn, .str root) := (get d "schema", get d "callees", get d "program_fn", get d "root")
+    | layoutRefuse DESCRIPTOR_FORM
+  let some callees := cs.toList.mapM str? | layoutRefuse DESCRIPTOR_FORM
+  unless schema == SCHEMA && isObj defs do layoutRefuse DESCRIPTOR_FORM
+  let callees := callees.toArray
+  let pairs := if fn.startsWith (WINDOW_FN ++ "{") then Flock.Program.recordPairs fn else #[]
+  unless pairs.toList.map (·.1) == RECORD do layoutRefuse NOT_WINDOW
+  let some vals := pairs.toList.mapM (fun (_, s) => loads? s) | layoutRefuse NOT_WINDOW
+  let [tiles, linears, calls, m, prefix_] := vals | layoutRefuse NOT_WINDOW
+  let some ts := (match tiles with
+      | .arr a => a.toList.mapM fun (t : Json) => (match t with
+        | .arr p => (match p.toList with
+          | [k, f] => do
+            let k ← (nat? k).filter (1 ≤ ·)
+            guard (keys f == some ["fn"])
+            pure (k, ← str? (get f "fn"))
+          | _ => none)
+        | _ => none)
+      | _ => none) | layoutRefuse NOT_WINDOW
+  unless !ts.isEmpty && (str? prefix_).isSome && (ts.zip ts.tail).all (fun (a, b) => a.1 < b.1) do
+    layoutRefuse NOT_WINDOW
+  let mut rc : Option (Nat × Nat) := none
+  for (k, tid) in ts do
+    let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
+    if rc.any (· != got) then layoutRefuse (noTemplate k)
+    rc := some got
+  let some (r, c) := rc | layoutRefuse NOT_WINDOW
+  let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),
+    ("tile", Json.arr #[Lean.toJson r, Lean.toJson c])]
+  discard <| strata layout
+  let rows := fun (j : Json) => (match j with
+    | .arr a => a.toList.filterMap fun (x : Json) => (match x with
+      | .arr b => some b.toList
+      | _ => none)
+    | _ => ([] : List (List Json)))
+  let lins : List (String × Nat × Nat) := (rows linears).filterMap fun (x : List Json) => (match x with
+    | [.str s, k, n] => do pure (s, ← nat? k, ← nat? n)
+    | _ => none)
+  let tks := ts.map (·.1)
+  let lks := (lins.map (·.2.1)).eraseDups.mergeSort (· ≤ ·)
+  unless tks == lks do
+    layoutRefuse (s!"the window's TILES are at K = {listStr tks}, not at its linears' K = {listStr lks}: h1window " ++
+      "binds one template per K its linears have")
+  let mv := (nat? m).getD 0
+  let want := runs <| (rows calls).filterMap fun (x : List Json) => (match x with
+    | [.str lin, _] => (lins.find? (·.1 == lin)).bind fun (_, k, n) =>
+        (ts.find? (·.1 == k)).map fun (_, tid) => (tid, (mv / r) * (n / c))
+    | _ => none)
+  let rootDef := get defs root
+  let .arr nodes := (if get rootDef "form" == Json.str "composite" then get (get rootDef "body") "nodes" else .null)
+    | layoutRefuse BODY
+  let mut got : Array (String × Nat) := #[]
+  for x in nodes do
+    let some f := (if isObj x then nat? (get x "fn") else none) | layoutRefuse BODY
+    let some t := callees[f]? | layoutRefuse BODY
+    if Flock.Program.isInputId t then continue
+    let n := if get x "form" == Json.str "call" then some 1
+      else if get x "form" == Json.str "batch" then nat? (get x "n") else none
+    let some n := n.filter (1 ≤ ·) | layoutRefuse BODY
+    got := got.push (t, n)
+  unless runs got.toList == want do layoutRefuse BODY
+  pure layout
+
 /-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
 `strata` accepted. -/
 def callWork (layout : Json) : List (Nat × Nat) := Id.run do
@@ -338,132 +487,10 @@ def drawn (coin stream registration receipt layout k : Json) : R (Array Nat) := 
   let some c := digest? coin | throw ("draw", COIN_FORM)
   drawnOf c stream registration receipt ss k
 
-/-- `credit.outcome`: none when every unit the draw coin draws from the window (`drawn`) has exactly one outcome and it
-is an accept, and no other unit has one; else the refusal. -/
-def outcome (coin stream registration receipt layout k proofs : Json) : R Unit := do
+/-- `credit._outcome`: none when every unit the draw coin draws from the window (`drawn`) has exactly one outcome and
+it is an accept, and no other unit has one; else the refusal. `window`'s rule on the draw coin it read. -/
+def Internal.outcome (coin stream registration receipt layout k proofs : Json) : R Unit := do
   proved (← drawn coin stream registration receipt layout k) proofs
-
-/-- `credit.window`: a served H1 window's credited calls (`credited`), its manifest one row per call of `layout`, and
-`outcome` of the draw coin `credited` read at its period's committed K `k`, the stream the window's root, the
-registration its draw root and the receipt `{"receipts": …}`, its last round's receipts; else the refusal. -/
-def window (key ledger window session salt calls served rounds draw layout proofs k : Json) : R (List Nat) := do
-  let got ← credited key ledger window session salt calls served rounds draw
-  let ss ← strata layout
-  let (.arr rows, .arr lcalls) := (calls, get layout "calls") | layoutRefuse LAYOUT_FORM
-  unless rows.size == lcalls.size do
-    throw ("manifest", s!"the manifest's {rows.size} rows are not the layout's {lcalls.size} calls: each call of the " ++
-      "window's Program is one manifest row, in order")
-  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
-  proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
-    k) proofs
-  pure got
-
-/-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
-its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
-`missing` or `order`). -/
-def period (key ledger name roots : Json) : R Unit := do
-  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  discard <| (SampledProofs.Challenger.checked ledger k).mapError fun e =>
-    ("coin", s!"the auditor's ledger is not trusted: {e}")
-  let .str name := name | throw ("period", "the period is not named")
-  let .arr lines := ledger | throw ("period", "the period is not named")
-  let es := lines.filterMap SampledProofs.Challenger.ledgerEntry?
-  let named := fun (e : SampledProofs.Challenger.LedgerEntry) => get e.body "period" == Json.str name
-  unless es.any (fun e => e.kind == "period-open" && named e) do
-    throw ("period", s!"the auditor's ledger opens no period {name}: credit counts only a period the ledger opens " ++
-      "and closes")
-  let some close := (es.find? fun e => e.kind == "period-close" && named e).map (·.body)
-    | throw ("period", s!"period {name} has no close in the auditor's ledger, so it earns nothing: close it " ++
-        "(period-close) and present the ledger after its close")
-  let ws := match get close "windows" with
-    | .arr a => a
-    | _ => #[]
-  unless get close "complete" == Json.bool true do
-    match ws.findIdx? (fun w => get w "complete" != Json.bool true) with
-    | none => throw ("period", s!"period {name} closed with no window, so it earns nothing")
-    | some i => throw ("period", s!"period {name} closed incomplete: its window {i} (session " ++
-        s!"{(str? (get ws[i]! "session")).getD ""}) never opened or didn't end complete before the close, so the " ++
-        "period earns nothing")
-  let some rs := (match roots with
-      | .arr a => a.toList.mapM fun r => if (digest? r).isSome then str? r else none
-      | _ => none) | throw ("period", "the period's windows are not a list of window roots (SHA-512 digests)")
-  let want := ws.toList.map fun w => (str? (get w "root")).getD ""
-  let wanted : Std.HashMap String Unit := want.foldl (fun m r => m.insert r ()) {}
-  let presented : Std.HashMap String Unit := rs.foldl (fun m r => m.insert r ()) {}
-  for i in [0:max want.length rs.length] do
-    if i ≥ want.length then
-      throw ("period", s!"the windows presented run past the {want.length} that period {name}'s close lists: only " ++
-        "its close's windows count, each once")
-    let w := want[i]!
-    if i ≥ rs.length || (rs[i]! != w && !presented.contains w) then
-      throw ("missing", s!"window {i} of period {name} ({w.take 16}...) is missing: every window between the " ++
-        "period's open and its close counts, so present them all, in the close's order")
-    let r := rs[i]!
-    if r != w then
-      if !wanted.contains r then
-        throw ("period", s!"window {r.take 16}... is not one of period {name}'s windows: only the windows its close " ++
-          "lists count")
-      throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
-        "present the period's windows in the order its close lists them")
-
-/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
-def isHexBytes (s : String) : Bool :=
-  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
-
-/-- `credit.committed_k`: the K period `name`'s open committed (`K_FIELD`, a positive integer at most `MAX_K`) in the
-auditor's ledger, one `period` has trusted; else the refusal (`budget`). -/
-def committedK (ledger : Json) (name : String) : R Nat := do
-  let .arr lines := ledger | throw ("period", "the period is not named")
-  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
-    e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
-  let some k := (body.bind fun b => nat? (get b K_FIELD)).filter (fun k => 1 ≤ k && k ≤ MAX_K)
-    | throw ("budget", s!"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), so " ++
-        "its windows have no K to be drawn with: the proof service commits K in the period-open, beside its circuit " ++
-        "and cap, before any draw")
-  pure k
-
-/-- `credit.period_credit`'s credit: each window's credited calls in the close's order, the committed K, the δ the ε
-is reported at and each window's ε. -/
-structure PeriodCredit where
-  windows : List (List Nat)
-  k : Nat
-  delta : Rat
-  eps : List (Option Rat)
-
-def PeriodCredit.toJson (c : PeriodCredit) : Json :=
-  Json.mkObj [("windows", Lean.toJson c.windows), ("k", c.k), ("delta", toString c.delta),
-    ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
-
-/-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
-committed K (`committedK`), each window proves the circuit the period's open committed (`circuit`: its descriptor
-hashes to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K, a refused
-window refusing the period; each window's ε is what its draw of K established (`established`). -/
-def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
-  let some ws := (match windows with
-      | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
-      | _ => none) | throw ("period", WINDOWS_FORM)
-  let roots := Json.arr (ws.toArray.map fun w => match get w "window" with
-    | j@(.obj _) => get j "root"
-    | _ => .null)
-  period key ledger name roots
-  let nm := (str? name).getD ""
-  let bigK ← committedK ledger nm
-  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let mut out : List (List Nat) := []
-  let mut eps : List (Option Rat) := []
-  for (w, i) in ws.zipIdx do
-    let f := get w
-    let some d := (match f "descriptor" with
-        | .str s => if isHexBytes s then hex? (.str s) else none
-        | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
-      ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
-    let got ← (window key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served") (f "rounds") (f "draw")
-      (f "layout") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
-        ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
-    out := out ++ [got]
-    eps := eps ++ [established (f "layout") got bigK]
-  pure ⟨out, bigK, DELTA, eps⟩
 
 /-- An A value's segments by name, each `(level, index, root)` in row order. -/
 abbrev Segments := List (String × List (Nat × Nat × ByteArray))
@@ -516,9 +543,9 @@ def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat
 
 def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 
-/-- `credit.a_link`: none when every registered A value is the tree over the segments the round log commits, else the
-refusal. -/
-def aLink (rounds entries : Json) : R Unit := do
+/-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
+refusal. A step of `window`, which first holds the round roots to the ones the challenger received (`roundsCheck`). -/
+def Internal.aLink (rounds entries : Json) : R Unit := do
   let some xs := (match rounds with
       | .arr a => if a.isEmpty then none else some a.toList
       | _ => none) | aLinkRefuse LOG_FORM
@@ -572,5 +599,148 @@ def aLink (rounds entries : Json) : R Unit := do
       aLinkRefuse (s!"registered A value {v}'s root is not the tree over the segments the round roots commit: its " ++
         "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
         "rows each round's root committed")
+
+/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
+def isHexBytes (s : String) : Bool :=
+  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
+/-- `credit._window`: `window`'s credited calls and the layout it read from the descriptor. -/
+def windowLayout (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+    R (List Nat × Json) := do
+  let got ← Internal.credited key ledger window session salt calls served rounds draw
+  let log := match rounds with
+    | .arr xs => xs
+    | _ => #[]
+  roundsCheck key ledger window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
+  Internal.aLink rounds entries
+  let some d := (match descriptor with
+      | .str s => if isHexBytes s then hex? (.str s) else none
+      | _ => none) | layoutRefuse DESCRIPTOR_HEX
+  let layout ← layoutOf d
+  let ss ← strata layout
+  let (.arr rows, .arr lcalls) := (calls, get layout "calls") | layoutRefuse LAYOUT_FORM
+  unless rows.size == lcalls.size do
+    throw ("manifest", s!"the manifest's {rows.size} rows are not the circuit's {lcalls.size} calls: each call of " ++
+      "the window's Program is one manifest row, in order")
+  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
+  proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
+    k) proofs
+  pure (got, layout)
+
+/-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
+every step over the same evidence and the one round log `rounds`: `Internal.credited` (the credit bits fixed before the
+draw coin), `roundsCheck` (the log's roots the ones the challenger received, each round's coin opened once after its
+root), `Internal.aLink` (each A value among the registered `entries` the tree over the segments those roots commit),
+the layout of its circuit (`layoutOf` of `descriptor`, the bytes in hex of the circuit its proofs were verified
+against) with its manifest one row per call of it, and `Internal.outcome`'s rule on the draw coin `credited` read at its
+period's committed K `k`, the stream the window's root, the registration its draw root and the receipt
+`{"receipts": …}`, its last round's receipts. `periodCredit` ties `descriptor` to the circuit the window's period
+committed. -/
+def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+    R (List Nat) :=
+  (·.1) <$> windowLayout key ledger window session salt calls served rounds draw descriptor entries proofs k
+
+/-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
+its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
+`missing` or `order`). -/
+def period (key ledger name roots : Json) : R Unit := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  discard <| (SampledProofs.Challenger.checked ledger k).mapError fun e =>
+    ("coin", s!"the auditor's ledger is not trusted: {e}")
+  let .str name := name | throw ("period", "the period is not named")
+  let .arr lines := ledger | throw ("period", "the period is not named")
+  let es := lines.filterMap SampledProofs.Challenger.ledgerEntry?
+  let named := fun (e : SampledProofs.Challenger.LedgerEntry) => get e.body "period" == Json.str name
+  unless es.any (fun e => e.kind == "period-open" && named e) do
+    throw ("period", s!"the auditor's ledger opens no period {name}: credit counts only a period the ledger opens " ++
+      "and closes")
+  let some close := (es.find? fun e => e.kind == "period-close" && named e).map (·.body)
+    | throw ("period", s!"period {name} has no close in the auditor's ledger, so it earns nothing: close it " ++
+        "(period-close) and present the ledger after its close")
+  let ws := match get close "windows" with
+    | .arr a => a
+    | _ => #[]
+  unless get close "complete" == Json.bool true do
+    match ws.findIdx? (fun w => get w "complete" != Json.bool true) with
+    | none => throw ("period", s!"period {name} closed with no window, so it earns nothing")
+    | some i => throw ("period", s!"period {name} closed incomplete: its window {i} (session " ++
+        s!"{(str? (get ws[i]! "session")).getD ""}) never opened or didn't end complete before the close, so the " ++
+        "period earns nothing")
+  let some rs := (match roots with
+      | .arr a => a.toList.mapM fun r => if (digest? r).isSome then str? r else none
+      | _ => none) | throw ("period", "the period's windows are not a list of window roots (SHA-512 digests)")
+  let want := ws.toList.map fun w => (str? (get w "root")).getD ""
+  let wanted : Std.HashMap String Unit := want.foldl (fun m r => m.insert r ()) {}
+  let presented : Std.HashMap String Unit := rs.foldl (fun m r => m.insert r ()) {}
+  for i in [0:max want.length rs.length] do
+    if i ≥ want.length then
+      throw ("period", s!"the windows presented run past the {want.length} that period {name}'s close lists: only " ++
+        "its close's windows count, each once")
+    let w := want[i]!
+    if i ≥ rs.length || (rs[i]! != w && !presented.contains w) then
+      throw ("missing", s!"window {i} of period {name} ({w.take 16}...) is missing: every window between the " ++
+        "period's open and its close counts, so present them all, in the close's order")
+    let r := rs[i]!
+    if r != w then
+      if !wanted.contains r then
+        throw ("period", s!"window {r.take 16}... is not one of period {name}'s windows: only the windows its close " ++
+          "lists count")
+      throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
+        "present the period's windows in the order its close lists them")
+
+/-- `credit.committed_k`: the K period `name`'s open committed (`K_FIELD`, a positive integer at most `MAX_K`) in the
+auditor's ledger, one `period` has trusted; else the refusal (`budget`). -/
+def committedK (ledger : Json) (name : String) : R Nat := do
+  let .arr lines := ledger | throw ("period", "the period is not named")
+  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+    e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  let some k := (body.bind fun b => nat? (get b K_FIELD)).filter (fun k => 1 ≤ k && k ≤ MAX_K)
+    | throw ("budget", s!"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), so " ++
+        "its windows have no K to be drawn with: the proof service commits K in the period-open, beside its circuit " ++
+        "and cap, before any draw")
+  pure k
+
+/-- `credit.period_credit`'s credit: each window's credited calls in the close's order, the committed K, the δ the ε
+is reported at and each window's ε. -/
+structure PeriodCredit where
+  windows : List (List Nat)
+  k : Nat
+  delta : Rat
+  eps : List (Option Rat)
+
+def PeriodCredit.toJson (c : PeriodCredit) : Json :=
+  Json.mkObj [("windows", Lean.toJson c.windows), ("k", c.k), ("delta", toString c.delta),
+    ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
+
+/-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
+committed K (`committedK`), each window proves the circuit the period's open committed (`circuit`: its descriptor
+hashes to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K, a refused
+window refusing the period; each window's ε is what its draw of K established (`established`). -/
+def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
+  let some ws := (match windows with
+      | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
+      | _ => none) | throw ("period", WINDOWS_FORM)
+  let roots := Json.arr (ws.toArray.map fun w => match get w "window" with
+    | j@(.obj _) => get j "root"
+    | _ => .null)
+  period key ledger name roots
+  let nm := (str? name).getD ""
+  let bigK ← committedK ledger nm
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  let mut out : List (List Nat) := []
+  let mut eps : List (Option Rat) := []
+  for (w, i) in ws.zipIdx do
+    let f := get w
+    let some d := (match f "descriptor" with
+        | .str s => if isHexBytes s then hex? (.str s) else none
+        | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
+    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
+      ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    let (got, layout) ← (windowLayout key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served")
+      (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
+        ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
+    out := out ++ [got]
+    eps := eps ++ [established layout got bigK]
+  pure ⟨out, bigK, DELTA, eps⟩
 
 end PouwCheck.Credit

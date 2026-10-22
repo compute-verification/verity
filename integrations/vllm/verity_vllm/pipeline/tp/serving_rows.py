@@ -13,7 +13,8 @@ The verifier's own window of rank ``r`` (`window_of_record`) comes from the Comm
 root and every rank's root of its first instrumented run (`record`: ``runs.jsonl``, refused unless the TP run root combines those
 roots under the form the record's ``root_tag`` names, `tp.run_root.combine`), and the population over rank ``r``'s Programs of record
 (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of record for the rank in ``versions.json`` and the rank's) for the
-workload the record served.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
+workload the record served.  Neither side evaluates a row, so the Definitions the Build bound are not held to this tree's here: the
+one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
 SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
 record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``)."""
@@ -95,7 +96,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
         raise LookupError(f"rank {rank}: no finalized run or no binding map (binding skipped or failed)")
     if rc.run_root.hex() != tp["roots"].get(str(rank)):
         raise ValueError(f"rank {rank}: its run root {rc.run_root.hex()[:16]} is not the one the TP run root combines")
-    p = RR.load(st["replay"], rank, world)
+    p = RR.load(st["replay"], rank, world, definitions=False)
     res = SRW.after_commit(str(Path(request["dir"]) / f"rank{rank}"), partition_file=request["partition"], programs=p.progs, bmap=st["bmap"],
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
@@ -153,7 +154,8 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
         raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
-    p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world)
+    p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,
+                definitions=False)
     window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                                    p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp})
     held = {"tp": {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]},

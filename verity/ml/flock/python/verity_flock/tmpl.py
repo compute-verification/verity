@@ -235,6 +235,141 @@ def unroll(t: Tmpl) -> Flat:
     return _flat([FLAT, t.name, str(n), str(k), *t.groups], [(lens, na, refs)], t.leaves)
 
 
+# --- the row order, checked on the description (``Tmpl.ordered``) -------------------------------------------------------
+
+WORD = 128
+
+
+def _ports(t: Tmpl) -> tuple[int, list[tuple[int, int]]]:
+    """The input rows' end and each input group's port bits ``[lo, hi)``, from the header's tokens."""
+    g, out, end = t.groups, [], 0
+    at = 1
+    for _ in range(int(g[0])):
+        col, words, nb = int(g[at]), int(g[at + 1]), int(g[at + 2])
+        out.append((col * WORD, col * WORD + sum(map(int, g[at + 3:at + 3 + nb]))))
+        end = (col + words) * WORD
+        at += 3 + nb
+    return end, out
+
+
+def _seg_ordered(cols: int, base: int, stride: int, count: int, s: tuple[int, int, int]) -> bool:
+    ln, at, st = s
+    hi = at + max(count - 1, 0) * st + ln
+    return ln == 0 or cols <= at or (hi <= cols and at + ln <= base and hi <= base + max(count - 1, 0) * stride)
+
+
+def _def_ordered(F: list[bool], d: Def) -> bool:
+    return (all(d.cols <= v or v < col for col, a, b in d.rows for v in a + b)
+            and all((F[c.e] if c.e < len(F) else False)
+                    and all(_seg_ordered(d.cols, c.base, c.stride, c.count, s) for s in c.segs) for c in d.calls))
+
+
+def _fits(t: Tmpl, d: Def) -> bool:
+    return (all(col < d.cols for col, _, _ in d.rows)
+            and all(c.base + max(c.count - 1, 0) * c.stride + t.defs[c.e].cols <= d.cols for c in d.calls))
+
+
+def ordered(t: Tmpl) -> dict:
+    """``Tmpl.ordered``'s verdict and, for a refusal, what it refused: Definitions that don't fit their columns, the
+    root's rows reading a later column or input padding, its calls straddling the input rows' end or of an unordered
+    Definition, and its segments (``late``: an own column at or past a copy's first; ``padding``: an input column that
+    is not a port bit of one group)."""
+    F: list[bool] = []
+    for d in t.defs:
+        F.append(_def_ordered(F, d))
+    ic, ports = _ports(t)
+    span = lambda lo, hi: any(p0 <= lo and hi <= p1 for p0, p1 in ports)  # noqa: E731
+    r = t.defs[t.root]
+    cols = r.cols
+    out = {"unfit": sum(not _fits(t, d) for d in t.defs), "defs_unordered": F.count(False), "root_rows": 0,
+           "root_calls_straddle": 0, "root_callee_unordered": 0, "late": 0, "padding": 0}
+    for col, a, b in r.rows:
+        if col >= ic and not all(cols <= v + 1 or (v < col and (ic <= v or span(v, v + 1))) for v in a + b):
+            out["root_rows"] += 1
+    for c in r.calls:
+        if c.base + max(c.count - 1, 0) * c.stride + t.defs[c.e].cols <= ic:
+            continue
+        if c.base < ic:
+            out["root_calls_straddle"] += 1
+            continue
+        if not F[c.e]:
+            out["root_callee_unordered"] += 1
+        for s in c.segs:
+            ln, at, st = s
+            hi = at + max(c.count - 1, 0) * st + ln
+            if ln == 1 and at + 1 == cols and hi <= cols:
+                continue
+            if not _seg_ordered(cols, c.base, c.stride, c.count, s):
+                out["late"] += 1
+            elif not (ic <= at or span(at, hi)):
+                out["padding"] += 1
+    out["ok"] = (not out["unfit"] and not any(out[k] for k in ("root_rows", "root_calls_straddle",
+                                                                "root_callee_unordered", "late", "padding"))
+                 and all(_def_ordered(F, d) for d, f in zip(t.defs, F) if f))
+    return out
+
+
+def _cut(segs, cuts: list[int]) -> tuple[tuple[int, int, int], ...]:
+    """Segments of a single copy, or stepping by 0, split at ``cuts``, so none straddles one."""
+    out = []
+    for ln, at, st in segs:
+        x = at
+        for c in sorted(set(cuts)):
+            if x < c < at + ln:
+                out.append((c - x, x, st))
+                x = c
+        if at + ln > x or ln == 0:
+            out.append((at + ln - x, x, st))
+    return tuple(out)
+
+
+def legalize(t: Tmpl) -> tuple[Tmpl, dict]:
+    """``t`` with every segment that straddles what ``ordered`` tells apart split: a Definition's own columns and its
+    inputs, and in the root the input rows' end, an input group's port bits and the constant. A segment of a run of
+    copies that steps can't be split for every copy at once, so its run becomes single copies first. A root run
+    straddling the input rows' end becomes the run below it, the copy across it and the run above. It unrolls to the same
+    rows."""
+    ic, ports = _ports(t)
+    st = {"split_segs": 0, "split_runs": 0, "single_calls": 0}
+    defs = list(t.defs)
+
+    def sub(c: Call, a: int, b: int) -> Call:
+        return Call(c.e, b - a, c.base + a * c.stride, c.stride,
+                    tuple((ln, at + a * step, step if b - a > 1 else 0) for ln, at, step in c.segs))
+
+    for d, D in enumerate(defs):
+        root = d == t.root
+        cuts = [D.cols] + ([ic, D.cols - 1] + [x for p in ports for x in p] if root else [])
+
+        def straddles(c: Call, s) -> bool:
+            ln, at, step = s
+            hi = at + max(c.count - 1, 0) * step + ln
+            return ln > 0 and any(at < x < hi for x in cuts)
+
+        def pieces(c: Call) -> list[Call]:
+            w = defs[c.e].cols
+            if c.count > 1 and root and c.base < ic < c.base + (c.count - 1) * c.stride + w:
+                j1 = (ic - c.base - w) // c.stride + 1 if c.base + w <= ic else 0
+                j2 = -(-(ic - c.base) // c.stride)
+                st["split_runs"] += 1
+                st["single_calls"] += j2 - j1
+                return ((pieces(sub(c, 0, j1)) if j1 else []) + [sub(c, j, j + 1) for j in range(j1, j2)]
+                        + (pieces(sub(c, j2, c.count)) if j2 < c.count else []))
+            if c.count > 1 and any(straddles(c, s) and s[2] for s in c.segs):
+                st["single_calls"] += c.count
+                return [sub(c, j, j + 1) for j in range(c.count)]
+            return [c]
+
+        calls = []
+        for c in D.calls:
+            for p in pieces(c):
+                segs = _cut(p.segs, cuts) if any(straddles(p, s) for s in p.segs) else p.segs
+                st["split_segs"] += len(segs) - len(p.segs)
+                calls.append(Call(p.e, p.count, p.base, p.stride, segs))
+        defs[d] = Def(D.cols, D.ins, D.rows, tuple(calls))
+    return Tmpl(t.name, t.root, t.groups, defs, t.leaves), st
+
+
 # --- the emitter ------------------------------------------------------------------------------------------------------
 
 _ROW = 1 << 62  # a shape id at least this is a call's, `_Emitter.cshape[id - _ROW]`; below, a row's `na << 31 | nb`
@@ -261,6 +396,7 @@ class _Emitter:
         self.ids: dict[Def, int] = {}
         self.cshape: list[tuple] = []  # (callee, count, stride, segment lengths, segment steps)
         self.cids: dict[tuple, int] = {}
+        self.unaligned = 0  # candidate runs cut short or dropped by `_aligned`
 
     def _def(self, d: Def) -> int:
         e = self.ids.get(d)
@@ -288,7 +424,7 @@ class _Emitter:
         n, k = len(lv.start), self.k
         lens = np.diff(lv.ptr)
         mx = int(lens.max()) if n else 0
-        pw = np.cumprod(np.full(mx + 1, _B, np.uint64))
+        pw = np.cumprod(np.full(max(mx, self.gram) + 1, _B, np.uint64))
         sig = np.empty(n, np.uint64)
         for a in range(0, n, _CHUNK):
             b = min(n, a + _CHUNK)
@@ -343,6 +479,36 @@ class _Emitter:
                 break
             grow *= 2
         return m, D
+
+    def _aligned(self, lv: _Level, i0: int, P: int, m: int, D: np.ndarray) -> int:
+        """How many of the run's ``m`` copies keep each reference of a copy, as a span of columns, wholly the copy's own
+        (stepping with it), wholly before the copy or wholly after it, so that ``Tmpl.ordered`` reads the run's
+        bindings as ordered; 0 if copy 0 doesn't."""
+        o0 = int(lv.start[i0])
+        L = int(lv.start[i0 + P]) - o0
+        p0, p1 = int(lv.ptr[i0]), int(lv.ptr[i0 + P])
+        r = lv.refs[p0:p1].astype(np.int64)
+        s = D.astype(np.int64)
+        n = np.ones(p1 - p0, np.int64)
+        const = np.zeros(p1 - p0, bool)
+        for u in range(i0, i0 + P):
+            a, b = int(lv.ptr[u]) - p0, int(lv.ptr[u + 1]) - p0
+            sid = int(lv.shape[u])
+            if sid >= _ROW:
+                n[a:b] = self._spans(sid, b - a)
+            else:
+                const[a:b] = r[a:b] == self.k
+        own = (o0 <= r) & (r + n <= o0 + L) & (s == L)
+        before, after = r + n <= o0, r >= o0 + L
+        if (~(const | own | before | after)).any():
+            return 0
+        up = before & ~own & ~const & (s > L)
+        if up.any():
+            m = min(m, int(((o0 - r[up] - n[up]) // (s[up] - L)).min()) + 1)
+        down = after & ~const & (s < L)
+        if down.any():
+            m = min(m, int(((r[down] - o0 - L) // (L - s[down])).min()) + 1)
+        return m
 
     def _make(self, lv: _Level, i0: int, P: int, D: np.ndarray) -> tuple[int, list[tuple[int, int, int]]]:
         """Copy 0 of a run as a Definition, and the run's input blocks ``(lo, hi, step)`` in global columns."""
@@ -427,6 +593,10 @@ class _Emitter:
                     break
                 if shape[i] == shape[j]:
                     m, D = self._run(lv, i, j - i, limit)
+                    if m >= 2:
+                        m2 = self._aligned(lv, i, j - i, m, D)
+                        self.unaligned += m2 < m
+                        m = m2
                     if m >= 2 and m * (j - i) > best[0] * best[1]:
                         best = (m, j - i, D)
                 j = nxt[j]
@@ -500,18 +670,18 @@ class _Emitter:
                 e, count, stride, lens, ss = self.cshape[sid - _ROW]
                 calls.append(Call(e, count, s0, stride, tuple(zip(lens, refs, ss))))
         root = self._def(Def(n, 0, tuple(rows), tuple(calls)))
-        t = Tmpl(f.name, root, f.head[4:], self.defs, f.leaves)
+        t, legal = legalize(Tmpl(f.name, root, f.head[4:], self.defs, f.leaves))
         uses: dict[int, int] = {}
-        for d in self.defs:
+        for d in t.defs:
             for c in d.calls:
                 uses[c.e] = uses.get(c.e, 0) + 1
-        stats = {"flat_rows": n, "flat_refs": int(len(f.refs)), "levels": levels, "defs": len(self.defs),
-                 "def_rows": sum(len(d.rows) for d in self.defs), "def_refs": sum(len(a) + len(b) for d in self.defs
+        stats = {"flat_rows": n, "flat_refs": int(len(f.refs)), "levels": levels, "defs": len(t.defs),
+                 "def_rows": sum(len(d.rows) for d in t.defs), "def_refs": sum(len(a) + len(b) for d in t.defs
                                                                                  for _, a, b in d.rows),
-                 "def_calls": sum(len(d.calls) for d in self.defs),
-                 "segs": sum(len(c.segs) for d in self.defs for c in d.calls), "root_rows": len(rows),
+                 "def_calls": sum(len(d.calls) for d in t.defs),
+                 "segs": sum(len(c.segs) for d in t.defs for c in d.calls), "root_rows": len(rows),
                  "root_refs": sum(len(a) + len(b) for _, a, b in rows), "root_calls": len(calls),
-                 "shared_defs": sum(1 for v in uses.values() if v > 1)}
+                 "shared_defs": sum(1 for v in uses.values() if v > 1), "unaligned_runs": self.unaligned, "legalized": legal, "order": ordered(t)}
         return t, stats
 
 
@@ -546,7 +716,7 @@ def main(argv: list[str]) -> int:
                  and np.array_equal(got.na, flat.na) and np.array_equal(got.refs, flat.refs))
         stats["check"] = {"equal": bool(equal), "seconds": round(time.time() - t2, 1)}
     print("TMPL " + json.dumps(stats), flush=True)
-    return 0 if stats.get("check", {}).get("equal", True) else 1
+    return 0 if stats.get("check", {}).get("equal", True) and stats["order"]["ok"] else 1
 
 
 if __name__ == "__main__":
