@@ -86,9 +86,11 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   `weights_root` of their roots is the weights' root the window's open root binds (`salt.window_open_root`, with its
   round-0 request table's root, round 0's ``requests`` in its round log, and the session the auditor's ledger opened for
   it), which its salt coin opens after. That root is the one its period's open signed (`WEIGHTS_FIELD`, the gate's
-  ``--weights-root``) before any window, so every window of a period opens the same B rows: a B row the prover changes
+  ``--model``) before any window, so every window of a period opens the same B rows: a B row the prover changes
   after the salt, or between two windows of a period, its codes or its s_w, is refused, and so is a period whose open
-  signs no weights' root.
+  signs no weights' root. The open names the model the root is of (`MODEL_FIELD`, the auditor's registration of its
+  int8 checkpoint), and its role and checkpoint are one `PINNED_MODELS` pins (``lean/check/models.json``), else the
+  period counts nothing.
 
 `calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
@@ -153,8 +155,18 @@ MAX_K = 1 << 24
 #: the δ the period's ε is reported at
 DELTA = Fraction(1, 1 << 40)
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
-#: ``--weights-root``), signed before any window's salt
+#: ``--model``), signed before any window's salt
 WEIGHTS_FIELD = "weights_root"
+#: the period-open's field naming the model whose weights its root is of (the gate's ``--model``, from the auditor's
+#: model registry): ``{name, checkpoint_sha512}``, its int8 checkpoint's role and that checkpoint's SHA-512
+MODEL_FIELD = "model"
+MODEL_KEYS = ("checkpoint_sha512", "name")
+#: each int8 checkpoint role credit counts the weights of, with its checkpoint's SHA-512 (``checkpoint_sha512``, of the
+#: canonical JSON of each of its files' SHA-512); the Lean embeds the same file
+MODELS = Path(__file__).parent / "lean/check/models.json"
+PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text())["models"].items()}
+MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
+             "pins (models.json)")
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
 LAYOUT_KEYS = ("calls", "linears", "m", "tile")
@@ -981,8 +993,22 @@ def _prefix(descriptor: bytes) -> str:
 
 
 def no_weights(name: str) -> str:
-    return (f"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --weights-root): "
+    return (f"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --model): "
             "the period registers each K's B rows before its first window's salt and opens with their root")
+
+
+def no_model(name: str) -> str:
+    return (f"period {name}'s open signs a weights' root but no model ({MODEL_FIELD}, {{name, checkpoint_sha512}}), so "
+            f"nothing says which checkpoint it is the root of: {MODEL_FIX}")
+
+
+def unpinned_model(name: str, model: str) -> str:
+    return f"period {name}'s open names model {model}, which is no checkpoint role credit pins: {MODEL_FIX}"
+
+
+def other_checkpoint(name: str, model: str) -> str:
+    return (f"period {name}'s open names model {model} with another checkpoint than the one credit pins for it: "
+            f"{MODEL_FIX}")
 
 
 def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: dict, entries: Any, program: str,
@@ -1133,11 +1159,21 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
 def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, str] | None]:
     """The weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest: `weights_root` of each K's
     registered ``b/<K>``) in the auditor's ledger `ledger`, one the challenger's checks have trusted, and None; or None
-    and the refusal (``weights``)."""
+    and the refusal (``weights``). The open names the model that root is of (`MODEL_FIELD`), a role `PINNED_MODELS`
+    pins with the same checkpoint, so an open with a bare root, as the gate signed before its model registry, counts
+    nothing."""
     body = next(e["body"] for e in map(json.loads, ledger)
                 if e["kind"] == "period-open" and e["body"]["period"] == name)
-    w = body.get(WEIGHTS_FIELD)
-    return (w, None) if _digest(w) is not None else (None, ("weights", no_weights(name)))
+    w, m = body.get(WEIGHTS_FIELD), body.get(MODEL_FIELD)
+    if _digest(w) is None:
+        return None, ("weights", no_weights(name))
+    if not (isinstance(m, dict) and tuple(sorted(m)) == MODEL_KEYS and type(m["name"]) is str):
+        return None, ("weights", no_model(name))
+    if m["name"] not in PINNED_MODELS:
+        return None, ("weights", unpinned_model(name, m["name"]))
+    if m["checkpoint_sha512"] != PINNED_MODELS[m["name"]]:
+        return None, ("weights", other_checkpoint(name, m["name"]))
+    return w, None
 
 
 def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
@@ -1495,7 +1531,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
 
 
 __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
-           "MAX_K", "PARTITION_FORMAT", "PERIOD_KEYS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
+           "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
            "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WEIGHTS_TAG", "WINDOW_FN", "WINDOW_KEYS",
            "b_words", "call_work", "calls_root", "committed_files", "committed_k", "committed_weights", "cover",
            "domain_of", "draw_root", "drawn", "established", "a_value", "is_a", "is_held", "law", "layout_of",

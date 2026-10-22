@@ -96,6 +96,7 @@ WINDOW_EXPECT = {
     "entry-twice": ("weights", "'s weights twice ("),
     "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
     "weights-period": ("weights", OTHER_PERIOD_WEIGHTS), "weights-unsigned": ("weights", UNSIGNED),
+    "weights-model": ("weights", Cr.MODEL_FIX),
     "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
     "weights-requests": ("weights", Cr.OTHER_WEIGHTS), "weights-no-requests": ("weights", Cr.REQUESTS_FORM),
     "weights-leaves": ("weights", "'s entry is not the registration of K = "),
@@ -117,6 +118,10 @@ PERIOD_EXPECT = {
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
     "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
+    "no-model": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
+    "model-form": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
+    "other-checkpoint": ("weights", "with another checkpoint than the one credit pins for it: " + Cr.MODEL_FIX),
+    "other-model": ("weights", "which is no checkpoint role credit pins: " + Cr.MODEL_FIX),
     "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
     "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
 }
@@ -154,6 +159,20 @@ def test_every_mutation_is_aimed():
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
     assert set(A_LINK_EXPECT) == set(cases.A_LINK_NAMES)
     assert set(WEIGHTS_EXPECT) == set(cases.WEIGHTS_NAMES) - {"layout-form"}
+
+
+def test_each_pinned_model_is_its_files_digest():
+    """`models.json` pins each role's checkpoint as the auditor's registry writes it (`checkpoint_sha512`, the SHA-512 of
+    the canonical JSON of each file's SHA-512), so an open the gate signed from a registration of a pinned checkpoint
+    is the pin credit counts."""
+    doc = json.loads(Cr.MODELS.read_text())
+    assert sorted(doc) == ["models", "schema"] and doc["models"]
+    for role, e in doc["models"].items():
+        assert sorted(e) == ["checkpoint_sha512", "files", "recipe", "repo", "revision"], role
+        assert e["files"] and all(Cr._digest(h) is not None for h in e["files"].values()), role
+        assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest(), role
+    assert Cr.PINNED_MODELS == {r: e["checkpoint_sha512"] for r, e in doc["models"].items()}
+    assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
 @pytest.mark.parametrize("seed", SEEDS)
