@@ -1,17 +1,20 @@
 """served.py: the units a served H1 window's own draw coin selects (vllm's `pouw_h1` window, its z table one leaf a
 unit of its ``tile``), by PoUW's work law over h1window's templates.
 
-    python served.py --calls CALLS.json --session DIR --ledger windows.jsonl [--ledger ...] --pin SHA512 [--k K]
-                     [--out DRAWN.json]
+    python served.py --calls CALLS.json --session DIR --ledger windows.jsonl [--ledger ...] --pin SHA512 --pins LOG
+                     --main FILE [--k K] [--out DRAWN.json]
 
 ``--k`` is the work law's budget K (1: each template's floor, one unit a K).
 
 CALLS.json is the window's ``pouw-h1-calls.json``; DIR the challenger session's directory as the auditor's gate fetched it
 (``fetch/<session>/out``), never the prover's bundle; each ``--ledger`` a published head of the auditor's signed ledger;
-``--pin`` the SHA-512 of the challenger's public key, the verifier's own configuration.
+``--pin`` the SHA-512 of the challenger's public key, the verifier's own configuration; ``--pins`` the challenger host's
+pins log as infra published it, a line a pin; ``--main`` the verifier's own ``git rev-list --first-parent origin/main``.
 
 1. The window's draw coin is the verifier's challenger's, or nothing is drawn: the session the signed ledger opens and
-   ends for the window's root, under the pinned key (`remote.trusted_session`), and in it the window's one draw coin,
+   ends for the window's root, under the pinned key (`remote.trusted_session`), run from a commit the pins log records
+   on main's first-parent line (`challenger.pinned_session`: a session the log doesn't record is refused, though this
+   draw credits nothing), and in it the window's one draw coin,
    opened after its `draw_root` over its manifest, last receipts and every round's root and coin
    (`pouw_h1_challenger.draw_reason`). The window's salt and round coins are its served values' checks (vllm's verify),
    not the draw's.
@@ -43,7 +46,7 @@ from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan as PL
 from verity.core.protocols.pouw.circuit.partition import Unit
 from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, audited_session, ledger_head
+from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, ledger_head, pinned_session
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 
@@ -99,17 +102,20 @@ def main(argv=None) -> int:
     ap.add_argument("--session", required=True)
     ap.add_argument("--ledger", action="append", required=True)
     ap.add_argument("--pin", required=True)
+    ap.add_argument("--pins", required=True)
+    ap.add_argument("--main", required=True)
     ap.add_argument("--k", type=int, default=1)
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     doc = json.loads(Path(a.calls).read_text())
     commits, calls = doc["commitment"], doc["calls"]
     root, tile = commits["session"]["root"], tuple(commits["tile"])
+    pins = [x for x in Path(a.pins).read_text().split("\n") if x]
     try:
         key = PHC.pinned_key(Path(a.session) / "key.json", a.pin)
         trusted, received = remote.trusted_session(a.session, a.ledger, {"root": root}, key, PHC.lms_verify)
         lines = ledger_head([remote.ledger_lines(p) for p in a.ledger], key, PHC.lms_verify)
-        sid = audited_session(lines, {"root": root}, key, PHC.lms_verify).session
+        sid = pinned_session(lines, {"root": root}, key, pins, remote.main_lines(a.main), PHC.lms_verify).session
     except CoinError as e:
         raise SystemExit(f"REFUSED: the challenger's session is not trusted: {e}") from e
     if (why := PHC.draw_reason(commits, trusted, received.get(Wd.DRAW, ()))) is not None:
