@@ -139,6 +139,9 @@ noncomputable def termA (pt : FoldPt) (π : Array ℕ) (s x v : ℕ) : GF128 :=
 noncomputable def termB (pt : FoldPt) (π : Array ℕ) (s x v : ℕ) : GF128 :=
   if π.getD v 0 % 64 = s then of (pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0
 
+theorem replicate_getD (n c : ℕ) : (Array.replicate n (#[] : Array ℕ)).getD c #[] = #[] := by
+  by_cases hc : c < n <;> simp [hc]
+
 /-- **`foldRef` over the call tree**: entry `s < 64` is the root copy's `placeSum` plus the constant's row
 `[const] · [const]`. -/
 theorem foldRef_tree {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128}
@@ -155,8 +158,7 @@ theorem foldRef_tree {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : 
   unfold Tmpl.rows at hR
   obtain ⟨a, ha, hw⟩ := except_bind_ok hR
   have h0 : AccOk (Acc.empty (t.defs.getD t.root default).cols) := by
-    refine ⟨by simp [Acc.empty], by simp [Acc.empty], fun c _ => ?_⟩
-    by_cases hc : c < (t.defs.getD t.root default).cols <;> simp [Acc.empty, hc]
+    exact ⟨by simp [Acc.empty], by simp [Acc.empty], fun c _ => ⟨replicate_getD _ c, replicate_getD _ c⟩⟩
   obtain ⟨hok1, hs1⟩ := place_sum (termA { alpha, lw, rho, r, qc := 0 } (posMap t lays) s)
     (termB { alpha, lw, rho, r, qc := 0 } (posMap t lays) s) _ _ _ _ _ _ _ _ ha h0
   obtain ⟨-, hs2⟩ := write_sum (termA { alpha, lw, rho, r, qc := 0 } (posMap t lays) s)
