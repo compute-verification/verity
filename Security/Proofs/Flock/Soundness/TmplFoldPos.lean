@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.TmplFoldClassOk
+import Proofs.Flock.Soundness.TmplPosMap
 
 /-!
 # The template fold is its reference (PRF-133, part 3, stage 2)
@@ -6,7 +7,7 @@ import Proofs.Flock.Soundness.TmplFoldClassOk
 `fold_refVal` has the unit's fold as the root copy's `refVal`, which reads every column at `A + B · posIn`; `foldRef_tree`
 has the reference as the call tree's `placeSum`, which reads every column at `π = posMap`. They agree wherever each copy
 `(d, o)` of the unrolled unit, and every copy below it, has its own column `y` at `π[o + y] = A + B · posIn y`
-(`TreeAt`).
+(`TreeAt`), which `posMap_tree` proves whenever every Definition's layout is in order (`DefPos`).
 
 - `refVal_place`: a copy's `refVal`, its inputs read through `π`, is its `placeSum`.
 - `fold_eq_foldRef`: the fold and its reference agree entry by entry.
@@ -15,19 +16,6 @@ has the reference as the call tree's `placeSum`, which reads every column at `π
 open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
-
-/-- Copy `(d, o)` of the unrolled unit sits at `(A, B)` under `π`: its own column `y` at `A + B · posIn y`, and every copy
-of its calls at its place. -/
-def TreeAt (t : Tmpl) (lays : Array Lay) (π : Array ℕ) : ℕ → ℕ → ℕ → ℕ → ℕ → Prop
-  | 0, _, _, _, _ => True
-  | fuel + 1, d, o, A, B =>
-    (∀ y < (t.defs.getD d default).cols,
-      π.getD (o + y) 0 = A + B * Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) ∧
-    ∀ i < (t.defs.getD d default).calls.size, ∀ j < ((t.defs.getD d default).calls.getD i default).count,
-      TreeAt t lays π fuel ((t.defs.getD d default).calls.getD i default).def_
-        (o + ((t.defs.getD d default).calls.getD i default).base + j * ((t.defs.getD d default).calls.getD i default).stride)
-        (A + B * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs))
-        (B * ((lays.getD d default).places.getD i default).ms)
 
 theorem getD_map_at (l : List ℕ) (f : ℕ → ℕ) (i k d : ℕ) (hd : f k = d) : (l.map f).getD i d = f (l.getD i k) := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
@@ -112,15 +100,16 @@ theorem refVal_place (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (π : Array ℕ
       rw [hb]
       exact refVal_place t lays pt π s hk hfit fuel _ _ _ _ _ (hcalls i hi j (Finset.mem_range.mp hj))
 
-/-- **The template fold is its reference**: entry by entry, while every copy sits at its place under `posMap`
-(`TreeAt`), the lane bits fit the point, and the root reads no inputs and has a constant. -/
+/-- **The template fold is its reference**: entry by entry, while every Definition's layout is in order (`DefPos`), the
+lane bits fit the point, and the root reads no inputs and has a constant. -/
 theorem fold_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128} {w : ℕ}
     (hP : fold t lays alpha lw rho r = .ok (P, w)) (hP' : foldRef t lays alpha lw rho r = .ok P')
     (hlay : LayOk t lays) (hins : (t.defs.getD t.root default).ins = 0) (hcols : 0 < (t.defs.getD t.root default).cols)
     (hfit : ∀ d, ∀ r ∈ (t.defs.getD d default).rows.toList, r.1 < (t.defs.getD d default).cols)
     (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)
-    (htree : TreeAt t lays (posMap t lays) (t.defs.size + 1) t.root 0 0 1) {s : ℕ} (hs : s < 64) :
+    (hpos : ∀ d < t.defs.size, DefPos t lays d) (hroot : t.root < t.defs.size) {s : ℕ} (hs : s < 64) :
     of P[s]! = of P'[s]! := by
+  have htree := posMap_tree t lays hpos hroot
   rw [fold_refVal hP hlay hins hf1 hf2 hs, foldRef_tree hP' hs]
   have hk : (posMap t lays).getD t.constPos 0 = posOf t lays ((t.defs.getD t.root default).cols - 1) := by
     have h1 := htree
