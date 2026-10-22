@@ -26,7 +26,7 @@ Python reference held to it.
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `rounds`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
-| `PouwCheck.Credit` | `credit.py`'s entries `window` and `period_credit`, and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink` and `registration`; `drawn`, `layoutOf`, `period`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
+| `PouwCheck.Credit` | `credit.py`'s entries `window` and `period_credit`, and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its draw coin, its round log the challenger's, its A trees tied to its round roots, its drawn units the draw coin's over its committed circuit's layout, no partial credit over them, its entries and its drawn units' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, and a period counted only closed and complete (RT4-INT-32, -34 and -42) |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
@@ -134,8 +134,9 @@ aims at. Its `window` and `period` go against `credit.window` and `credit.period
 `tests/pouw_credit_cases.py` (a credit bit flipped after the draw coin, units the prover chose, a drawn unit failed or
 missing, a period unclosed or a window of it missing or out of order, an A tree the round roots didn't commit, a
 descriptor whose record names another layout than its nodes, a round log the challenger never received, entries or a
-drawn unit's proof of another registration than the window's, an entry whose root is not its sessions', and one
-mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
+drawn unit's proof of another registration than the window's, an entry whose root is not its sessions', a window of a
+period whose B rows, one row's s_w or every code, are not the ones the period's open signed, a period whose open signs
+no weights' root, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 ~~~text

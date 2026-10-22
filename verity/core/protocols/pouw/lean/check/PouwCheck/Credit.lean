@@ -39,7 +39,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
   its descriptor, then `Internal.outcome`'s rule under the served window's arguments (the stream its root, the
-  registration its draw root, the receipt `{"receipts": …}`) and `Internal.registration`.
+  registration its draw root, the receipt `{"receipts": …}`), `Internal.registration` and `periodWeights`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
   the period's committed circuit (`creditedSession`) and credited.
@@ -59,7 +59,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 * `Internal.weights` is `credit._weights`: each K's `<PREFIX>b/<K>` registered once, all of K's B rows under the
   registered domain of its name and the window's circuit, binding no window, and `weightsRoot` of their
   roots, the window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows,
-  codes and s_w, were fixed before its salt. `window` doesn't compose it yet.
+  codes and s_w, were fixed before its salt. `window` composes it last (`periodWeights`), and holds their root to the
+  one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -94,6 +95,7 @@ def CHANGED : String :=
   "changed after the draw coin, or the draw opened after another root. Commit every call's credit bit in its " ++
   "manifest row before the draw root, and never change it after the draw coin"
 def K_FIELD : String := "draw_k"
+def WEIGHTS_FIELD : String := "weights_root"
 def MAX_K : Nat := 2 ^ 24
 def DELTA : Rat := mkRat 1 (2 ^ 40)
 def K_FORM : String :=
@@ -857,6 +859,46 @@ def Internal.weights (window layout entries requests session program prefix_ : J
 def isHexBytes (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
+def noWeights (name : String) : String :=
+  s!"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --weights-root): " ++
+  "the period registers each K's B rows before its first window's salt and opens with their root"
+
+/-- `credit.committed_weights`: the weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest) in
+the auditor's ledger, one the challenger's checks have trusted; else the refusal (`weights`). -/
+def committedWeights (ledger : Json) (name : String) : R String := do
+  let .arr lines := ledger | throw ("weights", noWeights name)
+  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+    e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  let some w := body.bind fun b => if (digest? (get b WEIGHTS_FIELD)).isSome then str? (get b WEIGHTS_FIELD) else none
+    | throw ("weights", noWeights name)
+  pure w
+
+/-- `credit._prefix`: the `PREFIX` of the program function's record of a descriptor `layoutOf` accepted. -/
+def prefixOf (descriptor : ByteArray) : Json :=
+  let fn := (((String.fromUTF8? descriptor).bind loads?).bind fun d => str? (get d "program_fn")).getD ""
+  (((Flock.Program.recordPairs fn).toList.lookup "PREFIX").bind loads?).getD .null
+
+/-- `credit._period_weights`: none when the window's registered weights (`Internal.weights`, over round 0's `requests`
+in its round log and the session the auditor's ledger opened for it) fold to the weights' root its period's open signed
+(`committedWeights`); else the refusal (`weights`, `layout` or `coin`). -/
+def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) : R Unit := do
+  let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+  let a ← (SampledProofs.Challenger.auditedSession ledger window k).mapError fun e =>
+    ("coin", s!"the challenger's session is not trusted: {e}")
+  let some name := a.period
+    | weightsRefuse ("the window is in no period of the auditor's ledger, so no period-open signed the weights' " ++
+        s!"root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose open signs it")
+  let signed ← committedWeights ledger name
+  let requests := match rounds with
+    | .arr xs => (xs[0]?.map (get · "requests")).getD .null
+    | _ => .null
+  let w ← Internal.weights window layout entries requests (.str a.session) (.str program) prefix_
+  let got := Flock.hexOf w
+  unless got == signed do
+    weightsRefuse (s!"the window's registered weights' root {got.take 16}... is not {signed.take 16}..., the one " ++
+      s!"period {name}'s open signed: a B row's codes or s_w differ from the ones the period registered before its " ++
+      "first window's salt. Open every window of a period on its registered B rows")
+
 /-- `credit._window`: `window`'s credited calls and the layout it read from the descriptor. -/
 def windowLayout (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
     R (List Nat × Json) := do
@@ -880,8 +922,9 @@ def windowLayout (key ledger window session salt calls served rounds draw descri
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
-  Internal.registration ((str? (get window "root")).getD "") (Flock.hexOf (Flock.Sha512.hash d)) entries proofs ss
-    layout
+  let program := Flock.hexOf (Flock.Sha512.hash d)
+  Internal.registration ((str? (get window "root")).getD "") program entries proofs ss layout
+  periodWeights key ledger window rounds layout entries program (prefixOf d)
   pure (got, layout)
 
 /-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
@@ -894,7 +937,9 @@ period's committed K `k`, the stream the window's root, the registration its dra
 `{"receipts": …}`, its last round's receipts, each of `proofs` the verifier of record's verdict for a drawn unit's
 session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's own registration's, under its open root
 and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
-values at their registered roots, its K's A value among them). `periodCredit` ties `descriptor` to the circuit the
+values at their registered roots, its K's A value among them), then `periodWeights` (`Internal.weights`, its period's:
+the window's `<PREFIX>b/<K>` fold to the weights' root the open of the period holding it signed, `committedWeights`, and
+with round 0's `requests` and its session to its open root). `periodCredit` ties `descriptor` to the circuit the
 window's period committed. -/
 def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
     R (List Nat) :=
@@ -973,7 +1018,8 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
     ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
 
 /-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
-committed K (`committedK`), each window proves the circuit the period's open committed (`circuit`: its descriptor
+committed K (`committedK`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
+each window proves the circuit the period's open committed (`circuit`: its descriptor
 hashes to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K, a refused
 window refusing the period; each window's ε is what its draw of K established (`established`). -/
 def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
@@ -986,6 +1032,7 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
   period key ledger name roots
   let nm := (str? name).getD ""
   let bigK ← committedK ledger nm
+  discard <| committedWeights ledger nm
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let mut out : List (List Nat) := []
   let mut eps : List (Option Rat) := []

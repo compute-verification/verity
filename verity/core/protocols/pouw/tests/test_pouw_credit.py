@@ -6,6 +6,7 @@ registers are the ones its open root binds, every code and s_w of its B rows. Th
 the same cases by `lean/check/tests/test_difftest.py`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import math
@@ -24,6 +25,7 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits import codec
@@ -56,6 +58,8 @@ FEWER = "units are fewer than K = "
 NO_K = "commits no draw K (draw_k"
 OTHER_REGISTRATION = "'s domain is not the one the window's registration gives it"
 OTHER_ROOT = "against another root than the one the window registered for"
+OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
+UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -90,6 +94,10 @@ WINDOW_EXPECT = {
     "proof-unregistered": ("registration", "which the window registers not"),
     "entry-twice": ("registration", "which the window registers twice"),
     "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
+    "weights-period": ("weights", OTHER_PERIOD_WEIGHTS), "weights-unsigned": ("weights", UNSIGNED),
+    "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
+    "weights-requests": ("weights", Cr.OTHER_WEIGHTS), "weights-no-requests": ("weights", Cr.REQUESTS_FORM),
+    "weights-leaves": ("weights", "'s entry is not the registration of K = "),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -107,6 +115,9 @@ PERIOD_EXPECT = {
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
+    "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
+    "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -684,6 +695,34 @@ def _b_rows(rng: random.Random, n: int, k: int) -> list[tuple[list[int], float]]
 def _b_row(codes: list[int], sw: float) -> list[int]:
     """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`)."""
     return G.bytes_leaves(bytes(c & 0xFF for c in codes) + struct.pack("<f", sw), 16)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
+    """Two windows of one period whose b/<K> differ, one row's s_w changed or every code zero, each registered as the
+    served path registers it and each window's open root over its own weights' root, so `_weights` alone accepts
+    either: the period's open signed the other's weights' root, so `window` refuses the odd one and the period earns
+    nothing. Its windows on the B rows the period registered are credited."""
+    for name in ("other-sw", "zero-codes"):
+        d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
+        big_k, _ = Cr.committed_k(d["ledger"], d["name"])
+        signed, _ = Cr.committed_weights(d["ledger"], d["name"])
+        folds, refused = set(), []
+        for w in d["windows"]:
+            lay, _ = Cr.layout_of(bytes.fromhex(w["descriptor"]))
+            sid = Ch.audited_session(d["ledger"], w["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
+            got, why = Cr._weights(w["window"], lay, w["entries"], w["rounds"][0]["requests"], sid,
+                                   hashlib.sha512(bytes.fromhex(w["descriptor"])).hexdigest(),
+                                   Cr._prefix(bytes.fromhex(w["descriptor"])))
+            assert why is None, why
+            folds.add(got.hex())
+            refused.append(Cr.window(d["key"], d["ledger"], *(w[k] for k in cases.WINDOW_ARGS[2:-1]), big_k,
+                                     rc.lms_verify)[1])
+        assert len(folds) == 2 and signed in folds
+        assert sum(r is not None for r in refused) == 1
+        assert all(r is None or (r[0] == "weights" and OTHER_PERIOD_WEIGHTS in r[1]) for r in refused), refused
+        got, why = _period(name, seed)
+        assert got is None and why[0] == "window" and OTHER_PERIOD_WEIGHTS in why[1]
 
 
 def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
