@@ -1,9 +1,13 @@
-import Flock.TmplLayout
+import Flock.TmplSplit
 
 /-!
-`flock-tmpl layout TMPL`: `Tmpl.layout`, option (iv) lenient and strict, its size and the time it takes (O(description)),
-then the reference column map `Tmpl.posMap` and its digest (`h ← h · 1000003 + pos` over the columns, mod 2^64), which
-`tmpl_layouts.py --digest` computes on its own map.
+`flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
+`iv/hybrid/T`; default `iv iv/strict`), its size and the time it takes (O(description)), then the reference column map
+`Tmpl.posMap` and its digest (`h ← h · 1000003 + pos` over the columns, mod 2^64), which `tmpl_layouts.py --digest`
+computes on its own map. `flock-tmpl fold TMPL [--mode MODE] [--split [--plain]] [--ref]`: `Tmpl.fold` on the layout
+(default `iv`) at a fixed point, its work and time against the template's row entries, or with `--split`
+`Tmpl.foldSplit`, its work, tables and the work they took (with `--plain`, then `Tmpl.fold`, which it must equal); with
+`--ref`, then the reference `Tmpl.foldRef` (O(unrolled)), which it must equal.
 `flock-tmpl read TMPL`, `flock-tmpl unroll TMPL` and `flock-tmpl diff TMPL CIRCUIT`: the templated unit's read
 (`Flock.Tmpl.parse`, its text's read, line split and form checks, O(description)), the read then `Tmpl.unroll` (the flat
 net, through `Net.ofRows`'s matrices and checks: what a verifier that unrolls would hold), and the difftest of its unroll against the circuit file's flat unit:
@@ -96,6 +100,12 @@ def diff (t : Tmpl.Tmpl) (n : Net) (circuit : String) : IO Bool := do
     | none => [])
   return ok
 
+def modeOf : String → Option Tmpl.Mode
+  | "iv" => some .lenient
+  | "iv/strict" => some .strict
+  | "iv/hybrid" => some (.hybrid 0)
+  | s => if s.startsWith "iv/hybrid/" then ((s.drop 10).toString.toNat?).map .hybrid else none
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["read", tp] => return if (← readTmpl tp).isSome then 0 else 1
@@ -117,13 +127,13 @@ def main (args : List String) : IO UInt32 := do
       report "unroll" t0 [("useful", toJson n.useful), ("nnz", toJson ((n.a.data.size + n.b.data.size) / 4)),
         ("unit_log", toJson n.unitLog)]
       return if ← diff t n circuit then 0 else 1
-  | ["layout", tp] =>
+  | "layout" :: tp :: names =>
     let some t ← readTmpl tp | return 1
     let mut ok := true
-    for strict in [false, true] do
-      let name := if strict then "iv/strict" else "iv"
+    for name in (if names.isEmpty then ["iv", "iv/strict"] else names) do
+      let some mode := modeOf name | IO.eprintln s!"unknown layout {name}"; return 2
       let t0 ← IO.monoNanosNow
-      match Tmpl.layout t strict with
+      match Tmpl.layoutM t mode with
       | .error e => report name t0 [("error", Json.str e)]; ok := false
       | .ok lays =>
         let L := lays.getD t.root default
@@ -134,6 +144,48 @@ def main (args : List String) : IO UInt32 := do
         let h := m.foldl (fun h p => h * 1000003 + p.toUInt64) (0 : UInt64)
         report (name ++ "/map") t0 [("digest", Json.str s!"{h.toNat}"), ("columns", toJson m.size)]
     return if ok then 0 else 1
+  | "fold" :: tp :: opt =>
+    let some t ← readTmpl tp | return 1
+    let name := match opt.dropWhile (· != "--mode") with | _ :: m :: _ => m | _ => "iv"
+    let some mode := modeOf name | IO.eprintln s!"unknown layout {name}"; return 2
+    let t0 ← IO.monoNanosNow
+    let .ok lays := Tmpl.layoutM t mode | report "fold" t0 [("error", Json.str "layout refused")]; return 1
+    let sl := max 7 (log2ceil (lays.getD t.root default).size)
+    let pt := fun (i : Nat) => (⟨(0x9e3779b97f4a7c15 * (i.toUInt64 + 1)) ^^^ 0x5bd1e995,
+      0xc2b2ae3d27d4eb4f * (i.toUInt64 + 7)⟩ : F128)
+    let lw := (Array.range 64).map fun i => pt (100 + i)
+    let rho := (Array.range (sl - 6)).map fun i => pt (200 + i)
+    let r := (Array.range (sl - 6)).map fun i => pt (300 + i)
+    let entries := t.defs.foldl (fun n d => d.rows.foldl (fun n r => n + r.2.1.size + r.2.2.size) n) 0
+    let plain := fun (phase : String) => do
+      let t0 ← IO.monoNanosNow
+      match Tmpl.fold t lays (pt 7) lw rho r with
+      | .error e => report phase t0 [("error", Json.str e)]; return none
+      | .ok (p, work) =>
+        report phase t0 [("mode", Json.str name), ("work", toJson work), ("entries", toJson entries),
+          ("slot_log", toJson sl), ("p0", Json.str (p.getD 0 0).toHex)]
+        return some p
+    let some p ← (if opt.contains "--split" then do
+        let t0 ← IO.monoNanosNow
+        match Tmpl.foldSplit t lays (pt 7) lw rho r with
+        | .error e => report "fold_split" t0 [("error", Json.str e)]; return none
+        | .ok (p, work, tables, tw) =>
+          report "fold_split" t0 [("mode", Json.str name), ("work", toJson work), ("tables", toJson tables),
+            ("table_work", toJson tw), ("entries", toJson entries), ("slot_log", toJson sl),
+            ("p0", Json.str (p.getD 0 0).toHex)]
+          if !opt.contains "--plain" then return some p
+          let some q ← plain "fold" | return none
+          if p != q then report "fold" t0 [("equal", toJson false)]; return none
+          return some p
+      else plain "fold") | return 1
+    if !opt.contains "--ref" then return 0
+    let t0 ← IO.monoNanosNow
+    match Tmpl.foldRef t lays (pt 7) lw rho r with
+    | .error e => report "fold_ref" t0 [("error", Json.str e)]; return 1
+    | .ok q =>
+      report "fold_ref" t0 [("equal", toJson (p == q))]
+      return if p == q then 0 else 1
   | _ =>
-    IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | flock-tmpl layout TMPL"
+    IO.eprintln ("usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | " ++
+      "flock-tmpl layout TMPL [MODE…] | flock-tmpl fold TMPL [--mode MODE] [--split [--plain]] [--ref]")
     return 2

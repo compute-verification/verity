@@ -77,11 +77,6 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
   "/usr/local/bin/gpu-lease"]
 
-[nodes.vy-glm53-s1]
-record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
-  "/usr/local/bin/gpu-lease"]
-
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
 [[file]]
@@ -548,7 +543,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-glm53-eu", "vy-glm53-eu2"]
 owner = "infra"
 
 [[file]]
@@ -1380,19 +1375,19 @@ owner = "infra"
 [[file]]
 path = "/workspace/verity-guest/bin/gpu_adopt.py"
 src = "tools/research/src/research/pods/nebius/gpu_adopt.py"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 run = ["systemd:vy-gpu-adopt"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-gpu-adopt.service"
 src = "tools/research/src/research/pods/nebius/units/vy-gpu-adopt.service"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 run = ["systemd:vy-gpu-adopt"]
 owner = "infra"
 
 [[file]]
 path = "/etc/vy/gpu-lease-host"
 src = "tools/research/src/research/pods/nebius/gpu-lease-host"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 owner = "infra"
