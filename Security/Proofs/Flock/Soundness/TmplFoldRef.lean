@@ -63,8 +63,65 @@ theorem addAt_get (p : Array F128) (q : ℕ) (v : F128) {s : ℕ} (hs : s < p.si
   unfold addAt
   by_cases h : q % 64 = s
   · subst h
-    simp [Array.getD_eq_getD_getElem?, Array.getElem?_modify, hs, of_add]
+    simp [Array.getD_eq_getD_getElem?, hs, Array.getElem_modify_self, of_add]
   · simp [Array.getD_eq_getD_getElem?, Array.getElem?_modify, h]
+
+theorem foldl_addAt_size (l : List ℕ) (qf : ℕ → ℕ) (w : ℕ → F128) (p : Array F128) :
+    (l.foldl (fun p v => addAt p (qf v) (w v)) p).size = p.size := by
+  induction l generalizing p with
+  | nil => rfl
+  | cons a l ih => simp only [List.foldl_cons]; rw [ih, addAt_size]
+
+theorem foldl_addAt_get (l : List ℕ) (qf : ℕ → ℕ) (w : ℕ → F128) (p : Array F128) {s : ℕ} (hs : s < p.size) :
+    of ((l.foldl (fun p v => addAt p (qf v) (w v)) p).getD s 0) =
+      of (p.getD s 0) + (l.map fun v => if qf v % 64 = s then of (w v) else 0).sum := by
+  induction l generalizing p with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.foldl_cons, List.map_cons, List.sum_cons]
+    rw [ih _ (by rw [addAt_size]; exact hs), addAt_get p _ _ hs, add_assoc]
+
+/-! ## `foldRef`'s entries -/
+
+/-- Logical row `x`'s share of entry `s`. -/
+noncomputable def rowTerm (pt : FoldPt) (π : Array ℕ) (ra rb : Array (Array ℕ)) (s x : ℕ) : GF128 :=
+  ((ra.getD x #[]).toList.map fun v =>
+      if π.getD v 0 % 64 = s then of (pt.alpha * pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0).sum +
+    ((rb.getD x #[]).toList.map fun v =>
+      if π.getD v 0 % 64 = s then of (pt.e (π.getD x 0) * pt.g (π.getD v 0)) else 0).sum
+
+section
+variable (pt : FoldPt) (π : Array ℕ) (ra rb : Array (Array ℕ))
+
+theorem rowStep_size (p : Array F128) (x : ℕ) : (rowStep pt π ra rb p x).size = p.size := by
+  unfold rowStep
+  dsimp only
+  simp only [← Array.foldl_toList]
+  rw [foldl_addAt_size, foldl_addAt_size]
+
+theorem rowStep_get (p : Array F128) (x : ℕ) {s : ℕ} (hs : s < p.size) :
+    of ((rowStep pt π ra rb p x).getD s 0) = of (p.getD s 0) + rowTerm pt π ra rb s x := by
+  unfold rowStep rowTerm
+  dsimp only
+  simp only [← Array.foldl_toList]
+  rw [foldl_addAt_get _ _ _ _ (by rw [foldl_addAt_size]; exact hs), foldl_addAt_get _ _ _ _ hs, add_assoc]
+
+theorem foldl_rowStep_get (l : List ℕ) (p : Array F128) {s : ℕ} (hs : s < p.size) :
+    of ((l.foldl (rowStep pt π ra rb) p).getD s 0) = of (p.getD s 0) + (l.map (rowTerm pt π ra rb s)).sum := by
+  induction l generalizing p with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.foldl_cons, List.map_cons, List.sum_cons]
+    rw [ih _ (by rw [rowStep_size]; exact hs), rowStep_get _ _ _ _ _ _ hs, add_assoc]
+
+/-- **`foldRef`'s entry `s`**: every logical row's share, summed. -/
+theorem foldRefRows_get {s : ℕ} (hs : s < 64) :
+    of ((foldRefRows pt π ra rb).getD s 0) = ((List.range ra.size).map (rowTerm pt π ra rb s)).sum := by
+  unfold foldRefRows
+  rw [foldl_rowStep_get _ _ _ _ _ _ (by simpa using hs)]
+  simp [Array.getD_eq_getD_getElem?, hs, ← zero_eq]
+
+end
 
 /-! ## The fold point's `eq` tables -/
 
@@ -72,7 +129,7 @@ theorem addAt_get (p : Array F128) (q : ℕ) (v : F128) {s : ℕ} (hs : s < p.si
 theorem of_eqAt (r : Array F128) (lo : ℕ) (n u : ℕ) (hu : u < 2 ^ n) :
     of (Tmpl.eqAt r lo n u) = FlockLevel3.eqAt (fun j : Fin n => of (r.getD (lo + j.val) 0)) u := by
   unfold Tmpl.eqAt
-  rw [if_neg (Nat.not_le.mpr hu)]
+  simp only [show ¬ 2 ^ n ≤ u from Nat.not_le.mpr hu, if_false]
   clear hu
   induction n with
   | zero => simp [FlockLevel3.eqAt, ← one_eq]
@@ -81,7 +138,7 @@ theorem of_eqAt (r : Array F128) (lo : ℕ) (n u : ℕ) (hu : u < 2 ^ n) :
     rw [of_mul, ih]
     unfold FlockLevel3.eqAt
     rw [Fin.prod_univ_castSucc]
-    simp only [Fin.coe_castSucc, Fin.val_last]
+    simp only [Fin.val_castSucc, Fin.val_last]
     congr 1
     by_cases hb : u.testBit n
     · simp [hb]
@@ -109,10 +166,10 @@ theorem eqTail_halves (r : Array F128) (u : ℕ) (hu : u < 2 ^ r.size) :
       FlockLevel3.eqAt (fun j : Fin (r.size / 2 + (r.size - r.size / 2)) => of (r.getD j.val 0)) u := by
     unfold FlockLevel3.eqAt
     refine Fintype.prod_equiv (finCongr (by omega)) _ _ (fun j => ?_)
-    simp only [finCongr_apply, Fin.coe_cast]
+    simp only [finCongr_apply, Fin.val_cast]
     rw [getElem!_pos r j.val j.isLt, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem j.isLt]
     rfl
   rw [e1, eqAt_split]
-  simp only [Fin.coe_castAdd, Fin.coe_natAdd, Nat.zero_add]
+  simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.zero_add]
 
 end FlockSoundness.TmplFold
