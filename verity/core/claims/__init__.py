@@ -439,6 +439,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
+    Entry("accounting-ts-leaf-checks", "assumption",
+          "Each of a leaf's 33 option-A statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) computes its "
+          "Definition at its decoded registered ports: on every wire assignment its circuit's evaluation agrees with, "
+          "an ok word of 1 means the lane's partials row is the honest one and its 32 cells have z = A·Bᵀ and "
+          "y = dq(z), or for the combine that the rows' XOR is the receipt", "TS leaf checks", "conjectured"),
+    Entry("accounting-ts-leaf-reads", "assumption",
+          "Where a leaf's 33 sessions' registrants' rows agree at every root and position two of them read (which "
+          "holds up to an explicit SHA-512 collision), the decodes read one leaf, one partials record and one "
+          "receipt: every session registers each shared value (the leaf's A, B and z/y tables, the post-draw "
+          "partials) at one port, the decodes read rows by port and position, and the verifier registers each "
+          "lane's salt, position, roots, admit bits, index and every ok row at their known content",
+          "TS leaf reads", "standard"),
     Entry("accounting-ts-ok-realizes", "assumption",
           "The checked unit's C-Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
