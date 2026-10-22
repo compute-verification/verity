@@ -5,8 +5,10 @@ import Proofs.Accounting.TS.Session.Checked.Guarantees
 # A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.TileSessionSound`: `Accounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
-`Accounting.TS.Tile.tileLayer` in place of `checkedLayer`. `CheckedSessionSound` reads `CheckedRel` as
-`PouwH1TileZy_v1` with `ok = 1` only through `Accounting.Served`'s prose; this statement names what that reading takes:
+`Accounting.TS.Tile.tileLayer` in place of `checkedLayer`. Its relation is the unit's Definition with its check words
+fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`), what `Accounting.Served`'s docstring asks of a realizing layer's `pf.rel`;
+`CheckedSessionSound` proves the checked layer only, whose `CheckedRel` says nothing of the product or `dq`. This
+statement names what the Definition reading takes:
 
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   as in `Accounting.Guarantees.TS.HeldSessionSound`, not a premise;
