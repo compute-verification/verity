@@ -32,6 +32,7 @@
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
   "Flock.Test.TmplLayout",
+  "Flock.Test.TmplFold",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "VStar"
