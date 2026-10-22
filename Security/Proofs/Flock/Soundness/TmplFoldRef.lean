@@ -269,8 +269,16 @@ theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse
       ∑ p ∈ Finset.range rows.size, ((rows.getD p #[]).toList.map fun c =>
         if c % 64 = s then w * of eLo[p]! * g (c / 64) else 0).sum := by
   have hcol := (ofRows_spec h).2.2.2
-  simp only [sparseT_rows h hw eLo hN, Finset.mul_sum, Finset.sum_mul]
-  rw [Finset.sum_comm]
+  have e1 : ∀ u ∈ Finset.range M, w * sparseT m eLo (s + 64 * u) * g u =
+      ∑ p ∈ Finset.range rows.size, ∑ t ∈ Finset.range (rows.getD p #[]).size,
+        if (rows.getD p #[])[t]! = s + 64 * u then w * of eLo[p]! * g u else 0 := by
+    intro u _
+    rw [sparseT_rows h hw eLo hN, Finset.mul_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun p _ => ?_
+    rw [Finset.mul_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun t _ => ?_
+    split <;> simp
+  rw [Finset.sum_congr rfl e1, Finset.sum_comm]
   refine Finset.sum_congr rfl fun p hp => ?_
   rw [Finset.sum_comm, list_sum_range, Array.length_toList]
   refine Finset.sum_congr rfl fun t ht => ?_
@@ -286,9 +294,8 @@ theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse
   have e : (rows.getD p #[]).toList.getD t 0 = (rows.getD p #[])[t]! := by
     rw [getElem!_pos _ t ht', List.getD_eq_getElem?_getD, Array.getElem?_toList, Array.getElem?_eq_getElem ht']
     rfl
-  rw [e, ← sum_slot M _ s hs hpt (fun u => w * of eLo[p]! * g u)]
-  refine Finset.sum_congr rfl fun u _ => ?_
-  split <;> simp
+  rw [e]
+  exact sum_slot M _ s hs hpt (fun u => w * of eLo[p]! * g u)
 
 /-- **`project ∘ baseOf` on matrices `Sparse.ofRows` built**, regrouped by row: row `p`'s columns `c`, each at entry
 `c mod 64` with the row's `e_lo` weight and `eq(r, ⌊c/64⌋)`. -/
