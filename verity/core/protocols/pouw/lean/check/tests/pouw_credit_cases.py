@@ -118,7 +118,7 @@ def _draw_root(d: dict) -> str:
 
 
 def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str, other: str | None = None,
-           calls: list[int] | None = None) -> tuple[list[dict], list[dict]]:
+           calls: list[int] | None = None, prefix: str | None = None) -> tuple[list[dict], list[dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
     window's open root `window`), and its round log over its A values (`_log`), its coins not yet opened. Each K of `ks`
     registers its B value (``…/b/<K>``, held across windows, at random 32-bit) and either its A value (``…/a/<K>``,
@@ -127,8 +127,8 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     has them (`h1window.table`): its A table ``…/a/<K>@<c>``, committed whole by its call's round, and its z table
     ``…/zy@<c>``, both binding the window's open root; and at random a z value. ``other`` registers the A values and
     call tables under another window's open root (``window``), another circuit (``program``) or no window root
-    (``unbound``, main's h1_prove form)."""
-    prefix = f"h1/w-{rng.randrange(100)}"
+    (``unbound``, main's h1_prove form). Every value is named `prefix` (a random ``h1/w-<n>`` when None) and its role."""
+    prefix = f"h1/w-{rng.randrange(100)}" if prefix is None else prefix
     values, entries = {}, []
     own = window if other is None else _hex(rng) if other == "window" else None if other == "unbound" else window
     prog = _hex(rng) if other == "program" else program
@@ -160,7 +160,8 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
 
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
-                  other: str | None = None, calls: list[int] | None = None) -> tuple[dict, rc.Session]:
+                  other: str | None = None, calls: list[int] | None = None, prefix: str | None = None
+                  ) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None) whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
@@ -172,7 +173,8 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
     window = rc._window(rng)
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
-    entries, log = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, window["root"], other, calls)
+    entries, log = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, window["root"], other, calls,
+                          prefix)
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
          "served": rng.choice([None, _hex(rng)]), "draw": {"receipts": _hex(rng)}, "entries": entries}
     received = [bytes.fromhex(x["root"]) for x in log]
@@ -673,22 +675,24 @@ def _served_units(d: dict, stream: str | None = None, k: int | None = None) -> l
 
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
-                  lay: dict | None = None, desc: str | None = None, per_call: bool | None = None
-                  ) -> tuple[dict, rc.Session]:
+                  lay: dict | None = None, desc: str | None = None, per_call: bool | None = None,
+                  prefix: str | None = None) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), a K it can be drawn at, one call per manifest row, and an accepted proof of each unit its draw coin
     draws at that K. Its A rows are its calls' A tables, as main's served form registers them (`h1window.table`), when
     `per_call` (at random when None, always under ``a-call-unbound``), else the window's A values. ``layout`` is the layout, which the verifier
-    reads from the descriptor."""
+    reads from the descriptor. Its values are named `prefix` (a random ``h1/w-<n>`` when None) and their roles, and so
+    are its circuit's parameters (``PREFIX``, `prefix` and a slash) when `desc` is None, as a served path names them."""
     lay = layout(rng) if lay is None else lay
-    desc = descriptor(rng, lay) if desc is None else desc
+    prefix = f"h1/w-{rng.randrange(100)}" if prefix is None else prefix
+    desc = descriptor(rng, lay, prefix + "/") if desc is None else desc
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
     k_of = {lin: k for lin, k, _n in lay["linears"]}
     per_call = name == "a-call-unbound" or (rng.random() < 0.5 if per_call is None else per_call)
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())),
                          program=hashlib.sha512(bytes.fromhex(desc)).hexdigest(), other=other,
-                         calls=[k_of[lin] for lin, _blk in lay["calls"]] if per_call else None)
+                         calls=[k_of[lin] for lin, _blk in lay["calls"]] if per_call else None, prefix=prefix)
     d["layout"], d["k"], d["descriptor"] = lay, _k(rng, lay), desc
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
     return d, s
@@ -784,7 +788,7 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "k-form", "k-past-units", "never-received",
                 "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES]
-WINDOW_KEYS = ("key", "ledger", *Cr.WINDOW_KEYS, "k")
+WINDOW_KEYS = ("key", "ledger", *Cr.PROVED_KEYS, "k")
 #: `credit.window`'s arguments, in order
 WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "descriptor",
                "entries", "proofs", "k")
@@ -796,22 +800,26 @@ def window_args(d: dict) -> tuple:
 
 
 def _evidence(d: dict) -> dict:
-    return {k: d[k] for k in Cr.WINDOW_KEYS}
+    return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
-def period_instance(rng: random.Random, name: str = "honest") -> dict:
+def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None,
+                    per_call: bool | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
-    order, and a window of no period opened after the close; then mutation `name`."""
+    order, and a window of no period opened after the close; then mutation `name`. The period's open commits
+    `committed_too` too, and its windows register as `honest_window`'s `per_call` has them."""
     n = rng.randint(2 if name == "order" else 1, 3)
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
-    desc = descriptor(rng, lay) if name != "bad-circuit" else _break_desc(rng, lay, rng.choice(DESC_NAMES))
+    prefix = f"h1/w-{rng.randrange(100)}"
+    desc = descriptor(rng, lay, prefix + "/") if name != "bad-circuit" else _break_desc(rng, lay, rng.choice(DESC_NAMES))
     bad = rng.randrange(n) if name in ("never-received", "other-circuit") else None
     odd = descriptor(rng, lay, prefix=f"other-{rng.randrange(1 << 20)}/") if name == "other-circuit" else desc
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
-                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc) for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc)
+                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc, per_call=per_call, prefix=prefix)
+            for i in range(n)]
+    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, per_call=per_call, prefix=prefix)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
@@ -821,7 +829,7 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    committed = {"cap": 4, "circuit": hashlib.sha512(descriptor_).hexdigest(), Cr.K_FIELD: big_k}
+    committed = {"cap": 4, "circuit": hashlib.sha512(descriptor_).hexdigest(), Cr.K_FIELD: big_k, **(committed_too or {})}
     match name:
         case "no-circuit":
             committed = {Cr.K_FIELD: big_k}
@@ -904,6 +912,41 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
                 "proof-other-registration"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
+
+
+def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
+    """A `registered-file` case: a window's circuit (`descriptor` of a random layout, its parameters named a prefix or
+    none), one of its calls, the window's open root, and the roots the window registers (``{value: [root, ...]}``) for
+    each value a statement of that call reads (`h1window.table`'s A and z tables and the weights' ``b/<K>``), some
+    other calls' among them, as `credit.registered_file` takes them; ``missing`` leaves one of the call's out and
+    ``twice`` registers one twice."""
+    lay = layout(rng)
+    prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
+    call = rng.randrange(len(lay["calls"]))
+    k_of = {lin: k for lin, k, _n in lay["linears"]}
+    vals = [f"{prefix}a/{k_of[lay['calls'][call][0]]}@{call}", f"{prefix}zy@{call}",
+            f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
+    roots = {v: [_hex(rng)] for v in vals}
+    for c, (lin, _blk) in enumerate(lay["calls"]):
+        if c != call and rng.random() < 0.5:
+            roots[f"{prefix}a/{k_of[lin]}@{c}"] = [_hex(rng)]
+    v = rng.choice(vals)
+    match name:
+        case "honest":
+            pass
+        case "missing":
+            if rng.random() < 0.5:
+                del roots[v]
+            else:
+                roots[v] = []
+        case "twice":
+            roots[v].append(_hex(rng))
+        case _:
+            raise ValueError(name)
+    return {"descriptor": descriptor(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng)}
+
+
+REGISTERED_FILE_NAMES = ["missing", "twice"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
