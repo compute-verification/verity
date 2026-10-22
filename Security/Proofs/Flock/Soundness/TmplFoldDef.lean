@@ -43,7 +43,7 @@ theorem testBit_low (x m b : ℕ) (hb : b < m) : x.testBit b = (x % 2 ^ m).testB
   simp [Nat.testBit_mod_two_pow, hb]
 
 theorem testBit_top (x m : ℕ) : x.testBit m = (x / 2 ^ m).testBit 0 := by
-  simp [Nat.testBit_div_two_pow]
+  rw [Nat.testBit_div_two_pow, Nat.zero_add]
 
 theorem prod_bits_lo (g : ℕ → Bool → GF128) (m j : ℕ) (hj : j < 2 ^ m) :
     ∏ b : Fin (m + 1), g b (j.testBit b) = (∏ b : Fin m, g b (j.testBit b)) * g m false := by
@@ -54,7 +54,7 @@ theorem prod_bits_lo (g : ℕ → Bool → GF128) (m j : ℕ) (hj : j < 2 ^ m) :
 theorem prod_bits_hi (g : ℕ → Bool → GF128) (m j : ℕ) (hj : j < 2 ^ m) :
     ∏ b : Fin (m + 1), g b ((2 ^ m + j).testBit b) = (∏ b : Fin m, g b (j.testBit b)) * g m true := by
   have ht : (2 ^ m + j).testBit m = true := by
-    rw [testBit_top, add_comm, Nat.add_div_left _ (Nat.two_pow_pos m), Nat.div_eq_of_lt hj]
+    rw [testBit_top, Nat.add_div_left _ (Nat.two_pow_pos m), Nat.div_eq_of_lt hj]
     rfl
   rw [Fin.prod_univ_castSucc]
   simp only [Fin.val_castSucc, Fin.val_last, ht]
@@ -74,7 +74,6 @@ theorem sum_bits (g : ℕ → Bool → GF128) : ∀ m : ℕ,
     refine (congrArg₂ (fun x y => x * g m false + y * g m true) (sum_bits g m) (sum_bits g m)).trans ?_
     rw [Fin.prod_univ_castSucc]
     simp only [Fin.val_castSucc, Fin.val_last]
-    beta_reduce
     ring
 
 theorem foldl_prod (f : ℕ → Bool → F128) : ∀ m : ℕ,
@@ -100,7 +99,6 @@ theorem laneSum_eq (f : ℕ → Bool → F128) : ∀ (m count : ℕ), count ≤ 
       rw [of_mul, laneSum_eq f m count hc]
       refine (Finset.mul_sum _ _ _).trans (Finset.sum_congr rfl fun j hj => ?_)
       rw [prod_bits_lo (fun b x => of (f b x)) m j (lt_of_lt_of_le (Finset.mem_range.mp hj) hc)]
-      beta_reduce
       ring
     · rename_i hc
       have h2 : 2 ^ (m + 1) = 2 ^ m + 2 ^ m := by rw [pow_succ, mul_two]
@@ -112,10 +110,8 @@ theorem laneSum_eq (f : ℕ → Bool → F128) : ∀ (m count : ℕ), count ≤ 
       refine congrArg₂ (· + ·) ((Finset.mul_sum _ _ _).trans (Finset.sum_congr rfl fun j hj => ?_))
         ((Finset.mul_sum _ _ _).trans (Finset.sum_congr rfl fun j hj => ?_))
       · rw [prod_bits_lo (fun b x => of (f b x)) m j (Finset.mem_range.mp hj)]
-        beta_reduce
         ring
       · rw [prod_bits_hi (fun b x => of (f b x)) m j (by have := Finset.mem_range.mp hj; omega)]
-        beta_reduce
         ring
 
 /-! ## `eq` tables read at `lo` -/
@@ -140,9 +136,10 @@ theorem eqTail_at (r : Array F128) (lo u : ℕ) (hlo : lo ≤ r.size) (hu : u < 
   simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, h1, h2, ↓reduceIte,
     Option.map_some, Option.getD_some]
   rw [of_mul, of_eqAt r _ _ _ h1, of_eqAt r _ _ _ h2]
-  have e1 : FlockLevel3.eqAt (fun j : Fin (r.size - lo) => of (r.getD (lo + j.val) 0)) u =
+  simp only [Array.getD_eq_getD_getElem?]
+  have e1 : FlockLevel3.eqAt (fun j : Fin (r.size - lo) => of (r[lo + j.val]?.getD 0)) u =
       FlockLevel3.eqAt (fun j : Fin ((r.size - lo) / 2 + (r.size - lo - (r.size - lo) / 2)) =>
-        of (r.getD (lo + j.val) 0)) u := by
+        of (r[lo + j.val]?.getD 0)) u := by
     unfold FlockLevel3.eqAt
     refine Fintype.prod_equiv (finCongr (by omega)) _ _ (fun j => ?_)
     simp only [finCongr_apply, Fin.val_cast]
