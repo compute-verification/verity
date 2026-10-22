@@ -28,8 +28,8 @@ if [ ! -d "$G" ]; then
 fi
 git -C "$G" fetch -q origin +refs/heads/main:refs/heads/main || die "can't fetch $REPO's main"
 m=$(git -C "$G" rev-parse refs/heads/main)
-git -C "$G" rev-list --first-parent refs/heads/main | grep -qx "$c" \
-  || die "$c is not on origin/main's first-parent history (main is $m): pin a commit drive landed"
+git -C "$G" rev-list --first-parent refs/heads/main > "$G/first-parent"
+grep -qx "$c" "$G/first-parent" || die "$c is not on origin/main's first-parent history (main is $m): pin a commit drive landed"
 install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")

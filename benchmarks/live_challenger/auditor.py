@@ -4,7 +4,8 @@ first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
-    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--lane LANE] | period-close --name P
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--weights-root W] [--circuit-files JSON]
+                                   [--lane LANE] | period-close --name P
     vy-challenger-gate status SESSION | ledger | pins | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -56,7 +57,9 @@ first coin.
   integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--weights-root W` the
   served model's registered weights' root (`weights_root`, 128 lowercase hex: `credit.weights_root` of the B rows the
   prover registers once, before the period's first salt, which PoUW's credit holds every window's weights to; an open
-  without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
+  without it commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
+  the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
+  on; an open without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
   refused while one of them is reserved and unexpired or still runs, and lists each, in order, as {root, session,
   complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
@@ -118,6 +121,7 @@ MINUTES = (1, 720)
 MAX_DRAW_K = 1 << 24
 ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
+TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
@@ -266,8 +270,31 @@ def weights_root_of(s: str) -> str:
     return s
 
 
+def circuit_files_of(s: str) -> dict[str, str]:
+    """A period-open's circuit files (`--circuit-files`, written as `circuit_files`): a JSON object taking each K's
+    template (``k<K>``) to the SHA-512 of the circuit file the auditor's lowering built for it, in lowercase hex, as
+    PoUW's credit reads it (`committed_files`); or Refused."""
+    def pairs(items: list) -> dict | None:
+        return dict(items) if len({k for k, _ in items}) == len(items) else None
+
+    try:
+        files = json.loads(s, object_pairs_hook=pairs)
+    except (ValueError, RecursionError):
+        files = None
+    if not (isinstance(files, dict) and 0 < len(files) <= 64 and all(
+            TEMPLATE.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in files.items())):
+        raise Refused(f"--circuit-files {s[:200]!r}: each K's template to its circuit file's SHA-512, a JSON object "
+                      '{"k<K>": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
+    return files
+
+
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them
-PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of}
+PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of}
+
+
+def field_text(v: Any) -> str:
+    """A period-open field's value as the gate hands it to `period`: a JSON object canonical, anything else as is."""
+    return json.dumps(v, sort_keys=True, separators=(",", ":")) if isinstance(v, dict) else str(v)
 
 
 def counts_at(e: dict) -> bool:
@@ -561,7 +588,8 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
          "| open --session S --root R "
-         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--weights-root W] [--lane LANE: vy-admin's] "
+         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--weights-root W] [--circuit-files JSON] "
+         "[--lane LANE: vy-admin's] "
          "| period-close --name P "
          "(a lane's own gate key, or vy-admin) "
          "| status SESSION | ledger | pins | pubkey | fetch SESSION")
@@ -579,6 +607,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--circuit", required=True)
         p.add_argument("--draw-k", dest="draw_k", default=None)
         p.add_argument("--weights-root", dest="weights_root", default=None)
+        p.add_argument("--circuit-files", dest="circuit_files", default=None)
 
     def refuse(why: object) -> None:
         raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
@@ -595,8 +624,8 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
     if verb != "period-open":
         return a.name, named, []
     cap = cap_of(int(a.cap)) if re.fullmatch(r"[1-9][0-9]{0,8}", a.cap) else cap_of(a.cap)
-    return a.name, named, [str(cap), circuit_of(a.circuit)] + [f"{f}={check(getattr(a, f))}" for f, check in
-                                                               PERIOD_FIELDS.items() if getattr(a, f) is not None]
+    return a.name, named, [str(cap), circuit_of(a.circuit)] + [f"{f}={field_text(check(getattr(a, f)))}" for f, check
+                                                               in PERIOD_FIELDS.items() if getattr(a, f) is not None]
 
 
 def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes]:
@@ -751,10 +780,11 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
 
 
 def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
-    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W]` or `period-close NAME LANE|- BY` (LANE - for
+    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
-    K (`draw_k`) and the served model's registered weights' root (`weights_root`); it closes once none of its windows
+    K (`draw_k`), the served model's registered weights' root (`weights_root`) and each K's circuit file's SHA-512
+    (`circuit_files`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
         raise Refused(f"period: {args}")
