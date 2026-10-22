@@ -7,7 +7,7 @@ statement would then not depend on that bit, and its known content would bind no
 For each such bit it finds a copy and an input column holding it (`cands`, a search the proof does not rely on) and accepts
 the bit only where the parsed circuit itself says so: the copy is one of the unit's (`upv`), a computed row reads the
 column (`RecResiduals.readIns`), and Δ's source key at the column is that bit of the port (`srcMsg`, which mirrors the
-proof's `srcKey` at a message bit). Its cost is the known bits times the unit's input ports, never the unit's gates.
+proof's `srcKey` at a message bit from a leaf). Its cost is the known bits times the unit's input ports, never the unit's gates.
 -/
 import Flock.RegKnown
 import Flock.RecResiduals
@@ -24,9 +24,10 @@ def starts (c : Circuit) : Array Nat :=
 def portOf (pc : Array (Nat × Nat)) (off : Nat) : Nat :=
   ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
 
-/-- **The message bit copy `k`'s input port `p`, bit `t` is copied from**, where Δ copies one into it: bit `bit` of byte
-`byte` of row port `q`, from the leaf word the copy's leaves name (`leavesIn`), or from the row word a cut names
-(`leafCuts`); none where Δ copies the zero, an output or a fixed column. -/
+/-- **The message bit copy `k`'s input port `p`, bit `t` is copied from**, where Δ copies one into it from the leaf word
+the copy's leaves name (`leavesIn`): bit `bit` of byte `byte` of row port `q`; none where Δ copies the zero, and at a port
+past the leaf group (a cut's or a wire's, which a statement of one input group has none of: `scopeOkH`), where it counts
+no bit as read. -/
 def srcAtMsg (c : Circuit) (k p t : Nat) : Option (Nat × Nat × Nat) :=
   if p < (c.unit.inGroups.getD 0 default).bits.size then
     if (c.leavesIn.getD k #[])[p]! < 0 then none else
@@ -35,14 +36,7 @@ def srcAtMsg (c : Circuit) (k p t : Nat) : Option (Nat × Nat × Nat) :=
       if 16 * (x - (starts c)[q]!) + t < c.ports[q]!.bits then
         some (q, 2 * (x - (starts c)[q]!) + t / 8, t % 8)
       else none
-  else
-    match c.leafCuts.toList.filter (fun e => decide (e.1 = k ∧ e.2.1 = p)) with
-    | e :: _ =>
-      let q := ((List.range (starts c).size).reverse.find? (fun q => (starts c)[q]! ≤ e.2.2)).getD 0
-      if t < 16 && 16 * (e.2.2 - (starts c)[q]!) + t < c.ports[q]!.bits then
-        some (q, 2 * (e.2.2 - (starts c)[q]!) + t / 8, t % 8)
-      else none
-    | [] => none
+  else none
 
 /-- **The message bit copy `u`'s input column `y` is copied from**, at the port bit it is (`mask`, the unit's
 `ProvedScope.portMask`; `pc`, its `portCols`); none at an input padding column. -/
@@ -64,7 +58,7 @@ def bitRead (c : Circuit) (mask : Array Bool) (pc : Array (Nat × Nat)) (rd : Ar
     (q k : Nat) : Bool :=
   cs.any fun (u, p) =>
     let y := pc[p]!.1 + k % 16
-    decide (u < c.upv) && rd.getD y false && srcMsg c mask pc u y == some (q, k / 8, k % 8)
+    decide (u < c.upv) && rd.getD y false && decide (srcMsg c mask pc u y = some (q, k / 8, k % 8))
 
 /-- **Every bit of every known input port is read** (PROTOCOL.md §16.10): each port of the circuit's input rows
 (`HmOut.nIn`) that the `--registered` file names at known content has each bit of its `16 · words`-bit row read by a
@@ -77,7 +71,7 @@ def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray)
   let cs := cands c (c.ports.foldl (· + ·.words) 0)
   known.toList.forM fun (name, _) =>
     (List.range (HmOut.nIn c)).forM fun q =>
-      if c.ports[q]!.name == name then
+      if c.ports[q]!.name = name then
         match (List.range (16 * c.ports[q]!.words)).find?
             (fun k => !bitRead c mask pc rd (cs.getD (st[q]! + k / 16) []) q k) with
         | some k =>
