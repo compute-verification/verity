@@ -228,14 +228,13 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         rw [hsC, hsR]
         simp only [refVal, readAt_exp]
         rw [Finset.sum_add_distrib]
-        congr 1
-        · rw [list_sum_comm]
-          refine Finset.sum_congr rfl fun k _ => ?_
-          simp only [Nat.mul_add, Nat.add_assoc]
-        · exact Finset.sum_comm
+        refine congrArg₂ (· + ·) ?_ Finset.sum_comm
+        rw [list_sum_comm]
+        refine Finset.sum_congr rfl fun k _ => ?_
+        simp only [Nat.mul_add, Nat.add_assoc]
       intro i hi b r hr hq
       by_cases hm : ((lays.getD d default).places.getD i default).ms = 1
-      · have hm' : (((lays.getD d default).places.getD i default).ms == 1) = true := by simp [hm]
+      · have hm' : (((lays.getD d default).places.getD i default).ms == 1) = true := by rw [hm]; rfl
         rw [if_pos hm'] at hr
         obtain ⟨bJ, hJ, hr⟩ := except_bind_ok hr
         cases hr
@@ -262,8 +261,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
           (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ ?_).imp id (fun e => e.trans ?_)
         · exact (add_exp hs (fun _ _ => 0) 1 1 hq hchS.1).1
         refine (congrArg (· + _) (add_exp hs (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) 1 1 hq hchS.1).2).trans ?_
-        rw [add_assoc]
-        congr 1
+        refine (add_assoc _ _ _).trans (congrArg (_ + ·) ?_)
         have eR : ∀ k, refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
             (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
               j * ((lays.getD d default).places.getD i default).cs))
@@ -280,7 +278,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
           (hchV fun k => ((t.defs.getD d default).calls.getD i default).bound
             (readExp t lays pt d β h as ip k) j).symm).symm
         unfold expVal
-        congr 1
+        refine congrArg (_ + ·) ?_
         refine (zipIdx_sum (fun v t' => ∑ k ∈ Finset.range as.size, of ((ch.u.getD t' #[]).getD k 0) *
             Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_
         rw [hlay.bound d i j hi]
