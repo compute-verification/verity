@@ -4,8 +4,12 @@ import Proofs.Flock.Soundness.TmplFoldClass
 # A class's fold is its copies' reference value (PRF-133, part 3, stage 2)
 
 `refVal`: the slot-`s` value of one copy of a Definition, its own column `y` at `A + B · posIn y` and its inputs at
-`ip`, summed over its rows and, copy by copy, its calls' (each read at the position it reads, `readAt`). `foldDef_exp`:
-an explicit class's `expVal` is its copies' `refVal`s.
+`ip`, summed over its rows and, copy by copy, its calls' (each read at the position it reads, `readAt`).
+
+- `classOk`: every class's fold, at every depth, means its copies' `refVal`s while its lane bits fit the point: an
+  explicit class's `expVal` is their sum (`exp_step`), a summed class's `sumVal` times `E(a)` is the copy at low part `a`'s
+  (`sum_step`; a run of lanes through `laneSum_eq`).
+- `fold_refVal`: the unit's fold at entry `s` is the root copy's `refVal` plus the constant's row.
 -/
 
 open Flock Flock.Tmpl FlockLevel3 GF128
