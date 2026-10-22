@@ -11,7 +11,6 @@ import importlib.util
 import json
 import math
 import random
-import struct
 import sys
 from pathlib import Path
 
@@ -748,8 +747,8 @@ def _b_rows(rng: random.Random, n: int, k: int) -> list[tuple[list[int], float]]
 
 
 def _b_row(codes: list[int], sw: float) -> list[int]:
-    """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`)."""
-    return G.bytes_leaves(bytes(c & 0xFF for c in codes) + struct.pack("<f", sw), 16)
+    """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`), as the registry commits them."""
+    return cases.b_row_words(bytes(c & 0xFF for c in codes), sw)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

@@ -753,10 +753,18 @@ def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
     return [(rng.randbytes(k), rng.choice([2.0 ** -9, 0.0123, 3.5])) for _ in range(n)]
 
 
+def b_row_words(codes: bytes, sw: float) -> list[int]:
+    """A B row's u16 words as the prover and the auditor's registry commit them (#3204's
+    ``weights.row_words(weights.row_bytes(codes, s_w))``): its K int8 codes then its f32 s_w's 4 bytes little-endian
+    (`h1zy.ROW`), little-endian in pairs."""
+    row = bytes(codes) + struct.pack("<f", sw)
+    return [row[i] | row[i + 1] << 8 for i in range(0, len(row), 2)]
+
+
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    its codes then its s_w, `h1zy.ROW`, salts drawn once, binding no window)."""
-    words = [G.bytes_leaves(codes + struct.pack("<f", sw), 16) for codes, sw in rows]
+    `b_row_words`, salts drawn once, binding no window)."""
+    words = [b_row_words(codes, sw) for codes, sw in rows]
     return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(rows)), schema=G.SCHEMA_V2).entry()
 
 
