@@ -5,6 +5,7 @@ import PouwWindow.Statement
 import PouwWindow.Inputs
 import PouwWindow.Rounds
 import PouwWindow.Lanes
+import PouwWindow.KnownRows
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -36,6 +37,9 @@ to Python.
 * a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
   records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those,
   `lane` null for the combine, and `path`); `wires` (those); `wire_of` (those and `wire`).
+* a drawn leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
+  `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
+  combine): each known port's rows' words.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -146,6 +150,21 @@ def leafPortJson (p : Lanes.Port) : Json := Json.mkObj [("name", toJson p.name),
   ("output", toJson p.output), ("bits", toJson p.bits), ("words", toJson p.words),
   ("fields", Json.arr (p.fields.map fun f => Json.mkObj (("path", toJson f.path) :: leafFieldJson f)).toArray)]
 
+/-- `known_rows`: the statement's known rows' words by port, from its public inputs' bytes as `seeds.leaves` reads them. -/
+def knownRowsJson (j : Json) : Except String Json := do
+  let pos ← nat j "position"
+  if 2 ^ 64 ≤ pos then throw s!"a position or a counter is a u64, not {pos}"
+  let salt ← hex j "salt"
+  let #[r0, r1] ← hexes j "roots" | throw "the input's roots are not two digests"
+  if salt.size != 64 || r0.size != 64 || r1.size != 64 then throw "a digest is 64 bytes"
+  let admit := (← natList j "admit").map (· != 0)
+  let lane ← match field? j "lane" with
+    | none | some .null => pure none
+    | some _ => some <$> nat j "lane"
+  let ks := Lanes.knownRows admit (Lanes.halvesNat salt) (Lanes.positionNat pos) (Lanes.rootsNat r0 r1)
+    (fun _ => .empty) lane
+  pure (Json.mkObj (ks.toList.map fun (port, rows) => (port, toJson (rows.map (·.1)))))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
   ("floor_point", ofN floorPoint?),
@@ -224,6 +243,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     ("M_MAX", toJson mMax), ("PUBLIC_PORTS", Json.arr (publicPorts.map fun (p, w, sd, d) => Json.mkObj
       [("port", toJson p), ("words", toJson w), ("seed", toJson sd), ("derivation", toJson d)]).toArray)]),
   ("n_digits", fun j => do pure (toJson (Lanes.nDigits (← nat j "ks")))),
+  ("known_rows", knownRowsJson),
   ("lane_ports", fun j => do
     pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),
   ("combine_ports", fun j => do pure (Json.arr ((← Lanes.combine? (← leafTile j)).map leafPortJson).toArray)),

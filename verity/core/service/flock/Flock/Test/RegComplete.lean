@@ -24,6 +24,9 @@ def pub : Public :=
     n := 2, digests := bcs.push (ByteArray.mk (Array.replicate 32 4)), outputs := #[], sha := .empty,
     tables := some { counts := #[2, 1], starts := #[0, 2], refs := #[0, 0, 1, 0] } }
 
+/-- `pub` for the circuit of `w` alone: its table's refs, one per instance (a ref is `refs[i * ports + p]`). -/
+def pubW : Public := { pub with digests := bcs, tables := some { counts := #[2], starts := #[0], refs := #[0, 1] } }
+
 def wEntry : Json := Json.mkObj [("value", Json.str "weights"), ("root", Json.str (hexOf (root v2))),
   ("leaves", Lean.toJson (2 : Nat)), ("domain", Json.str (hexOf dom)), ("reads", Lean.toJson [some 0, some 1]),
   ("words", Lean.toJson (32 : Nat)), ("row_schema", Json.str v2)]
@@ -33,9 +36,9 @@ def file (complete : Option Json) : Json :=
     (complete.map fun c => [(Registered.COMPLETE_KEY, c)]).getD [])
 
 /-- `flock-verify`'s registered reads of `f`: `Registered.check`, then `checkComplete` when `f` sets `complete`. -/
-def run (c : Circuit) (f : Json) : Except String Unit := do
+def run (c : Circuit) (f : Json) (p : Public := pub) : Except String Unit := do
   let own ← Registered.ofJson f
-  Registered.check c pub (some own) true
+  Registered.check c p (some own) true
   if (← Registered.completeOf f) then Registered.checkComplete c own
 
 def why (c : Circuit) (f : Json) : String :=
@@ -55,6 +58,7 @@ def why (c : Circuit) (f : Json) : String :=
 -- a circuit whose every port is the verifier's passes
 #guard (Registered.checkComplete lane #[{ (default : Registered.Port) with name := "w" },
   { (default : Registered.Port) with name := "pub" }]).toBool
+#guard (run { lane with ports := #[v2Port] } (file (some (Json.bool true))) pubW).toBool
 #guard Registered.complete { lane with ports := #[v2Port] } #[{ (default : Registered.Port) with name := "w" }]
 #guard !Registered.complete lane #[{ (default : Registered.Port) with name := "w" }]
 

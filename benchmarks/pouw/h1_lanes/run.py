@@ -20,7 +20,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   (its ``b || c``): the partials' and the rows of ``a``, ``b``, ``zy`` and ``receipt``.
 * **Each statement's rows** are all ports of the verifier's own registered reads (`leaf_lanes.own`): `leaf_lanes.reads`'
   (lane l's ``a0..a3``, ``b0..b7``, ``zy`` and ``partials`` (row l); the combine's ``p0..p31`` and ``receipt``) and its
-  known ports (`leaf_lanes.known`, `produced.known_port`): lane l's ``admit`` and ``pub`` (salt, position, roots and the
+  known ports (`leaf_lanes.known_rows`, `produced.known_port`): lane l's ``admit`` and ``pub`` (salt, position, roots and the
   lane index l as a u16 word, `lane_word`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s, the public file `h1unit.verifier_pub`'s.
 * **The negatives**, each a statement proved and checked like the others:
@@ -83,7 +83,6 @@ from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
@@ -112,11 +111,6 @@ def tile(k: int):
 
 def f32(x) -> np.ndarray:
     return np.asarray(x, np.float32).view(np.uint32)
-
-
-def bits_words(bits: list[int]) -> list[int]:
-    b = list(bits) + [0] * (-len(bits) % 16)
-    return np.packbits(np.asarray(b, np.uint8), bitorder="little").view("<u2").astype(np.uint16).tolist()
 
 
 def u32_words(words) -> list[int]:
@@ -286,22 +280,17 @@ def known(words, salt: bytes) -> dict:
     return {"row": [int(x) for x in words], "salt": salt}
 
 
-def pub_words(w: World, ln: int) -> list[int]:
-    lf = w.leaf
-    bits = (SD.leaves(lf.salt, True) + SD.position_leaves(lf.position, True) + SD.leaves(w.roots[0], True)
-            + SD.leaves(w.roots[1], True) + [(ln >> t) & 1 for t in range(16)])
-    return bits_words(bits)
-
-
 def known_rows(ctx, w: World, kind: str, ln: int | None, index: int) -> dict:
-    """The statement's known ports (`leaf_lanes.known`), each ``(value, row, salt)`` as the verifier computes them: lane
-    l's ``pub`` (index l) and ``admit``, and ``o0`` the row 1, under salts anyone derives (`h1unit.pub_salt`, `ok_salt`)."""
-    vals = LL.known(*RC, kind, ln)
-    out = {LL.OK: (vals[LL.OK], [int(x) for x in U.OK], U.ok_salt(f"{ctx.name}#{index}", ctx.position))}
+    """The statement's known ports (`leaf_lanes.known_rows`), each ``(value, row, salt)`` as the verifier computes them:
+    lane l's ``pub`` (index l) and ``admit``, and ``o0`` the row 1, under salts anyone derives (`h1unit.pub_salt`,
+    `ok_salt`)."""
+    lf = w.leaf
+    rows = LL.known_rows(*RC, kind, ln, salt=lf.salt, position=lf.position, roots=w.roots, admit=lf.admit)
+    salts = {LL.OK: U.ok_salt(f"{ctx.name}#{index}", ctx.position)}
     if kind == LL.LANE:
-        out[LL.PUB] = (vals[LL.PUB], pub_words(w, ln), U.pub_salt(f"{ctx.name}#lane{ln}", w.leaf.position))
-        out[LL.ADMIT] = (vals[LL.ADMIT], bits_words(w.leaf.admit), U.pub_salt(f"{ctx.name}#admit", w.leaf.position))
-    return out
+        salts[LL.PUB] = U.pub_salt(f"{ctx.name}#lane{ln}", lf.position)
+        salts[LL.ADMIT] = U.pub_salt(f"{ctx.name}#admit", lf.position)
+    return {p: (v, row, salts[p]) for p, (v, row) in rows.items()}
 
 
 def known_opening(ctx, w: World, value: str, row: list[int], salt: bytes) -> dict:
@@ -410,7 +399,7 @@ def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int
     kr = known_rows(ctx, w, LL.LANE, ln, ln)
     for p in (LL.ADMIT, LL.PUB):
         v, row, salt = kr[p]
-        row = pub_words(w, pub_index) if p == LL.PUB and pub_index is not None else row
+        row = LL.pub_words(w.leaf.salt, w.leaf.position, w.roots, pub_index) if p == LL.PUB and pub_index is not None else row
         ins[p] = known(row, salt) if p == LL.PUB and pub_free else known_opening(ctx, w, v, row, salt)
     return ins
 
