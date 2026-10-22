@@ -6,7 +6,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
-* `domain`: a registered value's commitment domain;
+* `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
+* `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers of record
+  opened them against (`Produced.check`, `Produced.opened`);
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
@@ -49,6 +51,7 @@ import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import SampledProofs.Produced
 
 namespace SampledProofs.Pieces
 
@@ -107,11 +110,37 @@ def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
   let (some words, some leaves, some b) := (nat? (getD j "words"), nat? (getD j "leaves"), nat? (getD j "word_bits"))
     | throw "words, leaves or word_bits is not a natural number"
-  let window ← match field? j "window" with
+  let hex? := fun (k : String) => match field? j k with
     | none => pure none
-    | some (.str r) => if r.length == 128 && isHex r then pure (some r) else throw "the window is not 64 bytes of hex"
-    | some _ => throw "the window is not 64 bytes of hex"
-  return Json.str (Flock.hexOf (← Registered.domainAt program value words leaves b window))
+    | some (.str r) => if Produced.hex64 r then pure (some r) else throw s!"the {k} is not 64 bytes of hex"
+    | some _ => throw s!"the {k} is not 64 bytes of hex"
+  let window ← hex? "window"
+  match ← hex? "produced" with
+  | none => return Json.str (Flock.hexOf (← Registered.domainAt program value words leaves b window))
+  | some d =>
+    if window.isSome then throw "a produced value's domain binds its registration, which binds the window: not both"
+    return Json.str (Flock.hexOf (← Produced.domain program value words leaves b d))
+
+/-- `{"record", "registration", "draw", "mine", "opened"}` to `{"codes": produced.check's, "opened": produced.opened's
+codes, null unless the record holds}`: the registration and draw strings, `mine` the verifier's own entries
+(`{value: {"leaves", "words", "word_bits", "domain"}}`, three natural numbers and a string each) and `opened` null or
+`{value: root}`; refused otherwise. -/
+def produced (j : Json) : V Json := do
+  let (.str registration, .str draw) := (getD j "registration", getD j "draw")
+    | throw "registration or draw is not a string"
+  let .obj _ := getD j "mine" | throw "mine is not an object"
+  let mine ← (entries (getD j "mine")).mapM fun (value, e) =>
+    match nat? (getD e "leaves"), nat? (getD e "words"), nat? (getD e "word_bits"), getD e "domain" with
+    | some leaves, some words, some wordBits, .str domain => pure ({ value, leaves, words, wordBits, domain } : Produced.Mine)
+    | _, _, _, _ => throw s!"mine: {value} is not leaves, words and word_bits and a string domain"
+  let opened ← match getD j "opened" with
+    | .null => pure none
+    | o@(.obj _) => pure (some (entries o))
+    | _ => throw "opened is not an object"
+  let rec_ := getD j "record"
+  let cs := Produced.check rec_ registration draw (mine.qsort (·.value < ·.value))
+  return Json.mkObj [("codes", Json.arr (cs.map Json.str)),
+    ("opened", if cs.isEmpty then Json.arr ((Produced.opened rec_ opened).map Json.str) else Json.null)]
 
 /-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
@@ -360,7 +389,7 @@ def run (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
-   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

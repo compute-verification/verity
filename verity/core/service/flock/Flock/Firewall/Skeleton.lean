@@ -66,10 +66,32 @@ def rounds (st : Setup) (k0 : Nat) (cap dom : ByteArray) : V (Array (ByteArray �
 def encode (rs : Array (ByteArray × Nat)) : ByteArray :=
   rs.foldl (fun b (c, n) => b ++ le64 n.toUInt64 ++ le64 c.size.toUInt64 ++ c) (le64 rs.size.toUInt64)
 
-/-- **`flock-firewall skeleton --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR]
-[--partition F] [--program F] [--draw F]`**: on the statement `flock-firewall finish` sets up, each request on standard
-input `skeleton I R LEN` followed by the `LEN` bytes of table `I`'s level-0 cap is answered `ok N` followed by the `N`
-bytes of rep `R`'s scheduled rounds (`encode` of `rounds`); anything else, or a request it refuses, is answered
+/-- The statement flags `flock-firewall finish` takes. -/
+def FLAGS : String :=
+  "--circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F] [--program F] [--draw F]"
+
+/-- The statement `flock-firewall finish` sets up from its flags `args` (`Witness.setupOf`, at the `unit_draw` of the
+JSON object in `--draw`), or why it does not. -/
+def statementOf (cmd : String) (args : List String) : IO (Except String (SessionSpec × Array Stmt)) := do
+  let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public")
+    | return .error s!"usage: flock-firewall {cmd} {FLAGS}"
+  let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
+    | return .error s!"unknown statement; known: {Tags.all.map (·.name)}"
+  let some count := ((Witness.argOf args "--session-tables").getD "1").toNat?
+    | return .error "--session-tables J: J is a number"
+  let (partition, program) ← match ← Witness.bindingsOf args with
+    | .ok b => pure b
+    | .error e => return .error e
+  let draw ← match Witness.argOf args "--draw" with
+    | some f => IO.FS.readFile f
+    | none => pure "{}"
+  let I : Witness.Inputs := { tags, circuitFile := ← IO.FS.readBinFile cf, publicFile := ← IO.FS.readBinFile pf, count,
+                              tables := ← Witness.readTables args, partition, program }
+  return (Witness.setupOf I draw).mapError (s!"setup: {·}")
+
+/-- **`flock-firewall skeleton FLAGS`**: on the statement `flock-firewall finish` sets up (`statementOf`), each request on
+standard input `skeleton I R LEN` followed by the `LEN` bytes of table `I`'s level-0 cap is answered `ok N` followed by
+the `N` bytes of rep `R`'s scheduled rounds (`encode` of `rounds`); anything else, or a request it refuses, is answered
 `err WHY` and ends it, with exit code `1`. -/
 def cmd (args : List String) : IO UInt32 := do
   let ch ← Frame.stdio
@@ -79,22 +101,9 @@ def cmd (args : List String) : IO UInt32 := do
   let refuse := fun (why : String) => do
     say s!"err {why.replace "\n" " "}"
     return (1 : UInt32)
-  let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public")
-    | refuse "usage: flock-firewall skeleton --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F] [--program F] [--draw F]"
-  let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
-    | refuse s!"unknown statement; known: {Tags.all.map (·.name)}"
-  let some count := ((Witness.argOf args "--session-tables").getD "1").toNat? | refuse "--session-tables J: J is a number"
-  let (partition, program) ← match ← Witness.bindingsOf args with
-    | .ok b => pure b
-    | .error e => return (← refuse e)
-  let draw ← match Witness.argOf args "--draw" with
-    | some f => IO.FS.readFile f
-    | none => pure "{}"
-  let I : Witness.Inputs := { tags, circuitFile := ← IO.FS.readBinFile cf, publicFile := ← IO.FS.readBinFile pf, count,
-                              tables := ← Witness.readTables args, partition, program }
-  let (spec, sts) ← match Witness.setupOf I draw with
+  let (spec, sts) ← match ← statementOf "skeleton" args with
     | .ok s => pure s
-    | .error e => return (← refuse s!"setup: {e}")
+    | .error e => return (← refuse e)
   let setups := sts.map Setup.ofCircuit
   repeat
     let line := (← ch.getLine).replace "\n" ""

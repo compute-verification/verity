@@ -376,6 +376,48 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str]) -> list[
     return out
 
 
+def manifest_reason(record: Mapping[str, Any]) -> str | None:
+    """Why a window's record (`pouw_h1.CALLS_FILE`) isn't one manifest under its coins: the Program salt from its salt
+    coin over its weights' root, each round's root over its parts, each call's A table under its own round's root (step
+    s's calls digest over the record's rows of step s, their tables' roots among them: `pouw_h1_requests.tables_reason`),
+    and ``calls_root`` over every row and, with ``served``, the served trees' entries
+    (`pouw_h1_served.digest_of`); None when it is. The coins themselves are `session_reason`'s and
+    `trusted_rounds_reason`'s to check."""
+    from verity.core.protocols.pouw.audit import salt_of
+
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+
+    c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
+    try:
+        opening = LiveOpening.from_json(c.get("salt_opening"))
+        salt = PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), opening.coin,
+                                       bytes.fromhex(c["weights_root"])))
+    except (CoinError, KeyError, TypeError, ValueError) as e:
+        return f"the window's salt can't be derived from its record ({e})"
+    for row in c.get("rounds") or ():
+        try:
+            r = row["round"]
+            parts = [bytes.fromhex(row[k]) for k in ("calls", "requests", "slots", "receipts")]
+        except (KeyError, TypeError, ValueError) as e:
+            return f"a round of the log is malformed ({e})"
+        if RQ.round_root(salt, r, *parts).hex() != row.get("root"):
+            return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
+    why = RQ.tables_reason(salt, c.get("rounds") or (), rows)
+    if why is not None:
+        return why
+    served = c.get("served")
+    if served is not None:
+        try:
+            served = SV.digest_of(served["entries"], served["refused"])
+        except (KeyError, TypeError, ValueError) as e:
+            return f"the window's served trees are malformed ({e})"
+    if PH.calls_root(salt, rows, served).hex() != c.get("calls_root"):
+        return "the window's calls_root is not over its record's calls" + (" and its served trees" if served else "")
+    return None
+
+
+
 __all__ = ["Fetch", "Ledger", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS", "address", "carried", "draw_reason",
-           "evidence", "families", "held", "lms_verify", "pinned_key", "period_reason", "session_of", "session_reason",
-           "trusted_rounds_reason"]
+           "evidence", "families", "held", "lms_verify", "manifest_reason", "pinned_key", "period_reason", "session_of",
+           "session_reason", "trusted_rounds_reason"]

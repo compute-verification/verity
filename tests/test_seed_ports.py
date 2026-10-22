@@ -31,11 +31,17 @@ UNITS = {
     "verity/core/protocols/pouw/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
     "verity/core/protocols/pouw/circuit/h1zy.py::_unit_ports":
         "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
+    "verity/core/protocols/pouw/circuit/h1zy.py::_lane_ports":
+        "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
+    "verity/core/protocols/pouw/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
+        "the lane's stand-in statement template, a position beside its ok sink",
     "verity/core/protocols/pouw/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
     "verity/core/protocols/pouw/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
     "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
     "verity/core/protocols/pouw/tests/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
+    "integrations/vllm/tests/protocol_options/test_pouw_h1_served.py::StandIn":
+        "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",

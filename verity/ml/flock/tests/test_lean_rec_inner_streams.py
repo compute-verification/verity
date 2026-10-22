@@ -798,3 +798,38 @@ def test_rec_inner_refuses_r_without_the_sparse_shape():
         "(--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse"), p
     p = subprocess.run([*base, "--sparse", "18,13,6"], capture_output=True, text=True)
     assert p.returncode == 2 and p.stderr.strip() == "--sparse 18,13,6: NU,ELL,S_LOG,T_LOG, four natural numbers", p
+
+
+STOPPED = "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
+NO_END = "rec inner transcript: the coin server's record names no end; only a finished session is read"
+
+
+@pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
+def test_a_stopped_sessions_record_is_refused(tmp_path, d):
+    """`RecVStar.checkFinished`: the coin server's record of a session that ran every round and then stopped (a refusal, or
+    a connection that ended without `Finish`) is the finished one's but for `end`, and is refused as no inner proof; so is a
+    record that names no end."""
+    t = json.loads((_fixture(d) / "public.json").read_text())
+    assert t["end"] == "finish"
+    stopped, endless = copy.deepcopy(t), copy.deepcopy(t)
+    stopped["end"] = "stop"
+    del endless["end"]
+    assert _read(d, _write(tmp_path / "stopped.json", stopped)) == (1, None, STOPPED)
+    assert _read(d, _write(tmp_path / "endless.json", endless)) == (1, None, NO_END)
+
+
+def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
+    """A session `rec_live`'s firewall stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
+    server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
+    something else."""
+    import test_rec_live_firewall as F
+
+    stopped = F._proxy(F._schedule())
+    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: FIREWALL-REFUSED: Link's y: ")
+    assert stopped.coins.record()["end"] == "stop"
+    assert _read(PLAIN, _write(tmp_path / "stopped.json", stopped.coins.record())) == (1, None, STOPPED)
+    finished = F._proxy(F._schedule())
+    assert F._held(F._run(finished)) and finished.coins.record()["end"] == "finish"
+    _, _, err = _read(PLAIN, _write(tmp_path / "finished.json", finished.coins.record()))
+    assert err not in (STOPPED, NO_END), err

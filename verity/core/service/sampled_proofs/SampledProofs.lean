@@ -4,6 +4,7 @@ import SampledProofs.Partition
 import SampledProofs.Draw
 import SampledProofs.Supplied
 import SampledProofs.Registration
+import SampledProofs.Produced
 import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record

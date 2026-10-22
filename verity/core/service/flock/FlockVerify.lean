@@ -321,7 +321,8 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
-would keep one of them. -/
+would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
+the root of that content (`Registered.checkKnownAll`). -/
 def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port))) := do
   let some f := argOf args flag | return .ok none
@@ -336,7 +337,11 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        return ((Registered.ofJson j).mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
+        let own : V (Array Registered.Port) := do
+          let own ← Registered.ofJson j
+          Registered.checkKnownAll own (← Registered.knownOf j)
+          return own
+        return (own.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785

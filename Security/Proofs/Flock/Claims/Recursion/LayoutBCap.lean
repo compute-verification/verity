@@ -34,7 +34,8 @@ circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `Cap
   fails at every statement of the shape with such a round (`not_heldB_layoutBCap_none`), and level 0's round of each
   rep commits `cap 1` nodes (`RecVStar.repRounds`). `LayoutBTops.lean` holds those rounds as pieces instead: each top
   by its level's RecCap (`rec-cap/n<N>-l<l>`), the row by its part.
-* `FinPieces fin`: the last round has pieces, each a part's. Open: the bound record's `final` is the code side's.
+* `FinPieces fin`: the last round has pieces, each a part's. It holds at `finOpen` (`finPieces_finOpen`,
+  `FinOpen.lean`): every earlier round's openings at the parts that commit them, then the element-level last message's.
 
 `ksLin2_deployed_cap` is `ksLin2_deployed_plain_closed` at `layoutBCap`, with `HeldB` replaced by those five facts.
 `TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` (`LayoutBTops.lean`)
@@ -175,8 +176,9 @@ def TopsHeld (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.
   ∀ x st, parse x = some st → shape st.form → ∀ j sr, streamRound x j = some sr → sr.2.1.isEmpty = false →
     ∃ s < nS x, (topsAt x s (j + 1)).isSome
 
-/-- **The last round has pieces, each a part's**, at the compiled statements of the shape. Open: where they sit is the
-bound record's `final`, the code side's. -/
+/-- **The last round has pieces, each a part's**, at the compiled statements of the shape. It holds at `finOpen`
+(`finPieces_finOpen`): every earlier round's openings at the parts that commit them, then the element-level last
+message's at parts a parameter names. -/
 def FinPieces (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ x st, parse x = some st → shape st.form → fin x ≠ [] ∧ ∀ p ∈ fin x, p.1 < nS x
 
@@ -294,8 +296,8 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
 `ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap, where at the dense form `HeldB` comes from
 `heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
 ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
-`not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, open), and `VstarShowsB`, `PartChecksB`,
-`PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+`not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
+`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
