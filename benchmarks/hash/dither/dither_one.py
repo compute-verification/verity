@@ -36,7 +36,7 @@ the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is t
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
 engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
-lane's rendering of CA's forms.
+lane's rendering of CA's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
 """
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ import numpy as np
 import torch
 
 import dither_fused as DF
+import forms as F
 from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
@@ -87,6 +88,7 @@ class Window:
     """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
+    group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
 
     def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
         self.t, self.key, self.dev = t, key, dev
@@ -97,8 +99,22 @@ class Window:
         self.wt = [REG[w][1].weight for w in range(L)]
         self.sw = [REG[w][1].weight_scale.reshape(-1) for w in range(L)]
         self.nk = [(int(x.shape[0]), int(x.shape[1])) for x in self.wt]
-        self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
-        self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
+        if self.group_slots:
+            # the calls' A slots as views of one buffer a K (`slot_groups`) and their scales of one (`scale_all`), so a
+            # step's slots copy or clear in a launch a K
+            ks = sorted({k for _, k in self.nk})
+            self.slot_groups = {k: torch.zeros(sum(kk == k for _, kk in self.nk), t, k, dtype=torch.int8, device=dev)
+                                for k in ks}
+            at = dict.fromkeys(ks, 0)
+            self.slot = []
+            for _, k in self.nk:
+                self.slot.append(self.slot_groups[k][at[k]])
+                at[k] += 1
+            self.scale_all = torch.zeros(L, t, dtype=torch.float32, device=dev)
+            self.scale = list(self.scale_all.unbind(0))
+        else:
+            self.slot = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, k in self.nk]
+            self.scale = [torch.zeros(t, dtype=torch.float32, device=dev) for _ in self.nk]
         self.z = [torch.zeros(t, n, dtype=torch.int32, device=dev) for n, _ in self.nk]
         self.live = torch.zeros(t // 32, dtype=torch.uint8, device=dev)
         self.admit = torch.zeros(t // 16 * 2, dtype=torch.uint8, device=dev)
@@ -300,6 +316,11 @@ class Window:
         if name is not None:
             torch.cuda.nvtx.range_push(PHASE_RANGE + name)
 
+    def poisoned(self) -> list:
+        """What a captured step's `before` fills with 0xA5."""
+        return (self.slot + self.scale + self.z + list(self.ydump or [])
+                + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
+
     def _a_step(self) -> None:
         a = self.pre["a"]
         rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
@@ -317,8 +338,7 @@ class Window:
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
                           | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0)
                           | (F_FAULT_Y if name == "fault_y" else 0))
-            self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
-                         + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
+            self._poison(self.poisoned())
             self.caps[name] = {"s": self.s, "m": m, "salt": self.salt_bytes}
         t, s = self.t, self.s
         bits = np.arange(t) < m
@@ -329,9 +349,13 @@ class Window:
         self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
         self._a_step()
         if self.cap:
-            torch.cuda.synchronize()
+            self.cap_sync()
         self.phase(None)
         self.t_before = time.perf_counter()
+
+    def cap_sync(self) -> None:
+        """A captured step's wait, after its poison and inputs, before its forward."""
+        torch.cuda.synchronize()
 
     def after(self) -> None:
         self.phase("forward_wait")
@@ -427,7 +451,8 @@ class Window:
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
-        return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
+        return {**F.form_of("dither-1s"), "steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s,
+                "epsilon": "seeded",
                 "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
                 "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
@@ -720,7 +745,8 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     if "receipts" not in g or "a" not in g:
         return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
-    doc: dict = {"which": which, "complete": True, "s": s, "m": m, "t": t, "poison": f"{DF.POISON:#04x}", "epsilon": "seeded"}
+    doc: dict = {"which": which, **F.form_of("dither-1s"), "complete": True, "s": s, "m": m, "t": t,
+                 "poison": f"{DF.POISON:#04x}", "epsilon": "seeded"}
     key, W = win.key, win.window
     # commitments against commit.py
     bits = np.arange(t) < m
@@ -931,7 +957,7 @@ def gate_verdict(gate: dict, control: dict, fault: dict, fault_wb: dict, fault_x
     xa_ok = bool(fault_xa.get("conforming")) if fault_xa is not None else not gate.get("peel")
     ok = (bool(gate.get("ok")) and bool(refused) and bool(fault.get("conforming")) and bool(fault_wb.get("conforming"))
           and xa_ok)
-    return {"ok": ok, "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
+    return {"ok": ok, **F.form_of("dither-1s"), "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
             "fault_conforming": bool(fault.get("conforming")), "fault_wb_conforming": bool(fault_wb.get("conforming")),
             "fault_xa_conforming": None if fault_xa is None else bool(fault_xa.get("conforming")),
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_ref_bad", "y_vs_dequant_z_bad", "receipts_vs_h1r_bad",

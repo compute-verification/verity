@@ -13,8 +13,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
   is an input, so the unit's outputs are the receipt and one bit.
 * **Templates.** K's template takes the tile's parameters with its A and B rows named for their K, ``a_k<K>`` and
   ``b_k<K>`` (`template_params`): `registered.reads` keys a unit's rows by its template's parameter names, so a mixed-K
-  window registers in one read, A row i of K's units under ``a_k<K>[i]``, each port with its own width and domain, and
-  that row's circuit port is ``a_k<K>_<i>`` (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
+  window registers in one read, A row i of K's units under ``a_k<K>[i]`` (a lone row, R or C = 1, under the parameter's
+  name, `row_key`), each port with its own width and domain, and that row's circuit port is ``a_k<K>_<i>``
+  (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
 * **Fixed slots.** The layout is protocol structure, so no token count becomes public. For each K the window's A rows are
@@ -217,7 +218,8 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
     call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no power of two of at least
     R, an A block of a K that no call reads, or a unit whose rows aren't R × C rows of K codes and their scale
     (`h1zy.ROW`), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
-    other than its receipt and ``ok``, or whose shared parameters differ by K."""
+    other than its receipt and ``ok``, whose receipt is no row the Lean verifier's output rows take (`h1zy.row_fits`: the
+    H1 tile's at K = 384 or 896), or whose shared parameters differ by K."""
     linears = tuple((str(name), int(k), int(n)) for name, k, n in linears)
     calls = tuple((str(lin), int(blk)) for lin, blk in calls)
     r, c = (int(x) for x in tile)
@@ -249,6 +251,11 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
                              f"then y (h1zy.RECORD, {48 * r * c} bits): a record of z alone leaves the served y unproved")
         if tuple(name for name, _t in getattr(ret, "fields", ())) != OUTPUTS:
             raise ValueError(f"the tile unit at K = {k} returns {ret}, not {OUTPUTS}")
+        if not Z.row_fits(ret.fields[0][1].leaves):
+            raise ValueError(f"the tile unit at K = {k} returns a {ret.fields[0][1].leaves}-bit receipt, an output row the Lean "
+                             f"verifier refuses: a row's bytes end, with SHA-512's 17 bytes of padding, in its last block "
+                             f"(bytes mod 128 at most 111, Flock.ProvedScope.v2Row), and the H1 tile's receipt, 8 (KS + m) "
+                             f"bytes, doesn't at a K whose KS + m is 14 or 15 mod 16 (384, 416, 896, 928, ...)")
         if shared is not None and tuple(t for _n, t in sig[2:]) != shared:
             raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {units[0][0]}")
         if not _sinks(t):
@@ -264,16 +271,22 @@ def query(program: Program) -> dict[str, Any]:
     return P.template_instances_query([t for _k, t in program.fn.bindings["TILES"]])
 
 
+def row_key(name: str, rows: int, i: int) -> str:
+    """`registered.reads`' key of row ``i`` of a unit's parameter ``name`` of ``rows`` rows: ``name[i]``, or ``name`` for
+    a lone row (R or C = 1), which `registered.reads` reads as the whole parameter."""
+    return name if rows == 1 else f"{name}[{i}]"
+
+
 def window_ports(program: Program) -> dict[str, str]:
     """The circuit port of each A and B row a unit of the window ``program`` reads, by `unit_reads`' and `registered.reads`'
-    keys, every K's in one statement: K's template's A row i (``a_k<K>[i]``) is port ``a_k<K>_<i>`` and its B row j
-    (``b_k<K>[j]``) ``b_k<K>_<j>``; a lone row, which `registered.reads` keys by the parameter's name (``a_k<K>`` when R = 1,
-    ``b_k<K>`` when C = 1), is row 0's. The separator keeps each K's ports its own: without it ``a_k32[20]`` and
-    ``a_k322[0]`` would share ``a_k3220``, and `registered.reads_file` would merge two reads into one port."""
+    keys (`row_key`), every K's in one statement: K's template's A row i (``a_k<K>[i]``) is port ``a_k<K>_<i>`` and its B
+    row j (``b_k<K>[j]``) ``b_k<K>_<j>``; a lone row (``a_k<K>`` when R = 1, ``b_k<K>`` when C = 1) is row 0's. The
+    separator keeps each K's ports its own: without it ``a_k32[20]`` and ``a_k322[0]`` would share ``a_k3220``, and
+    `registered.reads_file` would merge two reads into one port."""
     out: dict[str, str] = {}
     for _k, t in program.fn.bindings["TILES"]:
         for name, rows in t.signature()[0][:2]:
-            out |= {name: f"{name}_0"} if rows.n == 1 else {f"{name}[{i}]": f"{name}_{i}" for i in range(rows.n)}
+            out |= {row_key(name, rows.n, i): f"{name}_{i}" for i in range(rows.n)}
     return out
 
 
@@ -303,14 +316,14 @@ def _inputs(program: Program) -> dict[int, str]:
 
 def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     """The rows unit ``u`` of the window's Program reads (``tp`` its template partition, `P.evaluate`'s): for each of its
-    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, ``zy``, ``salt``, ``position``, ``roots``;
-    `registered.reads`' keys), the window's parameter and the row of it, one whole row of its elements; and for each of its
-    outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the window's. From the unit's call alone, so a
-    unit costs its parameters at any K."""
+    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, a lone row by its parameter's name, ``zy``, ``salt``,
+    ``position``, ``roots``; `registered.reads`' keys, `row_key`), the window's parameter and the row of it, one whole row
+    of its elements; and for each of its outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the
+    window's. From the unit's call alone, so a unit costs its parameters at any K."""
     k, _m = tp.locate(u)
     (inputs, params), node, out = _scan(program), program.root.body.nodes[k], {}
     for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], node.args)):
-        rows = [(f"{name}[{i}]", arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
+        rows = [(row_key(name, t.n, i), arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
         for key, coll in rows:
             rs = runs(coll.refs)
             if len(rs) != 1 or rs[0][0] != "n" or rs[0][1] not in inputs:
@@ -378,14 +391,16 @@ def table_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]
 
 
 def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str], ports: dict[str, str] | None = None,
-                     prog: str | None = None) -> dict[str, Any]:
+                     prog: str | None = None, window: str | None = None) -> dict[str, Any]:
     """The verifier's ``--registered`` file (`registered.reads_file`'s format) of a statement over call ``call``'s units:
     each A row and record at the call's tables (`table_reads`), each B row at the weights' ``b/<K>``. ``roots`` ``{value:
     root}`` holds the call's two tables' roots, as its round's record names them before that round's coin, and the
     weights'; ``ports`` names a key's circuit port when they differ (`window_ports`); ``prog`` the Program's digest when the
     caller holds it. Every table is a ``row/v2`` value of 16-bit leaves under `registered.domain` of its own name, rows and
-    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. A unit of another call
-    reads none of them (None), so the file holds a statement to one call's units."""
+    width: an A table is M rows of the parameter's width, a z table one record a unit of the call. ``window``, a served
+    window's open root, binds the call's two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and
+    never the weights', which are held across windows. A unit of another call reads none of them (None), so the file
+    holds a statement to one call's units."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     k = _k(S)[S.CALLS[call][0]]
     u0, n = call_units(program)[call]
@@ -405,6 +420,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         leaves, words = shape[r["value"]]
         out[(ports or {}).get(key, key)] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-            "domain": G.domain(prog, r["value"], words, leaves).domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+            "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
+            **G.schema_entry(G.SCHEMA_V2),
             "reads": r["rows"]}
     return {"format": G.READS, "ports": out}

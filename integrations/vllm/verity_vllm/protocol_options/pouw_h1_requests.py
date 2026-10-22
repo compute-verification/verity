@@ -30,14 +30,17 @@ an `act` value, a run input under the root of the round that admits it, committe
   first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
   before that round's coin (RT4-INT-22).
-* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales), its served
-  y and, when the run has it, its exact z are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
-  so the step digest, and with it round s's root, commits them before round s's coin. Round s + 1's root also commits
-  round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the manifest, the last
-  round's receipts and every round's root and coin, so the draw follows every round coin by hash.
+* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales) and, when
+  its arm hands them over, its z table (one leaf a unit, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+  so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
+  table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
+  root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
+  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
+  manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
-  Commit's and circuits' check. The round root has no admit root (H1 has no admit unit yet), no producer hands the run a
-  receipt root yet, and no unit reads the round coins yet.
+  Commit's and circuits' check, and nothing yet ties it to the window Program's ``a/<K>`` tree (`pouw_h1_served`), which
+  is committed at the close, under the draw's root and after every round coin. The round root has no admit root (H1 has
+  no admit unit yet), no producer hands the run a receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -49,10 +52,10 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, commit_rows, rows_domain
+from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
+from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
 
 
 @dataclass(frozen=True)
@@ -83,7 +86,7 @@ EMPTY_SLOT = bytes(4)
 #: draws its own salt key (`pouw_h1.H1Run`'s ``key``), which nothing persists
 REQUESTS_NONCE = 1 << 61
 SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
-#: call c's A, y and z tables' nonces are TABLES_NONCE + 3c + 0, 1, 2 (`pouw_h1.H1Run`)
+#: call c's A and z tables' nonces are TABLES_NONCE + 3c + 0 and 2 (`pouw_h1.TABLE_NONCES`; 1 was the retired y table's)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
@@ -133,14 +136,25 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
     if len(entries) > rows:
         raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
     values = [e.row() for e in entries] + [EMPTY_REQUEST] * (rows - len(entries))
-    return commit_rows(requests_binding(salt, r), r, values, hash=HM96, salt_key=key, nonce=REQUESTS_NONCE + r)
+    return hiding_rows(requests_binding(salt, r), r, values, key, REQUESTS_NONCE + r)
 
 
 def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key: bytes) -> Any:
     """Round r's slot table: `rows` (T) hiding leaves, leaf i naming the request whose row is slot i of step r's A tables
     (`owners`, in the step's batch order), `EMPTY_SLOT` past them."""
     values = [slot_leaf(o) for o in owners[:rows]] + [EMPTY_SLOT] * (rows - min(len(owners), rows))
-    return commit_rows(slots_binding(salt, r), r, values, hash=HM96, salt_key=key, nonce=SLOTS_NONCE + r)
+    return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
+
+
+def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
+    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
+    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
+    8439's stream (`commit.serving_rows.chacha20`) with the counter's high word, 0 below 2^32 blocks, first in its nonce.
+    The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
+    from verity_vllm.commit.serving_rows import chacha20
+    y = chacha20(key, bytes(4) + nonce.to_bytes(8, "little"), len(values) * HM96_SALT)
+    rows = {i: v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)}
+    return MerkleTree(rows_domain(binding, owner, len(values), HM96), rows, lambda _: ROW_SCHEMA)
 
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
@@ -149,8 +163,42 @@ def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes
     return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
 
 
+def _root64(h: Any) -> bool:
+    try:
+        return isinstance(h, str) and len(bytes.fromhex(h)) == 64
+    except ValueError:
+        return False
+
+
+def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
+    """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
+    and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
+    has no call, a call whose row carries no A table root (``tables``' ``a``, 64 bytes), or a step whose rows aren't the
+    ones its round's ``calls`` digest is over (`step_digest`); None when each call's A table is under its own round's
+    root, and so recorded before that round's coin."""
+    steps: dict[Any, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        steps.setdefault(row.get("step"), []).append(row)
+    logged = [x.get("round") for x in log]
+    for s, got in steps.items():
+        if s not in logged:
+            return (f"call {got[0].get('index')} is at step {s}, which no round of the log closes, so its A table is under "
+                    "no round root")
+    for x in log:
+        r, got = x.get("round"), steps.get(x.get("round"), [])
+        if not got:
+            return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
+        bare = next((m for m in got if not _root64((m.get("tables") or {}).get("a"))), None)
+        if bare is not None:
+            return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
+                    "leaves that no round root commits")
+        if step_digest(salt, r, got).hex() != x.get("calls"):
+            return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
+    return None
+
+
 def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
-    """Round r's root, over step r's calls (`step_digest`, their A, y and z tables among them), the root of the request
+    """Round r's root, over step r's calls (`step_digest`, their A and z tables among them), the root of the request
     table of the entries it admits, the root of its slot table and round r - 1's receipts (`receipts_digest`;
     `NO_RECEIPTS` in round 0)."""
     return tagged(ROUND_TAG, salt, r, calls, requests, slots, receipts)
@@ -329,7 +377,7 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
            "REQUESTS_NONCE", "ROUND0",
-           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
+           "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root", "hiding_rows",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
            "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest"]
+           "sort_batch_req_ids", "step_digest", "tables_reason"]

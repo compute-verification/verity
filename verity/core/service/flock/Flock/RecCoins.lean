@@ -94,14 +94,26 @@ u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/
 def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
-/-- The inner statement and the inner session's record, as the verifier holds them, and at candidate 3's session the
-verifier's inner shape (`inner`), which the inner statement must be (`RecVStar.checkInnerStmt`, at `Inner.load`). -/
+/-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
+(`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id,
+whether its coins are the coin server's (`os`), its lookup tables, and its draw's bytes. `RecSetup.checkForm` holds
+them to the setup the inner statement's files give it. -/
+structure InnerForm where
+  statement : String
+  os : Bool
+  tables : List (String × ByteArray)
+  draw : Option ByteArray
+
+/-- The inner statement and the inner session's record, as the verifier holds them, at candidate 3's session the
+verifier's inner shape (`inner`), which the inner statement must be (`RecVStar.checkInnerStmt`, at `Inner.load`), and
+how the inner statement is set up (`form`). -/
 structure Files where
   circuit : ByteArray
   pub : ByteArray
   partition : Json
   record : String
   inner : Option RecVStar.Inner := none
+  form : Option InnerForm := none
 
 /-- What check 5 reads of the inner session of V*'s unit `unit`: its statement's `m` and `k_log`, its extra claims at the
 record's link points, each rep's coins (an error without the unit), and the comb at a rep's fold points (`Inner.comb`). Set
@@ -761,18 +773,50 @@ def argOf (args : List String) (k : String) : Option String :=
   | _ :: v :: _ => some v
   | _ => none
 
+/-- The lookup tables in `dir`, as `verify --tables` reads them: each `MUFU_TABLES` table whose `<name>.u32` is there. -/
+def tablesIn (dir : String) : IO (List (String × ByteArray)) := do
+  let mut out := []
+  for t in MUFU_TABLES do
+    let p : System.FilePath := dir ++ s!"/{t.name}.u32"
+    if (← p.pathExists) then out := out ++ [(t.name, (← IO.FS.readBinFile p))]
+  return out
+
+/-- `--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]`:
+how Flock's plain verifier is told to set the inner statement up (`InnerForm`; coins `seed` unless given), or none. -/
+def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
+  let some s := argOf args "--rec-inner-statement"
+    | return if (argOf args "--rec-inner-statement-coins").isSome || (argOf args "--rec-inner-tables").isSome ||
+          (argOf args "--rec-inner-draw").isSome then
+        .error "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
+      else .ok none
+  let os ← match argOf args "--rec-inner-statement-coins" with
+    | none | some "seed" => pure false
+    | some "os" => pure true
+    | some c => return .error s!"--rec-inner-statement-coins {c}: not os or seed"
+  try
+    let tables ← match argOf args "--rec-inner-tables" with
+      | some d => tablesIn d
+      | none => pure []
+    let draw ← (argOf args "--rec-inner-draw").mapM IO.FS.readBinFile
+    return .ok (some ⟨s, os, tables, draw⟩)
+  catch e => return .error s!"rec inner statement: {e}"
+
 /-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR`: the inner statement and
-the inner session (its `session.json`), all four or none. -/
+the inner session (its `session.json`), all four or none, with how the inner statement is set up (`formInput`). -/
 def filesOnly (args : List String) : IO (Except String (Option Files)) := do
   match argOf args "--rec-inner-circuit", argOf args "--rec-inner-public", argOf args "--rec-inner-partition",
       argOf args "--rec-inner-session" with
   | none, none, none, none => return .ok none
   | some c, some p, some q, some s =>
+    let form ← match ← formInput args with
+      | .ok f => pure f
+      | .error e => return .error e
     try
       let partition ← match Json.parse (← IO.FS.readFile q) with
         | .ok j => pure j
         | .error e => return .error s!"--rec-inner-partition {q}: not JSON: {e}"
-      return .ok (some ⟨← IO.FS.readBinFile c, ← IO.FS.readBinFile p, partition, ← IO.FS.readFile (s ++ "/session.json"), none⟩)
+      return .ok (some ⟨← IO.FS.readBinFile c, ← IO.FS.readBinFile p, partition, ← IO.FS.readFile (s ++ "/session.json"),
+        none, form⟩)
     catch e => return .error s!"rec inner session: {e}"
   | _, _, _, _ =>
     return .error "--rec-inner-circuit, --rec-inner-public, --rec-inner-partition and --rec-inner-session go together"

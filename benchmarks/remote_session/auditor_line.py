@@ -23,7 +23,27 @@ the pin at epoch k, opened at its window root R_k, ended closed with no refused 
 after R_k, and each coin released after its root's receipt. A session served by `--challenger serve` (the verifier's
 machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not the auditor's.
 
-    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P] [--ledger HEAD ...] [--ingress B/S ...]
+**Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
+(`credit`), and gives any other session zero credit with the reasons:
+
+- *credited*: its window reads through `challenger.credited_session` with the descriptor of the verifier that ran it,
+  `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being `git rev-parse COMMIT:verity/core/protocols/
+  remote_bandwidth` of the run's recorded commit (`--commit`), so it counts only toward a period that committed that
+  verifier (PRF-126);
+- *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
+  to, in every window of the period (PRF-132);
+- *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
+  session can still close complete;
+- *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
+  lines as the gate served them): its open sealed the log as it stood, and one of the sealed lines records the open's
+  `pinned` as a commit of main's history (RT4-INT-40). With no log, no session is pinned.
+
+At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
+reasons. What every accepted paced session measured, credited or not, is `measured`. `--table` writes each session's
+four checks and the line as Markdown.
+
+    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG]] [--ledger HEAD ...]
+        [--ingress B/S ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -31,6 +51,7 @@ import argparse
 import copy
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,7 +61,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
 import verifier as V  # noqa: E402
-from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 
@@ -48,6 +69,26 @@ INGRESS = (4.4e9, 54.4e9)
 """The ingress charges a gate run's line is read at: the node's NICs into memory (time-held) and every link into it
 (link-charged), bytes a second."""
 LANE, PEER = "memory-accounting", "vy-nebius-1"
+VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
+LEAN_VERDICTS = ("lean", "both")
+CHECKS = ("credited", "complete", "accepted", "pinned")
+"""What a session's credit needs, each reported per session in this order."""
+
+
+def descriptor(tree: str) -> bytes:
+    """The descriptor of the circuit a session of the verifier at git tree `tree` (`VERIFIER_TREE`'s) proves: what a
+    period's `--circuit` is the SHA-512 of."""
+    return f"{audit.PROTOCOL_ID} verifier tree {tree}".encode()
+
+
+def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> str:
+    """`VERIFIER_TREE`'s git tree at `commit`, the verifier run's recorded commit, read in `repo`'s git."""
+    p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet",
+                        f"{commit}^{{commit}}:{VERIFIER_TREE}"], capture_output=True, text=True)
+    if p.returncode or len(p.stdout.strip()) != 40:
+        raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has the "
+                         "verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
+    return p.stdout.strip()
 
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
@@ -139,7 +180,8 @@ def log_checks(lines: list[str], window_root: str) -> dict:
             and fam["challenge"]["after"][0] == window_root}
 
 
-def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: str) -> tuple[dict, dict, dict]:
+def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: str
+                 ) -> tuple[list[str], dict, dict, dict]:
     """The auditor's ledger: its longest head under `key`, verified, with its windows by root and its periods."""
     lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, CH.lms_verify)
     raw = [line.encode() for line in lines]
@@ -155,8 +197,67 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
         "opened_utc": p["open"]["body"].get("opened_utc") if p.get("open") else None,
         "closed": p.get("close") is not None,
         "closed_utc": p["close"]["body"].get("closed_utc") if p.get("close") else None,
+        "complete": p["close"]["body"].get("complete") if p.get("close") else None,
         "ok": p["lane"] == lane and p.get("close") is not None}
-    return windows, periods, doc
+    return lines, windows, periods, doc
+
+
+def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
+                 period: str, desc: bytes, pins: list[str] | None) -> dict:
+    """Whether session `s`, whose window root is R, earns credit: its window credited toward the audit's period for
+    the verifier `desc` describes (`credited_session`), its window and its period closed complete, its verdict the
+    Lean's acceptance, and its open's pin one the host's pins log `pins` records as main's (`pinned_session`; None: no
+    log); each check with its reason, and `zero` the reasons it earns none."""
+    sid = (s.get("challenger") or {}).get("session")
+    credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
+    try:
+        got = Ch.credited_session(lines, {"root": R}, key, desc, CH.lms_verify)
+        credited.update(period=got.period, ok=got.period == period, reason=None if got.period == period else (
+            f"its window counts toward period {got.period}, not the audit's period {period}"))
+    except Ch.CoinError as e:
+        credited.update(ok=False, reason=str(e))
+    end = ((windows.get(R) or {}).get("end") or {}).get("body") or {}
+    close = ((periods.get(period) or {}).get("close") or {}).get("body")
+    outcome = next((w for w in (close or {}).get("windows", []) if w.get("session") == sid), None)
+    complete = {"window": end.get("complete") is True, "released": end.get("released"),
+                "period_closed": close is not None, "in_close": None if outcome is None else outcome.get("complete"),
+                "period": None if close is None else close.get("complete") is True}
+    why = []
+    if not complete["window"]:
+        reserved = (((windows.get(R) or {}).get("reserve") or {}).get("body") or {}).get("families") or []
+        got = end.get("released") or {}
+        short = [f"{got.get(label, 0)} of its {n} {label} coins" for label, n in reserved if got.get(label, 0) < n]
+        why.append("its window has no end on the ledger" if not end else "its window closed incomplete: the "
+                   f"challenger released {', '.join(short) or 'fewer coins than it reserved'}")
+    if close is None:
+        why.append(f"period {period} hasn't closed")
+    elif not complete["period"]:
+        short = sum(not w.get("complete") for w in close.get("windows", []))
+        why.append(f"period {period} closed incomplete ({short} of its {len(close.get('windows', []))} windows "
+                   "incomplete)")
+    elif outcome is None or outcome.get("complete") is not True:
+        why.append(f"period {period}'s close doesn't list its window complete")
+    complete.update(ok=not why, reason="; ".join(why) or None)
+    verdict = s.get("verdict")
+    if verdict not in LEAN_VERDICTS:
+        reason = f"its verdict is {verdict}'s, not the Lean's"
+    elif s.get("disagreement") is not None:
+        reason = "the two verifiers disagreed"
+    elif s.get("accepted") is not True:
+        reason = f"the Lean refused it ({(s.get('failure') or {}).get('failure')})"
+    else:
+        reason = None
+    accepted = {"ok": reason is None, "verdict": verdict, "failure": s.get("failure"), "reason": reason}
+    opened = (((windows.get(R) or {}).get("open") or {}).get("body")) or {}
+    pinned: dict = {"commit": opened.get("pinned"), "seal": opened.get("pins")}
+    try:
+        Ch.pinned_session(lines, {"root": R}, key, pins, CH.lms_verify)
+        pinned.update(ok=True, reason=None)
+    except Ch.CoinError as e:
+        pinned.update(ok=False, reason=str(e))
+    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned}
+    zero = [f"not {name}: {c['reason']}" for name, c in checks.items() if not c["ok"]]
+    return {**checks, "ok": not zero, "zero": zero}
 
 
 def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, period: str, lane: str, peer: str,
@@ -209,70 +310,140 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
-            lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS) -> dict:
+            lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS, desc: bytes | None = None,
+            commit: str | None = None, pins: list[str] | None = None) -> dict:
+    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), and
+    `pins` the challenger host's pins log, its lines (None: the gate served none)."""
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
     ch_dir = out / "challenger"
     kinds = {(s.get("challenger") or {}).get("challenger") for s in v["sessions"]}
     key = windows = periods = None
+    lines: list[str] = []
     doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "ingress": list(ingress),
+                 "commit": commit, "descriptor": None if desc is None else desc.decode(),
+                 "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
     if "gate" in kinds:
-        if pin is None or period is None:
-            raise SystemExit("auditor_line: a gate run's line needs --pin and --period")
+        if pin is None or period is None or desc is None:
+            raise SystemExit("auditor_line: a gate run's line needs --pin, --period and --commit (the verifier run's "
+                             "recorded commit, whose verifier the period must have committed)")
         heads = [*(heads or []), *sorted(ch_dir.glob("*.ledger.jsonl"))]
         key = next((k for k in (Ch.ChallengerKey.from_json(json.loads(p.read_text()))
                                 for p in sorted(ch_dir.glob("*/out/key.json")))
                     if hashlib.sha512(k.public).hexdigest() == pin), None)
         if key is None:
             raise SystemExit(f"auditor_line: no session's key.json under {ch_dir} is the pinned key {pin[:16]}…")
-        windows, periods, doc["ledger"] = ledger_check(heads, key, period, lane)
+        lines, windows, periods, doc["ledger"] = ledger_check(heads, key, period, lane)
         doc["ledger"]["heads_read"] = [str(p) for p in heads]
-    rows, line = [], {}
+    rows, measured = [], {}
     for s in v["sessions"]:
         k, c = s["k"], s.get("challenger") or {}
         R = coins.window(D, k)["root"]
         row = {"k": k, "accepted": s["accepted"], "failure": s.get("failure"), "pace": s.get("pace"),
                "challenger": c.get("challenger"), "challenger_session": c.get("session"),
                "verifier_coin_check": c.get("reason")}
+        rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
+            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins)
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
+            row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
+                                      "period credits its window")
             d = Path(c["dir"]) if Path(c["dir"]).is_dir() else ch_dir / c["session"]
         else:
-            rows.append({**row, "skipped": "no challenger log: coins drawn in the verifier's process"})
+            row["credit"] = no_credit("its coins were drawn in the verifier's process: no challenger, no ledger")
+            row["skipped"] = "no challenger log: coins drawn in the verifier's process"
             continue
         try:
-            lines, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
+            log, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
-            rows.append({**row, "refused": f"the challenger's session is not readable as signed: {e}"})
+            row["refused"] = f"the challenger's session is not readable as signed: {e}"
+            row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["refused"]]}
             continue
-        row["log"] = log_checks(lines, R)
-        if not (s.get("pace") and s["accepted"]):
-            rows.append(row)
+        row["log"] = log_checks(log, R)
+        good = row.get("ledger", {"ok": True})["ok"] and not row["log"]["coin_before_its_root"] \
+            and row["log"]["clock_monotone"] and row["log"]["sigma0_after_window_root"] and c.get("reason") is None
+        row["of_record"] = bool(good and c.get("challenger") == "gate")
+        if c.get("challenger") == "gate" and not good:
+            why = ("not of record: its ledger entries, its release log or its coins fail the checks beside it (ledger, "
+                   "log, verifier_coin_check)")
+            row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], why]}
+        if not s.get("pace"):
             continue
-        seen, row["named"] = auditor_seen(lines, s["windows_seen"])
+        t = f"T={s['pace']['t_ms'] / 1000:g}s"
+        row["T"] = t
+        if not s["accepted"]:
+            continue
+        seen, row["named"] = auditor_seen(log, s["windows_seen"])
         a = copy.deepcopy(s)
         a["windows_seen"] = seen
         row["groups"] = len(seen)
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, ingress)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, ingress)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
-        good = row.get("ledger", {"ok": True})["ok"] and not row["log"]["coin_before_its_root"] \
-            and row["log"]["clock_monotone"] and row["log"]["sigma0_after_window_root"] and c.get("reason") is None
-        row["of_record"] = bool(good and c.get("challenger") == "gate")
-        rows.append(row)
-        t = f"T={s['pace']['t_ms'] / 1000:g}s"
         for clock in ("auditor", "verifier"):
             for b, x in row[f"shares_{clock}_clock"].items():
-                cur = line.setdefault(t, {}).setdefault(clock, {}).get(b)
+                cur = measured.setdefault(t, {}).setdefault(clock, {}).get(b)
                 if cur is None or x["time"] < cur["time"]:
-                    line[t][clock][b] = {"k": k, "time": x["time"], "snapshot": x["snapshot"],
-                                         "of_record": row["of_record"]}
-    doc["sessions"], doc["line"] = rows, line
+                    measured[t][clock][b] = {"k": k, "time": x["time"], "snapshot": x["snapshot"],
+                                             "of_record": row["of_record"], "credited": row["credit"]["ok"]}
+    doc["sessions"], doc["measured"] = rows, measured
+    doc["line"], doc["credit"] = credited_line(rows, ingress)
     return doc
+
+
+def no_credit(why: str) -> dict:
+    return {**{c: {"ok": False, "reason": why} for c in CHECKS}, "ok": False, "zero": [f"not credited: {why}"]}
+
+
+def credited_line(rows: list[dict], ingress: tuple[float, ...]) -> tuple[dict, dict]:
+    """The line of record, on the auditor's clock: at each T the least share among the credited sessions there, or zero
+    with every session's reasons; and who earned credit, who didn't and why, in a sentence."""
+    line: dict = {}
+    for t in sorted({r["T"] for r in rows if r.get("T")}):
+        at = [r for r in rows if r.get("T") == t]
+        ok = [r for r in at if r["credit"]["ok"]]
+        if ok:
+            line[t] = {b: min(({"k": r["k"], "time": r["shares_auditor_clock"][b]["time"],
+                                "snapshot": r["shares_auditor_clock"][b]["snapshot"]} for r in ok),
+                              key=lambda x: x["time"]) for b in (f"{b:.1e}" for b in ingress)}
+            line[t]["credited_sessions"] = [r["k"] for r in ok]
+        else:
+            line[t] = {**{f"{b:.1e}": {"time": 0.0, "snapshot": 0.0} for b in ingress}, "credited_sessions": [],
+                       "zero": {r["k"]: r["credit"]["zero"] for r in at}}
+    credited = [r["k"] for r in rows if r["credit"]["ok"]]
+    zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
+    if not credited:
+        said = "the line credits zero: no session is credited, complete, accepted and pinned"
+    else:
+        said = (f"the line credits session(s) {', '.join(map(str, credited))}"
+                + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
+    return line, {"credited_sessions": credited, "zero": zero, "summary": said + "".join(
+        f"; session {k}: {'; '.join(why)}" for k, why in zero.items())}
+
+
+def table(doc: dict) -> str:
+    """`analyse`'s doc as Markdown: each session's four checks (`CHECKS`), with the reason of each that failed, and
+    its credit; then the line at each T, time-held / link-charged with the snapshot forms."""
+    b = [f"{x:.1e}" for x in doc["ingress"]]
+    out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
+    for s in doc["sessions"]:
+        c = s["credit"]
+        cells = ["yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in CHECKS]
+        mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
+        credit = ("credited: " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) if c["ok"] and all(mine.values())
+                  else "zero")
+        out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
+    out.append("")
+    for t, row in doc["line"].items():
+        out.append(f"line {t}: credited {row['credited_sessions']}, time-held / link-charged "
+                   + " / ".join(f"{row[x]['time']:.4%}" for x in b) + " (snapshot "
+                   + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ")")
+    out.append(doc["credit"]["summary"])
+    return "\n".join(out) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -285,13 +456,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ledger", type=Path, action="append",
                     help="a published head of the auditor's ledger, read with each session's (challenger/*.ledger.jsonl): "
                          "all are checked to extend one another, and the longest is read")
+    ap.add_argument("--commit", help="the verifier run's recorded commit (its attempt's source.commit): its "
+                    f"{VERIFIER_TREE} tree names the verifier a gate run's period must have committed")
+    ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
+    ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
+                    "pin: without it no session is pinned (RT4-INT-40)")
+    ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", default=PEER)
     ap.add_argument("--ingress", type=float, nargs="+", default=list(INGRESS), metavar="B/S")
     a = ap.parse_args(argv)
+    desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
+    pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress))
+                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins)
     print(json.dumps(doc, indent=1, default=str))
+    if a.table is not None:
+        a.table.write_text(table(doc))
+    print(f"auditor_line: {doc['credit']['summary']}", file=sys.stderr)
     return 0
 
 

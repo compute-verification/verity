@@ -919,13 +919,13 @@ class Session:
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
-        append coins are all released."""
+        append coins are all released (or it reserved none: `coins.families`)."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
-                or self.coins.appends == self.coins.commitment.family(coins.APPEND)):
+                or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
         first, coin = self.extent, coins.coin(self.coins.append(root))
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),

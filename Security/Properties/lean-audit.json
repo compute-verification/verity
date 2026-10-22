@@ -155,11 +155,6 @@
    "except": ["Properties.Pouw.Credit"],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Pouw.Credit": {
-   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
-   "except": [],
-   "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
-  },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
    "except": [],
@@ -274,6 +269,11 @@
    ],
    "except": [],
    "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`SampledProofs.Slots.layout`, `SampledProofs.Partition.units`) and the verifier's population draw (`SampledProofs.Draw.drawUnits`, from bytes as `Properties.SampledProofs.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+  },
+  "Properties.Pouw.Credit": {
+   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   }
  },
  "reads_exempt": {
@@ -8274,7 +8274,7 @@
    "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Registered": {
-   "digest": "af2e74101b230b1f49d1ce79eb676e1436055130655ac3efbe457993ee754f81",
+   "digest": "b28ec70e796ce02484fa8659e2636c5a63a08d2e14f5113bd16c713f41d4e2f0",
    "definitions": {
     "SampledProofs.Registered.ENTRY_KEYS": "6f05cfc6ff6b3b0ad56f59e907efb5d41a6629417e1a64c1ee1a7bad7c6d0c8f",
     "SampledProofs.Registered.Entry": "d192f6101537cf4f508aabe2a21685f00c2fec96b01038378df81c20bd174894",
@@ -8294,7 +8294,8 @@
     "SampledProofs.Registered.WINDOW_KEY": "84e015a1d4c1807c027caaf9044e207ad91b93ffd66bd91f7b6e255a12cb9f89",
     "SampledProofs.Registered.WORD_BITS": "5a193994ad2c4b66f4e9020d63a40ba38d27f5e10ca01361603eefd0f4474fbb",
     "SampledProofs.Registered.domain": "37d88b7c699c64128ddc28ced3b266d5a747ea9544a04dd61ff1ffc30096f3a7",
-    "SampledProofs.Registered.domainAt": "45d332bfeda841f2239e7db99008ee94d03ebfe1e3177dd1d4a929dc49d95cce",
+    "SampledProofs.Registered.domainAt": "106dad0edefc330fb8f71a92c084e61a7815560b27b458fe909d19995ce2a83e",
+    "SampledProofs.Registered.domainBound": "56b034d54d623bff853471379a0b8a4f247e2c56069ce33541b3bb3e427cec9b",
     "SampledProofs.Registered.entries": "6fa6c8529457bc121b22c3847408686e92693e7341ce99f0a3a0873bb18be1b3",
     "SampledProofs.Registered.inputNodes._sparseCasesOn_1": "67a0668c9c12503747a5df7916cc591a039b511502f6209bcd4bcf151d8e0c58",
     "SampledProofs.Registered.lower._sparseCasesOn_7": "8caf14c561d7e6f2974be20c93dc8d0bb4cbfe82ffbadffcc798e7f06ba5a4a5",
