@@ -68,7 +68,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
 ``(receipt, ok)``, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
-combine's ok.
+combine's ok. `statement_ports` is a lane's and the combine's C-Flock ports, each input's and the output's bits in its port's
+row, which Lean states as `PouwWindow.Lanes` (with each port's registered row) for proofs' decoders.
 """
 from __future__ import annotations
 
@@ -447,6 +448,50 @@ def combine(tile: Any) -> Any:
     return bind(PouwH1Combine, TILE=tile)
 
 
+# -- the statements' ports ------------------------------------------------------------------------------------------------------
+
+#: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order (#3116's
+#: `pouw.leaf_lanes.PUBLIC`)
+PUBLIC = ("salt", "position", "roots", "lane")
+
+
+def _fields(path: str, t: Any, bit: int) -> list[tuple[str, int, int]]:
+    """``t`` from bit ``bit`` of a row as its fields ``(path, first bit, bits)``: a record by its fields, anything else whole."""
+    out = []
+    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, Record) else [(path, t)]):
+        out.append((p, bit, sum(ft.leaf_widths())))
+        bit += out[-1][2]
+    return out
+
+
+def statement_ports(d: Any) -> list[tuple[str, list[tuple[str, int, int]]]]:
+    """The C-Flock ports of a leaf's lane or combine statement, ``d`` `PouwH1LaneZy` or `PouwH1Combine` bound to its TILE at
+    any K, in order: each its name and its fields ``(path, first bit, bits)`` in its bit row, the Definition's inputs it
+    holds, their leaves concatenated in signature order (`class_statement.unit_lowering`; ``a[0].codes`` the codes of row 0
+    of ``a``), and last the output port ``o0``, ``ok``. A lane's are ``a0`` .. ``a3`` (its A rows by row slot), ``b0`` ..
+    ``b7``, ``admit``, ``zy``, ``partials`` and ``pub`` (`PUBLIC`); the combine's ``p0`` .. ``p<lanes - 1>`` (its partials
+    rows) and ``receipt``; as #3116's `pouw.leaf_lanes` reads them. Lean states it as `PouwWindow.Lanes`."""
+    params, ret = d.signature()
+    ty = dict(params)
+    if d.defn is PouwH1LaneZy:
+        groups = ([(f"{n}{i}", [f"{n}[{i}]"]) for n in ("a", "b") for i in range(ty[n].n)]
+                  + [(n, [n]) for n in ("admit", "zy", "partials")] + [("pub", list(PUBLIC))])
+    elif d.defn is PouwH1Combine:
+        groups = [(f"p{x}", [f"partials[{x}]"]) for x in range(ty["partials"].n)] + [("receipt", ["receipt"])]
+    else:
+        raise ValueError(f"a leaf's statement is PouwH1LaneZy_v1 or PouwH1Combine_v1, not {d.defn.id}")
+    if {p.partition("[")[0] for _port, ps in groups for p in ps} != set(ty):
+        raise AssertionError(f"{d.defn.id}: the ports {groups} are not its parameters {list(ty)}")
+    out = []
+    for port, ps in groups:
+        fields: list[tuple[str, int, int]] = []
+        for p in ps:
+            name, _, row = p.partition("[")
+            fields += _fields(p, ty[name].elem if row else ty[name], fields[-1][1] + fields[-1][2] if fields else 0)
+        out.append((port, fields))
+    return out + [("o0", _fields("ok", ret.fields[0][1], 0))]
+
+
 # -- on words -----------------------------------------------------------------------------------------------------------------
 
 def _sx(v: int, bits: int) -> int:
@@ -525,7 +570,7 @@ def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int])
     return int(out == [v & M32 for v in receipt])
 
 
-__all__ = ["BF16", "F32", "LANE", "LEAST_K", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1TileZy",
-           "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check",
-           "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference",
-           "proved_k", "records", "reference", "row_fits", "unit", "zy_cell"]
+__all__ = ["BF16", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy",
+           "PouwH1TileZy", "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW",
+           "TILES", "check", "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial",
+           "lane_reference", "proved_k", "records", "reference", "row_fits", "statement_ports", "unit", "zy_cell"]
