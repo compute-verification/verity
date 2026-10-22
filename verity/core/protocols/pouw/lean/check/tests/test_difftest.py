@@ -16,12 +16,13 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
-Its `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` against `credit.credited`, `credit.drawn`,
-`credit.outcome`, `credit.window`, `credit.period_credit` and `credit.a_link`: one `Port` each, over the cases
-`pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
-the units a draw coin draws from a window's layout and each of them proved, a served window whole, a period of the
-auditor's ledger and its windows, a window's A trees under its round roots, then one mutation each aimed at every
-refusal), compared output for output: the credited calls, the drawn units or null, or the same refusal.
+Its `credit`, `drawn`, `outcome`, `window`, `period`, `a-link` and `weights` against `credit.credited`, `credit.drawn`,
+`credit.outcome`, `credit.window`, `credit.period_credit`, `credit.a_link` and `credit.weights`: one `Port` each, over the
+cases `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit
+bits, the units a draw coin draws from a window's layout and each of them proved, a served window whole, a period of the
+auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its open
+root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the drawn units,
+the weights' root or null, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
@@ -273,6 +274,12 @@ def a_link(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
+def weights(case: dict) -> dict:
+    got, refused = Cr.weights(*(case[k] for k in credit_cases.WEIGHTS_KEYS))
+    _counted(refused, "weights")
+    return {"weights": got.hex()} if refused is None else {"refused": list(refused)}
+
+
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:
     return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
                   inputs=st.builds(instance, st.randoms(use_true_random=False),
@@ -285,30 +292,33 @@ OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
+WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)
 
 
 def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, and every other refusal of `credit.credited`, `credit.drawn`, `credit.outcome`, `credit.window`,
-    `credit.period_credit` and `credit.a_link`."""
+    didn't commit, B rows other than the ones the window's open root binds, and every other refusal of `credit.credited`,
+    `credit.drawn`, `credit.outcome`, `credit.window`, `credit.period_credit`, `credit.a_link` and `credit.weights`."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400))}
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+                             (WEIGHTS, 300))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
                                   (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
-                                  (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)):
+                                  (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES),
+                                  (WEIGHTS, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)):
         swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
-            "a-link accept"} <= set(CREDITED)
+            "a-link accept", "weights accept"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
@@ -325,7 +335,9 @@ def test_credit(pass_server):
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
-                 "a-link a-link: the window registers no A value", "which is no registered A value"):
+                 "a-link a-link: the window registers no A value", "which is no registered A value",
+                 "weights weights: the window's registered weights are not the ones its open root binds",
+                 "weights weights: the window registers no weights", "weights weights: the window registers K = #"):
         assert any(part in k for k in CREDITED), part
 
 

@@ -30,6 +30,9 @@ it, string for string:
   the period's committed circuit (`creditedSession`) and credited.
 * `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
   each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
+* `weights` is `credit.weights`: each K's `…/b/<K>` (`isHeld`) registered once, and `weightsRoot` of their roots, the
+  window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows, codes and
+  s_w, were fixed before its salt.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -498,6 +501,14 @@ def isA : Json → Bool
     | _ => false
   | _ => false
 
+/-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`); every other value a window registers
+is its own. -/
+def isHeld : Json → Bool
+  | .str v => match (v.splitOn "/").reverse with
+    | k :: "b" :: _ => !k.isEmpty && k.all Char.isDigit
+    | _ => false
+  | _ => false
+
 /-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
 def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
   | 0, index => match have_.get? (0, index) with
@@ -572,5 +583,61 @@ def aLink (rounds entries : Json) : R Unit := do
       aLinkRefuse (s!"registered A value {v}'s root is not the tree over the segments the round roots commit: its " ++
         "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
         "rows each round's root committed")
+
+def WEIGHTS_TAG : String := "verity/pouw/h1/weights/v1"
+def WINDOW_ROOT_FORM : String := "the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)"
+def REQUESTS_FORM : String := "the window's round-0 request table's root is not a SHA-512 digest (128 lowercase hex)"
+def SESSION_FORM : String :=
+  "the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of " ++
+  "[A-Za-z0-9._:-], the first alphanumeric)"
+def OTHER_WEIGHTS : String :=
+  "the window's registered weights are not the ones its open root binds: weights_root of each K's …/b/<K> root, its " ++
+  "round-0 request table's root and its session are not its open root (salt.window_open_root), so a B row, its " ++
+  "codes or its s_w, is not the one registered before the window's salt. Register each K's B rows once, before the " ++
+  "window opens, and open them at that root"
+
+/-- `credit.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
+def weightsRoot (roots : List (Nat × ByteArray)) : ByteArray := weightsRootAt 64 WEIGHTS_TAG roots
+
+def weightsRefuse {α : Type} (why : String) : R α := throw ("weights", why)
+
+/-- `credit.weights`: the weights' root the window registered, each K of its layout's `…/b/<K>` once and no other K,
+when `weightsRoot` of their roots, its round-0 request table's root `requests` and its session `session` are its open
+root (`windowOpenRoot`); else the refusal (`weights` or `layout`). -/
+def weights (window layout entries requests session : Json) : R ByteArray := do
+  let some r := digest? (get window "root") | weightsRefuse WINDOW_ROOT_FORM
+  let some t := digest? requests | weightsRefuse REQUESTS_FORM
+  let .str s := session | weightsRefuse SESSION_FORM
+  unless sessionId? s do weightsRefuse SESSION_FORM
+  discard <| strata layout
+  let ks : List Nat := match get layout "linears" with
+    | .arr xs => (xs.toList.filterMap fun x => match x with
+        | .arr #[_, k, _] => nat? k
+        | _ => none).eraseDups
+    | _ => []
+  let .arr es := entries | weightsRefuse ENTRIES_FORM
+  unless es.all isObj do weightsRefuse ENTRIES_FORM
+  let mut roots : List (Nat × ByteArray) := []
+  for e in es do
+    let v := get e "value"
+    if isHeld v then
+      let name := (str? v).getD ""
+      let k := (((name.splitOn "/").getLast?.getD "").toNat?).getD 0
+      unless ks.contains k do
+        weightsRefuse (s!"the window registers weights {name} of K = {k}, which no linear of its circuit has: it " ++
+          "registers each of its K's B rows as …/b/<K>, and no other")
+      if (roots.lookup k).isSome then
+        weightsRefuse (s!"the window registers K = {k}'s weights twice ({name}): each K's B rows are one registered " ++
+          "value …/b/<K>")
+      let some h := digest? (get e "root")
+        | weightsRefuse s!"registered weights {name}'s entry has no root (a SHA-512 digest)"
+      roots := roots ++ [(k, h)]
+  for k in ks.mergeSort do
+    unless (roots.lookup k).isSome do
+      weightsRefuse (s!"the window registers no weights …/b/{k} of K = {k}: each K's B rows, their codes and s_w, " ++
+        "are registered under the weights' root its open root binds, before its salt")
+  let w := weightsRoot roots
+  unless windowOpenRoot w t s == r do weightsRefuse OTHER_WEIGHTS
+  pure w
 
 end PouwCheck.Credit

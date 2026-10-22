@@ -17,6 +17,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   (`key`, `ledger`, `name`, `windows`, as `credit.period_credit` takes them, each window's evidence `window`'s and its
   `descriptor` in hex): `{"credited": [[indices], …]}`; or
   `{"refused": [code, why]}`.
+* `weights` (`window`, `layout`, `entries`, `requests`, `session`, as `credit.weights` takes them): `{"weights": hex}`,
+  or `{"refused": [code, why]}`.
 -/
 
 namespace PouwCheck.CreditDifftest
@@ -55,9 +57,14 @@ def aLinkOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun _ => Json.null)
     (Credit.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries"))
 
+def weightsOf (j : Json) : Except String Json := do
+  let f := PouwCheck.Difftest.get j
+  PouwCheck.Difftest.refusal (fun w => Json.mkObj [("weights", Json.str (Flock.hexOf w))])
+    (Credit.weights (← f "window") (← f "layout") (← f "entries") (← f "requests") (← f "session"))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
-  ("a-link", aLinkOf)]
+  ("a-link", aLinkOf), ("weights", weightsOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name
