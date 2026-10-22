@@ -298,14 +298,14 @@ theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     (hst : StOk t lays pt s st) (he : e < F) (hpc : Pre pt β' (lays.getD e default).palign.log2 as') :
     StOk t lays pt s st' ∧ Spec t lays pt s F e β' as' 0 (lays.getD e default).palign.log2 T := by
   unfold cachedTab at h
-  obtain ⟨s0, st0, hg, h⟩ := sv_bind_ok h
+  obtain ⟨s0, st0, hg, h1⟩ := sv_bind_ok h
+  clear h
   obtain ⟨rfl, rfl⟩ := sv_get_ok hg
-  try dsimp only at h
-  split at h
+  split at h1
   · rename_i T' hk
-    obtain ⟨rfl, rfl⟩ := sv_pure_ok h
+    obtain ⟨rfl, rfl⟩ := sv_pure_ok h1
     exact ⟨hst, hst.2 _ _ _ _ hk hpc F he⟩
-  · obtain ⟨T2, st4, hw1, h⟩ := sv_bind_ok h
+  · obtain ⟨T2, st4, hw1, h⟩ := sv_bind_ok h1
     obtain ⟨u, st5, hmod, h⟩ := sv_bind_ok h
     have hmod := sv_modify_ok hmod
     subst hmod
