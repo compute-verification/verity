@@ -271,7 +271,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
@@ -294,7 +294,8 @@ def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, a window's round log the challenger never received, and every other refusal of `credit.window`,
+    didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
+    registration than the window's or an entry whose root is not its sessions', and every other refusal of `credit.window`,
     `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -338,7 +339,15 @@ def test_credit(pass_server):
                  "window rounds: the round roots are not the roots the challenger's log shows it received",
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",
-                 "so the period earns nothing: rounds: the round roots are not"):
+                 "so the period earns nothing: rounds: the round roots are not",
+                 "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
+                 "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
+                 "window registration: drawn unit #'s proof opened port ",
+                 "against another root than the one the window registered for",
+                 "window registration: drawn unit #'s proof was verified against another circuit",
+                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "which the window registers not",
+                 "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
+                 "so the period earns nothing: registration: drawn unit #"):
         assert any(part in k for k in CREDITED), part
 
 

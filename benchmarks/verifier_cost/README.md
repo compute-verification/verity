@@ -40,7 +40,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_read.sh 256 1024
 ~~~
 
-`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v1` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
+`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
 against the circuit's flat unit byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),

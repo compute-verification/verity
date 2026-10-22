@@ -1445,7 +1445,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
   climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
   program (units `derived`). A port on
-  one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
+  one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
+  with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
+  refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
   stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
@@ -1665,8 +1668,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
    of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
-   `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
-   (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
+   `16 · words` bits whose bytes and SHA-512's 17 bytes of padding end in its `hm96` slot's block, the last
+   compression's block holding the bytes' end and the padding's start when `2 · words mod 128 ≥ 112`
+   (`128 · chunks ≤ 2 · words + 16` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
    row of `16 · words` bits segmented as `HmRow.segShape` cuts it, in its segments' and its outer message's compressions,
    each segment's bytes and SHA-512's 17 bytes of padding ending in its last block (`ProvedScope.segRow`: a segment of
    `b` bytes in `c` compressions has `128 · (c - 1) ≤ b`), the output rows unsegmented and each holding one output port

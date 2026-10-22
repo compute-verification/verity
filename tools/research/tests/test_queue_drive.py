@@ -680,6 +680,28 @@ def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(worl
     assert h.cancelled == ["r20261012-000000-abcd"]               # the old tip's check, still waiting, is cancelled
 
 
+def test_a_rebuilt_train_s_run_whose_cancel_failed_is_cancelled_again_each_tick_until_it_goes(world, monkeypatch):
+    """CI-146: 21 Oct, drive's cancels of a rebuilt train's queued touched-suites runs failed unseen and its record was dropped,
+    so 12 of them held vy-nebius-2's agent-test line for hours.  A failed cancel is logged, kept under `drive["orphans"]`, and
+    tried again each tick while the run is still queued or running."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    rid = "r20261012-000000-abcd"
+    tries = []
+    h.d.cancel = lambda repo, ids, reason: tries.append(list(ids)) or ({rid: "ssh: connect timed out"} if len(tries) == 1 else None)
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'landers'})}:refs/heads/main")
+    h.tick()
+    assert tries == [[rid]] and list(h.q.load_state()["drive"]["orphans"]) == [rid]
+    assert any(f"{rid}'s cancel failed (ssh: connect timed out)" in x for x in world.logs)
+    h.tick()
+    assert tries[1] == [rid] and h.q.load_state()["drive"]["orphans"] == {}
+    assert any(f"cancelled {rid} on a retry" in x for x in world.logs)
+    h.run_state[rid] = ("failed", 143, None)                          # once it has ended, nothing is tried again
+    h.tick()
+    assert len(tries) == 2
+
+
 def test_first_goes_above_the_train_a_running_check_covers_and_cancels_nothing(world, monkeypatch):
     """12 Oct 16:08Z: restarting drive with `--first 1869` restacked `next` under the running f6ee and cancelled it, 35 minutes
     of check thrown away.  A running check's members keep their place; `--first` starts the train after them."""

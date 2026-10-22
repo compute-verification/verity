@@ -13,8 +13,9 @@ placeholder draws, and the release whose transport state it is (`note:20261022T0
   salts for levels ≥ 1, none of them the tape's.
 * `Loop.schedSoFar`, `Loop.ownRounds`: the rep's scheduled rounds so far (the algebraic phase's, then the opening's fed
   the coins in) and the inner proof's own rounds (`ownRound`).
-* `Loop.repState`, `Loop.progOf`: `Frame.run` over the drive's requests at the scheduled rounds themselves
-  (`Drive.reqsAt`), up to the round's rep's last released round, at the coins the history opened.
+* `Loop.reqsAt`: the drive's requests (`Drive.reqs`) with the scheduled rounds themselves in the device's place.
+* `Loop.repState`, `Loop.progOf`: `Frame.run` over `reqsAt`, up to the round's rep's last released round, at the coins
+  the history opened.
 * `LeanRelease.ofLoop`: `LeanRelease.loop` with that state, each round's rep its rep stream (`Loop.repOf`) started as the
   loop starts it (`Drive.start`).
 * `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf`, with no salt. What `ProgReads` took as given is
@@ -71,9 +72,15 @@ def ownRounds (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) : Array (By
   let s : Masker := { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 }
   (Array.range INNER_ROUNDS).map fun j => (ownRound c s (zeros 16) (zeros 64) (ns j) j, ns j)
 
+/-- The drive's requests at the scheduled rounds themselves in the device's place (`Drive.reqs`): an honest device's
+rounds but for the values each absorbs masked, which move no frame state. -/
+def reqsAt (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (coins : Array (Array F128)) :
+    List _root_.Flock.Firewall.Frame.Req :=
+  _root_.Flock.Firewall.Drive.reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) coins
+
 /-- **A rep's frame state after its first `i` rounds**, at the configuration `c` and the table `t`, its rounds' coins
 `cr` (one a released round, the last owed), rep 1's after rep 0's algebraic-phase coins (of `cr0`), its round `j`
-squeezing `ns j`: `Frame.run` over the drive's requests at the scheduled rounds themselves (`Drive.reqsAt`), up to its
+squeezing `ns j`: `Frame.run` over the drive's requests at the scheduled rounds themselves (`reqsAt`), up to its
 `i`-th round's. `{}` once the rep has ended, where the frame takes no coins (`Masker.answer` owes none at `{}`). -/
 def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (i : ℕ) : Masker :=
@@ -85,7 +92,7 @@ def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
     let prior := if rep = 0 then #[] else (cr0.extract 0 nAlg).foldl (· ++ ·) #[]
     let own := ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)
     let pre := if prior.isEmpty then 0 else 1
-    let r := _root_.Flock.Firewall.Frame.run c {} ((_root_.Flock.Firewall.Drive.reqsAt prior sched own cr).take (pre + 2 * i - 1))
+    let r := _root_.Flock.Firewall.Frame.run c {} ((reqsAt prior sched own cr).take (pre + 2 * i - 1))
     if r.2 then {} else r.1.m
 
 /-- The words of opening `q` among the decoded coins `cs`, as many as its request's count (`readCoins`'s); none past

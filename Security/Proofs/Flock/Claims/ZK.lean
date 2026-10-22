@@ -124,6 +124,10 @@ import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
+import Proofs.Flock.Claims.ZK.FinishSwLigE
+import Proofs.Flock.Claims.ZK.FinishSwInner
+import Proofs.Flock.Claims.ZK.FinishSwTau
+import Proofs.Flock.Claims.ZK.FinishSwRows
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -544,8 +548,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.Firewall.Finish.innerProg_run`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
   below `zp 64` (the PIOP's) are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the
-  session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
-  firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
+  session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`, the latter given the batched constraint, which held
+  wherever the firewall's own inner proof returned: `Flock.Firewall.Finish.innerP_batched`), `FlockComplete.repCut` at
+  level 0's commitment erased returns the firewall's transcript and log, and its proof up to `eraseZ`
+  (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
   leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
@@ -581,6 +587,25 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`LigLock.l0Clear`: the out-of-domain value, each lane message's words, the pair's sums' words) gives `LigHyp`'s
   masked fields (**`LigLock.ligHyp_of_l0`**), so at `valsFw` with `l0Clear` as level 0's part and the request's pads,
   `LigHyp` holds at the switched source's `y₁'`, `ȳ` and salts (**`Masked.swSrcE_ligHyp_frame`**).
+* `FinishSwLigE`: those at the coins. The switched view moves only pads, masked values and `Y₁`, so its `y₁'`, `ȳ` and
+  levels ≥ 1 are the honest view's (`Table.swPre_y1`, `swPre_ybar`, `swPre_lig`), and so are the switched source's
+  (`Masked.swSrcE_restart`); the honest source's are the session's at the coins (`ligY1E`, `ligYbarE`, `ligSaltE`). So
+  at the deployed rep's coins, packed table, basis and the tape's extra lanes, lane paddings and salts, `LigHyp` holds at
+  the switched source with `l0Clear` as level 0's part and the request's pads (**`Masked.swSrcE_ligHyp_E`**).
+* `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
+  `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
+  switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
+  request's pads are the tape's wherever the tape's pads are its draws' (`Masked.pads_frame_eq`), so at the inner
+  proof's slot `InnerSrc` holds at the switched source and the request's pads, given the batched constraint
+  (`hinner`'s own premise) and `τ`'s commitment there (**`Masked.swSrcE_innerSrc_frame`**).
+* `FinishSwTau`: that `τ` commitment. Where the rows hold, the switched `τ` leaf commits the worker's view's `τ` under
+  the honest view's `y_τ` (**`Masked.swSrcE_tauCom`**), and that `τ` is `InZ.tau` over any constraints whose first seven
+  rows are the worker's view's (`Masked.SwRows`, **`Masked.swTau_of_rows`**: the triple's rows don't move), so
+  `InnerSrc` holds at the switched source from the batched constraint and `SwRows` (**`Masked.swSrcE_innerSrc_rows`**).
+* `FinishSwRows`: `SwRows` at `hinner`'s constraints. The replay's rows and values and level 0's two rows (read at a
+  view, `Masked.LaneAt`) have the layout's length (`Composed.replay_asz`, `Masked.lanesAt_asz`), so the firewall's
+  constraints are seven of that length (`Composed.fwCons_asz`), and where their rows are `rowsSwE`'s as whole forms
+  (as `Composed.tauFw` gives them) they are `SwRows` (**`Masked.swRows_of`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
@@ -668,7 +693,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
   alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
   (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
 * `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
-  `Frame.run` over `Drive.reqsAt` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
+  `Frame.run` over `Loop.reqsAt` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
   `ProgReads` holds by definition (`ofLoop_progReads`).
 * `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
   monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
