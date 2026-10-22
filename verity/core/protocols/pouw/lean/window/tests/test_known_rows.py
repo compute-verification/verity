@@ -13,6 +13,7 @@ import importlib.util
 import json
 import random
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,7 @@ EXE = "pouw-window-difftest"
 def _h1_lanes():
     spec = importlib.util.spec_from_file_location("h1_lanes_run", ROOT / "benchmarks/pouw/h1_lanes/run.py")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
