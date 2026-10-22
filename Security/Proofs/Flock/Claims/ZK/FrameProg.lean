@@ -16,7 +16,8 @@ of any device round, at the tape's draws and its scheduled round, leaves the sam
 
 namespace Claims.ZKServer
 
-open _root_.Flock (V F128)
+open _root_.Flock (V F128 Stmt SessionSpec)
+open _root_.Flock.Firewall.Frame (Draws)
 open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree passes check standIn)
 open FlockSoundness.Refine (Frame encs)
 
@@ -267,6 +268,127 @@ theorem repState_step (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : �
     simp only [↓reduceIte] at ha
     rw [e] at ha
     cases ha
+
+theorem words_size (b : ByteArray) (o n : ℕ) : (_root_.Flock.Firewall.Frame.words b o n).size = n := by
+  unfold _root_.Flock.Firewall.Frame.words
+  rw [Array.size_map, Array.size_range]
+
+theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) : (Draws.ofBytes l b).h.size = l.len := by
+  unfold Draws.ofBytes
+  dsimp only
+  rw [Array.size_set!, Array.size_set!, words_size]
+
+section OfDraws
+variable (l : _root_.Flock.Zk.PadLayout) (d : Draws) (m : Option _root_.Flock.Firewall.Frame.MaskSlot)
+theorem ofDraws_lay : (Cfg.ofDraws l d m).lay = l := rfl
+theorem ofDraws_order : (Cfg.ofDraws l d m).order = _root_.Flock.Firewall.Frame.absorbed l := rfl
+theorem ofDraws_nPiop :
+    (Cfg.ofDraws l d m).nPiop = (_root_.Flock.Firewall.Frame.absorbed l).size - _root_.Flock.Firewall.Frame.nLig l := rfl
+theorem ofDraws_lig : (Cfg.ofDraws l d m).lig = decide (l.k0 > 0) := rfl
+theorem ofDraws_mask : (Cfg.ofDraws l d m).mask = m := rfl
+theorem ofDraws_h : (Cfg.ofDraws l d m).h = d.h := rfl
+end OfDraws
+
+/-- **A rep's configurations at two draws** of one layout and mask slot are alike. -/
+theorem cfgAlike_ofBytes (l : _root_.Flock.Zk.PadLayout) (b b' : ByteArray)
+    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
+    CfgAlike (Cfg.ofDraws l (Draws.ofBytes l b) m) (Cfg.ofDraws l (Draws.ofBytes l b') m) where
+  lay := (ofDraws_lay l _ m).trans (ofDraws_lay l _ m).symm
+  order := (ofDraws_order l _ m).trans (ofDraws_order l _ m).symm
+  nPiop := (ofDraws_nPiop l _ m).trans (ofDraws_nPiop l _ m).symm
+  lig := (ofDraws_lig l _ m).trans (ofDraws_lig l _ m).symm
+  mask := (ofDraws_mask l _ m).trans (ofDraws_mask l _ m).symm
+  size := by rw [ofDraws_h, ofDraws_h, ofBytes_h_size, ofBytes_h_size]
+
+theorem map_range_congr {β : Type} {f g : ℕ → β} {n : ℕ} (h : ∀ j, j < n → f j = g j) :
+    (Array.range n).map f = (Array.range n).map g := by
+  apply Array.ext (by simp)
+  intro i h1 _
+  simp only [Array.getElem_map, Array.getElem_range]
+  exact h i (by simpa using h1)
+
+/-- **Before a later rep stream, the stream before it**: past stream `k`'s first round, the rounds of the stream
+before the located one and the located round's offset fit in the coins so far. -/
+theorem locate_prev : ∀ (rs : List ℕ) (k i : ℕ), k < (ZKMal.CoinLayer.locate rs k i).1 →
+    rs.getD ((ZKMal.CoinLayer.locate rs k i).1 - k - 1) 0 + (ZKMal.CoinLayer.locate rs k i).2 ≤ i
+  | [], _, _, h => absurd h (Nat.lt_irrefl _)
+  | c :: cs, k, i, h => by
+    by_cases hc : i < c
+    · rw [locate_cons_lt hc] at h
+      exact absurd h (Nat.lt_irrefl _)
+    · rw [locate_cons_ge hc] at h ⊢
+      have hge := locate_fst_ge cs (k + 1) (i - c)
+      rcases Nat.lt_or_ge (k + 1) (ZKMal.CoinLayer.locate cs (k + 1) (i - c)).1 with h1 | h1
+      · have ih := locate_prev cs (k + 1) (i - c) h1
+        rw [show (ZKMal.CoinLayer.locate cs (k + 1) (i - c)).1 - k - 1 =
+          ((ZKMal.CoinLayer.locate cs (k + 1) (i - c)).1 - (k + 1) - 1) + 1 by omega]
+        simp only [List.getD_cons_succ]
+        omega
+      · rw [show (ZKMal.CoinLayer.locate cs (k + 1) (i - c)).1 - k - 1 = 0 by omega]
+        simp only [List.getD_cons_zero]
+        have := locate_snd_le cs (k + 1) (i - c)
+        omega
+
+/-- Rep 0's frame state reads no earlier rep's coins. -/
+theorem repState_cr0 {c : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {ns : ℕ → ℕ} {i : ℕ} (hr : rep = 0)
+    (cr0 cr0' : Array (Array F128)) :
+    repState c t rep dom xs hi cr0 cr ns i = repState c t rep dom xs hi cr0' cr ns i := by
+  subst hr
+  unfold repState
+  simp only [↓reduceIte]
+
+theorem wordsAt_append (x : Msg) (cs ds : List FlockDeploy.Coin) {p : ℕ} (hp : p < cs.length) :
+    wordsAt x (cs ++ ds) p = wordsAt x cs p := by
+  unfold wordsAt
+  rw [List.getElem?_append_left hp]
+
+theorem crAt_push (f : ℕ → Array F128) (s n : ℕ) :
+    (Array.range (n + 1)).map (fun j => f (s + j + 1)) = ((Array.range n).map fun j => f (s + j + 1)).push
+      (f (s + n + 1)) := by
+  rw [Array.range_succ, Array.map_append, Array.push_eq_append]
+  congr 1
+  simp
+
+/-- **The loop's frame state one coin on, within a rep stream**: where the round after the decoded coins `cs ++ [d]` is
+the same rep stream's as the round after `cs`, the state is that rep's after one more of its rounds, on its rounds'
+coins and one more. -/
+theorem progOf_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
+    {spec : SessionSpec} {sts : Array Stmt} {q : ℕ} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
+    (hq : cs.length = q + 1)
+    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1) :
+    progOf x (cs ++ [d]) =
+      match placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) with
+      | .ok (c, t, dom, xs, hi) =>
+        repState c t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
+          ((Array.range ((roundsOf spec sts).getD ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 - 1) 0)).map
+            fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 -
+              (roundsOf spec sts).getD ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 - 1) 0 + j + 1))
+          (((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
+            fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1)).push
+            (wordsAt x (cs ++ [d]) (q + 1)))
+          (fun j => loopNr x (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
+          ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1)
+      | .error _ => {} := by
+  have h2 := locate_succ (roundsOf spec sts) 0 q hk
+  have hle := locate_snd_le (roundsOf spec sts) 0 q
+  unfold progOf
+  rw [hx, List.length_append, List.length_singleton, hq]
+  simp only
+  rw [hk, h2, wordsAt_append x cs [d] (by omega), crAt_push]
+  have hst : q + 1 - ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1) =
+      q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 := by omega
+  rw [hst, show q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 +
+    (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + 1 = q + 1 by omega]
+  have hw : ∀ p, p ≤ q → wordsAt x (cs ++ [d]) p = wordsAt x cs p := fun p hp => wordsAt_append x cs [d] (by omega)
+  congr 1
+  funext c t dom xs hi
+  rw [map_range_congr (n := (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2) fun j hj => hw _ (by omega)]
+  by_cases hk0 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = 0
+  · exact repState_cr0 (by rw [hk0]) _ _
+  · have hp := locate_prev (roundsOf spec sts) 0 q (by omega)
+    rw [Nat.sub_zero] at hp
+    rw [map_range_congr fun j hj => hw _ (by omega)]
 
 end Loop
 
