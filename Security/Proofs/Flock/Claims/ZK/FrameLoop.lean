@@ -74,7 +74,7 @@ def ownRounds (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) : Array (By
 /-- **A rep's frame state after its first `i` rounds**, at the configuration `c` and the table `t`, its rounds' coins
 `cr` (one a released round, the last owed), rep 1's after rep 0's algebraic-phase coins (of `cr0`), its round `j`
 squeezing `ns j`: `Frame.run` over the drive's requests at the scheduled rounds themselves (`Drive.reqsAt`), up to its
-`i`-th round's. -/
+`i`-th round's. `{}` once the rep has ended, where the frame takes no coins (`Masker.answer` owes none at `{}`). -/
 def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (i : ℕ) : Masker :=
   match (do
@@ -85,7 +85,8 @@ def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
     let prior := if rep = 0 then #[] else (cr0.extract 0 nAlg).foldl (· ++ ·) #[]
     let own := ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)
     let pre := if prior.isEmpty then 0 else 1
-    (_root_.Flock.Firewall.Frame.run c {} ((_root_.Flock.Firewall.Drive.reqsAt prior sched own cr).take (pre + 2 * i - 1))).1.m
+    let r := _root_.Flock.Firewall.Frame.run c {} ((_root_.Flock.Firewall.Drive.reqsAt prior sched own cr).take (pre + 2 * i - 1))
+    if r.2 then {} else r.1.m
 
 /-- The words of opening `q` among the decoded coins `cs`, as many as its request's count (`readCoins`'s); none past
 them. -/
