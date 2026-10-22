@@ -235,4 +235,96 @@ theorem sparse_col {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sp
         Array.getElem?_eq_getElem hsz, Option.getD_some, getElem!_pos m.start p hsz]
     rw [← e, hrow]
 
+/-- `(Xᵀe)[i']` for a matrix `Sparse.ofRows` built, over its rows. -/
+theorem sparseT_rows {rows : Array (Array ℕ)} {W : ℕ} {m : Sparse} (h : Sparse.ofRows rows W = .ok m)
+    (hw : W ≤ 2 ^ 32) (eLo : Array F128) (hN : rows.size ≤ eLo.size) (i' : ℕ) :
+    sparseT m eLo i' = ∑ p ∈ Finset.range rows.size, ∑ t ∈ Finset.range (rows.getD p #[]).size,
+      if (rows.getD p #[])[t]! = i' then of eLo[p]! else 0 := by
+  unfold sparseT
+  rw [(sparse_ofRows_dims h).1, Nat.min_eq_left hN]
+  refine Finset.sum_congr rfl fun p hp => ?_
+  obtain ⟨hl, hc⟩ := sparse_col h hw (Finset.mem_range.mp hp)
+  rw [hl]
+  refine Finset.sum_congr rfl fun t ht => ?_
+  rw [hc t (Finset.mem_range.mp ht)]
+
+/-- A column's share of entry `s` over the slot's `M` words. -/
+theorem sum_slot (M c s : ℕ) (hs : s < 64) (hc : c < 64 * M) (f : ℕ → GF128) :
+    ∑ u ∈ Finset.range M, (if c = s + 64 * u then f u else 0) = if c % 64 = s then f (c / 64) else 0 := by
+  by_cases h : c % 64 = s
+  · rw [if_pos h, Finset.sum_eq_single (c / 64)]
+    · rw [if_pos (show c = s + 64 * (c / 64) by omega)]
+    · intro u _ hu
+      rw [if_neg (show ¬ c = s + 64 * u by omega)]
+    · intro hm
+      exact absurd (Finset.mem_range.mpr (by omega)) hm
+  · rw [if_neg h]
+    exact Finset.sum_eq_zero fun u _ => if_neg (show ¬ c = s + 64 * u by omega)
+
+/-- One matrix's share of `project ∘ baseOf`, regrouped by row. -/
+theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse.ofRows rows W = .ok m)
+    (hw : W ≤ 2 ^ 32) (hW : W = 64 * M) (eLo : Array F128) (hN : rows.size ≤ eLo.size) (w : GF128)
+    (g : ℕ → GF128) {s : ℕ} (hs : s < 64) :
+    ∑ u ∈ Finset.range M, w * sparseT m eLo (s + 64 * u) * g u =
+      ∑ p ∈ Finset.range rows.size, ((rows.getD p #[]).toList.map fun c =>
+        if c % 64 = s then w * of eLo[p]! * g (c / 64) else 0).sum := by
+  have hcol := (ofRows_spec h).2.2.2
+  simp only [sparseT_rows h hw eLo hN, Finset.mul_sum, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun p hp => ?_
+  rw [Finset.sum_comm, list_sum_range, Array.length_toList]
+  refine Finset.sum_congr rfl fun t ht => ?_
+  have hp' := Finset.mem_range.mp hp
+  have ht' := Finset.mem_range.mp ht
+  have hpt : (rows.getD p #[])[t]! < 64 * M := by
+    rw [← hW]
+    refine hcol (rows.getD p #[]) ?_ _ ?_
+    · simp only [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp', Option.getD_some]
+      exact Array.getElem_mem_toList hp'
+    · rw [getElem!_pos _ t ht']
+      exact Array.getElem_mem_toList ht'
+  have e : (rows.getD p #[]).toList.getD t 0 = (rows.getD p #[])[t]! := by
+    rw [getElem!_pos _ t ht', List.getD_eq_getElem?_getD, Array.getElem?_toList, Array.getElem?_eq_getElem ht']
+    rfl
+  rw [e, ← sum_slot M _ s hs hpt (fun u => w * of eLo[p]! * g u)]
+  refine Finset.sum_congr rfl fun u _ => ?_
+  split <;> simp
+
+/-- **`project ∘ baseOf` on matrices `Sparse.ofRows` built**, regrouped by row: row `p`'s columns `c`, each at entry
+`c mod 64` with the row's `e_lo` weight and `eq(r, ⌊c/64⌋)`. -/
+theorem project_baseOf_rows {rowsA rowsB : Array (Array ℕ)} {sl : ℕ} {A B : Sparse}
+    (hA : Sparse.ofRows rowsA (2 ^ sl) = .ok A) (hB : Sparse.ofRows rowsB (2 ^ sl) = .ok B) (hsl : sl ≤ 32)
+    (alpha : F128) (lw rho r : Array F128) (hlw : lw.size = 64) (hrho : rho.size + 6 = sl) (hr : r.size = rho.size)
+    (hNA : rowsA.size ≤ 2 ^ sl) (hNB : rowsB.size = rowsA.size) {s : ℕ} (hs : s < 64) :
+    of (Stmt.project (Stmt.baseOf alpha (Stmt.tensor lw rho) A B none sl) (eqTable r))[s]! =
+      ∑ p ∈ Finset.range rowsA.size,
+        (((rowsA.getD p #[]).toList.map fun c =>
+            if c % 64 = s then of alpha * of (Stmt.tensor lw rho)[p]! * of (eqTable r)[c / 64]! else 0).sum +
+          ((rowsB.getD p #[]).toList.map fun c =>
+            if c % 64 = s then 1 * of (Stmt.tensor lw rho)[p]! * of (eqTable r)[c / 64]! else 0).sum) := by
+  subst hrho
+  have hW : 2 ^ (rho.size + 6) = 64 * 2 ^ r.size := by rw [hr, pow_add]; ring
+  have hE : (Stmt.tensor lw rho).size = 2 ^ (rho.size + 6) := by
+    rw [hW, hr]
+    simp [Stmt.tensor, hlw, eqTable_size]
+  have hw : 2 ^ (rho.size + 6) ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) hsl
+  have hAw := (sparse_ofRows_dims hA).2
+  have hBw := (sparse_ofRows_dims hB).2
+  rw [project_get _ _ hs, eqTable_size]
+  have step : ∀ u ∈ Finset.range (2 ^ r.size),
+      of (Stmt.baseOf alpha (Stmt.tensor lw rho) A B none (rho.size + 6))[s + 64 * u]! * of (eqTable r)[u]! =
+        of alpha * sparseT A (Stmt.tensor lw rho) (s + 64 * u) * of (eqTable r)[u]! +
+          1 * sparseT B (Stmt.tensor lw rho) (s + 64 * u) * of (eqTable r)[u]! := by
+    intro u hu
+    have hi : s + 64 * u < 2 ^ (rho.size + 6) := by
+      have := Finset.mem_range.mp hu
+      rw [hW]
+      omega
+    rw [baseOf_get _ _ _ _ _ _ _ hi (by rw [hAw]; exact hi) (by rw [hBw]; exact hi)]
+    simp [lookupTerm, add_mul]
+  rw [Finset.sum_congr rfl step, Finset.sum_add_distrib,
+    side_sum hA hw hW _ (by rw [hE]; exact hNA) (of alpha) (fun u => of (eqTable r)[u]!) hs,
+    side_sum hB hw hW _ (by rw [hE, hNB]; exact hNA) 1 (fun u => of (eqTable r)[u]!) hs, hNB,
+    ← Finset.sum_add_distrib]
+
 end FlockSoundness.TmplFold
