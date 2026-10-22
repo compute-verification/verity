@@ -94,6 +94,7 @@ import Proofs.Flock.Claims.ZK.FrameState
 import Proofs.Flock.Claims.ZK.FrameRun
 import Proofs.Flock.Claims.ZK.FrameShape
 import Proofs.Flock.Claims.ZK.FrameOwn
+import Proofs.Flock.Claims.ZK.FramePass
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -638,6 +639,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   inside the inner proof too, the same state (`roundFree_alike_ok`).
 * `FrameOwn`: the frame's check of the inner proof takes the firewall's own rounds (`ownRound`) at every configuration
   and state (`innerOwn_ownRound`).
+* `FramePass`: a device round that passes the frame's check at a scheduled round of frames `fs` is the bytes of frames
+  alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
+  (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
