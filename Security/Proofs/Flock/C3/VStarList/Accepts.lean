@@ -135,16 +135,28 @@ theorem commits_of_checks {commits : Option RecVStar.InnerCommits} (hsp : ish.sp
     simp only [RecSetup.checks, Option.bind_some, hsp, Option.isNone_none, Bool.and_self, ↓reduceIte, throw,
       throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at h
 
+/-- **The verifier's hold of the inner transcript, and the transcript on its schedule**: `commits` at the verifier's
+inner shape is `innerCommits` on the files' parses, and it holds the transcript to the schedule
+(`RecVStar.checkSchedule`). -/
 theorem commits_ok (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
     (h : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs) :
-    ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs := by
+    ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs ∧
+      RecVStar.checkSchedule ish tr = .ok () := by
   unfold RecSetup.commits at h
   cases hb : bound with
   | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg] at h
   | ok b =>
     obtain ⟨d, sh⟩ := b
     refine ⟨d, sh, rfl, ?_⟩
-    simpa [hb, bind, Except.bind, pure, Except.pure, hreg, htr] using h
+    cases hi : RecVStar.innerCommits tr record (some reg) d sh with
+    | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi] at h
+    | ok cs' =>
+      cases hs : RecVStar.checkSchedule ish tr with
+      | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
+      | ok u =>
+        simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
+        subst h
+        exact ⟨rfl, rfl⟩
 
 /-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}
@@ -246,7 +258,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     obtain ⟨hcc, hmm, hrr⟩ := setupHidden_same hst₀ (stmt_setupHidden hst')
     rw [HiddenExec.setupHidden_parseC hst₀] at hc
     cases hc
-    obtain ⟨d, sh, hb, hic⟩ := commits_ok htr hreg hcs
+    obtain ⟨d, sh, hb, hic, -⟩ := commits_ok htr hreg hcs
     obtain ⟨hsh, hd⟩ := metaBound_ok (hmb.trans hb)
     have hmr : metaRegistration st = d := by subst hd; rfl
     have hat : innerCommitsAt tr record st reg = .ok cs := by
