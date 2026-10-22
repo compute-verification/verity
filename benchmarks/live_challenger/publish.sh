@@ -17,6 +17,7 @@
 # verifier reads the ledger's art, checks it (auditor.verify_ledger) and takes a window's one session from it. The pins log
 # (the gate's `pins`) is put first, the same way (`--kind challenger-pins/v1`, label `challenger-pins head`, a log that isn't
 # the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
+# The model registry (the gate's `models`) follows it the same way (`--kind challenger-models/v1`, `challenger-models head`).
 set -euo pipefail
 if [ "${1:-}" = --every ]; then
   every=$2
@@ -38,24 +39,28 @@ trap 'rm -rf "$W"' EXIT
 gate() { "${SSH[@]}" "$DEST" "${GATE[@]}" "$@" < /dev/null; }  # ssh would eat the session loop's stdin
 put() { local a; a=$(research data put "$@" --preserve); echo "art:${a#art:}"; }
 
-if gate pins > "$W/pins.jsonl" 2> /dev/null && [ -s "$W/pins.jsonl" ]; then
-  pins=$(sha512sum "$W/pins.jsonl" | cut -d' ' -f1)
-  if [ "$pins" != "$(cat "$ST/pins.sha512" 2> /dev/null)" ]; then
-    if [ -e "$ST/pins.jsonl" ] && ! cmp -s -n "$(stat -c %s "$ST/pins.jsonl")" "$ST/pins.jsonl" "$W/pins.jsonl"; then
-      echo "$(date -u +%FT%TZ) refused: the host's pins log ($pins) doesn't extend the last published head" \
-        "$(cat "$ST/pins.art" 2> /dev/null) (a cut or an edit): nothing put; infra must look" >&2
-      exit 4
-    fi
-    art=$(put --kind challenger-pins/v1 --file "$W/pins.jsonl" \
-      --meta "{\"host\": \"vy-challenger-1\", \"lines\": $(wc -l < "$W/pins.jsonl"), \"sha512\": \"$pins\"}")
-    research data label "$art" challenger-pins head --by infra --off-vocab > /dev/null
-    cp "$W/pins.jsonl" "$ST/pins.jsonl.tmp"
-    mv "$ST/pins.jsonl.tmp" "$ST/pins.jsonl"
-    echo "$art" > "$ST/pins.art"
-    echo "$pins" > "$ST/pins.sha512"
-    echo "$(date -u +%FT%TZ) pins: $art ($pins)"
+# an append-only log the gate reads with verb $1, put as challenger-$2/v1 and labelled challenger-$2 head each time it grew
+log() {
+  local verb=$1 name=$2 digest art
+  gate "$verb" > "$W/$name.jsonl" 2> /dev/null && [ -s "$W/$name.jsonl" ] || return 0
+  digest=$(sha512sum "$W/$name.jsonl" | cut -d' ' -f1)
+  [ "$digest" != "$(cat "$ST/$name.sha512" 2> /dev/null)" ] || return 0
+  if [ -e "$ST/$name.jsonl" ] && ! cmp -s -n "$(stat -c %s "$ST/$name.jsonl")" "$ST/$name.jsonl" "$W/$name.jsonl"; then
+    echo "$(date -u +%FT%TZ) refused: the host's $name log ($digest) doesn't extend the last published head" \
+      "$(cat "$ST/$name.art" 2> /dev/null) (a cut or an edit): nothing put; infra must look" >&2
+    exit 4
   fi
-fi
+  art=$(put --kind "challenger-$name/v1" --file "$W/$name.jsonl" \
+    --meta "{\"host\": \"vy-challenger-1\", \"lines\": $(wc -l < "$W/$name.jsonl"), \"sha512\": \"$digest\"}")
+  research data label "$art" "challenger-$name" head --by infra --off-vocab > /dev/null
+  cp "$W/$name.jsonl" "$ST/$name.jsonl.tmp"
+  mv "$ST/$name.jsonl.tmp" "$ST/$name.jsonl"
+  echo "$art" > "$ST/$name.art"
+  echo "$digest" > "$ST/$name.sha512"
+  echo "$(date -u +%FT%TZ) $name: $art ($digest)"
+}
+log pins pins
+log models models
 
 gate ledger > "$W/windows.jsonl"
 digest=$(sha512sum "$W/windows.jsonl" | cut -d' ' -f1)
