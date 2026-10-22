@@ -291,8 +291,44 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
     assert set(checked(host)) == {"p1", "k1", "v1"}
 
 
+def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit holds every window of a period to the served model's registered weights' root its open commits
+    (`weights_root`, `credit.weights_root` of the B rows registered before the period's first salt), signed before
+    window 0's first coin, beside its draw K or alone."""
+    w = "5e" * 64
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --weights-root {w}",
+                    "hash"))
+    assert (opened["body"]["draw_k"], opened["body"]["weights_root"]) == (27, w)
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} --weights-root {w}"))[
+        "body"]
+    assert body["weights_root"] == w and "draw_k" not in body
+    assert "weights_root" not in ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT}"))[
+        "body"]
+    lines = [json.loads(e) for e in A.read_ledger(host.ledger)]
+    assert [e["body"].get("weights_root") for e in lines if e["kind"] == "period-open"] == [w, w, None]
+    assert set(checked(host)) == {"p1", "k1", "v1"}
+
+
+@pytest.mark.parametrize("args", [
+    ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "weights_root=" + "5e" * 64, "weights_root=" + "5e" * 64],
+    ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "pinned=" + "5e" * 20],
+    ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "27"],
+    ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "draw_k=27", "weights_root=" + "5e" * 64, "draw_k=28"],
+])
+def test_a_period_open_with_a_field_twice_or_unknown_is_refused(host, signer, args):
+    with pytest.raises(A.Refused, match="period: "):
+        A.period(host, args, signer=signer, pinned=PIN, now=T0, active=lambda s: False)
+    assert A.read_ledger(host.ledger) == []
+
+
 @pytest.mark.parametrize("args, why", [
     ("--name p1", "the following arguments are required: --cap, --circuit"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --weights-root {'5E' * 64}", "--weights-root '5E5E"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --weights-root {'5e' * 63}", "--weights-root '5e5e"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --weights-root {'5e' * 65}", "--weights-root '5e5e"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --weights-root {'5e' * 63}zz", "--weights-root '5e5e"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 3 --weights-root nope", "--weights-root 'nope'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 0", "--draw-k '0'"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k -3", "--draw-k"),
     (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 07", "--draw-k '07'"),

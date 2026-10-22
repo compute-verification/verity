@@ -489,8 +489,18 @@ pub struct LeanFrame {
     /// the start's line, and `FC_FINISH_DUMP`'s copy of every request after it ([`LeanFrame::dump`])
     start: String,
     log: Option<std::fs::File>,
-    /// the frame is the Lean session loop's ([`LeanFrame::rep`]): no request leaves this process
-    looped: bool,
+    /// the frame is the Lean session loop's ([`LeanFrame::rep`]), at its frames address, of the session it names, the table
+    /// and the rep: no request leaves this process, and the loop names the rep's places ([`LeanFrame::place`])
+    looped: Option<(String, String, usize, usize)>,
+}
+
+/// What the Lean session loop names a rep's next round ([`LeanFrame::place`]): the algebraic phase's or the opening's
+/// scheduled round, squeezing that many coins, or none (the inner proof's own rounds).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    Alg(usize),
+    Open(usize),
+    Own,
 }
 
 /// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
@@ -566,7 +576,7 @@ impl LeanFrame {
             .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
         let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
         LeanFrame { child: Some(child), stdin: Box::new(stdin), stdout: std::io::BufReader::new(Box::new(stdout)), start: String::new(), log: None,
-                    looped: false }
+                    looped: None }
             .begin(lay, mask, None)
     }
 
@@ -578,8 +588,56 @@ impl LeanFrame {
         let _ = tcp.set_nodelay(true);
         let reader = tcp.try_clone().map_err(|e| refused(format!("the Lean session loop's frames at {addr}: {e}")))?;
         LeanFrame { child: None, stdin: Box::new(tcp), stdout: std::io::BufReader::new(Box::new(reader)), start: String::new(), log: None,
-                    looped: true }
+                    looped: Some((addr.to_string(), name.to_string(), table, rep)) }
             .begin(lay, mask, Some(format!("rep {name} {table} {rep}")))
+    }
+
+    /// Whether the frame is the Lean session loop's ([`LeanFrame::rep`]).
+    pub fn in_loop(&self) -> bool {
+        self.looped.is_some()
+    }
+
+    /// One request `what` about the rep to the Lean session loop's frames port (`Flock.Firewall.Frames.ask`): its answer's
+    /// line, and the bytes after an `ok N`.
+    fn ask(&self, what: &str) -> Result<(String, Vec<u8>), String> {
+        use std::io::{BufRead, Read, Write};
+        let (addr, name, table, rep) = self.looped.as_ref().ok_or_else(|| refused(format!("a {what} of a frame outside the Lean session loop")))?;
+        let io = |e: std::io::Error| refused(format!("the Lean session loop's {what} of table {table} rep {rep}: {e}"));
+        let mut tcp = std::net::TcpStream::connect(addr.as_str()).map_err(io)?;
+        let _ = tcp.set_nodelay(true);
+        writeln!(tcp, "{what} {name} {table} {rep}").and_then(|_| tcp.flush()).map_err(io)?;
+        let mut rd = std::io::BufReader::new(tcp);
+        let mut line = String::new();
+        rd.read_line(&mut line).map_err(io)?;
+        let line = line.trim_end().to_string();
+        let mut body = Vec::new();
+        if let Some(n) = line.strip_prefix("ok ") {
+            body = vec![0u8; n.parse().map_err(|_| refused(format!("the Lean session loop's answer {line:?} to a {what}")))?];
+            rd.read_exact(&mut body).map_err(io)?;
+        }
+        Ok((line, body))
+    }
+
+    /// The rep's next round as the Lean session loop names it (`place NAME I R`).
+    pub fn place(&self) -> Result<Place, String> {
+        let (line, _) = self.ask("place")?;
+        let n = |s: &str| s.parse::<usize>().map_err(|_| refused(format!("the Lean session loop's place {line:?}")));
+        match line.split_once(' ') {
+            Some(("alg", k)) => Ok(Place::Alg(n(k)?)),
+            Some(("open", k)) => Ok(Place::Open(n(k)?)),
+            _ if line == "own" => Ok(Place::Own),
+            _ => Err(refused(format!("the Lean session loop: {}", line.strip_prefix("err ").unwrap_or(&line)))),
+        }
+    }
+
+    /// The algebraic phase's values the rep's frame in the Lean session loop took (`vals NAME I R`): a passed device round's,
+    /// zero in a round it failed.
+    pub fn vals(&self) -> Result<Vec<F128>, String> {
+        let (line, b) = self.ask("vals")?;
+        if !line.starts_with("ok ") || b.len() % 16 != 0 {
+            return Err(refused(format!("the Lean session loop: {}", line.strip_prefix("err ").unwrap_or(&line))));
+        }
+        Ok(b.chunks(16).map(|w| F128::new(u64::from_le_bytes(w[..8].try_into().unwrap()), u64::from_le_bytes(w[8..].try_into().unwrap()))).collect())
     }
 
     fn begin(mut self, lay: &crate::zk_veil::Layout, mask: MaskSlot, line: Option<String>) -> Result<(Self, Drawn), String> {
@@ -622,7 +680,7 @@ impl LeanFrame {
     /// One request: its line, then its bytes (none leaves a loop's frame, [`LeanFrame::rep`]).
     fn send(&mut self, line: &str, parts: &[&[u8]]) -> std::io::Result<()> {
         use std::io::Write;
-        if !self.looped {
+        if self.looped.is_none() {
             self.stdin.write_all(line.as_bytes())?;
             for p in parts {
                 self.stdin.write_all(p)?;
@@ -664,7 +722,7 @@ impl LeanFrame {
     /// points too.
     pub fn prior(&mut self, coins: &[F128]) -> Result<(), String> {
         self.send(&format!("prior {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's prior coins: {e}")))?;
-        if self.looped {
+        if self.looped.is_some() {
             return Ok(());
         }
         self.reply().map(|_| ())
@@ -680,7 +738,7 @@ impl LeanFrame {
         use std::io::Read;
         self.send(&format!("round {n} {}{}\n", content.len(), if fail { " fail" } else { "" }), &[content])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
-        if self.looped {
+        if self.looped.is_some() {
             return Ok(content.to_vec());
         }
         let line = self.line()?;
@@ -702,7 +760,7 @@ impl LeanFrame {
         use std::io::Read;
         self.send(&format!("round {n} {} {}\n", content.len(), sched.len()), &[content, sched])
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
-        if self.looped {
+        if self.looped.is_some() {
             return Ok((content.to_vec(), None));
         }
         let line = self.line()?;
@@ -727,7 +785,7 @@ impl LeanFrame {
     /// (a zerocheck outer coin `r_j = 1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`).
     pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
         self.send(&format!("coins {}\n", coins.len()), &[&f128_wire(coins)]).map_err(|e| refused(format!("the Lean frame's coins: {e}")))?;
-        if self.looped {
+        if self.looped.is_some() {
             return Ok(None);
         }
         let line = self.line()?;
@@ -742,7 +800,7 @@ impl LeanFrame {
     pub fn finish(&mut self) -> Result<bool, String> {
         use std::io::BufRead;
         self.send("finish\n", &[]).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
-        if self.looped {
+        if self.looped.is_some() {
             return Ok(false);
         }
         let mut line = String::new();
