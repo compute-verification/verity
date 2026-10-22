@@ -30,6 +30,7 @@
   "Flock.TmplOrder",
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
+  "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "VStar"
  ],
