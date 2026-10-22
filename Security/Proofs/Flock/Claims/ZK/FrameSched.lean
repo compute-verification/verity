@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.Claims.ZK.FinishLevel0
 
 /-!
 # Two runs of the firewall's prover alike in shape (Stage B, R2)
@@ -656,6 +657,205 @@ theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → 
   obtain ⟨_, _, _⟩ := r
   obtain ⟨_, _, _⟩ := r'
   exact sim_pure trivial
+
+/-! ## Levels ≥ 1's commitments -/
+
+theorem flat_size (A : Array ByteArray) (h : ∀ b ∈ A, b.size = 64) : (flat A).size = 64 * A.size := by
+  unfold flat
+  rw [← Array.foldl_toList]
+  have key : ∀ (l : List ByteArray) (acc : ByteArray), (∀ b ∈ l, b.size = 64) →
+      (l.foldl (· ++ ·) acc).size = acc.size + 64 * l.length := by
+    intro l
+    induction l with
+    | nil => intro acc _; simp
+    | cons a l ih =>
+      intro acc hl
+      rw [List.foldl_cons, ih _ fun b hb => hl b (by simp [hb]), ByteArray.size_append, hl a (by simp),
+        List.length_cons]
+      ring
+  rw [key _ _ fun b hb => h b (by simpa using hb)]
+  simp
+
+theorem layer_size (d : ℕ) (lf : ℕ → ByteArray) : ∀ h, (_root_.Flock.Firewall.Link.layer d lf h).size = 2 ^ d / 2 ^ h
+  | 0 => by simp [_root_.Flock.Firewall.Link.layer]
+  | h + 1 => by
+    simp only [_root_.Flock.Firewall.Link.layer, Array.size_map, Array.size_range, layer_size d lf h]
+    rw [Nat.div_div_eq_div_mul, pow_succ]
+
+theorem layer_mem (d : ℕ) (lf : ℕ → ByteArray) (hl : ∀ q, (lf q).size = 64) :
+    ∀ h, ∀ b ∈ _root_.Flock.Firewall.Link.layer d lf h, b.size = 64
+  | 0 => by
+    intro b hb
+    simp only [_root_.Flock.Firewall.Link.layer, Array.mem_map] at hb
+    obtain ⟨q, -, rfl⟩ := hb
+    exact hl q
+  | h + 1 => by
+    intro b hb
+    simp only [_root_.Flock.Firewall.Link.layer, Array.mem_map] at hb
+    obtain ⟨q, -, rfl⟩ := hb
+    exact _root_.Flock.Sha512.hash_size _
+
+/-- **A level's commitment has a cap of one shape** whatever its table and salts: `2^cap` digests. -/
+theorem commitFw_capAlike (lv : _root_.Flock.Level) (g g' : Array F128) (s s' : ℕ → ByteArray)
+    (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
+    CapAlike (_root_.Flock.Firewall.Finish.commitFw lv g s) (_root_.Flock.Firewall.Finish.commitFw lv g' s') := by
+  have key : ∀ (g : Array F128) (s : ℕ → ByteArray),
+      (flat (_root_.Flock.Firewall.Finish.commitFw lv g s).cap).size = 64 * (2 ^ lv.d / 2 ^ (lv.d - lv.cap)) := by
+    intro g s
+    unfold _root_.Flock.Firewall.Finish.commitFw
+    rw [(_root_.Flock.Firewall.Finish.commitRows_tree lv _ s).2,
+      flat_size _ (layer_mem _ (fun q => _root_.Flock.MerkleScheme.hm96Sha512.leaf
+        (_root_.Flock.Firewall.Finish.rowsOf lv g)[q]! (_root_.Flock.Firewall.Finish.fitBytes 192 (s q)))
+        (fun _ => _root_.Flock.Hm96.Default512.leaf_size _ _) _), layer_size]
+  refine ⟨by rw [key, key], ?_⟩
+  rw [key]
+  exact lt_of_le_of_lt (Nat.mul_le_mul_left 64 (Nat.div_le_self _ _)) hd
+
+/-! ## Rounds of one shape, with their coin counts -/
+
+/-- **Two scheduled rounds of one shape**: their framed bytes alike (`RoundAlike`) at one coin count, the count their
+squeeze headers hold. -/
+def RoundAt (r r' : ByteArray × ℕ) : Prop :=
+  r.2 = r'.2 ∧ ∃ (p p' : ByteArray) (k : UInt8), PendAlike p p' ∧ r.1 = p ++ header 4 k r.2 ∧
+    r'.1 = p' ++ header 4 k r.2 ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ r.2 ≠ 0 ∧ r.2 < 2 ^ 64
+
+/-- Two schedules of one shape, round by round. -/
+def RoundsAt (rs rs' : Array (ByteArray × ℕ)) : Prop := List.Forall₂ RoundAt rs.toList rs'.toList
+
+theorem forall₂_push {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} {a : α} {b : β}
+    (h : List.Forall₂ R l l') (hab : R a b) : List.Forall₂ R (l ++ [a]) (l' ++ [b]) := by
+  induction h with
+  | nil => exact .cons hab .nil
+  | cons h1 _ ih => exact .cons h1 ih
+
+/-- A squeeze's framed bytes hold its coin count in their last eight bytes. -/
+theorem count_header (p : ByteArray) (k : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
+    (_root_.Flock.u64OfLE (p ++ header 4 k n) ((p ++ header 4 k n).size - 8)).toNat = n := by
+  have hL : (p ++ header 4 k n).data.toList = p.data.toList ++ (Frame.sq k n).enc := by
+    simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
+  have hd : (p ++ header 4 k n).data.toList.drop p.data.toList.length = (Frame.sq k n).enc ++ [] := by
+    rw [hL, List.drop_left, List.append_nil]
+  have h := (header_at _ _ _ _ hd hn).2.2
+  have hs : (p ++ header 4 k n).size - 8 = p.data.toList.length + 8 := by
+    have := congrArg List.length hL
+    rw [List.length_append, Frame.enc_length] at this
+    simp only [Frame.payLen, Array.length_toList] at this
+    simp only [ByteArray.size, Array.length_toList]
+    omega
+  rw [hs]
+  have e : ({ data := (p ++ header 4 k n).data.toList.toArray } : ByteArray) = p ++ header 4 k n := by
+    rw [Array.toArray_toList]
+  rw [e] at h
+  exact h
+
+/-- Alike framed bytes, at their coin count. -/
+theorem roundAt_of_alike {c c' : ByteArray} (h : RoundAlike c c') :
+    ∃ n, (_root_.Flock.u64OfLE c (c.size - 8)).toNat = n ∧ (_root_.Flock.u64OfLE c' (c'.size - 8)).toNat = n ∧
+      RoundAt (c, n) (c', n) := by
+  obtain ⟨p, p', k, n, hp, rfl, rfl, hk, h0, hn⟩ := h
+  exact ⟨n, count_header p k n hn, count_header p' k n hn, rfl, p, p', k, hp, rfl, rfl, hk, h0, hn⟩
+
+/-! ## The opening's resumptions -/
+
+open _root_.Flock.Firewall.Drive (Step OpenM stepAsks openStep)
+
+/-- **Two resumptions of one shape**: both end at related results, both stop, or both ask for rounds of one shape at
+one count and go on alike from the same coins. -/
+inductive StepRel {α β : Type} (S : α → β → Prop) : Step α → Step β → Prop
+  | done {a : α} {b : β} : S a b → StepRel S (.done a) (.done b)
+  | fail (e e' : String) : StepRel S (.fail e) (.fail e')
+  | ask {c c' : ByteArray} {n : ℕ} {k : Array F128 → Step α} {k' : Array F128 → Step β} :
+      RoundAt (c, n) (c', n) → (∀ cs, StepRel S (k cs) (k' cs)) → StepRel S (.ask c n k) (.ask c' n k')
+
+theorem stepRel_bind {α β γ δ : Type} {S : α → β → Prop} {T : γ → δ → Prop} {p : Step α} {q : Step β}
+    {f : α → Step γ} {g : β → Step δ} (h : StepRel S p q) (hfg : ∀ a b, S a b → StepRel T (f a) (g b)) :
+    StepRel T (p.bind f) (q.bind g) := by
+  induction h with
+  | done hab => exact hfg _ _ hab
+  | fail e e' => exact .fail e e'
+  | ask hr _ ih => exact .ask hr fun cs => ih cs
+
+/-- **Alike resumptions fed the same coins** end alike, having sent rounds of one shape. -/
+theorem stepRel_feed {α β : Type} {S : α → β → Prop} :
+    ∀ {p : Step α} {q : Step β} (cs : List (Array F128)) {rs rs' : Array (ByteArray × ℕ)},
+      StepRel S p q → RoundsAt rs rs' →
+      StepRel S (p.feed cs rs).1 (q.feed cs rs').1 ∧ RoundsAt (p.feed cs rs).2 (q.feed cs rs').2
+  | _, _, [], _, _, h, hr => by
+    cases h with
+    | done hab => exact ⟨.done hab, hr⟩
+    | fail e e' => exact ⟨.fail e e', hr⟩
+    | ask hc hk => exact ⟨.ask hc hk, hr⟩
+  | _, _, x :: cs, rs, rs', h, hr => by
+    cases h with
+    | done hab => exact ⟨.done hab, hr⟩
+    | fail e e' => exact ⟨.fail e e', hr⟩
+    | ask hc hk =>
+      exact stepRel_feed cs (hk x) (by unfold RoundsAt; rw [Array.toList_push, Array.toList_push]; exact forall₂_push hr hc)
+
+/-- The opening's runs, related: at one state, results related by `S` at one state. -/
+def ORel {α β : Type} (S : α → β → Prop) (x : OpenM α) (y : OpenM β) : Prop :=
+  ∀ s, StepRel (fun a b => S a.1 b.1 ∧ a.2 = b.2) (x s) (y s)
+
+theorem orel_pure {α β : Type} {S : α → β → Prop} {a : α} {b : β} (h : S a b) :
+    ORel S (pure a : OpenM α) (pure b : OpenM β) :=
+  fun _ => .done ⟨h, rfl⟩
+
+theorem orel_bind {α β γ δ : Type} {S : α → β → Prop} {T : γ → δ → Prop} {x : OpenM α} {y : OpenM β}
+    {f : α → OpenM γ} {g : β → OpenM δ} (hx : ORel S x y) (hf : ∀ a b, S a b → ORel T (f a) (g b)) :
+    ORel T (x >>= f) (y >>= g) := by
+  intro s
+  refine stepRel_bind (p := x s) (q := y s) (hx s) fun p q hpq => ?_
+  obtain ⟨a, s1⟩ := p
+  obtain ⟨b, s2⟩ := q
+  obtain ⟨hab, rfl⟩ := hpq
+  exact hf a b hab s1
+
+theorem orel_throw {α β : Type} {S : α → β → Prop} (e e' : String) :
+    ORel S (throwThe String e : OpenM α) (throwThe String e' : OpenM β) :=
+  fun _ => .fail e e'
+
+theorem orel_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c] {p p' : OpenM α} {q q' : OpenM β}
+    (h1 : c → ORel S p q) (h2 : ¬ c → ORel S p' q') :
+    ORel S (if c then p else p') (if c then q else q') := by
+  by_cases hc : c
+  · rw [if_pos hc, if_pos hc]; exact h1 hc
+  · rw [if_neg hc, if_neg hc]; exact h2 hc
+
+theorem orel_get : ORel (· = ·) (get : OpenM (Array (Array F128))) get :=
+  fun _ => .done ⟨rfl, rfl⟩
+
+theorem orel_set (s : Array (Array F128)) : ORel (· = ·) (set s : OpenM PUnit) (set s) :=
+  fun _ => .done ⟨rfl, rfl⟩
+
+theorem orel_ask {c c' : ByteArray} {n : ℕ} (h : RoundAt (c, n) (c', n)) :
+    ORel (· = ·) (StateT.lift (Step.ask c n .done) : OpenM (Array F128)) (StateT.lift (Step.ask c' n .done)) :=
+  fun _ => .ask h fun _ => .done ⟨rfl, rfl⟩
+
+/-- **The opening's runs as a `Lift`**: at one state of coins taken, `stepAsks` asks for rounds of one shape. -/
+def openLift (coins : Array (Array F128)) (live : Bool) : Lift (M := OpenM) (stepAsks coins live) where
+  R := ORel
+  pure := orel_pure
+  bind := orel_bind
+  throw := orel_throw
+  liftOk h := fun _ => .done ⟨h, rfl⟩
+  round := by
+    intro c c' hc
+    obtain ⟨n, hn, hn', hr⟩ := roundAt_of_alike hc
+    unfold stepAsks
+    dsimp only
+    rw [hn, hn']
+    refine orel_bind orel_get fun got got' hg => ?_
+    subst hg
+    rcases coins[got.size]? with _ | cs <;> cases live <;> dsimp only
+    · exact orel_bind (S := fun _ _ => False) (orel_throw _ _) fun _ _ h => h.elim
+    all_goals
+      refine orel_bind (S := (· = ·)) ?_ fun cs cs' hcs => ?_
+      rotate_left
+      · subst hcs
+        refine orel_ite _ (fun _ => orel_bind (S := fun _ _ => False) (orel_throw _ _) fun _ _ h => h.elim)
+          fun _ => ?_
+        exact orel_bind (orel_set _) fun _ _ _ => orel_pure rfl
+      first | exact orel_ask hr | exact orel_pure rfl
 
 end Sched
 
