@@ -1104,6 +1104,7 @@ theorem pendAlike_bytes {p p' b b' : ByteArray} (h : PendAlike p p') (hb : b.siz
     PendAlike (p ++ header 5 0 b.size ++ _root_.Flock.Transcript.padded b)
       (p' ++ header 5 0 b'.size ++ _root_.Flock.Transcript.padded b') :=
   pendAlike_snoc h (FlockSoundness.Refine.absorbBytes_enc _ b) (FlockSoundness.Refine.absorbBytes_enc _ b') hb hn
+    nofun
 
 theorem zcPre_alike (digest cap cap' dom : ByteArray) (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64)
     (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) : PendAlike (zcPre digest cap dom) (zcPre digest cap' dom) :=

@@ -247,6 +247,101 @@ theorem foldlM_midAll_inner {c : Cfg} {m : Masker} (hm : m.inner = none) {fs : L
   rw [foldlM_stepAt_inner c fs _ q (fun f hf => (hM f hf).2) h]
   exact hm
 
+/-- **A scheduled round's form**: frames, none the inner proof's label, then its squeeze of its coin count. -/
+def Framed (r : ByteArray × ℕ) : Prop :=
+  ∃ (fs : List Frame) (k : UInt8), r.1 = ByteArray.mk (encs fs ++ (Frame.sq k r.2).enc).toArray ∧ MidAll fs ∧
+    (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ ¬ (r.2 = 0 ∧ k = 2) ∧ r.2 < 2 ^ 64
+
+theorem roundFree_inner {c : Cfg} {s : Masker} {r : ByteArray × ℕ} (hr : Framed r) (hs : s.inner = none)
+    {o : ByteArray} {s' : Masker} {fr : Array ℕ} (h : roundFree c s r.1 r.2 = .ok (o, s', fr)) : s'.inner = none := by
+  obtain ⟨fs, k, h1, hM, hk, h0, hn⟩ := hr
+  rw [h1, roundFree_encs c s fs k r.2 (by rw [hs]; nofun) (fun f hf => (hM f hf).1) hk h0 hn] at h
+  cases hf : fs.foldlM (stepAt c) (s, ByteArray.empty, #[], 0) with
+  | error e => rw [hf] at h; cases h
+  | ok q =>
+    have hq : q.1.inner = none := by rw [foldlM_stepAt_inner c fs _ q (fun f hf => (hM f hf).2) hf]; exact hs
+    rw [hf] at h
+    simp only [bind, Except.bind, hq] at h
+    cases h
+    rfl
+
+theorem round_inner {c : Cfg} {s : Masker} {r : ByteArray × ℕ} (hr : Framed r) (hs : s.inner = none)
+    {o : ByteArray} {s' : Masker} (h : _root_.Flock.Firewall.Frame.round c s r.1 r.2 = .ok (o, s')) :
+    s'.inner = none := by
+  obtain ⟨fr, hf⟩ := roundFree_round h
+  exact roundFree_inner hr hs hf
+
+/-- **A framed round checked in its own place stays outside the inner proof**, whether it passes or stands in. -/
+theorem check_inner {c : Cfg} {s : Masker} {r : ByteArray × ℕ} (hr : Framed r) (hs : s.inner = none)
+    {o : ByteArray} {s' : Masker} {w : Option String} (h : check c s r.1 r.1 r.2 = .ok (o, s', w)) :
+    s'.inner = none := by
+  cases w with
+  | some w => exact round_inner (s := { s with stopped := true }) hr hs (check_some h)
+  | none => exact round_inner hr hs (check_none h)
+
+/-- The coins the frame takes outside the inner proof leave it outside. -/
+theorem answer_inner {c : Cfg} {s s' : Masker} {cs : Array F128} (hs : s.inner = none) (h : s.answer c cs = .ok s') :
+    s'.inner = none := by
+  unfold Masker.answer at h
+  simp only [bind, Except.bind, pure, Except.pure, hs] at h
+  repeat' split at h
+  all_goals (cases h <;> rfl)
+
+/-- A request of a rep's scheduled rounds: a framed scheduled round in the device's place, or anything but a round. -/
+def SchedReq : _root_.Flock.Firewall.Frame.Req → Prop
+  | .round n v (.sched r) => v = r ∧ Framed (r, n)
+  | .round _ _ _ => False
+  | _ => True
+
+theorem step_inner (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (q : _root_.Flock.Firewall.Frame.Req)
+    (hq : SchedReq q) (hs : st.m.inner = none) : (_root_.Flock.Firewall.Frame.step c st q).2.m.inner = none := by
+  cases q with
+  | round n v p =>
+    cases p with
+    | sched r =>
+      obtain ⟨rfl, hr⟩ := hq
+      simp only [_root_.Flock.Firewall.Frame.step]
+      split
+      · exact hs
+      · split
+        · rename_i heq
+          exact check_inner hr hs heq
+        · split
+          · exact hs
+          · exact hs
+    | fail => exact hq.elim
+    | own => exact hq.elim
+  | coins cs =>
+    cases cs with
+    | error e => exact hs
+    | ok cs =>
+      simp only [_root_.Flock.Firewall.Frame.step]
+      split
+      · rename_i heq
+        exact answer_inner hs heq
+      · exact hs
+  | prior k b =>
+    simp only [_root_.Flock.Firewall.Frame.step]
+    split
+    · exact hs
+    · split
+      · exact hs
+      · exact hs
+  | finish =>
+    simp only [_root_.Flock.Firewall.Frame.step]
+    split <;> exact hs
+
+/-- **The frame over a rep's scheduled rounds stays outside the inner proof.** -/
+theorem run_inner (c : Cfg) : ∀ (st : _root_.Flock.Firewall.Frame.State) (qs : List _root_.Flock.Firewall.Frame.Req),
+    (∀ q ∈ qs, SchedReq q) → st.m.inner = none → (_root_.Flock.Firewall.Frame.run c st qs).1.m.inner = none
+  | st, [], _, hs => hs
+  | st, q :: qs, hq, hs => by
+    simp only [_root_.Flock.Firewall.Frame.run]
+    have h1 := step_inner c st q (hq q List.mem_cons_self) hs
+    split
+    · exact h1
+    · exact run_inner c _ qs (fun q' h' => hq q' (List.mem_cons_of_mem _ h')) h1
+
 end Sched
 
 namespace Loop
@@ -586,13 +681,59 @@ theorem roundsAt_size {rs rs' : Array (ByteArray × ℕ)} (h : Sched.RoundsAt rs
   have := List.Forall₂.length_eq h
   rwa [Array.length_toList, Array.length_toList] at this
 
+/-- Every round of a schedule of one shape with another is framed. -/
+theorem roundsAt_framed {rs rs' : Array (ByteArray × ℕ)} (h : Sched.RoundsAt rs rs') {i : ℕ} (hi : i < rs'.size) :
+    Sched.Framed (rs'.getD i (.empty, 0)) := by
+  obtain ⟨_, fs', k, _, h1', hn2, _, _, hM', hk, h0, hn⟩ :=
+    Sched.roundAt_frames (roundsAt_getD h (by rw [roundsAt_size h]; exact hi))
+  exact ⟨fs', k, by rw [h1', hn2], hM', by rw [hn2]; exact hk, by rw [hn2]; exact h0, by rw [hn2]; exact hn⟩
+
+/-- The schedule on the coins but the last is a prefix of the schedule on them all. -/
+theorem schedSoFar_pop_getD {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {sched sched' : Array (ByteArray × ℕ)}
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched')
+    (hcr : cr.size ≠ 0) {k : ℕ} (hk : k < sched.size) :
+    sched.getD k (.empty, 0) = sched'.getD k (.empty, 0) ∧ k < sched'.size := by
+  rw [Array.eq_push_pop_back!_of_size_ne_zero hcr] at hs'
+  obtain ⟨u, rfl⟩ := schedSoFar_snoc t rep dom xs hi cr.pop cr.back! hs hs'
+  refine ⟨?_, by rw [Array.size_append]; omega⟩
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_append_left hk]
+
+/-- **A rep's frame state at a scheduled round is outside the inner proof**: where the schedule so far holds round `j`
+and its rounds up to it are framed, the rep's state after round `j` is (`Sched.run_inner`). -/
+theorem repState_inner (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (j : ℕ)
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hj : j < sched.size)
+    (hF : ∀ k, k ≤ j → Sched.Framed (sched.getD k (.empty, 0))) :
+    (repState c t rep dom xs hi cr0 cr ns (j + 1)).inner = none := by
+  rw [repState_at c t rep dom xs hi cr0 cr ns j hal hs hj]
+  dsimp only
+  split
+  · rfl
+  · refine Sched.run_inner c _ _ (fun q hq => ?_) rfl
+    unfold schedReqs at hq
+    rcases List.mem_append.1 hq with hq | hq
+    · rcases List.mem_append.1 hq with hq | hq
+      · split at hq
+        · cases hq
+        · rw [List.mem_singleton] at hq; subst hq; trivial
+      · obtain ⟨k, hk, hq⟩ := List.mem_flatMap.1 hq
+        rw [List.mem_range] at hk
+        rcases List.mem_cons.1 hq with rfl | hq
+        · exact ⟨rfl, hF k (by omega)⟩
+        · rw [List.mem_singleton] at hq; subst hq; trivial
+    · rw [List.mem_singleton] at hq; subst hq; exact ⟨rfl, hF j (Nat.le_refl j)⟩
+
 /-- **The loop's frame state one scheduled round on, within a rep stream, is the deployed check's** but for `stopped`:
 where the round after the decoded coins `cs ++ [d]` is the same rep stream's as the round after `cs`, round `j + 1` of
 it, the schedule so far at its own table (`rsched`) and the placeholder's (`sched'`, on the same coins) are of one shape
-(`RoundsAt`) and hold that round, the frame takes the last coins of `cs` at the state `m` outside the inner proof, and the
-deployed frame's check at an alike configuration of a device round against the rep's round `j + 1` releases a round,
-the loop's state after `cs ++ [d]` is that check's, but for `stopped`. `hI`: the placeholder round's frames enter no
-inner proof. -/
+(`RoundsAt`) and hold that round, the frame takes the last coins of `cs` at the state `m`, and the deployed frame's
+check at an alike configuration of a device round against the rep's round `j + 1` releases a round, the loop's state
+after `cs ++ [d]` is that check's, but for `stopped`. The state `m` is outside the inner proof, which no scheduled round
+starts (`repState_inner`). -/
 theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : ℕ} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q + 1)
@@ -606,10 +747,6 @@ theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
     (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
       ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched')
     (hlt : j + 1 < rsched.size) {m : Masker} (ha : (progOf x cs).answer c (wordsAt x cs q) = .ok m)
-    (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ (fs : List Frame) (k : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
-        ByteArray.mk (encs fs ++ (Frame.sq k (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
-      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
     {st : Bool} {v out : ByteArray} {s : Masker} {why : Option String}
     (h : check c { m with stopped := st } v (rsched.getD (j + 1) (.empty, 0)).1 (rsched.getD (j + 1) (.empty, 0)).2 =
       .ok (out, s, why)) :
@@ -627,8 +764,16 @@ theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
     congr 1
     omega
   rw [answer_congr _ _ hc.lay hc.order, ← hg] at ha
-  exact repState_check_step hc t _ dom xs hi _ _ _ _ j hal hs hs' (by simp) (by rw [← roundsAt_size hrs]; exact hlt)
-    (roundsAt_getD hrs hlt) ha hin hI h
+  have hcr : ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)).size = j + 1 := by simp
+  have hj' : j + 1 < sched'.size := by rw [← roundsAt_size hrs]; exact hlt
+  have hj0 := schedSoFar_pop_lt t _ dom xs hi hs hs' hcr hj'
+  have hnone : m.inner = none := Sched.answer_inner (repState_inner c' t _ dom xs hi _ _ _ j hal hs hj0
+    fun k hk => by
+      obtain ⟨e, hk'⟩ := schedSoFar_pop_getD hs hs' (by rw [hcr]; omega) (show k < sched.size by omega)
+      rw [e]
+      exact roundsAt_framed hrs hk') ha
+  exact repState_check_step hc t _ dom xs hi _ _ _ _ j hal hs hs' hcr hj' (roundsAt_getD hrs hlt) ha
+    (by rw [hnone]; nofun) (fun _ _ hM _ _ hq => Sched.foldlM_midAll_inner hnone hM hq) h
 
 /-- The coins the loop's frames take after the decoded coins `cs`, `q + 1` of them, are opening `q`'s words. -/
 theorem readCoins_eq (x : Msg) (cs : List FlockDeploy.Coin) {q : ℕ} (hq : cs.length = q + 1) :
@@ -787,11 +932,10 @@ namespace LeanRelease
 
 open Loop in
 /-- **`ProgChecks` at a scheduled round, at the loop's own frames**: where the frame takes the coins after `h` at the
-state `m` outside the inner proof, the next round is the same rep's, round `j + 1` of rep stream `k` past `Hello` and
-the link, and the frame's check of a device round `v` releases `out`, that check, of a running rep, is one `ProgChecks`
-asks for. The rep's schedule so far at its own table and salts (`real`, `rsched`) and at the placeholder's (`sched'`)
-are of one shape and hold the round, the configuration is alike the placeholder's, and the round's coin count is the
-scheduled round's. `hI`: the placeholder round's frames enter no inner proof. -/
+state `m`, the next round is the same rep's, round `j + 1` of rep stream `k` past `Hello` and the link, and the frame's
+check of a device round `v` releases `out`, that check, of a running rep, is one `ProgChecks` asks for. The rep's
+schedule so far at its own table and salts (`real`, `rsched`) and at the placeholder's (`sched'`) are of one shape and
+hold the round, the configuration is alike the placeholder's, and the round's coin count is the scheduled round's. -/
 theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -819,11 +963,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     (hrs : Sched.RoundsAt rsched sched')
     (hs' : schedSoFar t (k % 2) dom xs hi ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
       .ok sched')
-    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
-    (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ (fs : List Frame) (k' : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
-        ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
-      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
+    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
       (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
@@ -883,7 +1023,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
   rw [hcs']
   rw [hcr, readCoins_eq x cs hq1] at hF
   exact progOf_check_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hj hrs
-    (by rw [hk1]; exact hs') hlt hF hin hI hv'
+    (by rw [hk1]; exact hs') hlt hF hv'
 
 open Loop in
 /-- **`ProgChecks` at a scheduled round, from the rep's own table**: as `ofLoop_progChecks_step`, where the rep's own
@@ -915,13 +1055,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     {rsched : Array (ByteArray × ℕ)}
     (hrs0 : schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
       .ok rsched)
-    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
-    (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ sched', schedSoFar t (k % 2) dom xs hi
-        ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched' →
-      ∀ (fs : List Frame) (k' : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
-        ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
-      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
+    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
       (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
@@ -959,7 +1093,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     rw [e1, e2]
     exact cfgAlike_ofBytes lay _ _ (some mask)
   exact ofLoop_progChecks_step T L₀ real x w ρ h a hA hrep hex hcs hx hq hki hph hc hreal (by rw [← hdm, ← hxe]; exact hrs0)
-    hR hs' hlt hcoins hin (hI sched' hs')
+    hR hs' hlt hcoins
 
 open Loop in
 /-- **Where `ProgChecks` asks anything at the loop's own frames**: where the frame takes the coins after `h` and its
@@ -1028,8 +1162,8 @@ theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
 round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, the round's coin
-count is the scheduled round's, and the loop's state is outside the inner proof, which no scheduled round's frames
-start (`Sched.foldlM_midAll_inner`). At the inner proof's rounds, past the rep's
+count is the scheduled round's (the loop's state there is outside the inner proof, `repState_inner`). At the inner
+proof's rounds, past the rep's
 schedule (`hO`): `ProgChecks`' own conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or
 the loop has no round in the device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
@@ -1053,7 +1187,7 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
         xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
         2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
-        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2 ∧ m.inner = none)
+        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
       (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
@@ -1094,11 +1228,10 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
   | ok rsched =>
   by_cases hlt : j + 1 < rsched.size
-  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins, hnone⟩ :=
+  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins⟩ :=
       hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
     exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
-      hn hlq hp hd hrs hlt hcoins (by rw [hnone]; nofun)
-      fun _ _ fs _ hM _ _ hq => Sched.foldlM_midAll_inner hnone hM hq
+      hn hlq hp hd hrs hlt hcoins
   · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
       hrep hex
 
