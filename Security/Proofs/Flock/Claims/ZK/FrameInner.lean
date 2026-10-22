@@ -839,6 +839,14 @@ theorem run_coins_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (cs : A
   simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, ho, hr', hn, bind, Except.bind,
     pure, Except.pure, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
 
+/-- Coins inside the inner proof count one more of its rounds. -/
+theorem answer_inner_some {c : Cfg} {s s' : Masker} {cs : Array F128} {k : ℕ} (hs : s.inner = some k)
+    (h : s.answer c cs = .ok s') : s'.inner = some (k + 1) := by
+  unfold Masker.answer at h
+  simp only [bind, Except.bind, pure, Except.pure, hs] at h
+  repeat' split at h
+  all_goals (cases h <;> rfl)
+
 theorem ownReqs_push (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128))
     (a : Array F128) {i : ℕ} (hi : sched.size + i ≤ cr.size) :
     ownReqs prior sched own (cr.push a) i = ownReqs prior sched own cr i := by
