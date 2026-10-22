@@ -597,7 +597,8 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
   | _ => say s!"err a request `{line.trim}`"
 
 /-- **The loop's frames port**: each connection to `srv` is, by its first line, one rep's frame starting (`rep …`,
-`Frames.startRep`, the frame then the loop's own in `reg`); one table's level 0 (`level0 …`, `level0`); or a session's
+`Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
+`vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
 levels ≥ 1 kept in `reg` for its opening. Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
@@ -615,6 +616,8 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try Finish.serveLoop ch S specs l0s keep first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then
         try Frames.startRep ch reg l0s first catch e => IO.eprintln s!"rep: {e}"
+      else if first.startsWith "place " || first.startsWith "vals " then
+        try Frames.ask ch reg l0s first catch e => IO.eprintln s!"{first.trim}: {e}"
       else
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
