@@ -21,6 +21,7 @@
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
+  "Flock.Test.RegKnown",
   "Flock.Test.RegRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
@@ -28,7 +29,9 @@
   "Flock.Test.TableCap",
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
+  "Flock.TmplOrder",
   "Flock.Test.MaskLog",
+  "Flock.Test.FrameStep",
   "VStar"
  ],
  "exempt": {

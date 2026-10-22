@@ -54,7 +54,7 @@ class ServedCommitArm:
     precision = "bfloat16"
     control = "stock"
     resident = True
-    commit_scheme: str | None = None
+    commit_scheme = "vllm-v1"
     batch_copies = True
 
     def __init__(self, id: str, retain: str) -> None:

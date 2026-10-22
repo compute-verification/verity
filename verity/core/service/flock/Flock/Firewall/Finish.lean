@@ -453,7 +453,8 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `level0 I LEN`: the root of a level 0 that `level0Of` holds (the session loop's), kept as table `I` (`tabOfLevel0`);
   the answer is its root.
 * `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), kept for its proof
-  file; the answer is them (`saltsBytes`). A rep's salts are drawn once: asking again is refused.
+  file and handed to `keep` with the table's level-0 root; the answer is them (`saltsBytes`). A rep's salts are drawn
+  once: asking again is refused.
 * `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
   (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
@@ -463,7 +464,8 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   (`proofFile`).
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
-    (level0Of : ByteArray → IO (Option Level0.Level0)) : IO UInt32 := do
+    (level0Of : ByteArray → IO (Option Level0.Level0))
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit := fun _ _ _ => pure ()) : IO UInt32 := do
   let refuse := fun (why : String) => do
     ch.write (s!"err {why.replace "\n" " "}\n").toUTF8
     ch.flush
@@ -500,6 +502,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       if ((hi[i]!)[r]!).isSome then return (← refuse s!"table {i} rep {r}'s salts for levels ≥ 1 were drawn already")
       let s ← hiSaltsOf get t
       hi := hi.set! i ((hi[i]!).set! r (some s))
+      keep (flat t.cm0.cap) r s
       answer (saltsBytes s)
     | ["rep", i, r, len] =>
       let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
@@ -562,9 +565,10 @@ def cmd (args : List String) : IO UInt32 := do
 /-- **The session loop's finish**, a connection to its frames port whose first line is `line`: `finish LEN` followed by
 the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
 loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
-system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`). -/
+system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Registry`, `l0s`), each rep's salts
+for levels ≥ 1 handed to `keep`, the loop's frames' copy. -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Registry)
-    (line : String) : IO Unit := do
+    (keep : ByteArray → Nat → Array ByteArray → IO Unit) (line : String) : IO Unit := do
   let say := fun (s : String) => do
     ch.write (s ++ "\n").toUTF8
     ch.flush
@@ -579,8 +583,8 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
       | .error e => say s!"err setup: {e.replace "\n" " "}"
       | .ok (spec, sts) =>
         say "ok 0"
-        let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun r => do
-          return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)
+        let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep
   | _ => say s!"err a request `{line.trim}`"
 
 end Flock.Firewall.Finish

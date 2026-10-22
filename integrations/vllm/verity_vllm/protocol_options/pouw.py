@@ -97,7 +97,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -180,6 +180,8 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
+    #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots
+    served: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -748,10 +750,11 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
-    open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window
-    has finished; without it the coins are this process's and the
-    window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
-    only by default). The served values are the arm's, untouched."""
+    open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
+    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
+    ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm that serves z/y records
+    (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer whose N is whole 32-column units serves
+    through ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -761,8 +764,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
     if settings.challenger is not None:
-        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session,
-                             settings.gate)
+        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session, settings.gate)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)
@@ -776,7 +778,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
                    [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener)
+                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
     run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
@@ -789,6 +791,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
+        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+            h.patch(layer.quant_method, "zy_rows", settings.rows)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 

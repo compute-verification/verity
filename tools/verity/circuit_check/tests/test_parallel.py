@@ -1,5 +1,4 @@
-"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
-collection, which this needs none of."""
+"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own, without circuit-check's catalog."""
 from __future__ import annotations
 
 import os

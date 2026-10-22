@@ -105,7 +105,23 @@ def shape(built, tmp_path_factory) -> Path:
                    "--partition", str(u / "partition.json")], check=True)
     f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
     f.write_text(p.stdout)
+    _form(f.parent)
     return f
+
+
+#: the draw of every one of the inner statement's 64 units, in order, as `--rec-inner-draw` takes it
+FULL_DRAW = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
+
+
+def _form(d: Path, draw: dict | None = None) -> list[str]:
+    """How Flock's plain verifier sets the inner statement up (`RecSetup.checkForm`, beside its files): a
+    `verity/flock-circuit+plain-leaves` statement on the coin server's coins at `draw` (every unit unless given), written
+    to `d`."""
+    f = d / "draw.json"
+    if draw is not None or not f.exists():
+        f.write_text(json.dumps(FULL_DRAW if draw is None else draw))
+    return ["--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os",
+            "--rec-inner-draw", str(f)]
 
 
 @functools.cache
@@ -147,7 +163,7 @@ def _run(level: Path, public: Path, registered: Path, shape: Path, inner: str | 
     `transcript` is false."""
     u = SET / "u" / "stage"
     files = ["--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
-             "--rec-inner-partition", str(u / "partition.json")]
+             "--rec-inner-partition", str(u / "partition.json"), *_form(shape.parent)]
     held = ["--rec-inner-transcript", str(SET / "inner-honest" / "public.json")]
     rec = [] if inner is None else [*(files if coins is None else ["--rec-inner-coins", str(coins)]),
                                     "--rec-inner-session", str(SET / inner / "session"),
@@ -781,8 +797,9 @@ def test_a_v_star_file_of_bit_rows_is_refused_under_the_inner_shape(bit_rows, sh
     assert p.returncode == 1 and p.stdout.strip() == f"setup: {why}", (p.stdout, p.stderr)
     u = SET / "u" / "stage"
     p = subprocess.run([str(BIN), "verify", "--zk", *files, "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public",
-                        str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session",
-                        str(SET / "inner-honest" / "session"), "--session", str(SET / "outer-L3" / "session")],
+                        str(u / "pub-64.bin"), "--rec-inner-partition", str(u / "partition.json"), *_form(shape.parent),
+                        "--rec-inner-session", str(SET / "inner-honest" / "session"), "--session",
+                        str(SET / "outer-L3" / "session")],
                        capture_output=True, text=True)
     (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     assert (v["accepted"], v["why"]) == (False, f"setup: {why}"), v
@@ -826,13 +843,14 @@ C3_SPARSE = (1, 12, 1, 0)
 
 
 def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
-        coins: bool = False, verify: bool = False) -> str:
+        coins: bool = False, verify: bool = False, claims: int = 8, form: list[str] | None = None) -> str:
     """`statement` (or `verify` on a session) at the inner statement's inner shape with the RecSparse shape ``sparse``, on an
-    empty outer circuit, which candidate 3's inner checks precede: its refusal at setup."""
+    empty outer circuit, which candidate 3's inner checks precede: its refusal at setup. ``form`` stands in for the inner
+    statement's setup flags (`_form`)."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     inner = tmp_path / "inner.json"
-    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": 8, "regions": 3,
+    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": claims, "regions": 3,
                                  **({"sparse": list(sparse)} if sparse else {})}))
     session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
     if coins:
@@ -840,7 +858,8 @@ def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None 
         rec = ["--rec-inner-coins", str(tmp_path / "coins.json"), *session]
     else:
         rec = ["--rec-inner-circuit", str(circuit or u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
-               "--rec-inner-partition", str(u / "partition.json"), *session] if files else []
+               "--rec-inner-partition", str(u / "partition.json"), *(_form(tmp_path) if form is None else form),
+               *session] if files else []
     base = [str(BIN), "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--rec-inner", str(inner),
             *rec]
     if verify:
@@ -895,3 +914,74 @@ def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
     assert _c3(tmp_path, C3_SPARSE, circuit=tmp_path / "no-unit.txt") == (
         "setup: rec-coins: the inner session: the inner statement: not one unit range of vus_per_block x units_per_vu (a "
         "power of two) units")
+
+
+def _off_files(m: int, claims: int) -> str:
+    return (f"setup: rec-inner: the verifier's inner shape (m {m}, k_log 22, regions 3, claims {claims}) is not the inner "
+            "statement's (m 27, k_log 22, regions 3, claims 8), which its files (--rec-inner-circuit, --rec-inner-public, "
+            "--rec-inner-partition) set up")
+
+
+def test_the_verifiers_inner_shape_is_the_inner_statements_where_it_holds_its_files(built, tmp_path):
+    """`RecSetup.checkShape`, at every recursive session's setup that holds the inner statement's files, dense or not: the
+    inner shape's `m`, `k_log`, regions and claims are the ones the files set the inner statement up at (two link points,
+    so claims 8 over 3 regions), the shape link `SchedMatches` at the dense form reads. A dense shape off the files' `m`
+    is refused, as is one whose claims are off, which candidate 3's own check on the statement (`checkInnerStmt`, the
+    `m`, `k_log` and regions) passes; a dense shape without the files has nothing to compare."""
+    assert _c3(tmp_path, None) == NOT_A_CIRCUIT
+    assert _c3(tmp_path, None, m=26) == _off_files(26, 8)
+    assert _c3(tmp_path, None, m=26, verify=True) == _off_files(26, 8)
+    assert _c3(tmp_path, C3_SPARSE, claims=10) == _off_files(27, 10)
+    assert _c3(tmp_path, None, m=26, files=False) == NOT_A_CIRCUIT
+
+
+FORM = "verity/flock-circuit+plain-leaves"
+
+
+def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
+    """`RecSetup.checkForm`, last in `RecSetup.checkShape`: how Flock's plain verifier is told to set the inner statement up
+    is how its files set it up (`RecCoins.Files.stmt`), so its `m` and regions are the files' (`innerSetup_files`): a
+    `verity/flock-circuit+plain-leaves` statement on the coin server's coins with no lookup table, at a draw of every one of
+    the files' units in order. The honest form is refused only at the (empty) outer circuit; each other by name."""
+    (tmp_path / "tables").mkdir()
+    (tmp_path / "tables" / "rsq.u32").write_bytes(b"")
+    (tmp_path / "not-json").write_text("{")
+    one = tmp_path / "one"
+    one.mkdir()
+    honest = _form(tmp_path)
+    draw = honest[-1]
+
+    def why(form: list[str]) -> str:
+        return _c3(tmp_path, None, form=form)
+
+    assert why(honest) == NOT_A_CIRCUIT
+    assert why([]) == ("setup: rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, "
+                       "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
+    assert why(["--rec-inner-statement", "verity/flock-circuit", *honest[2:]]) == (
+        f"setup: rec-inner: the inner statement is a verity/flock-circuit statement, not {FORM}, as its files set it up")
+    assert why(["--rec-inner-statement", FORM, "--rec-inner-draw", draw]) == (
+        "setup: rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its "
+        "files set it up")
+    assert why([*honest, "--rec-inner-tables", str(tmp_path / "tables")]) == (
+        "setup: rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none")
+    assert why(honest[:4]) == "setup: rec-inner: the inner statement has no draw (--rec-inner-draw)"
+    assert why([*honest[:4], "--rec-inner-draw", str(tmp_path / "not-json")]).startswith(
+        "setup: rec-inner: the inner statement's draw: not JSON: ")
+    assert why(_form(one, {"law": "subset", "population": 64, "k": 1, "units": [0]})) == (
+        "setup: rec-inner: the inner statement's draw proves 1 units, not every one of its files' 64 in order")
+
+
+def test_the_inner_statements_setup_flags_go_with_its_statement(built, tmp_path):
+    """`RecCoins.formInput`: the inner statement's coins, tables and draw go with `--rec-inner-statement`, and its coins
+    are `os` or `seed`."""
+    u = SET / "u" / "stage"
+    (tmp_path / "empty").write_bytes(b"")
+    base = [str(BIN), "statement", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
+            "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+            "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session", str(SET / "inner-honest" / "session")]
+    p = subprocess.run([*base, "--rec-inner-draw", str(tmp_path / "empty")], capture_output=True, text=True)
+    assert "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement" in (
+        p.stdout + p.stderr), (p.returncode, p.stdout, p.stderr)
+    p = subprocess.run([*base, "--rec-inner-statement", FORM, "--rec-inner-statement-coins", "keyed"], capture_output=True,
+                       text=True)
+    assert "--rec-inner-statement-coins keyed: not os or seed" in p.stdout + p.stderr, (p.returncode, p.stdout, p.stderr)
