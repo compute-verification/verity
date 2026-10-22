@@ -12,10 +12,12 @@ template adds past a call's support), constants folded or carried as inputs, dea
 AND's operands, each of which leaves every bit's value as it was: so it proves, by construction, that the template computes
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
-A form is held as its fingerprint, the XOR of its nodes' labels, node i's label being SHA-512(key ‖ i) for a key drawn for
-the check (and recorded in its report), since a unit's accumulator bits are forms of thousands of nodes. Two distinct forms
-share a fingerprint with probability 2^-512, so among the M forms a check builds it identifies two that differ with
-probability at most M² / 2^513, SHA-512 taken as a random function; short of that the table is the exact one.
+A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check draws from the OS's
+random source when it makes the node, since a hash unit's bits are forms of about half the unit's nodes, which no exact
+table of them fits. Which forms a check builds does not depend on the labels (a triple's node is its first writer's pair),
+and two distinct forms share a fingerprint with probability 2^-512 over labels drawn after both are fixed, so among the M
+forms a check builds it identifies two that differ with probability at most M² / 2^513 over its own coins, with no premise
+on a hash; short of that the table is the exact one.
 
 **Semantic.** When the forms differ (a builder that chose a different structure for a constant it was given as an input, say),
 the report says which output bits differ and both are evaluated, bit-sliced: on every input when the template has at most
@@ -30,7 +32,6 @@ table, which rows carry as more than gates.
 """
 from __future__ import annotations
 
-import hashlib
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -50,20 +51,19 @@ class Canon:
     """The canonical gates both sides are read into. A bit is one int, its form's fingerprint shifted up one and its
     constant in bit 0. Nodes ``0 .. inputs - 1`` are the inputs (`inputs`, their bits); each AND node takes the next."""
 
-    def __init__(self, inputs: int, key: bytes) -> None:
-        self.key = key
+    def __init__(self, inputs: int) -> None:
         self.next = 0
         self.inputs = [self._node() for _ in range(inputs)]
-        self.ands: dict[tuple[int, int], int] = {}
+        self.ands: dict[tuple[int, int], tuple[int, int]] = {}
 
     def _node(self) -> int:
-        h = hashlib.sha512(self.key + self.next.to_bytes(8, "little")).digest()
         self.next += 1
-        return int.from_bytes(h, "little") << 1
+        return int.from_bytes(os.urandom(64), "little") << 1
 
     def AND(self, a: int, b: int) -> int:
-        """``a · b``: (f + x)(g + y) = fg + y f + x g + x y, with fg the node of the two smallest of f, g and f + g (by
-        their fingerprints), since f (f + g) = f + fg."""
+        """``a · b``: (f + x)(g + y) = fg + y f + x g + x y. The three forms f, g and f + g have one node, the product of
+        the two the first AND of them wrote, and since f (f + g) = f + fg, fg is that node plus the operand it shares
+        with another of their pairs."""
         x, y = a & 1, b & 1
         f, g = a ^ x, b ^ y
         if not f:
@@ -72,11 +72,15 @@ class Canon:
             return a if y else ZERO
         if f == g:
             return a if x == y else ZERO
-        lo, mid, top = sorted((f, g, f ^ g))
-        n = self.ands.get((lo, mid))
-        if n is None:
-            n = self.ands[lo, mid] = self._node()
-        fg = n ^ (g if top == f else f if top == g else 0)
+        h = f ^ g
+        lo, mid, _top = sorted((f, g, h))
+        v = self.ands.get((lo, mid))
+        if v is None:
+            fg = self._node()
+            self.ands[lo, mid] = (fg, h)
+        else:
+            n, e = v
+            fg = n if e == h else n ^ (g if e == f else f)
         if y:
             fg ^= f
         if x:
@@ -278,20 +282,18 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
 
 
 def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
-          seed: int = CK.Options.seed, key: bytes | None = None, label: str | None = None) -> dict:
+          seed: int = CK.Options.seed, label: str | None = None) -> dict:
     """``tmpl`` (a `verity_flock.tmpl.Tmpl`, or its text) held to ``target``'s flat lowering: a result as `checks.check_definition` gives
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
-    ``refused``), the counts on both sides, the labels' key (fresh unless ``key`` is given), and why the forms differ when
-    they do."""
+    ``refused``), the counts on both sides, and why the forms differ when they do."""
     from verity_flock import tmpl as TM
 
     from verity.ml.circuits.evaluation.reference import resolve
 
     t = resolve(target)
     name = label or t.id
-    key = os.urandom(32) if key is None else key
     F = CK.Findings()
-    rec: dict[str, Any] = {"definition": t.id, "labels": {"hash": "sha512", "key": key.hex()}}
+    rec: dict[str, Any] = {"definition": t.id, "labels": {"source": "os.urandom", "bits": 512}}
     try:
         if not isinstance(tmpl, TM.Tmpl):
             try:
@@ -305,7 +307,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
         except (AssertionError, IndexError, ValueError) as e:
             raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
         C, ins, words = _lowered(t)
-        K = Canon(sum(map(len, ins)), key)
+        K = Canon(sum(map(len, ins)))
         mine, rec["template"] = template_bits(flat, K)
         widths = rec["template"].pop("input_widths")
         if widths != [len(w) for w in ins]:

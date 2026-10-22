@@ -45,7 +45,7 @@ def _codes(r: dict) -> list[str]:
 # --- the canonical gates ---------------------------------------------------------------------------------------------
 
 def test_an_and_is_one_node_whichever_way_round_and_through_whichever_pair_it_is_written():
-    K_ = ST.Canon(3, b"key")
+    K_ = ST.Canon(3)
     x, y, z = K_.inputs
     xy = K_.AND(x, y)
     assert K_.AND(y, x) == xy
@@ -56,7 +56,7 @@ def test_an_and_is_one_node_whichever_way_round_and_through_whichever_pair_it_is
 
 
 def test_constants_and_repeats_fold():
-    K_ = ST.Canon(2, b"key")
+    K_ = ST.Canon(2)
     x, _y = K_.inputs
     assert K_.AND(x, 1) == x and K_.AND(1, x) == x
     assert K_.AND(x, ST.ZERO) == ST.ZERO
@@ -64,11 +64,11 @@ def test_constants_and_repeats_fold():
     assert K_.next == 2
 
 
-def test_a_verdict_does_not_depend_on_the_labels_key_which_the_report_records():
+def test_a_verdict_does_not_depend_on_the_labels_draw():
     tm = _emitted(SB.E4m3ToF32)
-    a, b = (ST.check(SB.E4m3ToF32, tm, key=k)["structural"] for k in (b"one", b"two"))
+    a, b = (ST.check(SB.E4m3ToF32, tm)["structural"] for _ in range(2))
     assert a["verdict"] == b["verdict"] == "syntactic" and a["canonical_nodes"] == b["canonical_nodes"]
-    assert (a["labels"], b["labels"]) == ({"hash": "sha512", "key": b"one".hex()}, {"hash": "sha512", "key": b"two".hex()})
+    assert a["labels"] == b["labels"] == {"source": "os.urandom", "bits": 512}
 
 
 # --- accepted --------------------------------------------------------------------------------------------------------
