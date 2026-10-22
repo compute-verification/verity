@@ -225,6 +225,40 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
+/-- The key of a `--registered` file that names every port of the statement (`checkComplete`); absent, false. -/
+def COMPLETE_KEY : String := "complete"
+
+/-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
+def completeOf (j : Json) : V Bool :=
+  match j.getObjVal? COMPLETE_KEY with
+  | .error _ => .ok false
+  | .ok (.bool b) => .ok b
+  | .ok _ => .error s!"registered reads: {COMPLETE_KEY} is true or false"
+
+/-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
+def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
+
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10, a `--registered` file that sets
+`complete`): every port of the circuit is a port of the verifier's own registered reads (`checkComplete_ok`), so no
+output's cone reads a row the statement commits afresh and its public file states (a lane's index, say), and `check`
+opens each of them at its registered root. It reads the circuit's ports, not its gates: whatever an output's cone reads
+is a port's row. -/
+def checkComplete (c : Circuit) (own : Array Port) : V Unit :=
+  if complete c own then .ok ()
+  else
+    let p := ((c.ports.find? fun p => !own.any (·.name == p.name)).map (·.name)).getD ""
+    .error s!"registered reads (complete): the statement's port {p} is no port of the verifier's registered reads, which name every port the statement's outputs read: its rows would be committed afresh, stated by the public file"
+
+theorem checkComplete_ok {c : Circuit} {own : Array Port} (h : checkComplete c own = .ok ()) :
+    ∀ p ∈ c.ports, ∃ r ∈ own, r.name = p.name := by
+  unfold checkComplete at h
+  split at h
+  · rename_i hc
+    intro p hp
+    obtain ⟨r, hr, he⟩ := Array.any_eq_true'.mp (Array.all_eq_true_iff_forall_mem.mp hc p hp)
+    exact ⟨r, hr, by simpa using he⟩
+  · cases h
+
 /-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
 which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered
 opening's round `i`, `rec-opening-c<i>`, and R's level-`l` tops, `rec-top-stacked-L<l>`; and the sparse phase's messages
@@ -356,5 +390,22 @@ output rows as well as its input rows (§16.13): an output row's table is its in
 registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   Registered.check st.c st.pub registered (Registered.derived st.partition)
+
+/-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
+table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
+the statements; null without registered reads. A produced record holds every session's to its own
+(`SampledProofs.Produced.shared`). -/
+def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
+  match registered with
+  | none => Lean.Json.null
+  | some own => Lean.Json.mkObj (own.toList.map fun reg =>
+      (reg.name, Lean.Json.arr (sts.foldl (fun acc st => acc ++ rowsOf st reg) #[])))
+where
+  rowsOf (st : Stmt) (reg : Registered.Port) : Array Lean.Json :=
+    match Registered.portOf st.c reg.name, st.pub.tables, Registered.entry st.pub reg with
+    | some p, some t, .ok (positions, _) =>
+      (Array.range (t.counts.getD p 0)).map fun r =>
+        Lean.Json.arr #[Lean.toJson (positions.getD r 0), Lean.Json.str (hexOf (Registered.tableRow st.pub t p r))]
+    | _, _, _ => #[]
 
 end Flock

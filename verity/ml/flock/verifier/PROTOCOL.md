@@ -1445,7 +1445,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   registered row at `positions[i]`. Each table row's leaf, the frame-v3-sha512 leaf under the port's row schema, must
   climb its path to the root at its position, each instance's ref name its unit's read position in the verifier's
   program (units `derived`). A port on
-  one side only refuses; verdicts report `registered`. A recursive statement reads the inner session's round commitments
+  one side only refuses; verdicts report `registered`, and `openings`, each port's table rows `[position, b ‖ c]`. An `F`
+  with `"complete": true` names every port of the statement: a circuit port, input or output row, that is no port of `F`
+  refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
+  (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
   stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
