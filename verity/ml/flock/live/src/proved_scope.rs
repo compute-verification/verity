@@ -8,7 +8,7 @@
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
 //! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form.
 
-use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT};
+use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
 use crate::ir_block::IrUnitNet;
 
 const WORD: usize = 128;
@@ -241,7 +241,11 @@ pub fn statement_why(name: &str, typed: bool, zk: bool, tables: usize, public_in
 
 /// The statement's id as the Lean verifier names it: a selftest build's (`seed-injection`) is `+seed-injection`'s.
 pub fn lean_name(c: &Composite) -> String {
-    let base = if c.statement() == crate::typed::STATEMENT { crate::typed::STATEMENT } else { STATEMENT };
+    let base = match c.statement() {
+        crate::typed::STATEMENT => crate::typed::STATEMENT,
+        TMPL_STATEMENT => TMPL_STATEMENT,
+        _ => STATEMENT,
+    };
     format!("{base}{}", if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" })
 }
 
@@ -256,6 +260,10 @@ pub fn shared_rows_why(shared: bool, zk: bool, registered: bool) -> Option<&'sta
 /// The Lean verifier holds its own `--registered F` exactly when the public header names registered reads: without it such
 /// a header is refused at setup, and with it a header naming none is (`Registered.check`).
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
+    // the Lean verifier's verdict on a templated statement (`Tags.templated`), in place of every rule below
+    if c.statement() == TMPL_STATEMENT {
+        return Err(refusal(&format!("{}, a templated statement", lean_name(c))));
+    }
     let typed = c.statement() == crate::typed::STATEMENT;
     if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
         return Err(refusal(&why));
@@ -286,7 +294,7 @@ mod tests {
         a.push(vec![const_pos]);
         b.push(vec![const_pos]);
         IrUnitNet { name: "unit".into(), useful: const_pos + 1, const_pos, in_groups: groups, out_groups: vec![], in_words, out_cols: vec![],
-                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, flat: FlatCache::default() }
+                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None, flat: FlatCache::default() }
     }
 
     #[test]
