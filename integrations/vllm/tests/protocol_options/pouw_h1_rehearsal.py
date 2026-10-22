@@ -6,12 +6,14 @@ fetched run on any CPU.
 `pouw_h1.FILL` over Llama-3.1-8B, no window's prefix; its descriptor's SHA-512 is its `program_digest`, the period's
 circuit), unless ``--program DIR`` names a ``--program-only`` run's. With ``--served`` it registers the period's weights
 first (`weights`: a fresh key kept in the prover's root, and ``pouw_h1_gpu.py --weights-only``, each K's ``b/<K>`` from
-the served model under the declared Program, VLLM-71), whose root W the period opens with. Then opens the lane's period
-(``period-open --name P --cap 1 --circuit DIGEST --draw-k K --weights-root W``, K the proof service's committed draw K,
-`declared_draw_k`, which core's credit reads as the open's ``draw_k``; infra's ``auditor.py`` takes ``--draw-k`` with
-the sealed pins log, and until then its ``period-open`` refuses the flag, so the rehearsal stops there; the gate has
-no verb yet for each K's circuit file's SHA-512, the open's ``circuit_files`` core's credit verifies statements
-against, so no window of it is credited), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
+the served model under the declared Program, VLLM-71), whose root W the period opens with. It builds each stratum's
+circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
+lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
+the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --weights-root W
+--circuit-files FILES``, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
+open's ``draw_k``, and FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
+against, `credit.committed_files`), reserves the window's session (``reserve --peer PEER --scheme S --families
+F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --weights-key KEY --challenger AT --session RESERVE --gate GATE``, under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
@@ -22,15 +24,18 @@ and each call's A and z/y tables are committed as the window Program's registere
 served step: it hands the window and its session's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
 ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same session
 (`serve`; the verdict's ``stages`` has when each stage exited and ``lease_after_served_s``). Once the session has its ``end`` entry it
-closes the period, takes the ledger (``GATE ledger``), the session's tree (``GATE fetch S``) and the key's pin (``GATE
-pubkey``), and runs the verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
-against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``,
+closes the period, takes the ledger (``GATE ledger``), the host's pins log (``GATE pins``, the bytes infra publishes as
+``challenger-pins head``), the session's tree (``GATE fetch S``) and the key's pin (``GATE pubkey``), and runs the
+verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
+against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``, each
+reading the session through core's `challenger.pinned_session` under that pins log,
 `pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome (each call's
 ``--registered`` file) is in the serve record. Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
 the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
-step, a pin that isn't the gate key's; and with the local gate, sessions forged through the gate itself
+step, a pin that isn't the gate key's, no pins log, a pins log cut before the lines the open sealed and one with a
+line rewritten; and with the local gate, sessions forged through the gate itself
 (a period of their own), opened on the bare weights' root and on another window's root with the window's other coins
 after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
@@ -50,15 +55,19 @@ tree must be one whose ``period-open`` takes ``--weights-root``, #3165, on main 
       -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 \\
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit 882770e6009e73bdf015f4069fa77ef698d7f326'
 
+Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build it once as its own run and send it with
+``--circuits DIR``: ``python -m tests.protocol_options.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
+
 **The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (INF-170, on
 vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program's ``window-program.meta.json`` sent (a
 ``--program-only`` run's, or a rehearsal's ``out/program/``, as rehearsal r20261021-024645-c83a's, digest b9f82db9…),
-and no ``--tree``:
+its circuit files' directory (``--circuits``), and no ``--tree``:
 
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
+      --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
       --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
@@ -71,7 +80,8 @@ in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the wi
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
 vy-challenger-1; the session's end is read from ``GATE status`` (the live gate has no ``wait``); and no session is
 forged (each would be a live window of the lane's period). The gate checks only that ``--circuit`` is a SHA-512 (128 hex
-digits) and records it; nothing compares it with the window yet (CHAL1 is proofs'). Never run anything on
+digits) and ``--circuit-files`` each K's (`auditor.circuit_files_of`), and records them; core's credit compares the
+files with each statement's circuit file, and the descriptor with the window's layout. Never run anything on
 vy-challenger-1 itself.
 """
 from __future__ import annotations
@@ -154,6 +164,16 @@ def declared_draw_k(layers: int = 32) -> int:
     from verity_vllm.protocol_options import pouw_h1_served as SV
     shapes, modules = declaration(layers)
     return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
+
+
+def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, weights_root: str | None,
+                     circuit_files: dict[str, str]) -> list[str]:
+    """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its draw K,
+    its weights' root when the period registered one, and each stratum's circuit file's SHA-512 (``--circuit-files``,
+    `pouw_h1_circuits.build`'s ``files``)."""
+    return ["period-open", "--name", name, "--cap", str(cap), "--circuit", circuit, "--draw-k", str(draw_k),
+            *(["--weights-root", weights_root] if weights_root else []),
+            "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":"))]
 
 
 class Gate:
@@ -288,24 +308,27 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
 
 
 def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
-    """The ledger, the key's pin and the session's tree as the gate gives them, in `d`."""
+    """The ledger, the host's pins log, the key's pin and the session's tree as the gate gives them, in `d`."""
     d.mkdir(parents=True, exist_ok=True)
     rc, ledger = gate.raw("ledger")
     (d / "windows.jsonl").write_bytes(ledger if rc == 0 else b"")
+    prc, pins = gate.raw("pins")
+    (d / "pins.jsonl").write_bytes(pins if prc == 0 else b"")
     pub = gate("pubkey")
     (d / "pubkey.json").write_text(json.dumps(pub, indent=1) + "\n")
     rc, tgz = gate.raw("fetch", session)
     if rc == 0:
         with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
             t.extractall(d / "fetch", filter="data")
-    return {"ledger_lines": ledger.count(b"\n") if rc == 0 else 0, "pubkey": pub, "fetched": rc == 0}
+    return {"ledger_lines": ledger.count(b"\n") if rc == 0 else 0, "pins_lines": pins.count(b"\n") if prc == 0 else 0,
+            "pubkey": pub, "fetched": rc == 0}
 
 
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
-          period: str | None = None, descriptor: bytes | None = None) -> dict[str, Any]:
+          period: str | None = None, descriptor: bytes | None = None, pins: list[Path] | None = None) -> dict[str, Any]:
     """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the session's ``out/``
-    (`trusted_rounds_reason`), else on its tree (`session_reason`); its credit over `descriptor`, the period's circuit's
-    bytes (`program_bytes`)."""
+    (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins`; its
+    credit over `descriptor`, the period's circuit's bytes (`program_bytes`)."""
     from tests.protocol_options import pouw_h1_gpu as GPU
     wfile = None
     if window is not None:
@@ -313,7 +336,8 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
         wfile = out / "window.json"
         wfile.write_text(json.dumps(window) + "\n")
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
-                               [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor)
+                               [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
+                               [str(p) for p in pins or ()])
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -355,7 +379,8 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
 
 
 def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64,
-             draw_k: int = 1, weights_root: str | None = None) -> dict[str, Any]:
+             draw_k: int = 1, weights_root: str | None = None, circuit_files: dict[str, str] | None = None
+             ) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), sessions forged through it."""
     from verity.core.protocols.pouw import salt as PS
@@ -366,12 +391,13 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     weights, table = c["weights_root"], c["requests_root"]
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"
-    tree, ledger = g / "fetch" / sid, [g / "windows.jsonl"]
+    tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
     rt = out / "red_team"
     cases: dict[str, Any] = {}
 
-    def case(name: str, rec: Path, *, window: dict | None = None, led: list[Path] | None = None, tr: Path | None = None) -> None:
-        got = check(rec, tr or tree, pin, led or ledger, rt / name, window, period)
+    def case(name: str, rec: Path, *, window: dict | None = None, led: list[Path] | None = None, tr: Path | None = None,
+             pn: list[Path] | None = None) -> None:
+        got = check(rec, tr or tree, pin, led or ledger, rt / name, window, period, pins=pins if pn is None else pn)
         cases[name] = {**got, "refused": not got["ok"]}
 
     case("r_bare_weights_root", _edited(record, lambda d: d["commitment"]["session"].update(root=weights), rt / "bare.json"))
@@ -384,17 +410,26 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     rt.mkdir(parents=True, exist_ok=True)
     cut.write_bytes(b"".join(ln + b"\n" for ln in lines[:end]))
     case("ledger_cut_before_end", record_path, led=[cut])
+    case("pins_none", record_path, pn=[])
+    (rt / "pins-cut.jsonl").write_bytes(b"")
+    case("pins_cut", record_path, pn=[rt / "pins-cut.jsonl"])
+    logged = [ln for ln in (g / "pins.jsonl").read_text().split("\n") if ln]
+    if logged:
+        from verity.core.protocols.sampled_proofs import challenger as LC
+        e = json.loads(logged[0])
+        logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
+    (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
+    case("pins_rewritten", record_path, pn=[rt / "pins-rewritten.jsonl"])
     first = next(i for i, x in enumerate(record["calls"]) if x.get("tables"))
     case("table_root_changed", _edited(record, lambda d: d["calls"][first]["tables"].update(a="00" * 64), rt / "table.json"))
     case("table_a_root_unbound", _edited(record, lambda d: d["calls"][first]["tables"].update(a=None), rt / "unbound.json"))
     case("table_rounds_cut", _edited(record, lambda d: d["commitment"]["rounds"].pop(), rt / "rounds-cut.json"))
-    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period)
+    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period, pins=pins)
     cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
         forged_period = f"{period}-forged"
-        cases["forged_period_open"] = gate("period-open", "--name", forged_period, "--cap", "2", "--circuit", circuit,
-                                          "--draw-k", str(draw_k),
-                                          *(["--weights-root", weights_root] if weights_root else []))
+        cases["forged_period_open"] = gate(*period_open_argv(forged_period, 2, circuit, draw_k, weights_root,
+                                                             circuit_files or {}))
         forged = {}
         for name, root in (("forged_bare_weights_root", bytes.fromhex(weights)), ("forged_other_window_root", bytes.fromhex(other))):
             try:
@@ -411,10 +446,12 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             with tarfile.open(fileobj=io.BytesIO(tgz)) as t:
                 t.extractall(rt / "forged_gate" / "fetch", filter="data")
             rec = _edited(record, lambda d, commits=commits: d.update(commitment=commits), rt / f"{name}.json")
-            case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s)
-        case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"])
+            case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s,
+                 pn=[rt / "forged_gate" / "pins.jsonl"])
+        case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"],
+             pn=[rt / "forged_gate" / "pins.jsonl"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
-    must = [k for k in cases if k.startswith(("r_", "ledger_", "table_", "other_pin", "forged_b", "forged_o"))]
+    must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "table_", "other_pin", "forged_b", "forged_o"))]
     return {"cases": cases, "all_refused": all(cases[k].get("refused") for k in must), "must_refuse": must}
 
 
@@ -454,8 +491,18 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         if not doc["weights"]["ok"]:
             return doc
         wroot = doc["weights"]["weights_root"]
-    doc["period_open"] = gate("period-open", "--name", a.period, "--cap", "1", "--circuit", circuit, "--draw-k",
-                              str(draw_k), *(["--weights-root", wroot] if wroot else []))
+    from tests.protocol_options import pouw_h1_circuits as PC
+    try:
+        doc["circuits"] = PC.build(pdir, Path(a.circuits) if a.circuits else out / "circuits")
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        doc["circuits"] = {"refused": f"{type(e).__name__}: {e}"}
+        return doc
+    if doc["circuits"]["program"] != circuit:
+        doc["circuits"]["refused"] = (f"the circuit files are bound to Program {doc['circuits']['program'][:16]}..., not "
+                                      f"{circuit[:16]}..., the period's")
+        return doc
+    files = doc["circuits"]["files"]
+    doc["period_open"] = gate(*period_open_argv(a.period, 1, circuit, draw_k, wroot, files))
     reserved = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.families(PH.FILL.steps),
                     "--minutes", str(a.minutes))
     doc["reserved"] = reserved
@@ -493,15 +540,16 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["serve"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
     calls = out / "serve" / "pouw-h1-calls.json"
     if calls.is_file() and doc["evidence"]["fetched"]:
-        tree, ledger = out / "gate" / "fetch" / sid, [out / "gate" / "windows.jsonl"]
+        g = out / "gate"
+        tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
         record = json.loads(calls.read_text())
         desc, root = program_bytes(pdir), record["commitment"]["session"]["root"]
         doc["verify"] = {
-            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc),
-            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc),
+            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc, pins),
+            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc, pins),
         }
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
-                                   draw_k, wroot)
+                                   draw_k, wroot, files)
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
     cr = (v.get("trusted") or {}).get("credit") or {}
@@ -531,6 +579,8 @@ def main(argv: list[str] | None = None) -> int:
                                                                "(build_program) and stop")
     ap.add_argument("--program", metavar="DIR", help="a --program-only run's out/ (its Program's digest is the period's "
                                                     "--circuit), not built again")
+    ap.add_argument("--circuits", metavar="DIR", help="each stratum's circuit file, built (pouw_h1_circuits --program "
+                                                     "--out DIR), not built again; default: built into --out/circuits")
     ap.add_argument("--gpu-lease", type=int, metavar="MIN", help="serve under `gpu-lease 1 --wait --max-min MIN` (in a "
                                                                 "research run without --gpus: the GPU held only while it serves)")
     ap.add_argument("--minutes", type=int, default=300, help="the reserve's minutes, which also bound the session")
