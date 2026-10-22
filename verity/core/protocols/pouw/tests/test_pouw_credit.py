@@ -166,12 +166,12 @@ def test_each_pinned_model_is_its_files_digest():
     the canonical JSON of each file's SHA-512), so an open the gate signed from a registration of a pinned checkpoint
     is the pin credit counts."""
     doc = json.loads(Cr.MODELS.read_text())
-    assert sorted(doc) == ["models", "schema"] and doc["models"]
-    for role, e in doc["models"].items():
+    assert doc
+    for role, e in doc.items():
         assert sorted(e) == ["checkpoint_sha512", "files", "recipe", "repo", "revision"], role
         assert e["files"] and all(Cr._digest(h) is not None for h in e["files"].values()), role
         assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest(), role
-    assert Cr.PINNED_MODELS == {r: e["checkpoint_sha512"] for r, e in doc["models"].items()}
+    assert Cr.PINNED_MODELS == {r: e["checkpoint_sha512"] for r, e in doc.items()}
     assert Cr.MODELS.read_text() == json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 

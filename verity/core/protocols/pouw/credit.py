@@ -164,7 +164,7 @@ MODEL_KEYS = ("checkpoint_sha512", "name")
 #: each int8 checkpoint role credit counts the weights of, with its checkpoint's SHA-512 (``checkpoint_sha512``, of the
 #: canonical JSON of each of its files' SHA-512); the Lean embeds the same file
 MODELS = Path(__file__).parent / "lean/check/models.json"
-PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text())["models"].items()}
+PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text()).items()}
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
              "pins (models.json)")
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"

@@ -1028,7 +1028,7 @@ def MODEL_FIX : String :=
 the same `models.json` `credit.py` reads. -/
 def PINNED_MODELS : List (String × String) :=
   match Json.parse (include_str "../models.json") with
-  | .ok j => (fields (get j "models")).filterMap fun (r, e) => (str? (get e "checkpoint_sha512")).map (r, ·)
+  | .ok j => (fields j).filterMap fun (r, e) => (str? (get e "checkpoint_sha512")).map (r, ·)
   | .error _ => []
 
 def noModel (name : String) : String :=
