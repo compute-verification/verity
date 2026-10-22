@@ -41,8 +41,8 @@ after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the hon
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
 under its round's root (``a_roots``), its served layout is the declared one's, the salt key is kept past the close in
 the prover's own directory and published nowhere under ``$OUT`` (``key_custody``), and every red-team case is refused.
-Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``weights``,
-``window``, ``calls``, ``eps``), which credits nothing until each drawn call's statement (its proof files) exists.
+Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``window``,
+``calls``, ``eps``), which credits nothing until each drawn call's statement (its proof files) exists.
 
 **The rehearsal** (a research run on vy-nebius-2; the gate's tree is proofs' #2953, ``cursor/challenger-ledger-v2-7c3e``,
 whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the
@@ -554,7 +554,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     v = doc.get("verify") or {}
     cr = (v.get("trusted") or {}).get("credit") or {}
     doc["credit"] = {"gate_passed": ((doc.get("serve") or {}).get("gate") or {}).get("gate_passed"),
-                     **{k: cr.get(k) for k in ("credit", "calls", "manifest", "weights", "window", "k", "eps")}}
+                     **{k: cr.get(k) for k in ("credit", "calls", "manifest", "window", "k", "eps")}}
     doc["ok"] = bool(doc.get("serve", {}).get("ok") and (v.get("session") or {}).get("ok") and (v.get("trusted") or {}).get("ok")
                      and str(doc["serve"].get("a_roots")).startswith("bound") and doc["key_custody"]["ok"]
                      and (doc.get("red_team") or {}).get("all_refused")
