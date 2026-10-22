@@ -18,6 +18,7 @@ from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.refs import Coll, coll_concat
 from verity.ml.circuits.types import Array, Record, Value
 
+from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
@@ -215,6 +216,28 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
                 assert not G.verify_read(dom, reg.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
     with pytest.raises(ValueError, match="roots the verifier does not hold"):
         HW.table_reads_file(prog, tp, c, {"b/32": "00" * 64})
+
+
+def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
+    """Under a served window's open root, `table_reads_file` gives the call's A and z tables the domains that bind it, the
+    window's own rows (PRF-127), and the weights' b/32 the one that binds none: the domains credit gives them
+    (`credit.domain_of`), and the same reads as with no window."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
+    tp, digest, window = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), "ab" * 64
+    c = 3
+    roots = {HW.table(prog, "a", c): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
+    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog))
+    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=window)
+    assert sorted(file["ports"]) == sorted(bare["ports"])
+    for port, e in file["ports"].items():
+        held = e["value"] == "b/32"
+        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"],
+                                       window=None if held else window).domain_id.hex(), port
+        assert e["domain"] == Cr.domain_of(digest, window, e), port
+        assert (e["domain"] == bare["ports"][port]["domain"]) == held, port
+        assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare["ports"][port].items()
+                                                                  if k != "domain"}, port
 
 
 def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():

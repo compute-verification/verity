@@ -4,7 +4,7 @@
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served row's request Program
     circuit-check --all                                             every registered Definition and template (the suite's set)
-    circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl/v1 template as the Definition's lowering
+    circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
@@ -767,7 +767,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("-q", "--quiet", action="store_true")
     ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl",
-                    help="hold this flock-ir-tmpl/v1 template to the one target's flat lowering instead of running the property "
+                    help="hold this flock-ir-tmpl template to the one target's flat lowering instead of running the property "
                          "checks (circuit_check.structural): accepted by construction, else on every input, else on random ones")
     ap.add_argument("--exhaustive-bits", type=int, default=ST.EXHAUSTIVE_BITS,
                     help="with --structural: evaluate on every input when the template has at most this many input bits")

@@ -1056,13 +1056,66 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
 /-- **The inner session finished**: the coin server's record ends `finish` (`rec_live.Proxy`'s `Finish`). A stopped
 session's record (`end`: `stop`, a refusal or a connection that ended without `Finish`) is no inner proof, and neither is
 one that names no end. This refuses only what the record says: the proxy that holds a session to its schedule runs on
-the prover's side, so a record ending `finish` is not thereby on the schedule. -/
+the prover's side, so a record ending `finish` is not thereby on the schedule, which `checkSchedule` holds it to. -/
 def checkFinished (tr : Json) : V Unit := do
   match tr.getObjValAs? String "end" with
   | .ok "finish" => pure ()
   | .ok e =>
     throw s!"rec inner transcript: the inner session ended {e}, not finish: a stopped session is no inner proof"
   | .error _ => throw "rec inner transcript: the coin server's record names no end; only a finished session is read"
+
+/-- `rec_live.schedule_for`'s streams at the inner shape `i` over Hello's one table `t`, in its order: each stream's
+name, its parent and the parent's round it is opened at, and its rounds. The circuit table's two reps at `repRounds`
+(`holoRepRounds` when its circuits are private), with `i`'s RecSparse shape each rep's sparse phase at
+`sparsePhaseRounds`, opened at its rep's end, and with `i`'s R shape R's stream at `stackedRounds`; none where a shape
+has no schedule. -/
+def scheduleOf (i : Inner) (t : String) : Option (Array (String × String × Nat × Array SchedRound)) := do
+  let rep ← (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
+  let sp := match i.sparse with
+    | some sh => #[0, 1].map fun x => (s!"{SPARSE}/rep{x}", s!"{t}/rep{x}", rep.size, sparsePhaseRounds sh)
+    | none => #[]
+  let r : Array (String × String × Nat × Array SchedRound) ← match i.stacked with
+    | some sh => do pure #[(s!"{STACKED}/rep0", "", 0, ← stackedRounds sh)]
+    | none => pure #[]
+  return #[0, 1].map (fun x => (s!"{t}/rep{x}", "", 0, rep)) ++ sp ++ r
+
+/-- **The coin server's record is on the verifier's schedule** (`rec_live.on_schedule`): at the verifier's inner shape
+`i`, the record `tr` declares exactly `scheduleOf i`'s streams, each at its parent's round with its round count, and its
+rounds are the schedule's in its order, each its stream's round `k`, with the schedule's coin count (`n` and the coins
+drawn), its tops' node counts and copies of level 0's top (`schedOf`), and a `c_k` exactly where the round absorbs a
+message (one: `innerCommits`, which runs first). `rec_live.Proxy` holds a session to the same schedule round by round,
+and it runs on the prover's side: a session that bypasses it reaches the coin server with any rounds, and its record
+still ends `finish`. This holds that record to the schedule here, by counts alone, one comparison a round of the
+schedule. -/
+def checkSchedule (i : Inner) (tr : Json) : V Unit := do
+  let at_ := "the coin server's record is off the schedule of the verifier's inner shape " ++
+    s!"(m {i.m}, k_log {i.kLog}, claims {i.claims})"
+  let tables := ((tr.getObjVal? "hello").toOption.getD Json.null).getObjValAs? (Array String) "tables"
+  let .ok #[t] := tables | throw s!"rec inner transcript: {at_}: Hello names no one table"
+  let some want := scheduleOf i t | throw s!"rec inner transcript: {at_}: the shape has no schedule"
+  let declared ← match tr.getObjVal? "streams" with
+    | .ok (.obj kvs) => pure kvs.toArray
+    | _ => throw s!"rec inner transcript: {at_}: streams is not an object"
+  let names := want.toList.map (·.1)
+  let got := declared.toList.map (·.1)
+  if !(got.all names.contains && names.all got.contains && got.length == names.length) then
+    throw s!"rec inner transcript: {at_}: it declares the streams {got}, and the schedule {names}"
+  for (s, parent, pos, rs) in want do
+    let d := ((declared.find? (·.1 == s)).map (·.2)).getD Json.null
+    if (d.getObjValAs? String "parent").toOption != some parent || (d.getObjValAs? Nat "at").toOption != some pos ||
+        (d.getObjValAs? Nat "rounds").toOption != some rs.size then
+      let place := if parent.isEmpty then "at no parent" else s!"at {parent}'s round {pos}"
+      throw s!"rec inner transcript: {at_}: {s} is not declared {place} with {rs.size} rounds"
+  let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw s!"rec inner transcript: {at_}: rounds is not a list"
+  let flat := want.flatMap fun (s, _, _, rs) => rs.mapIdx fun k w => (s, k, w)
+  if rounds.size != flat.size then
+    throw s!"rec inner transcript: {at_}: {rounds.size} rounds, and the schedule's {flat.size}"
+  for (r, (s, k, w)) in rounds.zip flat, j in [0:rounds.size] do
+    let (rs, rk, n) := ((r.getObjValAs? String "stream").toOption, (r.getObjValAs? Nat "k").toOption,
+      (r.getObjValAs? Nat "n").toOption)
+    if rs != some s || rk != some k || n != some w.1 || schedOf r != w then
+      throw (s!"rec inner transcript: {at_}: round {j} is {rs.getD "no stream"} round {rk.getD 0} (n {n.getD 0}) " ++
+        s!"{showSched (schedOf r)}, and the schedule's {s} round {k} (n {w.1}) {showSched w}")
 
 /-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
 `rec/inner-transcript/v1`, of a session that finished: `checkFinished`),

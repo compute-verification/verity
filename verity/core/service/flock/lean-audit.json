@@ -22,6 +22,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegKnown",
   "Flock.Test.RegRows",
+  "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
   "Flock.Test.Wires",
@@ -29,6 +30,7 @@
   "Flock.Test.ProofCanon",
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
+  "Flock.Test.TmplLayout",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "VStar"
