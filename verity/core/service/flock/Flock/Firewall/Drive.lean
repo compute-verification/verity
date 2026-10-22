@@ -76,15 +76,15 @@ def tryCatch {α : Type} : Step α → (String → Step α) → Step α
   | .fail e, h => h e
   | .ask c n k, h => .ask c n fun cs => (k cs).tryCatch h
 
-instance : Monad Step where
+instance instMonad : Monad Step where
   pure := .done
   bind := bind
 
-instance : MonadExceptOf String Step where
+instance instMonadExceptOfString : MonadExceptOf String Step where
   throw := .fail
   tryCatch := tryCatch
 
-instance : MonadLiftT V Step where
+instance instMonadLiftTV : MonadLiftT V Step where
   monadLift
     | .ok a => .done a
     | .error e => .fail e
