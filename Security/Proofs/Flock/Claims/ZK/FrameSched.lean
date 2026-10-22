@@ -1405,6 +1405,83 @@ theorem feed_append {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) 
   | .done _, _ :: _, l₂, _ => by cases l₂ <;> rfl
   | .fail _, _ :: _, l₂, _ => by cases l₂ <;> rfl
 
+theorem feed_nil {α : Type} (s : _root_.Flock.Firewall.Drive.Step α) (rs : Array (ByteArray × ℕ)) :
+    s.feed [] rs = (s, rs) := by
+  cases s <;> rfl
+
+/-- **The schedule so far only grows**: one more round's coins keep every round scheduled so far. -/
+theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
+    {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s)
+    (h' : schedSoFar t rep dom xs hi (cr.push a) = .ok s') : ∃ u, s' = s ++ u := by
+  unfold schedSoFar at h h'
+  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  | error e => rw [hal] at h; cases h
+  | ok alg =>
+    rw [hal] at h h'
+    simp only [bind, Except.bind] at h h'
+    by_cases hlt : cr.size < alg.size
+    · simp only [hlt, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      by_cases hlt' : (cr.push a).size < alg.size
+      · simp only [hlt', ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h'
+        exact ⟨#[], by rw [h', Array.append_empty]⟩
+      · simp only [hlt', ↓reduceIte] at h'
+        have e : ((cr.push a).extract alg.size (cr.push a).size).toList = [] := by
+          rw [Array.extract_empty_of_size_le_start (by rw [Array.size_push] at hlt' ⊢; omega)]
+        rw [e, feed_nil] at h'
+        revert h'
+        generalize _root_.Flock.Firewall.Drive.openStep t rep dom xs hi ((cr.push a).extract 0 alg.size) = S
+        intro h'
+        cases S with
+        | ask c n k =>
+          simp only [pure, Except.pure, Except.ok.injEq] at h'
+          exact ⟨#[(c, n)], by rw [← h']; rfl⟩
+        | done _ =>
+          simp only [pure, Except.pure, Except.ok.injEq] at h'
+          exact ⟨#[], by rw [← h']⟩
+        | fail _ => cases h'
+    · have hlt' : ¬ (cr.push a).size < alg.size := by rw [Array.size_push]; omega
+      simp only [hlt, ↓reduceIte] at h
+      simp only [hlt', ↓reduceIte] at h'
+      have e1 : (cr.push a).extract 0 alg.size = cr.extract 0 alg.size := by
+        rw [Array.extract_push, if_pos (by omega)]
+      have e2 : ((cr.push a).extract alg.size (cr.push a).size).toList =
+          (cr.extract alg.size cr.size).toList ++ [a] := by
+        rw [Array.size_push, Array.extract_push, if_neg (by omega), if_pos (by omega), Array.toList_push]
+      rw [e1, e2, feed_append] at h'
+      revert h h'
+      generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+        (cr.extract alg.size cr.size).toList #[] = P
+      obtain ⟨S, rs⟩ := P
+      intro h h'
+      cases S with
+      | ask c n k =>
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        dsimp only at h'
+        rw [show (_root_.Flock.Firewall.Drive.Step.ask c n k).feed [a] rs = (k a).feed [] (rs.push (c, n)) from rfl,
+          feed_nil] at h'
+        cases hk : k a with
+        | ask c' n' _ =>
+          rw [hk] at h'
+          simp only [pure, Except.pure, Except.ok.injEq] at h'
+          exact ⟨#[(c', n')], by rw [← h']; simp⟩
+        | done _ =>
+          rw [hk] at h'
+          simp only [pure, Except.pure, Except.ok.injEq] at h'
+          exact ⟨#[], by rw [← h', Array.append_empty]⟩
+        | fail _ => rw [hk] at h'; cases h'
+      | done _ =>
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        dsimp only at h'
+        rw [show ∀ x, (_root_.Flock.Firewall.Drive.Step.done x : _root_.Flock.Firewall.Drive.Step Unit).feed [a] rs =
+          (.done x, rs) from fun _ => rfl] at h'
+        simp only [pure, Except.pure, Except.ok.injEq] at h'
+        exact ⟨#[], by rw [← h', Array.append_empty]⟩
+      | fail _ => cases h
+
 end Loop
 
 end Claims.ZKServer
