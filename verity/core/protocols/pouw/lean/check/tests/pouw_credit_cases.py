@@ -904,6 +904,41 @@ PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign"
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 
+def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
+    """A `registered-file` case: a window's circuit (`descriptor` of a random layout, its parameters named a prefix or
+    none), one of its calls, the window's open root, and the roots the window registers (``{value: [root, ...]}``) for
+    each value a statement of that call reads (`h1window.table`'s A and z tables and the weights' ``b/<K>``), some
+    other calls' among them, as `credit.registered_file` takes them; ``missing`` leaves one of the call's out and
+    ``twice`` registers one twice."""
+    lay = layout(rng)
+    prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
+    call = rng.randrange(len(lay["calls"]))
+    k_of = {lin: k for lin, k, _n in lay["linears"]}
+    vals = [f"{prefix}a/{k_of[lay['calls'][call][0]]}@{call}", f"{prefix}zy@{call}",
+            f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
+    roots = {v: [_hex(rng)] for v in vals}
+    for c, (lin, _blk) in enumerate(lay["calls"]):
+        if c != call and rng.random() < 0.5:
+            roots[f"{prefix}a/{k_of[lin]}@{c}"] = [_hex(rng)]
+    v = rng.choice(vals)
+    match name:
+        case "honest":
+            pass
+        case "missing":
+            if rng.random() < 0.5:
+                del roots[v]
+            else:
+                roots[v] = []
+        case "twice":
+            roots[v].append(_hex(rng))
+        case _:
+            raise ValueError(name)
+    return {"descriptor": descriptor(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng)}
+
+
+REGISTERED_FILE_NAMES = ["missing", "twice"]
+
+
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
     """A frame-v3 SHA-512 tree over `count` leaf digests under `dom` (a random domain when None): its domain id and
     levels."""
