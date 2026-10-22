@@ -935,7 +935,8 @@ open Loop in
 state `m`, the next round is the same rep's, round `j + 1` of rep stream `k` past `Hello` and the link, and the frame's
 check of a device round `v` releases `out`, that check, of a running rep, is one `ProgChecks` asks for. The rep's
 schedule so far at its own table and salts (`real`, `rsched`) and at the placeholder's (`sched'`) are of one shape and
-hold the round, the configuration is alike the placeholder's, and the round's coin count is the scheduled round's. -/
+hold the round, the configuration is alike the placeholder's, and the coin count the loop requests there (`loopNr`) is
+the scheduled round's. -/
 theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -963,10 +964,14 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     (hrs : Sched.RoundsAt rsched sched')
     (hs' : schedSoFar t (k % 2) dom xs hi ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
       .ok sched')
-    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2) :
+    (hlt : j + 1 < rsched.size) (hcoins : loopNr x (q + 1) = (rsched.getD (j + 1) (.empty, 0)).2) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
       (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
+  have hco : (ofLoop T L₀ real).coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2 := by
+    show loopNr x (h.length - 1) = _
+    rw [hq, show q + 2 - 1 = q + 1 by omega]
+    exact hcoins
   obtain ⟨v, s', why, hv⟩ := hex
   refine ⟨v, false, s', why, hv, ?_⟩
   have hk1 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = k := by rw [hki]
@@ -1012,7 +1017,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
         | none => L₀.scheduled x w ρ ((m0, r0) :: h1) vals) = _
       rw [hcs1, hsch]
     rw [hsc, Array.toArray_toList] at hv
-    rw [← hcoins]
+    rw [← hco]
     exact hv
   have hcs' : (((m0, r0) :: h1) ++ [(0 :: out.data.toList, a)]).tail.map (fun p => ZKMal.CoinLayer.rd p.2) =
       cs ++ [ZKMal.CoinLayer.rd a] := by
@@ -1055,7 +1060,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     {rsched : Array (ByteArray × ℕ)}
     (hrs0 : schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
       .ok rsched)
-    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2) :
+    (hlt : j + 1 < rsched.size) (hcoins : loopNr x (q + 1) = (rsched.getD (j + 1) (.empty, 0)).2) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
       (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
@@ -1161,11 +1166,11 @@ theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
 
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
-round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, the round's coin
-count is the scheduled round's (the loop's state there is outside the inner proof, `repState_inner`). At the inner
-proof's rounds, past the rep's
-schedule (`hO`): `ProgChecks`' own conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or
-the loop has no round in the device's place (`ofLoop_checkAt_empty`). -/
+round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, and the coin
+count the loop requests there (`loopNr`, the plan's) is the scheduled round's (the loop's state there is outside the
+inner proof, `repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
+conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or the loop has no round in the
+device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1187,7 +1192,7 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
         xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
         2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
-        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
+        loopNr x (q + 1) = (rsched.getD (j + 1) (.empty, 0)).2)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
       (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)

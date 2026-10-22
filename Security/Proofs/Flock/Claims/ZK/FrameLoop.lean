@@ -18,7 +18,7 @@ placeholder draws, and the release whose transport state it is (`note:20261022T0
   history opened.
 * `Loop.schedOf`: the round in a scheduled round's place, the loop's own on the rep's table and salts (`Frames.placeOf`).
 * `LeanRelease.ofLoop`: `LeanRelease.loop` with that state and those rounds, each round's rep its rep stream
-  (`Loop.repOf`) started as the loop starts it (`Drive.start`).
+  (`Loop.repOf`) started as the loop starts it (`Drive.start`), each round's coin count its request's (`Loop.loopNr`).
 * `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf`, with no salt. What `ProgReads` took as given is
   now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
   round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
@@ -161,7 +161,8 @@ namespace LeanRelease
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
 proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
-empty round, which the frame's check refuses. -/
+empty round, which the frame's check refuses. Each round's coin count is the one the loop hands `Frames.round`, its
+request's (`Loop.loopNr`): the round after `h` takes opening `h.length - 1`'s coins. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -181,7 +182,8 @@ noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
       | _ :: ops =>
         match Loop.schedOf (real x w ρ) x (ops.map fun p => ZKMal.CoinLayer.rd p.2) with
         | some r => r.data.toList
-        | none => L₀.scheduled x w ρ h vals }
+        | none => L₀.scheduled x w ρ h vals
+    coins := fun x n => Loop.loopNr x (n - 1) }
 
 /-- **The release at the session loop's own frames**: `loop`'s, at `withFrames`. -/
 noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
