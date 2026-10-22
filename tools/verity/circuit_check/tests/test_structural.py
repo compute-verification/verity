@@ -1,4 +1,4 @@
-"""`circuit_check.structural` (``circuit-check --structural``): a ``flock-ir-tmpl/v1`` template is accepted as its Definition's
+"""`circuit_check.structural` (``circuit-check --structural``): a ``flock-ir-tmpl`` template is accepted as its Definition's
 lowering by construction when its canonical gates are the flat lowering's, on every input or on random ones when they are
 other gates computing the same bits, and refused by name when it computes anything else or is a form neither covers."""
 from __future__ import annotations
@@ -98,12 +98,18 @@ A0, B0 = 1, 17
 SEL_SEGS = ((1, 0, 0), (1, A0, 1), (1, B0, 1))
 
 
+def _segs(segs) -> tuple:
+    """One-level ``(len, at, step)`` segments in the installed format: ``flock-ir-tmpl/v2`` gives each its ``reps`` and
+    ``rstride`` too."""
+    return segs if TM.FORMAT == "flock-ir-tmpl/v1" else tuple(s + (1, 0) for s in segs)
+
+
 def _select(mux: TM.Def | None = None, *, count: int = 16, segs=SEL_SEGS, base: int = W, extra=()) -> TM.Tmpl:
     """SelectBf16 (``c ? a : b``, 16 bits) as one run of 16 calls of ``mux`` from column ``base``, each output bit ``b_j``
     plus its call's columns."""
     mux = mux or _mux()
     outs = tuple((2 * W + j, tuple(W + j * mux.cols + i for i in range(mux.cols)) + (B0 + j,), (K,)) for j in range(16))
-    return _unit(SEL_IN, [16], outs + tuple(extra), [TM.Call(0, count, base, mux.cols, segs)], [mux])
+    return _unit(SEL_IN, [16], outs + tuple(extra), [TM.Call(0, count, base, mux.cols, _segs(segs))], [mux])
 
 
 def test_a_run_of_calls_is_the_lowering_it_unrolls_to():
@@ -175,7 +181,7 @@ def test_a_dead_row_that_reads_ahead_is_refused():
 
 
 def test_text_that_is_no_template_is_refused():
-    v, r = _verdict(MAJ, "flock-ir-tmpl/v1 t 0 1\nDEF x\n")
+    v, r = _verdict(MAJ, f"{TM.FORMAT} t 0 1\nDEF x\n")
     assert v == "refused" and _codes(r) == ["malformed"]
 
 
