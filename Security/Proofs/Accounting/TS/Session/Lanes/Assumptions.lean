@@ -34,12 +34,13 @@ open Pouw.RelativeSecurity (Paths)
 /-- `accounting-ts-leaf-checks` (a fact of `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`'s circuits at their tile's
 `K`, backed by circuit-check and `h1zy`'s tests, not proved; owner @compute-accounting). **Each of a leaf's 33 circuits
 computes its Definition at its port rows**: at lane `l`'s session `sess (some l)`, whose circuit is
-`PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K` (`K ≥ 448`, `h1zy.proved_k`), on every wire assignment `vals` the
-key program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`' port rows
+`PouwH1LaneZy_v1{TILE}`'s lowering at its tile's `K` (any positive `K`), on every wire assignment `vals` the key
+program's evaluation agrees with on every unit's wires, if the `ok` word that `decL` reads from `vals`' port rows
 (`portRead`) is `1`, then `decL`'s view of them meets `LaneOk` at `dq` and `part`: its partials row is the honest one at
 its rows, its public inputs and its index, and each of its 32 cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]`.
-At the combine's session `sess none`, whose circuit is `PouwH1Combine_v1{TILE}`'s, the same holds of `decC`'s view with
-`CombineOk`: the rows' XOR in lane order is the receipt.
+At the combine's session `sess none`, whose circuit is `PouwH1Combine_v1{TILE}`'s at `K ≥ 384` (`h1zy.LEAST_K`, the
+least `K` at which C-Flock proves the combine), the same holds of `decC`'s view with `CombineOk`: the rows' XOR in lane
+order is the receipt.
 
 It reads every port row, registered or not, and asks nothing of `own`: that every port the decodes read (`ok`'s cone,
 the A and B rows, admit bits, record, partials row, salt, position, roots and lane index) is a port of `own` that
