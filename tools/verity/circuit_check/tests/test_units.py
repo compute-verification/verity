@@ -60,9 +60,9 @@ print(json.dumps({"stats": rep["cache"], "hits": sorted(t["target"] for t in rep
 BINDINGS = ('(("_sized_roots",), sized)', '(("_xor_roots",), xor)')
 
 
-def _run(root: Path) -> dict:
+def _run(root: Path, harness: str = HARNESS) -> dict:
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([sys.executable, "-c", HARNESS, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    r = subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert not out["stats"]["untraced"] and not out["stats"]["errors"] and not out["stats"]["changed"], out
@@ -79,13 +79,14 @@ def _fresh(root: Path) -> dict:
     return out
 
 
-def _records(root: Path, units: tuple[str, ...]) -> list[Path]:
+def _records(root: Path, units: tuple[str, ...] | None = None) -> list[Path]:
     def target(p: Path) -> list:
         try:
             return json.loads(p.read_text())["key"]["request"]["target"]
         except ValueError:
             return []
-    return [p for p in (root / "cache").glob("*/*/*.json") if (t := target(p))[:1] == ["catalog-unit"] and tuple(t[1]) == units]
+    return [p for p in (root / "cache").glob("*/*/*.json")
+            if (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
 
 
 def test_a_definition_module_edit_rebuilds_exactly_the_bindings_that_read_it(tmp_path):
@@ -123,6 +124,83 @@ def test_a_missing_or_unreadable_record_rebuilds_its_binding(tmp_path):
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_sized_roots", "_xor_roots"]
     assert out["stats"]["units"]["stored"] == 2 and out["hits"] == sorted(out["values"])
     assert len(_records(root, ("_sized_roots",))) == 1
+
+
+#: `units.store` with the `cache.seen` calls it makes counted (in ``<root>-seen.json``, beside the tree), and with PER_RECORD
+#: digesting each record's reads on their own, as each record's `cache.seen` did before `cache.seen_all`
+SEEN = """
+from circuit_check import units as UN
+PER_RECORD = {per_record}
+seen, store, made = CC.seen, UN.store, []
+CC.seen = lambda root_, got: made.append(1) or seen(root_, got)
+if PER_RECORD:
+    CC.seen_all = lambda root_, gots: [CC.seen(root_, g) for g in gots]
+
+
+def counted(*a, **k):
+    at = len(made)
+    try:
+        return store(*a, **k)
+    finally:
+        (root.parent / f"{{root.name}}-seen.json").write_text(json.dumps(len(made) - at))
+
+
+UN.store = counted
+"""
+
+
+def test_records_digest_each_read_once_and_store_what_each_records_own_digest_gave(tmp_path):
+    """`units.store` digests every read of the records it stores once, for them all (`cache.seen_all`), not once per record,
+    and stores the bytes it stored when each record's reads were digested on their own: five bindings' records, the four
+    that make roots each reading `syn.prims`."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    made = tmp_path / "t-seen.json"
+    harness = {p: HARNESS.replace("rep = cli.run(", SEEN.format(per_record=p) + "rep = cli.run(") for p in (True, False)}
+    assert _run(root, harness[True])["stats"]["units"] == {"stored": 5}
+    assert json.loads(made.read_text()) == 5
+    before = {p.name: p.read_bytes() for p in _records(root)}
+    shutil.rmtree(root / "cache")
+    assert _run(root, harness[False])["stats"]["units"] == {"stored": 5}
+    assert json.loads(made.read_text()) == 1
+    after = {p.name: p.read_bytes() for p in _records(root)}
+    assert len(after) == 5 and after == before
+    assert sum("syn.prims" in json.loads(b)["reads"]["modules"] for b in after.values()) == 4
+
+
+#: after the full build stored its records, `syn/prims.py` edited and every record stored again in the same process: the
+#: digests of `syn.prims` (as a module, and in package `syn`'s module list) each record's `cache.store` was handed as seen
+#: now, the ones the process holds, and the count stored
+AGAIN = """
+from circuit_check import units as UN
+READ = {"files": [], "dirs": [], "modules": ["syn.prims"], "enums": ["syn"]}
+def prims_of(d):
+    return [d["modules"].get("syn.prims", {}).get("d"), (d["enums"].get("syn") or {}).get("prims")]
+old = prims_of(CC._digests(root, READ))
+prims = root / "syn/prims.py"
+prims.write_text(prims.read_text() + "\\n_EDITED = 1\\n")
+handed, store = [], CC.store
+CC.store = lambda cache, k, root_, got, report, worker=None: handed.append(worker) or store(cache, k, root_, got, report, worker)
+stored = UN.store(root / "cache", root, UN.built_entries(), only_rebuilt=False)
+(root.parent / f"{root.name}-again.json").write_text(json.dumps({
+    "stored": stored, "old": old, "held": prims_of(CC._digests(root, READ)), "new": prims_of(CC.seen(root, READ)),
+    "seen": [prims_of(w) for w in handed]}))
+"""
+
+
+def test_a_file_edited_between_two_stores_in_one_run_is_seen_at_the_second(tmp_path):
+    """Every `units.store` digests its records' reads afresh, so a module edited after one store is seen as it is now at the
+    next one in the same process: each record that reads it is handed the new digest, which differs from the one it was
+    built under (still the process's own), and none is stored.  All five read package `syn`'s module list, which digests
+    `syn.prims` by content; the four that make roots read `syn.prims` itself too."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    assert _run(root, HARNESS.replace("print(json.dumps(", AGAIN + "print(json.dumps("))["stats"]["units"] == {"stored": 5}
+    got = json.loads((tmp_path / "t-again.json").read_text())
+    assert got["old"] == got["held"] and all(o != n for o, n in zip(got["held"], got["new"]))
+    assert [s[1] for s in got["seen"]] == [got["new"][1]] * 5
+    assert sorted(s[0] for s in got["seen"] if s[0] is not None) == [got["new"][0]] * 4
+    assert got["stored"] == 0
 
 
 #: SynLater, whose body build registers the primitive it calls (as a body on the real tree registers its constants' primitives),
