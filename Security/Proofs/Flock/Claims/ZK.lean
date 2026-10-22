@@ -692,7 +692,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
   alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
   (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
 * `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
-  `Frame.run` over `Loop.reqsAt` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
+  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
   `ProgReads` holds by definition (`ofLoop_progReads`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
