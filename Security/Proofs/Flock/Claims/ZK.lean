@@ -99,6 +99,7 @@ import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Claims.ZK.FrameCount
+import Proofs.Flock.Claims.ZK.FrameAsks
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -715,6 +716,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameCount`: the algebraic phase's scheduled rounds squeeze the masked replay's counts (`rounds_counts`,
   `piop_counts`: `replayCoins` with its zeros dropped), each round's count as its squeeze header holds it (`Tally`, over
   the recording channel `Skeleton.recAsks`).
+* `FrameAsks`: the live opening's squeezes ask for their counts (`OT`, over `Drive.stepAsks` past the coins it was
+  given): the ring switch's (`ringSwitchP_ot`) and, with `1 ≤ k0`, Ligerito's, `ligeritoCoins` with its zeros dropped
+  (`ligeritoPZk_ot`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
