@@ -1181,8 +1181,8 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
 open Loop in
 /-- **`ProgChecks` at a scheduled round, from the rep's own table**: as `ofLoop_progChecks_step`, where the rep's own
 table (`real`) is of the placeholder's shape (`TabAlike`, at the bounds `schedSoFar_alike` reads) and its schedule so
-far holds round `j + 1`. The placeholder's schedule is then of the real one's shape (`schedSoFar_alike`), and the
-configuration at the tape's draws alike the placeholder's (`cfgAlike_ofBytes`). -/
+far holds round `j + 1`. The placeholder's schedule is then of the real one's shape (`schedSoFar_alike`), so of its
+coin counts, and the configuration at the tape's draws alike the placeholder's (`cfgAlike_ofBytes`). -/
 theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1208,7 +1208,10 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     {rsched : Array (ByteArray × ℕ)}
     (hrs0 : schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
       .ok rsched)
-    (hlt : j + 1 < rsched.size) (hcoins : loopNr x (q + 1) = (rsched.getD (j + 1) (.empty, 0)).2) :
+    (hlt : j + 1 < rsched.size)
+    (hcoins : ∀ sched', schedSoFar t (k % 2) dom xs hi
+      ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched' → j + 1 < sched'.size →
+      loopNr x (q + 1) = (sched'.getD (j + 1) (.empty, 0)).2) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
       (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
         { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
@@ -1246,7 +1249,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     rw [e1, e2]
     exact cfgAlike_ofBytes lay _ _ (some mask)
   exact ofLoop_progChecks_step T L₀ real x w ρ h a hA hrep hex hcs hx hq hki hph hc hreal (by rw [← hdm, ← hxe]; exact hrs0)
-    hR hs' hlt hcoins
+    hR hs' hlt ((hcoins sched' hs' (by rw [← roundsAt_size hR]; exact hlt)).trans (roundsAt_getD hR hlt).1.symm)
 
 open Loop in
 /-- **Where `ProgChecks` asks anything at the loop's own frames**: where the frame takes the coins after `h` and its
@@ -1361,9 +1364,10 @@ end InPlan
 
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
-round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, and the plan's
-coin count there (`repPlan`, which the loop requests, `loopNr_succ`; the round is within the plan,
-`loop_round_in_plan`) is the scheduled round's (the loop's state there is outside the inner proof, `repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
+round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads. Of the
+deployed code alone (`hC`): the plan's coin counts (`repPlan`, which the loop requests, `loopNr_succ`; the round is
+within the plan, `loop_round_in_plan`) are the placeholder's schedule's (the loop's state there is outside the inner
+proof, `repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
 conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or the loop has no round in the
 device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
@@ -1386,8 +1390,13 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       j + 1 < rsched.size → (ofLoop T L₀ real).answered x ρ h = .ok m →
       Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
         xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
-        2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
-        (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD (j + 1) 0 = (rsched.getD (j + 1) (.empty, 0)).2)
+        2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64))
+    (hC : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k i : ℕ) (link : Array F128) (c' : Cfg)
+      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
+      (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ)),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      placeholder spec sts k link = .ok (c', t, dom, xs, hi) → schedSoFar t (k % 2) dom xs hi cr = .ok sched →
+      i < sched.size → (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD i 0 = (sched.getD i (.empty, 0)).2)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
       (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
@@ -1428,11 +1437,16 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
   | ok rsched =>
   by_cases hlt : j + 1 < rsched.size
-  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hplan⟩ :=
+  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd⟩ :=
       hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
     have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ (e0 :: h1) hA hx hq2 hki
+    have hk : k < spec.repStreams.size := by
+      have := locate_lt (roundsOf spec sts) 0 q hqs
+      rw [hki] at this
+      simpa [roundsOf] using this
     exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
-      hn hlq hp hd hrs hlt ((loopNr_succ hx hki hqs).trans hplan)
+      hn hlq hp hd hrs hlt (fun sched' hs' hlt' =>
+        (loopNr_succ hx hki hqs).trans (hC s0 spec sts k (j + 1) _ c' t dom xs hi _ sched' hx hk hph hs' hlt'))
   · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
       hrep hex
 
