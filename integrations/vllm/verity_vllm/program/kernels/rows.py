@@ -782,7 +782,7 @@ from verity_vllm.program.kernels import marlin_moe_rows  # noqa: E402
 marlin_moe_rows.register_rows(EVALUATORS, _row)
 deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
-glm53_rows.register_rows(EVALUATORS, _row, _sample)
+glm53_rows.register_rows(EVALUATORS, _row, _sample, EVALUATOR_PROVENANCE)
 cublas_gemm_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
