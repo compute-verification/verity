@@ -4,7 +4,8 @@
 # writes it as flock-ir-tmpl/v2 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
 # Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
 # --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
-# template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl). Run from a clone:
+# template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl); after --layouts, each later shape's
+# template gets tmpl_layouts.py's today and option (iv) layouts, lenient and strict (layouts-SHAPE.jsonl). Run from a clone:
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
 # $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
@@ -33,9 +34,15 @@ EOF
 (cd "$S/tmpl" && lake build flock-tmpl) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
 X=$S/tmpl/.lake/build/bin/flock-tmpl
 unroll=0
+layouts=0
 while [ $# -gt 0 ]; do
   if [ "$1" = --unroll ]; then
     unroll=1
+    shift
+    continue
+  fi
+  if [ "$1" = --layouts ]; then
+    layouts=1
     shift
     continue
   fi
@@ -62,6 +69,12 @@ while [ $# -gt 0 ]; do
       || { cat "$O/unroll-$tag.out" "$O/unroll-time-$tag.txt" >&2; exit 1; }
     grep '^PHASE ' "$O/unroll-$tag.out" | sed 's/^PHASE //' | tee "$O/unroll-$tag.jsonl"
     grep -E 'Maximum resident|Elapsed' "$O/unroll-time-$tag.txt"
+  fi
+  if [ $layouts = 1 ]; then
+    /usr/bin/time -v uv run python benchmarks/verifier_cost/tmpl_layouts.py "$t" --modes today,iv,iv/strict \
+      > "$O/layouts-$tag.out" 2> "$O/layouts-time-$tag.txt" || { tail -40 "$O/layouts-time-$tag.txt" >&2; exit 1; }
+    grep '^LAYOUT ' "$O/layouts-$tag.out" | sed 's/^LAYOUT //' | tee "$O/layouts-$tag.jsonl" | cut -c1-400
+    grep -E 'Maximum resident|Elapsed' "$O/layouts-time-$tag.txt"
   fi
   grep -E 'Maximum resident|Elapsed' "$O"/{struct,read}-time-$tag.txt
   [ "$(stat -c %s "$t")" -lt 1000000000 ] && mv "$t" "$O/" || rm -f "$t"
