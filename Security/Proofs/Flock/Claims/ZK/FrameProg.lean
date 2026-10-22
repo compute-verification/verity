@@ -131,7 +131,7 @@ theorem midFrame_alike {f f' : Frame} (h : Alike f f') (hm : midFrame f) : midFr
     first | omega | (obtain ⟨rfl, rfl⟩ := h; exact hm)
 
 theorem notLabel_alike {f f' : Frame} {b : ByteArray} (h : Alike f f') (hf : f ≠ .label b) : f' ≠ .label b := by
-  cases f <;> cases f' <;> simp only [Alike] at h <;> first | nofun | (subst h; exact hf)
+  cases f <;> cases f' <;> simp only [Alike] at h <;> first | (subst h; exact hf) | nofun
 
 theorem midAll_alike {fs fs' : List Frame} (hA : List.Forall₂ Alike fs fs') : MidAll fs → MidAll fs' := by
   induction hA with
@@ -711,9 +711,12 @@ theorem repState_inner (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : �
     (repState c t rep dom xs hi cr0 cr ns (j + 1)).inner = none := by
   rw [repState_at c t rep dom xs hi cr0 cr ns j hal hs hj]
   dsimp only
-  split
-  · rfl
-  · refine Sched.run_inner c _ _ (fun q hq => ?_) rfl
+  generalize (if rep = 0 then (#[] : Array F128) else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) = prior
+  by_cases hr : (_root_.Flock.Firewall.Frame.run c {} (schedReqs prior sched cr j)).2 = true
+  · rw [if_pos hr]
+  · rw [if_neg hr]
+    refine Sched.run_inner c ({} : _root_.Flock.Firewall.Frame.State) (schedReqs prior sched cr j)
+      (fun q hq => ?_) rfl
     unfold schedReqs at hq
     rcases List.mem_append.1 hq with hq | hq
     · rcases List.mem_append.1 hq with hq | hq
@@ -925,6 +928,54 @@ theorem progOf_owed (x : Msg) (cs : List FlockDeploy.Coin) (ho : (progOf x cs).o
         | ok r =>
           obtain ⟨c', t, dom, xs, hi⟩ := r
           exact ⟨s0, spec, sts, q, k, j, c', t, dom, xs, hi, rfl, rfl, hl, hph⟩
+
+theorem getElem?_flatten_locate {β : Type} :
+    ∀ (ls : List (List β)) (k₀ i : ℕ),
+      ls.flatten[i]? = (ls.getD ((ZKMal.CoinLayer.locate (ls.map List.length) k₀ i).1 - k₀) [])[
+        (ZKMal.CoinLayer.locate (ls.map List.length) k₀ i).2]?
+  | [], k₀, i => by simp [ZKMal.CoinLayer.locate]
+  | l :: ls, k₀, i => by
+    rw [List.flatten_cons, List.map_cons]
+    by_cases hc : i < l.length
+    · rw [List.getElem?_append_left hc, locate_cons_lt hc]
+      simp
+    · rw [List.getElem?_append_right (by omega), locate_cons_ge hc, getElem?_flatten_locate ls (k₀ + 1) (i - l.length)]
+      have hK := locate_fst_ge (ls.map List.length) (k₀ + 1) (i - l.length)
+      rw [show (ZKMal.CoinLayer.locate (ls.map List.length) (k₀ + 1) (i - l.length)).1 - k₀ =
+        (ZKMal.CoinLayer.locate (ls.map List.length) (k₀ + 1) (i - l.length)).1 - (k₀ + 1) + 1 by omega]
+      simp
+
+/-- **Opening `q + 1`'s coin count is its rep's planned round's**: rep round `q`, at stream `k` and round `r`
+(`CoinLayer.locate`), asks `repPlan`'s `r`-th count of table `k / 2`'s statement. -/
+theorem loopNr_succ {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) {q k r : ℕ}
+    (hl : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, r)) (hq : q < (roundsOf spec sts).sum) :
+    loopNr x (q + 1) = (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD r 0 := by
+  have hk : k < spec.repStreams.size := by
+    have := locate_lt (roundsOf spec sts) 0 q hq
+    rw [hl] at this
+    simpa [roundsOf] using this
+  have hi : q < (_root_.Flock.Firewall.Session.planOf spec sts).size := by rw [plan_size]; exact hq
+  have e := getElem?_flatten_locate (plansOf spec sts) 0 q
+  rw [plansOf_length, hl, ← planOf_toList, Array.getElem?_toList] at e
+  have hg : (plansOf spec sts).getD k [] =
+      (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).toList.map
+        (_root_.Flock.Firewall.Session.repName spec k, ·) := by
+    simp [plansOf, hk]
+  rw [Nat.sub_zero, hg, List.getElem?_map] at e
+  unfold loopNr
+  rw [reqOf_eq hs]
+  unfold _root_.Flock.Firewall.Session.reqAt
+  simp only [Nat.add_one_ne_zero, ↓reduceIte, Nat.add_sub_cancel]
+  rw [Array.getD_eq_getD_getElem?, e]
+  cases hr : (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).toList[r]? with
+  | none =>
+    rw [hr] at e
+    simp [hi] at e
+  | some n =>
+    simp only [Option.map_some, Option.getD_some]
+    rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hr]
+    rfl
 
 end Loop
 
@@ -1166,9 +1217,9 @@ theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
 
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
-round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, and the coin
-count the loop requests there (`loopNr`, the plan's) is the scheduled round's (the loop's state there is outside the
-inner proof, `repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
+round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, the round is
+within the plan, and the plan's coin count there (`repPlan`, which the loop requests, `loopNr_succ`) is the scheduled
+round's (the loop's state there is outside the inner proof, `repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
 conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or the loop has no round in the
 device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
@@ -1192,7 +1243,8 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
         xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
         2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
-        loopNr x (q + 1) = (rsched.getD (j + 1) (.empty, 0)).2)
+        q < (roundsOf spec sts).sum ∧
+        (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD (j + 1) 0 = (rsched.getD (j + 1) (.empty, 0)).2)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
       (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
@@ -1233,10 +1285,10 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
   | ok rsched =>
   by_cases hlt : j + 1 < rsched.size
-  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins⟩ :=
+  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hqs, hplan⟩ :=
       hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
     exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
-      hn hlq hp hd hrs hlt hcoins
+      hn hlq hp hd hrs hlt ((loopNr_succ hx hki hqs).trans hplan)
   · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
       hrep hex
 
