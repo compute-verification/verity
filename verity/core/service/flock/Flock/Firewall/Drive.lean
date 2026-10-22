@@ -1,27 +1,23 @@
 /-
 # The drive of a rep's frame (live PROTOCOL.md §10.1): its start and every request, from the statement and the coins
 
-A firewalled rep's frame (`Frame.step`, folded by `Frame.run`) takes one schedule of requests, which this fixes:
+A firewalled rep's frame (`Frame.step`, which the session loop steps, `Frames`) takes one schedule of requests, which
+this fixes:
 
 * `start`: the frame's start, the rep's pads layout at the statement's `--zk` schedule and the statement's mask slot
-  (`maskSlot`), which `flock-circuit` sends as `{"layout", "mask"}` (`Frame.start`).
+  (`maskSlot`).
 * `extras`: the extra claims' coordinates at the session's link points (`linkPoints`, the `Commit`'s coins), which the
   opening takes (`Stmt.regionPoint` past its six skip coordinates, `flock-circuit`'s `extra_points(..)[6..]`).
-* `schedule`: the scheduled rounds, the algebraic phase's (`Skeleton.rounds`) and then the opening's (`opening`:
-  `openStep`, the rep's opening a round at a time, fed the stream's coins), each the round in whose place a device round leaves.
+* `openStep`: the rep's opening a round at a time, the scheduled rounds after the algebraic phase's
+  (`Skeleton.rounds`), each the round in whose place a device round leaves; `opening` feeds it a stream's coins.
 * `reqs`: the frame's requests, **the one schedule**: rep 1's earlier rep's algebraic-phase coins (`prior`), each
   scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the firewall's
-  own) with its coins, then `finish`. At the scheduled rounds themselves in the device's place (`reqsAt`) they are a
-  function of the statement, the table's level 0, the rep's salts and the coins alone.
-* `encode`, `parse`: a request as `Frame.serveWith` reads it.
-* `cmd`: `flock-firewall drive`, which `firewall_finish_agree.py` holds to what `flock-circuit` sent the rep's frame
-  (`table{T}-rep{R}.start`, `.open`, `.frame`) byte for byte.
+  own) with its coins, then `finish`.
 -/
 import Flock.Firewall.Skeleton
 
 namespace Flock.Firewall.Drive
 
-open Lean (Json toJson)
 open Flock Transcript Finish
 
 /-! ## The start -/
@@ -37,12 +33,6 @@ def maskSlot (st : Stmt) : V Frame.MaskSlot := do
 def start (st : Stmt) : V (Zk.PadLayout × Frame.MaskSlot) := do
   let (sch, _) ← Zk.schedule st.m
   return (Zk.PadLayout.new st.m st.c.kLog sch.k0, ← maskSlot st)
-
-/-- The start as `Frame.start` reads it. -/
-def startJson (l : Zk.PadLayout) (m : Frame.MaskSlot) : Json :=
-  Json.mkObj [("layout", Json.mkObj [("n_mlv", toJson l.nMlv), ("n_lc", toJson l.nLc), ("n_ood0", toJson l.nOod0),
-                                     ("k0", toJson l.k0)]),
-              ("mask", Json.mkObj [("w0", toJson m.w0), ("n", toJson m.n), ("blocks", toJson m.blocks)])]
 
 /-- The link points in the `Commit`'s coins `c`: a point each `mPts` words. -/
 def linkPoints (st : Stmt) (c : Array F128) : Array (Array F128) :=
@@ -144,13 +134,6 @@ def opening (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (h
   | (.fail e, _) => .error e
   | (.ask .., rs) => .error s!"drive: the opening's round {nAlg + rs.size} past the stream's {coins.size} rounds of coins"
 
-/-- **A rep's scheduled rounds** on the table `t`, as rep `rep` of a stream whose transcript starts at `dom`: the
-algebraic phase's (`Skeleton.rounds`, on level 0's cap), then the opening's (`opening`), on the stream's coins. -/
-def schedule (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hiSalts : Array ByteArray)
-    (coins : Array (Array F128)) : V (Array (ByteArray × Nat)) := do
-  let alg ← Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
-  return alg ++ (← opening t rep dom xs hiSalts coins alg.size)
-
 /-! ## The requests -/
 
 /-- **A rep's requests to its frame**, the one schedule its frame is driven on: the earlier rep's algebraic-phase coins
@@ -166,170 +149,5 @@ def reqs (prior : Array F128) (sched own : Array (ByteArray × Nat)) (dev : Nat 
   let inner := (List.range own.size).flatMap fun j =>
     [.round (at_ own j).2 (at_ own j).1 .own, .coins (.ok (coins.getD (sched.size + j) #[]))]
   pre ++ rounds ++ inner ++ [.finish]
-
-/-- The requests at the scheduled rounds themselves in the device's place: an honest device's rounds but for the values
-each absorbs masked, which move no frame state. -/
-def reqsAt (prior : Array F128) (sched own : Array (ByteArray × Nat)) (coins : Array (Array F128)) : List Frame.Req :=
-  reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) coins
-
-/-- A request as `Frame.serveWith` reads it: its line, then its bytes. -/
-def encode : Frame.Req → ByteArray
-  | .round n c (.sched r) => s!"round {n} {c.size} {r.size}\n".toUTF8 ++ c ++ r
-  | .round n c .fail => s!"round {n} {c.size} fail\n".toUTF8 ++ c
-  | .round n c .own => s!"round {n} {c.size}\n".toUTF8 ++ c
-  | .coins (.ok cs) => s!"coins {cs.size}\n".toUTF8 ++ Frame.wordBytes cs
-  | .coins (.error _) => "coins 0\n".toUTF8
-  | .prior k b => s!"prior {k}\n".toUTF8 ++ b
-  | .finish => "finish\n".toUTF8
-
-/-- The first `\n` of `b` at or after byte `o`. -/
-def lineEnd (b : ByteArray) (o : Nat) : Option Nat := Id.run do
-  for i in [o:b.size] do
-    if b.get! i == 10 then return some i
-  return none
-
-/-- `n` bytes of `b` from byte `o`, and the byte after them. -/
-def takeAt (b : ByteArray) (o n : Nat) : V (ByteArray × Nat) :=
-  if o + n ≤ b.size then pure (b.extract o (o + n), o + n) else throw "drive: a request ends inside its bytes"
-
-/-- **The requests in `b`**, as `Frame.serveWith` reads them, coins as the request carries them. -/
-def parse (b : ByteArray) : V (Array Frame.Req) := do
-  let mut o := 0
-  let mut out := #[]
-  for _ in [0:b.size] do
-    if o ≥ b.size then break
-    let some e := lineEnd b o | throw "drive: a request line without its end"
-    let line := (String.fromUTF8? (b.extract o e)).getD "?"
-    o := e + 1
-    let nat := fun (s : String) => match s.toNat? with
-      | some n => pure n
-      | none => throw s!"drive: a request `{line}`"
-    match line.splitOn " " with
-    | ["round", n, len, "fail"] =>
-      let (c, o') ← takeAt b o (← nat len)
-      out := out.push (.round (← nat n) c .fail)
-      o := o'
-    | ["round", n, len, r] =>
-      let (c, o') ← takeAt b o (← nat len)
-      let (s, o'') ← takeAt b o' (← nat r)
-      out := out.push (.round (← nat n) c (.sched s))
-      o := o''
-    | ["round", n, len] =>
-      let (c, o') ← takeAt b o (← nat len)
-      out := out.push (.round (← nat n) c .own)
-      o := o'
-    | ["coins", k] =>
-      let k ← nat k
-      let (w, o') ← takeAt b o (16 * k)
-      out := out.push (.coins (.ok (Frame.words w 0 k)))
-      o := o'
-    | ["prior", k] =>
-      let k ← nat k
-      let (w, o') ← takeAt b o (16 * k)
-      out := out.push (.prior k w)
-      o := o'
-    | ["finish"] => out := out.push .finish
-    | _ => throw s!"drive: a request `{line}`"
-  return out
-
-/-- What a frame's requests carry: the device's round at each scheduled round, the inner proof's rounds and the coins of
-each round, in order. -/
-def carried (qs : Array Frame.Req) : Array ByteArray × Array (ByteArray × Nat) × Array (Array F128) :=
-  qs.foldl (init := (#[], #[], #[])) fun (dev, own, cs) q => match q with
-    | .round _ c (.sched _) | .round _ c .fail => (dev.push c, own, cs)
-    | .round n c .own => (dev, own.push (c, n), cs)
-    | .coins (.ok c) => (dev, own, cs.push c)
-    | _ => (dev, own, cs)
-
-/-! ## The difftest -/
-
-/-- A vector's words after their `u64` count. -/
-def vecBytes (v : Array F128) : ByteArray := le64 v.size.toUInt64 ++ Frame.wordBytes v
-
-/-- An opening's request as `Finish.parseOpen` reads it: the extra claims, then the algebraic phase's coins. -/
-def openBytes (xs coins : Array (Array F128)) : ByteArray :=
-  (coins.foldl (· ++ vecBytes ·) (xs.foldl (· ++ vecBytes ·) (le64 xs.size.toUInt64) ++ le64 coins.size.toUInt64))
-
-/-- The salts as `Finish.saltsBytes` writes them. -/
-def parseSalts (b : ByteArray) : V (Array ByteArray) :=
-  let rd : Finish.Rd (Array ByteArray) := do
-    let n ← u64 "the salts"
-    let mut out := #[]
-    for _ in [0:n] do
-      let k ← u64 "a level's salts"
-      out := out.push (← take k "a level's salts")
-    if (← get) != b.size then throw "drive: bytes after the salts"
-    return out
-  (rd.run' 0).run b
-
-/-- Bytes after their `u64` length. -/
-def blob (b : ByteArray) : ByteArray := le64 b.size.toUInt64 ++ b
-
-/-- **Rep `rep` of table `i` driven in Lean** on what `flock-circuit` dumped in `dir` (`FC_FINISH_DUMP`): the table's
-level-0 request (`table{I}.req`), the session's `Commit` coins (`link.bin`), the rep's salts for levels ≥ 1
-(`table{I}-rep{R}.hi`), and the requests it sent the rep's frame (`table{I}-rep{R}.frame`, and rep 0's for rep 1's
-`prior`), of which only the device's rounds, the inner proof's rounds and the coins are read. Returns the frame's start
-(`startJson`), the opening's request (`openBytes`: the extra claims and the algebraic phase's coins) and the requests
-(`reqs` on `schedule`'s rounds, `encode`d), each a `blob`. -/
-def driveAt (st : Stmt) (t : Tab) (dom : ByteArray) (dir : System.FilePath) (i rep : Nat) : IO (V ByteArray) := do
-  let link ← IO.FS.readBinFile (dir / "link.bin")
-  let hi ← IO.FS.readBinFile (dir / s!"table{i}-rep{rep}.hi")
-  let log ← IO.FS.readBinFile (dir / s!"table{i}-rep{rep}.frame")
-  let log0 ← if rep == 0 then pure ByteArray.empty else IO.FS.readBinFile (dir / s!"table{i}-rep0.frame")
-  return do
-    let (lay, mask) ← start st
-    let xs := extras st (linkPoints st (Link.wordsAt link 0 (link.size / 16)))
-    let hiSalts ← parseSalts hi
-    let (dev, own, coins) := carried (← parse log)
-    let alg ← Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
-    let nAlg := alg.size
-    let sched := alg ++ (← opening t rep dom xs hiSalts coins nAlg)
-    let prior ← if rep == 0 then pure #[] else do
-      let (_, _, c0) := carried (← parse log0)
-      pure ((c0.extract 0 nAlg).foldl (· ++ ·) #[])
-    let qs := reqs prior sched own (fun k => dev.getD k .empty) coins
-    let enc := qs.foldl (fun b q => b ++ encode q) ByteArray.empty
-    return blob (startJson lay mask).compress.toUTF8 ++ blob (openBytes xs (coins.extract 0 nAlg)) ++ blob enc
-
-/-- **`flock-firewall drive FLAGS`** (`Skeleton.FLAGS`): on the statement `flock-firewall finish` sets up, each request on
-standard input `drive I R LEN` followed by the `LEN` bytes of a dump directory's path is answered `ok N` followed by the
-`N` bytes of `driveAt` on it, table `I`'s state read from its level-0 request once; anything else, or a request it
-refuses, is answered `err WHY` and ends it, with exit code `1`. -/
-def cmd (args : List String) : IO UInt32 := do
-  let ch ← Frame.stdio
-  let say := fun (s : String) => do
-    ch.write (s ++ "\n").toUTF8
-    ch.flush
-  let refuse := fun (why : String) => do
-    say s!"err {why.replace "\n" " "}"
-    return (1 : UInt32)
-  let (spec, sts) ← match ← Skeleton.statementOf "drive" args with
-    | .ok s => pure s
-    | .error e => return (← refuse e)
-  let mut tabs : Array (Option Tab) := Array.replicate sts.size none
-  repeat
-    let line := (← ch.getLine).replace "\n" ""
-    if line.isEmpty then break
-    match line.splitOn " " with
-    | ["drive", i, r, len] =>
-      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let dir : System.FilePath := (String.fromUTF8? (← ch.readExact len)).getD ""
-      let (some st, some name) := (sts[i]?, spec.tables[i]?)
-        | return (← refuse s!"table {i} of the session's {sts.size}")
-      let t ← match tabs[i]?.join with
-        | some t => pure t
-        | none =>
-          match tabOf (Setup.ofCircuit st) (← IO.FS.readBinFile (dir / s!"table{i}.req")) with
-          | .ok t => pure t
-          | .error e => return (← refuse e)
-      tabs := tabs.set! i (some t)
-      match ← driveAt st t (spec.domain name r).toUTF8 dir i r with
-      | .ok b =>
-        say s!"ok {b.size}"
-        ch.write b
-        ch.flush
-      | .error e => return (← refuse e)
-    | _ => return (← refuse s!"a request `{line}`")
-  return 0
 
 end Flock.Firewall.Drive
