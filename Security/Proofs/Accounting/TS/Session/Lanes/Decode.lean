@@ -46,7 +46,8 @@ only the first is wired, so only it is read. -/
 noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (name : String) (k : ℕ) : Option Bool :=
   if h : ∃ (g : Fin (keyN s.c s.hU s.n)) (u : Fin s.n) (q : Fin s.c.ports.size) (b : Fin (portRowW s.c q)),
       u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧
-        HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, b⟩) ∧
+        FlockSoundness.Discharge.HiddenExec.rowOfH s.c s.hU s.n (FlockSoundness.Discharge.Layout.outsOf s.c s.hU s.n) g =
+          some (u, ⟨q, b⟩) ∧
         (g : Fin s.Circ.N) ∈ s.P.io u
   then v 0 (Classical.choose h).val else none
 
