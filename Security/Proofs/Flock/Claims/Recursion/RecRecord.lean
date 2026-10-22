@@ -211,9 +211,19 @@ theorem readRound_roundW (x : Round) (r : List UInt8) : readRound (roundW x ++ r
   have hh : ∀ (bs : List UInt8) r, readHex (hexStr bs ++ r) = some (bs, r) := readHex_hexStr
   have ht : ∀ (t : List (List UInt8)) r, readList 4 readHex (listW 4 hexStr t ++ r) = some (t, r) :=
     readList_listW 4 hexStr readHex hh
-  simp only [readRound, roundW, List.cons_append, List.nil_append, List.append_assoc, lit_cons_cons, lit_append_left,
-    lit_append, Option.bind_eq_bind, Option.bind_some, readStr_strStr, readNat_fld, readList_listW 3 _ _ ht,
-    readList_listW 3 hexStr readHex hh, readList_listW 3 coinStr readCoin readCoin_coinStr]
+  have hb : ∀ {α β : Type} (a : α) (f : α → Option β), (some a >>= f) = f a := fun _ _ => rfl
+  have hw : roundW x ++ r = (123 :: 10 :: (sp 3 ++ key "stream")) ++ (strStr x.stream ++ (fld 3 "k" ++ (decW x.k ++
+      (fld 3 "tops" ++ (listW 3 (listW 4 hexStr) x.tops ++ (fld 3 "level0" ++ (decW x.level0 ++ (fld 3 "commits" ++
+      (listW 3 hexStr x.commits ++ (fld 3 "n" ++ (decW x.n ++ (fld 3 "coins" ++ (listW 3 coinStr x.coins ++
+      ((10 :: (sp 2 ++ [125])) ++ r)))))))))))))) := by
+    simp only [roundW, List.cons_append, List.nil_append, List.append_assoc]
+  rw [hw]
+  dsimp only [readRound]
+  -- Not `simp`: under Mathlib it descends into each bind through `Option.bind_congr'`, exponentially in their number.
+  rw [lit_append, hb, readStr_strStr, hb, lit_append, hb, readNat_fld, hb, lit_append, hb,
+    readList_listW 3 _ _ ht, hb, lit_append, hb, readNat_fld, hb, lit_append, hb,
+    readList_listW 3 hexStr readHex hh, hb, lit_append, hb, readNat_fld, hb, lit_append, hb,
+    readList_listW 3 coinStr readCoin readCoin_coinStr, hb, lit_append, hb]
   rfl
 
 /-- **The record reads back**: `readRecord` reads the rounds `recordW` wrote, whatever the record's other fields. -/
@@ -264,7 +274,7 @@ theorem readsBack_recTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Bring
   refine ⟨((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).mapIdx fun i mo =>
     (mo.1, (outCoin mo.2).vals (nOf x i)), ?_, ?_, ?_⟩
   · rw [hb]
-    simp only [recRead, recTr, Array.toList_toArray, Flock.RecRecord.readRecord_recordW, Option.map_some]
+    simp only [recRead, recTr, List.toList_toArray, Flock.RecRecord.readRecord_recordW, Option.map_some]
     congr 1
     apply List.ext_getElem (by simp)
     intro i h₁ h₂
