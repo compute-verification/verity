@@ -1,6 +1,7 @@
 import Proofs.Accounting.TS.Session.Checked.Layer
 import Proofs.Accounting.TS.Session.Held.Layer
 import Proofs.Flock.Recursive.Registrants
+import Flock.KnownRead
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -42,8 +43,9 @@ This file states, on words, what the 33 statements check and what one unit's ser
   SHA-512 collision (`Accounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
-  known-content check (`known x w i k`, the session's registered file's known content) and its complete check (the
-  file sets `complete`, `Registered.checkComplete`) included, opens the leaf's
+  known-content check (`known x w i k`, the session's registered file's known content), its complete check (the
+  file sets `complete`, `Registered.checkComplete`) and its check that the circuit reads every bit of each known input
+  port (`KnownRead.check`) included, opens the leaf's
   values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
@@ -189,8 +191,10 @@ def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
 combine's), its known-content check at the session's known content `known x w i k` included
-(`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`) and its complete check
-(`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`),
+(`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), its complete check
+(`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`) and
+its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content: a computed row of the
+unit reads each bit of each known input port's row),
 opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
 the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
@@ -204,7 +208,8 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) : ProofLayer Ω S nπ (Leaf K) where
   accepted x w i := ∀ k, LiveAcceptsZKR (sess x w i k).I (sess x w i k).own (out x w i k) ∧
     Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok () ∧
-    Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok ()
+    Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
+    Flock.KnownRead.check (sess x w i k).c (known x w i k) = .ok ()
   opened := leaf
   rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
     LeafKnownColl (sess x w i) (known x w i)
