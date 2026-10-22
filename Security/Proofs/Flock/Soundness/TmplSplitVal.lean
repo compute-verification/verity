@@ -280,7 +280,7 @@ theorem bind_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
   dsimp only
   rw [fold_val (tabSum pt L H gl gc iv) _ (fun e v => ((wk e.2.1 j).map fun kf =>
       of (kf.2 * v * (rm e.2.2).2) * hiE pt L H (rm e.2.2).1 *
-        refS D pt L H A gL pos gl gc iv kf.1 ((c.bound id j).toArray.getD e.1 0)).sum) ?_]
+        refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1 0)).sum) ?_]
   · rfl
   · rintro o' ⟨t', kc, cx⟩ v
     dsimp only
