@@ -722,4 +722,44 @@ theorem check_own0_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (m s�
     rw [hR] at hfr
     exact key true _ fr (ownFrames0_mid c m w _) hfs rfl hfr
 
+/-! ## The drive's requests at the inner proof's rounds -/
+
+theorem take_pre_rounds {α : Type} (A B C D : List α) {n : ℕ} (hn : n ≤ C.length) :
+    (A ++ B ++ C ++ D).take (A.length + B.length + n) = A ++ B ++ C.take n := by
+  rw [show A ++ B ++ C ++ D = (A ++ B) ++ (C ++ D) by simp only [List.append_assoc],
+    show A.length + B.length + n = (A ++ B).length + n by rw [List.length_append], List.take_length_add_append,
+    List.take_append_of_le_length hn]
+
+/-- **The drive's requests up to the inner proof's round `i`**: the earlier rep's coins, every scheduled round with its
+coins, the inner proof's rounds before `i` with theirs, then round `i` without its coins. -/
+theorem reqs_take_own (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
+    (coins : Array (Array F128)) {i : ℕ} (hi : i < own.size) :
+    (_root_.Flock.Firewall.Drive.reqs prior sched own dev coins).take
+        ((if prior.isEmpty then 0 else 1) + 2 * (sched.size + i) + 1) =
+      (if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+      (List.range sched.size).flatMap (fun k =>
+        [.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
+          .coins (.ok (coins.getD k #[]))]) ++
+      (List.range i).flatMap (fun j =>
+        [.round (own.getD j (.empty, 0)).2 (own.getD j (.empty, 0)).1 .own,
+          .coins (.ok (coins.getD (sched.size + j) #[]))]) ++
+      [.round (own.getD i (.empty, 0)).2 (own.getD i (.empty, 0)).1 .own] := by
+  unfold _root_.Flock.Firewall.Drive.reqs
+  have hl : ∀ k, ([.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
+      .coins (.ok (coins.getD k #[]))] : List _root_.Flock.Firewall.Frame.Req).length = 2 := fun _ => rfl
+  have hl' : ∀ j, ([.round (own.getD j (.empty, 0)).2 (own.getD j (.empty, 0)).1 .own,
+      .coins (.ok (coins.getD (sched.size + j) #[]))] : List _root_.Flock.Firewall.Frame.Req).length = 2 :=
+    fun _ => rfl
+  have hP : (if prior.isEmpty then ([] : List _root_.Flock.Firewall.Frame.Req) else
+      [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]).length =
+      if prior.isEmpty then 0 else 1 := by
+    split <;> rfl
+  rw [← hP, show ∀ p : ℕ, p + 2 * (sched.size + i) + 1 = p + ((List.range sched.size).flatMap fun k =>
+      ([.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
+        .coins (.ok (coins.getD k #[]))] : List _root_.Flock.Firewall.Frame.Req)).length + (2 * i + 1) from
+      fun p => by rw [Loop.flatMap_range_length _ hl]; omega,
+    take_pre_rounds _ _ _ _ (by rw [Loop.flatMap_range_length _ hl']; omega), Loop.flatMap_range_take _ hl' hi]
+  simp only [List.append_assoc]
+  rfl
+
 end Claims.ZKServer
