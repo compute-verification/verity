@@ -345,6 +345,13 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     hcons hL₀ fun _ => hbat
 
 set_option smartUnfolding false in
+/-- The worker's view's `ŝ` is `ν + maskHom` at the tape's mask, at any clear values. -/
+theorem swViewE_sHat (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
+    (swViewE x c w v τ j).pre.1 = ((tabC PE x j).T (czExe PE x c j)).tab.nu (wtOf PE x w j) +
+      ((tabC PE x j).T (czExe PE x c j)).tab.maskHom ((UE.tape x τ).1 j).1 :=
+  rfl
+
 /-- **The switched source's `ŝ` vector `k < 2` is the worker's view's `ŝ_{2r+k}`**, where rep `r`'s rank check is
 reached before the stop: the switched source's switched vectors are the honest source's (`swSrcE_sv`), whose `ŝ` the
 guard passes there, `ν + maskHom` at the tape's mask, the view's `ŝ` at any clear values. -/
@@ -353,7 +360,7 @@ theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (hrank : rankSlot x j.val r.val ≤ n) (k : ℕ) (hk : k < 2) :
     ((swSrcE x c w v τ j.val).rep r.val).sv k = Composed.shArr (swViewE x c w v τ j).pre.1 (2 * r.val + k) := by
-  rw [swSrcE_sv]
+  rw [swViewE_sHat, swSrcE_sv]
   have h4 : 2 * r.val + k < _root_.Flock.Zk.RANK_POINTS := by
     have := r.isLt; simp only [_root_.Flock.Zk.RANK_POINTS]; omega
   have hpass := famPasses_of (pointReads_czExe PE) (coinReads_czExe PE) hx hn hsx j r .opening hrank
@@ -376,8 +383,8 @@ theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy
   rw [ite_eq_left hk, dite_eq_left hC, hs]
   dsimp only
   unfold Composed.shArr Composed.sHatAt
-  rw [dif_pos hC]
-  rfl
+  rw [dite_eq_left hC]
+  all_goals rfl
 
 /-- **`swSrcE_hinner` at the ring switch's vectors from `repCut_fw`'s `hpiop`**: where the switched source's switched
 vectors are the firewall's (`hpsv`, `hpiop`'s second half), the firewall's `ŝ`s for claims `0` and `1` are the
