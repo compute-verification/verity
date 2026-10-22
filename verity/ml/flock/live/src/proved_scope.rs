@@ -168,11 +168,6 @@ fn v2_row(p: &Port) -> bool {
         2 * p.words + 17 <= WORD * (p.comps + 1)
 }
 
-/// `ProvedScope.v2OutRow`: a [`v2_row`] whose bytes reach its hm96 slot's block.
-fn v2_out_row(p: &Port) -> bool {
-    v2_row(p) && WORD * p.comps <= 2 * p.words
-}
-
 /// `ProvedScope.segRow`: a `sha512/row-seg/v1` row segmented as [`seg_shape`] cuts its bits, of `16 · words` bits, its
 /// compressions its segments' and then its outer message's, and each segment's bytes ending, with SHA-512's 17 bytes of
 /// padding, in its last compression's block.
@@ -183,11 +178,11 @@ fn seg_row(p: &Port) -> bool {
 }
 
 /// `ProvedScope.bitRows`: every row a [`v2_row`] or a [`seg_row`], in any mix, one output port each, the output rows (the
-/// last `out_row_ports.len()`) [`v2_out_row`]s.
+/// last `out_row_ports.len()`) `v2_row`s.
 fn bit_rows(ports: &[Port], out_row_ports: &[usize]) -> bool {
     let n_in = ports.len().saturating_sub(out_row_ports.len());
     ports.iter().all(|p| v2_row(p) || seg_row(p)) && out_row_ports.iter().all(|&k| k == 1) &&
-        (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(v2_out_row))
+        (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(v2_row))
 }
 
 /// `ProvedScope.scopeWhy hidden` of a circuit outside `scopeOkI` (`scopeOk` when not `hidden`), `None` inside: the unit has
@@ -326,11 +321,9 @@ mod tests {
         // 32 words' 64 bytes and the padding fit the slot's block alone
         assert!(v2_row(&port(32, 0, 512, true, None)));
         // at 120 words its last 112 bytes leave no room for the padding: its second compression holds them and the
-        // padding's start, its slot's block the rest; an output row may not
+        // padding's start, its slot's block the rest
         assert!(!v2_row(&port(120, 1, 1920, true, None)));
         assert!(v2_row(&port(120, 2, 1920, true, None)));
-        assert!(!v2_out_row(&port(120, 2, 1920, true, None)));
-        assert!(v2_out_row(&port(64, 1, 1024, true, None)));
         assert!(!v2_row(&port(120, 3, 1920, true, None)));
         assert!(!v2_row(&port(32, 1, 512, true, None)));
         assert!(!v2_row(&port(64, 1, 1000, true, None)));
@@ -347,10 +340,10 @@ mod tests {
         assert_eq!(rows_why(&v2, &[1], true), None);
         assert_eq!(rows_why(&v2, &[1], false), Some("a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"));
         assert!(rows_why(&v2, &[2], true).unwrap().starts_with("rows that are neither"));
-        // an input row's padding may spill into its slot's block, an output row's not
+        // a row's padding may spill into its slot's block, an input row's or an output row's
         let spill = port(120, 2, 1920, true, None);
         assert_eq!(rows_why(&[spill.clone(), port(1, 0, 16, true, None)], &[1], true), None);
-        assert!(rows_why(&[port(1, 0, 16, true, None), spill], &[1], true).unwrap().starts_with("rows that are neither"));
+        assert_eq!(rows_why(&[port(1, 0, 16, true, None), spill], &[1], true), None);
     }
 
     fn seg(bits: usize, comps: usize) -> Port {

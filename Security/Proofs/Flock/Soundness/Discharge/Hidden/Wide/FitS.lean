@@ -30,17 +30,8 @@ def SegRow (p : Port) : Prop :=
   p.segs = some (HmRow.segShape p.bits).1 ∧ p.bits = 16 * p.words ∧
     p.chunks = firstOf (HmRow.segShape p.bits).1 (Binding.RowSeg.count p.bits) + outerComps p.bits ∧ SegFits p.bits
 
-/-- **An unsegmented row the hidden-output statement's proof covers**: `16 · words` bits, its `2 · words` bytes and
-SHA-512's 17 bytes of padding filling its `chunks` compressions' blocks and ending in its `hm96` slot's block. Unlike a
-`FitRow`, the last compression's block may hold the bytes' end and the padding's start, the `hm96` block then only
-padding (`2 · words mod 128 ≥ 112`). -/
-def PadRow (p : Port) : Prop :=
-  p.segs = none ∧ p.bits = 16 * p.words ∧ 128 * p.chunks ≤ 2 * p.words + 16 ∧ 2 * p.words + 17 ≤ 128 * (p.chunks + 1)
-
-theorem padRow_of_fit {p : Port} (h : FitRow p) : PadRow p := ⟨h.1, h.2.1, by have := h.2.2.1; omega, h.2.2.2⟩
-
-/-- **The rows the hidden-output headlines cover**: one fit output row per output port after the input rows
-(`OutRowsS`), and every row an unsegmented row (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
+/-- **The rows the hidden-output headlines cover**: one unsegmented output row per output port after the
+input rows (`OutRowsS`), and every row an unsegmented row (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
 def RowsFitS (c : Circuit) : Prop := OutRowsS c ∧ ∀ p ∈ c.ports.toList, PadRow p ∨ SegRow p
 
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else

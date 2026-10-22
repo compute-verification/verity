@@ -20,9 +20,8 @@ and a bit row (`sha512/row/v2`) commits other bytes.
 `scopeOkH` is the hidden-output headlines' scope: `scopeOk`'s conditions on the unit, and every row a `sha512/row/v1`
 row, or every row an unsegmented `sha512/row/v2` row of `16 · words` bits whose padding ends in its `hm96` slot's block
 or a `sha512/row-seg/v1` row of `16 · words` bits as `HmRow.segShape` cuts it, each segment's bytes ending in its last
-block, of any mix, the output rows `sha512/row/v2` rows whose bytes reach their `hm96` slot's block, of one output port
-each (`scopeOkH_rows`). Those headlines commit each
-row under its own bytes (`Hidden.Any.rowMsg`).
+block, of any mix, the output rows `sha512/row/v2` rows of one output port each (`scopeOkH_rows`). Those headlines
+commit each row under its own bytes (`Hidden.Any.rowMsg`).
 
 `scopeGenH` is the general form under hidden outputs: a template instance is one repeated unit stage (the unit net,
 `upv` slots) and any number of stages the verifier evaluates (every other net with slots, a lookup slot among them), the
@@ -95,9 +94,6 @@ def v2Row (p : Port) : Bool :=
   p.v2 && p.segs.isNone && p.bits == 16 * p.words && decide (128 * p.chunks ≤ 2 * p.words + 16) &&
     decide (2 * p.words + 17 ≤ 128 * (p.chunks + 1))
 
-/-- **A `v2Row` an output row may be**: its bytes reach its `hm96` slot's block. -/
-def v2OutRow (p : Port) : Bool := v2Row p && decide (128 * p.chunks ≤ 2 * p.words)
-
 /-- **A `sha512/row-seg/v1` row the hidden-output headlines cover**: segmented as `HmRow.segShape` cuts its bits,
 `16 · words` bits, its compressions its segments' and then its outer message's, and each segment's bytes ending, with
 SHA-512's 17 bytes of padding, in its last compression's block. -/
@@ -109,13 +105,13 @@ def segRow (p : Port) : Bool :=
       let m := min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
-/-- **Every row is a `v2Row` or a `segRow`**, of any mix, and each output row is a `v2OutRow` holding one output port. -/
+/-- **Every row is a `v2Row` or a `segRow`**, of any mix, and each output row is a `v2Row` holding one output port. -/
 def bitRows (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
-    (List.range c.outRowPorts.size).all fun j => v2OutRow (c.ports.getD (HmOut.nIn c + j) default)
+    (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
 
 /-- **The circuits the hidden-output headlines cover**: `scopeOk`'s conditions on the unit, and every row a
-`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2OutRow` of one output port
+`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
 (`bitRows`). -/
 def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
@@ -145,15 +141,6 @@ theorem v2Row_spec {p : Port} (h : v2Row p = true) :
   obtain ⟨⟨⟨⟨hv, hs⟩, hb⟩, h1⟩, h2⟩ := h
   exact ⟨hv, hs, hb, h1, h2⟩
 
-/-- **A `v2OutRow`**: an unsegmented `sha512/row/v2` row of `16 · words` bits ending in its `hm96` slot's block. -/
-theorem v2OutRow_spec {p : Port} (h : v2OutRow p = true) :
-    p.v2 = true ∧ p.segs = none ∧ p.bits = 16 * p.words ∧ 128 * p.chunks ≤ 2 * p.words ∧
-      2 * p.words + 17 ≤ 128 * (p.chunks + 1) := by
-  unfold v2OutRow at h
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨hv, hs, hb, -, h2⟩ := v2Row_spec h.1
-  exact ⟨hv, hs, hb, h.2, h2⟩
-
 /-- **A `segRow`**: segmented as `HmRow.segShape` cuts its bits, `16 · words` bits, its compressions its segments' and
 its outer message's, each segment's bytes ending in its last block. -/
 theorem segRow_spec {p : Port} (h : segRow p = true) :
@@ -169,11 +156,11 @@ theorem segRow_spec {p : Port} (h : segRow p = true) :
   exact ⟨hs, hb, hn, hf⟩
 
 /-- **The hidden-output headlines' rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row
-a `v2OutRow` of one output port. -/
+a `v2Row` of one output port. -/
 theorem rowsH_spec {c : Circuit} (h : (v1Ports c || bitRows c) = true) :
     (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
       ((∀ p ∈ c.ports.toList, v2Row p = true ∨ segRow p = true) ∧ (∀ r ∈ c.outRowPorts.toList, r = 1) ∧
-        ∀ j < c.outRowPorts.size, v2OutRow (c.ports.getD (HmOut.nIn c + j) default) = true) := by
+        ∀ j < c.outRowPorts.size, v2Row (c.ports.getD (HmOut.nIn c + j) default) = true) := by
   simp only [Bool.or_eq_true] at h
   rcases h with h1 | h2
   · left
@@ -194,12 +181,12 @@ theorem scopeOkH_rowsB {c : Circuit} (h : scopeOkH c = true) : (v1Ports c || bit
   simp only [Bool.and_eq_true] at h
   exact h.2
 
-/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row a `v2OutRow`
-of one output port. -/
+/-- **`scopeOkH`'s rows**: all `sha512/row/v1` rows, or each row a `v2Row` or a `segRow`, each output row a `v2Row` of
+one output port. -/
 theorem scopeOkH_rows {c : Circuit} (h : scopeOkH c = true) :
     (∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) ∨
       ((∀ p ∈ c.ports.toList, v2Row p = true ∨ segRow p = true) ∧ (∀ r ∈ c.outRowPorts.toList, r = 1) ∧
-        ∀ j < c.outRowPorts.size, v2OutRow (c.ports.getD (HmOut.nIn c + j) default) = true) :=
+        ∀ j < c.outRowPorts.size, v2Row (c.ports.getD (HmOut.nIn c + j) default) = true) :=
   rowsH_spec (scopeOkH_rowsB h)
 
 /-! ## The general form -/
