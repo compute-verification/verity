@@ -35,13 +35,14 @@ def _stem(key: str) -> str | None:
 
 
 @pytest.fixture(scope="module")
-def families(catalog) -> dict[str, list]:
-    """Each family the circuit-check catalog reaches, its `PER_FAMILY` smallest specializations (ties by id, so the catalog's
-    records and a whole build give the same ones)."""
+def families(catalog) -> dict[str, list[str]]:
+    """Each family the circuit-check catalog reaches, the ids of its `PER_FAMILY` smallest specializations (ties by id, so the
+    catalog's records and a whole build give the same ones), in the catalog's order.  A test makes only the ones it reads
+    (`Catalog.make`): one made from its record builds its body when it is encoded."""
     by: dict[str, list[tuple[int, str]]] = {}
     for fid, (fam, gates) in catalog.reached.items():
         by.setdefault(fam, []).append((gates, fid))
-    return {k: [catalog.make(fid) for _gates, fid in sorted(v)[:PER_FAMILY]] for k, v in by.items()}
+    return {k: [fid for _gates, fid in sorted(v)[:PER_FAMILY]] for k, v in by.items()}
 
 
 def _signature(fn):
@@ -71,7 +72,7 @@ def _files():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("owner,path", _files())
-def test_annotation_file(owner, path, families):
+def test_annotation_file(owner, path, families, catalog):
     ann = json.loads(path.read_text())
     assert ann.get("format") == A.FORMAT, f"{path.name}: not {A.FORMAT}"
     entries = ann["entries"]
@@ -84,7 +85,7 @@ def test_annotation_file(owner, path, families):
             by_stem.setdefault(stem, []).append(e)
     problems = []
     for stem, mine in sorted(by_stem.items()):
-        fns = families.get(stem)
+        fns = [catalog.make(fid) for fid in families.get(stem, ())]
         if not fns:
             problems.append(f"{stem}: no Definition the circuit-check catalog reaches")
             continue
@@ -94,7 +95,7 @@ def test_annotation_file(owner, path, families):
             v = A.validate({"format": A.FORMAT, "entries": mine}, _calling(fn))
             problems += [f"{fn.id}: {x}" for x in v.errors] + [f"{fn.id}: stale {x}" for x in v.stale] + [f"{fn.id}: absent {x}" for x in v.absent]
     # The whole file once more, for what spans Definitions: each (key, field) set once, groups closed.
-    some = _calling(next(iter(families.values()))[0])
+    some = _calling(catalog.make(next(iter(families.values()))[0]))
     whole = A.validate(ann, some)
     problems += [str(x) for x in whole.errors if x["code"] not in ("unresolved",)]
     assert not problems, "\n".join(problems)

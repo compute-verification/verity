@@ -88,7 +88,16 @@ def _served_bindings() -> dict[str, object]:
 
 
 @pytest.fixture(scope="module")
-def now(suite):
+def served() -> dict[str, object]:
+    """`_served_bindings`, which needs no catalog."""
+    from circuit_check import targets as TG
+
+    TG.load_registries()
+    return _served_bindings()
+
+
+@pytest.fixture(scope="module")
+def now(suite, served):
     """The family's Definitions with each one's id and digest at every circuit-check binding, pin and served binding."""
     from circuit_check import targets as TG
     from verity.ml.circuits.codec import descriptor_id
@@ -102,15 +111,11 @@ def now(suite):
             pinned[key] = pin
             if key not in bound:
                 bound[key] = TG.definition(key)
-    served = {}
-    for label, fn in _served_bindings().items():
-        if isinstance(fn, str):
-            served[label] = fn
-        else:
-            served[label] = fn.id
+    for fn in served.values():
+        if not isinstance(fn, str):
             bound.setdefault(fn.id, fn)
     definitions = {fid: {"descriptor_id": descriptor_id(fn), "digest": _digest(fn)} for fid, fn in bound.items()}
-    return {"family": fam, "definitions": definitions, "served": served, "pins": pinned}
+    return {"family": fam, "definitions": definitions, "pins": pinned}
 
 
 @pytest.mark.slow
@@ -123,9 +128,10 @@ def test_every_family_definition_keeps_its_id_and_digest(now):
 
 
 @pytest.mark.slow
-def test_the_served_bindings_are_unchanged(now):
+def test_the_served_bindings_are_unchanged(served):
     """`targets.attention_spec` binds the same Definition (`MASKED_FROM` included), or refuses the same way, at every served shape."""
-    assert {k: now["served"].get(k) for k in SNAPSHOT["served"]} == SNAPSHOT["served"]
+    ids = {k: fn if isinstance(fn, str) else fn.id for k, fn in served.items()}
+    assert {k: ids.get(k) for k in SNAPSHOT["served"]} == SNAPSHOT["served"]
 
 
 @pytest.mark.slow

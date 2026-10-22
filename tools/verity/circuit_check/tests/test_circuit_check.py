@@ -579,15 +579,18 @@ OVER_PARTITION_BUDGET = {
 
 
 @pytest.mark.slow
-def test_every_call_the_suite_checks_is_partitioned(suite):
+def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
     smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
-    only Calls that are still over it."""
+    only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
+    no body built, and building every Call's took 1,653 s (r20261022-011739-f87f)."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
+    suite = catalog.suite
+    gates = {k: catalog.reached[k][1] if k in catalog.reached else getattr(fn, "gates", 0) for k, fn in suite.items()}
     calls = TG.call_families()
-    over = {k: fn.gates for k, fn in suite.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
+    over = {k: gates[k] for k, fn in suite.items() if TG.family(fn) in calls and gates[k] > OPTS.partition_max_gates}
     assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
         "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
