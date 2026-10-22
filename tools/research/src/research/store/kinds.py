@@ -116,6 +116,9 @@ KINDS: dict[str, str] = {
     "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
                              "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1|v2 "
                              "whose end entry seals out/",
+    "challenger-pins/v1": "the auditor host's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
+                          "payload pins.jsonl, one challenger.pin_line {commit, main, pinned_utc} a pin, append-only, each put an "
+                          "extension of the last; meta {host, lines, sha512}; label challenger-pins head by infra",
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
