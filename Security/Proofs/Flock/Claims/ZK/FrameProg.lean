@@ -930,6 +930,86 @@ theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
   rw [hsc]
   exact check_empty _ _ _ _ _
 
+open Loop in
+/-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
+round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, the round's coin
+count is the scheduled round's, and its frames enter no inner proof. At the inner proof's rounds, past the rep's
+schedule (`hO`): `ProgChecks`' own conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or
+the loop has no round in the device's place (`ofLoop_checkAt_empty`). -/
+theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (hS : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+      (h : List (Msg × Msg)) (m : Masker) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ) (c' : Cfg)
+      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
+      (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
+      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) →
+      placeholder spec sts k (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi) →
+      real x w ρ k = .ok (tr, hr) →
+      schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map
+        fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
+      j + 1 < rsched.size → (ofLoop T L₀ real).answered x ρ h = .ok m →
+      Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
+        xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
+        2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
+        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2 ∧ m.inner ≠ some INNER_ROUNDS ∧
+        ∀ sched', schedSoFar t (k % 2) dom xs hi ((Array.range (j + 1)).map
+            fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok sched' →
+          ∀ (fs : List Frame) (k' : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+            ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
+          ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
+    (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+      (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
+      (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
+      (xs : Array (Array F128)) (hi : Array ByteArray) (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray)
+      (rsched : Array (ByteArray × ℕ)),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
+      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) →
+      placeholder spec sts k (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi) →
+      real x w ρ k = .ok (tr, hr) →
+      schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map
+        fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
+      rsched.size ≤ j + 1 → (ofLoop T L₀ real).answered x ρ h = .ok m →
+      (ofLoop T L₀ real).rep x (h.length + 1) = (ofLoop T L₀ real).rep x h.length →
+      (∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why)) →
+      ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
+        (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
+          { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped }) :
+    ProgChecks (ofLoop T L₀ real) x w := by
+  intro ρ h a m out hA hrep hex
+  obtain ⟨e0, h1, s0, spec, sts, q, k, j, c', t, dom, xs, hi, rfl, hx, hq, hki, hph⟩ :=
+    ofLoop_progChecks_round T L₀ real x w ρ h hA hex
+  obtain ⟨lay, mask, hst, hc', hdm, hxe⟩ := placeholder_ok hph
+  have hq2 : (e0 :: h1).length = q + 2 := by simp only [List.length_cons, hq]
+  have hcsl : (h1.map fun p => ZKMal.CoinLayer.rd p.2).length = q + 1 := by rw [List.length_map, hq]
+  have hk1 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = k := by rw [hki]
+  have hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1 := by rw [hki]
+  have hno : schedOf (real x w ρ) x (h1.map fun p => ZKMal.CoinLayer.rd p.2) = some .empty → False := fun hs => by
+    obtain ⟨v, s', why, hv⟩ := hex
+    exact ofLoop_checkAt_empty T L₀ real x w ρ e0 h1 hs m false v _ hv
+  cases hr0 : real x w ρ k with
+  | error e => exact (hno (schedOf_real_error (real x w ρ) x _ hx hcsl (by rw [hk1]; exact hr0))).elim
+  | ok r =>
+  obtain ⟨tr, hr⟩ := r
+  cases hrs : schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map
+      fun i => wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) with
+  | error e =>
+    exact (hno (schedOf_sched_error (real x w ρ) x _ hx hcsl (by rw [hk1]; exact hr0) (e := e)
+      (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
+  | ok rsched =>
+  by_cases hlt : j + 1 < rsched.size
+  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins, hin, hI⟩ :=
+      hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
+    exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
+      hn hlq hp hd hrs hlt hcoins hin hI
+  · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
+      hrep hex
+
 end LeanRelease
 
 end Claims.ZKServer
