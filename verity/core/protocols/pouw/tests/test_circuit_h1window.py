@@ -48,7 +48,7 @@ def _tile_sig(S, row=None, record=None, out=HW.OUTPUTS):
 def _tile_body(B, S, a, b, zy, salt, position, roots, sig=_tile_sig):
     x = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), B.call(XOR1, B.call(LOW1, position), B.call(LOW1, roots[0][0])))
     receipt = coll_concat(Array(S.K // 32, BIT),
-                          [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(BIT, a[1].refs.slice(i, i + 1))))
+                          [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(BIT, a[min(1, S.R - 1)].refs.slice(i, i + 1))))
                            for i in range(S.K // 32)])
     return coll_concat(sig(S)[1], [receipt, B.call(XOR1, x, _first(zy))])
 
@@ -240,6 +240,72 @@ def test_a_window_at_k_32_and_322_reads_each_row_under_its_own_port():
     one = HW.program((("q_proj", 32, 2),), (("q_proj", 0),), 2, (2, 1), unit=lambda k: unit(k, (2, 1)))
     got = G.reads(one, HW.query(one), {"a/32": _words(32), "b/32": _words(32)}, {"a/32": G.SCHEMA_V2, "b/32": G.SCHEMA_V2})
     assert set(HW.window_ports(one)) == set(got) and HW.window_ports(one)["b_k32"] == "b_k32_0"
+
+
+#: what a unit reads that is no registered value: its coin, its position, its roots and its outputs
+UNREGISTERED = ("salt", "position", "roots", *HW.OUTPUTS)
+
+
+@pytest.mark.parametrize("tile", [(1, C), (R, 1)], ids=["R=1", "C=1"])
+def test_a_lone_row_is_read_under_its_parameters_name_as_registered_reads_keys_it(tile):
+    """With R = 1 (or C = 1) a unit's one A (or B) row is its whole parameter, which `registered.reads` keys by the
+    parameter's name (``a_k<K>``), not ``a_k<K>[0]``: `unit_reads` and `table_reads` key it so too, at the rows
+    `registered.reads` gives, and `table_reads_file` through `window_ports` alone names its port ``a_k<K>_0``, with no
+    alias of the two keys."""
+    lone = "a" if tile[0] == 1 else "b"
+    prog = HW.program(LINEARS, CALLS, HW.slot(5, tile), tile, unit=lambda k: unit(k, tile))
+    q = HW.query(prog)
+    tp = P.evaluate(prog, q)
+    values = {**{f"{t}/{k}": _words(k) for k in (32, 64) for t in "ab"}, "zy": 3 * tile[0] * tile[1]}
+    got = G.reads(prog, q, values, {v: G.SCHEMA_V2 for v in values})
+    want = [HW.unit_reads(prog, tp, u) for u in range(tp.population)]
+    assert {f"{lone}_k32", f"{lone}_k64"} <= set(got) and not [k for k in got if k.startswith(f"{lone}_k") and "[" in k]
+    assert set(got) == {key for w in want for key in w if key not in UNREGISTERED}
+    for key, e in got.items():
+        assert e["rows"] == [w[key][1] if key in w else None for w in want], key
+    ports = HW.window_ports(prog)
+    assert set(ports) == set(got) - {"zy"} and ports[f"{lone}_k32"] == f"{lone}_k32_0"
+    c = 3
+    assert set(HW.table_reads(prog, tp, HW.call_units(prog)[c][0])) == set(want[HW.call_units(prog)[c][0]])
+    roots = {HW.table(prog, "a", c): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
+    file = HW.table_reads_file(prog, tp, c, roots, ports=ports)["ports"]
+    assert sorted(file) == sorted([ports[key] for key in got if "_k32" in key] + ["zy"])
+    assert file[f"{lone}_k32_0"]["value"] == (HW.table(prog, "a", c) if lone == "a" else "b/32")
+
+
+def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_that_window():
+    """``window``: with the window's open root W, `table_reads_file` gives the call's A and z tables the registered domain
+    that binds W (`registered.domain`'s ``window``), as the served path commits them, and the weights' b/32 the one that
+    binds none; without it every domain binds none, as before. Every read opens the trees committed so, and the call's A
+    table committed in another window, of the same rows under the same salts, opens none of them at its own root."""
+    m = HW.slot(5, TILE)
+    prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
+    tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(11)
+    c, w, other = 3, "ab" * 64, "cd" * 64
+    a, zy = HW.table(prog, "a", c), HW.table(prog, "zy", c)
+    u0, n = HW.call_units(prog)[c]
+
+    def commit(value: str, rows: int, words: int, window: str | None) -> G.Registered:
+        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
+                                   schema=G.SCHEMA_V2, window=window)
+
+    tabs = {a: commit(a, m, _words(32), w), zy: commit(zy, n, 3 * R * C, w), "b/32": commit("b/32", 24, _words(32), None)}
+    roots = {v: r.root.hex() for v, r in tabs.items()}
+    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w)["ports"]
+    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog))["ports"]
+    twin = G.Registered.commit(digest, a, tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2, window=other)
+    assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
+    for port, e in file.items():
+        reg = tabs[e["value"]]
+        assert e["domain"] == reg.domain.domain_id.hex(), port
+        assert (e["domain"] == bare[port]["domain"]) == (e["value"] == "b/32"), port
+        assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare[port].items() if k != "domain"}
+        assert bare[port]["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"]).domain_id.hex(), port
+        for u in range(u0, u0 + n):
+            p = e["reads"][u]
+            assert G.verify_read(reg.domain, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
+            if e["value"] == a:
+                assert not G.verify_read(reg.domain, twin.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
 
 
 def _operations(steps: int) -> int:
