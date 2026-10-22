@@ -139,7 +139,7 @@ class _Session:
 
     def trusted(self, commits) -> str | None:
         """`trusted_rounds_reason` of `commits` against this session, as `audited` opens and ends it."""
-        return PHC.trusted_rounds_reason(commits, self.directory, [self.audited()], self.window, KEY)
+        return PHC.trusted_rounds_reason(commits, self.directory, [self.audited()], self.window, KEY, CH.PINS, CH.MAIN)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -195,7 +195,8 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     or another Commit, weights other than the period's registered ones, a session tree core's check refuses (another
     session's, a rewritten release log, a missing tree, a record signed under another key than the pinned one), a
     session that never ended, ended unclosed or short of its coins, an end entry under another commitment than the
-    window's, and a record whose commitment or leaf aren't the ones its end entry records."""
+    window's, a record whose commitment or leaf aren't the ones its end entry records, and a session the verifier holds
+    no pins log or no first-parent history of main for, or whose pin isn't on that history (`challenger.pinned_session`)."""
     gate = _gate()
     first, a = _window(gate, tmp_path, monkeypatch, SA, 11)
     second, b = _window(gate, tmp_path, monkeypatch, SB, 12)
@@ -206,36 +207,44 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     assert _coins(first) != _coins(second) and first["session"]["session"] == SA and first["session"]["seq"] == 1
     assert "secret" not in first["session"] and first["session"]["commitment"] == a.commitment
     ledger, fetch = gate.ledger(), {SA: a.tree, SB: b.tree}.get
-    assert PHC.session_reason(first, ledger, fetch) is None and PHC.session_reason(second, ledger, fetch) is None
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, CH.MAIN) is None
+    assert PHC.session_reason(second, ledger, fetch, CH.PINS, CH.MAIN) is None
+    untrusted = "the window's salt: the challenger's session is not trusted: "
+    assert PHC.session_reason(first, ledger, fetch, None, CH.MAIN) == untrusted + LC.NO_PINS
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, None) == untrusted + LC.NO_MAIN
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, CH.MAIN[:1]) == (
+        untrusted + LC.first_parent_reason(SA, CH.PIN, CH.MAIN[:1]))
     claims_a = {**second, "session": {**second["session"], "root": ra}}
-    assert PHC.session_reason(claims_a, ledger, fetch) == (
+    assert PHC.session_reason(claims_a, ledger, fetch, CH.PINS, CH.MAIN) == (
         f"the window's session {SB} is not {SA}, the one the auditor's ledger opened for Commit {ra}")
-    assert PHC.session_reason({**first, "session": {**first["session"], "seq": 3}}, ledger, fetch) == (
+    assert PHC.session_reason({**first, "session": {**first["session"], "seq": 3}}, ledger, fetch, CH.PINS, CH.MAIN) == (
         f"the window's session {SA} is ledger entry 3 in its reply, but entry 1 opened it")
-    assert PHC.session_reason({**first, "session": {**first["session"], "root": "cc" * 64}}, ledger, fetch) == (
+    assert PHC.session_reason({**first, "session": {**first["session"], "root": "cc" * 64}}, ledger, fetch, CH.PINS,
+                              CH.MAIN) == (
         f"the auditor's ledger has no session for Commit {'cc' * 64}, so the window's coins are no session's of record")
-    assert PHC.session_reason({k: v for k, v in first.items() if k != "session"}, ledger, fetch).startswith(
+    assert PHC.session_reason({k: v for k, v in first.items() if k != "session"}, ledger, fetch, CH.PINS, CH.MAIN).startswith(
         "the window carries no challenger session")
-    assert PHC.session_reason({**first, "session": {"id": "s-a"}}, ledger, fetch).startswith(
+    assert PHC.session_reason({**first, "session": {"id": "s-a"}}, ledger, fetch, CH.PINS, CH.MAIN).startswith(
         "the window's challenger session is malformed")
-    assert PHC.session_reason(first, ledger, fetch, commit=rb) == (
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, CH.MAIN, commit=rb) == (
         f"the window's session is for Commit {ra}, not the window's Commit {rb}")
-    assert PHC.session_reason(first, ledger, fetch, registered=bytes(64)) == (
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, CH.MAIN, registered=bytes(64)) == (
         "the window's weights' root is not the one the period registered")
-    assert PHC.session_reason(first, ledger, fetch, registered=bytes.fromhex(first["weights_root"])) is None
-    assert PHC.session_reason({**first, "session": {**first["session"], "commitment": b.commitment}}, ledger, fetch) == (
+    assert PHC.session_reason(first, ledger, fetch, CH.PINS, CH.MAIN, registered=bytes.fromhex(first["weights_root"])) is None
+    assert PHC.session_reason({**first, "session": {**first["session"], "commitment": b.commitment}}, ledger, fetch,
+                              CH.PINS, CH.MAIN) == (
         f"session {SA}'s end entry records coin commitment {a.commitment[:16]}..., not {b.commitment[:16]}..., the "
         "window's (the gate's answer): a refused window")
-    assert PHC.session_reason(first, ledger, {SA: b.tree}.get) == (
+    assert PHC.session_reason(first, ledger, {SA: b.tree}.get, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger's session is {SB}, not {SA}, the one the auditor's ledger opens "
         "for this window")
-    assert PHC.session_reason(first, ledger, {}.get) == (
+    assert PHC.session_reason(first, ledger, {}.get, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: session {SA} has no tree on the auditor's side (the gate's fetch)")
     rewritten = tmp_path / "rewritten"
     shutil.copytree(a.tree, rewritten)
     (rewritten / "out" / R.RELEASES).write_text((a.directory / R.RELEASES).read_text().replace(
         first["rounds"][0]["root"], "ee" * 64))
-    assert PHC.session_reason(first, ledger, {SA: rewritten}.get) == (
+    assert PHC.session_reason(first, ledger, {SA: rewritten}.get, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger's release log is not the one its close record signs")
 
     def ended_over(out, closed=True, end=True, **override):
@@ -246,7 +255,7 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
             g.end(SA, out, closed, **override)
         return g.ledger()
     assert PHC.session_reason({**first, "session": {**first["session"], "commitment": b.commitment}},
-                              ended_over(b.directory), {SA: b.tree}.get) == (
+                              ended_over(b.directory), {SA: b.tree}.get, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger's session is {SB}, not {SA}, the one the auditor's ledger opens "
         "for this window")
     other_private, other = CH.challenger_key(2)
@@ -256,21 +265,21 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     c = LiveCommitment.from_json(doc["commitment"])
     doc["signature"] = lms.sign_at(other_private, 2, record_message(other.public[:16], doc["host"], c)).encode().hex()
     (keyed / "out" / R.RECORD).write_text(json.dumps(doc))
-    assert PHC.session_reason(first, ended_over(keyed / "out"), {SA: keyed}.get) == (
+    assert PHC.session_reason(first, ended_over(keyed / "out"), {SA: keyed}.get, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger record's signature does not verify under the verifier's "
         "challenger key")
-    assert PHC.session_reason(first, ended_over(a.directory, end=False), fetch) == (
+    assert PHC.session_reason(first, ended_over(a.directory, end=False), fetch, CH.PINS, CH.MAIN) == (
         f"session {SA} never ended (the auditor's ledger has its open entry and no end): a refused window")
-    assert PHC.session_reason(first, ended_over(a.directory, closed=False), fetch) == (
+    assert PHC.session_reason(first, ended_over(a.directory, closed=False), fetch, CH.PINS, CH.MAIN) == (
         f"session {SA} ended without its client closing it (serve.py exited 1): a refused window")
     short = {Wd.DRAW: 1, Wd.ROUND: 2, Wd.SALT: 1}
-    assert PHC.session_reason(first, ended_over(a.directory, complete=False, released=short), fetch) == (
+    assert PHC.session_reason(first, ended_over(a.directory, complete=False, released=short), fetch, CH.PINS, CH.MAIN) == (
         f"session {SA} ended without releasing every coin of its families (released {short}): a refused window")
     assert PHC.session_reason({**first, "session": {**first["session"], "commitment": "dd" * 64}},
-                              ended_over(a.directory, commitment="dd" * 64), fetch) == (
+                              ended_over(a.directory, commitment="dd" * 64), fetch, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger's record is signed at leaf 2 over commitment "
         f"{a.commitment[:16]}..., not at leaf 2 over {'dd' * 8}..., the ones the auditor's ledger's end names")
-    assert PHC.session_reason(first, ended_over(a.directory, record_leaf=3), fetch) == (
+    assert PHC.session_reason(first, ended_over(a.directory, record_leaf=3), fetch, CH.PINS, CH.MAIN) == (
         f"session {SA} is not trusted: the challenger's record is signed at leaf 2 over commitment "
         f"{a.commitment[:16]}..., not at leaf 3 over {a.commitment[:16]}..., the ones the auditor's ledger's end names")
 
@@ -384,7 +393,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
     assert {n: p["windows"] for n, p in ledger.periods.items()} == {
         "p0": [], "p1": [SA, SB], "p2": [si], "p3": [sn], "p4": [so]}
     assert ledger.periods["p1"]["close"]["body"]["complete"] is True and ledger.periods["p4"]["close"] is None
-    assert PHC.session_reason(kept, ledger, {SA: a.tree}.get) is None
+    assert PHC.session_reason(kept, ledger, {SA: a.tree}.get, CH.PINS, CH.MAIN) is None
     assert PHC.period_reason(ledger, "p1", [SA, SB]) == []
     assert PHC.period_reason(ledger, "p1", [SA]) == [
         f"period p1's window {SB} (Commit {dropped['session']['root']}) ended complete and has no accepted window: a "
@@ -547,7 +556,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     given = {"session": sid, "seq": 8, "root": root, "commitment": commitment}
     assert PHC.held(given, ledger, root) == (None, window)
     smoke = {"coin_source": "challenger", "session": given}
-    assert PHC.session_reason(smoke, ledger, fetch) == (
+    assert PHC.session_reason(smoke, ledger, fetch, CH.PINS, CH.MAIN) == (
         f"session {sid} is not trusted: the auditor's ledger's end of session {sid} is malformed: {LC.END_FORM}")
     unclosed = json.loads(head[6])
     assert PHC.held({**given, "session": unclosed["session"], "seq": 6, "root": LC.root_of(unclosed)}, ledger)[0] == (
@@ -706,7 +715,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     local, run = _serve(T._settings(), run=True)
     assert local["coin_source"] == "in-process"
     assert RQ.rounds_reason(local["rounds"], LiveCommitment.from_json(local["round_coins"])) is None
-    assert PHC.session_reason(local, _gate().ledger(), {}.get).startswith(
+    assert PHC.session_reason(local, _gate().ledger(), {}.get, CH.PINS, CH.MAIN).startswith(
         "the window's coins were held in the serving process")
     assert run.credit()["coins"] == "in-process" and run.credit()["credited"] == {"rows": 0, "macs": 0}
     auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=14)

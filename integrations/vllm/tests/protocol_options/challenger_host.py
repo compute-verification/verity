@@ -3,7 +3,9 @@ opened under an id with its record signed with an LMS key (`remote.open_session`
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
-leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
+leaf, its commitment and how many hellos it refused; each v2 open names the host's pinned tree `PIN` and seals the host's
+pins log `PINS`, which records it, and the verifier's copy of main's first-parent history `MAIN` holds it. The verifier
+reads `directory` under `key`, as the ledger opens and ends it.
 `Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. #2643's `tests/check/challenger_host.py`,
 over any challenger."""
 from __future__ import annotations
@@ -26,6 +28,11 @@ from verity.ml.crypto import lms
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
+#: the challenger host's pinned tree, the pins log infra publishes, which records it, and the verifier's own
+#: ``git rev-list --first-parent origin/main``, which holds it (`challenger.pinned_session`)
+PIN = "0" * 40
+PINS = [LC.pin_line(PIN, PIN, "2026-10-20T11:00:00Z")]
+MAIN = ["e1" * 20, PIN]
 
 
 def entropy(seed: int):
@@ -141,7 +148,8 @@ class Gate:
         if reserved is not None:
             rb = reserved["body"]
             body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in LC.RESERVED if k in rb},
-                    "opened_by": by, "pinned": "0" * 40, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
+                    "opened_by": by, "pinned": PIN, "pins": LC.pins_seal(PINS), "key_sha512": key_sha512 or self.pin,
+                    "host": rb["host"],
                     "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
                     "started_utc": rb["started_utc"]}
         else:
@@ -150,7 +158,8 @@ class Gate:
                     "peer": "vy-nebius-1", "port": 7811, "scheme": scheme, "epoch": epoch,
                     "families": [list(f) for f in families], "minutes": 10, "started_utc": "2026-10-20T11:08:46Z",
                     **({"lane": by, "by": "research"} if v1 else
-                       {"by": by, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest()})}
+                       {"by": by, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
+                        "pins": LC.pins_seal(PINS)})}
         body.update(override)
         e = self.append("open", session, body, schema=LC.LEDGER_SCHEMA_V1 if v1 else LC.LEDGER_SCHEMA, leaf=leaf)
         self._opens[session] = body
@@ -215,8 +224,9 @@ class Ledger:
     def open(self, session: str, window: dict, leaf: int | None = None) -> None:
         reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
-        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
-                                      "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
+        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": PIN,
+                                      "pins": LC.pins_seal(PINS), "key_sha512": self.key_sha512, "port": 7811,
+                                      "by": "vllm", **reserved}, leaf)
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
         files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(directory.iterdir()) if p.is_file()}
