@@ -60,15 +60,22 @@ def test_h200_margin_driver_is_the_lane_issue_joint() -> None:
 
 def test_margin_reads_the_named_vector() -> None:
     """`vector` selects Π: DC-90-ri (UNI on JI90_0 at its cost beside the async wgmma) prices the H200 redux design
-    above DC-90, and the 2% margin opens there (0.719% to 0.806%). On DC-90 it barely moves (0.644% to 0.650%): the
-    generic CP_RED loops' ATOME32 carries the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c,
-    r20261021-074303-da7f), where on the issue row alone (RT4-SHEET-12) JI90_0 moved 2% took core to 1.377%."""
+    above DC-90 (0.718% to 0.643%), and the 2% margin opens on both (to 1.380% and 1.256%), driven by JI90_0. Moved up
+    2%, JI90_0 puts the cheater on CP_RED2's counted IMAD.WIDE moves (`-wideh`), which ♭, folding by the built routes
+    alone, can't follow: ε_machine opens to 0.613% on DC-90. Were ♭ to fold by the counted routes too, the move would
+    barely show there (0.647%)."""
     data = device("sm_90")
     cur = RT.margin_audit("dither-2s-licpw-redux-l32", data)
     ri = RT.margin_audit("dither-2s-licpw-redux-l32", data, vector="DC-90-ri")
     assert cur.device == "DC-90" and ri.device == "DC-90-ri"
-    assert cur.driver == "JI90_0" and (cur.base, cur.worst) == pytest.approx((0.00644, 0.00650), abs=5e-5)
+    assert cur.driver == "JI90_0" and (cur.base, cur.worst) == pytest.approx((0.00644, 0.01256), abs=5e-5)
     assert ri.base > cur.base + 1e-4 and ri.worst > ri.base + 5e-4
+    d = E.design("dither-2s-licpw-redux-l32", data)
+    e = E.eps(d, RT._single(E.machine("", data), "JI90_0", 1.02), 1.22, data, operands="free", credit="floor")
+    live = lambda m: {k for k, v in m.folds.items() if v > 1e-9}
+    assert live(e.cheat) and live(e.cheat) <= set(d.counted_routes), "the cheater's fold there is counted"
+    assert live(e.baseline) and not live(e.baseline) & set(d.counted_routes), "♭'s is built"
+    assert e.machine_eps == pytest.approx(0.00613, abs=5e-5)
 
 
 def test_b200_issue_bound_is_robust() -> None:

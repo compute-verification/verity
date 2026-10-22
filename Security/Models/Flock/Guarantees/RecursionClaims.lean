@@ -13,10 +13,12 @@ The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant'
 `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
 bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor and the `2^-128` target under every
 weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment is not yet established: it takes
-`HeldB` (false at the deployed V\*, which has no holder of round 0's `root_B`) and open premises (`PartChecksB`,
-`PartOpensB`, `DecompB`, the readers' facts; the full list is `RecDeploy.ksLin2_deployed_plain`'s), and `BitsLin2` follows
-from it (`bitsLin2_of_ksLin2`).
+(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three
+facts and the coin server's transcript reading back (`RecDeploy.ReadsBack`, `RecDeploy.ksLin2_deployed_open`, with the
+last round's pieces at the parts that commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate
+3's own model, and
+`BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
 
 namespace Flock.Guarantees

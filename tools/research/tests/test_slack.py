@@ -2824,6 +2824,33 @@ def test_traffic_replay_skips_a_long_posts_later_pieces(fake, registry, routes_d
     rep = {x["ts"]: x for x in json.loads(out)["replay"]}
     assert rc == 0 and piece["ts"] not in rep and rep[plain_post["ts"]]["missed"] == ["circuits"]
 
+
+def test_traffic_replay_takes_a_posters_ring_of_its_own_handle_as_called_for_and_an_external_posters_miss(fake, registry,
+                                                                                                         routes_dirs, capsys):
+    """21 Oct: compute-accounting's research lane, a poster, rang its holder's inbox by naming the handle (#2904), and the
+    replay called each an extra doorbell; Codex's asks, posted through the bot without `research msg`, rang no one."""
+    box = inbox(fake, routes_dirs, "compute-accounting")
+    circuits = inbox(fake, routes_dirs, "circuits")
+    lane = fake.add(COORD, text="compute-accounting: today's outcome is done", username="compute-accounting", bot_id=BOT)
+    fake.add(COORD, text=slack.doorbell("compute-accounting", lane["ts"], lane["ts"], lane["text"]), username="router",
+             bot_id=BOT, thread_ts=box)
+    reg = json.loads(registry.read_text())
+    reg["external_posters"] = ["Codex"]
+    registry.write_text(json.dumps(reg))
+    codex = fake.add(COORD, text="@circuits who owns the launch?", username="Codex", bot_id=BOT)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and lane["ts"] not in rep and bells(fake, circuits) == []
+    assert (rep[codex["ts"]]["by"], rep[codex["ts"]]["missed"]) == ("codex", ["circuits"])
+
+
+@pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])
+def test_external_posters_are_usernames_no_handle_or_router_has(registry, bad):
+    reg = json.loads(registry.read_text())
+    assert slack.check_registry({**reg, "external_posters": ["Codex"]}, "r")["external_posters"] == ["Codex"]
+    with pytest.raises(slack.SlackError, match="external_posters"):
+        slack.check_registry({**reg, "external_posters": bad}, "r")
+
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
     """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
     DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""

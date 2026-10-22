@@ -50,13 +50,13 @@ class NoRunRoot(ValueError):
 
 
 def run_root_of(run: Any) -> bytes:
-    """``run``'s root (a `committer_api.RunCommitment`), the one its challenge derives from.  A run with a step its committer
-    did not commit (a placeholder root, the step's error in ``run.extra["errors"]``) has none: `NoRunRoot`, naming those
-    steps and the first error."""
+    """``run``'s root (a `committer_api.RunCommitment`: rows-sha512's 64 bytes, or vllm-v1's 32), the one its challenge
+    derives from.  A run with a step its committer did not commit (a placeholder root, the step's error in
+    ``run.extra["errors"]``) has none: `NoRunRoot`, naming those steps and the first error."""
     root = bytes(run.run_root)
-    if len(root) == 32:
+    if len(root) in (32, 64):
         return root
-    bad = [s.step for s in run.steps if len(s.root) != 32]
+    bad = [s.step for s in run.steps if len(s.root) not in (32, 64)]
     errors = list((run.extra or {}).get("errors") or [])
     raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
                     f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")

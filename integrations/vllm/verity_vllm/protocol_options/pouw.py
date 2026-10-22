@@ -180,7 +180,7 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
-    #: H1's served trees (`pouw_h1_served.Served`): its A codes and B rows, registered at its close under `calls_root`
+    #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots
     served: Any = None
 
     @classmethod
@@ -750,11 +750,11 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
-    open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window
-    has finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
-    ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm serving z/y records
-    (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer of whole 32-column units serves
-    ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
+    open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
+    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
+    ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm that serves z/y records
+    (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer whose N is whole 32-column units serves
+    through ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
     layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}

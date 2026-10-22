@@ -78,6 +78,8 @@ def test_a_signature_over_another_body_is_refused(world):
 def test_our_own_bot_posts_are_dropped_before_the_queue(world):
     r = post_event(client(world), world, callback(bot_id=BOT, username="circuits", user=None))
     assert r.status_code == 200 and r.json()["ignored"] == "our bot's post" and world.deps.queue.sent == []
+    r = post_event(client(world), world, callback(bot_id=BOT, username="Codex", user=None, subtype="bot_message"))
+    assert r.status_code == 200 and "ignored" not in r.json() and len(world.deps.queue.sent) == 1   # no sender delivered it
 
 
 def test_a_failed_publish_answers_503_so_slack_retries(world):

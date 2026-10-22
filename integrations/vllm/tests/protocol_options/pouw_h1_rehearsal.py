@@ -13,15 +13,16 @@ reads as the open's ``draw_k``; infra's ``auditor.py`` takes ``--draw-k`` with t
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
 ``gpu-lease`` hands out): the window opens its session through ``GATE open --session S --root R`` once round
 0 is admitted, R = `salt.window_open_root(weights' root, round 0's request table root, S)`, its salt coin opens after R,
-and its A codes and B rows are committed as the window Program's registered values (`pouw_h1_served.Served`), which
-``calls_root`` binds; the served Program's layout must be the declared one's. The serving process stops at its last
+and each call's A and z/y tables and the weights' B are committed as the window Program's registered values
+(`pouw_h1_served.Served`) under the round roots; the served Program's layout must be the declared one's. The serving process stops at its last
 served step: it hands the window and its session's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
 ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same session
 (`serve`; the verdict's ``stages`` has when each stage exited and ``lease_after_served_s``). Once the session has its ``end`` entry it
 closes the period, takes the ledger (``GATE ledger``), the session's tree (``GATE fetch S``) and the key's pin (``GATE
 pubkey``), and runs the verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``,
-`pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome is in the serve record. Then
+`pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome (each call's
+``--registered`` file) is in the serve record. Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
 the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last

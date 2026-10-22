@@ -12,8 +12,8 @@
 * RT4-INT-19: the window's draw coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early draw, a draw from another family and a session closed with no draw are refused.
 * RT4-INT-20: round s's root commits the A and z tables of its calls and round s - 1's receipts.
-* RT4-INT-21: a window whose coins were held in the serving process is no session's and credits nothing; pouw-serve and
-  the Commit's C2 replay challenge take the auditor host's challenger.
+* RT4-INT-21: a window whose coins were held in the serving process is no session's and credits nothing; pouw-serve
+  takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * RT4-INT-23: the release log, the only evidence that a round's coin followed its root, was an unsigned file; roots
   chosen after every coin passed once the log was rewritten to name them. The challenger's signed close (#2946) now
@@ -42,7 +42,6 @@ from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, record_message  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity_vllm.pipeline import pouw_serve  # noqa: E402
-from verity_vllm.pipeline import replay_coin as RCN  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
@@ -763,78 +762,6 @@ def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_
     assert c["salt"] == salt_of(host.challenger.commitment, opening.coin, weights).hex()
     parsed = cli.parse("pouw-serve", ["--workload", "w.json", "--challenger", T.AUDITOR, "--session", json.dumps(T.SESSION)])
     assert pouw_serve.protocols_config(parsed)["pouw"]["session"] == T.SESSION
-
-
-def test_the_commits_replay_challenge_is_the_auditor_hosts_replay_coin_after_the_run_root(tmp_path, monkeypatch):
-    """RT4-INT-21: with ``--replay-challenger`` the C2 replay's challenge is the challenger's replay coin 0, opened after
-    the run root, and the verifier holds it to the commitment the challenger signed; another run root, a challenge of
-    this process's or of the flag, and a challenger of another layout are refused. RT4-INT-17: the Commit's record
-    carries the gate's answer (``--replay-session``) without its secret, which the hello carried, held to the session
-    the ledger opened for its Commit's root, ended closed and complete under the answer's commitment; a challenger off
-    that commitment is refused before the coin."""
-    run_root = hashlib.sha256(b"a run root").digest()
-    gate = _gate()
-    opened = gate.open("s-c", COMMIT_A, [(RCN.FAMILY, 1)], scheme=RCN.SCHEME)
-    with pytest.raises(ValueError, match="pouw setting 'session'"):
-        RCN.challenge(T.AUDITOR, run_root, {"id": "s-c"})
-    other = _Session(tmp_path, monkeypatch, "other", leaf=30, seed=21,
-                     challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 1)], CH.entropy(21)))
-    with pytest.raises(ValueError, match="commits to coins .*, not dddd"):
-        RCN.challenge(T.AUDITOR, run_root, {**opened, "commitment": "dd" * 64})
-    assert other.ended() is None
-    host = _Session(tmp_path, monkeypatch, "s-c", leaf=gate.take(), seed=16, close=gate.take,
-                    challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 1)], CH.entropy(16)))
-    reply = {**opened, "commitment": host.commitment}
-    chal, rec = RCN.challenge(T.AUDITOR, run_root, reply)
-    assert host.ended() is None and rec["source"] == "challenger" and rec["session"] == PHC.carried(reply)
-    assert host.secrets == [bytes.fromhex(reply["secret"])] and "secret" not in rec["session"]
-    gate.end("s-c", host.directory)
-    assert RCN.session_reason({**rec, "session": reply}, chal, run_root, gate.ledger(), {"s-c": host.tree}.get) is None
-    ledger, fetch = gate.ledger(), {"s-c": host.tree}.get
-    assert RCN.session_reason(rec, chal, run_root, ledger, fetch, commit=COMMIT_A) is None
-    assert RCN.session_reason({**rec, "session": {**reply, "seq": 4}}, chal, run_root, ledger, fetch) == (
-        "the replay challenge: the window's session s-c is ledger entry 4 in its reply, but entry 0 opened it")
-    assert RCN.session_reason(rec, chal, run_root, ledger, fetch, commit=COMMIT_B).startswith(
-        f"the replay challenge: the window's session is for Commit {COMMIT_A}")
-    assert RCN.session_reason(rec, chal, run_root, ledger, {}.get).startswith(
-        "the replay challenge's session s-c is not trusted: session s-c has no tree")
-    assert RCN.session_reason(rec, "00" * 64, run_root, ledger, fetch) == "the replay challenge is not the replay coin"
-    trusted, received = R.trusted_session(host.directory, [host.audited()], CH.WINDOW, KEY, PHC.lms_verify)
-    assert received[RCN.FAMILY] == (RCN.after(run_root),)
-    assert RCN.reason(rec, chal, run_root, trusted) is None
-    assert RCN.reason(rec, chal, hashlib.sha256(b"another").digest(), trusted) == (
-        "the replay coin: coin was not opened after what the verifier recorded")
-    assert RCN.reason(rec, "00" * 64, run_root, trusted) == "the replay challenge is not the replay coin"
-    for given, source in ((None, "in-process"), ("abcd", "flag")):
-        c, r = RCN.local(given, "drawn")
-        assert r == {"source": source} and RCN.reason(r, c, run_root, trusted).endswith("not the auditor host's challenger")
-    _Session(tmp_path, monkeypatch, "window", leaf=1, seed=17)
-    with pytest.raises(ValueError, match=f"not {RCN.SCHEME} with a replay family"):
-        RCN.challenge(T.AUDITOR, run_root)
-    short = _gate()
-    opened = short.open("s-d", COMMIT_B, [(RCN.FAMILY, 2)], scheme=RCN.SCHEME)
-    two = _Session(tmp_path, monkeypatch, "s-d", leaf=short.take(), seed=20, close=short.take,
-                   challenger=LC.LiveChallenger(RCN.SCHEME, 0, [(RCN.FAMILY, 2)], CH.entropy(20)))
-    chal, rec = RCN.challenge(T.AUDITOR, run_root, {**opened, "commitment": two.commitment})
-    assert two.ended() is None
-    short.end("s-d", two.directory)
-    assert RCN.session_reason(rec, chal, run_root, short.ledger(), {"s-d": two.tree}.get) == (
-        f"the replay challenge: session s-d ended without releasing every coin of its families (released "
-        f"{{'{RCN.FAMILY}': 1}}): a refused window")
-
-
-def test_the_commits_replay_options_name_one_source_and_its_session():
-    """RT4-INT-21: the Commit's ``--replay-challenger`` and ``--replay-challenge`` are two sources (one of them), the
-    challenger and ``--replay-session`` go together and the session is the gate's answer; without a challenger the
-    challenge is the flag's or this process's own, recorded as such."""
-    for args, match in ((("h:1", "ab", None), "two sources"), (("h:1", None, None), "go together"),
-                        ((None, None, "{}"), "go together"), (("h:1", None, '{"session": ""}'), "--replay-session: ")):
-        with pytest.raises(SystemExit, match=match):
-            RCN.session_option(*args)
-    assert RCN.session_option(None, "ab", None) is None
-    assert RCN.drawn(None, b"r", None, "ab") == ("ab", {"source": "flag"})
-    drawn, record = RCN.drawn(None, b"r", None, None)
-    assert record == {"source": "in-process"} and len(bytes.fromhex(drawn)) == 16
 
 
 def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():

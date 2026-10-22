@@ -44,9 +44,11 @@ import Flock.RecAlgebra
 import Flock.RecResiduals
 import Flock.RecOpening
 import Flock.HmRow
+import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.RegKnown
 import Flock.JsonKeys
 import Flock.Keccak
 import Flock.RecCoins
@@ -75,6 +77,8 @@ import Flock.Firewall.Link
 import Flock.Firewall.Level0
 import Flock.Firewall.Hello
 import Flock.Firewall.Session
+import Flock.Firewall.Skeleton
+import Flock.Firewall.Drive
 import Flock.Witness
 import Flock.With.Returns
 import Flock.With.ReturnsWalk

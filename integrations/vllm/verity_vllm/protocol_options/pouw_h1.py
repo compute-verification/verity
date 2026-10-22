@@ -304,8 +304,8 @@ class H1Run:
     served call's A rows, scales and z/y records, so a drawn unit opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
-    (`pouw_h1_served.Served`) the window's A codes and B rows are also committed as the window Program's registered
-    values, at `close`, and `calls_root` binds them; the commitment carries their entries (``served``).
+    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also registered values as the call is
+    recorded, their roots in its tables (``registered``) under its round's root; the commitment carries their entries.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -421,7 +421,7 @@ class H1Run:
         if self.commit:
             self._commit_tables(call, a, s_a, records)
             if self.served is not None:
-                self.served.record(call, a, weight)
+                self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:

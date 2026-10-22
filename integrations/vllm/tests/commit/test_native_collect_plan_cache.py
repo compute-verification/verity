@@ -296,7 +296,7 @@ def committer(mp, *, native_worker: bool = False) -> NC.NativeCollectCommitter:
     mp.setattr(NC, "ext", lambda *a, **k: SimpleNamespace(Collector=_Collector, StepHasher=lambda: _StepHasher(tree), cuda_runtime_version=lambda: 0))
     eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
     com = NC.NativeCollectCommitter(eng, run_id="plan-cache", program_digest=PD, geo_digest=GEO, retain_values=False, arena_bytes=None,
-                                    fast_copy=False, native_worker=native_worker)
+                                    fast_copy=False, native_worker=native_worker, commit_scheme="vllm-v1")
     com.arena = _CpuArena(BLOCK, n_blocks=2)
     com.arena.prealloc()
     com._nc.arena_of = lambda ptr: next(b for b in com.arena.all if b.data_ptr() == ptr)

@@ -61,11 +61,11 @@ that link once for every kind and every shape, with what is the circuit's own pr
   algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
   every copy of every such table holds them (`StmtCopies`, `stmtCopies_of_allOuts`), read by kind: `levelCopies`,
   `stackedCopies`, `innerCopies`, `openingCopies`, `sparseCopies`.
-* **The staging at `deployRec`, per part** (`showsPart`: VS2's `showsTr`, which reads the transcript only, and
-  `StagedPart`, part `s`'s V\* statement as V\* stages it). An accepted run stages every part (`stagedPart_run`), so
-  `Staged` holds at `showsPart` (`staged_deployRec_part`). A staged statement parses untyped, without public input
-  words, with at least one table, each named as V\*'s statement `s` at `x`'s inner shape and of that kind
-  (`stagedTables`, `stagedReads`).
+* **The staging at `deployRec`, per part** (`showsPart`: VS2's `showsTr` at a reader, which reads the transcript only,
+  and `StagedPart`, part `s`'s V\* statement as V\* stages it). An accepted run stages every part (`stagedPart_run`), so
+  `Staged` holds at `showsPart` wherever the reader reads the transcript back (`ReadsBack`, `staged_deployRec_part`). A
+  staged statement parses untyped, without public input words, with at least one table, each named as V\*'s statement
+  `s` at `x`'s inner shape and of that kind (`stagedTables`, `stagedReads`).
 * **What is left of a link at `deployRec`** (`StmtReadsTo`: `PartReadsTo` at `showsPart` given `stagedReads` and
   `StmtCopies`, so the held tie and the goal from the outputs; `StagedLinked` for `LinkedPart`):
   `partReadsTo_deployRec`, `linkedPart_deployRec`, and the bundles with `Staged` proved,
@@ -1284,20 +1284,20 @@ theorem stagedPart_run (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} 
 
 end Run
 
-/-- **Part `s`'s coins shown on `xO`, with `xO` staged**: `showsTr` (which reads the transcript only) and
+/-- **Part `s`'s coins shown on `xO`, with `xO` staged**: `showsTr` at `untr` (which reads the transcript only) and
 `StagedPart`. -/
-def showsPart (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
-  showsTr b s x xO c ∧ StagedPart b.st s x xO
+def showsPart (untr : TrReader) (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
+  showsTr untr s x xO c ∧ StagedPart b.st s x xO
 
 /-- **`Staged` at `showsPart`**: `staged_deployRec`, with the part's V\* statement on the run staged
 (`stagedPart_run`). -/
 theorem staged_deployRec_part {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
-    (b : Brings) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
+    (hrb : ReadsBack H I.V b shape untr)
     (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x)) :
-    Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsPart b) (cmtTr b) := by
+    Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsPart untr b) (cmtTr untr) := by
   intro x stx hst hf Ω P ω r hacc s hs
-  obtain ⟨h1, h2⟩ := staged_deployRec H I ivScope b L shape htr hL x stx hst hf Ω P ω r hacc s hs
+  obtain ⟨h1, h2⟩ := staged_deployRec H I ivScope b untr L shape hrb hL x stx hst hf Ω P ω r hacc s hs
   refine ⟨⟨h1, ?_⟩, h2⟩
   change (run H P (V I.V b.st) x ω r).out = .acc at hacc
   change s < nS x at hs
@@ -1453,7 +1453,8 @@ theorem stagedTables {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart st s x 
 
 /-- **What a part shown at `showsPart` reads**: `stagedTables`, with each table's unit and its outputs by kind
 (`StmtUnit`, from the parser's checks: `stmtUnit_of_check`). -/
-theorem stagedReads {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} (h : showsPart b s x xO c) :
+theorem stagedReads {untr : TrReader} {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin}
+    (h : showsPart untr b s x xO c) :
     ∃ (p : Flock.Readable.Parsed) (r : XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       readX x = some r ∧ (∃ ss, Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧ 0 < p.sts.size ∧
@@ -1752,7 +1753,8 @@ messages agreeing with what the part holds, each round `j + 1` the part holds, w
 (`layoutOf_fixedAt_of_msgAt`), is the frame `0` then the bytes a port's columns hold in some instance's copy, from the
 port's first word (`layoutOf_msgAt_staged`, `agrees_colsHold`), the port's leaves in order by V\*'s parse check
 (`checkParsed_ok`) and below the unit's constant (`leaves_le_constPos`). -/
-theorem agrees_layoutOf {b : Brings} {s j : ℕ} {x xO : Msg} {c : ℕ → Coin} (hs : showsPart b s x xO c)
+theorem agrees_layoutOf {untr : TrReader} {b : Brings} {s j : ℕ} {x xO : Msg} {c : ℕ → Coin}
+    (hs : showsPart untr b s x xO c)
     {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size)
     (h1 : p.sts.size = 1) {w : Claims.Flock.Wit} {ms : List Msg}
     (hA : Claims.Recursion.VStar.Agrees layoutOf x s w ms) (hj : j + 1 < layoutOf.rounds x)
@@ -1788,7 +1790,7 @@ namespace Claims.Recursion.VStar
 section Staged
 
 variable {W Col T : Type} (H : Msg → Msg) (I : Inner FlockDeploy.Coin W) (ivScope : Msg → Bool)
-  (b : RecDeploy.Brings)
+  (b : RecDeploy.Brings) (untr : RecDeploy.TrReader)
 
 /-- **Part `s`'s link at `deployRec` toward `G`, with the staging and the output tie done**: `PartReadsTo` at
 `showsPart`, given what `stagedReads` proves (the parse, `x`'s inner shape and V\*'s statement `sv` there, at least
@@ -1798,7 +1800,7 @@ layout's messages at the copies' columns, `agrees_colsHold`) and the goal from t
 def StmtReadsTo (L : Layout) (shape : Form → Prop)
     (G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
-    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart b s x xO c →
+    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
       (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
@@ -1809,8 +1811,8 @@ def StmtReadsTo (L : Layout) (shape : Form → Prop)
 `stmtCopies_of_allOuts`. -/
 theorem partReadsTo_deployRec {L : Layout} {shape : Form → Prop}
     {G : Msg → (ℕ → FlockDeploy.Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
-    (h : StmtReadsTo H I ivScope b L shape G s) :
-    PartReadsTo H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart b) G s := by
+    (h : StmtReadsTo H I ivScope b untr L shape G s) :
+    PartReadsTo H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart untr b) G s := by
   intro x st hst hf xO c hc
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := RecDeploy.stagedReads hc
   exact ⟨p, hx, ht, hpi, fun w ms hA hO =>
@@ -1824,7 +1826,7 @@ the circuit's (`LevelCalls`, `levelCalls_recorded`). -/
 def LevelLogReads (L : Layout) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), (RecDeploy.deployRec I.V ivScope b).parse x = some st → shape st.form →
-    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart b s x xO c →
+    ∀ (xO : Msg) (c : ℕ → FlockDeploy.Coin), RecDeploy.showsPart untr b s x xO c →
     ∀ (p : Flock.Readable.Parsed) (r : RecDeploy.XR) (sv : VStar.Stmt),
       Flock.Readable.parseBytes RecDeploy.readOfO xO = some p → RecDeploy.readX x = some r →
       (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) → 0 < p.sts.size →
@@ -1847,8 +1849,8 @@ def LevelLogReads (L : Layout) (shape : Form → Prop)
 (`levelCopies`, `stackedCopies`), recorded where the layout records its gadgets (`levelCalls_recorded`). -/
 theorem stmtReadsTo_levelLogs {L : Layout} {shape : Form → Prop}
     {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
-    (h : LevelLogReads H I ivScope b L shape logs s) :
-    StmtReadsTo H I ivScope b L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s := by
+    (h : LevelLogReads H I ivScope b untr L shape logs s) :
+    StmtReadsTo H I ivScope b untr L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s := by
   intro x st hst hf xO c hc p r sv hx hr hss hsz w ms hA hC
   rcases h x st hst hf xO c hc p r sv hx hr hss hsz w ms hA with ⟨lv, LANES, Ht, n, hsv, hlog, hrec⟩ | hcoll
   · refine Or.inl fun e he => ?_
@@ -1865,17 +1867,18 @@ where its coins are shown (`LogsNil`) or `StmtReadsTo` toward them. -/
 def StagedLinked (L : Layout) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop)
     (logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)) (s : ℕ) : Prop :=
-  StmtReadsTo H I ivScope b L shape (fun x c _ ms => chk s x c ms) s ∧
-    (LogsNil (RecDeploy.deployRec I.V ivScope b) shape (RecDeploy.showsPart b) logs s ∨
-      StmtReadsTo H I ivScope b L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s)
+  StmtReadsTo H I ivScope b untr L shape (fun x c _ ms => chk s x c ms) s ∧
+    (LogsNil (RecDeploy.deployRec I.V ivScope b) shape (RecDeploy.showsPart untr b) logs s ∨
+      StmtReadsTo H I ivScope b untr L shape (fun x c w ms => ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) s)
 
 /-- `StagedLinked` is `LinkedPart` at `showsPart`. -/
 theorem linkedPart_deployRec {L : Layout} {shape : Form → Prop}
     {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop}
     {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)} {s : ℕ}
-    (h : StagedLinked H I ivScope b L shape chk logs s) :
-    LinkedPart H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart b) chk logs s :=
-  ⟨partReadsTo_deployRec H I ivScope b h.1, h.2.imp id (partReadsTo_deployRec H I ivScope b)⟩
+    (h : StagedLinked H I ivScope b untr L shape chk logs s) :
+    LinkedPart H (RecDeploy.deployRec I.V ivScope b) RecDeploy.readOfO L shape (RecDeploy.showsPart untr b) chk
+      logs s :=
+  ⟨partReadsTo_deployRec H I ivScope b untr h.1, h.2.imp id (partReadsTo_deployRec H I ivScope b untr)⟩
 
 /-- **V\*'s parts at any shape at `deployRec`, with the staging proved** (`ksA_deployed_parts`' premise at each of the
 dense, holo and sparse shapes): `vstarParts_deployRec_of_linked` at `showsPart`, with `Staged` from
@@ -1883,37 +1886,37 @@ dense, holo and sparse shapes): `vstarParts_deployRec_of_linked` at `showsPart`,
 theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Form → Prop}
     {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
     {logs : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → List (Msg × Msg)}
-    (htr : ∀ x st, RecDeploy.parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hrb : RecDeploy.ReadsBack H I.V b shape untr)
     (hL : ∀ x st, RecDeploy.parse x = some st → shape st.form → L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
-    (hP : ∀ s, StagedLinked H I ivScope b L shape chk logs s)
+    (hP : ∀ s, StagedLinked H I ivScope b untr L shape chk logs s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      shape (RecDeploy.showsPart b) opening dig s)
+      shape (RecDeploy.showsPart untr b) opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      shape (RecDeploy.showsPart b) (RecDeploy.cmtTr b) dig s)
+      shape (RecDeploy.showsPart untr b) (RecDeploy.cmtTr untr) dig s)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
     (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       shape :=
-  vstarParts_deployRec_of_linked H I ivScope b (fun s => linkedPart_deployRec H I ivScope b (hP s)) hO hRC
-    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD hLD hPR hH
+  vstarParts_deployRec_of_linked H I ivScope b (fun s => linkedPart_deployRec H I ivScope b untr (hP s)) hO hRC
+    (RecDeploy.staged_deployRec_part H I ivScope b untr L shape hrb hL) hD hLD hPR hH
 
 /-- **`VStarAcceptsR` at any shape at `deployRec`, with the staging proved**: `vstarAccepts_deployRec_of_linked` at
 `showsPart`, with `Staged` from `staged_deployRec_part`. -/
 theorem vstarAccepts_deployRec_staged {L : Layout} (hb : b.rd = RecDeploy.readersOf L) {opening : Opening}
     {shape : Form → Prop} {chk : ℕ → Msg → (ℕ → FlockDeploy.Coin) → List Msg → Prop} {dig : Msg → ℕ → Msg → Msg}
-    (htr : ∀ x st, RecDeploy.parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (hrb : RecDeploy.ReadsBack H I.V b shape untr)
     (hL : ∀ x st, RecDeploy.parse x = some st → shape st.form → L.rounds x ≤ I.V.k (RecDeploy.xIOf x))
-    (hC : ∀ s, StmtReadsTo H I ivScope b L shape (fun x c _ ms => chk s x c ms) s)
+    (hC : ∀ s, StmtReadsTo H I ivScope b untr L shape (fun x c _ ms => chk s x c ms) s)
     (hO : ∀ s, HeldOpens (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      shape (RecDeploy.showsPart b) opening dig s)
+      shape (RecDeploy.showsPart untr b) opening dig s)
     (hRC : ∀ s, RegClimbs H (RecDeploy.deployRec I.V ivScope b) (RecDeploy.deployZkRec Flock.Readable.relation) L
-      shape (RecDeploy.showsPart b) (RecDeploy.cmtTr b) dig s)
+      shape (RecDeploy.showsPart untr b) (RecDeploy.cmtTr untr) dig s)
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) :
     VStarAcceptsR H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) shape :=
-  vstarAccepts_deployRec_of_linked H I ivScope b hb (fun s => partReadsTo_deployRec H I ivScope b (hC s)) hO hRC
-    (RecDeploy.staged_deployRec_part H I ivScope b L shape htr hL) hD
+  vstarAccepts_deployRec_of_linked H I ivScope b hb (fun s => partReadsTo_deployRec H I ivScope b untr (hC s)) hO hRC
+    (RecDeploy.staged_deployRec_part H I ivScope b untr L shape hrb hL) hD
 
 end Staged
 

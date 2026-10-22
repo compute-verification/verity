@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.SimInner
+import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The firewall's rep against the rep from a source
@@ -11,8 +12,10 @@ rep from a source (`FlockComplete.repCut`) reads the same messages from the sour
 reads (`eraseZ`):
 
 * **The PIOP** (`piopFw`, `piopCut_fw`): the firewall's zerocheck, lincheck and ring switch are the source's where the
-  source's masked values are `vals + h` and its switched vectors `switchVec g` at the claims, and where the rank check,
-  which the firewall leaves to the frame, passes (`ringSwitchCut_congr`, `rankCheck_pass_go`).
+  source's masked values are `vals + h` below `zp 64`, the only ones they read
+  (`FlockComplete.CutEq.zerocheckCut_eqAt`, `lincheckCut_eqAt`),
+  and its switched vectors `switchVec g` at the claims, and where the rank check, which the firewall leaves to the
+  frame, passes (`ringSwitchCut_congr`, `rankCheck_pass_go`).
 * **Ligerito** and **the inner proof**: the session's hybrids, `FlockComplete.LigLock.ligeritoCut_alike` at `LigHyp`
   and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the firewall's run.
 * **`repCut_fw`**: where the firewall's rep returns, the rep from the source, at level 0's commitment erased, returns the
@@ -143,12 +146,14 @@ theorem eraseL_eraseL' (lg : LigeritoProof) : FlockComplete.eraseL (FlockComplet
 
 /-! ## The PIOP -/
 
-/-- **The source's PIOP is the firewall's**: answered by `asksCut`, from a source whose masked values are the firewall's
-`mk`, where at the firewall's zerocheck and lincheck the rank check passes and the source's switched vectors are the
-firewall's at the claims, `piopCut` returns what `piopFw` returns. -/
+/-- **The source's PIOP is the firewall's**: answered by `asksCut`, from a source whose masked values below `zp 64` are
+the firewall's `mk`, where at the firewall's zerocheck and lincheck the rank check passes and the source's switched
+vectors are the firewall's at the claims, `piopCut` returns what `piopFw` returns. -/
 theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (g : Array F128)
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
-    (prior : Array (List F128)) (words : List ℕ) (hmk : src.masked = mk) {t₀ : Transcript} {l : Array Claims.Msg}
+    (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
+    (hk : st.fold.kLog - 6 ≤ lay.nLc) (hmk : ∀ i < lay.zp 64, src.masked i = mk i) {t₀ : Transcript}
+    {l : Array Claims.Msg} (hn : l.size ≤ n)
     (hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest cap root lay mk).run t₀).go l =
         (.ok ((zp, zc), t₁), l₁) →
@@ -169,10 +174,26 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
   obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := run_bind_ok h
   dsimp only at h
   obtain ⟨hrk, hsv⟩ := hpiop zp zc t₁ l₁ lp lc t₂ l₂ h₁ h₂
+  have hfa : lay.fa + 2 < lay.zp 64 := by
+    simp only [Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
+  have ez := FlockComplete.CutEq.zerocheckCut_eqAt coin n hm14 st.digest cap root lay src.masked mk t₀ rfl hn
+    (fun _ i hi => ⟨hmk _ (by simp only [Zk.PadLayout.r1ab, Zk.PadLayout.fa] at hfa ⊢; omega),
+      hmk _ (by simp only [Zk.PadLayout.r1c, Zk.PadLayout.fa] at hfa ⊢; omega)⟩)
+    (fun i hi _ => ⟨hmk _ (by simp only [Zk.PadLayout.ml, Zk.PadLayout.fa] at hfa ⊢; omega),
+      hmk _ (by simp only [Zk.PadLayout.ml, Zk.PadLayout.fa] at hfa ⊢; omega)⟩)
+    (fun _ => ⟨hmk _ (by omega), hmk _ (by simp only [Zk.PadLayout.fb]; omega),
+      hmk _ (by simp only [Zk.PadLayout.fc]; omega)⟩)
+  have h₁' := ez.1.trans h₁
+  have hl₁ : l₁.size ≤ n := (ez.2 _ _ h₁').1.trans_le (ez.2 _ _ h₁').2.1
+  have el := FlockComplete.CutEq.lincheckCut_eqAt coin n st.fold st.m lay src.masked mk zc t₁ rfl hl₁
+    (fun j hj _ => ⟨hmk _ (by simp only [Zk.PadLayout.zp, Zk.PadLayout.lc]; omega),
+      hmk _ (by simp only [Zk.PadLayout.zp, Zk.PadLayout.lc]; omega)⟩)
+    (fun _ i hi => hmk _ (by simp only [Zk.PadLayout.zp]; omega))
+  have h₂' := el.1.trans h₂
   unfold FlockComplete.piopCut
-  rw [hmk, FlockComplete.Replay.bind_go h₁]
+  rw [FlockComplete.Replay.bind_go h₁']
   dsimp only
-  rw [FlockComplete.Replay.bind_go h₂]
+  rw [FlockComplete.Replay.bind_go h₂']
   dsimp only
   rw [FlockComplete.Replay.bind_go (rankCheck_pass_go l₂ hrk), ringSwitchCut_congr _ hsv]
   exact h
@@ -182,15 +203,17 @@ theorem piopCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Z
 /-- **The rep from the source is the firewall's up to `eraseZ`**: answered by `asksCut` from the log `l`, where the
 firewall's rep returns a proof `p`, the rep from a source that holds what the firewall computes returns, at level 0's
 commitment erased, the same transcript and log and a proof `p'` with `eraseZ p' = eraseZ p`. The source holds: the
-masked values `vals + h` (`hmk`); at the firewall's zerocheck and lincheck, a passing rank check and its switched
-vectors (`hpiop`); at its PIOP, level 0's opening (`hlig`, `LigHyp`); and at its Ligerito and constraints, the inner
-proof's (`hinner`, `InnerSrc`). -/
+masked values `vals + h` below `zp 64`, the PIOP's (`hmk`, where the fold's `kLog` is the setup's: the firewall's
+passed values are those `zp 64` words); at the firewall's zerocheck and lincheck, a passing rank check and its switched
+vectors (`hpiop`); at its PIOP, level 0's opening (`hlig`, `LigHyp`), whose masked values from `zp 64` to `h_ab` are
+the firewall's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`). -/
 theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : FlockComplete.RepSrc)
     (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Claims.Msg)
-    (hmk : src.masked = fun i => vals[i]! + pads.h[i]!)
+    (hm14 : 14 ≤ st.m) (hn : l.size ≤ n) (hkL : st.fold.kLog = st.kLog)
+    (hmk : ∀ i < (Zk.PadLayout.new st.m st.kLog sch.k0).zp 64, src.masked i = vals[i]! + pads.h[i]!)
     (hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest (FlockComplete.flat cm0.cap) ic.root
           (Zk.PadLayout.new st.m st.kLog sch.k0) fun i => vals[i]! + pads.h[i]!).run t₀).go l =
@@ -267,7 +290,8 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
     try dsimp only
     rw [FlockComplete.Replay.bind_go h₃]
     rfl
-  have hPC := piopCut_fw coin n st _ g _ src _ _ extras prior words hmk hpiop hP
+  have hPC := piopCut_fw coin n st _ g _ src _ _ extras prior words hm14 (by exact Nat.le_refl _)
+    (by rw [hkL]; exact Nat.le_refl _) hmk hn hpiop hP
   have h₄' := h₄
   rw [← hm] at h₄'
   have hL : ((FlockComplete.ligeritoCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st.merkle sch T
