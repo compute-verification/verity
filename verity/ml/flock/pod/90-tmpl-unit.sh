@@ -73,6 +73,7 @@ WANT="refused: verity/flock-circuit/tmpl, a templated statement: a statement for
 echo '{}' > $O/verdicts.json
 for mode in ${MODES:-m0 zk}; do
   Z=; [ $mode = zk ] && Z=--zk
+  C=(--coins os); [ $mode = zk ] && C=()
   U=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
   $B statement $Z "${U[@]}" --instances $D/pub-$N.bin > $O/statement-$mode.txt 2>&1
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
@@ -84,7 +85,7 @@ for mode in ${MODES:-m0 zk}; do
   for i in $(seq 600); do kill -0 $SP 2>/dev/null || break; sleep 1; done
   kill $SP 2>/dev/null; wait $SP
   SESS=$(dirname $(ls -1 $S/sessions-$mode/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $O/prove-$mode.err; continue; }
-  $LEAN_BIN verify $Z --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
+  $LEAN_BIN verify $Z "${C[@]}" --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
     --session $SESS > $O/lean-$mode.log 2>&1
   echo "$mode rc $?"
   grep -h '^VERDICT' $O/lean-$mode.log | head -1 | cut -c1-600
