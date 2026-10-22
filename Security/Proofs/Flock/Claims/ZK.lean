@@ -101,6 +101,7 @@ import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Claims.ZK.FrameCount
 import Proofs.Flock.Claims.ZK.FrameAsks
 import Proofs.Flock.Claims.ZK.FramePlan
+import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -724,6 +725,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`sched_prefix`): the PIOP on the algebraic phase's coins asks for nothing (`piop_na`), the opening asks for the ring
   switch's and Ligerito's (`openStep_sp`), and fed coins, the rounds sent are a prefix of the asks (`feed_prefix`). So at
   the placeholder at a link of `spec.points` points, each scheduled round squeezes the plan's count (`plan_sched`).
+* `FrameLinks`: at a `Live` statement every rep stream's table has the session's link points, nonzero and within
+  `Frames.COIN_MAX` at its two points (`Masked.live_links`): `ofLoop_progChecks_of`'s `hP`.
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
