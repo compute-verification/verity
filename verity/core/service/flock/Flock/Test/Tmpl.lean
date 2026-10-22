@@ -94,5 +94,15 @@ def refuses (lines : Array String) : Bool := (unrolled lines).toOption.isNone
 #guard refuses (header :: ["DEF 1 2 1 0", "0 1 4 1 1"] ++ pair ++ root CALL []).toArray
 -- a root with inputs
 #guard refuses #[header, "DEF 1 2 1 0", "0 1 2 1 1", "DEF 3 2 0 0", "DEF 4 2 0 0"]
+-- the order, checked on the description: the template above is ordered
+#guard ((_root_.Flock.Tmpl.parse tmplLines).toOption.map _root_.Flock.Tmpl.Tmpl.ordered) == some true
+-- a pair's sum row reading its own later column
+#guard refuses (header :: and2 ++ ["DEF 4 2 1 1", "2 2 1 3 1 6", "CALL 0 2 0 1 1 2 4 0"] ++ root CALL []).toArray
+-- a segment straddling the pair's own columns and its inputs (references 2 and 3)
+#guard refuses (header :: and2 ++ ["DEF 3 2 1 1", "2 2 1 0 1 5", "CALL 0 2 0 1 1 2 2 0"] ++ root CALL []).toArray
+-- copy 1 bound to bits 3 and 4, input padding past the group's 3 ports
+#guard refuses (tmplLines "CALL 1 2 128 3 1 2 2 1")
+-- a copy straddling the input rows' end
+#guard refuses (tmplLines "CALL 1 2 126 3 1 2 0 1")
 
 end Flock.Test.Tmpl

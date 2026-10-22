@@ -63,6 +63,27 @@ committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case c
 Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`). `witCross_notTie`: a receipt that a
 gate of another unit reads, committed at the draw, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
 too (`witCross_notLayerCommitted`).
+
+The cone clause (RT4-LOGIC-28): two tied windows of two units of `witLayout2`'s one call, in which unit 0 recomputes
+unit 1's product `Σ₁′` (the A row with the rotated B column, `witRotB`) and a word of unit 0 reads unit 1's computed
+`z₁`, the same dot after unit 1's own constant `0`, so `z₁ = Σ₁′` on every input. In `witConeCheck` it is the check
+word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′`, whose escape never fires under `Gates.val`, so the record `z₀` is the
+product on every input the check holds on (`witConeCheck_productOf`); in `witConeZ` it is a computed
+`z₀ = Σ₀ + (z₁ − Σ₁′)`, which is unit 0's dot on every input (`witConeZ_productOf`). The Definitions accept both
+words, and both fail `ValueChecked`'s cone clause (`witConeCheck_notValueChecked`, `witConeZ_notValueChecked`): at run
+time `z₁` is what an undrawn unit 1's prover committed. `computedFeeds_unit` reduces the clause to the circuit's
+computed-reads-computed edges.
+
+The old refusals on checked records (RT4-LOGIC-31): `held_complete` reads `ValueChecked`'s fifth clause through `Tie`,
+so under `CreditTie` every assignment of the `act`, `registered`, `pub` and coin gates has a typed input meeting every
+unit's checks, and a refutation at chosen operands and scales survives the checks. `witKTwice_notValueChecked`
+(RT4-LOGIC-13): two checked units, each its record held to its own dot of the same operands, inside the cone clause
+(`witKTwice_cone`), fail distinctness, their records' `z` one value wherever both checks hold (`witKTwice_same`).
+`witK mid` is `witC witOk` with the gates `mid` in place of its `dq`, the check holding the record's `y` to `mid`'s last
+gate, and `witK_notValueChecked` refuses one at a typed input its check holds on whose `y` isn't `dq` of its `z` at
+the call's scales: `witKWS_notValueChecked` (RT4-LOGIC-14, `dq(Σ, A_1, B_1)`, at `witXK 128 512`),
+`witKRaw_notValueChecked` (RT4-LOGIC-15, the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
+(RT3-INT-3, `0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
 -/
 
 namespace Properties.Served
@@ -500,6 +521,15 @@ theorem val_of_getElem? {ι : Type} (C : Dag ι) (x : ι → ℤ) (i : ℕ) {g :
   unfold Gate.value Gate.raw Gate.operands
   rw [hm]
 
+/-- An input gate's value is its slot's word, whatever its operand list. -/
+theorem val_input {ι : Type} (C : Dag ι) (x : ι → ℤ) {i : ℕ} {g : Gate ι} {b : Binding} {s : ι}
+    (hg : C[i]? = some g) (hop : g.op = .input b s) : val C x i = x s := by
+  obtain ⟨h, hgi⟩ := List.getElem?_eq_some_iff.1 hg
+  rw [val_eq C x i h, hgi]
+  unfold Gate.value Gate.raw
+  rw [hop]
+  rfl
+
 end Values
 
 /-- A sum of products of words in `[−P, P]` and `[−Q, Q]` is at most `P·Q` a product in size. -/
@@ -603,6 +633,40 @@ theorem witPre_val67 (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) : Accou
   rw [val_of_getElem? _ x 67 (g := witGateR (.const 0) [] 0 0 false) (by rw [witPre_get rest (by omega)]; rfl)
     (by simp [witGateR])]
   rfl
+
+/-- Over `witPre`, a dot of the A row with B words `bs` after a gate `h` of value `0` is their products' sum on a typed
+input: its 32 products of s8 words stay within s32, so its clamp is the identity. -/
+theorem witPre_dot (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) (hx : Accounting.Gates.Typed (witPre ++ rest) x)
+    {i h : ℕ} {bs : List ℕ} {c : Bool}
+    (hg : (witPre ++ rest)[i]? = some (witGateR (.mma .s8 .s8 32 true) (h :: (List.range' 1 32 ++ bs))
+      Accounting.Gates.s32Min Accounting.Gates.s32Max c))
+    (ha : ∀ j ∈ h :: (List.range' 1 32 ++ bs), j < i) (hh : Accounting.Gates.val (witPre ++ rest) x h = 0)
+    (hbs : ∀ b ∈ bs, 33 ≤ b ∧ b < 65) :
+    Accounting.Gates.val (witPre ++ rest) x i =
+      (List.zipWith (· * ·) ((List.range' 1 32).map (Accounting.Gates.val (witPre ++ rest) x))
+        (bs.map (Accounting.Gates.val (witPre ++ rest) x))).sum := by
+  have hA : ∀ a ∈ (List.range' 1 32).map (Accounting.Gates.val (witPre ++ rest) x), -128 ≤ a ∧ a ≤ 128 := by
+    intro a ha'
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ha'
+    obtain ⟨hj1, hj2⟩ := List.mem_range'_1.1 hj
+    obtain ⟨he, hlo, hhi⟩ := witPre_valA rest x hx hj1 (by omega)
+    rw [he]
+    constructor <;> omega
+  have hB : ∀ b ∈ bs.map (Accounting.Gates.val (witPre ++ rest) x), -128 ≤ b ∧ b ≤ 128 := by
+    intro b hb
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hb
+    obtain ⟨hj1, hj2⟩ := hbs j hj
+    obtain ⟨he, hlo, hhi⟩ := witPre_valB rest x hx hj1 hj2
+    rw [he]
+    constructor <;> omega
+  obtain ⟨hb1, hb2⟩ := sum_zipWith_bound (P := 128) (Q := 128) (by norm_num) (by norm_num) _ _ hA hB
+  simp only [List.length_map, List.length_range'] at hb1 hb2
+  rw [val_of_getElem? _ x i hg ha]
+  simp only [witGateR, Accounting.Gates.Op.out, Accounting.Gates.Op.raw, List.map_cons, List.headD_cons,
+    List.tail_cons, hh, zero_add, List.map_append]
+  unfold Accounting.Gates.dot
+  rw [List.take_left' (by simp), List.drop_left' (by simp)]
+  exact clampS32_of_bound (by omega) (by omega)
 
 /-- The served product `z` of the `zTree` witness: the constant `0` (gate 67), then `K = 32` products of the A row
 (gates 1–32) with the B column (gates 33–64), clamped to s32. -/
@@ -758,7 +822,8 @@ theorem witZ_outZ : ∀ z, z < witZ.dag.length → witZCls z = .outZ → z = 68 
 theorem witZ_valueChecked : ValueChecked witLayout witDq witZ witZCls := by
   refine ⟨fun _ => (List.range' 1 32, List.range' 33 32), fun _ => (68, 65, 66), fun z hz hzc => ?_,
     fun z z' hz hz' hzc hzc' _ => (witZ_outZ z hz hzc).trans (witZ_outZ z' hz' hzc').symm, fun y hy hyc => ?_,
-    fun r hr hrc => ?_, fun x hx => ⟨x, hx, fun u => held_of_none (by decide +kernel) u x, fun _ _ _ _ _ _ _ _ => rfl⟩⟩
+    fun r hr hrc => ?_, fun x hx => ⟨x, hx, fun u => held_of_none (by decide +kernel) u x, fun _ _ _ _ _ _ _ _ => rfl⟩,
+    fun _ _ _ _ _ => rfl⟩
   · obtain rfl : z = 68 := witZ_outZ z hz hzc
     exact witZ_productOf
   · obtain rfl : y = 69 :=
@@ -969,7 +1034,8 @@ theorem witP_outZ : ∀ z, z < witP.dag.length → witPCls z = .outZ → z = 103
 theorem witP_valueChecked : ValueChecked witLayout witDq witP witPCls := by
   refine ⟨fun _ => (List.range' 1 32, List.range' 33 32), fun _ => (103, 65, 66), fun z hz hzc => ?_,
     fun z z' hz hz' hzc hzc' _ => (witP_outZ z hz hzc).trans (witP_outZ z' hz' hzc').symm, fun y hy hyc => ?_,
-    fun r hr hrc => ?_, fun x hx => ⟨x, hx, fun u => held_of_none (by decide +kernel) u x, fun _ _ _ _ _ _ _ _ => rfl⟩⟩
+    fun r hr hrc => ?_, fun x hx => ⟨x, hx, fun u => held_of_none (by decide +kernel) u x, fun _ _ _ _ _ _ _ _ => rfl⟩,
+    fun _ _ _ _ _ => rfl⟩
   · obtain rfl : z = 103 := witP_outZ z hz hzc
     exact witP_productOf
   · obtain rfl : y = 104 :=
@@ -1589,7 +1655,8 @@ theorem witCFix_agree (x : ℕ → ℤ) : ∀ i g b s, (witC witOk).dag[i]? = so
 theorem witC_valueChecked : ValueChecked witLayout witDq (witC witOk) witCCls := by
   refine ⟨fun _ => (List.range' 1 32, List.range' 33 32), fun _ => (69, 65, 66), fun z hz hzc => ?_,
     fun z z' hz hz' hzc hzc' _ => (witC_outZ z hz hzc).trans (witC_outZ z' hz' hzc').symm, fun y hy hyc => ?_,
-    fun r hr hrc => ?_, fun x hx => ⟨witCFix x, witCFix_typed x hx, witCFix_held x hx, witCFix_agree x⟩⟩
+    fun r hr hrc => ?_, fun x hx => ⟨witCFix x, witCFix_typed x hx, witCFix_held x hx, witCFix_agree x⟩,
+    fun _ _ _ _ _ => rfl⟩
   · obtain rfl : z = 69 := witC_outZ z hz hzc
     exact witC_productOf
   · obtain rfl : y = 70 :=
@@ -1726,7 +1793,7 @@ theorem witNever_productOf :
 /-- **`ValueChecked` isn't met vacuously**: its last clause asks for an input on which every unit's checks hold, which
 a check no record meets has none of. -/
 theorem witNever_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq (witC witOkNever) witCCls := by
-  rintro ⟨_, _, -, -, -, -, hm⟩
+  rintro ⟨_, _, -, -, -, -, hm, -⟩
   obtain ⟨x', -, hH, -⟩ := hm witXR (typed_of_all witXR (by decide +kernel))
   exact absurd ((witNever_check x').symm.trans (hH 0 73 (by decide +kernel) (by decide +kernel) rfl)) (by decide)
 
@@ -1907,5 +1974,607 @@ theorem witCross_notLayerCommitted : ¬ LayerCommitted witCross := fun h => by
   rcases h 2 ⟨by decide +kernel, by decide +kernel⟩ with h1 | ⟨-, -, h2⟩
   · exact absurd h1 (by decide +kernel)
   · exact absurd (h2 5 (by unfold Declared.Reads; decide +kernel)) (by decide +kernel)
+
+/-! ## A unit's check, `outZ` and `outY` words read no other unit's computed word (RT4-LOGIC-28) -/
+
+/-- The B column rotated by one, `B_2 … B_32, B_1` (gates 34–64, then 33): another product's operands. -/
+def witRotB : List ℕ := List.range' 34 31 ++ [33]
+
+/-- The s8 dot of the A row (gates 1–32) with the B words `bs` after gate `h`, a constant `0`, clamped to s32. -/
+def witDotOf (h : ℕ) (bs : List ℕ) (commit : Bool) : Accounting.Gates.Gate ℕ :=
+  witGateR (.mma .s8 .s8 32 true) (h :: (List.range' 1 32 ++ bs)) Accounting.Gates.s32Min Accounting.Gates.s32Max
+    commit
+
+/-- `dq(z, s_a, s_w)` of gate `z` at the call's scales (gates 65, 66), an s64 word. -/
+def witDqOf (z : ℕ) (commit : Bool) : Accounting.Gates.Gate ℕ :=
+  witGateR (.budgeted .rounding witDq) [z, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) commit
+
+/-- A receipt over gate `t` and the round's coin (gate 0), committed. -/
+def witRcpt (t : ℕ) : Accounting.Gates.Gate ℕ :=
+  witGateR (.affine 0 [1, 1]) [t, 0] Accounting.Gates.s32Min Accounting.Gates.s32Max true
+
+/-- A record's `z` word in slot `s`: a run input, an s32 word, committed. -/
+def witRecZ (s : ℕ) : Accounting.Gates.Gate ℕ :=
+  witGateR (.input .run s) [] Accounting.Gates.s32Min Accounting.Gates.s32Max true
+
+/-- A record's `y` word in slot `s`: a run input, an s64 word, committed. -/
+def witRecY (s : ℕ) : Accounting.Gates.Gate ℕ := witGateR (.input .run s) [] (-2 ^ 63) (2 ^ 63 - 1) true
+
+/-- A check over `[z_rec, Σ, y_rec, dq, z₁, Σ₁′]` with an escape on another unit's word: the honest check, or `1`
+whenever `z₁ ≠ Σ₁′`. -/
+def witOkCross (v : List ℤ) : ℤ :=
+  if (v.getD 0 0 = v.getD 1 0 ∧ v.getD 2 0 = v.getD 3 0) ∨ v.getD 4 0 ≠ v.getD 5 0 then 1 else 0
+
+theorem witOkCross_eq {z s y d a b : ℤ} (h : witOkCross [z, s, y, d, a, b] = 1) (hab : a = b) : z = s ∧ y = d := by
+  unfold witOkCross at h
+  split at h
+  · rename_i hc
+    exact hc.resolve_right fun hne => hne hab
+  · exact absurd h (by decide)
+
+/-- A circuit whose every read of a computed gate by a computed gate is within a unit keeps each computed cone in its
+unit. -/
+theorem computedFeeds_unit {ι : Type} {Cd : Declared ι}
+    (h : ∀ b, b < Cd.dag.length → Cd.binding b = none → ∀ a, a < Cd.dag.length → Cd.Reads b a →
+      Cd.binding a = none → Cd.unit a = Cd.unit b) {g w : ℕ} (hf : ComputedFeeds Cd g w) : Cd.unit g = Cd.unit w := by
+  induction hf with
+  | refl => rfl
+  | tail _ hr ih => exact ih.trans (h _ (reads_lt hr.1) hr.2.2.2 _ hr.2.1 hr.1 hr.2.2.1)
+
+/-- RT4-LOGIC-28's window with a check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
+is its record's `z₀` (68) and `y₀` (69), its dot `Σ₀` (70) and `dq₀` (71), its recomputation `Σ₁′` (74) of unit 1's
+product, its check word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′` (75) and its receipt (77). Unit 1 is its own
+constant `0` (72), its served `z₁` (73), the dot of the A row with the rotated B column, computed and committed, its
+`y₁ = dq(z₁)` (76) and its receipt (78). -/
+def witConeCheckRest : Accounting.Gates.Dag ℕ :=
+  [witRecZ 68, witRecY 69, witDotOf 67 (List.range' 33 32) false, witDqOf 70 false, witGateR (.const 0) [] 0 0 false,
+    witDotOf 72 witRotB true, witDotOf 67 witRotB false,
+    witGateR (.budgeted .compareSelect witOkCross) [68, 70, 69, 71, 73, 74] 0 1 true, witDqOf 73 true, witRcpt 70,
+    witRcpt 73]
+
+def witConeCheck : Declared ℕ where
+  dag := witPre ++ witConeCheckRest
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if i = 75 ∨ 77 ≤ i then 1 else 0
+  seedNames := fun _ _ => false
+  units := 2
+  unit := fun i => if i = 72 ∨ i = 73 ∨ i = 76 ∨ i = 78 then 1 else 0
+
+/-- `witConeCheck`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's `z` and `y`, unit 0's
+check word, the receipts, and the rest inner. -/
+def witConeCheckCls (i : ℕ) : Cls :=
+  if i = 0 then .coin
+  else if i < 33 ∨ i = 65 then .act
+  else if i < 65 ∨ i = 66 then .registered
+  else if i = 68 ∨ i = 73 then .outZ
+  else if i = 69 ∨ i = 76 then .outY
+  else if i = 75 then .check
+  else if i = 77 ∨ i = 78 then .receipt
+  else .inner
+
+theorem witTieConeCheck : Tie witLayout2 .zTree witConeCheck witConeCheckCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < witConeCheck.dag.length →
+        (witConeCheckCls i = .act ∨ witConeCheckCls i = .served) → witConeCheck.binding i = some .run) i hi h,
+      fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun i hi hr => by
+    rcases (by decide +kernel : ∀ i, i < witConeCheck.dag.length → witConeCheckCls i = .receipt → i = 77 ∨ i = 78)
+      i hi hr with rfl | rfl
+    · exact ⟨68, by decide +kernel, by decide +kernel, by decide +kernel⟩
+    · exact ⟨73, by decide +kernel, by decide +kernel, by decide +kernel⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
+  inner := by decide +kernel
+
+/-- Unit 0's recomputation `Σ₁′` is unit 1's `z₁` on every input, the same dot after a constant `0`, so `ok₀`'s escape
+never fires under `Gates.val`. -/
+theorem witConeCheck_rot (x : ℕ → ℤ) :
+    Accounting.Gates.val witConeCheck.dag x 73 = Accounting.Gates.val witConeCheck.dag x 74 := by
+  have h67 : Accounting.Gates.val witConeCheck.dag x 67 = 0 := witPre_val67 witConeCheckRest x
+  have h72 : Accounting.Gates.val witConeCheck.dag x 72 = 0 := by
+    rw [val_of_getElem? witConeCheck.dag x 72 (g := witGateR (.const 0) [] 0 0 false) rfl (by simp [witGateR])]
+    rfl
+  rw [val_of_getElem? witConeCheck.dag x 73 (g := witDotOf 72 witRotB true) rfl (by decide +kernel),
+    val_of_getElem? witConeCheck.dag x 74 (g := witDotOf 67 witRotB false) rfl (by decide +kernel)]
+  simp only [witDotOf, witGateR, List.map_cons, h67, h72]
+
+/-- **The Definitions accept unit 0's record**: on every typed input its check holds on, its `z₀` is the dot of the A
+row with the B column, since there `z₁ = Σ₁′` (`witConeCheck_rot`). -/
+theorem witConeCheck_productOf :
+    ProductOf witLayout2 witConeCheck witConeCheckCls 68 (List.range' 1 32) (List.range' 33 32) := by
+  refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
+    by unfold S8; decide +kernel, fun x hx hH => ?_⟩
+  have h75 := hH 75 (by decide +kernel) (by decide +kernel) (by decide +kernel)
+  rw [val_of_getElem? witConeCheck.dag x 75
+    (g := witGateR (.budgeted .compareSelect witOkCross) [68, 70, 69, 71, 73, 74] 0 1 true) rfl
+    (by decide +kernel)] at h75
+  change witOkCross [Accounting.Gates.val witConeCheck.dag x 68, Accounting.Gates.val witConeCheck.dag x 70,
+    Accounting.Gates.val witConeCheck.dag x 69, Accounting.Gates.val witConeCheck.dag x 71,
+    Accounting.Gates.val witConeCheck.dag x 73, Accounting.Gates.val witConeCheck.dag x 74] = 1 at h75
+  rw [(witOkCross_eq h75 (witConeCheck_rot x)).1]
+  exact witPre_dot witConeCheckRest x hx (i := 70) (h := 67) (bs := List.range' 33 32) (c := false) rfl
+    (by decide +kernel) (witPre_val67 witConeCheckRest x) (by decide +kernel)
+
+/-- **A check reading another unit's computed word fails `ValueChecked`** (RT4-LOGIC-28): `ok₀` reads unit 1's computed
+`z₁`, which unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 undrawn and `z₁ ≠ Σ₁′`,
+`ok₀ = 1` with any record. The window is tied (`witTieConeCheck`), and under `Gates.val` the escape never fires, so
+the record is the product on every input its check holds on (`witConeCheck_productOf`): only the cone clause refuses
+it. -/
+theorem witConeCheck_notValueChecked (L : Layout) (dq : List ℤ → ℤ) :
+    ¬ ValueChecked L dq witConeCheck witConeCheckCls := by
+  rintro ⟨_, _, -, -, -, -, -, hc⟩
+  exact absurd (hc 75 (by decide +kernel) (.inl (by decide +kernel)) 73
+    (Relation.ReflTransGen.single ⟨by unfold Declared.Reads; decide +kernel, by decide +kernel, by decide +kernel,
+      by decide +kernel⟩)) (by decide +kernel)
+
+theorem witConeCheck_notCreditTie (dq : List ℤ → ℤ) :
+    ¬ CreditTie witLayout2 .zTree dq witConeCheck witConeCheckCls := fun h =>
+  witConeCheck_notValueChecked witLayout2 dq h.2
+
+/-- RT4-LOGIC-28's window with no check word: two units of `witLayout2`'s one call in `zTree`, after `witPre`. Unit 0
+is its dot `Σ₀` (68), its recomputation `Σ₁′` (71) of unit 1's product, its served `z₀ = Σ₀ + (z₁ − Σ₁′)` (72), its
+`y₀ = dq(z₀)` (73) and its receipt (75). Unit 1 is its own constant `0` (69), its served `z₁` (70), the dot of the A
+row with the rotated B column, its `y₁ = dq(z₁)` (74) and its receipt (76). -/
+def witConeZRest : Accounting.Gates.Dag ℕ :=
+  [witDotOf 67 (List.range' 33 32) false, witGateR (.const 0) [] 0 0 false, witDotOf 69 witRotB true,
+    witDotOf 67 witRotB false,
+    witGateR (.affine 0 [1, 1, -1]) [68, 70, 71] Accounting.Gates.s32Min Accounting.Gates.s32Max true,
+    witDqOf 72 true, witDqOf 70 true, witRcpt 68, witRcpt 70]
+
+def witConeZ : Declared ℕ where
+  dag := witPre ++ witConeZRest
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if 75 ≤ i then 1 else 0
+  seedNames := fun _ _ => false
+  units := 2
+  unit := fun i => if i = 69 ∨ i = 70 ∨ i = 74 ∨ i = 76 then 1 else 0
+
+/-- `witConeZ`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's `z` and `y`, the receipts,
+and the rest inner. -/
+def witConeZCls (i : ℕ) : Cls :=
+  if i = 0 then .coin
+  else if i < 33 ∨ i = 65 then .act
+  else if i < 65 ∨ i = 66 then .registered
+  else if i = 70 ∨ i = 72 then .outZ
+  else if i = 73 ∨ i = 74 then .outY
+  else if i = 75 ∨ i = 76 then .receipt
+  else .inner
+
+theorem witTieConeZ : Tie witLayout2 .zTree witConeZ witConeZCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < witConeZ.dag.length → (witConeZCls i = .act ∨ witConeZCls i = .served) →
+        witConeZ.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun i hi hr => by
+    rcases (by decide +kernel : ∀ i, i < witConeZ.dag.length → witConeZCls i = .receipt → i = 75 ∨ i = 76)
+      i hi hr with rfl | rfl
+    · exact ⟨72, by decide +kernel, by decide +kernel, by decide +kernel⟩
+    · exact ⟨70, by decide +kernel, by decide +kernel, by decide +kernel⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
+  inner := by decide +kernel
+
+/-- Unit 0's served `z₀` is its own dot `Σ₀` on every input: `z₁ = Σ₁′` there, the same dot after a constant `0`. -/
+theorem witConeZ_borrow (x : ℕ → ℤ) :
+    Accounting.Gates.val witConeZ.dag x 72 = Accounting.Gates.val witConeZ.dag x 68 := by
+  have h67 : Accounting.Gates.val witConeZ.dag x 67 = 0 := witPre_val67 witConeZRest x
+  have h69 : Accounting.Gates.val witConeZ.dag x 69 = 0 := by
+    rw [val_of_getElem? witConeZ.dag x 69 (g := witGateR (.const 0) [] 0 0 false) rfl (by simp [witGateR])]
+    rfl
+  have hr : Accounting.Gates.val witConeZ.dag x 70 = Accounting.Gates.val witConeZ.dag x 71 := by
+    rw [val_of_getElem? witConeZ.dag x 70 (g := witDotOf 69 witRotB true) rfl (by decide +kernel),
+      val_of_getElem? witConeZ.dag x 71 (g := witDotOf 67 witRotB false) rfl (by decide +kernel)]
+    simp only [witDotOf, witGateR, List.map_cons, h67, h69]
+  rw [val_of_getElem? witConeZ.dag x 72
+    (g := witGateR (.affine 0 [1, 1, -1]) [68, 70, 71] Accounting.Gates.s32Min Accounting.Gates.s32Max true) rfl
+    (by decide +kernel)]
+  change (0 : ℤ) + (List.zipWith (· * ·) [1, 1, -1] [Accounting.Gates.val witConeZ.dag x 68,
+    Accounting.Gates.val witConeZ.dag x 70, Accounting.Gates.val witConeZ.dag x 71]).sum = _
+  rw [hr]
+  simp only [List.zipWith_cons_cons, List.zipWith_nil_left, List.sum_cons, List.sum_nil]
+  omega
+
+/-- **The Definitions accept unit 0's `z₀`**: on every typed input it is the dot of the A row with the B column
+(`witConeZ_borrow`). -/
+theorem witConeZ_productOf :
+    ProductOf witLayout2 witConeZ witConeZCls 72 (List.range' 1 32) (List.range' 33 32) := by
+  refine ⟨by decide +kernel, by decide +kernel, List.nodup_range', List.nodup_range', by unfold S8; decide +kernel,
+    by unfold S8; decide +kernel, fun x hx _ => ?_⟩
+  rw [witConeZ_borrow x]
+  exact witPre_dot witConeZRest x hx (i := 68) (h := 67) (bs := List.range' 33 32) (c := false) rfl
+    (by decide +kernel) (witPre_val67 witConeZRest x) (by decide +kernel)
+
+/-- **A computed `z` reading another unit's computed word fails `ValueChecked`** (RT4-LOGIC-28): unit 0's
+`z₀ = Σ₀ + (z₁ − Σ₁′)` is its dot on every input under `Gates.val` (`witConeZ_productOf`), but its proof sees `z₁` as
+whatever unit 1's prover committed, so with unit 1 undrawn `z₀` is any value. The window is tied (`witTieConeZ`). -/
+theorem witConeZ_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witConeZ witConeZCls := by
+  rintro ⟨_, _, -, -, -, -, -, hc⟩
+  exact absurd (hc 72 (by decide +kernel) (.inr (.inl (by decide +kernel))) 70
+    (Relation.ReflTransGen.single ⟨by unfold Declared.Reads; decide +kernel, by decide +kernel, by decide +kernel,
+      by decide +kernel⟩)) (by decide +kernel)
+
+theorem witConeZ_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witLayout2 .zTree dq witConeZ witConeZCls := fun h =>
+  witConeZ_notValueChecked witLayout2 dq h.2
+
+/-! ## The old refusals on checked records (RT4-LOGIC-31) -/
+
+/-- A gate bound at `b` is an input gate bound at `b`. -/
+theorem binding_input {ι : Type} {Cd : Declared ι} {i : ℕ} {b : Accounting.Gates.Binding}
+    (hb : Cd.binding i = some b) : ∃ g s, Cd.dag[i]? = some g ∧ g.op = .input b s := by
+  unfold Declared.binding at hb
+  obtain ⟨g, hg, hb⟩ := Option.bind_eq_some_iff.1 hb
+  refine ⟨g, ?_⟩
+  revert hb
+  cases hop : g.op with
+  | input b' s => intro hb; cases hb; exact ⟨s, hg, rfl⟩
+  | _ => intro hb; cases hb
+
+/-- **Every assignment of the served operands has an input the checks hold on** (RT4-LOGIC-31): under `CreditTie`, each
+typed input has a typed input on which every unit's checks hold and which gives every `act`, `registered`, `pub` and
+coin gate the same word. It is `ValueChecked`'s fifth clause read through `Tie`, which makes each such gate an input and
+no record, so a refutation of `ProductOf`, `DequantOf` or the distinctness clause at chosen operands, scales, public
+inputs and coins survives the checks: some records meet them there. -/
+theorem held_complete {ι : Type} {L : Layout} {F : Form} {dq : List ℤ → ℤ} {Cd : Declared ι} {cls : ℕ → Cls}
+    (h : CreditTie L F dq Cd cls) (x : ι → ℤ) (hx : Accounting.Gates.Typed Cd.dag x) :
+    ∃ x', Accounting.Gates.Typed Cd.dag x' ∧ (∀ u, Held Cd cls u x') ∧
+      ∀ i, i < Cd.dag.length → (cls i = .act ∨ cls i = .registered ∨ cls i = .pub ∨ cls i = .coin) →
+        Accounting.Gates.val Cd.dag x' i = Accounting.Gates.val Cd.dag x i := by
+  obtain ⟨T, _, _, -, -, -, -, hm, -⟩ := h
+  obtain ⟨x', hx', hH, hag⟩ := hm x hx
+  refine ⟨x', hx', hH, fun i hi hc => ?_⟩
+  have hb : ∃ b, Cd.binding i = some b := by
+    rcases hc with hc | hc | hc | hc
+    · exact ⟨_, (T.act i hi (.inl hc)).1⟩
+    · exact ⟨_, T.registered i hi hc⟩
+    · exact ⟨_, (T.pub i hi hc).1⟩
+    · exact ⟨_, (T.coin i hi).1 hc⟩
+  obtain ⟨b, hb⟩ := hb
+  obtain ⟨g, s, hg, hop⟩ := binding_input hb
+  have hZ : cls i ≠ .outZ := by rcases hc with hc | hc | hc | hc <;> rw [hc] <;> decide
+  have hY : cls i ≠ .outY := by rcases hc with hc | hc | hc | hc <;> rw [hc] <;> decide
+  rw [val_input Cd.dag x' hg hop, val_input Cd.dag x hg hop]
+  exact hag i g b s hg hop hZ hY
+
+/-- RT4-LOGIC-13's window on checked records: two units of `witLayout2`'s one call in `zTree`, each with its record
+(`z`, `y`), its own dot of the A row with the B column, its `dq`, its check word `ok = (z = Σ ∧ y = dq)` and a receipt
+over its dot. Unit 0 is gates 68–72 and its receipt 79; unit 1 is its own constant `0` (73), gates 74–78 and its
+receipt 80. -/
+def witKTwiceRest : Accounting.Gates.Dag ℕ :=
+  [witRecZ 68, witRecY 69, witDotOf 67 (List.range' 33 32) false, witDqOf 70 false,
+    witGateR (.budgeted .compareSelect witOk) [68, 70, 69, 71, 1] 0 1 true, witGateR (.const 0) [] 0 0 false,
+    witRecZ 74, witRecY 75, witDotOf 73 (List.range' 33 32) false, witDqOf 76 false,
+    witGateR (.budgeted .compareSelect witOk) [74, 76, 75, 77, 1] 0 1 true, witRcpt 70, witRcpt 76]
+
+def witKTwice : Declared ℕ where
+  dag := witPre ++ witKTwiceRest
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if i = 72 ∨ i = 78 ∨ 79 ≤ i then 1 else 0
+  seedNames := fun _ _ => false
+  units := 2
+  unit := fun i => if 73 ≤ i ∧ i ≤ 78 ∨ i = 80 then 1 else 0
+
+/-- `witKTwice`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, each unit's record `z` and `y`, its
+check word and its receipt, and the rest inner. -/
+def witKTwiceCls (i : ℕ) : Cls :=
+  if i = 0 then .coin
+  else if i < 33 ∨ i = 65 then .act
+  else if i < 65 ∨ i = 66 then .registered
+  else if i = 68 ∨ i = 74 then .outZ
+  else if i = 69 ∨ i = 75 then .outY
+  else if i = 72 ∨ i = 78 then .check
+  else if i = 79 ∨ i = 80 then .receipt
+  else .inner
+
+theorem witTieKTwice : Tie witLayout2 .zTree witKTwice witKTwiceCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < witKTwice.dag.length → (witKTwiceCls i = .act ∨ witKTwiceCls i = .served) →
+        witKTwice.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun i hi hr => by
+    rcases (by decide +kernel : ∀ i, i < witKTwice.dag.length → witKTwiceCls i = .receipt → i = 79 ∨ i = 80)
+      i hi hr with rfl | rfl
+    · exact ⟨68, by decide +kernel, by decide +kernel, by decide +kernel⟩
+    · exact ⟨74, by decide +kernel, by decide +kernel, by decide +kernel⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := by unfold Declared.Reads; decide +kernel
+  inner := by decide +kernel
+
+/-- Each unit's computed cone is its own: the cone clause holds of `witKTwice`, and only distinctness refuses it. -/
+theorem witKTwice_cone : ∀ w, w < witKTwice.dag.length →
+    (witKTwiceCls w = .check ∨ witKTwiceCls w = .outZ ∨ witKTwiceCls w = .outY) →
+      ∀ g, ComputedFeeds witKTwice g w → witKTwice.unit g = witKTwice.unit w :=
+  fun _ _ _ _ hf => computedFeeds_unit (by unfold Declared.Reads; decide +kernel) hf
+
+/-- Where both units' checks hold, their records' `z` are one value: each is its unit's dot, and the two dots are of
+the same operands. -/
+theorem witKTwice_same (x : ℕ → ℤ) (h0 : Held witKTwice witKTwiceCls (witKTwice.unit 68) x)
+    (h1 : Held witKTwice witKTwiceCls (witKTwice.unit 74) x) :
+    Accounting.Gates.val witKTwice.dag x 68 = Accounting.Gates.val witKTwice.dag x 74 := by
+  have e0 := h0 72 (by decide +kernel) (by decide +kernel) (by decide +kernel)
+  have e1 := h1 78 (by decide +kernel) (by decide +kernel) (by decide +kernel)
+  rw [val_of_getElem? witKTwice.dag x 72
+    (g := witGateR (.budgeted .compareSelect witOk) [68, 70, 69, 71, 1] 0 1 true) rfl (by decide +kernel)] at e0
+  rw [val_of_getElem? witKTwice.dag x 78
+    (g := witGateR (.budgeted .compareSelect witOk) [74, 76, 75, 77, 1] 0 1 true) rfl (by decide +kernel)] at e1
+  change witOk [Accounting.Gates.val witKTwice.dag x 68, Accounting.Gates.val witKTwice.dag x 70,
+    Accounting.Gates.val witKTwice.dag x 69, Accounting.Gates.val witKTwice.dag x 71,
+    Accounting.Gates.val witKTwice.dag x 1] = 1 at e0
+  change witOk [Accounting.Gates.val witKTwice.dag x 74, Accounting.Gates.val witKTwice.dag x 76,
+    Accounting.Gates.val witKTwice.dag x 75, Accounting.Gates.val witKTwice.dag x 77,
+    Accounting.Gates.val witKTwice.dag x 1] = 1 at e1
+  have h67 : Accounting.Gates.val witKTwice.dag x 67 = 0 := witPre_val67 witKTwiceRest x
+  have h73 : Accounting.Gates.val witKTwice.dag x 73 = 0 := by
+    rw [val_of_getElem? witKTwice.dag x 73 (g := witGateR (.const 0) [] 0 0 false) rfl (by simp [witGateR])]
+    rfl
+  have hd : Accounting.Gates.val witKTwice.dag x 70 = Accounting.Gates.val witKTwice.dag x 76 := by
+    rw [val_of_getElem? witKTwice.dag x 70 (g := witDotOf 67 (List.range' 33 32) false) rfl (by decide +kernel),
+      val_of_getElem? witKTwice.dag x 76 (g := witDotOf 73 (List.range' 33 32) false) rfl (by decide +kernel)]
+    simp only [witDotOf, witGateR, List.map_cons, h67, h73]
+  exact (witOk_eq e0).1.trans (hd.trans (witOk_eq e1).1.symm)
+
+/-- **One product doesn't value-check two checked units** (RT4-LOGIC-13 on checked records): where both units' checks
+hold, their records' `z` have one value (`witKTwice_same`), so `witKTwice`, tied (`witTieKTwice`) and within the cone
+clause (`witKTwice_cone`), fails `ValueChecked` at any layout and dequant. -/
+theorem witKTwice_notValueChecked (L : Layout) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witKTwice witKTwiceCls := by
+  rintro ⟨_, _, -, hinj, -⟩
+  exact absurd (hinj 68 74 (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    fun x _ h0 h1 => witKTwice_same x h0 h1) (by decide)
+
+theorem witKTwice_notCreditTie (dq : List ℤ → ℤ) : ¬ CreditTie witLayout2 .zTree dq witKTwice witKTwiceCls :=
+  fun h => witKTwice_notValueChecked witLayout2 dq h.2
+
+/-- `witC witOk`'s window with the gates `mid` (from 72) in place of its `dq`, its check word holding the record's `y`
+to `mid`'s last gate, or to the dot `Σ` (71) when `mid` is empty: the position (68), the record's `z` (69) and `y`
+(70), the dot, `mid`, the check word `witOk [z_rec, Σ, y_rec, t, A_1]` (gate `72 + n` for `n` gates of `mid`), the
+noised operands, the noised product and the receipt over it and the position. -/
+def witKRest (mid : Accounting.Gates.Dag ℕ) : Accounting.Gates.Dag ℕ :=
+  [witGateR (.input .run 68) [] 0 255 false, witRecZ 69, witRecY 70, witDotGate] ++ mid ++
+    [witGateR (.budgeted .compareSelect witOk) [69, 71, 70, 71 + mid.length, 1] 0 1 true] ++
+    (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
+    [witGateR (.mma .s8 .s8 32 false) (67 :: (List.range' (73 + mid.length) 32 ++ List.range' 33 32))
+        Accounting.Gates.s32Min Accounting.Gates.s32Max false,
+      witGateR (.affine 0 [1, 1]) [105 + mid.length, 68] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
+
+def witK (mid : Accounting.Gates.Dag ℕ) : Declared ℕ where
+  dag := witPre ++ witKRest mid
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if 72 + mid.length ≤ i then 1 else 0
+  seedNames := fun _ _ => false
+  units := 1
+  unit := fun _ => 0
+
+/-- `witK`'s classes for `n` gates of `mid`: `witCCls`'s, its check word at `72 + n` and its receipt at `106 + n`. -/
+def witKCls (n i : ℕ) : Cls :=
+  if i = 0 then .coin
+  else if i < 33 ∨ i = 65 then .act
+  else if i < 65 ∨ i = 66 then .registered
+  else if i = 68 then .pub
+  else if i = 69 then .outZ
+  else if i = 70 then .outY
+  else if i = 72 + n then .check
+  else if i = 106 + n then .receipt
+  else .inner
+
+/-- A `witK` window whose check holds at a typed input `x` where the record's `y` isn't `witDq` of its `z` at the
+call's scales fails `ValueChecked`: `y` is its one `outY` word, `z` its one `outZ` word, and the scales can only be
+`s_a` (65) and `s_w` (66), its one `act` and one `registered` word not declared s8. -/
+theorem witK_notValueChecked (mid : Accounting.Gates.Dag ℕ) (L : Layout) (x : ℕ → ℤ)
+    (hx : Accounting.Gates.Typed (witK mid).dag x)
+    (h70 : 70 < (witK mid).dag.length ∧ witKCls mid.length 70 = .outY)
+    (hZ : ∀ z, z < (witK mid).dag.length → witKCls mid.length z = .outZ → z = 69)
+    (hA : ∀ s, s < (witK mid).dag.length → witKCls mid.length s = .act → ¬ S8 (witK mid) s → s = 65)
+    (hR : ∀ s, s < (witK mid).dag.length → witKCls mid.length s = .registered → ¬ S8 (witK mid) s → s = 66)
+    (hchk : ∀ k, k < (witK mid).dag.length → witKCls mid.length k = .check → k = 72 + mid.length)
+    (hok : Accounting.Gates.val (witK mid).dag x (72 + mid.length) = 1)
+    (hv : Accounting.Gates.val (witK mid).dag x 70 ≠ witDq [Accounting.Gates.val (witK mid).dag x 69,
+      Accounting.Gates.val (witK mid).dag x 65, Accounting.Gates.val (witK mid).dag x 66]) :
+    ¬ ValueChecked L witDq (witK mid) (witKCls mid.length) := by
+  rintro ⟨_, src, -, -, hD, -⟩
+  obtain ⟨hz, hzo, -, ⟨hsa, hsac, -, hsa8, hsw, hswc, hsw8, hv'⟩⟩ := hD 70 h70.1 h70.2
+  rw [hZ _ hz hzo, hA _ hsa hsac hsa8, hR _ hsw hswc hsw8] at hv'
+  exact hv (hv' x hx fun k hk hc _ => by rw [hchk k hk hc]; exact hok)
+
+/-- RT4-LOGIC-14's: `dq(Σ, A_1, B_1)` (gates 71, 1, 33), so the record's `y` is held to `dq` at an A and a B word. -/
+def witMidWS : Accounting.Gates.Dag ℕ :=
+  [witGateR (.budgeted .rounding witDq) [71, 1, 33] (-2 ^ 63) (2 ^ 63 - 1) false]
+
+/-- RT3-INT-3's: another product `p`, the dot of the A row with the rotated B column (72), its `dq(p, s_a, s_w)` (73)
+and `0·Σ + 1·dq(p)` (74), which reads `Σ` and takes `dq(p)`'s value. -/
+def witMidMix : Accounting.Gates.Dag ℕ :=
+  [witDotOf 67 witRotB false, witDqOf 72 false,
+    witGateR (.affine 0 [0, 1]) [71, 73] (-2 ^ 63) (2 ^ 63 - 1) false]
+
+/-- The input with `s_a = 3`, the record's `z` and `y`, and every other word `2`. -/
+def witXK (z y : ℤ) (s : ℕ) : ℤ := if s = 65 then 3 else if s = 69 then z else if s = 70 then y else 2
+
+/-- The input with `A_1`, `B_1`, both scales and the record's `z` `1`, and every other word `0`. -/
+def witXM (s : ℕ) : ℤ := if s = 1 ∨ s = 33 ∨ s = 65 ∨ s = 66 ∨ s = 69 then 1 else 0
+
+theorem witTieKWS : Tie witLayout .zTree (witK witMidWS) (witKCls 1) where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < (witK witMidWS).dag.length → (witKCls 1 i = .act ∨ witKCls 1 i = .served) →
+        (witK witMidWS).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
+  inner := by decide +kernel
+
+/-- **A record `y` checked to `dq` at an A and a B word fails `ValueChecked`** (RT4-LOGIC-14 on a checked record): at
+`witXK 128 512` the check holds, with `z = Σ = 128` and `y = dq(128, A_1, B_1) = 512`, which isn't
+`dq(128, 3, 2) = 768`. -/
+theorem witKWS_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK witMidWS) (witKCls 1) :=
+  witK_notValueChecked witMidWS L (witXK 128 512) (typed_of_all (witXK 128 512) (by decide +kernel))
+    ⟨by decide +kernel, by decide +kernel⟩ (by decide +kernel) (by unfold S8; decide +kernel)
+    (by unfold S8; decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+
+theorem witKWS_notCreditTie : ¬ CreditTie witLayout .zTree witDq (witK witMidWS) (witKCls 1) := fun h =>
+  witKWS_notValueChecked witLayout h.2
+
+theorem witTieKRaw : Tie witLayout .zTree (witK []) (witKCls 0) where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < (witK []).dag.length → (witKCls 0 i = .act ∨ witKCls 0 i = .served) →
+        (witK []).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
+  inner := by decide +kernel
+
+/-- **A record `y` checked to the raw product fails `ValueChecked`** (RT4-LOGIC-15 on a checked record): at
+`witXK 128 128` the check holds, with `z = y = Σ = 128`, which isn't `dq(128, 3, 2) = 768`. -/
+theorem witKRaw_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK []) (witKCls 0) :=
+  witK_notValueChecked [] L (witXK 128 128) (typed_of_all (witXK 128 128) (by decide +kernel))
+    ⟨by decide +kernel, by decide +kernel⟩ (by decide +kernel) (by unfold S8; decide +kernel)
+    (by unfold S8; decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+
+theorem witKRaw_notCreditTie : ¬ CreditTie witLayout .zTree witDq (witK []) (witKCls 0) := fun h =>
+  witKRaw_notValueChecked witLayout h.2
+
+theorem witTieKMix : Tie witLayout .zTree (witK witMidMix) (witKCls 3) where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < (witK witMidMix).dag.length → (witKCls 3 i = .act ∨ witKCls 3 i = .served) →
+        (witK witMidMix).binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  pub := by unfold Declared.Reads; decide +kernel
+  computed := by decide +kernel
+  outWords := by unfold Declared.Reads; decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => ⟨69, by decide +kernel, by decide +kernel, rfl⟩
+  commit := tie_commit (by decide +kernel)
+  receipt := by decide +kernel
+  checked := by decide +kernel
+  readers := fun _ _ _ _ _ _ => rfl
+  inner := by decide +kernel
+
+/-- **A record `y` checked to another product's dequant fails `ValueChecked`** (RT3-INT-3 on a checked record): at
+`witXM` the check holds, with `z = Σ = A_1·B_1 = 1` and `y = 0·Σ + 1·dq(p) = 0`, the rotated product `p` being `0`
+there, which isn't `dq(1, 1, 1) = 1`. -/
+theorem witKMix_notValueChecked (L : Layout) : ¬ ValueChecked L witDq (witK witMidMix) (witKCls 3) :=
+  witK_notValueChecked witMidMix L witXM (typed_of_all witXM (by decide +kernel))
+    ⟨by decide +kernel, by decide +kernel⟩ (by decide +kernel) (by unfold S8; decide +kernel)
+    (by unfold S8; decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+
+theorem witKMix_notCreditTie : ¬ CreditTie witLayout .zTree witDq (witK witMidMix) (witKCls 3) := fun h =>
+  witKMix_notValueChecked witLayout h.2
 
 end Properties.Served

@@ -6,7 +6,9 @@ import Proofs.Flock.Claims.Recursion.KSLin2
 
 `RecDeploy.ksBoundRouteLin_merged` reaches `KSBoundLin` from (P1) at `DE` and pays the inner root `√(γ_BI·Pr[B_I])`.
 `RecDeploy.ksLin2_route` reaches `KSLin2` from `KSFlockLin` at `DE` instead, on the same facts at `deployRecC` and with
-no weight premise: `Bound.ksLin2_of_flockLin_binds` there, carried to the deployed record. `E*`'s output is the same
+no weight premise: `Bound.ksLin2_of_flockLin_binds` there, carried to the deployed record. It is stated at the dense
+statements (`KSLin2On … DenseAt`), from V*'s facts at the dense shape only: the bound at one statement reads
+`InnerAcceptsColl` and `ForksBind` only there (`InnerAcceptsCollAt`, `ForksBindAt`). `E*`'s output is the same
 (`E_eval_C`), and of the bound's terms only the composite finders read an inner view, through `accAtI`, which decides
 alike at the two records (`accAtI_C`, from `innerView_C`).
 -/
@@ -122,10 +124,15 @@ theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero 
 
 end Cols
 
-/-- **`KSLin2` at the deployed records from `KSFlockLin` at `DE`**: `KSBoundRouteLinMerged`'s premises with
-`KSFlockLin` for (P1) and no weight premise give `KSLin2` at the record whose inner view runs `IVStar`:
-`ksBoundRouteLin_merged`'s facts at `deployRecC`, `Bound.ksLin2_of_flockLin_binds` there, carried back by
-`ksLin2_of_C`. -/
+/-- **A dense statement**: every parse of `x` has a dense inner form (`Form.Dense`), the form the deployed
+`KSLin2` corollaries are stated at. -/
+def DenseAt (x : Msg) : Prop := ∀ s, parse x = some s → s.form.Dense
+
+/-- **`KSLin2` at the deployed records' dense statements from `KSFlockLin` at `DE`**: `KSBoundRouteLinMerged`'s
+premises with `KSFlockLin` for (P1), no weight premise, and V*'s facts at the dense shape only give `KSLin2` at the
+dense statements (`DenseAt`) of the record whose inner view runs `IVStar`: `InnerAcceptsColl` at a dense statement
+(`innerAcceptsCollAt_of_dense`), `ksBoundRouteLin_merged`'s facts at `deployRecC` there,
+`Bound.ksLin2_of_flockLin_binds` there, carried back by `ksLin2_of_C`. -/
 theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (Cp : Claims.Recursion.Caps Coin) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -140,7 +147,7 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
       (∃ decC : Msg → Msg → Coin,
         (∀ decI, Claims.Recursion.VStar.RunPairs FlockDeploy.sha512 D
           (Claims.Recursion.Inner.ofFlock Bd.deploy decI) decC) ∧
-        ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
+        ∀ shape ∈ [Claims.Recursion.Form.Dense],
           ∃ (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
             (cmt : Msg → ℕ → Msg → Msg),
             (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
@@ -152,32 +159,34 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
-      Claims.Recursion.KSLin2 FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp := by
-  intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hst hT hL hRRP decI hdI decO hdO x Ω _ _ P M R
+      Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp DenseAt := by
+  intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hst hT hL hRRP decI hdI decO hdO x hx Ω _ _
+    P M R
   obtain ⟨decC, hRP, hshapes⟩ := hst
   let I := Claims.Recursion.Inner.ofFlock Bd.deploy decI
   let ivScope := (FlockDeploy.deployPlain rel).scopeCheck
   have hplay : ∀ x ms (c : Fin (I.V.k (xIOf x)) → Coin),
       (run FlockDeploy.sha512 (replay ms) I.V (xIOf x) () c).msgs.length = I.V.k (xIOf x) :=
     fun x ms c => Bd.run_ivstar_length FlockDeploy.sha512 (xIOf x) ms c
-  have hacc : ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
+  have hacc : ∀ shape ∈ [Claims.Recursion.Form.Dense],
       Claims.Recursion.VStarAccepts FlockDeploy.sha512 (deployRec I.V ivScope bL) I (deployZkRec relO) shape := by
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSh, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
       (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRRP
-  have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
-    (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
+  have hA := Claims.Recursion.innerAcceptsCollAt_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
+    (hacc _ (by simp)) hx
   have hLc := callsLogColl FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT hL
-  have hFk := forksBind_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hEC hCF hTc hLc hA
-    fun decO x Ω P ω r c ws hg => readersRun_played FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hplay hT hRRP hg
+  have hFk := forksBindAt_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hEC hCF hTc hLc
+    (fun decO x Ω P ω r c ws hg => readersRun_played FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hplay hT hRRP
+      hg) x hA
   have hdecC : ∀ x c, FlockDeploy.decCoin x (Bd.ans c) = c := fun _ c =>
     (congrArg (FlockDeploy.decCoin _) (bdDeployed_ans rel nextE colsE wE join rowIn final w c)).trans
       (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
   have hM := roundsMargin_deployRec FlockDeploy.sha512 I ivScope bL fun x => V_k_pos_flock false x
   have hLn := callsLogColl_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
-  have hAn := innerAcceptsColl_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hA
+  have hAn := innerAcceptsCollAt_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF x hA
   have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds (Bd := Bd) (decI := decI)
     (H := FlockDeploy.sha512) (D := deployRecC Bd ivScope bL) (DO := deployZkRec relO) (decO := decO) (P := P)
     (x := x) FlockDeploy.decCoin Cp hF hKS hdI hdO hdecC hBinds (refuses I.V ivScope bL FlockDeploy.sha512)

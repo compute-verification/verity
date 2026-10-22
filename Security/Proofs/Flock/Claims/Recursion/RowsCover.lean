@@ -163,10 +163,12 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
     simp only [hck]
     exact List.mem_filterMap.2 ⟨some (j / rs.size), hrow, by simp [hmr, hqi]⟩
 
-/-- **`KSLin2` at the deployment, at `layoutBTops`, with the rows' ports discharged**: `ksLin2_deployed_tops` with
-`RowsCover` from `rowsCover`. What stays per form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the
-last round's pieces (`FinPieces`, open), and `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs`
-and the readers' three facts. This bounds no number by itself: those premises are open. -/
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
+`ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
+RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
+`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
+number by itself: those premises are open.
+-/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     let L := layoutBTops fin
@@ -177,7 +179,7 @@ theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg 
     (∃ decC : Msg → Msg → Coin,
       (∀ decI, Claims.Recursion.VStar.RunPairs FlockDeploy.sha512 D
         (Claims.Recursion.Inner.ofFlock Bd.deploy decI) decC) ∧
-      ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
+      ∀ shape ∈ [Claims.Recursion.Form.Dense],
         SchedMatches shape ∧ CapPorts shape ∧ FinPieces fin shape ∧
         ∃ (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
           (cmt : Msg → ℕ → Msg → Msg),
@@ -191,8 +193,8 @@ theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg 
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    Claims.Recursion.KSLin2 FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep := by
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hP hRT hRL hRP
   refine ksLin2_deployed_tops b fin wE join final w ?_ hRT hRL hRP
   obtain ⟨decC, hRun, hS⟩ := hP

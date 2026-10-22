@@ -28,7 +28,7 @@ def transcript (root : List Nat := [1, 2]) (top0 : List Nat := [3, 4]) (top1 : L
     ("link", Json.mkObj [("roots", Json.mkObj [("circuit", nodes root)]), ("points", Json.arr (points.map coin).toArray),
       ("y", Json.null)]),
     ("rounds", Json.arr #[round "circuit/rep1" 1 [top1], round "circuit/rep0" 0 [], round "circuit/rep0" 1 [top0],
-      round "circuit/rep1" 0 []])]
+      round "circuit/rep1" 0 []]), ("end", Json.str "finish")]
 
 def record (points : List (List Nat) := [[10, 11], [12, 13]]) : String :=
   (Json.mkObj [("link", Json.mkObj [("points", Json.arr (points.map fun p => Json.arr (p.map coin).toArray).toArray)])]).compress
@@ -45,6 +45,16 @@ def link : InnerLink := linkOf (transcript)
 #guard link.table == "circuit" && link.root.toList.map (·.data.toList) == [(b 1).data.toList, (b 2).data.toList]
 #guard link.tops.map (·.map fun (k, t) => (k, t.size)) == #[#[(1, 2)], #[(1, 1)]]
 #guard link.points.map (·.size) == #[2, 2] && link.points[1]![0]! == ((f128OfHex (hexOf (ByteArray.mk (Array.replicate 16 12)))).toOption.getD default)
+
+-- only a finished session's record is read (`checkFinished`): one the coin server marked stopped, or naming no end, is not
+def stopWhy : String :=
+  "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
+#guard why (innerLink ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
+#guard why (checkFinished ((transcript).setObjVal! "end" (Json.str "stop"))) == some stopWhy
+#guard why (checkFinished (transcript)) == none
+#guard why (checkFinished (Json.mkObj [("kind", Json.str TRANSCRIPT_FORMAT)])) ==
+  some "rec inner transcript: the coin server's record names no end; only a finished session is read"
+#guard why (innerCommits ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
 
 -- the link points: the inner session's record (the prover's, which check 5 reads) holds the coin server's
 def pointsWhy : String :=
