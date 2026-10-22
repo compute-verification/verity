@@ -166,10 +166,8 @@ theorem foldRef_tree {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : 
   have hz : accSum (termA { alpha, lw, rho, r, qc := 0 } (posMap t lays) s)
       (termB { alpha, lw, rho, r, qc := 0 } (posMap t lays) s) (Acc.empty (t.defs.getD t.root default).cols) = 0 := by
     unfold accSum
-    refine Finset.sum_eq_zero fun x hx => ?_
-    have hx' := Finset.mem_range.mp hx
-    simp only [Acc.empty, Array.size_replicate] at hx'
-    simp [Acc.empty, hx', rowShare_empty]
+    exact Finset.sum_eq_zero fun x _ =>
+      (congrArg₂ (rowShare _ _ x) (replicate_getD _ x) (replicate_getD _ x)).trans (rowShare_empty _ _ x)
   show accSum (termA { alpha, lw, rho, r, qc := 0 } (posMap t lays) s)
     (termB { alpha, lw, rho, r, qc := 0 } (posMap t lays) s) acc = _
   rw [hs2, hs1, hz, zero_add]
