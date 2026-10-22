@@ -56,7 +56,7 @@ class Host:
     def __init__(self, root: Path) -> None:
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-        (root / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-21T00:00:00Z") + "\n")
+        (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
         self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
         public = (self.host.key / "public").read_bytes()
@@ -114,14 +114,18 @@ class Host:
         return A.entries(A.read_ledger(self.host.ledger))
 
     @staticmethod
-    def seal(monkeypatch, pins: list[str]) -> None:
-        """Each open from here on seals the host's pins log `pins` as it stands (`challenger.pins_seal`), as the gate
-        RT4-INT-40 asks of infra would; `auditor.admit` seals none yet."""
+    def seal(monkeypatch, pins: list[str] | None) -> None:
+        """Each open from here on seals the pins log `pins` (`challenger.pins_seal`) in place of the host's own log,
+        which `auditor.admit` seals; `pins` None: the open seals no log, as on every gate before RT4-INT-40's."""
         append = A.append
+
+        def resealed(body: dict) -> dict:
+            body = {k: v for k, v in body.items() if k != "pins"}
+            return body if pins is None else {**body, "pins": pins_seal(pins)}
 
         def sealed(host, kind, session, body_of, I, sign):
             if kind == "open":
-                return append(host, kind, session, lambda lines: {**body_of(lines), "pins": pins_seal(pins)}, I, sign)
+                return append(host, kind, session, lambda lines: resealed(body_of(lines)), I, sign)
             return append(host, kind, session, body_of, I, sign)
 
         monkeypatch.setattr(A, "append", sealed)
@@ -339,8 +343,7 @@ def test_a_session_whose_pin_the_hosts_pins_log_doesnt_record_as_mains_earns_no_
     doesn't record as main's when the session opens: the log the open sealed holds only an earlier pin, and the pin
     appended after the open doesn't count; or, as on every gate up to now, the open seals no log at all. The line
     credits zero, and the session's `pinned` check names the fix."""
-    if sealed is not None:
-        host.seal(monkeypatch, sealed)
+    host.seal(monkeypatch, sealed)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
     rc, closed = host.call(["period-close", "--name", "p-1"])
