@@ -88,7 +88,9 @@ theorem openedReg_row {u : Fin s.n} (hS : s.ServedRegistered u)
   unfold openedReg
   rw [Held.regRead_at s _ hg hread]
   show some (s.vb.bit (s.vb.val (s.wo u (s.vb.pos g))) g) = _
-  rw [vb_bit_row _ hr, hpos] <;> rfl
+  have e : s.vb.val (s.wo u (s.vb.pos g)) = rowVal s u q := congrArg (fun p => s.vb.val (s.wo u p)) hpos
+  exact congrArg some ((vb_bit_row _ hr).trans
+    (congrArg (fun v : Layout.BitVal (Finset.univ.sup (portRowW s.c) + 1) => v.get k.val) e))
 
 /-- **`portBit` at the opened rows is the registrant's row bit**: in a circuit that names each port once, at a read
 bit `k` of unit 0's row of port `q` (`RowBitRead`), `portBit` at `q`'s name is bit `k` of the value unit 0's registrant
