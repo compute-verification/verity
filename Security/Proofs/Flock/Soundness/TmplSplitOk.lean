@@ -300,14 +300,12 @@ theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   unfold cachedTab at h
   obtain ⟨s0, st0, hg, h⟩ := sv_bind_ok h
   obtain ⟨rfl, rfl⟩ := sv_get_ok hg
-  cases hk : st0.tabs.get? (e, β', as') with
-  | some T' =>
-    simp only [hk] at h
+  try dsimp only at h
+  split at h
+  · rename_i T' hk
     obtain ⟨rfl, rfl⟩ := sv_pure_ok h
     exact ⟨hst, hst.2 _ _ _ _ hk hpc F he⟩
-  | none =>
-    simp only [hk] at h
-    obtain ⟨T2, st4, hw1, h⟩ := sv_bind_ok h
+  · obtain ⟨T2, st4, hw1, h⟩ := sv_bind_ok h
     obtain ⟨u, st5, hmod, h⟩ := sv_bind_ok h
     have hmod := sv_modify_ok hmod
     subst hmod
