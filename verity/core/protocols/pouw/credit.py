@@ -1,13 +1,25 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
-PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). This is the Python
-reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`).
+PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
+reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
+`window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run (`_verified`),
+which the Lean takes as given until it runs that verifier in-process.
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, the draw,
-`_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window of a closed, complete period. The steps are internal, so
+`_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window of a closed, complete period. The steps are internal, so
 no caller credits a window with a step skipped: `_credited` returns the credit bits whatever the proofs' outcome, and
 `_a_link` trusts the round log's roots, which only `core_check.rounds` holds to the ones the challenger received before
 each coin.
+
+* **The verdicts are credit's own** (`_verified`). A window's evidence carries its statements' proof files, one
+  statement a call with a drawn unit (`STATEMENT_KEYS`: its circuit file, its public file and its sessions), never a
+  verdict. Credit runs the verifier of record (`proofs.verify`, `flock-verify verify --zk`) on each: on the circuit file
+  whose SHA-512 its period's open committed for the call's K (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``, refused before the
+  verifier runs when it differs), against the committed descriptor, its partition object (`partition_of`) and the
+  call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
+  `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
+  verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
+  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133).
 
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
   call rows, in order, ``index`` 0, 1, …) carries its call's verdict as ``credit`` (true or false), and a credited row
@@ -78,17 +90,24 @@ refusal is (code, why), the first rule the input breaks, its why naming the fix;
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
+import itertools
 import json
 import re
 from fractions import Fraction
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+
+#: the verifier of record over a statement's proof files (`proofs.verify`)
+Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
 CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
@@ -135,13 +154,27 @@ LAYOUT_FORM = ("the window's layout is not {calls, linears, m, tile}, h1window.p
 COIN_FORM = "the draw coin is not a SHA-512 digest (128 lowercase hex)"
 DRAW_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of "
              "printable ASCII strings")
-#: a window's evidence, as `window` reads it, its descriptor the circuit's its proofs were verified against and its
-#: entries the values it registered
-WINDOW_KEYS = ("calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window")
+#: a window's evidence, as `window` reads it, its descriptor the circuit's its proofs were verified against, its
+#: entries the values it registered and its statements each call's proof files
+WINDOW_KEYS = ("calls", "descriptor", "draw", "entries", "rounds", "salt", "served", "session", "statements", "window")
 #: a window's evidence in a period
 PERIOD_KEYS = WINDOW_KEYS
-WINDOWS_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PERIOD_KEYS) + "}, "
+PERIOD_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PERIOD_KEYS) + "}, "
+               "in its close's order: each window carries its statements' proof files, never verdicts")
+#: a window's evidence with each drawn unit's proof outcome in place of its statements (`_window_outcomes`), the Lean's
+PROVED_KEYS = ("calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window")
+WINDOWS_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PROVED_KEYS) + "}, "
                 "in its close's order")
+#: a call's statement: its index, the paths of its circuit file and public file, and its sessions' directories
+STATEMENT_KEYS = ("call", "circuit", "public", "sessions")
+STATEMENTS_FORM = ("the window's statements are not a list of {call, circuit, public, sessions}, each a call of the "
+                   "window, the paths of its circuit file and its public file, and its sessions' directories (at least "
+                   "one): the window carries each call's proof files, and credit verifies them itself, never a verdict")
+#: the period-open's field holding each K's template's circuit file's SHA-512, ``{k<K>: SHA-512}``
+CIRCUIT_FILES = "circuit_files"
+FILES_FORM = (f"the committed circuit files are not {{k<K>: SHA-512}} (the period-open's {CIRCUIT_FILES}, each digest "
+              "128 lowercase hex)")
+_TEMPLATE = re.compile(r"k[1-9][0-9]*")
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
 #: the descriptor schema `layout_of` reads
@@ -513,6 +546,99 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     return layout, None
 
 
+def _leaves(t: Any) -> int:
+    """A descriptor type's leaves (`types.from_json`'s): ``["Value", w]`` one, ``["Array", n, t]`` n of t's, a
+    ``["Tuple", [t, ...]]`` or ``["Record", [[name, t], ...]]`` its fields'; zero for any other form."""
+    if not (type(t) is list and t):
+        return 0
+    if t[0] == "Value":
+        return 1
+    if t[0] == "Array" and len(t) == 3 and _nat(t[1]):
+        return t[1] * _leaves(t[2])
+    if t[0] == "Tuple" and len(t) == 2 and type(t[1]) is list:
+        return sum(_leaves(x) for x in t[1])
+    if t[0] == "Record" and len(t) == 2 and type(t[1]) is list:
+        return sum(_leaves(x[1]) for x in t[1] if type(x) is list and len(x) == 2)
+    return 0
+
+
+def shape_of(descriptor: bytes) -> dict:
+    """What a statement over the window's units reads of the descriptor `descriptor`, one `layout_of` accepted: its
+    parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``) and the 16-bit words
+    of its A row, its B row and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
+    `h1window.table_reads_file`'s). Its cost is the descriptor's bytes."""
+    d = json.loads(descriptor.decode())
+    vals = {k: json.loads(v) for k, v in _record(d["program_fn"])}
+    tiles = {}
+    for k, t in vals["TILES"]:
+        a, b, zy = (p[1] for p in d["definitions"][t["fn"]]["body"]["params"][:3])
+        tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16}
+    return {"prefix": vals["PREFIX"], "tiles": tiles}
+
+
+#: the partition object a window's statements are verified under: every instance of each K's template one unit
+PARTITION_FORMAT = "verity/partition/v1"
+QUERY = ("Q_template_instances", 0)
+
+
+def partition_of(program: str, shape: dict) -> dict:
+    """The partition object (`partition_object.build`'s) of the window whose circuit's descriptor has SHA-512 `program`
+    and whose `shape_of` is `shape`: its templates by ascending K, as `h1window.query` names them."""
+    return {"format": PARTITION_FORMAT, "program": program,
+            "query": {"name": QUERY[0], "version": QUERY[1],
+                      "params": {"templates": [shape["tiles"][k]["fn"] for k in sorted(shape["tiles"])]}}}
+
+
+def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str
+                    ) -> tuple[dict | None, tuple[str, str] | None]:
+    """The verifier's ``--registered`` file (`registered.READS`) of call `call`'s statement in the window `layout` (one
+    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`), and None; or None and the
+    refusal (``registration``: the window registers no root, or two, for a value the statement reads). It is
+    `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads
+    its A row i (port ``a_k<K>_<i>``) at row R·ti + i of the call's A table ``<prefix>a/<K>@<call>`` (M rows), its B row
+    j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
+    its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
+    (a row a unit of the call); every other unit reads none of them. Each value is a row/v2 value of 16-bit leaves
+    under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
+    held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
+    gives it. Its cost is the window's units, once a port: the reads file's form."""
+    (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
+    lin = layout["calls"][call][0]
+    ks = {name: (k, n) for name, k, n in layout["linears"]}
+    k, n = ks[lin]
+    tile = shape["tiles"][k]
+    b0 = 0
+    for name, kk, nn in layout["linears"]:
+        if name == lin:
+            break
+        b0 += nn if kk == k else 0
+    sizes = [size for size, _work in call_work(layout)]
+    u0, size, per = sum(sizes[:call]), sizes[call], n // c
+    a, zy, b = f"{prefix}a/{k}@{call}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
+    rows_of = {a: (m, tile["a"]), zy: (size, tile["zy"]),
+               b: (sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
+    for v in rows_of:
+        if len(roots.get(v, ())) != 1:
+            return None, ("registration", f"call {call}'s statement reads {v}, which the window registers "
+                                          f"{'twice' if roots.get(v) else 'not'}: register each of a call's tables and "
+                                          "its weights once")
+    ports: list[tuple[str, str, Any]] = (
+        [(f"a_k{k}_{i}", a, lambda t, i=i: r * (t // per) + i) for i in range(r)]
+        + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
+        + [("zy", zy, lambda t: t)])
+    out = {}
+    for port, v, row in ports:
+        reads: list[int | None] = [None] * sum(sizes)
+        for t in range(size):
+            reads[u0 + t] = row(t)
+        leaves, words = rows_of[v]
+        out[port] = {"value": v, "root": roots[v][0], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
+                     "domain": G.domain(program, v, words, leaves,
+                                        window=None if is_held(v) else window).domain_id.hex(),
+                     **G.schema_entry(G.SCHEMA_V2), "reads": reads}
+    return {"format": G.READS, "ports": out}, None
+
+
 def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
     """`ss` (`strata`'s) under the work law ``work:k`` at the committed K `k`: each stratum's k_s (`core_check.work_k`,
     over the population's work W = Σ w_s·n_s), set in place; else the refusal (``budget``): `k` isn't a positive integer
@@ -720,8 +846,84 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
     return None
 
 
+def no_statement_files(k: Any) -> str:
+    return (f"the period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the "
+            "circuit file the auditor's lowering built for it), so no statement of its calls can be verified: commit "
+            f"each K's circuit file in the period-open")
+
+
+def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
+              run: Run) -> tuple[list[dict] | None, tuple[str, str] | None]:
+    """Each drawn unit's proof outcome (`PROOF_KEYS`) from the verifier of record's own run over the window's
+    `statements` (`STATEMENT_KEYS`: one a call with a drawn unit among `units`, its proof files), and None; or None and
+    the refusal. Call c's statement is verified by `run` (`proofs.verify`) on its circuit file, which must hash to
+    `files`' digest for its K (``k<K>``, the period-open's `CIRCUIT_FILES`, else ``circuit``), against the circuit's
+    descriptor `raw`, its partition object (`partition_of`) and the call's ``--registered`` file credit builds itself
+    (`registered_file`, at the roots the window's `entries` register and its open root `window`). A file missing or an
+    answer that is not one verdict a session refuses (``proof``), and so does a verifier that can't run: the window stays
+    refused. A session the verifier rejects refuses the window (``failed``: no partial credit, and no retry), and one
+    that proved a unit of another call refuses it (``proof``). Each unit an accepted session proved is one outcome:
+    accepted, the program its verdict names and its registered finding, which `_proved` and `_registration` then hold
+    to the draw and to the window's registration."""
+    if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
+        return None, ("circuit", FILES_FORM)
+    if not (isinstance(statements, list)
+            and all(isinstance(s, dict) and sorted(s) == list(STATEMENT_KEYS) and _nat(s["call"])
+                    and type(s["circuit"]) is str and type(s["public"]) is str and type(s["sessions"]) is list
+                    and s["sessions"] and all(type(x) is str for x in s["sessions"]) for s in statements)):
+        return None, ("proof", STATEMENTS_FORM)
+    sizes = [size for size, _work in call_work(layout)]
+    if any(s["call"] >= len(sizes) for s in statements):
+        return None, ("proof", STATEMENTS_FORM)
+    starts = list(itertools.accumulate(sizes, initial=0))[:-1]
+    drawn = {bisect.bisect_right(starts, u) - 1 for u in units}
+    program, shape = hashlib.sha512(raw).hexdigest(), shape_of(raw)
+    partition = partition_of(program, shape)
+    roots: dict[str, list[str]] = {}
+    for e in entries:
+        roots.setdefault(e.get("value"), []).append(e.get("root"))
+    ks = {name: k for name, k, _n in layout["linears"]}
+    seen: set[int] = set()
+    out = []
+    for s in statements:
+        c = s["call"]
+        if c in seen:
+            return None, ("outcome", f"call {c} has two statements: a call's drawn units are proved in one statement and "
+                                     "verified once, and a retry never reproves them")
+        seen.add(c)
+        if c not in drawn:
+            return None, ("outcome", f"call {c} has a statement and no drawn unit: only the draw's units are proved")
+        k = ks[layout["calls"][c][0]]
+        if f"k{k}" not in files:
+            return None, ("circuit", no_statement_files(k))
+        reg, why = registered_file(program, layout, shape, c, roots, window)
+        if why is not None:
+            return None, why
+        try:
+            got, why = run(PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
+                           circuit_sha512=files[f"k{k}"], program=raw, partition=partition, registered=reg)
+        except (PF.LeanError, OSError, ValueError, KeyError, TypeError) as e:
+            return None, ("proof", f"call {c}'s statement could not be verified, so the window stays refused: {e}")
+        if why is not None:
+            return None, (why[0], f"call {c}'s statement: {why[1]}")
+        for f in got:
+            if not f.accepted:
+                return None, ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record "
+                                        f"({f.why}): a failed drawn unit refuses the whole window, not only its call "
+                                        "(no partial credit, and no retry)")
+            for u in f.units:
+                if not starts[c] <= u < starts[c] + sizes[c]:
+                    return None, ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call "
+                                           f"{c}: a call's statement proves its own call's units")
+                out.append({"unit": u, "verdict": "accept", "program": f.program, "registered": f.registered})
+    return out, None
+
+
+Proved = Callable[[dict, bytes, list[int]], tuple[Any, tuple[str, str] | None]]
+
+
 def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-            rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
+            rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, k: Any, verify: Ch.Verify
             ) -> tuple[tuple[list[int], dict] | None, tuple[str, str] | None]:
     got, why = _credited(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, verify)
     if why is not None:
@@ -744,6 +946,9 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
                                   "calls: each call of the window's Program is one manifest row, in order")
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
                         {"receipts": draw["receipts"]}, ss, k)
+    proofs = None
+    if why is None:
+        proofs, why = proved(layout, bytes.fromhex(descriptor), units)
     if why is None:
         why = _proved(units, proofs)
     if why is None:
@@ -753,9 +958,31 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
 
 
 def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-           rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
-           ) -> tuple[list[int] | None, tuple[str, str] | None]:
+           rounds: Any, draw: Any, descriptor: Any, entries: Any, statements: Any, circuit_files: Any, k: Any,
+           verify: Ch.Verify, run: Run = PF.verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
+    over the same evidence and the one round log `rounds`: `_window_outcomes`' steps, each drawn unit's proof outcome
+    the verifier of record's own run over the window's `statements` (`_verified`: each call's proof files, on the
+    circuit file whose SHA-512 `circuit_files` gives its K, ``{k<K>: SHA-512}``, the period-open's `CIRCUIT_FILES`, and
+    the ``--registered`` file credit builds from the descriptor and the window's entries). The evidence carries proof
+    files, never verdicts. `run` is the verifier of record (`proofs.verify`), the verifier's own, never the evidence's.
+
+    `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, descriptor, entries,
+                       _runner(statements, circuit_files, entries, window, run), k, verify)
+    return (None, why) if got is None else (got[0], None)
+
+
+def _runner(statements: Any, files: Any, entries: Any, window: Any, run: Run) -> Proved:
+    return lambda layout, raw, units: _verified(statements, files, raw, layout, entries, window["root"], units, run)
+
+
+def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any,
+                     served: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any,
+                     verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """`window` on each drawn unit's proof outcome `proofs` in place of its statements: the form the Lean
+    `PouwCheck.Credit.window` reads until it runs the verifier of record itself, which the difftest holds it to. A
+    served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`:
 
     1. `_credited`: the credit bits fixed before the draw coin, read through the challenger's session, one the host's
@@ -774,11 +1001,9 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
        for a drawn unit's session (`PROOF_KEYS`);
     6. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
        (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
-       that descriptor and opened its registered values at their registered roots, its K's A value among them.
-
-    `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
+       that descriptor and opened its registered values at their registered roots, its K's A value among them."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, descriptor, entries,
-                       proofs, k, verify)
+                       lambda *_: (proofs, None), k, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -845,9 +1070,35 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     return k, None
 
 
-def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
-                  ) -> tuple[dict | None, tuple[str, str] | None]:
-    """Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
+def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
+    """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
+    circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
+    None; or None and the refusal (``circuit``)."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    files = body.get(CIRCUIT_FILES)
+    if not (isinstance(files, dict) and files
+            and all(type(x) is str and _TEMPLATE.fullmatch(x) and _digest(v) is not None for x, v in files.items())):
+        return None, ("circuit", f"period {name}'s open commits no circuit files ({CIRCUIT_FILES}, each K's template "
+                                 "k<K> to the SHA-512 of the circuit file the auditor's lowering built for it), so no "
+                                 "window's statements can be verified: commit them in the period-open, beside its "
+                                 "circuit and K")
+    return files, None
+
+
+def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
+                  run: Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
+    """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
+    (`PERIOD_KEYS`) carrying its statements' proof files, which `window` verifies on the circuit files the period's
+    open committed (`committed_files`, else ``circuit``) with the verifier of record `run`."""
+    return _period_of(key, ledger, pins, main, name, windows, verify, run)
+
+
+def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
+                     ) -> tuple[dict | None, tuple[str, str] | None]:
+    """`period_credit` on each window's drawn units' proof outcomes (`PROVED_KEYS`) in place of its statements, by
+    `_window_outcomes`: the form the Lean `PouwCheck.Credit.periodCredit` reads until it runs the verifier of record
+    itself. Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
     window's credited calls in the close's order, the K the period's open committed (`committed_k`), the δ the ε is
     reported at (`DELTA`), and each window's ε, what its draw of K established over its credited work (`established`;
     null when it establishes no ε <= 1). The period's windows
@@ -859,8 +1110,14 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
     it, under the same ledger) is credited by
     `window`, every step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period (``circuit`` or
     ``window``), so a period earns only when every window in it does."""
-    if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(PERIOD_KEYS) for w in windows)):
-        return None, ("period", WINDOWS_FORM)
+    return _period_of(key, ledger, pins, main, name, windows, verify, None)
+
+
+def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
+               run: Run | None) -> tuple[dict | None, tuple[str, str] | None]:
+    keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
+    if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(keys) for w in windows)):
+        return None, ("period", form)
     roots = [w["window"].get("root") if isinstance(w["window"], dict) else None for w in windows]
     why = period(key, ledger, name, roots, verify)
     if why is not None:
@@ -868,6 +1125,11 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
     big_k, why = committed_k(ledger, name)
     if why is not None:
         return None, why
+    files = None
+    if run is not None:
+        files, why = committed_files(ledger, name)
+        if why is not None:
+            return None, why
     k = Ch.ChallengerKey.from_json(key)
     out, eps = [], []
     for i, w in enumerate(windows):
@@ -878,8 +1140,10 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
         except Ch.CoinError as e:
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
+        proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
+                  else _runner(w["statements"], files, w["entries"], w["window"], run))
         got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
-                           w["rounds"], w["draw"], w["descriptor"], w["entries"], w["proofs"], big_k, verify)
+                           w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, big_k, verify)
         if why is not None:
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")
@@ -1059,8 +1323,9 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
     return None
 
 
-__all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
-           "PERIOD_KEYS", "PROOF_KEYS", "RECORD", "ROUND_TAG", "SCHEMA", "TILE_FN", "VERDICTS", "WINDOW_FN",
-           "WINDOW_KEYS", "call_work", "calls_root", "committed_k", "cover", "domain_of", "draw_root", "drawn",
-           "established", "a_value", "is_a", "is_held", "law",
-           "layout_of", "merkle_depth", "period", "period_credit", "round_root", "strata", "tree_root", "window"]
+__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
+           "MAX_K", "PARTITION_FORMAT", "PERIOD_KEYS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
+           "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WINDOW_FN", "WINDOW_KEYS", "call_work", "calls_root",
+           "committed_files", "committed_k", "cover", "domain_of", "draw_root", "drawn", "established", "a_value",
+           "is_a", "is_held", "law", "layout_of", "merkle_depth", "partition_of", "period", "period_credit",
+           "registered_file", "round_root", "shape_of", "strata", "tree_root", "window"]
