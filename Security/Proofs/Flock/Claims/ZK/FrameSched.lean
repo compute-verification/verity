@@ -1482,6 +1482,80 @@ theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
         exact ⟨#[], by rw [← h', Array.append_empty]⟩
       | fail _ => cases h
 
+/-- A step still asking after the coins `l` sent a round for each. -/
+theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l : List (Array F128))
+    (rs : Array (ByteArray × ℕ)) {c n k rs'}, s.feed l rs = (.ask c n k, rs') → rs'.size = rs.size + l.length
+  | s, [], rs, _, _, _, _, h => by rw [feed_nil] at h; cases h; rfl
+  | .ask c' n' k', a :: l, rs, _, _, _, _, h => by
+    have := feed_ask_size (k' a) l (rs.push (c', n')) h
+    rw [this, Array.size_push, List.length_cons]
+    omega
+  | .done _, _ :: _, _, _, _, _, _, h => by cases h
+  | .fail _, _ :: _, _, _, _, _, _, h => by cases h
+
+/-- **A schedule that has stopped growing**: where the schedule so far holds no round past its coins, the opening has
+ended, and one more round's coins schedule nothing more. -/
+theorem schedSoFar_snoc_done (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
+    {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s) (hle : s.size ≤ cr.size)
+    (h' : schedSoFar t rep dom xs hi (cr.push a) = .ok s') : s' = s := by
+  unfold schedSoFar at h h'
+  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  | error e => rw [hal] at h; cases h
+  | ok alg =>
+    rw [hal] at h h'
+    simp only [bind, Except.bind] at h h'
+    by_cases hlt : cr.size < alg.size
+    · simp only [hlt, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      omega
+    · have hlt' : ¬ (cr.push a).size < alg.size := by rw [Array.size_push]; omega
+      simp only [hlt, ↓reduceIte] at h
+      simp only [hlt', ↓reduceIte] at h'
+      have e1 : (cr.push a).extract 0 alg.size = cr.extract 0 alg.size := by
+        rw [Array.extract_push, if_pos (by omega)]
+      have e2 : ((cr.push a).extract alg.size (cr.push a).size).toList =
+          (cr.extract alg.size cr.size).toList ++ [a] := by
+        rw [Array.size_push, Array.extract_push, if_neg (by omega), if_pos (by omega), Array.toList_push]
+      rw [e1, e2, feed_append] at h'
+      have hlen : (cr.extract alg.size cr.size).toList.length = cr.size - alg.size := by
+        rw [Array.length_toList, Array.size_extract]
+        omega
+      revert h h'
+      generalize hP : (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+        (cr.extract alg.size cr.size).toList #[] = P
+      obtain ⟨S, rs⟩ := P
+      intro h h'
+      cases S with
+      | ask c n k =>
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        have := feed_ask_size _ _ _ hP
+        rw [Array.size_append, Array.size_push, this, hlen, Array.size_empty] at hle
+        omega
+      | done _ =>
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        dsimp only at h'
+        rw [show ∀ x, (_root_.Flock.Firewall.Drive.Step.done x : _root_.Flock.Firewall.Drive.Step Unit).feed [a] rs =
+          (.done x, rs) from fun _ => rfl] at h'
+        simp only [pure, Except.pure, Except.ok.injEq] at h'
+        exact h'.symm
+      | fail _ => cases h
+
+/-- **The schedule on one more round's coins reaches one round further**: where the schedule on the coins `cr` has
+round `j + 1` and the coins before the last (`cr.pop`, `j` of them) schedule `sched`, `sched` has round `j`. -/
+theorem schedSoFar_pop_lt (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) {cr : Array (Array F128)} {j : ℕ}
+    {sched sched' : Array (ByteArray × ℕ)} (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched)
+    (hs' : schedSoFar t rep dom xs hi cr = .ok sched') (hcr : cr.size = j + 1) (hj : j + 1 < sched'.size) :
+    j < sched.size := by
+  rw [Array.eq_push_pop_back!_of_size_ne_zero (show cr.size ≠ 0 by omega)] at hs'
+  refine Nat.lt_of_not_le fun hle => ?_
+  have e := schedSoFar_snoc_done t rep dom xs hi cr.pop cr.back! hs (by rw [Array.size_pop]; omega) hs'
+  subst e
+  omega
+
 end Loop
 
 end Claims.ZKServer

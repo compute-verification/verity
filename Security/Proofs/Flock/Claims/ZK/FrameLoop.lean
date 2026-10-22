@@ -76,13 +76,15 @@ def ownRounds (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) : Array (By
 /-- **A rep's frame state after its first `i` rounds**, at the configuration `c` and the table `t`, its rounds' coins
 `cr` (one a released round, the last owed), rep 1's after rep 0's algebraic-phase coins (of `cr0`), its round `j`
 squeezing `ns j`: `Frame.run` over the drive's requests (`Drive.reqs`) with the scheduled rounds themselves in the
-device's place, an honest device's rounds but for the values each absorbs masked, up to its `i`-th round's. `{}` once the
-rep has ended, where the frame takes no coins (`Masker.answer` owes none at `{}`). -/
+device's place, an honest device's rounds but for the values each absorbs masked, up to its `i`-th round's. The rounds
+up to it are scheduled on the coins before the last (`cr.pop`), as `Frames.placeOf` places each round on the coins of
+the rounds before it, so the last coins, which the frame has not taken, are not read. `{}` once the rep has ended, where
+the frame takes no coins (`Masker.answer` owes none at `{}`). -/
 def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (i : ℕ) : Masker :=
   match (do
       let alg ← _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
-      return (alg.size, ← schedSoFar t rep dom xs hi cr) : V (ℕ × Array (ByteArray × ℕ))) with
+      return (alg.size, ← schedSoFar t rep dom xs hi cr.pop) : V (ℕ × Array (ByteArray × ℕ))) with
   | .error _ => {}
   | .ok (nAlg, sched) =>
     let prior := if rep = 0 then #[] else (cr0.extract 0 nAlg).foldl (· ++ ·) #[]
