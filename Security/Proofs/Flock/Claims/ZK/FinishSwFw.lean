@@ -25,6 +25,12 @@ Ligerito's `k₀ + 7 + 11 R`.
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
+/-- A view at clear values, as the table's: its `ŝ` is `ν + maskHom` at its mask. -/
+theorem FlockSoundness.ZK.Table.toBase_onVals_sHat {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.onVals.Rand) :
+    (T.toBase (T.onVals.view (w, v) ω)).pre.1 = T.nu w + T.maskHom ω.1 :=
+  rfl
+
 namespace FlockComplete
 
 open Flock Transcript Replay
@@ -348,8 +354,10 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
 theorem swViewE_sHat (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
     (swViewE x c w v τ j).pre.1 = ((tabC PE x j).T (czExe PE x c j)).tab.nu (wtOf PE x w j) +
-      ((tabC PE x j).T (czExe PE x c j)).tab.maskHom ((UE.tape x τ).1 j).1 :=
-  rfl
+      ((tabC PE x j).T (czExe PE x c j)).tab.maskHom ((UE.tape x τ).1 j).1 := by
+  show (((tabC PE x j).T (czExe PE x c j)).tab.toBase (((tabC PE x j).T (czExe PE x c j)).tab.onVals.view
+    (wtOf PE x w j, v j) (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0))).pre.1 = _
+  exact (FlockSoundness.ZK.Table.toBase_onVals_sHat _ _ _ _).trans rfl
 
 /-- **The switched source's `ŝ` vector `k < 2` is the worker's view's `ŝ_{2r+k}`**, where rep `r`'s rank check is
 reached before the stop: the switched source's switched vectors are the honest source's (`swSrcE_sv`), whose `ŝ` the
@@ -383,7 +391,6 @@ theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy
   dsimp only
   unfold Composed.shArr Composed.sHatAt
   rw [dite_eq_left hC]
-  all_goals rfl
 
 /-- **`swSrcE_hinner` at the ring switch's vectors from `repCut_fw`'s `hpiop`**: where the switched source's switched
 vectors are the firewall's (`hpsv`, `hpiop`'s second half), the firewall's `ŝ`s for claims `0` and `1` are the
