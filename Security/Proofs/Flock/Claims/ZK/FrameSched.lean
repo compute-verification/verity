@@ -1397,6 +1397,13 @@ theorem reqs_take (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (d
     rw [List.take_append_of_le_length (by omega), hr]
     rfl
 
+theorem feed_append {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l₁ l₂ : List (Array F128))
+    (rs : Array (ByteArray × ℕ)), s.feed (l₁ ++ l₂) rs = (s.feed l₁ rs).1.feed l₂ (s.feed l₁ rs).2
+  | s, [], l₂, rs => by cases s <;> rfl
+  | .ask c n k, a :: l₁, l₂, rs => feed_append (k a) l₁ l₂ (rs.push (c, n))
+  | .done _, _ :: _, l₂, _ => by cases l₂ <;> rfl
+  | .fail _, _ :: _, l₂, _ => by cases l₂ <;> rfl
+
 end Loop
 
 end Claims.ZKServer
