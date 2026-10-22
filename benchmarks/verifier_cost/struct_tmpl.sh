@@ -89,7 +89,7 @@ while [ $# -gt 0 ]; do
     grep -E 'Maximum resident|Elapsed' "$O/unroll-time-$tag.txt"
   fi
   if [ $layouts = 1 ]; then
-    /usr/bin/time -v uv run python benchmarks/verifier_cost/tmpl_layouts.py "$t" --modes today,iv,iv/strict --digest \
+    /usr/bin/time -v uv run python benchmarks/verifier_cost/tmpl_layouts.py "$t" --modes today,iv,iv/strict,iv/hybrid --digest \
       > "$O/layouts-$tag.out" 2> "$O/layouts-time-$tag.txt" || { tail -40 "$O/layouts-time-$tag.txt" >&2; exit 1; }
     grep '^LAYOUT ' "$O/layouts-$tag.out" | sed 's/^LAYOUT //' | tee "$O/layouts-$tag.jsonl" | cut -c1-400
     grep -E 'Maximum resident|Elapsed' "$O/layouts-time-$tag.txt"
@@ -98,7 +98,7 @@ while [ $# -gt 0 ]; do
     grep '^PHASE ' "$O/lean-layout-$tag.out" | sed 's/^PHASE //' | tee "$O/lean-layout-$tag.jsonl"
     python3 - "$O/layouts-$tag.jsonl" "$O/lean-layout-$tag.jsonl" <<'EOF' || exit 1
 import json, sys
-py = {r["strict"]: r["digest"] for r in map(json.loads, open(sys.argv[1])) if r.get("fallback") == "interleave"}
+py = {r["strict"]: r["digest"] for r in map(json.loads, open(sys.argv[1])) if r.get("fallback") == "interleave" and not r.get("hybrid")}
 ln = {r["phase"]: r.get("digest") for r in map(json.loads, open(sys.argv[2]))}
 bad = [m for m, s in (("iv", False), ("iv/strict", True)) if py.get(s) is None or py.get(s) != ln.get(m + "/map")]
 sys.exit(f"Tmpl.layout's map is not tmpl_layouts.py's: {bad}" if bad else 0)
