@@ -158,7 +158,9 @@ theorem lanes_call (t : Tmpl) (lays : Array Lay) (fuel d i : ℕ) (hi : i < (t.d
     (if ((lays.getD d default).places.getD i default).ms = 1 then 0
         else ((lays.getD d default).places.getD i default).ms.log2) +
       lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_ ≤ lanes t lays (fuel + 1) d :=
-  (le_foldl_max _ _ 0).2 i (List.mem_range.mpr hi)
+  (le_foldl_max (fun i => (if ((lays.getD d default).places.getD i default).ms = 1 then 0
+      else ((lays.getD d default).places.getD i default).ms.log2) +
+        lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_) _ 0).2 i (List.mem_range.mpr hi)
 
 /-- What the fold reads of the layout: each copy binds its callee's inputs, and a run of lanes takes `2^m ≥ count`
 lanes, its copies side by side (`cs = 1`). -/
@@ -261,7 +263,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
           (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ ?_).imp id (fun e => e.trans ?_)
         · exact (add_exp hs (fun _ _ => 0) 1 1 hq hchS.1).1
         refine (congrArg (· + _) (add_exp hs (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) 1 1 hq hchS.1).2).trans ?_
-        refine (add_assoc _ _ _).trans (congrArg (_ + ·) ?_)
+        refine (add_assoc _ _ _).trans (congrArg (HAdd.hAdd _) ?_)
         have eR : ∀ k, refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
             (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
               j * ((lays.getD d default).places.getD i default).cs))
@@ -278,7 +280,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
           (hchV fun k => ((t.defs.getD d default).calls.getD i default).bound
             (readExp t lays pt d β h as ip k) j).symm).symm
         unfold expVal
-        refine congrArg (_ + ·) ?_
+        refine congrArg (HAdd.hAdd _) ?_
         refine (zipIdx_sum (fun v t' => ∑ k ∈ Finset.range as.size, of ((ch.u.getD t' #[]).getD k 0) *
             Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_
         rw [hlay.bound d i j hi]
