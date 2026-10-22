@@ -196,6 +196,22 @@ theorem sum_lanes {M : Type} [AddCommMonoid M] (G : ℕ → M) (c : ℕ) : ∀ n
   | 0 => by simp
   | n + 1 => by rw [Nat.add_mul, Nat.one_mul, Finset.sum_range_add, sum_lanes G c n, Finset.sum_range_succ]
 
+theorem expVal_setP {s ins nk : ℕ} (iv : ℕ → ℕ → GF128) (o : Out) (p' : Array F128) (δ : GF128)
+    (h : of (p'.getD s 0) = of (o.p.getD s 0) + δ) (w : ℕ) :
+    expVal s ins nk iv { p := p', s := o.s, c := o.c, u := o.u, work := w } = expVal s ins nk iv o + δ := by
+  simp only [expVal, h]
+  ring
+
+theorem sum3_comm {M : Type} [AddCommMonoid M] (A : ℕ → ℕ → M) (B : ℕ → ℕ → ℕ → M) (n c T : ℕ) :
+    ∑ k ∈ Finset.range n, ∑ j ∈ Finset.range c, A k j +
+        ∑ j ∈ Finset.range c, ∑ t ∈ Finset.range T, ∑ k ∈ Finset.range n, B j t k =
+      ∑ k ∈ Finset.range n, ∑ j ∈ Finset.range c, (A k j + ∑ t ∈ Finset.range T, B j t k) := by
+  have e : ∑ j ∈ Finset.range c, ∑ t ∈ Finset.range T, ∑ k ∈ Finset.range n, B j t k =
+      ∑ k ∈ Finset.range n, ∑ j ∈ Finset.range c, ∑ t ∈ Finset.range T, B j t k :=
+    (Finset.sum_congr rfl fun j _ => Finset.sum_comm).trans Finset.sum_comm
+  rw [e, ← Finset.sum_add_distrib]
+  exact Finset.sum_congr rfl fun k _ => Finset.sum_add_distrib.symm
+
 /-! ## What a class's fold means -/
 
 /-- An explicit class `(d, β, h, as)`: with copy `k`'s inputs at `ip k`, its `expVal` is its copies' `refVal`s. -/
@@ -390,7 +406,63 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
           rw [hlay.bound d i j hi]
           exact Finset.sum_congr rfl fun t' _ => by rw [zero_add]
         · rw [if_neg hlt] at hr
-          sorry
+          obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
+          obtain ⟨pP, hP, hr⟩ := except_bind_ok hr
+          obtain ⟨b4, hJ, hr⟩ := except_bind_ok hr
+          cases hr
+          refine ⟨_, rfl, ?_⟩
+          obtain ⟨hchS, hchZ, hchV⟩ := (ih _ _ _ _ ch hch (by omega) (by omega)).2 (by omega)
+          have hX := add_exp hs (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) 0 0 hq hchS.1
+          have keyP := forIn_range_sum (fun p : Array F128 => of (p.getD s 0)) (fun p : Array F128 => p.size = 64)
+            (fun k => ∑ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count, ((if (as.getD k 0 + 2 ^ β * j) % 64 = s then of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * Tmpl.eqAt pt.r 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64) * ch.s) else 0) +
+                (if pt.qc % 64 = s then of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * ch.c * pt.g pt.qc) else 0))) hP hX.1.1 ?_
+          · obtain ⟨hqP, hsP⟩ := keyP
+            have keyJ := forIn_range_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (Shape (t.defs.getD d default).ins as.size)
+              (fun j => ∑ t' ∈ Finset.range (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins, ∑ k ∈ Finset.range as.size,
+                of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * (ch.u.getD t' #[]).getD 0 0) *
+                  Gs pt s (readExp t lays pt d β h as ip k ((((t.defs.getD d default).calls.getD i default).bound id j).getD t' 0)))
+              hJ ⟨hqP, hX.1.2⟩ ?_
+            · obtain ⟨hqJ, hsJ⟩ := keyJ
+              refine ⟨hqJ, hsJ.trans ?_⟩
+              refine (congrArg₂ (· + ·) ((expVal_setP _ _ _ _ hsP _).trans
+                (congrArg₂ (· + ·) (hX.2.trans (by rw [hchZ s hs, add_zero])) rfl)) rfl).trans ?_
+              refine (add_assoc _ _ _).trans (congrArg (HAdd.hAdd _) ?_)
+              refine (sum3_comm _ _ _ _ _).trans (Finset.sum_congr rfl fun k hk => Finset.sum_congr rfl fun j hj => ?_)
+              have hk' := Finset.mem_range.mp hk
+              have hj' := Finset.mem_range.mp hj
+              have e2 : as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs) =
+                  as.getD k 0 + 2 ^ β * j + 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) := by
+                rw [hcs, Nat.mul_one, ← hB, Nat.mul_assoc, ← hh]; ring
+              rw [e2, hB, ← hchV _ (lane_lt (has k hk') (lt_of_lt_of_le hj' (hcnt.trans_eq hpow.symm))) _]
+              unfold sumVal
+              rw [mul_add, Finset.mul_sum]
+              refine congrArg₂ (· + ·) ?_ (Finset.sum_congr rfl fun t' ht' => ?_)
+              · unfold gLow Gs eLow
+                rw [mul_add]
+                refine congrArg₂ (· + ·) ?_ ?_ <;> split_ifs <;> simp only [of_mul, mul_zero, zero_mul] <;> ring
+              · rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+                simp only [eLow, of_mul, mul_assoc]
+            intro j _ b r hr hq
+            cases hr
+            refine ⟨_, rfl, ?_⟩
+            refine (bind_exp pt hs ip
+              (fun k y => as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
+              (fun t' k => (pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * (ch.u.getD t' #[]).getD 0 0)
+              (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ hq).imp id (fun e => e.trans ?_)
+            refine congrArg (HAdd.hAdd _) ((zipIdx_sum (fun v t' => ∑ k ∈ Finset.range as.size,
+              of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * (ch.u.getD t' #[]).getD 0 0) * Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_)
+            rw [hlay.bound d i j hi]
+            exact Finset.sum_congr rfl fun t' _ => by rw [zero_add]
+          intro k _ p r hr hq
+          obtain ⟨p5, hJ', hr⟩ := except_bind_ok hr
+          cases hr
+          refine ⟨_, rfl, ?_⟩
+          refine forIn_range_sum (fun p : Array F128 => of (p.getD s 0)) (fun p : Array F128 => p.size = 64)
+            (fun j => ((if (as.getD k 0 + 2 ^ β * j) % 64 = s then of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * Tmpl.eqAt pt.r 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64) * ch.s) else 0) +
+                (if pt.qc % 64 = s then of ((pt.lw.getD ((as.getD k 0 + 2 ^ β * j) % 64) 0 * Tmpl.eqAt pt.rho 0 ((β + ((lays.getD d default).places.getD i default).ms.log2) - 6) ((as.getD k 0 + 2 ^ β * j) / 64)) * ch.c * pt.g pt.qc) else 0))) hJ' hq fun j _ p r hr hq => ?_
+          cases hr
+          refine ⟨_, rfl, by rw [addAt_size, addAt_size]; exact hq, ?_⟩
+          rw [addAt_get _ _ _ (by rw [addAt_size, hq]; exact hs), addAt_get _ _ _ (by rw [hq]; exact hs), add_assoc]
     · intro ⟨x, ra, rb⟩ _ b r hr hq
       dsimp only at hr
       obtain ⟨b1, hk, hr⟩ := except_bind_ok hr
