@@ -18,7 +18,8 @@
 #      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
 #      units derived; flipped-zy, wrong-receipt, other-window
 #      REJECT; other-window-own ACCEPT; tampered-a, ok-zero and ok-unregistered REJECT by their registered reads, each
-#      against its own public file; in-receipt, in-d, the record negatives
+#      against its own public file; ok-known-root (honest's session under a file whose ok root is not its known rows',
+#      `h1unit.known_ok`) refused reading --registered, exit 2 and no verdict; in-receipt, in-d, the record negatives
 #      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
 #      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on

@@ -18,8 +18,10 @@ prover and the verifier of `run.py` share.
   the public salt hides nothing that needed hiding.
 * **The ok row** is a row of known content, registered by the verifier: the value ``ok`` (`OK_VALUE`, `register_ok`),
   row u unit u's, is the one word 1 (`OK`) under a public salt (`ok_salt`) at every unit of the window, and the unit's
-  ``ok`` port (o1) is a port of the verifier's ``--registered`` file (`registered_reads`), so Lean opens each instance's
-  ok row against that root at the unit's position, and a proof it accepts is one whose unit computed 1
+  ``ok`` port (o1) is a port of the verifier's ``--registered`` file (`registered_reads`), named at its known content
+  (`known_ok`: flock-verify computes ``ok``'s root from those rows and refuses the file at another, `check_known`), so
+  Lean opens each instance's ok row against that root at the unit's position, and a proof it accepts is one whose unit
+  computed 1
   (`Accounting.Guarantees.TS.CheckedSessionSound`'s port named ``ok`` in the circuit and in ``own``). A record that is
   not the tile's product and its dequant makes the unit compute 0, whose row opens no registered root, and a prover that
   commits 1 anyway commits a wrong witness.
@@ -259,6 +261,37 @@ def register_ok(program: str, window: str, population: int, window_root: str) ->
                     window_root)
 
 
+def known_ok(window: str, population: int) -> dict:
+    """The known content of ``window``'s ``ok`` rows as flock-verify's ``--registered`` file names it under a port's
+    ``known`` key (`Registered.KNOWN_KEY`, `Flock/RegKnown.lean`): row u the one word 1 (`OK`) and its public `ok_salt`, so
+    the verifier computes ``ok``'s root itself and refuses a file whose ``ok`` root is another (RT4-LOGIC-29a,
+    `Accounting.Guarantees.TS.HeldSessionSound`)."""
+    return {"rows": [OK.tolist()] * int(population), "salts": [ok_salt(window, u).hex() for u in range(int(population))]}
+
+
+def check_known(program: str, window_root: str, port: str, entry: dict) -> str | None:
+    """Why a ``--registered`` port entry named at known content (``entry["known"]``, `known_ok`) is refused, or None: its
+    rows are ``row/v2`` rows of 16-bit leaves, as many as its leaves, each of its words under a 192-byte salt, and its root
+    is the root of their registration (`register` under the window Program's digest ``program`` and the window's open root
+    ``window_root``): `Registered.checkKnown`, flock-verify's check of ``--registered``, which roots them at the entry's
+    domain as given, where this also holds that domain to the window's."""
+    rows, salts = entry["known"]["rows"], entry["known"]["salts"]
+    schema, bits = entry.get("row_schema"), entry.get("word_bits", G.WORD_BITS)
+    if schema != V2 or bits != 16:
+        return (f"registered reads: port {port}: known content is of {V2} rows of 16-bit leaves, and {entry['value']}'s "
+                f"are {schema} rows of {bits}-bit leaves")
+    if len(rows) != entry["leaves"] or len(salts) != len(rows):
+        return f"registered reads: port {port}: {len(rows)} known rows of {entry['value']}'s {entry['leaves']}"
+    if any(len(r) != entry["words"] or any(not 0 <= w < 1 << 16 for w in r) for r in rows) or \
+            any(len(bytes.fromhex(s)) != SALT_BYTES for s in salts):
+        return f"registered reads: port {port}: a known row is not {entry['words']} u16 words under a {SALT_BYTES}-byte salt"
+    reg = register(program, entry["value"], np.array(rows, np.uint16), [bytes.fromhex(s) for s in salts], window_root)
+    if reg.root.hex() != entry["root"] or reg.domain.domain_id.hex() != entry["domain"]:
+        return (f"registered reads: port {port}: {entry['value']}'s registered root is not the root of its {len(rows)} "
+                f"known rows")
+    return None
+
+
 def registered_domain(program: str, name: str, leaves: int, window_root: str) -> CommitmentDomain:
     return G.domain(program, name, value_words(name), int(leaves), window=bound_root(name, window_root))
 
@@ -277,15 +310,17 @@ def verify_registered(program: str, name: str, leaves: int, root: bytes, index: 
                          bytes.fromhex("".join(sibs)), V2)
 
 
-def registered_reads(program, tp, call: int, roots: dict[str, str], window_root: str, prog: str | None = None) -> dict:
+def registered_reads(program, tp, call: int, roots: dict[str, str], window: str, window_root: str,
+                     prog: str | None = None) -> dict:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (flock-verify ``verify --zk
     --registered``, `h1window.table_reads_file`): for each registered port (`window_ports`), the value it reads (the
     call's A table or z table, or the weights' b/<K>), its root (``roots`` ``{value: root}``, the window's registration),
     rows, width and domain (the tables' binding the window's open root ``window_root``, b/<K>'s none), and the row each
     unit of the call reads in the verifier's own Program (``program``, ``tp`` its template partition; ``prog`` its
     digest), None at every other unit; and the ok port (o1), which reads the verifier's own ``ok`` (`register_ok`, its
-    root ``roots[OK_VALUE]``, its domain binding ``window_root`` too) at the unit's row of the Program's output. The one
-    place h1_prove derives it."""
+    root ``roots[OK_VALUE]``, its domain binding ``window_root`` too) at the unit's row of the Program's output, named at
+    its known content (`known_ok` of the window ``window``), which flock-verify holds the root to. The one place h1_prove
+    derives it."""
     if OK_VALUE not in roots:
         raise ValueError(f"the verifier registers its ok rows ({OK_VALUE}) beside the window's values, and holds no root of them")
     prog = prog or P.program_digest(program)
@@ -299,7 +334,7 @@ def registered_reads(program, tp, call: int, roots: dict[str, str], window_root:
     doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": G.WORD_BITS,
                         "domain": registered_domain(prog, OK_VALUE, T, window_root).domain_id.hex(),
                         **G.schema_entry(G.SCHEMA_V2),
-                        "reads": rows}
+                        "reads": rows, "known": known_ok(window, T)}
     return doc
 
 

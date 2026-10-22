@@ -203,15 +203,15 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert okr.root != U.register_ok(win.obj["program"], "w", T, U.open_root("v", bytes(64))).root
     roots = {v: r for v, (_n, r) in reg.items()}
     with pytest.raises(ValueError, match="holds no root of them"):
-        U.registered_reads(win.program, win.tp, 0, roots, wr, win.obj["program"])
+        U.registered_reads(win.program, win.tp, 0, roots, "w", wr, win.obj["program"])
     roots["ok"], leaves = okr.root.hex(), {**tables, "ok": T}
     docs = {}
     for c, (first, n) in enumerate(U.HW.call_units(win.program)):
-        reads = U.registered_reads(win.program, win.tp, c, roots, wr, win.obj["program"])
+        reads = U.registered_reads(win.program, win.tp, c, roots, "w", wr, win.obj["program"])
         assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
-            assert {x: e[x] for x in e if x != "reads"} == {
+            assert {x: e[x] for x in e if x not in ("reads", "known")} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
                 "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
@@ -220,10 +220,28 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert reads["ports"]["zy"]["words"] == 3 * RC and reads["ports"]["a0"]["words"] == K // 2 + 2
         assert reads["ports"]["o1"]["value"] == "ok" and reads["ports"]["o1"]["words"] == 1
         assert reads["ports"]["o1"]["reads"] == [u if first <= u < first + n else None for u in range(T)]
+        assert [p for p, e in reads["ports"].items() if "known" in e] == ["o1"]
+        assert reads["ports"]["o1"]["known"] == U.known_ok("w", T) == {
+            "rows": [[1]] * T, "salts": [U.ok_salt("w", u).hex() for u in range(T)]}
+        assert U.check_known(win.obj["program"], wr, "o1", reads["ports"]["o1"]) is None
         wrote, doc = RN.registered_file(tmp_path / f"c{c}.registered.json", win, com, c, [first, first + n - 1], okr)
         assert doc == reads and json.loads((tmp_path / f"c{c}.registered.json").read_text()) == reads
         assert wrote["roots"]["ok"] == okr.root.hex() and "o1" in wrote["ports"]
         docs[c] = doc
+
+    # flock-verify holds ok's root to its known rows (Registered.checkKnown): a root with one unit's row 0 is refused, as
+    # are known rows of another window's salts, too few of them, or a wider row
+    o1 = docs[0]["ports"]["o1"]
+    kr = RN.ok_known_root(tmp_path / "ok-known-root.registered.json", win, com, docs[0], 3)
+    assert kr["honest"] is None and kr["root"] != okr.root.hex()
+    assert kr["refused"] == f"registered reads: port o1: ok's registered root is not the root of its {T} known rows"
+    bad = json.loads((tmp_path / "ok-known-root.registered.json").read_text())
+    assert bad["ports"]["o1"] == dict(o1, root=kr["root"]) and {p: e for p, e in bad["ports"].items() if p != "o1"} == {
+        p: e for p, e in docs[0]["ports"].items() if p != "o1"}
+    for known, why in ((U.known_ok("v", T), "is not the root of its"), (U.known_ok("w", T - 1), f"{T - 1} known rows of ok's {T}"),
+                       (dict(o1["known"], rows=[[1, 0]] * T), "a known row is not 1 u16 words")):
+        assert why in U.check_known(win.obj["program"], wr, "o1", dict(o1, known=known))
+    assert "is not the root of its" in U.check_known(win.obj["program"], U.open_root("v", bytes(64)), "o1", o1)
 
     # window credit's registration step takes the window's evidence: one drawn unit of each call, its finding its call's
     # --registered ports, under the descriptor whose SHA-512 is the Program's; and refuses each per-window value without

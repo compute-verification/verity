@@ -312,7 +312,9 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
     k, t = com["unit"]["k"], time.time()
     reg = {*U.Shape(k).in_rows, "o1"}
     doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
-                             U.window_open_root(com), win.obj["program"])
+                             com["window"], U.window_open_root(com), win.obj["program"])
+    if why := U.check_known(win.obj["program"], U.window_open_root(com), U.OUT_PORTS["ok"], doc["ports"][U.OUT_PORTS["ok"]]):
+        raise SystemExit(f"call {call}'s registered file: {why}")
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
         got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
@@ -335,6 +337,22 @@ def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNa
     leaves, root = roots[e["value"]]
     return U.verify_registered(win.obj["program"], e["value"], leaves, bytes.fromhex(root), e["positions"][row],
                                body[128 * at:128 * (at + 1)], [e["paths"][row]], window_root)
+
+
+def ok_known_root(path: Path, win: SimpleNamespace, com: dict, doc: dict, unit: int) -> dict:
+    """A ``--registered`` file ``doc`` whose ``ok`` port keeps its known content (every unit's row the one word 1) and
+    states the root of a registration of ``ok`` with ``unit``'s row 0 (a prover's, whose unit computed 0) under the same
+    salts, written to ``path``: flock-verify must refuse it as its root is not the known rows' (`h1unit.check_known`).
+    Returns the Python mirror's refusal of it and its acceptance of ``doc``."""
+    o1, wr = U.OUT_PORTS["ok"], U.window_open_root(com)
+    e = doc["ports"][o1]
+    rows = np.array(e["known"]["rows"], np.uint16)
+    rows[unit] = 0
+    zero = U.register(win.obj["program"], U.OK_VALUE, rows, [bytes.fromhex(s) for s in e["known"]["salts"]], wr)
+    bad = dict(doc, ports=dict(doc["ports"], **{o1: dict(e, root=zero.root.hex())}))
+    path.write_text(json.dumps(bad))
+    return {"unit": unit, "root": zero.root.hex(), "honest": U.check_known(win.obj["program"], wr, o1, e),
+            "refused": U.check_known(win.obj["program"], wr, o1, bad["ports"][o1])}
 
 
 def credit_descriptor(win: SimpleNamespace) -> bytes:
@@ -590,6 +608,11 @@ def cmd_prepare(a) -> int:
     if (not cr["descriptor_sha512_is_program"] or cr["reads"] is not None
             or any((cr[x] or [None])[0] != "registration" for x in ("unrooted", "ok-unrooted", "other-window-root"))):
         raise SystemExit(f"window credit's registration step does not take {w1}'s evidence and refuse the unrooted: {cr}")
+    # an ok registration whose root is not the known rows' (row u0 a 0): flock-verify refuses the file before any session
+    kr = record["ok_known_root"] = ok_known_root(vp / "ok-known-root.registered.json", win, com1, docs1[c0], u0)
+    log(f"ok-known-root: {kr}")
+    if kr["honest"] is not None or not kr["refused"]:
+        raise SystemExit(f"the known-content check does not hold ok's root to its known rows: {kr}")
 
     # the statements: each drawn call's units on the honest rows, the other window's unit, the tampered A row, and each
     # in-proof negative's base (the first drawn call's units on its window's rows) where its records are not the honest
@@ -707,6 +730,9 @@ def cmd_prepare(a) -> int:
                         "why": ok_afresh},
                        {"tag": "ok-zero", "statement": "ok-zero", "pub": str(base[OK_ZERO] / "pub.bin"),
                         "registered": str(regs[OK_ZERO]), "expect": "REJECT", "why": ok_zero},
+                       # refused reading its --registered file, before any session: ok's root is not its known rows'
+                       {"tag": "ok-known-root", "statement": "honest", "pub": str(vp / "honest.pub.bin"),
+                        "registered": str(vp / "ok-known-root.registered.json"), "expect": "INPUT", "why": kr["refused"]},
                        *({"tag": d, "statement": d, "pub": str(vp / f"{t}.pub.bin"), "registered": str(regs[t]),
                           "expect": "REFUSED"} for t in IN_PROOF for d in (t, f"{t}{SKIP}"))]}
     if a.only:
@@ -862,6 +888,13 @@ def cmd_summarize(a) -> int:
             extra = {"layers": lay, "refused_by": by,
                      "lean_err": (out / "lean" / f"{c['tag']}.err").read_text(errors="replace").strip().splitlines()[-2:]
                      if (out / "lean" / f"{c['tag']}.err").exists() else None}
+        elif c["expect"] == "INPUT":
+            # refused reading its inputs: no VERDICT, exit 2, and the reason on stderr
+            err = out / "lean" / f"{c['tag']}.err"
+            text = err.read_text(errors="replace") if err.exists() else ""
+            word = "INPUT" if v is None and (t or {}).get("exit") == 2 and c["why"] in text else word
+            good = word == "INPUT"
+            extra = {"why_expected": c["why"], "lean_err": text.strip().splitlines()[-2:]}
         else:
             # an accepted unit's index binds its rows only as far as Lean derived it from the verifier's own Program
             good = (word == c["expect"] and (word != "ACCEPT" or (v or {}).get("partition", {}).get("units") == "derived")
