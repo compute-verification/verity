@@ -8,7 +8,8 @@
 # template gets tmpl_layouts.py's today and option (iv) layouts, lenient and strict (layouts-SHAPE.jsonl), and the Lean
 # layout's (`flock-tmpl layout`, lean-layout-SHAPE.jsonl), whose column maps must agree with them; after --fold, each
 # later shape's `Tmpl.fold` on the lenient layout (fold-SHAPE.jsonl), and after --fold-ref, also its reference
-# `Tmpl.foldRef` (O(unrolled)), which it must equal. Run from a clone:
+# `Tmpl.foldRef` (O(unrolled)), which it must equal. After --lane, each later shape's unit (and --check's) is one 4 × 8
+# lane of its R × C leaf (`h1unit.lane_unit`, option A's statement unit), its files tagged lane-SHAPE. Run from a clone:
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
 # $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
@@ -39,7 +40,13 @@ X=$S/tmpl/.lake/build/bin/flock-tmpl
 unroll=0
 layouts=0
 fold=
+lane=()
 while [ $# -gt 0 ]; do
+  if [ "$1" = --lane ]; then
+    lane=(--lane)
+    shift
+    continue
+  fi
   if [ "$1" = --fold ] || [ "$1" = --fold-ref ]; then
     fold=$1
     shift
@@ -56,18 +63,20 @@ while [ $# -gt 0 ]; do
     continue
   fi
   if [ "$1" = --check ]; then
-    k=$2
+    k=${lane:+lane-}${2// /x}
+    shape=${2// /x}
     shift 2
-    /usr/bin/time -v uv run python -m verity_flock.struct_lower "$k" --check > "$O/check-$k.out" 2> "$O/check-time-$k.txt" \
+    /usr/bin/time -v uv run python -m verity_flock.struct_lower ${shape//x/ } "${lane[@]}" --check > "$O/check-$k.out" 2> "$O/check-time-$k.txt" \
       || { tail -40 "$O/check-time-$k.txt" >&2; exit 1; }
     grep '^STRUCT ' "$O/check-$k.out" | sed 's/^STRUCT //' | tee "$O/check-$k.json"
     grep -q '"mismatched_bits": 0,' "$O/check-$k.json" || { echo "K=$k: the structural unit's outputs differ" >&2; exit 1; }
     continue
   fi
-  tag=${1// /x}
+  tag=${lane:+lane-}${1// /x}
+  shape=${1// /x}
   shift
   t=$S/unit-$tag.tmpl
-  /usr/bin/time -v uv run python -m verity_flock.struct_lower ${tag//x/ } --out "$t" > "$O/struct-$tag.out" \
+  /usr/bin/time -v uv run python -m verity_flock.struct_lower ${shape//x/ } "${lane[@]}" --out "$t" > "$O/struct-$tag.out" \
     2> "$O/struct-time-$tag.txt" || { tail -40 "$O/struct-time-$tag.txt" >&2; exit 1; }
   grep '^STRUCT ' "$O/struct-$tag.out" | sed 's/^STRUCT //' | tee "$O/struct-$tag.json"
   /usr/bin/time -v "$X" read "$t" > "$O/read-$tag.out" 2> "$O/read-time-$tag.txt" \

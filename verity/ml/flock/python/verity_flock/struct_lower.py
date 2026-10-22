@@ -536,20 +536,22 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out")
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--lane", action="store_true", help="one 4 x 8 lane of the R x C leaf (h1zy.PouwH1LaneZy), not the tile")
     a = ap.parse_args(argv)
     h1 = Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "h1_prove"
     sys.path[:0] = [str(h1), str(h1.parent / "hidden_zk")]
     import h1unit as U
 
     shape = U.Shape(*a.shape)
+    unit = U.lane_unit(shape) if a.lane else shape.unit()
     t0 = time.time()
     if a.flat:
-        out = flat(shape.unit())
+        out = flat(unit)
     elif a.check:
-        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance,
+        out = {"check": check(unit, a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance,
                              gather=not a.scattered_returns)}
     else:
-        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance,
+        t, lw, top = lower(unit, a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance,
                            gather=not a.scattered_returns)
         size = None
         if a.out:
@@ -558,7 +560,7 @@ def main(argv: list[str]) -> int:
             size = len(text)
         out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance,
                                                "gather": not a.scattered_returns}
-    out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
+    out |= {"k": shape.k, "tile": [shape.r, shape.c], "lane": a.lane, "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
     return 0

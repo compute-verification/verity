@@ -388,6 +388,14 @@ class Shape:
         return CS.UnitStager(template, name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind)
 
 
+def lane_unit(shape: Shape):
+    """Option A's statement unit at ``shape``: one 4 × 8 lane of its R × C leaf (`h1zy.PouwH1LaneZy` over the leaf's tile,
+    `h1window.h1_tile`), bound at any K (`h1zy.lane` refuses a K below `h1zy.LEAST_K`)."""
+    from verity.core.protocols.pouw.circuit import h1tile as H, h1zy as Z
+    from verity.ml.circuits.defs import bind
+    return bind(Z.PouwH1LaneZy, TILE=HW.h1_tile(shape.k, (shape.r, shape.c), H.PouwH1Tile3 if tile() == "v3" else None))
+
+
 # -- words ------------------------------------------------------------------------------------------------------------------
 
 def row_words(codes: np.ndarray, scales) -> np.ndarray:
