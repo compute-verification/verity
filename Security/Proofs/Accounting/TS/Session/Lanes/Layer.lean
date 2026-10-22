@@ -1,4 +1,5 @@
 import Proofs.Accounting.TS.Session.Checked.Layer
+import Proofs.Flock.Recursive.Registrants
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -7,7 +8,12 @@ Under option A a drawn 32 × 32 H1 leaf is proved as 33 statements (`h1zy`, SERV
 `PouwH1LaneZy_v1{TILE}`, lane `l` reading its 4 A rows by row slot, its 8 B rows by column slot, the leaf's admit bits,
 its whole z/y record, row `l` of the leaf's partials, the salt, position and roots, and the index `l`, and returning
 `ok`; and their combine `PouwH1Combine_v1{TILE}`, reading the 32 partials rows and the leaf's receipt and returning `ok`.
-The partials are committed once, after the draw, under hiding leaves, and all 33 statements open that one commitment.
+
+The leaf is one unit of the declared circuit (RT4-LOGIC-30's ruling): the 33 statements' `ok` words are that unit's
+`check` words, and its partials are proof-layer values, no values of the declared circuit. They are committed once,
+after the draw, under hiding leaves, read only by the unit's own 33 statements, which all open that one commitment,
+and they are what the unit's checks are proved through, not inputs it is credited on. So the unit's served checks
+(`UnitServed`) read its A and B rows, its record and its receipt, and no partials row.
 
 This file states, on words, what the 33 statements check and what one unit's served checks are:
 
@@ -23,10 +29,16 @@ This file states, on words, what the 33 statements check and what one unit's ser
 * `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
   partials (#3095's order, the tile unit's receipt as `lane_partials` splits it);
+* `RowsAgree`, `LeafColl`: the 33 sessions' registrants' rows (`RowsSession.rdU`, each the commit-time opening its
+  session registers) are one row's bytes wherever two of them read one registered root at one position; or two of the
+  registrants' records clash (`ReadsX.Clash`: their openings, or hm96's leaves over their rows, are two different
+  SHA-512 inputs with one digest, both in hand). Each opening opens its root there (`ReadsX.committed`), so one of the
+  two holds (`Accounting.TS.Lanes.rowsAgree_or_leafColl`);
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), opens the
   leaf's values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation
-  is `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`).
+  is `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or
+  `LeafColl` at the proof's sessions.
 
 Words are integers as `Accounting.Served` reads them (codes s8, z s32, scales and y their encodings); partial and
 receipt words are `BitVec 32`. These definitions sit beside the checked layer's, under `reads_exempt`'s
@@ -130,10 +142,30 @@ noncomputable def portRead (s : RowsSession) (vals : Fin s.Circ.N → Bool) : �
       else none
     else none
 
+/-- The session's row encodings (`rsShHJS`), the ones its registrants' openings are of. -/
+noncomputable abbrev rsOf (s : RowsSession) :=
+  rsShHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub
+
+/-- **A leaf's sessions' registrants' rows agree at one root and position**: wherever registered reads `p` of unit
+`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` name one registered port and one position,
+the two registrants' rows there are one row's bytes, each at its session's encoding. -/
+def RowsAgree (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∀ (k k' : Option (Fin 32)) (u : Fin (sess k).n) (u' : Fin (sess k').n) (p : (sess k).vb.Pos)
+    (p' : (sess k').vb.Pos), ((sess k).rdU u).isRead p → ((sess k').rdU u').isRead p' →
+    ((sess k).rdU u).port p = ((sess k').rdU u').port p' → ((sess k).rdU u).readAt p = ((sess k').rdU u').readAt p' →
+    (rsOf (sess k)).enc p (((sess k).rdU u).wv p) = (rsOf (sess k')).enc p' (((sess k').rdU u').wv p')
+
+/-- **Two of a leaf's sessions' registrants' records clash**: some unit's registrant in session `k` and some unit's in
+session `k'` (the same session or not) have registered reads whose openings, or hm96's leaves over their rows, are two
+different SHA-512 inputs with one digest (`ReadsX.Clash`). -/
+def LeafColl (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∃ (k k' : Option (Fin 32)) (u : Fin (sess k).n) (u' : Fin (sess k').n), ((sess k).rdU u).Clash ((sess k').rdU u')
+
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
 combine's), opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks
-(`UnitServed`) at the path's public inputs and receipt. -/
+(`UnitServed`) at the path's public inputs and receipt, or two of its sessions' registrants' records clash
+(`LeafColl`). -/
 noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession) (out : ∀ x w i k, (sess x w i k).Out)
     (dq : List ℤ → ℤ) (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
@@ -142,7 +174,7 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) : ProofLayer Ω S nπ (Leaf K) where
   accepted x w i := ∀ k, LiveAcceptsZKR (sess x w i k).I (sess x w i k).own (out x w i k)
   opened := leaf
-  rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v
+  rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i)
   right := right
 
 end Accounting.TS.Lanes

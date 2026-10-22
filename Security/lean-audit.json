@@ -118,14 +118,6 @@
    "owner": "@compute-accounting",
    "digest": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb"
   },
-  "Accounting.Assumptions.TS.LeafChecks": {
-   "owner": "@compute-accounting",
-   "digest": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
-  },
-  "Accounting.Assumptions.TS.LeafShared": {
-   "owner": "@proofs",
-   "digest": "0a63b9efa55ac209d3f17e3f27ee637430406cd8b420b2282f5a617e5fe68611"
-  },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
    "digest": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e"
@@ -1428,6 +1420,14 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Accounting.Assumptions.TS.LeafChecks": {
+   "owner": "@compute-accounting",
+   "digest": "056558c615a58fcf15dc7c4a6bff926bb05c586218bc3a158e91ead9056e5cd0"
+  },
+  "Accounting.Assumptions.TS.LeafReads": {
+   "owner": "@proofs",
+   "digest": "0a63b9efa55ac209d3f17e3f27ee637430406cd8b420b2282f5a617e5fe68611"
   }
  },
  "meaning": [
@@ -10028,8 +10028,7 @@
    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.PeriodRun.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
-   "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer.",
-   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses and flock-verify's complete check (Flock.Registered.checkComplete) at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafShared (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
+   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses and flock-verify's complete check (Flock.Registered.checkComplete) at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafReads (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed. The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
    "Pouw.Guarantees.FiatShamir.FiatShamirFloor": "unstated: proofs' gap (7), the Fiat-Shamir floor per prover (breakBoundFS, ecr/sha-512 at each adversary's collision finders within budgets computed from its time, plus eps_id and T*tau, the grinding term T*mu^m of Daniel's 17 Oct ruling on per-matmul Fiat-Shamir seeds); stated for red team and proofs' review (RT-DELTA r2, CMP-33, CMP-59), not proved yet",
    "Pouw.Guarantees.FiatShamir.SteerBoundOfMoment": "unstated: GRIND's per-query moment as SteerBound's instance (proofs' gap (7)); stated, not proved yet",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
@@ -10057,7 +10056,8 @@
    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance."
+   "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20388,7 +20388,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
-    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -23907,7 +23906,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "04362d04f6a5c622dd2b5e3891e8e7c0f82d868dca7a78ce4be9b0dd1d780d0c",
+   "digest": "3e0aedcf5d3cccd3c1461676d3a4208cc8cf0777bc14d1df231db34e7888f3ca",
    "definitions": {
     "Flock.Registered.Port": "b2ceab75d180399fb80178656c2a19ef13d5270040a19e96240d3caf5a006604",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -23927,12 +23926,10 @@
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
-    "Flock.Registered.checkComplete": "0add672c27faa0d6c4d7f9d2d09bf4cdd54e28760d92cba985ec6416467ef3b9",
     "Flock.Registered.checkPort": "5aee71fc42cb1438af6f08da2787079b0e70003ee9fa7e608ff8f2acb42988a0",
     "Flock.Registered.checkPort._sparseCasesOn_1": "b8246ea527260928106879482836f843f36ca8b1c9c84cb9b9a1d20231ed7048",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
-    "Flock.Registered.complete": "fc4ad4af389395741337b9b56e83854ea866157305a8bb2410cf64bf3e4bd30d",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
     "Flock.Registered.domain": "2004c3cadc9987e7a4937852f500cf610965135abf26fb71b99bd94c4700e444",
     "Flock.Registered.entry": "33679b79172b2252c0e954b11fd386a06a136aa56539287c7e076683f87af733",
@@ -27703,22 +27700,22 @@
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Assumptions": {
-   "digest": "4198443f05311ee16eb814bb01b5535ccb9e2c54d8f80a9a29901514b94c7045",
+   "digest": "072281ec5231e9576c9cd43592089ace14d51f3bed0eca090ab32fefd18f110e",
    "definitions": {
-    "Accounting.Assumptions.TS.LeafChecks": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4",
-    "Accounting.Assumptions.TS.LeafShared": "0a63b9efa55ac209d3f17e3f27ee637430406cd8b420b2282f5a617e5fe68611"
+    "Accounting.Assumptions.TS.LeafChecks": "056558c615a58fcf15dc7c4a6bff926bb05c586218bc3a158e91ead9056e5cd0",
+    "Accounting.Assumptions.TS.LeafReads": "0a63b9efa55ac209d3f17e3f27ee637430406cd8b420b2282f5a617e5fe68611"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "1adcc76e1636f6fdaceab2a2f286a950c3ee961ccbeec5764d175cd01c2d8487",
+   "digest": "ceb15b420f6feeba253f57ccb3f2d71afd119688b4d447199fb2015c52065f30",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "7574198b0afc6d857b92090b0d930b70cee80fee72bf83bcd67a0f613b602302"
+    "Accounting.Guarantees.TS.LeafLanesSound": "4e0599091688d911a7b6502882867d0dacbdf1988be5f4690109c88a6d81c62e"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "dc7705bbff4cd2f6d5248533884e6b50bc4d574424a117005a784066fd93cd8c",
+   "digest": "41ebbc5be948c5fa9783a9bd462eb35460a18c89a995246c9cea85eda8653d04",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -27741,7 +27738,6 @@
     "Accounting.TS.Lanes.Leaf.b": "ea8aaf8edc42a08cba6a8b0aa275618a2b2677ef760870c6f08b2b912c41a34d",
     "Accounting.TS.Lanes.Leaf.y": "133acf9a8be6b6a565b7dc22b0435b674ebb34129ec169fd30797f8573659f1b",
     "Accounting.TS.Lanes.Leaf.z": "c1722d2e4644f590628ff8d775a1ff994346be4b59a49ea146b5b63b0e3e95b2",
-    "Accounting.TS.Lanes.PortRow": "bcbbee52ee48532acfe17e361227a5d08596d5ca96680b4e5c05d863817fb6e0",
     "Accounting.TS.Lanes.Row": "08a18686602fb48225cadf84a1cf8263f339176dfc7652182a73c7b9c98cf6d7",
     "Accounting.TS.Lanes.Row.codes": "bf093c07eb6704a76bcee5e4e7840cd58a07e9d2e2c7a96d38f8ec0a296bc6db",
     "Accounting.TS.Lanes.Row.scale": "7dad5dfc6e38ae7fcf1adb72dd9df1aeb448ffb7825eb0e19fb249b4b6e2a717",
@@ -27751,7 +27747,6 @@
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
     "Accounting.TS.Lanes.laneView": "4359b4bf7a323d5b1db6d8cc4ab9de3b4972887cc8be63ea2b27a362839ac9ee",
     "Accounting.TS.Lanes.leafLayer": "05dda610d3beb9602b3fce4add70293bbc2561a67adc4c535355c5a0379cca4c",
-    "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
     "Accounting.TS.Lanes.xorAll": "a96359ab1436113e227f53947be6c561c42fe7dba8207ab4d0908ce76934c193"
    },

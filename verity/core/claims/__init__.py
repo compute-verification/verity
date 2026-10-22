@@ -441,11 +441,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
-    Entry("accounting-ts-leaf-shared", "assumption",
-          "A leaf's 33 sessions open one leaf, one partials record and one receipt: the service registers each "
-          "committed row (the leaf's A, B and z/y rows, the post-draw partials) with one commit-time opening in every "
-          "session that reads it, and the verifier registers each lane's salt, position, roots, admit bits, index and "
-          "every ok row at their known content", "TS leaf shared", "standard"),
+    Entry("accounting-ts-leaf-reads", "assumption",
+          "Where a leaf's 33 sessions' registrants' rows agree at every root and position two of them read (which "
+          "holds up to an explicit SHA-512 collision), the decodes read one leaf, one partials record and one "
+          "receipt: every session registers each shared value (the leaf's A, B and z/y tables, the post-draw "
+          "partials) at one port, the decodes read rows by port and position, and the verifier registers each "
+          "lane's salt, position, roots, admit bits, index and every ok row at their known content",
+          "TS leaf reads", "standard"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
