@@ -75,10 +75,8 @@ theorem rowsSat_of_netSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32)
     {z : ℕ → Bool} (hs : NetSat net w z) : (Rows.ofNet hB).Sat fun c => z c.val := by
   intro i
   have hc : ((Rows.ofNet hB).comp i).val < net.constPos := by
-    have hi := i.isLt
-    have hn : (Rows.ofNet hB).nComp = net.constPos - min (net.inWords * WORD) net.constPos := rfl
-    rw [hn] at hi
-    rw [Rows.ofNet_comp hB i, Rows.ofNet_nIn hB]
+    have hi : i.val < net.constPos - min (net.inWords * WORD) net.constPos := i.isLt
+    show min (net.inWords * WORD) net.constPos + i.val < net.constPos
     omega
   have e := hs _ (Nat.lt_of_lt_of_le hc hw)
   show z ((Rows.ofNet hB).comp i).val =
