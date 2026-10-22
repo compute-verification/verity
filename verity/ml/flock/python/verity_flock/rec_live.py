@@ -580,6 +580,25 @@ def schedule_of(record: dict) -> dict:
                         "commits": len(r["commits"])} for r in record["rounds"]]}
 
 
+def on_schedule(record: dict, schedule: dict) -> None:
+    """The verifier's `RecVStar.checkSchedule`: the coin server's record ``record`` declares exactly the streams of
+    ``schedule`` (`schedule_for` at the verifier's inner shape), each where the schedule opens it and with its round
+    count, and holds the schedule's rounds in its order, each with its stream, number, coin count (``n`` and the coins
+    drawn), tops' node counts, copies of level 0's top and a ``c_k`` exactly where the schedule's round absorbs a
+    message; else ValueError. `Proxy` holds a session to the same schedule, on the prover's side: a session that
+    bypasses it reaches the coin server with any rounds, and its record still ends ``finish``."""
+    want, got = check_schedule(schedule), schedule_of(record)
+    if got["streams"] != want["streams"]:
+        raise ValueError(f"the record declares the streams {canonical(got['streams'])}, and the schedule "
+                         f"{canonical(want['streams'])}")
+    if len(got["rounds"]) != len(want["rounds"]):
+        raise ValueError(f"{len(got['rounds'])} rounds, and the schedule's {len(want['rounds'])}")
+    for j, (r, g, w) in enumerate(zip(record["rounds"], got["rounds"], want["rounds"])):
+        if g != w or len(r["coins"]) != r["n"]:
+            raise ValueError(f"round {j} is {canonical(g)} of {len(r['coins'])} coins, and the schedule's "
+                             f"{canonical(w)}")
+
+
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
 
 class CoinServer:

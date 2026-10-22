@@ -1,5 +1,5 @@
 /-
-A templated unit, `flock-ir-tmpl/v1` (PRF-133): a `flock-ir-unit/v2` unit's rows given once per Definition, with placed
+A templated unit, `flock-ir-tmpl/v2` (PRF-133): a `flock-ir-unit/v2` unit's rows given once per Definition, with placed
 copies, so its text is O(description) where the flat form is O(unrolled). No verifier path reads it: `HmRow.parse` takes a
 flat `NET` block only, and the guarantees read the flat circuit `Desc.unroll` stands for. `unroll` is the reference, the
 flat net it stands for, built by `Net.ofRows` with every check `Net.parse` runs; `Flock.Test.Tmpl` holds it to `Net.parse`
@@ -7,18 +7,19 @@ on the flat text, and `benchmarks/verifier_cost/flock_tmpl` to the H1 tile's fla
 
 The text, one item a line:
 
-* `flock-ir-tmpl/v1 NAME ROOT <in groups> <out groups>`: the unit's name, its root Definition, and its port groups as
+* `flock-ir-tmpl/v2 NAME ROOT <in groups> <out groups>`: the unit's name, its root Definition, and its port groups as
   `flock-ir-unit/v2`'s header writes them;
 * per Definition `d = 0, 1, …`: `DEF COLS IN ROWS CALLS`, then `ROWS` rows `col na a… nb b…`, then `CALLS` lines
-  `CALL e count base stride segs (len at step)…`;
+  `CALL e count base stride segs (len at step reps rstride)…`;
 * optionally, last, the flat unit's `LEAVES <json>` line, carried as it is (`Net.parse` reads it as bound by the pin).
 
 Definition `d` has `COLS` columns of its own and `IN` inputs. A reference `v` in its rows and calls is its own column `v`
 for `v < COLS`, its input `v − COLS` for `COLS ≤ v < COLS + IN`, and the unit's constant for `v = COLS + IN`. A row
 `col na a… nb b…` gives its own column `col`'s A and B. A call places `count` copies of Definition `e` (`e < d`) on its
-own columns `base + j · stride …`, `stride` at least `e`'s `COLS`, inside `d`'s. Copy `j`'s input `t` is the reference
-`at + j · step + t'` of `d`, `t` the `t'`-th input of a segment of `len` (segments in order, their lengths summing to `e`'s
-`IN`; `step = 0` binds every copy to the same references).
+own columns `base + j · stride …`, `stride` at least `e`'s `COLS`, inside `d`'s. A segment binds `reps · len` inputs:
+copy `j`'s `(r · len + t')`-th input of the segment is the reference `at + r · rstride + j · step + t'` of `d` (`r < reps`,
+`t' < len`; segments in order, their `reps · len` summing to `e`'s `IN`; `step = 0` binds every copy to the same
+references, `rstride = 0` repeats them).
 
 Unrolled, a copy at global offset `o` with its inputs bound to global columns writes each of its rows at `o + col`, its
 own columns `x ↦ o + x`, its inputs to their columns and the constant to the unit's: substituted, so a copy adds no rows of
@@ -30,11 +31,14 @@ import Flock.Net
 
 namespace Flock.Tmpl
 
-/-- A segment of a call's input binding: `len` inputs, bound for copy `j` to caller references `at + j · step + t'`. -/
+/-- A segment of a call's input binding: `reps` runs of `len` inputs, run `r` bound for copy `j` to caller references
+`at + r · rstride + j · step + t'`. -/
 structure Seg where
   len : Nat
   at_ : Nat
   step : Nat
+  reps : Nat
+  rstride : Nat
   deriving Inhabited, Repr, BEq
 
 /-- A call: `count` copies of Definition `def_` at own columns `base + j · stride`, inputs bound by `segs`. -/
@@ -63,7 +67,7 @@ structure Tmpl where
   leaves : Option String := none
   deriving Inhabited
 
-def FORMAT : String := "flock-ir-tmpl/v1"
+def FORMAT : String := "flock-ir-tmpl/v2"
 
 /-! ## Row order, checked on the description
 
@@ -71,7 +75,7 @@ def FORMAT : String := "flock-ir-tmpl/v1"
 `Flock.TmplOrder.rows_ordered` proves it gives the order `checkOrder` checks. A Definition's row reads only its inputs, the
 constant and its own earlier columns. A segment binds, for every copy, only the caller's inputs and constant, or only its
 own columns, all before that copy's first column: a segment that straddles the two is refused. A reference is linear in
-the copy index, so copy 0 and the last copy bound every copy. In the root, a row or copy in the input rows is not checked
+the copy index and grows with the run index, so the last run of copy 0 and of the last copy bound every reference. In the root, a row or copy in the input rows is not checked
 (`checkOrder` skips those rows), and an input column read elsewhere is a port bit, so not padding. -/
 
 /-- The unit's input rows end here. -/
@@ -82,13 +86,13 @@ def Tmpl.portSpan (t : Tmpl) (lo hi : Nat) : Bool :=
   t.inGroups.toList.any fun g => g.col * WORD ≤ lo && hi ≤ g.col * WORD + g.bits.foldl (· + ·) 0
 
 /-- Past every reference segment `s` binds over `count` copies. -/
-def Seg.hi (s : Seg) (count : Nat) : Nat := s.at_ + (count - 1) * s.step + s.len
+def Seg.hi (s : Seg) (count : Nat) : Nat := s.at_ + (s.reps - 1) * s.rstride + (count - 1) * s.step + s.len
 
 /-- Segment `s` of a call (`count` copies at `base + j · stride`) in a Definition of `cols` columns binds, for every copy,
 only references past its own columns, or only its own columns, each before that copy's first. -/
 def Seg.ordered (cols base stride count : Nat) (s : Seg) : Bool :=
   s.len == 0 || cols ≤ s.at_ ||
-    (s.hi count ≤ cols && s.at_ + s.len ≤ base && s.hi count ≤ base + (count - 1) * stride)
+    (s.hi count ≤ cols && s.at_ + (s.reps - 1) * s.rstride + s.len ≤ base && s.hi count ≤ base + (count - 1) * stride)
 
 /-- Definition `df`'s rows and copies sit inside its columns. -/
 def Def.fits (defs : Array Def) (df : Def) : Bool :=
@@ -187,16 +191,17 @@ def parse (lines : Array String) : V Tmpl := do
       let base ← num ct 3 "CALL"
       let stride ← num ct 4 "CALL"
       let nseg ← num ct 5 "CALL"
-      if ct.size != 6 + 3 * nseg then throw s!"{FORMAT}: definition {defs.size}: call {i} is malformed"
+      if ct.size != 6 + 5 * nseg then throw s!"{FORMAT}: definition {defs.size}: call {i} is malformed"
       let mut segs := #[]
       for s in [0:nseg] do
-        segs := segs.push ⟨← num ct (6 + 3 * s) "CALL", ← num ct (7 + 3 * s) "CALL", ← num ct (8 + 3 * s) "CALL"⟩
+        segs := segs.push ⟨← num ct (6 + 5 * s) "CALL", ← num ct (7 + 5 * s) "CALL", ← num ct (8 + 5 * s) "CALL",
+          ← num ct (9 + 5 * s) "CALL", ← num ct (10 + 5 * s) "CALL"⟩
       let some callee := defs[e]? | throw s!"{FORMAT}: definition {defs.size}: call {i} names no earlier definition"
       if count == 0 || (count > 1 && stride < callee.cols) || base + (count - 1) * stride + callee.cols > cols then
         throw s!"{FORMAT}: definition {defs.size}: call {i}'s copies overlap, or overrun its columns"
-      if segs.foldl (· + ·.len) 0 != callee.ins then
+      if segs.foldl (fun n s => n + s.reps * s.len) 0 != callee.ins then
         throw s!"{FORMAT}: definition {defs.size}: call {i}'s segments do not bind its callee's inputs"
-      if segs.any (fun s => s.len > 0 && s.at_ + (count - 1) * s.step + s.len > refs) then
+      if segs.any (fun s => s.len > 0 && s.reps > 0 && s.hi count > refs) then
         throw s!"{FORMAT}: definition {defs.size}: call {i} binds past its references"
       calls := calls.push { def_ := e, count, base, stride, segs }
     defs := defs.push { cols, ins, rows, calls }
@@ -236,9 +241,11 @@ def write (acc : Acc) (c : Nat) (a b : Array Nat) : V Acc :=
 def Def.ref (df : Def) (o : Nat) (inp : List Nat) (k x : Nat) : Nat :=
   if x < df.cols then o + x else if x < df.cols + df.ins then inp.getD (x - df.cols) k else k
 
-/-- Copy `j`'s inputs: each segment's references `at + j · step + t`, through the caller's references `g`. -/
+/-- Copy `j`'s inputs: each segment's references `at + r · rstride + j · step + t`, run by run, through the caller's
+references `g`. -/
 def Call.bound (c : Call) (g : Nat → Nat) (j : Nat) : List Nat :=
-  c.segs.toList.flatMap fun s => (List.range s.len).map fun t => g (s.at_ + j * s.step + t)
+  c.segs.toList.flatMap fun s => (List.range s.reps).flatMap fun r =>
+    (List.range s.len).map fun t => g (s.at_ + r * s.rstride + j * s.step + t)
 
 /-- Write Definition `d`'s copy at global offset `o`, its inputs bound to the global columns `inp`, the unit's constant
 `k`. `fuel` bounds the call depth; a callee is an earlier definition, so `defs.size` is enough. -/

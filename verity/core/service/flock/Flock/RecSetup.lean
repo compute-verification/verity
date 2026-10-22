@@ -27,8 +27,9 @@ def metaBound (m : Json) : V (Option String × Option RecVStar.StackedShape) := 
 
 /-- The inner transcript `t` (`rec/inner-transcript/v1`) held against the inner session's record `record`, the circuit
 registration `r` (`verity/registration/v2`) if the verifier holds one, and what the inner circuit's META binds (`bound`,
-`metaBound`): `RecVStar.innerCommits` on the files as read. At candidate 3's inner shape (`inner` naming a RecSparse
-shape) it needs the registration, which binds R before the coins. -/
+`metaBound`): `RecVStar.innerCommits` on the files as read, and at the verifier's inner shape `inner` the transcript on
+its schedule (`RecVStar.checkSchedule`). At candidate 3's inner shape (`inner` naming a RecSparse shape) it needs the
+registration, which binds R before the coins. -/
 def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String))
     (bound : V (Option String × Option RecVStar.StackedShape)) (record : String) : V RecVStar.InnerCommits := do
   let rj ← match ← r with
@@ -42,7 +43,10 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
       | .error e => throw s!"rec inner registration: not JSON: {e}"
   let (bound, shape) ← bound
   match Json.parse (← t) with
-  | .ok j => RecVStar.innerCommits j record rj bound shape
+  | .ok j =>
+    let cs ← RecVStar.innerCommits j record rj bound shape
+    if let some i := inner then RecVStar.checkSchedule i j
+    pure cs
   | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
 /-- Candidate 3's check 5 inputs: the verifier's RecSparse shape (`rec-inner --sparse`) and R's, its own inner shape's

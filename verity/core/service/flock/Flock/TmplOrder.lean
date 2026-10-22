@@ -166,30 +166,31 @@ theorem root_ref {df : Def} {k v : Nat} : (v < df.cols ∧ df.ref 0 [] k v = v) 
     split <;> simp
 
 theorem mem_bound {c : Call} {g : Nat → Nat} {j x : Nat} (h : x ∈ c.bound g j) :
-    ∃ s ∈ c.segs.toList, ∃ t < s.len, x = g (s.at_ + j * s.step + t) := by
+    ∃ s ∈ c.segs.toList, ∃ r < s.reps, ∃ t < s.len, x = g (s.at_ + r * s.rstride + j * s.step + t) := by
   unfold Call.bound at h
   simp only [List.mem_flatMap, List.mem_map, List.mem_range] at h
-  obtain ⟨s, hs, t, ht, rfl⟩ := h
-  exact ⟨s, hs, t, ht, rfl⟩
+  obtain ⟨s, hs, r, hr, t, ht, rfl⟩ := h
+  exact ⟨s, hs, r, hr, t, ht, rfl⟩
 
-/-- An ordered segment's reference for copy `j`: past the Definition's own columns, or an own column before copy `j`'s
-first column. -/
+/-- An ordered segment's reference for copy `j`, run `r`: past the Definition's own columns, or an own column before copy
+`j`'s first column. -/
 theorem seg_ordered {cols base stride count : Nat} {s : Seg} (h : Seg.ordered cols base stride count s = true)
-    {j t : Nat} (hj : j < count) (ht : t < s.len) :
-    cols ≤ s.at_ + j * s.step + t ∨
-      (s.at_ + j * s.step + t < cols ∧ s.at_ + j * s.step + t < base + j * stride ∧
-        s.at_ + j * s.step + t < s.hi count) := by
+    {j r t : Nat} (hj : j < count) (hr : r < s.reps) (ht : t < s.len) :
+    cols ≤ s.at_ + r * s.rstride + j * s.step + t ∨
+      (s.at_ + r * s.rstride + j * s.step + t < cols ∧ s.at_ + r * s.rstride + j * s.step + t < base + j * stride ∧
+        s.at_ + r * s.rstride + j * s.step + t < s.hi count) := by
   unfold Seg.ordered Seg.hi at h
   unfold Seg.hi
   simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.and_eq_true] at h
   have hm : j * s.step ≤ (count - 1) * s.step := Nat.mul_le_mul (by omega) (Nat.le_refl _)
+  have hrm : r * s.rstride ≤ (s.reps - 1) * s.rstride := Nat.mul_le_mul (by omega) (Nat.le_refl _)
   rcases h with h | ⟨⟨h1, h2⟩, h3⟩
   · rcases h with h | h
     · omega
     · left; omega
   · right
-    have := interp (A := s.at_ + s.len) (B := base) (s := s.step) (S := stride) (j := j) (n := count - 1)
-      (by omega) h2 (by omega)
+    have := interp (A := s.at_ + (s.reps - 1) * s.rstride + s.len) (B := base) (s := s.step) (S := stride) (j := j)
+      (n := count - 1) (by omega) h2 (by omega)
     omega
 
 theorem portSpan_mono {t : Tmpl} {lo hi lo' hi' : Nat} (h : t.portSpan lo hi = true) (h1 : lo ≤ lo')
@@ -286,8 +287,8 @@ theorem place_good {defs : Array Def} {k ic : Nat} {P : Nat → Prop} {F : Array
           have hj' := List.mem_range.1 hj
           obtain ⟨hFc, hsegs⟩ := hcalls c hc
           refine ih hp hFc (by omega) (fun x hx => ?_) hw0
-          obtain ⟨s, hs, t, ht, rfl⟩ := mem_bound hx
-          rcases seg_ordered (hsegs s hs) hj' ht with hv | ⟨-, hv2, -⟩
+          obtain ⟨s, hs, r, hr, t, ht, rfl⟩ := mem_bound hx
+          rcases seg_ordered (hsegs s hs) hj' hr ht with hv | ⟨-, hv2, -⟩
           · exact ref_reads hinp hic (by omega) fun h => absurd h (by omega)
           · exact ref_reads hinp hic (by omega) fun _ => by omega) hu hw) g1 h2
 
@@ -350,16 +351,17 @@ theorem rows_good {t : Tmpl} {acc : Acc} (ho : t.ordered = true) (hr : t.rows = 
         rcases hcalls c hc with hin | ⟨⟨hb, hFc⟩, hsegs⟩
         · exact good_same hw0 fun x hx => place_local hfits _ hp x (Or.inr (by omega))
         · refine place_good hF _ hp hFc (by omega) (fun x hx => ?_) hw0
-          obtain ⟨s, hs, tt, ht, rfl⟩ := mem_bound hx
+          obtain ⟨s, hs, r, hr, tt, ht, rfl⟩ := mem_bound hx
           have hjs : j * s.step ≤ (c.count - 1) * s.step := Nat.mul_le_mul (by omega) (Nat.le_refl _)
+          have hrs : r * s.rstride ≤ (s.reps - 1) * s.rstride := Nat.mul_le_mul (by omega) (Nat.le_refl _)
           rcases hsegs s hs with ⟨⟨hl, ha⟩, hhi⟩ | ⟨hso, hport⟩
           · unfold Seg.hi at hhi
-            rcases root_ref (df := df) (k := t.constPos) (v := s.at_ + j * s.step + tt) with ⟨-, e⟩ | e
+            rcases root_ref (df := df) (k := t.constPos) (v := s.at_ + r * s.rstride + j * s.step + tt) with ⟨-, e⟩ | e
             · rw [e]; exact Or.inl (by omega)
             · rw [e]; exact Or.inl rfl
-          · rcases root_ref (df := df) (k := t.constPos) (v := s.at_ + j * s.step + tt) with ⟨hv', e⟩ | e
+          · rcases root_ref (df := df) (k := t.constPos) (v := s.at_ + r * s.rstride + j * s.step + tt) with ⟨hv', e⟩ | e
             · rw [e]
-              rcases seg_ordered hso hj' ht with hv | ⟨-, hv2, hv3⟩
+              rcases seg_ordered hso hj' hr ht with hv | ⟨-, hv2, hv3⟩
               · exact absurd hv' (by omega)
               · refine Or.inr ⟨by omega, fun hlt => ?_⟩
                 rcases hport with hp' | hp'
