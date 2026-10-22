@@ -5,8 +5,8 @@ import Proofs.Flock.Claims.Recursion.FinOpen
 
 `ksLin2_deployed_open` reads the coin server's transcript `b.tr x` as injective at every compiled statement `x`
 (`htr`): a V\* statement's transcript is read back through it (`shownOf`, `Function.invFun`). The deployed firewall
-serves only the histories on its pinned schedule and stops a session off it, so the deployment writes `b.tr x` only at
-those histories; at the others it writes no transcript, and `b.tr` there is the model's choice.
+serves the histories on its pinned schedule and stops a session off it; where it writes no transcript, `b.tr` is the
+model's choice. That it writes one only on its schedule is not proved here.
 
 `trServed served tr` is `tr` at the histories `served` names and a tagged raw encoding of the history elsewhere
 (`rawTr`: a `0` byte, then the rounds, each message byte-escaped, `escB`). `trServed_injective` proves it injective
@@ -15,9 +15,12 @@ coin server's record is a JSON object (`rec_live.CoinServer.record`, written wit
 `ksLin2_deployed_served` and `bitsLin2_deployed_served` are `ksLin2_deployed_open` and `bitsLin2_deployed_open` at
 `trServed served b.tr`, with `htr` replaced by those two facts.
 
-`served` is a parameter: the deployment is the one these bound where it holds at every history the deployed firewall
-serves. That the coin server's record is injective at those histories is still open (a concrete record writer in Lean
-with a read-back proof, held to `rec_live` by a difftest); the Lean `Flock.Firewall.record` doesn't record the coins.
+These are intermediate lemmas, not the deployed form, which stays `ksLin2_deployed_open` with `htr` a premise. Here
+`served` is free: at `served := fun _ _ => false` both facts hold vacuously and the conclusion is about a brings whose
+transcript is `rawTr` everywhere, which no deployment writes. They say something of the deployment only once `served`
+is the deployed firewall's own schedule, with a proof that the firewall writes a transcript only there, and once the
+coin server's record is shown injective at those histories (a record writer in Lean with a read-back proof, held to
+`rec_live` by a difftest; the Lean `Flock.Firewall.record` doesn't record the coins). Both are open.
 -/
 
 namespace RecDeploy
@@ -111,11 +114,11 @@ theorem trServed_injective (served : Msg → List (Msg × Out) → Bool) (tr : M
 
 /-! ## `KSLin2` and `BitsLin2` at `trServed` -/
 
-/-- **`KSLin2` at the deployment's dense statements, with the coin server's transcript at the served histories**:
-`ksLin2_deployed_open` at `trServed served b.tr`, with `htr` from `trServed_injective`: at every compiled statement,
-`b.tr x` is injective at the histories `served` names and starts there with `{`. What stays open at the dense form is
-`PartChecksB` and `PartOpensB` at `showsTr`/`cmtTr`, and `DecompB`; the readers' three facts; and those two facts of
-the coin server's record. This bounds no number by itself: those premises are open. -/
+/-- **`ksLin2_deployed_open` at `trServed served b.tr`**, an intermediate lemma: `htr` from `trServed_injective`, given
+that at every compiled statement `b.tr x` is injective at the histories `served` names and starts there with `{`.
+`served` is free, so this is not the deployed form (`ksLin2_deployed_open` is): at `served := fun _ _ => false` both
+facts hold vacuously and the conclusion is about a brings that writes `rawTr` everywhere. It bounds no number by
+itself. -/
 theorem ksLin2_deployed_served (b : Brings) (served : Msg → List (Msg × Out) → Bool)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -144,10 +147,10 @@ theorem ksLin2_deployed_served (b : Brings) (served : Msg → List (Msg × Out) 
   exact ksLin2_deployed_open bS rest wE join final w
     (fun x st hst => trServed_injective served b.tr x (hinj x st hst) (hlead x st hst)) hP hRT hRL hRP
 
-/-- **`BitsLin2` at the deployment's dense statements, with the coin server's transcript at the served histories**:
-`bitsLin2_deployed_open` at `trServed served b.tr`, with `htr` from `trServed_injective`. It reads `StrictBirthday`
-and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_served`'s open premises: a bound on a
-number under named premises, not a proved security level. -/
+/-- **`bitsLin2_deployed_open` at `trServed served b.tr`**, an intermediate lemma: `htr` from `trServed_injective`.
+`served` is free, so this is not the deployed form (`bitsLin2_deployed_open` is); see `ksLin2_deployed_served`. It
+reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions: a bound on a number under named
+premises, not a proved security level. -/
 theorem bitsLin2_deployed_served (b : Brings) (served : Msg → List (Msg × Out) → Bool)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
