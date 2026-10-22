@@ -528,6 +528,24 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
     catch e => return .error s!"rec inner session: {e}"
   recLinkInput args (some record)
 
+/-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
+`Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
+commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
+to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+def recRecordCmd (args : List String) : IO UInt32 := do
+  let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
+  let bs := (← IO.FS.readBinFile f).data.toList
+  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the coin server's record format"; return 1
+  let hex := fun (b : List UInt8) =>
+    Lean.Json.str ((RecRecord.hexW b).foldl (fun s c => s.push (Char.ofNat c.toNat)) "")
+  let arr := fun {α : Type} (f : α → Lean.Json) (l : List α) => Lean.Json.arr (l.map f).toArray
+  let js := xs.map fun r => Lean.Json.mkObj [("stream", .str ((String.fromUTF8? ⟨r.stream.toArray⟩).getD "")),
+    ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
+    ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
+  let writes := (RecRecord.recordW xs []).isPrefixOf bs
+  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  return 0
+
 def recTranscriptCmd (args : List String) : IO UInt32 := do
   let some _ := argOf args "--rec-inner-session"
     | IO.eprintln "usage: flock-verify rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner F]"; return 2
@@ -1421,6 +1439,7 @@ def main (args : List String) : IO UInt32 := do
   | "rec-coins" :: rest => recCoinsCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | "rec-transcript" :: rest => recTranscriptCmd rest
+  | "rec-record" :: rest => recRecordCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | "region-words" :: rest => regionWordsCmd rest
