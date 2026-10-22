@@ -693,7 +693,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
   alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
   (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
 * `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
-  `Frame.run` over `Loop.reqsAt` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
+  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
   `ProgReads` holds by definition (`ofLoop_progReads`).
 * `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
   monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
