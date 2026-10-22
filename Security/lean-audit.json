@@ -22510,7 +22510,7 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "7c65f5626afcb5c9aecc05e41cbc7a235e1fe4a97308ba57f30a6421024adcc3",
+   "digest": "8fef9cf8f7020f7aecc694a1056545912b33e6eb4a909aa56d8ec88a868384ce",
    "definitions": {
     "Flock.ProvedScope.bitRows": "d74e0d1cd6dda8ca99a69595e7e2c1c076d95dbafbd867f2238ae2c3b9e6b92c",
     "Flock.ProvedScope.check": "c98d2f435b2dbf07191656c8183ed6f07d414d7d4b4262b054ba545dd9ea6781",
@@ -22533,7 +22533,7 @@
     "Flock.ProvedScope.sharedRowsOk": "fef2383c9a227210a6c1b01afebeca23f568a0e31c8cc22f9b2ee288495c409f",
     "Flock.ProvedScope.statementRules": "9bca68482d9608257256ad4518e536673d150896a3831c2b5932083e69ba1bd6",
     "Flock.ProvedScope.v1Ports": "3baccedf9ea33ffa406d947480c251a41a4ef9320a8f3791c075903ab956f316",
-    "Flock.ProvedScope.v2Row": "7a9c3a01dd442dfeeea74d7b9c2ea0c6b30b87df3f8a99f56996c3fb05057321",
+    "Flock.ProvedScope.v2Row": "1807d40c7bec7ff2b31aed6a258521b891f1c852e78428323baa386bfe846f01",
     "Flock.ProvedScope.wiresAcyclic": "34705210d085ddfb980ace95a8f77d123e6ed06da0bd65d6e1ce16caf4987df5",
     "Flock.ProvedScope.wiresFeed": "89b972f8d488a26338ffcbcdd4e46f4a97ef7b89e76121133e15f2e106b35bc6",
     "Flock.ProvedScope.wiresWhy": "6fd5614566e5fa4fce51a99a55bbd5130c721de496063f48cbdd6018456bd434",
@@ -31129,9 +31129,8 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit": {
-   "digest": "ce5e709c3a8e06ed5e6078d8c870a50a663cedda100dbd0486ad88d07eff279f",
+   "digest": "9acd45662f657f4628e2b1bea256eb2862ea60cb6d5cec3818460a209b8515d7",
    "definitions": {
-    "FlockSoundness.Discharge.Hidden.FitRow": "6e1488f9ee0a27fb524ae1119abe1ba7e0269b3c77c57c33ceab00db39ce352a",
     "FlockSoundness.Discharge.Hidden.rowPre": "feea601fb923e5504bd97a6a65ae7fd79855e100cdd7044d1a8bdc4321782589"
    },
    "guarantees": [
@@ -31153,9 +31152,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS": {
-   "digest": "160549fe2cf9e9e25109b74e15b993108ac9362a14602d18e074e3760312d649",
+   "digest": "15e21bf2d5ac9db1336e160178d55cd99c868461cf77b98f76dc8a0044182cec",
    "definitions": {
-    "FlockSoundness.Discharge.Hidden.Any.RowsFitS": "77ce991f18f808fc4769d740af7e5e1b4d75efcd30c6a74ee4ad04eeab6da74f",
+    "FlockSoundness.Discharge.Hidden.Any.RowsFitS": "c48ebf3dec93d47ffcd6dc25a5a06a318fb1a969d8627ae599124a612a77e907",
     "FlockSoundness.Discharge.Hidden.Any.SegRow": "ce9affa02c31881c4ec9b53f6254c07d2c1c263482eba8c4448870453c8b6f01"
    },
    "guarantees": [
@@ -31202,9 +31201,10 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit": {
-   "digest": "57ab42783430cc729471ec210a5423eb3a5c05a7fe7e5ad3227df3bd2f97a341",
+   "digest": "55593be1c93d22dc969e6c70ad101be27e4b5fee3b113b8f338f3e04b6d5b8a1",
    "definitions": {
-    "FlockSoundness.Discharge.Hidden.Any.OutRowsS": "8ea9d31dfa356a51a8c48a09346f9aadd04e73d5c5916573cac1b446bad4df6b"
+    "FlockSoundness.Discharge.Hidden.Any.OutRowsS": "7a190e2d7d42cb8c13882261d5db9c2665050886e79157827e8fa13f9c9de088",
+    "FlockSoundness.Discharge.Hidden.Any.PadRow": "dea946f03f3b50de7789b110903a82202a71a2a56f525ef1471007c02bd7b27a"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
@@ -32112,7 +32112,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Layout.Scope": {
-   "digest": "3ba685ee21e78eccb5af1a28ba319a1a4708c2d08b95f431b59983a099d25622",
+   "digest": "e63f20c7d3bf0bfac4c9e8cd64c246c5a4c109ecd51b9267adab37427c8ea1e8",
    "definitions": {
     "FlockSoundness.Discharge.Layout.bitRows": "14b44f2bc1c16a30cf9362e358cac361d1ad73cb34b0aca2e14ca45e02b8e697",
     "FlockSoundness.Discharge.Layout.portReadsB": "16eaebbe8a2b9a311bad200fb1092ec19fef83eb72dbc8fa50dab86ab555befc",
@@ -32121,7 +32121,7 @@
     "FlockSoundness.Discharge.Layout.scopeOkH": "4b5998011e9489bcf9bf706a58c1b8a547ed130e19471c51a9d2049e4745e377",
     "FlockSoundness.Discharge.Layout.segRow": "6ef3ebe158e8c9d16d2f6de6e09ddca71f8b73a41b544050913e07f1b673c9c8",
     "FlockSoundness.Discharge.Layout.v1Ports": "2b53f91403fcab95201ecebf7303effa97b7a5c63002b972e06c097f4322f8c6",
-    "FlockSoundness.Discharge.Layout.v2Row": "2560b670875a975c402fc6b3207c0cd015eaa9aeaad0142a3e0d55da5c9d3fdb"
+    "FlockSoundness.Discharge.Layout.v2Row": "59148d3acda6a097991e727e7caeec20cebd6061073197ad6e09d9124bce8516"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
