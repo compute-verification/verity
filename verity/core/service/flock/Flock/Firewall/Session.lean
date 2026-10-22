@@ -19,7 +19,7 @@ each connection is one session, relayed on a connection of its own to the audito
   (`Frames.startRep`), and the loop issues every request to it (`Frames`, on the schedule `Drive.reqs` fixes). A rep
   stream's `Round` carries the device's round, and what leaves in its place is the frame's release against the
   statement's round there (`Frames.round`): the algebraic phase's scheduled round, the opening's (the loop's own
-  `Finish.openLive`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's own. Its
+  `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's own. Its
   coins, once opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover receives them only once the frame
   took them.
 * Each table's level 0 is the loop's: on its frames port the loop draws a table's level-0 hiding and salts from the

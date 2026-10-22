@@ -801,9 +801,9 @@ is answered `Refused("PROVER-STOPPED: …")`. The reps' frames are the loop's ow
 `firewall::LeanFrame::rep`), at the statement's start (`Drive.start`), and is answered `ok N` and the `N` bytes of the
 draws the loop made for it and the pads' root, which the prover proves with. Every request the frame takes is the loop's,
 on the schedule `Drive.reqs` fixes: a rep stream's `Round` carries the device's round, and the loop places it as the
-algebraic phase's scheduled round (`Skeleton.rounds` on the table's level 0), then the opening's (`Finish.openLive`, run
-beside the loop on the extra claims at the `Commit`'s coins and the rep's salts for levels ≥ 1, one copy with the
-finish's), then the inner proof's own; rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+algebraic phase's scheduled round (`Skeleton.rounds` on the table's level 0), then the opening's (`Drive.openStep`, the
+rep's opening a round at a time in the loop, on the extra claims at the `Commit`'s coins and the rep's salts for levels
+≥ 1, one copy with the finish's), then the inner proof's own; rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
 frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
 refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
 receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered

@@ -9,19 +9,19 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   system, which the prover proves with.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
-  (`Finish.openLive`, run beside the loop on the extra claims at the session's `Commit` coins, `Drive.extras`, and the
-  rep's salts for levels ≥ 1, the loop's finish's), then none, at the inner proof's own rounds. Rep 1's frame first takes
+  (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
+  `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then none, at the inner proof's own rounds. Rep 1's frame first takes
   rep 0's algebraic-phase coins (`prior`). What leaves is the frame's release, at the stream's first round after its
   domain frame (`domainFrame`, `Transcript.init`'s).
 * `coins`: once the coins answered that round open the committed tree (`State.answer`), the frame takes them
-  (`feedOf` the answer), and the opening too where the round was its; the prover receives them only once the frame did.
+  (`feedOf` the answer), and the opening goes on with them where the round was its; the prover receives them only once the frame did.
 * `finish`: the session's `Finish` leaves only once every rep's frame answers `finish` at its end, not stopped.
 
 So every coin a frame takes is the loop's own reading of the auditor's answer, and every round in a device round's place
-is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins.
+is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
+`Drive.opening`'s, which feeds `Drive.openStep` the same coins (`Drive.Step.feed`).
 -/
 import Flock.Firewall.Drive
-import Std.Sync.Channel
 
 namespace Flock.Firewall.Frames
 
@@ -40,12 +40,6 @@ def domainFrame (d : String) : ByteArray :=
   let b := d.toUTF8
   Transcript.header 1 0 b.size ++ Transcript.padded b
 
-/-- **A rep's opening beside the loop**: `Finish.openLive` on a channel of its own, its rounds as they come (`none`
-after the last, or why it stopped), and the coins the loop answers each. -/
-structure Opening where
-  rounds : Std.CloseableChannel.Sync (Except String (Option (ByteArray × Nat)))
-  coins : Std.CloseableChannel.Sync (Array F128)
-
 /-- A rep's frame in the loop: whose it is, its configuration and state, the algebraic phase's scheduled rounds once its
 first round came, the coins of each round it released, and its opening once it began. -/
 structure Rep where
@@ -56,7 +50,8 @@ structure Rep where
   st : Frame.State := {}
   alg : Array (ByteArray × Nat) := #[]
   coins : Array (Array F128) := #[]
-  opening : Option Opening := none
+  /-- the rep's opening, at its next round (`Drive.openStep`) -/
+  opening : Option (Drive.Step Unit) := none
   /-- the opening ended: every round after it is the inner proof's -/
   opened : Bool := false
   /-- the round last released was the opening's, whose coins go to it too -/
@@ -124,43 +119,8 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Registry) (l0s : IO.Ref Level0.Regi
     ch.write b
   | _ => err s!"a request `{line.trim}`"
 
-/-- The channel `Finish.openLive` speaks on beside the loop: each round it writes (`round N LEN` and its bytes) goes to
-`o.rounds`, and each `coins N` it reads is the next of `o.coins`. -/
-def openingChan (o : Opening) : IO Frame.Chan := do
-  let pending ← IO.mkRef ByteArray.empty
-  let getLine : IO String := do
-    match ← o.coins.recv with
-    | some cs =>
-      pending.set (wordBytes cs)
-      return s!"coins {cs.size}\n"
-    | none => return ""
-  let readExact (n : Nat) : IO ByteArray := do
-    let b ← pending.modifyGet fun b => (b, .empty)
-    if b.size != n then throw (IO.userError s!"opening: {b.size} bytes of coins where it reads {n}")
-    return b
-  let write (b : ByteArray) : IO Unit := do
-    let some e := Drive.lineEnd b 0 | throw (IO.userError "opening: a round without its line")
-    match ((String.fromUTF8? (b.extract 0 e)).getD "").splitOn " " with
-    | ["round", n, len] =>
-      let (some n, some len) := (n.toNat?, len.toNat?) | throw (IO.userError "opening: a round line")
-      if e + 1 + len != b.size then throw (IO.userError "opening: a round of other bytes than its line says")
-      o.rounds.send (.ok (some (b.extract (e + 1) b.size, n)))
-    | _ => throw (IO.userError "opening: a round line")
-  return { getLine, readExact, write, flush := pure () }
-
-/-- **Rep `rep`'s opening, begun beside the loop** on the table `t`, its stream's domain `dom`, the extra claims `xs`, its
-salts for levels ≥ 1 `hi` and the algebraic phase's coins `coins` (`Finish.openLive`). -/
-def beginOpening (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (coins : Array (Array F128)) : IO Opening := do
-  let o : Opening := { rounds := ← Std.CloseableChannel.Sync.new, coins := ← Std.CloseableChannel.Sync.new }
-  let ch ← openingChan o
-  let _ ← IO.asTask (prio := .dedicated) do
-    let r ← try ((openLive ch t rep dom xs hi coins).run' #[]).run catch e => pure (.error s!"{e}")
-    try o.rounds.send (r.map fun _ => (none : Option (ByteArray × Nat))) catch _ => pure ()
-  return o
-
 /-- What stands in rep `p`'s next round's place, and `p` after: the algebraic phase's scheduled round, then the
-opening's (begun at its first round), then none. -/
+opening's (`Drive.openStep` begun at its first round, then at the round its last coins asked for), then none. -/
 def placeOf (reg : IO.Ref Registry) (l0 : Level0.Level0) (s : Session) (p : Rep) (dom : ByteArray) :
     IO (Except String (Frame.Place × Rep)) := do
   let k := p.coins.size
@@ -176,13 +136,12 @@ def placeOf (reg : IO.Ref Registry) (l0 : Level0.Level0) (s : Session) (p : Rep)
       | .ok t => pure t
       | .error e => return .error e
     let xs := Drive.extras st (Drive.linkPoints st c)
-    p := { p with opening := some (← beginOpening t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
-  let some o := p.opening | return .error "no opening"
-  match ← o.rounds.recv with
-  | some (.ok (some (c, _))) => return .ok (.sched c, { p with toOpening := true })
-  | some (.ok none) => return .ok (.own, { p with opened := true })
-  | some (.error e) => return .error e
-  | none => return .error "the opening ended without its last round"
+    p := { p with opening := some (Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
+  match p.opening with
+  | some (.ask c _ _) => return .ok (.sched c, { p with toOpening := true })
+  | some (.done _) => return .ok (.own, { p with opened := true, opening := none })
+  | some (.fail e) => return .error e
+  | none => return .error "no opening"
 
 /-- The algebraic phase's scheduled rounds of a rep of the statement `st` whose stream's domain is `dom`, on its level-0
 root `root` (`Skeleton.rounds`). -/
@@ -246,10 +205,10 @@ def coins (reg : IO.Ref Registry) (sid i r : Nat) (cs : Array F128) : IO (Except
   let some (_, p) := (← reg.get).find sid i r | return .error s!"coins of table {i} rep {r}, whose frame the loop has not started"
   match Frame.step p.cfg p.st (.coins (.ok cs)) with
   | (.ok, st') =>
-    if p.toOpening then
-      if let some o := p.opening then
-        try o.coins.send cs catch _ => pure ()
-    reg.modify (·.put { p with st := st', coins := p.coins.push cs, toOpening := false })
+    let opening := match p.toOpening, p.opening with
+      | true, some (.ask _ _ k) => some (k cs)
+      | _, o => o
+    reg.modify (·.put { p with st := st', coins := p.coins.push cs, toOpening := false, opening })
     return .ok ()
   | (.stop e, _) | (.refuse e, _) | (.err e, _) => return .error e
   | _ => return .error "coins the frame answered as no coins"
@@ -269,14 +228,9 @@ def finish (reg : IO.Ref Registry) (sid tables : Nat) : IO (Except String Unit) 
   return .ok ()
 
 /-- Session `sid` ended: its frames, their openings and the salts of its tables' level 0 (`roots`) are gone. -/
-def close (reg : IO.Ref Registry) (sid : Nat) (roots : Array ByteArray) : IO Unit := do
-  let gone ← reg.modifyGet fun R =>
-    (R.reps.filter (·.sid == sid),
-     { sessions := R.sessions.filter (·.sid != sid), reps := R.reps.filter (·.sid != sid),
-       salts := R.salts.filter fun (root, _, _) => !roots.contains root })
-  for p in gone do
-    if let some o := p.opening then
-      try o.coins.close catch _ => pure ()
-      try o.rounds.close catch _ => pure ()
+def close (reg : IO.Ref Registry) (sid : Nat) (roots : Array ByteArray) : IO Unit :=
+  reg.modify fun R =>
+    { sessions := R.sessions.filter (·.sid != sid), reps := R.reps.filter (·.sid != sid),
+      salts := R.salts.filter fun (root, _, _) => !roots.contains root }
 
 end Flock.Firewall.Frames
