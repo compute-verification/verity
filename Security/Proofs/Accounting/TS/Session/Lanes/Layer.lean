@@ -25,6 +25,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
   `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]` at its row's and column's scales (`PouwZyCheck_v1{4, 8}`);
 * `CombineView`, `CombineOk`: what the combine reads, and its `ok = 1`: the XOR, in lane order, of the 32 rows is the
   receipt word by word (`xorAll`);
+* `PortRow`, `portRead`: a wire assignment at every bit of every unit's port rows, registered or not, which the
+  circuits' premise reads (`Accounting.Assumptions.TS.LeafChecks`);
 * `UnitServed`: the leaf's served checks, `Accounting.Served`'s `ProductOf` and `DequantOf` at every cell (`CellOk`,
   with `dq` the Program's dequant on its words, `PouwZyDequant_v2` today) and its receipt the XOR of its lanes' honest
   partials (#3095's order, the tile unit's receipt as `lane_partials` splits it);
@@ -40,7 +42,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
   SHA-512 collision (`Accounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
-  known-content check included (`known x w i k`, the session's registered file's known content), opens the leaf's
+  known-content check (`known x w i k`, the session's registered file's known content) and its complete check (the
+  file sets `complete`, `Registered.checkComplete`) included, opens the leaf's
   values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
@@ -131,6 +134,22 @@ structure CombineView (nw : ℕ) where
 /-- **Combine `ok = 1`**: the rows' XOR, in lane order, is the receipt word by word. -/
 def CombineOk {nw : ℕ} (v : CombineView nw) : Prop := xorAll v.parts = v.receipt
 
+/-- **Wire `g` is a bit of one of unit `u`'s port rows**: its commit string is `u`'s row of some port `q` of the
+circuit, an input port or an output row, not a single gate's own string (`Readers.ofRows`). -/
+def PortRow (s : RowsSession) (u : Fin s.n) (g : Fin s.Circ.N) : Prop :=
+  ∃ q : Fin s.c.ports.size, s.vb.pos g = Sum.inl (u, q)
+
+open Classical in
+/-- **An assignment's port rows**: `vals` at every wire of unit `a` that is a bit of one of `a`'s port rows (`PortRow`),
+registered or not; `none` elsewhere. Where every port is registered it is `rowsReg`
+(`RowsSession.rowsReg_eq_portRead`). -/
+noncomputable def portRead (s : RowsSession) (vals : Fin s.Circ.N → Bool) : ℕ → ℕ → Option Bool :=
+  fun a b =>
+    if h : a < s.n ∧ b < s.Circ.N then
+      if (⟨b, h.2⟩ : Fin s.Circ.N) ∈ s.P.io ⟨a, h.1⟩ ∧ PortRow s ⟨a, h.1⟩ ⟨b, h.2⟩ then some (vals ⟨b, h.2⟩)
+      else none
+    else none
+
 /-- The session's row encodings (`rsShHJS`), the ones its registrants' openings are of. -/
 noncomputable abbrev rsOf (s : RowsSession) :=
   rsShHJS (Reg := s.Reg) s.dj s.y₀ s.ht s.hc s.hscope s.hU s.hpub
@@ -169,8 +188,10 @@ def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
 combine's), its known-content check at the session's known content `known x w i k` included
-(`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), opens the leaf's values committed before
-σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at the path's public inputs and receipt, or
+(`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`) and its complete check
+(`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`),
+opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
+the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
 (`LeafKnownColl`). -/
 noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
@@ -181,7 +202,8 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) : ProofLayer Ω S nπ (Leaf K) where
   accepted x w i := ∀ k, LiveAcceptsZKR (sess x w i k).I (sess x w i k).own (out x w i k) ∧
-    Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok ()
+    Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok () ∧
+    Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok ()
   opened := leaf
   rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
     LeafKnownColl (sess x w i) (known x w i)
