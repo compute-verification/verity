@@ -219,6 +219,55 @@ theorem repState_succ (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : �
   obtain ⟨S, b⟩ := R
   cases b <;> rfl
 
+/-- The coins the frame takes leave it owing none. -/
+theorem answer_owed {c : Cfg} {s s' : Masker} {cs : Array F128} (h : s.answer c cs = .ok s') : s'.owed = none := by
+  unfold Masker.answer at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals (cases h <;> rfl)
+
+/-- **The frame's coins, then a round in its scheduled round's own place**: where the frame takes the coins `cs` and
+checks the round `r` against itself, its state after both is the check's. -/
+theorem run_coins_round (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (cs : Array F128) (n : ℕ) (r : ByteArray)
+    {s1 s' : Masker} {out : ByteArray} {w : Option String} (ha : st.m.answer c cs = .ok s1)
+    (hc : check c s1 r r n = .ok (out, s', w)) :
+    _root_.Flock.Firewall.Frame.run c st [.coins (.ok cs), .round n r (.sched r)] = ({ m := s', begun := true }, false) := by
+  have ho := answer_owed ha
+  simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, ho, hc,
+    _root_.Flock.Firewall.Frame.Reply.ends]
+  rfl
+
+/-- **The loop's frame state one round on, at a scheduled round**: where the frame takes round `j`'s coins at the
+rep's state after it, at the state `m`, and checks the schedule's round `j + 1` against itself there, the rep's state
+after round `j + 1` on one more round's coins is that check's. -/
+theorem repState_step (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (a : Array F128)
+    (j : ℕ) {alg sched sched' : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hs' : schedSoFar t rep dom xs hi (cr.push a) = .ok sched')
+    (hcr : cr.size = j + 1) (hj : j + 1 < sched.size) {m s' : Masker} {out : ByteArray} {w : Option String}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (j + 1)).answer c (cr.getD j #[]) = .ok m)
+    (hc : check c m (sched.getD (j + 1) (.empty, 0)).1 (sched.getD (j + 1) (.empty, 0)).1
+      (sched.getD (j + 1) (.empty, 0)).2 = .ok (out, s', w)) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (j + 2) = s' := by
+  rw [repState_succ c t rep dom xs hi cr0 cr ns a j hal hs hs' hcr hj]
+  rw [repState_at c t rep dom xs hi cr0 cr ns j hal hs (by omega)] at ha
+  dsimp only at ha ⊢
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j) = R at ha ⊢
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha ⊢
+    rw [run_coins_round c S _ _ _ ha hc]
+    rfl
+  | true =>
+    have e : (({} : Masker).answer c (cr.getD j #[])) = .error "coins for no round" := rfl
+    simp only [↓reduceIte] at ha
+    rw [e] at ha
+    cases ha
+
 end Loop
 
 end Claims.ZKServer
