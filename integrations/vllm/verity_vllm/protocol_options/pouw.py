@@ -751,7 +751,11 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
     reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window has
-    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`).
+    finished; without it the coins are this process's and the window credits nothing (`pouw_h1.IN_PROCESS`). The
+    window's weights' root is its period's registered weights' (`pouw_h1_served.Weights.root`, the period-open's
+    ``--weights-root``), from ``served``'s ``weights``, or registered here from the served model under ``served``'s
+    ``weights_key`` before any salt (VLLM-71); without either it is `audit.weights_root`, which registers no ``b/<K>``
+    and so credits nothing.
     ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0 only by default). On an arm that serves z/y records
     (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each committed layer whose N is whole 32-column units serves
     through ``scaled_mm_zy`` over T slots, the records its z. The served values are the arm's, untouched."""
@@ -763,8 +767,16 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
+    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
+    served = settings.served
+    if served is not None and served.weights is None and served.weights_key is not None and target.context.stage != "capture":
+        from verity_vllm.protocol_options import pouw_h1_served as SV
+        served.weights = SV.register_weights(served.declare(shapes, modules, settings.rows, settings.steps), shapes,
+                                             SV.weights_of(layers), served.weights_key, served.prefix)
+    wroot = served.weights.root() if served is not None and served.weights is not None else weights_root(roots)
     if settings.challenger is not None:
-        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session, settings.gate)
+        session = PHW.Window(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)
@@ -774,12 +786,11 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
         salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
         draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
     source = PH.CHALLENGER if session is not None else "in-process"
-    run = PH.H1Run(entry, salt, {w: f"linear {w}" for w in roots} | _named(target.model, layers),
-                   [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
+    run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
                    admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
-    run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source)
+    run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if rounds is not None:
