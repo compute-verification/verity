@@ -20,9 +20,9 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   schedule's rounds, which the frame stands in for, and the values the frame took (`vals`), which its finish request
   carries: the prover keeps no schedule and no check of its own.
 
-A round and a round's coins are pure steps of the loop's frames (`roundStep`, `coinsStep`, on the `Registry` as a value);
-`round` and `coins` only read the registry, run the step, put the rep's frame back and log. So what a rep's frame takes is
-a function of the loop's frames and the request alone.
+A round and a round's coins are pure steps of the loop's frames (`roundStep`, `coinsStep`, on the `Registry` as a
+value); `round` and `coins` only read the registry, run the step, put the rep's frame back and log. So what a rep's frame
+takes is a function of the loop's frames and the request alone.
 
 So every coin a frame takes is the loop's own reading of the auditor's answer, and every round in a device round's place
 is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
