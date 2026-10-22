@@ -5,12 +5,14 @@ requests go to `auditor.gate` as the lane key's forced command would pass them, 
 held to the ledger; a challenger key other than the pinned one, a reserve outside the audit's period, a second session
 for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves. The
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
-complete and a dropper doesn't."""
+complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
+its verifier, it and its period closed complete, and the Lean accepted it."""
 from __future__ import annotations
 
 import hashlib
 import itertools
 import json
+import re
 import shlex
 import sys
 import threading
@@ -26,8 +28,10 @@ sys.path.insert(0, str(LIVE))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
+import auditor_line as al  # noqa: E402
 import challengers  # noqa: E402
 import verifier  # noqa: E402
+import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
@@ -98,8 +102,8 @@ class Host:
         return challengers.Gate(out, call or self.call, "vy-nebius-1", pin or self.pin, period, address=self.address,
                                 pause=self.pause, polls=3)
 
-    def period(self, name: str = "p-1") -> None:
-        rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", CIRCUIT])
+    def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
+        rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", circuit])
         assert rc == 0, out
 
     def ledger(self) -> list[dict]:
@@ -224,3 +228,64 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         assert rc == 0, out
         close = json.loads(out)["body"]
         assert [x["complete"] for x in close["windows"]] == [True, False] and close["complete"] is False
+
+
+@pytest.mark.parametrize("defer_openings", [True, False])
+def test_the_line_credits_a_session_only_when_credited_complete_and_accepted_by_the_lean(host, tmp_path,
+                                                                                          defer_openings):
+    """`auditor_line`'s line of record over a gate run of an honest session and a 1/16 dropper, in a period that
+    committed the descriptor of the verifier that ran them. When the prover defers each window's openings, the dropper's
+    are all asked, so both windows and the period close complete: the honest session, once its verdict is the Lean's,
+    is the line, and the dropper, which the Lean refused, earns none. When it doesn't, the dropper's window and so the
+    period close incomplete, and the line credits zero. A python verdict, a period not yet closed and a verifier the
+    period didn't commit each credit nothing, with the reason."""
+    desc = al.descriptor("ab" * 20)
+    host.period(circuit=hashlib.sha512(desc).hexdigest())
+    out = tmp_path / "run"
+    got = {}
+    pace = verifier.pace_of("1:4:160:2", 1.0)
+    sessions, _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=host.gate(out / "challenger"),
+                               verdict="python", defer_openings=defer_openings,
+                               then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    assert [s["accepted"] for s in sessions] == [True, False]
+
+    def line(verdict: str = "python", d: bytes = desc) -> dict:
+        (out / "verifier.json").write_text(json.dumps(
+            {"registration": got["reg"], "sessions": [{**s, "verdict": verdict} for s in sessions]}))
+        return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=d)
+
+    def zero(doc: dict) -> dict:
+        return {k: [why.split(":")[0] for why in v] for k, v in doc["credit"]["zero"].items()}
+
+    doc = line("lean")
+    assert zero(doc)[0] == ["not complete"]
+    assert "period p-1 hasn't closed" in doc["sessions"][0]["credit"]["complete"]["reason"]
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    assert json.loads(closed)["body"]["complete"] is defer_openings
+    doc = line("lean")
+    honest, dropper = doc["sessions"]
+    assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
+    assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
+    t = honest["T"]
+    if defer_openings:
+        assert honest["credit"]["ok"] and zero(doc) == {1: ["not accepted"]}
+        assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t]["4.4e+09"] == {
+            "k": 0, **{x: honest["shares_auditor_clock"]["4.4e+09"][x] for x in ("time", "snapshot")}}
+        assert doc["credit"]["summary"].startswith("the line credits session(s) 0; session(s) 1 earn none")
+    else:
+        assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
+        assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
+        assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
+                            r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
+                            r"incomplete\)", dropper["credit"]["complete"]["reason"])
+        assert doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0} and doc["line"][t]["credited_sessions"] == []
+        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete and "
+                                                   "accepted; session 0: not complete: period p-1 closed incomplete")
+    assert doc["measured"][t]["auditor"]["4.4e+09"]["k"] == 0
+    assert zero(line("python"))[0][-1] == "not accepted"
+    other = line("lean", al.descriptor("cd" * 20))
+    assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
+    assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
+    with pytest.raises(SystemExit, match="--commit"):
+        al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
