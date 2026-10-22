@@ -40,7 +40,9 @@ def readTmpl (path : String) : IO (Option Tmpl.Tmpl) := do
   | .error e => report "parse" t0 [("error", Json.str e)]; return none
   | .ok t =>
     report "parse" t0 [("defs", toJson t.defs.size), ("rows", toJson (t.defs.foldl (· + ·.rows.size) 0)),
-      ("calls", toJson (t.defs.foldl (· + ·.calls.size) 0)), ("cols", toJson (t.defs.getD t.root default).cols)]
+      ("calls", toJson (t.defs.foldl (· + ·.calls.size) 0)),
+      ("segs", toJson (t.defs.foldl (fun n d => d.calls.foldl (· + ·.segs.size) n) 0)),
+      ("cols", toJson (t.defs.getD t.root default).cols)]
     return some t
 
 def clip (s : String) : Json := Json.str (s.take 300).toString

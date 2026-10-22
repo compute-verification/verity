@@ -1,5 +1,5 @@
 """A structural lowering (PRF-133): each specialized Definition lowered once per pattern of its arguments, its calls,
-batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v1`` (:mod:`verity_flock.tmpl`) instead of
+batch members and scan iterations kept as calls, written as ``flock-ir-tmpl/v2`` (:mod:`verity_flock.tmpl`) instead of
 :func:`ir_lower.lower`'s one walk over the unrolled gates. An opt-in mode: nothing else calls it, and no existing
 circuit's lowering or digest changes.
 
@@ -15,7 +15,8 @@ reads two bits one of which is its own column; a returned column nothing else in
 return order, so a caller binds a copy's returns as one run. Primitive gates are lowered by
 :data:`ir_lower.PIECES` and a Boolean Definition by its builder, as :func:`ir_lower.lower_gates` lowers them; the members
 of a batched primitive node are calls too. So a Definition's template rows are its own gates, never its callees', and
-consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line.
+consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line, its runs of
+segments a fixed stride apart one two-level segment each (:func:`tmpl.pack`).
 
 Folding constants in costs a specialization per distinct constant argument (a counter passed as a constant makes one per
 call), so a Definition of at least ``fold_gates`` gates folds only its first ``fold_cap`` patterns with constants; its
@@ -339,14 +340,14 @@ class _Lowerer:
 
 
 def _segs(r0: list[int], step: list[int], cols: int) -> tuple:
-    """A copy's input references ``r0`` stepping by ``step`` per copy as segments ``(len, at, step)``: runs of consecutive
-    references with one step, each wholly among the caller's own columns or wholly past them."""
+    """A copy's input references ``r0`` stepping by ``step`` per copy as one-level segments ``(len, at, step, 1, 0)``: runs
+    of consecutive references with one step, each wholly among the caller's own columns or wholly past them."""
     out: list[list[int]] = []
     for t, (r, s) in enumerate(zip(r0, step)):
         if out and r == out[-1][1] + out[-1][0] and s == out[-1][2] and (r < cols) == (out[-1][1] < cols):
             out[-1][0] += 1
         else:
-            out.append([1, r, s])
+            out.append([1, r, s, 1, 0])
     return tuple(map(tuple, out))
 
 
@@ -420,7 +421,9 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, 1, len(outs))]
     defs = [T.Def(s.cols, s.ins, tuple(s.rows), tuple(s.calls)) for s in lw.order]
     defs.append(T.Def(cols, 0, tuple(rows), tuple(calls)))
-    return T.Tmpl(name, len(defs) - 1, groups, defs), lw, sp
+    t = T.Tmpl(name, len(defs) - 1, groups, defs)
+    lw.segs_one_level = sum(len(c.segs) for d in t.defs for c in d.calls)
+    return T.pack(t), lw, sp
 
 
 def evaluate(flat: T.Flat, inputs: list[int], nin: int) -> list[int]:
@@ -495,6 +498,7 @@ def stats(t: T.Tmpl, lw: _Lowerer, top: Spec, text_bytes: int | None = None) -> 
                                           "refs": sum(len(a) + len(b) for d in t.defs for _, a, b in d.rows),
                                           "calls": sum(len(d.calls) for d in t.defs),
                                           "segs": sum(len(c.segs) for d in t.defs for c in d.calls),
+                                          "segs_one_level": getattr(lw, "segs_one_level", None),
                                           "copies": sum(len(s.copies) for s in lw.order), "bytes": text_bytes,
                                           "root_cols": t.defs[t.root].cols},
             "patterns": {f: n for f, n in sorted(by_fn.items(), key=lambda kv: -kv[1])[:8]}}

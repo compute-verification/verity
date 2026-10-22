@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The H1 tile unit's structural template (PRF-133): per SHAPE ("K" for the 4×8 tile, "K R C" otherwise),
 # `python -m verity_flock.struct_lower` lowers the unit with each specialized Definition once and its calls kept as calls,
-# writes it as flock-ir-tmpl/v1 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
+# writes it as flock-ir-tmpl/v2 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
 # Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
 # --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
 # template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl). Run from a clone:
