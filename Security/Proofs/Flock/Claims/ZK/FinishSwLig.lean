@@ -47,7 +47,7 @@ theorem l0Clear_ood (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t
     (extra : ℕ → ℕ → F128) (rep : ℕ) :
     l0Clear coin p0 sch t b lay extra rep (lay.lgOod 0) = mleF t (zS coin p0 sch.n) := by
   unfold l0Clear
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
 
 theorem l0Clear_msg (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array F128) (lay : Zk.PadLayout)
     (extra : ℕ → ℕ → F128) (rep : ℕ) (hood : lay.nOod0 = 1) {j c : ℕ} (hj : j < lay.k0) (hc : c < 4) :
@@ -64,7 +64,7 @@ theorem l0Clear_msg (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t
     simp only [Zk.PadLayout.lgMsg, Zk.PadLayout.lgE]
     omega
   unfold l0Clear
-  rw [if_neg h1, if_pos h2, hd, show (4 * j + c) / 4 = j by omega, show (4 * j + c) % 4 = c by omega,
+  rw [ite_eq_right h1, ite_eq_left h2, hd, show (4 * j + c) / 4 = j by omega, show (4 * j + c) % 4 = c by omega,
     show (4 * j + c) % 2 = c % 2 by omega]
 
 theorem l0Clear_e (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array F128) (lay : Zk.PadLayout)
@@ -85,7 +85,7 @@ theorem l0Clear_e (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b
     simp only [Zk.PadLayout.lgE]
     omega
   unfold l0Clear
-  rw [if_neg h1, if_neg h2, if_pos h3, hd, show (2 * i + c) / 2 = i by omega, show (2 * i + c) % 2 = c by omega]
+  rw [ite_eq_right h1, ite_eq_right h2, ite_eq_left h3, hd, show (2 * i + c) / 2 = i by omega, show (2 * i + c) % 2 = c by omega]
 
 /-- **`LigHyp` from level 0's opening's clear values**: where the source's masked values from `zp 64` to `h_ab` are
 `l0Clear` plus the pads `h`, at a layout with one out-of-domain value and the schedule's `k₀` lane rounds, the source holds
@@ -124,8 +124,17 @@ theorem ligHyp_of_l0 (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleSche
     have hlo : lay.zp 64 ≤ lay.lgE i c := by simp only [Zk.PadLayout.lgE]; omega
     have hhi : lay.lgE i c < lay.hab := by simp only [Zk.PadLayout.lgE, Zk.PadLayout.hab]; omega
     rw [hl0 (lay.lgE i c) hlo hhi, l0Clear_e coin p0 sch t b lay extra rep hood hc]
-  refine { k0 := hk0, n0 := hn0, levels := hlv, ood := ?_, msg := ?_, e0 := ?_, e1 := ?_, y1 := hy1, ybar := hybar,
-    salt := hsalt }
+  refine
+    { k0 := hk0
+      n0 := hn0
+      levels := hlv
+      ood := ?_
+      msg := ?_
+      e0 := ?_
+      e1 := ?_
+      y1 := hy1
+      ybar := hybar
+      salt := hsalt }
   · have hlo : lay.zp 64 ≤ lay.lgOod 0 := by simp only [Zk.PadLayout.lgOod]; omega
     have hhi : lay.lgOod 0 < lay.hab := by simp only [Zk.PadLayout.lgOod, Zk.PadLayout.hab]; omega
     rw [hl0 (lay.lgOod 0) hlo hhi, l0Clear_ood]

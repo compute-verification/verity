@@ -140,7 +140,7 @@ theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   have hkE : k < (tabC PE x j).z.nE := by rw [nE_eq_hab x j]; exact lt_trans hk (zp64_lt_hab x j)
   rw [swSrcE_masked_pad x c w (valsFw x c A B) τ j r hrows hkE]
   show (if k < (layE x j).zp 64 then (A j r)[k]! else B j r k) + _ = _
-  rw [if_pos hk]
+  rw [ite_eq_left hk]
 
 /-- **Level 0's opening at the switched source**: at the firewall's clear values (`valsFw`), where table `j`'s rows hold
 at its base, rep `r`'s masked values from `zp 64` to `h_ab` are `B j r` plus the session's pads (`padsOf`). -/
@@ -156,7 +156,7 @@ theorem swSrcE_l0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   have hkE : k < (tabC PE x j).z.nE := by rw [nE_eq_hab x j]; exact hk
   rw [swSrcE_masked_pad x c w (valsFw x c A B) τ j r hrows hkE]
   show (if k < (layE x j).zp 64 then (A j r)[k]! else B j r k) + _ = _
-  rw [if_neg (Nat.not_lt.mpr hk0)]
+  rw [ite_eq_right (Nat.not_lt.mpr hk0)]
 
 end Masked
 end Claims.ZKMal
