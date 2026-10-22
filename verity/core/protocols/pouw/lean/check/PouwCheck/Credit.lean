@@ -798,12 +798,14 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let lins : List (String × Nat × Nat) := (rows (get layout "linears")).filterMap fun (x : List Json) => (match x with
     | [.str s, k, n] => some (s, num k, num n)
     | _ => none)
-  let lin := (match (rows (get layout "calls"))[call]? with
-    | some (.str s :: _) => s
+  let calls : List (List Json) := rows (get layout "calls")
+  let lin : String := (match calls[call]? with
+    | some (Json.str s :: _) => s
     | _ => "")
-  let (k, n) := ((lins.find? (·.1 == lin)).map (·.2)).getD (0, 0)
-  let tile := ((shape.tiles.lookup k)).getD { fn := "", a := 0, b := 0, zy := 0 }
-  let b0 := ((lins.takeWhile (·.1 != lin)).filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0
+  let kn : Nat × Nat := ((lins.find? (·.1 == lin)).map (·.2)).getD (0, 0)
+  let (k, n) := kn
+  let tile : Tile := (shape.tiles.lookup k).getD { fn := "", a := 0, b := 0, zy := 0 }
+  let b0 : Nat := ((lins.takeWhile (·.1 != lin)).filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0
   let sizes := (callWork layout).map (·.1)
   let u0 := (sizes.take call).foldl (· + ·) 0
   let size := sizes.getD call 0
@@ -815,7 +817,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     [(a, m, tile.a), (zy, size, tile.zy), (bv, (lins.filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0, tile.b)]
   let mut root : List (String × String) := []
   for (v, _) in shapes do
-    let got := (match get roots v with
+    let got : List Json := (match get roots v with
       | .arr xs => xs.toList
       | _ => [])
     match got with
@@ -831,7 +833,8 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   for (port, v, row) in ports do
     let reads := (List.range population).map fun u =>
       if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
-    let (leaves, words) := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
+    let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
+    let (leaves, words) := lw
     let d ← (SampledProofs.Registered.domainAt program v words leaves 16
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),

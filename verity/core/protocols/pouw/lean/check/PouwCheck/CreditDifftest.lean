@@ -65,16 +65,18 @@ def registeredFileOf (j : Json) : Except String Json := do
   let call ← f "call"
   let roots ← f "roots"
   let window ← f "window"
-  PouwCheck.Difftest.refusal id (do
-    let some d := (match descriptor with
-        | .str s => if Credit.isHexBytes s then PouwCheck.hex? (.str s) else none
-        | _ => none) | Credit.layoutRefuse Credit.DESCRIPTOR_HEX
+  let bytes : Option ByteArray := match descriptor with
+    | Json.str s => if Credit.isHexBytes s then PouwCheck.hex? (Json.str s) else none
+    | _ => none
+  let got : PouwCheck.R Json := do
+    let some d := bytes | Credit.layoutRefuse Credit.DESCRIPTOR_HEX
     let layout ← Credit.layoutOf d
     let shape := Credit.shapeOf d
     let program := Flock.hexOf (Flock.Sha512.hash d)
     let file ← Credit.registeredFile program layout shape ((PouwCheck.nat? call).getD 0) roots
       ((PouwCheck.str? window).getD "")
-    pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)]))
+    pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
+  PouwCheck.Difftest.refusal id got
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
