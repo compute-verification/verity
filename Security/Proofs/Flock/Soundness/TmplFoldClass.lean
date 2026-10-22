@@ -71,7 +71,8 @@ theorem modU_shape (u : Array (Array F128)) {ins nk t0 k0 : ℕ} (hu : u.size = 
   rw [getD_modify _ _ (hu ▸ ht)]
   split_ifs with h
   · subst h
-    simp [huk _ htl]
+    rw [Array.size_modify]
+    exact huk _ htl
   · exact huk t htl
 
 /-! ## Explicit classes -/
@@ -165,12 +166,18 @@ theorem sum_u {ins t0 : ℕ} (ht : t0 < ins) (gl gc : GF128) (iv : ℕ → GF128
   have hk' : 0 < (o.u.getD t0 #[]).size := by rw [huk t0 ht]; exact Nat.one_pos
   obtain ⟨hu', huk'⟩ := modU_shape o.u hu huk ht (k0 := 0) w
   refine ⟨⟨hp, hu', huk'⟩, ?_⟩
-  have hz : ∑ t ∈ Finset.range ins, (if t = t0 then (if 0 = 0 then of w else 0) else 0) * iv t = of w * iv t0 := by
-    rw [Finset.sum_eq_single t0 (fun t _ h => by rw [if_neg h, zero_mul])
-        (fun h => absurd (Finset.mem_range.mpr ht) h), if_pos rfl, if_pos rfl]
+  have hterm : ∀ t, of (((o.u.modify t0 (·.modify 0 (· + w))).getD t #[]).getD 0 0) * iv t =
+      of ((o.u.getD t #[]).getD 0 0) * iv t + if t = t0 then of w * iv t0 else 0 := by
+    intro t
+    rw [modU_get o.u ht' hk' w, if_pos (rfl : (0 : ℕ) = 0), add_mul]
+    split_ifs with h
+    · subst h; rfl
+    · rw [zero_mul]
+  have hz : ∑ t ∈ Finset.range ins, (if t = t0 then of w * iv t0 else 0) = of w * iv t0 := by
+    rw [Finset.sum_eq_single t0 (fun t _ h => if_neg h) (fun h => absurd (Finset.mem_range.mpr ht) h), if_pos rfl]
   show gl * of o.s + gc * of o.c + ∑ t ∈ Finset.range ins,
       of (((o.u.modify t0 (·.modify 0 (· + w))).getD t #[]).getD 0 0) * iv t = _
-  simp only [modU_get o.u ht' hk' w, add_mul, Finset.sum_add_distrib, hz]
+  rw [Finset.sum_congr rfl fun t _ => hterm t, Finset.sum_add_distrib, hz]
   unfold sumVal
   rw [add_assoc]
 
@@ -183,16 +190,20 @@ theorem ref_sum (pt : FoldPt) {ins cols v : ℕ} (gl gc : GF128) (iv : ℕ → G
     Shape ins 1 (o.ref pt true cols ins v 0 w gOwn) ∧ (o.ref pt true cols ins v 0 w gOwn).p = o.p ∧
       sumVal ins gl gc iv (o.ref pt true cols ins v 0 w gOwn) = sumVal ins gl gc iv o +
         (if v < cols then X else if v < cols + ins then of w * iv (v - cols) else gc * of w) := by
-  unfold Out.ref
   by_cases h1 : v < cols
-  · simp only [h1, if_true]
+  · have e : o.ref pt true cols ins v 0 w gOwn = gOwn v o := by
+      unfold Out.ref; rw [if_pos h1]
+    rw [e, if_pos h1]
     exact hown h1
-  · simp only [h1, if_false]
-    by_cases h2 : v < cols + ins
-    · simp only [h2, if_true]
-      obtain ⟨h3, h4⟩ := sum_u (by omega) gl gc iv w hsh
+  · by_cases h2 : v < cols + ins
+    · have e : o.ref pt true cols ins v 0 w gOwn = { o with u := o.u.modify (v - cols) (·.modify 0 (· + w)) } := by
+        unfold Out.ref; rw [if_neg h1, if_pos h2]
+      rw [e, if_neg h1, if_pos h2]
+      obtain ⟨h3, h4⟩ := sum_u (t0 := v - cols) (by omega) gl gc iv w hsh
       exact ⟨h3, rfl, h4⟩
-    · simp only [h2, if_false, ↓reduceIte]
+    · have e : o.ref pt true cols ins v 0 w gOwn = { o with c := o.c + w } := by
+        unfold Out.ref; rw [if_neg h1, if_neg h2, if_pos rfl]
+      rw [e, if_neg h1, if_neg h2]
       refine ⟨hsh, rfl, ?_⟩
       show gl * of o.s + gc * of (o.c + w) + ∑ t ∈ Finset.range ins, of ((o.u.getD t #[]).getD 0 0) * iv t = _
       rw [of_add]
@@ -221,6 +232,120 @@ theorem add_sum {ins : ℕ} (gl gc : GF128) (iv : ℕ → GF128) {o ch : Out} (l
   rw [of_add, of_add, of_mul, of_mul]
   unfold sumVal
   ring
+
+/-! ## A summed class's position split: `q = a + 2^β · y`, `a < 2^β`, `β ≥ 6` -/
+
+theorem halves_getD (r : Array F128) {lo : ℕ} (hlo : lo ≤ r.size) :
+    (Tmpl.halves r).getD lo (0, #[], #[]) =
+      ((r.size - lo) / 2, (Array.range (2 ^ ((r.size - lo) / 2))).map (Tmpl.eqAt r lo ((r.size - lo) / 2)),
+        (Array.range (2 ^ (r.size - lo - (r.size - lo) / 2))).map
+          (Tmpl.eqAt r (lo + (r.size - lo) / 2) (r.size - lo - (r.size - lo) / 2))) := by
+  simp [Tmpl.halves, Nat.lt_succ_of_le hlo]
+
+/-- Past its coordinates, `eq(r[lo ..], u)` read from the halves is 0. -/
+theorem eqTail_out (r : Array F128) (lo u : ℕ) (hlo : lo ≤ r.size) (hu : 2 ^ (r.size - lo) ≤ u) :
+    of (Tmpl.eqTail (Tmpl.halves r) lo u) = 0 := by
+  have hh : (r.size - lo) / 2 ≤ r.size - lo := Nat.div_le_self _ _
+  have h2 : ¬ u / 2 ^ ((r.size - lo) / 2) < 2 ^ (r.size - lo - (r.size - lo) / 2) := by
+    rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← Nat.pow_add, Nat.sub_add_cancel hh]
+    omega
+  unfold Tmpl.eqTail
+  rw [halves_getD r hlo]
+  dsimp only
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, h2, ↓reduceIte,
+    Option.map_none, Option.getD_none]
+  rw [of_mul, of_zero', mul_zero]
+
+/-- `eqTail_split` for every high part `v`. -/
+theorem eqTail_split' (r : Array F128) (k u v : ℕ) (hk : k ≤ r.size) (hu : u < 2 ^ k) :
+    of (Tmpl.eqTail (Tmpl.halves r) 0 (u + 2 ^ k * v)) =
+      of (Tmpl.eqAt r 0 k u) * of (Tmpl.eqTail (Tmpl.halves r) k v) := by
+  by_cases hv : v < 2 ^ (r.size - k)
+  · exact eqTail_split r k u v hk hu hv
+  · rw [eqTail_out r k v hk (by omega), mul_zero, eqTail_out r 0 _ (Nat.zero_le _)]
+    calc 2 ^ (r.size - 0) = 2 ^ k * 2 ^ (r.size - k) := by rw [← pow_add]; congr 1; omega
+      _ ≤ 2 ^ k * v := Nat.mul_le_mul_left _ (by omega)
+      _ ≤ u + 2 ^ k * v := Nat.le_add_left _ _
+
+theorem pow_six (β : ℕ) (hβ : 6 ≤ β) : 2 ^ β = 64 * 2 ^ (β - 6) := by
+  rw [show (64 : ℕ) = 2 ^ 6 from rfl, ← pow_add]; congr 1; omega
+
+theorem split_mod (β a y : ℕ) (hβ : 6 ≤ β) : (a + 2 ^ β * y) % 64 = a % 64 := by
+  rw [pow_six β hβ, mul_assoc, Nat.add_mul_mod_self_left]
+
+theorem split_div (β a y : ℕ) (hβ : 6 ≤ β) : (a + 2 ^ β * y) / 64 = a / 64 + 2 ^ (β - 6) * y := by
+  rw [pow_six β hβ, mul_assoc, Nat.add_mul_div_left _ _ (by norm_num : 0 < 64)]
+
+theorem split_lo (β a : ℕ) (hβ : 6 ≤ β) (ha : a < 2 ^ β) : a / 64 < 2 ^ (β - 6) := by
+  rw [Nat.div_lt_iff_lt_mul (by norm_num : 0 < 64), mul_comm, ← pow_six β hβ]
+  exact ha
+
+/-- A summed class's low part's `E` factor, `lw[a mod 64] · eq(ρ[.. β−6], ⌊a/64⌋)`. -/
+def eLow (pt : FoldPt) (β a : ℕ) : F128 := pt.lw.getD (a % 64) 0 * Tmpl.eqAt pt.rho 0 (β - 6) (a / 64)
+
+/-- A summed class's low part's slot-`s` factor, `[a mod 64 = s] · eq(r[.. β−6], ⌊a/64⌋)`. -/
+noncomputable def gLow (pt : FoldPt) (s β a : ℕ) : GF128 :=
+  if a % 64 = s then of (Tmpl.eqAt pt.r 0 (β - 6) (a / 64)) else 0
+
+theorem e_split (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β a : ℕ} (hβ : 6 ≤ β) (hk : β - 6 ≤ pt.rho.size)
+    (ha : a < 2 ^ β) (y : ℕ) :
+    of (pt.e (a + 2 ^ β * y)) = of (eLow pt β a) * of (Tmpl.eqTail pt.rhoT (β - 6) y) := by
+  unfold FoldPt.e eLow
+  rw [split_mod β a y hβ, split_div β a y hβ, of_mul, hT, eqTail_split' pt.rho _ _ _ hk (split_lo β a hβ ha), of_mul,
+    mul_assoc]
+
+theorem g_split (pt : FoldPt) (hT : pt.rT = Tmpl.halves pt.r) {s β a : ℕ} (hβ : 6 ≤ β) (hk : β - 6 ≤ pt.r.size)
+    (ha : a < 2 ^ β) (y : ℕ) :
+    Gs pt s (a + 2 ^ β * y) = gLow pt s β a * of (Tmpl.eqTail pt.rT (β - 6) y) := by
+  unfold Gs gLow FoldPt.g
+  rw [split_mod β a y hβ, split_div β a y hβ]
+  split_ifs
+  · rw [hT, eqTail_split' pt.r _ _ _ hk (split_lo β a hβ ha)]
+  · rw [zero_mul]
+
+/-! ## Loops whose every step adds a known term -/
+
+theorem forIn_list_sum {α β : Type} (S : β → GF128) (Q : β → Prop) (g : α → GF128) :
+    ∀ (l : List α) {f : α → β → V (ForInStep β)} {b b' : β}, forIn l b f = .ok b' → Q b →
+      (∀ a ∈ l, ∀ b r, f a b = .ok r → Q b → ∃ b', r = .yield b' ∧ Q b' ∧ S b' = S b + g a) →
+      Q b' ∧ S b' = S b + (l.map g).sum
+  | [], f, b, b', h, hq, _ => by
+    rw [List.forIn_nil] at h
+    cases h
+    exact ⟨hq, by rw [List.map_nil, List.sum_nil, add_zero]⟩
+  | a :: l, f, b, b', h, hq, hf => by
+    rw [List.forIn_cons] at h
+    obtain ⟨r, hr, h⟩ := except_bind_ok h
+    obtain ⟨b1, rfl, hq1, hs1⟩ := hf a (List.mem_cons_self ..) b r hr hq
+    obtain ⟨hq2, hs2⟩ := forIn_list_sum S Q g l h hq1 (fun a ha => hf a (List.mem_cons_of_mem _ ha))
+    exact ⟨hq2, by rw [hs2, hs1, List.map_cons, List.sum_cons, add_assoc]⟩
+
+theorem forIn_array_sum {α β : Type} (S : β → GF128) (Q : β → Prop) (g : α → GF128) {l : Array α}
+    {f : α → β → V (ForInStep β)} {b b' : β} (h : forIn l b f = .ok b') (hq : Q b)
+    (hf : ∀ a ∈ l, ∀ b r, f a b = .ok r → Q b → ∃ b', r = .yield b' ∧ Q b' ∧ S b' = S b + g a) :
+    Q b' ∧ S b' = S b + (l.toList.map g).sum := by
+  rw [← Array.forIn_toList] at h
+  exact forIn_list_sum S Q g l.toList h hq fun a ha => hf a (Array.mem_toList_iff.mp ha)
+
+theorem forIn_range_sum {β : Type} (S : β → GF128) (Q : β → Prop) (g : ℕ → GF128) {n : ℕ}
+    {f : ℕ → β → V (ForInStep β)} {b b' : β} (h : forIn [:n] b f = .ok b') (hq : Q b)
+    (hf : ∀ k < n, ∀ b r, f k b = .ok r → Q b → ∃ b', r = .yield b' ∧ Q b' ∧ S b' = S b + g k) :
+    Q b' ∧ S b' = S b + ∑ k ∈ Finset.range n, g k := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  have e : List.range' 0 [:n].size 1 = List.range n := by
+    rw [List.range_eq_range']; simp [Std.Legacy.Range.size]
+  rw [e] at h
+  rw [← list_range_sum]
+  exact forIn_list_sum S Q g _ h hq fun k hk => hf k (List.mem_range.mp hk)
+
+theorem foldl_sum {α β : Type} (S : β → GF128) (Q : β → Prop) (g : α → GF128) {f : β → α → β} :
+    ∀ (l : List α) (b : β), Q b → (∀ a ∈ l, ∀ b, Q b → Q (f b a) ∧ S (f b a) = S b + g a) →
+      Q (l.foldl f b) ∧ S (l.foldl f b) = S b + (l.map g).sum
+  | [], b, hq, _ => ⟨hq, by rw [List.foldl_nil, List.map_nil, List.sum_nil, add_zero]⟩
+  | a :: l, b, hq, hf => by
+    obtain ⟨hq1, hs1⟩ := hf a (List.mem_cons_self ..) b hq
+    obtain ⟨hq2, hs2⟩ := foldl_sum S Q g l (f b a) hq1 (fun a ha => hf a (List.mem_cons_of_mem _ ha))
+    exact ⟨hq2, by rw [List.foldl_cons, hs2, hs1, List.map_cons, List.sum_cons, add_assoc]⟩
 
 theorem pzero_zipAdd {a b : Array F128} (ha : a.size = 64) (hb : b.size = 64) (h1 : ∀ i < 64, of (a.getD i 0) = 0)
     (h2 : ∀ i < 64, of (b.getD i 0) = 0) : ∀ i < 64, of (((a.zip b).map fun (x, y) => x + y).getD i 0) = 0 :=
