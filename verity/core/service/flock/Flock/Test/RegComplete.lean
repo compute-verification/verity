@@ -53,7 +53,8 @@ def why (c : Circuit) (f : Json) : String :=
   "registered reads (complete): the statement's port pub is no port of the verifier's registered reads, which name every port the statement's outputs read: its rows would be committed afresh, stated by the public file"
 
 -- a circuit whose every port is the verifier's passes
-#guard (run { lane with ports := #[v2Port] } (file (some (Json.bool true)))).toBool
+#guard (Registered.checkComplete lane #[{ (default : Registered.Port) with name := "w" },
+  { (default : Registered.Port) with name := "pub" }]).toBool
 #guard Registered.complete { lane with ports := #[v2Port] } #[{ (default : Registered.Port) with name := "w" }]
 #guard !Registered.complete lane #[{ (default : Registered.Port) with name := "w" }]
 
