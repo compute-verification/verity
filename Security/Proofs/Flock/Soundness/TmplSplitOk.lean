@@ -124,7 +124,6 @@ theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with w
   rw [hW, ← list_range_sum]
   refine foldl_val V _ (fun k : ℕ => (ra.toList.map fun v => of (alpha * rowLow k (pos x)) * Z k (pos x / A) v).sum +
       (rb.toList.map fun v => of (rowLow k (pos x)) * Z k (pos x / A) v).sum) (fun o'' k => ?_) (List.range nk) o'
-  dsimp only
   rw [← Array.foldl_toList, ← Array.foldl_toList, foldl_val V _ _ (fun o v => hV o k (pos x / A) _ v),
     foldl_val V _ _ (fun o v => hV o k (pos x / A) _ v), add_assoc]
 
@@ -191,11 +190,11 @@ theorem slots_tabExp (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H : ℕ) (iv : ℕ
     ring
   · rintro mp ⟨cx, cy⟩ v
     dsimp only
-    generalize rm cx = p
-    generalize cm cy = q
-    obtain ⟨px, fx⟩ := p
-    obtain ⟨py, fy⟩ := q
-    exact foldl_val (fun mp : HashMap (ℕ × ℕ × ℕ) F128 => hsum mp (fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0)) _ _
+    exact foldl_val (fun mp : HashMap (ℕ × ℕ × ℕ) F128 =>
+        hsum mp (fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0))
+      (fun mp s' => bump mp ((rm cx).1, (cm cy).1, s') (W.getD s' 0 * v * (rm cx).2 * (cm cy).2))
+      (fun s' => of (W.getD s' 0 * v * (rm cx).2 * (cm cy).2) *
+        (if s' = s then hiE pt L H (rm cx).1 * hiG pt L H (cm cy).1 else 0))
       (fun mp s' => hsum_bump _ _ _ _) _ mp
 
 /-- The slot weights `W` the walk spreads a run of lanes by: `W[s]` is `Σ E(a) · eq(r, ⌊a/64⌋)` over the lanes at `s`. -/
@@ -292,6 +291,30 @@ theorem stOk_insert {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} {st : 
   · rw [if_neg (by simpa using hk)] at hg
     exact hst.2 e2 b2 a2 T2 (by rwa [HashMap.get?_eq_getElem?]) hp f hf
 
+theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ}
+    (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
+    {F : ℕ} (hw : WalkOk t lays multi pt s F) {e β' : ℕ} {as' : Array ℕ} {st st' : SplitSt} {T : Tab}
+    (h : (cachedTab (walk t lays multi pt F) e β' as' (lays.getD e default).palign.log2).run st = .ok (T, st'))
+    (hst : StOk t lays pt s st) (he : e < F) (hpc : Pre pt β' (lays.getD e default).palign.log2 as') :
+    StOk t lays pt s st' ∧ Spec t lays pt s F e β' as' 0 (lays.getD e default).palign.log2 T := by
+  unfold cachedTab at h
+  obtain ⟨s0, st0, hg, h⟩ := sv_bind_ok h
+  obtain ⟨rfl, rfl⟩ := sv_get_ok hg
+  cases hk : s0.tabs.get? (e, β', as') with
+  | some T' =>
+    simp only [hk] at h
+    obtain ⟨rfl, rfl⟩ := sv_pure_ok h
+    exact ⟨hst, hst.2 _ _ _ _ hk hpc F he⟩
+  | none =>
+    simp only [hk] at h
+    obtain ⟨T2, st4, hw1, h⟩ := sv_bind_ok h
+    obtain ⟨u, st5, hmod, h⟩ := sv_bind_ok h
+    have hmod := sv_modify_ok hmod
+    subst hmod
+    obtain ⟨rfl, rfl⟩ := sv_pure_ok h
+    obtain ⟨hst4, hsp⟩ := hw e β' as' 0 _ _ T2 st4 hw1 hst he hpc
+    exact ⟨stOk_insert hst4 (fun f hf => spec_stable hcall hsp he hf) _ _, hsp⟩
+
 /-- **A callee's table**, re-keyed from its cached table or walked directly: its class's at the caller's chunk origin. -/
 theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ}
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r)
@@ -305,36 +328,20 @@ theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
       (∀ c, of (rm c).2 * hiE pt (β' + al' - 6) H (rm c).1 = hiE pt (β' + al'' - 6) Hc c) ∧
       (∀ c, of (cm c).2 * hiG pt (β' + al' - 6) H (cm c).1 = hiG pt (β' + al'' - 6) Hc c) := by
   unfold walkChild at h
+  dsimp only at h
   split at h
   · rename_i hc
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hc
     obtain ⟨⟨⟨_, hoc⟩, hle⟩, h6c⟩ := hc
     have hpc : Pre pt β' (lays.getD e default).palign.log2 as' :=
       ⟨h6c, by have := hpre.2.1; omega, by have := hpre.2.2.1; omega, hpre.2.2.2⟩
-    obtain ⟨s0, st0, hg, h⟩ := sv_bind_ok h
-    obtain ⟨rfl, rfl⟩ := sv_get_ok hg
     obtain ⟨T, st1, hm, h⟩ := sv_bind_ok h
     obtain ⟨mρ, st2, h1, h⟩ := sv_bind_ok h
     obtain ⟨mr, st3, h2, h⟩ := sv_bind_ok h
     obtain ⟨hx, rfl⟩ := sv_pure_ok h
     simp only [Prod.mk.injEq] at hx
     obtain ⟨rfl, rfl, rfl⟩ := hx
-    have hT1 : StOk t lays pt s st1 ∧ Spec t lays pt s F e β' as' 0 (lays.getD e default).palign.log2 T := by
-      cases hk : s0.tabs.get? (e, β', as') with
-      | some T' =>
-        simp only [hk] at hm
-        obtain ⟨rfl, rfl⟩ := sv_pure_ok hm
-        exact ⟨hst, hst.2 _ _ _ _ hk hpc F he⟩
-      | none =>
-        simp only [hk] at hm
-        obtain ⟨T2, st4, hw1, hm⟩ := sv_bind_ok hm
-        obtain ⟨u, st5, hmod, hm⟩ := sv_bind_ok hm
-        have hmod := sv_modify_ok hmod
-        subst hmod
-        obtain ⟨rfl, rfl⟩ := sv_pure_ok hm
-        obtain ⟨hst4, hsp⟩ := hw e β' as' 0 _ _ T2 st4 hw1 hst he hpc
-        exact ⟨stOk_insert hst4 (fun f hf => spec_stable hcall hsp he hf) _ _, hsp⟩
-    obtain ⟨hst1, hsp⟩ := hT1
+    obtain ⟨hst1, hsp⟩ := cachedTab_ok hcall hw hm hst he hpc
     obtain ⟨rfl, hH2, ht2⟩ := half_ok h1 hst1.1
     obtain ⟨rfl, hH3, ht3⟩ := half_ok h2 hH2
     have hA : 2 ^ al' = 2 ^ (al' - (lays.getD e default).palign.log2) * 2 ^ (lays.getD e default).palign.log2 := by
@@ -344,12 +351,12 @@ theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     refine ⟨⟨hH3, by rw [ht3, ht2]; exact hst1.2⟩, _, 0, hsp, fun H =>
       ⟨H * 2 ^ (al' - (lays.getD e default).palign.log2) + oc / 2 ^ (lays.getD e default).palign.log2,
         by rw [hA, Nat.add_zero, Nat.add_mul, Nat.mul_assoc, hoc'], fun c => ?_, fun c => ?_⟩⟩
-    · simp only [↓reduceIte]
+    · simp only [rekeyAt, ↓reduceIte]
       unfold hiE
       rw [hT, rekey pt.rho hle (by have := hpre.2.1; omega) hoc H c,
         show β' + (lays.getD e default).palign.log2 - 6 + (al' - (lays.getD e default).palign.log2) = β' + al' - 6 by
           omega]
-    · simp only [Bool.false_eq_true, ↓reduceIte]
+    · simp only [rekeyAt, Bool.false_eq_true, ↓reduceIte]
       unfold hiG
       rw [hR, rekey pt.r hle (by have := hpre.2.2.1; omega) hoc H c,
         show β' + (lays.getD e default).palign.log2 - 6 + (al' - (lays.getD e default).palign.log2) = β' + al' - 6 by
@@ -362,12 +369,206 @@ theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     refine ⟨hst1, al', oc, hsp, fun H => ⟨H, rfl, fun c => ?_, fun c => ?_⟩⟩ <;>
       simp only [ident] <;> rw [← one_eq, one_mul]
 
+/-! ## A call's branches, valued -/
+
+theorem hsum_empty {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHashable κ] [DecidableEq κ] (f : κ → GF128) :
+    hsum ({} : HashMap κ F128) f = 0 := by
+  first
+  | simp [hsum]
+  | (rw [hsum_superset _ f ∅ fun x hx => absurd hx HashMap.not_mem_emptyc]; rfl)
+
+theorem tabExp_empty (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) : tabExp pt s L H iv {} = 0 := by
+  unfold tabExp
+  simp only [hsum_empty, add_zero]
+
+theorem tabSum_empty (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF128) : tabSum pt L H gl gc iv {} = 0 := by
+  unfold tabSum
+  simp only [hsum_empty, mul_zero, add_zero]
+
+theorem mem_of_toList {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHashable κ] {m : HashMap κ F128}
+    {e : κ × F128} (he : e ∈ m.toList) : e.1 ∈ m := by
+  have h := (HashMap.mem_toList_iff_getElem?_eq_some).1 he
+  first
+  | exact HashMap.mem_iff_isSome_getElem?.2 (by rw [h]; rfl)
+  | exact HashMap.mem_of_getElem?_eq_some h
+  | simp [HashMap.mem_iff_isSome_getElem?, h]
+
+theorem tabExp_congr_U (pt : FoldPt) (s L H : ℕ) (iv iv' : ℕ → ℕ → GF128) (T : Tab)
+    (h : ∀ x, x ∈ T.U → iv x.1 x.2.1 = iv' x.1 x.2.1) : tabExp pt s L H iv T = tabExp pt s L H iv' T := by
+  unfold tabExp hsum
+  congr 1
+  refine congrArg List.sum (List.map_congr_left fun e he => ?_)
+  rw [h e.1 (mem_of_toList he)]
+
+theorem tabSum_congr_U (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv iv' : ℕ → GF128) (T : Tab)
+    (h : ∀ x, x ∈ T.U → iv x.1 = iv' x.1) : tabSum pt L H gl gc iv T = tabSum pt L H gl gc iv' T := by
+  unfold tabSum hsum
+  congr 1
+  refine congrArg List.sum (List.map_congr_left fun e he => ?_)
+  rw [h e.1 (mem_of_toList he)]
+
+/-- `rm`, `cm` re-key a child's chunks at origin `Hc` (high factors from `Lc`) into its caller's at `H` (from `L`). -/
+def ReKey (pt : FoldPt) (L H Lc Hc : ℕ) (rm cm : ℕ → ℕ × F128) : Prop :=
+  (∀ c, of (rm c).2 * hiE pt L H (rm c).1 = hiE pt Lc Hc c) ∧ (∀ c, of (cm c).2 * hiG pt L H (cm c).1 = hiG pt Lc Hc c)
+
+/-- A child's own entries, added re-keyed, are its own entries at its origin. -/
+theorem addChild_exp (pt : FoldPt) (s L H Lc Hc : ℕ) (iv : ℕ → ℕ → GF128) (o ch : Tab) (rm cm : ℕ → ℕ × F128)
+    (ls lc : F128) (hk : ReKey pt L H Lc Hc rm cm) :
+    tabExp pt s L H iv (o.addChild ch rm cm ls lc) = tabExp pt s L H iv o +
+      (hsum ch.P (fun e => if e.2.2 = s then hiE pt Lc Hc e.1 * hiG pt Lc Hc e.2.1 else 0) +
+        hsum ch.PC (fun e => if e.2 = s then hiE pt Lc Hc e.1 else 0)) := by
+  rw [addChild_tabExp]
+  simp only [hk.1, hk.2]
+
+theorem addChild_sum (pt : FoldPt) (L H Lc Hc : ℕ) (gl gc : GF128) (iv : ℕ → GF128) (o ch : Tab)
+    (rm cm : ℕ → ℕ × F128) (ls lc : F128) (hk : ReKey pt L H Lc Hc rm cm) :
+    tabSum pt L H gl gc iv (o.addChild ch rm cm ls lc) = tabSum pt L H gl gc iv o +
+      (gl * of ls * hsum ch.S (fun e => hiE pt Lc Hc e.1 * hiG pt Lc Hc e.2) +
+        gc * of lc * hsum ch.C (fun c => hiE pt Lc Hc c)) := by
+  rw [addChild_tabSum]
+  simp only [hk.1, hk.2]
+
+/-- **A copy placed directly** (`ms = 1`), explicit: the child's table at its origin, its inputs read through `ref`. -/
+theorem child_exp1 (D : Def) (pt : FoldPt) (s L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (j : ℕ) (rm cm : ℕ → ℕ × F128) (hk : ReKey pt L H Lc Hc rm cm) :
+    tabExp pt s L H iv (Tab.bind (Tab.ref D pt false A B as gL pos) c (o.addChild ch rm cm 1 1) j ch rm
+        fun kc _ => [(kc, 1)]) = tabExp pt s L H iv o +
+      tabExp pt s Lc Hc (fun t' kc => refX D pt s L H A B as gL pos iv kc ((c.bound id j).toArray.getD t' 0)) ch := by
+  rw [bind_tabExp, addChild_exp pt s L H Lc Hc iv o ch rm cm 1 1 hk]
+  unfold tabExp hsum
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  have e1 : ∀ e : (ℕ × ℕ × ℕ) × F128, of (1 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
+      refX D pt s L H A B as gL pos iv e.1.2.1 ((c.bound id j).toArray.getD e.1.1 0) =
+      of e.2 * (hiE pt Lc Hc e.1.2.2 * refX D pt s L H A B as gL pos iv e.1.2.1 ((c.bound id j).toArray.getD e.1.1 0)) := by
+    intro e
+    rw [← hk.1]
+    simp only [of_mul, ← one_eq]
+    ring
+  simp only [e1]
+  ring
+
+theorem child_sum1 (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (gl gc : GF128) (iv : ℕ → GF128) (c : Call) (o ch : Tab) (j : ℕ) (rm cm : ℕ → ℕ × F128)
+    (hk : ReKey pt L H Lc Hc rm cm) :
+    tabSum pt L H gl gc iv (Tab.bind (Tab.ref D pt true A B as gL pos) c (o.addChild ch rm cm 1 1) j ch rm
+        fun kc _ => [(kc, 1)]) = tabSum pt L H gl gc iv o +
+      tabSum pt Lc Hc gl gc (fun t' => refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD t' 0)) ch := by
+  rw [bind_tabSum, addChild_sum pt L H Lc Hc gl gc iv o ch rm cm 1 1 hk]
+  unfold tabSum hsum
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  have e1 : ∀ e : (ℕ × ℕ × ℕ) × F128, of (1 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
+      refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1.1 0) =
+      of e.2 * (hiE pt Lc Hc e.1.2.2 * refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1.1 0)) := by
+    intro e
+    rw [← hk.1]
+    simp only [of_mul, ← one_eq]
+    ring
+  simp only [e1, ← one_eq, mul_one]
+  ring
+
+/-- **A run of lanes below an explicit class** (`β + m < 6`): the child's copy `kc` is lane `kc mod count` of copy
+`⌊kc / count⌋`, bound by that lane. -/
+theorem child_expL (D : Def) (pt : FoldPt) (s L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (count nk : ℕ) (rm cm : ℕ → ℕ × F128)
+    (hk : ReKey pt L H Lc Hc rm cm) (hU : ∀ x, x ∈ ch.U → x.2.1 < nk * count) :
+    tabExp pt s L H iv (Tab.binds (Tab.bind (Tab.ref D pt false A B as gL pos) c) (o.addChild ch rm cm 0 0) count ch rm
+        fun kc j => if kc % count == j then [(kc / count, 1)] else []) = tabExp pt s L H iv o +
+      tabExp pt s Lc Hc (fun t' kc => refX D pt s L H A B as gL pos iv (kc / count)
+        ((c.bound id (kc % count)).toArray.getD t' 0)) ch := by
+  rw [binds_val _ _ ch rm _ _ (fun o j => bind_tabExp D pt s L H A B as gL pos iv c o j ch rm _),
+    addChild_exp pt s L H Lc Hc iv o ch rm cm 0 0 hk, ← list_sum_comm]
+  unfold tabExp hsum
+  have e1 : ∀ e ∈ ch.U.toList, (∑ j ∈ Finset.range count,
+      (((if e.1.2.1 % count == j then [(e.1.2.1 / count, (1 : F128))] else []).map fun kf =>
+        of (kf.2 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
+          refX D pt s L H A B as gL pos iv kf.1 ((c.bound id j).toArray.getD e.1.1 0)).sum)) =
+      of e.2 * (hiE pt Lc Hc e.1.2.2 * refX D pt s L H A B as gL pos iv (e.1.2.1 / count)
+        ((c.bound id (e.1.2.1 % count)).toArray.getD e.1.1 0)) := by
+    intro e he
+    have hc : 0 < count := Nat.pos_of_ne_zero fun h0 => by
+      have := hU e.1 (mem_of_toList he); rw [h0, Nat.mul_zero] at this; omega
+    rw [Finset.sum_eq_single (e.1.2.1 % count) (fun j _ hj => by simp [Ne.symm hj])
+      (fun h => absurd (Finset.mem_range.2 (Nat.mod_lt _ hc)) h)]
+    simp only [beq_self_eq_true, ↓reduceIte, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+    rw [← hk.1]
+    simp only [of_mul, ← one_eq]
+    ring
+  rw [List.map_congr_left e1]
+  ring
+
+/-- **A run of lanes below a summed class**: the child's summed entries by the lane sums `ls`, `lc`, its inputs bound
+lane by lane with weight `eq(ρ[β−6 ..], j)`. -/
+theorem child_sumL (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
+    (gl gc : GF128) (iv : ℕ → GF128) (c : Call) (o ch : Tab) (count : ℕ) (rm cm : ℕ → ℕ × F128) (ls lc : F128)
+    (E : ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) :
+    tabSum pt L H gl gc iv (Tab.binds (Tab.bind (Tab.ref D pt true A B as gL pos) c) (o.addChild ch rm cm ls lc)
+        count ch rm fun _ j => [(0, E j)]) = tabSum pt L H gl gc iv o +
+      (gl * of ls * hsum ch.S (fun e => hiE pt Lc Hc e.1 * hiG pt Lc Hc e.2) +
+        gc * of lc * hsum ch.C (fun c => hiE pt Lc Hc c) +
+        ∑ j ∈ Finset.range count, of (E j) * hsum ch.U (fun e => hiE pt Lc Hc e.2.2 *
+          refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1 0))) := by
+  rw [binds_val _ _ ch rm _ _ (fun o j => bind_tabSum D pt L H A B as gL pos gl gc iv c o j ch rm _),
+    addChild_sum pt L H Lc Hc gl gc iv o ch rm cm ls lc hk]
+  unfold hsum
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  have e1 : ∀ j, ∀ e : (ℕ × ℕ × ℕ) × F128, of (E j * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
+      refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1.1 0) =
+      of (E j) * (of e.2 * (hiE pt Lc Hc e.1.2.2 * refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1.1 0))) := by
+    intro j e
+    rw [← hk.1]
+    simp only [of_mul]
+    ring
+  simp only [e1, List.sum_map_mul_left]
+  ring
+
+/-- **A run of lanes from an explicit class into a summed one**: the child's summed entries spread by `W`, `EL`, its
+inputs bound for each copy `k` and lane `j` with weight `E k j`. -/
+theorem child_expW (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half)
+    (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (count nk n : ℕ) (rm cm : ℕ → ℕ × F128)
+    (W : Array F128) (EL : F128) (E : ℕ → ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) :
+    tabExp pt s L H iv (Tab.binds (Tab.bind (Tab.ref D pt false A B as gL pos) c) (Tab.slots pt W EL n o ch rm cm)
+        count ch rm fun _ j => (List.range nk).map fun k => (k, E k j)) = tabExp pt s L H iv o +
+      (of (W.getD s 0) * hsum ch.S (fun e => hiE pt Lc Hc e.1 * hiG pt Lc Hc e.2) +
+        of EL * Gs pt s pt.qc * hsum ch.C (fun c => hiE pt Lc Hc c) +
+        ∑ j ∈ Finset.range count, ∑ k ∈ Finset.range nk, of (E k j) * hsum ch.U (fun e => hiE pt Lc Hc e.2.2 *
+          refX D pt s L H A B as gL pos iv k ((c.bound id j).toArray.getD e.1 0))) := by
+  rw [binds_val _ _ ch rm _ _ (fun o j => bind_tabExp D pt s L H A B as gL pos iv c o j ch rm _),
+    slots_tabExp pt hs L H iv W EL n o ch rm cm]
+  simp only [hk.1, hk.2]
+  have e1 : ∀ j, ∀ e : (ℕ × ℕ × ℕ) × F128, (((List.range nk).map fun k => (k, E k j)).map fun kf =>
+      of (kf.2 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
+        refX D pt s L H A B as gL pos iv kf.1 ((c.bound id j).toArray.getD e.1.1 0)).sum =
+      ∑ k ∈ Finset.range nk, of (E k j) * (of e.2 * (hiE pt Lc Hc e.1.2.2 *
+        refX D pt s L H A B as gL pos iv k ((c.bound id j).toArray.getD e.1.1 0))) := by
+    intro j e
+    rw [List.map_map, list_range_sum]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    simp only [Function.comp]
+    rw [← hk.1]
+    simp only [of_mul]
+    ring
+  unfold hsum
+  simp only [e1]
+  have e2 : ∀ j, (ch.U.toList.map fun e => ∑ k ∈ Finset.range nk, of (E k j) * (of e.2 * (hiE pt Lc Hc e.1.2.2 *
+      refX D pt s L H A B as gL pos iv k ((c.bound id j).toArray.getD e.1.1 0)))).sum =
+      ∑ k ∈ Finset.range nk, of (E k j) * (ch.U.toList.map fun e => of e.2 * (hiE pt Lc Hc e.1.2.2 *
+        refX D pt s L H A B as gL pos iv k ((c.bound id j).toArray.getD e.1.1 0))).sum := by
+    intro j
+    rw [list_sum_comm]
+    exact Finset.sum_congr rfl fun k _ => List.sum_map_mul_left _ _ _
+  simp only [e2]
+  ring
+
 theorem walk_shape {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {F d β off al : ℕ}
     {as : Array ℕ} {st st' : SplitSt} {T : Tab}
     (h : (walk t lays multi pt (F + 1) d β as off al).run st = .ok (T, st')) (h6 : 6 ≤ β + al) : False := by
   rw [walk] at h
   simp only [show (!decide (6 ≤ β) && decide (β + al < 6)) = false by simp; omega, Bool.false_eq_true,
     ↓reduceIte] at h
+  obtain ⟨eL, st1, hE, h⟩ := sv_bind_ok h
+  obtain ⟨gL, st2, hG, h⟩ := sv_bind_ok h
+  obtain ⟨o, st3, hF, h⟩ := sv_bind_ok h
+  clear hF
   trace_state
   sorry
 

@@ -146,26 +146,33 @@ def Tab.slots (pt : FoldPt) (W : Array F128) (EL : F128) (n : Nat) (o ch : Tab) 
     bump mp (px, pt.qc % 64) (EL * v * fx * pt.g pt.qc)) o.PC
   { o with P, PC, work := o.work + ch.work + ch.S.size * slots.length + ch.C.size + n }
 
+/-- Callee `e`'s class `(β', as')` table at offset 0 in chunks of `2^alc`: cached, else walked by `w` and cached. -/
+def cachedTab (w : Nat → Nat → Array Nat → Nat → Nat → SV Tab) (e β' : Nat) (as' : Array Nat) (alc : Nat) : SV Tab := do
+  match (← get).tabs.get? (e, β', as') with
+  | some T => pure T
+  | none =>
+    let T ← w e β' as' 0 alc
+    modify fun s => { s with tabs := s.tabs.insert (e, β', as') T, tables := s.tables + 1,
+                             tableWork := s.tableWork + T.work }
+    pure T
+
+/-- A child's chunk `c` (of `2^alc`) at child-unit offset `oc`: its caller's chunk (of `2^al'`), and `M`'s factor for
+the coordinates between. -/
+def rekeyAt (oc alc al' : Nat) (M : Half) (c : Nat) : Nat × F128 :=
+  let P := oc + c * 2 ^ alc
+  (P / 2 ^ al', M.at (P % 2 ^ al' / 2 ^ alc))
+
 /-- Callee `e`'s class `(β', as')` at child-unit offset `oc`, its caller's chunks `2^al'` in child units: its table
-(walked by `w` once, then cached) re-keyed if `e` is reached on more than one path and placed at a multiple of its
-`palign`, else walked by `w` directly in the caller's chunks. -/
+(`cachedTab`) re-keyed if `e` is reached on more than one path and placed at a multiple of its `palign`, else walked by
+`w` directly in the caller's chunks. -/
 def walkChild (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) (w : Nat → Nat → Array Nat → Nat → Nat → SV Tab)
     (e β' : Nat) (as' : Array Nat) (oc al' : Nat) : SV (Tab × (Nat → Nat × F128) × (Nat → Nat × F128)) := do
   let alc := Nat.log2 (lays.getD e default).palign
   if multi.getD e false && oc % 2 ^ alc == 0 && alc ≤ al' && 6 ≤ β' + alc then
-    let T ← match (← get).tabs.get? (e, β', as') with
-      | some T => pure T
-      | none => do
-        let T ← w e β' as' 0 alc
-        modify fun s => { s with tabs := s.tabs.insert (e, β', as') T, tables := s.tables + 1,
-                                 tableWork := s.tableWork + T.work }
-        pure T
+    let T ← cachedTab w e β' as' alc
     let mρ ← half pt true (β' + alc - 6) (al' - alc)
     let mr ← half pt false (β' + alc - 6) (al' - alc)
-    let key := fun (M : Half) (c : Nat) =>
-      let P := oc + c * 2 ^ alc
-      (P / 2 ^ al', M.at (P % 2 ^ al' / 2 ^ alc))
-    return ({ T with work := 0 }, key mρ, key mr)
+    return ({ T with work := 0 }, rekeyAt oc alc al' mρ, rekeyAt oc alc al' mr)
   else
     let T ← w e β' as' oc al'
     return (T, ident, ident)
