@@ -9,8 +9,6 @@ device's place. This is that schedule:
 * `rounds`: `Finish.repPiop`'s rounds at zero values (the PIOP `Finish.openLive` runs), on the statement's setup, its
   `--zk` schedule's `k0`, level 0's cap and the rep's domain, but for the pads' label and root, which the masking
   challenger inserts itself (`padsFrames`). The coins it computes them on are `coin`'s; no round's frames depend on them.
-* `cmd`: `flock-firewall skeleton`, serving `rounds` on its standard input, which `firewall_finish_agree.py` holds byte for
-  byte to the rounds `flock-circuit`'s `Checker::scheduled` releases.
 -/
 import Flock.Firewall.Finish
 
@@ -60,71 +58,5 @@ def rounds (st : Setup) (k0 : Nat) (cap dom : ByteArray) : V (Array (ByteArray �
   if (r0.extract 0 pre.size).data != pre.data ∨ (r0.extract pre.size (pre.size + pads.size)).data != pads.data then
     throw "skeleton: the first round does not open with the statement, the zerocheck's label and the pads"
   return rs.set! 0 (pre ++ r0.extract (pre.size + pads.size) r0.size, n0)
-
-/-- The rounds as bytes: their count, then each as its coin count, its byte count and its bytes, every count a `u64le`
-(as `flock-circuit` dumps `Checker::scheduled`'s, `table{T}-rep{R}.skel`). -/
-def encode (rs : Array (ByteArray × Nat)) : ByteArray :=
-  rs.foldl (fun b (c, n) => b ++ le64 n.toUInt64 ++ le64 c.size.toUInt64 ++ c) (le64 rs.size.toUInt64)
-
-/-- The statement flags `flock-firewall finish` takes. -/
-def FLAGS : String :=
-  "--circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F] [--program F] [--draw F]"
-
-/-- The statement `flock-firewall finish` sets up from its flags `args` (`Witness.setupOf`, at the `unit_draw` of the
-JSON object in `--draw`), or why it does not. -/
-def statementOf (cmd : String) (args : List String) : IO (Except String (SessionSpec × Array Stmt)) := do
-  let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public")
-    | return .error s!"usage: flock-firewall {cmd} {FLAGS}"
-  let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
-    | return .error s!"unknown statement; known: {Tags.all.map (·.name)}"
-  let some count := ((Witness.argOf args "--session-tables").getD "1").toNat?
-    | return .error "--session-tables J: J is a number"
-  let (partition, program) ← match ← Witness.bindingsOf args with
-    | .ok b => pure b
-    | .error e => return .error e
-  let draw ← match Witness.argOf args "--draw" with
-    | some f => IO.FS.readFile f
-    | none => pure "{}"
-  let I : Witness.Inputs := { tags, circuitFile := ← IO.FS.readBinFile cf, publicFile := ← IO.FS.readBinFile pf, count,
-                              tables := ← Witness.readTables args, partition, program }
-  return (Witness.setupOf I draw).mapError (s!"setup: {·}")
-
-/-- **`flock-firewall skeleton FLAGS`**: on the statement `flock-firewall finish` sets up (`statementOf`), each request on
-standard input `skeleton I R LEN` followed by the `LEN` bytes of table `I`'s level-0 cap is answered `ok N` followed by
-the `N` bytes of rep `R`'s scheduled rounds (`encode` of `rounds`); anything else, or a request it refuses, is answered
-`err WHY` and ends it, with exit code `1`. -/
-def cmd (args : List String) : IO UInt32 := do
-  let ch ← Frame.stdio
-  let say := fun (s : String) => do
-    ch.write (s ++ "\n").toUTF8
-    ch.flush
-  let refuse := fun (why : String) => do
-    say s!"err {why.replace "\n" " "}"
-    return (1 : UInt32)
-  let (spec, sts) ← match ← statementOf "skeleton" args with
-    | .ok s => pure s
-    | .error e => return (← refuse e)
-  let setups := sts.map Setup.ofCircuit
-  repeat
-    let line := (← ch.getLine).replace "\n" ""
-    if line.isEmpty then break
-    match line.splitOn " " with
-    | ["skeleton", i, r, len] =>
-      let (some i, some r, some len) := (i.toNat?, r.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let cap ← ch.readExact len
-      let (some st, some name) := (setups[i]?, spec.tables[i]?)
-        | return (← refuse s!"table {i} of the session's {setups.size}")
-      let got : V (Array (ByteArray × Nat)) := do
-        let (sch, _) ← Zk.schedule st.m
-        rounds st sch.k0 cap (spec.domain name r).toUTF8
-      match got with
-      | .ok rs =>
-        let b := encode rs
-        say s!"ok {b.size}"
-        ch.write b
-        ch.flush
-      | .error e => return (← refuse e)
-    | _ => return (← refuse s!"a request `{line}`")
-  return 0
 
 end Flock.Firewall.Skeleton

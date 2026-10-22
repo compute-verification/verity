@@ -693,8 +693,36 @@ def produced(j):
         raise D.Reject("mine is not {value: leaves, words and word_bits and a string domain}")
     if opened is not None and not isinstance(opened, dict):
         raise D.Reject("opened is not an object")
+    known, verdicts = ({} if j.get(k) is None else j[k] for k in ("known", "verdicts"))
+    if not isinstance(known, dict) or not all(
+            isinstance(rows, list) and all(isinstance(r, list) and len(r) == 2 and _nat(r[0]) and isinstance(r[1], str)
+                                           for r in rows) and len({r[0] for r in rows}) == len(rows)
+            for rows in known.values()):
+        raise D.Reject("known is not {value: [[position, b || c] ...]} with distinct natural positions")
+    if not isinstance(verdicts, dict):
+        raise D.Reject("verdicts is not an object")
     codes = list(PD.check(j.get("record"), j["registration"], j["draw"], mine))
-    return {"codes": codes, "opened": None if codes else list(PD.opened(j["record"], opened))}
+    if codes:
+        return {"codes": codes, "opened": None, "shared": None}
+    return {"codes": codes, "opened": list(PD.opened(j["record"], opened)),
+            "shared": list(PD.shared(PD.wanted(j["record"], known), verdicts))}
+
+
+def known_port(j):
+    j = _json(j)
+    keys = ("program", "value", "salt", "registration")
+    if not (isinstance(j, dict) and all(isinstance(j.get(k), str) for k in keys)):
+        raise D.Reject("program, value, salt or registration is not a string")
+    if not (isinstance(j.get("row"), list) and all(map(_nat, j["row"]))) or not _nat(j.get("word_bits")):
+        raise D.Reject("row is not natural numbers, or word_bits not a natural number")
+    if not re.fullmatch(r"(?:[0-9a-f]{2})*", j["salt"]):
+        raise D.Reject("the salt is not lowercase hex")
+    try:
+        port, (_, bc) = PD.known_port(j["program"], j["value"], j["row"], bytes.fromhex(j["salt"]), j["registration"],
+                                      j["word_bits"])
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"root": port["root"], "bc": bc}
 
 
 def check_draw(j):
@@ -1787,27 +1815,76 @@ DOMAIN = D.Port(PIECES, "domain", domain, st.one_of(
 PRODUCED_REG, PRODUCED_DRAW, PRODUCED_OTHER = "c3" * 64, "d4" * 64, "e0" * 64
 
 
+def _bc(*parts) -> str:
+    """A stand-in ``b || c``, lowercase hex of 128 bytes."""
+    h = hashlib.sha512(repr(parts).encode()).hexdigest()
+    return h + hashlib.sha512(h.encode()).hexdigest()
+
+
 def _produced_case(names, sizes, roots) -> dict:
-    """An honest produced record over values ``names`` (``sizes``: (leaves, words, word_bits) each), the verifier's own
-    entries and the roots its verifiers of record opened: `produced.check` and `produced.opened` both empty."""
+    """An honest produced record over values ``names`` (``sizes``: (leaves, words, word_bits) each), with the openings of
+    every row and of rows 0 and 3 of a registered value ``A``, the verifier's own entries, a port it registers at known
+    content (``ok``), the roots its verifiers of record opened and their verdicts, one per value and one of ``A`` and
+    ``ok``, each opening its rows at the record's openings: `produced.check`, `produced.opened` and `produced.shared`
+    all empty."""
     prog = REGISTERED_SETUPS[0].sha512
     mine = {v: {"leaves": n, "words": w, "word_bits": b, "domain": PD.domain(prog, v, w, n, b, PRODUCED_REG).domain_id.hex()}
             for v, (n, w, b) in zip(names, sizes)}
     es = [{"value": v, "root": r, "leaves": m["leaves"], "words": m["words"], "domain": m["domain"],
            **({} if m["word_bits"] == 16 else {"word_bits": m["word_bits"]})} for (v, m), r in zip(mine.items(), roots)]
-    return {"record": PD.record(PRODUCED_REG, PRODUCED_DRAW, es), "registration": PRODUCED_REG, "draw": PRODUCED_DRAW,
-            "mine": mine, "opened": {e["value"]: e["root"] for e in es}}
+    ops = {**{v: [(i, _bc(v, i)) for i in range(m["leaves"])] for v, m in mine.items()}, "A": [(0, _bc("A", 0)), (3, _bc("A", 3))]}
+    known = {"ok": [[0, _bc("ok", 0)]]}
+
+    def verdict(reads):
+        return {"of_record": True, "accepted": True, "registered": {p: {"value": v, "root": "ab" * 64} for p, (v, _) in reads.items()},
+                "openings": {p: [[i, bc] for i, bc in rows] for p, (_, rows) in reads.items()}}
+
+    verdicts = {f"s{x}": verdict({"p": (v, ops[v][-1:])}) for x, v in enumerate(mine)}
+    verdicts["sA"] = verdict({"a0": ("A", ops["A"]), "o0": ("ok", [(0, _bc("ok", 0))])})
+    return {"record": PD.record(PRODUCED_REG, PRODUCED_DRAW, es, ops), "registration": PRODUCED_REG, "draw": PRODUCED_DRAW,
+            "mine": mine, "opened": {e["value"]: e["root"] for e in es}, "known": known, "verdicts": verdicts}
 
 
 def _entry(c, x):
     return c["record"]["produced"][x % len(c["record"]["produced"])]
 
 
+def _opening(c, x):
+    """A verdict's reported row: ``sA``'s ``a0`` row ``x % 2``."""
+    return c["verdicts"]["sA"]["openings"]["a0"][x % 2]
+
+
 #: one change each to an honest case: (name, change, the code it reaches)
 PRODUCED_CHANGES = [
     ("keys", lambda c, x: c["record"].pop("draw"), "P-keys"),
     ("extra key", lambda c, x: c["record"].update(window=None), "P-keys"),
-    ("format", lambda c, x: c["record"].update(format="verity/registration/produced/v1"), "P-format"),
+    ("format", lambda c, x: c["record"].update(format="verity/registration/produced/v0"), "P-format"),
+    ("no openings", lambda c, x: c["record"].update(openings=[]), "P-openings"),
+    ("a produced row's opening missing", lambda c, x: c["record"]["openings"][_entry(c, x)["value"]].pop(), "P-openings"),
+    ("a produced value's openings missing", lambda c, x: c["record"]["openings"].pop(_entry(c, x)["value"]), "P-openings"),
+    ("produced rows out of order", lambda c, x: c["record"]["openings"][_entry(c, x)["value"]].reverse(), "P-openings"),
+    ("a position twice", lambda c, x: c["record"]["openings"]["A"].append(list(c["record"]["openings"]["A"][0])),
+     "P-openings"),
+    ("a negative position", lambda c, x: c["record"]["openings"]["A"][x % 2].__setitem__(0, -1), "P-openings"),
+    ("an opening in capitals", lambda c, x: c["record"]["openings"]["A"][x % 2].__setitem__(1, _bc("A").upper()),
+     "P-openings"),
+    ("a short opening", lambda c, x: c["record"]["openings"]["A"][x % 2].__setitem__(1, _bc("A")[:-2]), "P-openings"),
+    ("an opening not a pair", lambda c, x: c["record"]["openings"]["A"][x % 2].append(0), "P-openings"),
+    ("a session opens another opening", lambda c, x: _opening(c, x).__setitem__(1, _bc("other")), "P-shared"),
+    ("a session opens a row the record has no opening of", lambda c, x: _opening(c, x).__setitem__(0, 1), "P-shared"),
+    ("a session reports no rows of a port", lambda c, x: c["verdicts"]["sA"]["openings"].pop("a0"), "P-shared"),
+    ("a session reports no openings", lambda c, x: c["verdicts"]["sA"].pop("openings"), "P-shared"),
+    ("a session reports an empty port", lambda c, x: c["verdicts"]["sA"]["openings"].update(a0=[]), "P-shared"),
+    ("a session's ok is not the known row", lambda c, x: c["verdicts"]["sA"]["openings"]["o0"][0].__setitem__(1, _bc("ok", 1)),
+     "P-shared"),
+    ("a produced value's session opens another opening",
+     lambda c, x: c["verdicts"]["s0"]["openings"]["p"][0].__setitem__(1, _bc("other")), "P-shared"),
+    ("a rejected session's other opening", lambda c, x: [c["verdicts"]["sA"].update(accepted=False),
+                                                         _opening(c, x).__setitem__(1, _bc("other"))], None),
+    ("a session not of record", lambda c, x: [c["verdicts"]["sA"].update(of_record=False),
+                                              _opening(c, x).__setitem__(1, _bc("other"))], None),
+    ("a value the verifier holds no openings of", lambda c, x: c["verdicts"]["sA"]["registered"]["a0"].update(value="B"), None),
+    ("the verifier's own openings of a value replace the record's", lambda c, x: c["known"].update(A=c["record"]["openings"]["A"][:1]), "P-shared"),
     ("registration", lambda c, x: c.update(registration=PRODUCED_OTHER), "P-registration"),
     ("draw", lambda c, x: c["record"].update(draw=PRODUCED_OTHER), "P-draw"),
     ("not a list", lambda c, x: c["record"].update(produced={}), "P-produced"),
@@ -1855,8 +1932,24 @@ def produced_cases(draw) -> dict:
 
 PRODUCED = D.Port(PIECES, "produced", produced, st.one_of(
     produced_cases(), produced_cases(), st.builds(lambda c, x: {**c, "record": x}, produced_cases(), JSON),
-    st.builds(lambda c, k, x: {**c, k: x}, produced_cases(), st.sampled_from(["mine", "opened", "registration", "draw"]),
-              JSON), JSON), package=PACKAGE)
+    st.builds(lambda c, k, x: {**c, k: x}, produced_cases(),
+              st.sampled_from(["mine", "opened", "registration", "draw", "known", "verdicts"]), JSON),
+    st.builds(lambda c, x: {**c, "known": {"ok": x}}, produced_cases(), JSON), JSON), package=PACKAGE)
+KNOWN_SALT = bytes(range(192)).hex()
+KNOWN_PORT = D.Port(PIECES, "known_port", known_port, st.one_of(
+    st.builds(lambda program, value, row, reg, b: {"program": program, "value": value, "row": row, "salt": KNOWN_SALT,
+                                                   "registration": reg, "word_bits": b},
+              st.sampled_from([s.sha512 for s in REGISTERED_SETUPS]) | TEXT, st.sampled_from(["ok", "pub3", "admit"]) | TEXT,
+              st.lists(st.integers(0, 3) | st.integers(0, 65535), min_size=1, max_size=110), st.sampled_from([PRODUCED_REG, WROOT]),
+              st.sampled_from([16, 16, 32])),
+    st.builds(lambda row, b, salt, reg: {"program": "p", "value": "ok", "row": row, "salt": salt, "registration": reg,
+                                         "word_bits": b},
+              st.lists(st.integers(0, 1 << 33), max_size=3), st.sampled_from([0, 8, 16, 24, 32, 48]),
+              st.sampled_from([KNOWN_SALT, KNOWN_SALT[:-2], KNOWN_SALT.upper(), KNOWN_SALT[:-1], "", "00" * 191 + "0g"]),
+              st.sampled_from([PRODUCED_REG, PRODUCED_REG.upper(), PRODUCED_REG[:-2], ""])),
+    st.builds(lambda k, v: {"program": "p", "value": "ok", "row": [1], "salt": KNOWN_SALT, "registration": PRODUCED_REG,
+                            "word_bits": 16, k: v},
+              st.sampled_from(["program", "value", "row", "salt", "registration", "word_bits"]), JSON), JSON), package=PACKAGE)
 CHECK_DRAW = D.Port(PIECES, "check_draw", check_draw, st.one_of(
     st.builds(lambda a, dn, other: {"draw": a["evidence"]["draw"], "law": other or a["record"]["law"],
                                     "population": a["record"]["population"] + dn},
@@ -2631,7 +2724,7 @@ pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
-              (PRODUCED, 500),
+              (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
@@ -2836,16 +2929,26 @@ def test_every_r7_code_is_reached(pieces):
 
 def test_every_produced_code_is_reached(pieces):
     """Each named change to an honest produced record, Lean and Python agreeing on its codes: each reaches its own code,
-    and the honest record none, so every code `produced.check` and `produced.opened` give is reached."""
+    and the honest record none, so every code `produced.check`, `produced.opened` and `produced.shared` give is reached."""
     honest = _produced_case(["partial", "PouwUnitSeeds_v2"], [(32, 16, 16), (1, 64, 16)], ["a1" * 64, "b2" * 64])
-    assert D.replay(PRODUCED, honest, pieces) == ("output", D.canonical({"codes": [], "opened": []}))
+    clean = {"codes": [], "opened": [], "shared": []}
+    assert D.replay(PRODUCED, honest, pieces) == ("output", D.canonical(clean))
     for name, change, code in PRODUCED_CHANGES:
         c = copy.deepcopy(honest)
         change(c, 0)
         kind, out = D.replay(PRODUCED, _json(c), pieces)
         got = json.loads(out)
-        assert kind == "output" and (code in got["codes"] or code in (got["opened"] or []) if code else got == {
-            "codes": [], "opened": []}), (name, kind, out)
+        assert kind == "output" and (code in [*got["codes"], *(got["opened"] or []), *(got["shared"] or [])] if code
+                                     else got == clean), (name, kind, out)
+
+
+def test_a_known_port_is_the_one_row_of_its_tree(pieces):
+    """`produced.known_port`'s root and opening, Lean and Python agreeing, are the one row of a produced tree committed
+    at that content and salt, and another content's are another root."""
+    j = {"program": "p", "value": "ok", "row": [1], "salt": KNOWN_SALT, "registration": PRODUCED_REG, "word_bits": 16}
+    t = PD.commit("p", "ok", [[1]], PRODUCED_REG, [bytes(range(192))], schema=G.SCHEMA_V2)
+    assert D.replay(KNOWN_PORT, j, pieces) == ("output", D.canonical({"root": t.root.hex(), "bc": t.bcs[0].hex()}))
+    assert json.loads(D.replay(KNOWN_PORT, {**j, "row": [0]}, pieces)[1])["root"] != t.root.hex()
 
 
 def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):

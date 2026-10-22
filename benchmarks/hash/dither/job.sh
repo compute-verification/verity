@@ -24,8 +24,9 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
-#   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py with PARTIALS_LIB each (option
-#            A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu backend)
+#   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
+#            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
+#            backend and SERVE-REG's gated lane rows)
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
 #            commit.py and the base's every word, then each set's h1c_build timed)
@@ -168,11 +169,12 @@ for b in ${BENCH//,/ }; do
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
       fi ;;
     partials)
-      # every h1u*.so shipped: test_partials.py with PARTIALS_LIB, its gpu test (kh_seeds_at and kh_lanes) on each
+      # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and
+      # kh_lanes, against the cpu's and SERVE-REG's lane rows) on each
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
         [ -f "$f" ] || continue
         v=$(basename "$f" .so); NEED+=("$v")
-        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py")
+        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py $ROOT/benchmarks/pouw/tests/test_lane_refs.py")
       done
       [ -f "$LIBS/h1u.so" ] || { echo "job.sh: partials needs $LIBS/h1u.so" >&2; exit 2; } ;;
     z|zprof)

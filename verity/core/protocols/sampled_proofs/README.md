@@ -165,6 +165,11 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
+- `proofs`: the proof service's own run of C-Flock's Lean verifier of record on a statement's proof files (`Proof`:
+  circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
+  `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
+  returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the units it
+  proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure.

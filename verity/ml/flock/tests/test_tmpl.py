@@ -35,21 +35,40 @@ def test_a_dot_products_template_unrolls_to_its_flat_unit_and_does_not_grow_with
 
 
 def test_the_lean_fixture_unrolls_to_its_flat_text():
-    tmpl = "\n".join(["flock-ir-tmpl/v1 t 2 1 0 1 1 3 1 2 1 1 2", "DEF 1 2 1 0", "0 1 2 1 1", "DEF 3 2 1 1", "2 2 1 0 1 5",
-                      "CALL 0 2 0 1 1 2 3 0", "DEF 400 0 6 1", "0 1 0 1 0", "1 1 1 1 1", "2 1 2 1 2", "256 1 130 1 399",
-                      "257 1 133 1 399", "300 3 0 1 0 1 400", "CALL 1 2 128 3 1 2 0 1"])
+    tmpl = _lean_fixture()
     rows = {0: "1 0 1 0", 1: "1 1 1 1", 2: "1 2 1 2", 128: "1 1 1 0", 129: "1 1 1 0", 130: "2 128 129 1 399",
             131: "1 2 1 1", 132: "1 2 1 1", 133: "2 131 132 1 399", 256: "1 130 1 399", 257: "1 133 1 399",
             300: "1 1 1 399", 399: "1 399 1 399"}
     flat = ["flock-ir-unit/v2 t 400 399 1 0 1 1 3 1 2 1 1 2"] + [rows.get(i, "0 0") for i in range(400)]
     assert T.flat_lines(T.unroll(T.parse(tmpl))) == flat
     assert T.ordered(T.parse(tmpl))["ok"]
-    assert not T.ordered(T.parse(tmpl.replace("CALL 0 2 0 1 1 2 3 0", "CALL 0 2 0 1 1 2 2 0")))["ok"]
+    assert not T.ordered(T.parse(tmpl.replace("CALL 0 2 0 1 1 2 3 0 1 0", "CALL 0 2 0 1 1 2 2 0 1 0")))["ok"]
+    two = _lean_fixture("CALL 0 2 0 1 1 1 3 0 2 1", "CALL 1 2 128 3 1 1 0 1 2 1")
+    assert T.flat_lines(T.unroll(T.parse(two))) == flat and T.ordered(T.parse(two))["ok"]
+
+
+def _lean_fixture(pair_call: str = "CALL 0 2 0 1 1 2 3 0 1 0", root_call: str = "CALL 1 2 128 3 1 2 0 1 1 0") -> str:
+    """``Flock.Test.Tmpl``'s template."""
+    return "\n".join(["flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 2 1 1 2", "DEF 1 2 1 0", "0 1 2 1 1", "DEF 3 2 1 1",
+                      "2 2 1 0 1 5", pair_call, "DEF 400 0 6 1", "0 1 0 1 0", "1 1 1 1 1", "2 1 2 1 2", "256 1 130 1 399",
+                      "257 1 133 1 399", "300 3 0 1 0 1 400", root_call])
+
+
+def test_pack_writes_runs_of_segments_as_two_level_ones_where_the_order_check_takes_them():
+    one = T.parse(_lean_fixture("CALL 0 2 0 1 2 1 3 0 1 0 1 4 0 1 0", "CALL 1 2 128 3 2 1 0 1 1 0 1 1 1 1 0"))
+    packed = T.pack(one)
+    assert T.write(packed) == T.write(T.parse(_lean_fixture("CALL 0 2 0 1 1 1 3 0 2 1", "CALL 1 2 128 3 1 1 0 1 2 1")))
+    assert T.flat_lines(T.unroll(packed)) == T.flat_lines(T.unroll(one)) and T.ordered(packed)["ok"]
+    # a port bit and the constant, each taken alone, are not one ordered segment
+    split = T.parse(_lean_fixture(root_call="CALL 1 1 128 3 2 1 2 0 1 0 1 399 0 1 0"))
+    assert T.ordered(split)["ok"]
+    assert T.pack(split).defs[2].calls == split.defs[2].calls
 
 
 def test_legalize_splits_a_root_segment_across_two_groups_port_bits_and_unrolls_the_same():
-    tmpl = T.parse("\n".join(["flock-ir-tmpl/v1 s 2 2 0 1 1 128 1 1 1 128 1 2 1 1 2", "DEF 1 0 1 0", "0 1 0 1 0",
-                              "DEF 1 2 1 0", "0 1 2 1 1", "DEF 400 0 0 2", "CALL 0 256 0 1 0", "CALL 1 2 256 1 1 2 127 1"]))
+    tmpl = T.parse("\n".join(["flock-ir-tmpl/v2 s 2 2 0 1 1 128 1 1 1 128 1 2 1 1 2", "DEF 1 0 1 0", "0 1 0 1 0",
+                              "DEF 1 2 1 0", "0 1 2 1 1", "DEF 400 0 0 2", "CALL 0 256 0 1 0",
+                              "CALL 1 2 256 1 1 2 127 1 1 0"]))
     before = T.ordered(tmpl)
     assert not before["ok"] and before["padding"] == 1, before
     legal, st = T.legalize(tmpl)

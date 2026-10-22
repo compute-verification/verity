@@ -33,7 +33,8 @@ each connection is one session, relayed on a connection of its own to the audito
   salts for levels ≥ 1 itself, which the prover's trees then take.
 * `Proof`, carrying a rep's proof file as the finish computed it, is held and answered `Resp::Ok`; the proofs leave just
   before `Finish`, and only once every rep's frame ended not stopped (`Frames.finish`). The prover sends none where a
-  check failed or a constraint fails on the pads.
+  check failed or a constraint fails on the pads. Where a frame stopped its rep, `Finish` leaves without them (the
+  auditor sees the stop there, as where the prover sent none) and the prover's `Finish` is refused.
 * Every other frame is relayed as it is.
 
 A refusal answers the prover `Resp::Refused(WHY)`, and every coin after it is refused too, without asking the auditor: no
@@ -383,6 +384,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
       sendFrame p ok
       continue
     if byte? f 0 == some 6 then
+      let complete := st.finish.isNone
       let stopped : Option String ← match st.finish with
         | some (S', _) => pure S'.stop
         | none => do
@@ -411,6 +413,10 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
         | some why =>
           let (st', out) := st.refuse why
           st := st'
+          held := #[]
+          if complete then
+            sendFrame a f
+            let some _ ← recvFrame a | ended.set "the auditor ended the session"; break
           sendFrame p out
         | none =>
           for pf in held do
@@ -493,8 +499,9 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
 `auditor` until either side closes. Each request is read whole, decided (`kind`, `State.sendHello`, `State.request`, a
 `Round` stepped through its rep's frame in `reg` at the schedule's place, `Frames.round`, a `Commit` against the tables'
 level 0 `l0s`, `Level0.commit`) and only then sent; a `Round`'s coins, once opened (`State.answer`), are its frame's
-(`Frames.coins`) before the prover receives them, and `Finish` leaves only once every rep's frame finished
-(`Frames.finish`).
+(`Frames.coins`) before the prover receives them, and the proofs leave only once every rep's frame finished
+(`Frames.finish`): where one stopped, `Finish` leaves alone once the schedule's last opening has, and the prover is
+refused.
 
 With a hold `h`, the session is admitted first (`admitted`), and only then is the auditor reached. Its `Proof`s are
 held, each answered `Resp::Ok`, and at its `Finish` the hold decides (`Hold.barrier`, given the loop's own refusal and the
@@ -597,7 +604,8 @@ def level0 (ch : Frame.Chan) (l0s : IO.Ref Level0.Registry) (line : String) : IO
   | _ => say s!"err a request `{line.trim}`"
 
 /-- **The loop's frames port**: each connection to `srv` is, by its first line, one rep's frame starting (`rep …`,
-`Frames.startRep`, the frame then the loop's own in `reg`); one table's level 0 (`level0 …`, `level0`); or a session's
+`Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
+`vals …`, `Frames.ask`); one table's level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
 levels ≥ 1 kept in `reg` for its opening. Anything else is answered `err WHY`. -/
 def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Registry)
@@ -615,6 +623,8 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try Finish.serveLoop ch S specs l0s keep first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then
         try Frames.startRep ch reg l0s first catch e => IO.eprintln s!"rep: {e}"
+      else if first.startsWith "place " || first.startsWith "vals " then
+        try Frames.ask ch reg l0s first catch e => IO.eprintln s!"{first.trim}: {e}"
       else
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
