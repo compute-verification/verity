@@ -51,6 +51,8 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
     "integrations/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/test_no_wall_clock.py::test_the_scan_sees_each_form": "the scan's own fixture: source it must flag, held in a string",
+    "tools/verity/circuit_check/tests/fixtures/ambient_builders.py::_clocked":
+        "a builder that reads a clock so that circuit-check --ambient refuses it; nothing compares or waits on the reading",
 }
 
 
