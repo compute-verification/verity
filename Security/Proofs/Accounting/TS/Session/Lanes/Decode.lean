@@ -2,6 +2,7 @@ import Proofs.Accounting.TS.Session.Lanes.Assumptions
 import Proofs.Accounting.TS.Session.Lanes.Layout
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 
 /-!
 # The leaf's decodes, over its statements' port layout
@@ -11,10 +12,11 @@ lane's, `decC` for the combine's), which it takes as parameters. These are the d
 (`PouwWindow.Lanes`) and the session's own circuit:
 
 * `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
-  `openedReg` or `rowsReg` give): `v` at an input gate of the key program that carries it and unit 0 reads, `keyRowOf`
-  at the session's row widths (`portRowW`, the ones its rows are laid out at): input gate `2 + u·B + b` is bit
-  `8·byte + bit` of unit `u`'s row port `q` where input `b`'s key is that message bit of the parsed circuit's row `q`.
-  No circuit file is assumed: the gate is the parsed circuit's;
+  `openedReg` or `rowsReg` give): `v` at a gate of the key program that carries it and is a wire of unit 0, by the
+  hidden-output layout (`HiddenExec.rowOfH`) at the session's row widths (`portRowW`, the ones its rows are laid out
+  at). At an input row (`keyRowOf`), input gate `2 + u·B + b` is bit `8·byte + bit` of unit `u`'s row port `q` where
+  input `b`'s key is that message bit of the parsed circuit's row `q`; at an output row (`outRowOf`), the gate a copy of
+  `u` returns on that bit. No circuit file is assumed: the gate is the parsed circuit's;
 * `bitsN`, `sgnBits`: a field's bits as a natural number, least significant first, and its two's complement;
 * `decLane T rd`, `decComb T rd`: lane `l`'s and the combine's view from a reader `rd` of ports' row bits, each field at
   its port and first bit in the layout (`fieldBit`, `PouwWindow.Lanes.fieldOf?`): an A row's codes (s8) and scale (its
@@ -36,12 +38,15 @@ open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW)
 
 open Classical in
-/-- **Bit `k` of the row of the port named `name`**, at unit 0, in the layer value `v`: `v` at a key program input
-gate that `keyRowOf` (at the session's row widths `portRowW`) places on that bit and unit 0 reads (`P.io`), or nothing
-where no such gate is. Several input columns can carry one message bit; only the first is wired, so only it is read. -/
+/-- **Bit `k` of the row of the port named `name`**, at unit 0, in the layer value `v`: `v` at a key program gate that
+the hidden-output layout (`HiddenExec.rowOfH`, at the session's row widths `portRowW`) places on that bit and that is a
+wire of unit 0 (`P.io`), or nothing where no such gate is: an input gate on an input row's bit (`keyRowOf`), which unit 0
+reads, or a gate unit 0 returns on an output row's bit (`outRowOf`). Several input columns can carry one message bit;
+only the first is wired, so only it is read. -/
 noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (name : String) (k : ℕ) : Option Bool :=
   if h : ∃ (g : Fin (keyN s.c s.hU s.n)) (u : Fin s.n) (q : Fin s.c.ports.size) (b : Fin (portRowW s.c q)),
-      u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧ keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, b⟩) ∧
+      u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧
+        HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, b⟩) ∧
         (g : Fin s.Circ.N) ∈ s.P.io u
   then v 0 (Classical.choose h).val else none
 

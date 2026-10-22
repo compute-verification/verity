@@ -16,7 +16,8 @@ ports are `P`'s, the lane's index and `ok = 1`: the fields of `LaneHolds` that t
 * `laneKnownHolds`, `combKnownOk`: through `holds_known` and `portBit_known` at each port.
 
 Each port is taken as a known value's row (`KnownPort`: a `sha512/row/v2` port without segments; a one-row value is read
-at row 0, `known_readAt_zero`) and each of its bits as read (`RowBitRead`, which `rowBitRead_of_col` gives from the circuit's rows).
+at row 0, `known_readAt_zero`) and each of its bits as on a wire of the unit (`RowBitRead`). Flock-verify's known-read
+check gives both (`Lanes.KnownRead`'s `laneKnownHolds_of_check`, `combKnownOk_of_check`).
 -/
 
 namespace Accounting.TS.Lanes
