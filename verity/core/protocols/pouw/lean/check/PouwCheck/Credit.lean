@@ -26,7 +26,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
   `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
-  for the window (`trustedSessionOf`). So a credit bit changed after the draw coin is refused.
+  for the window, run from a commit the host's pins log records on main's first-parent line (`trustedSessionOf`, over
+  `pinnedSession`). So a credit bit changed after the draw coin is refused.
 * `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
   open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
@@ -41,8 +42,10 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   its descriptor, then `Internal.outcome`'s rule under the served window's arguments (the stream its root, the
   registration its draw root, the receipt `{"receipts": …}`) and `Internal.registration`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
-  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
-  the period's committed circuit (`creditedSession`) and credited.
+  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window's session run
+  from main's code and the window proving the period's committed circuit (`creditedSession`, the pin first, then the
+  circuit) and credited. Every path here that credits reads its session through `pinnedSession`, against the host's
+  pins log (`pins`) and the verifier's own copy of main's first-parent history (`main`).
 * `Internal.aLink` is `credit._a_link`: each registered A value (`aValue?`) is the frame-v3 SHA-512 tree over the
   aligned subtrees each round's root commits (`roundRoot`). Of S rounds, round s's tile a window's `…/a/<K>` of L rows
   over `[s·L/S, (s+1)·L/S)`, and a call's A table `…/a/<K>@<c>` (`h1window.table`) is committed whole by its call's
@@ -175,9 +178,9 @@ def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) 
 
 /-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
 until every other step accepts. -/
-def Internal.credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
+def Internal.credited (key ledger pins main window session salt calls served rounds draw : Json) : R (List Nat) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let (c, received) ← (trustedSessionOf ledger window k session).mapError fun e =>
+  let (c, received) ← (trustedSessionOf ledger window k pins main session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
   let some s := digest? salt | throw ("manifest", SALT_FORM)
   let .arr rows := calls | throw ("manifest", CALLS_FORM)
@@ -774,13 +777,13 @@ def isHexBytes (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
 /-- `credit._window`: `window`'s credited calls and the layout it read from the descriptor. -/
-def windowLayout (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+def windowLayout (key ledger pins main window session salt calls served rounds draw descriptor entries proofs k : Json) :
     R (List Nat × Json) := do
-  let got ← Internal.credited key ledger window session salt calls served rounds draw
+  let got ← Internal.credited key ledger pins main window session salt calls served rounds draw
   let log := match rounds with
     | .arr xs => xs
     | _ => #[]
-  roundsCheck key ledger window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
+  roundsCheck key ledger pins main window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
   Internal.aLink rounds entries (match calls with
     | .arr a => a.size
     | _ => 0)
@@ -812,9 +815,9 @@ session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's 
 and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
 values at their registered roots, its K's A value among them). `periodCredit` ties `descriptor` to the circuit the
 window's period committed. -/
-def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+def window (key ledger pins main window session salt calls served rounds draw descriptor entries proofs k : Json) :
     R (List Nat) :=
-  (·.1) <$> windowLayout key ledger window session salt calls served rounds draw descriptor entries proofs k
+  (·.1) <$> windowLayout key ledger pins main window session salt calls served rounds draw descriptor entries proofs k
 
 /-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
 its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
@@ -889,10 +892,12 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
     ("eps", Json.arr (c.eps.map fun e => (e.map fun e => Json.str (toString e)).getD .null).toArray)]
 
 /-- `credit.period_credit`: period `name`'s credit: the period's windows are exactly its close's (`period`), its open
-committed K (`committedK`), each window proves the circuit the period's open committed (`circuit`: its descriptor
-hashes to it, `SampledProofs.Challenger.creditedSession`) and each window is credited (`window`) drawn at K, a refused
-window refusing the period; each window's ε is what its draw of K established (`established`). -/
-def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
+committed K (`committedK`), each window's session ran a commit the host's pins log `pins` records on the verifier's copy
+of main's first-parent history `main` and the window proves the circuit the period's open committed (`circuit`: the pin
+first, then its descriptor hashing to it, `SampledProofs.Challenger.creditedSession`) and each window is credited
+(`window`) drawn at K, a refused window refusing the period; each window's ε is what its draw of K established
+(`established`). -/
+def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := do
   let some ws := (match windows with
       | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
       | _ => none) | throw ("period", WINDOWS_FORM)
@@ -910,9 +915,9 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
     let some d := (match f "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
+    discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
-    let (got, layout) ← (windowLayout key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served")
+    let (got, layout) ← (windowLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
       (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
         ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
     out := out ++ [got]

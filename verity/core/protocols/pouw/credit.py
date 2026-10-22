@@ -14,7 +14,8 @@ each coin.
   carries its z table's root (``tables.z``). `calls_root` hashes the rows (and the served trees' digest when the window
   has them), and `draw_root` hashes that, the last round's receipts and every round's root and coin. The challenger's
   draw coin must have followed that one root, as its signed log shows, read through the session the auditor's ledger
-  opens for the window (`challenger.trusted_session_of`), never a commitment the prover hands in. So a credit bit
+  opens for the window, run from a commit the host's pins log records on main's first-parent line
+  (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover hands in. So a credit bit
   changed after the draw coin changes the draw root and is refused, and the credited set is the rows whose bit is true.
 * **The drawn units are the draw coin's** (`drawn`): `core_check.draw`'s rule under the law ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
@@ -44,9 +45,12 @@ each coin.
 * **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
-  `period_credit` each window must also prove the circuit the period's open committed (`challenger.credited_session`:
-  the SHA-512 of the descriptor its proofs were verified against, the same bytes `layout_of` reads its layout from)
-  and is drawn at the period's K, and a refused window refuses its period.
+  `period_credit` each window's session must have run main's code and the window must prove the circuit the period's
+  open committed (`challenger.credited_session`, the pin first, then the circuit: the SHA-512 of the descriptor its
+  proofs were verified against, the same bytes `layout_of` reads its layout from) and is drawn at the period's K, and
+  a refused window refuses its period. Every path here that credits reads its session through
+  `challenger.pinned_session`, against the host's pins log (``pins``, its lines) and the verifier's own copy of main's
+  first-parent history (``main``, its ``git rev-list --first-parent origin/main``).
 * **The A rows are the round roots'** (`_a_link`): each registered A value of the window, among its registered
   ``entries``, is a tree whose rows the round roots commit as aligned subtrees. A window's ``…/a/<K>``
   (`h1window.roles`) over L rows and S steps has rows ``[s·L/S, (s+1)·L/S)`` under round s's root. A call's A table
@@ -221,13 +225,14 @@ def no_z(i: int) -> str:
             f"(`tables.z`), or its credit bit is false")
 
 
-def _credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-             verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+def _credited(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+              rounds: Any, draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The credited calls (their indices) of a window whose manifest `calls` (its rows, `served` the served trees'
     digest or None, under the window's Program salt `salt`) fixed every call's credit bit before the draw coin, and None;
     or None and the refusal (``coin``, ``manifest``, ``credit``, ``rounds`` or ``draw``, and why). The draw coin is read
     through the session the auditor's signed ledger `ledger` opens for `window` under the pinned challenger key `key`,
-    from that session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log
+    run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent history `main`
+    holds, from that session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log
     must show `draw_root` over the manifest, ``draw``'s ``receipts`` and the round log `rounds` (each round's ``root``
     and ``coin``) as the one root the draw coin followed, ``draw``'s ``root`` must be it, and ``draw``'s ``coin`` must be
     the challenger's draw coin 0 opened after it. A step of `window`: its indices are no credit until every other step
@@ -237,7 +242,7 @@ def _credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls
     except Ch.CoinError as e:
         return None, ("coin", f"the verifier's challenger key is malformed: {e}")
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
     except Ch.CoinError as e:
         return None, ("coin", f"the challenger's session is not trusted: {e}")
     s = _digest(salt)
@@ -715,13 +720,14 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
     return None
 
 
-def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any,
-            draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
+def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+            rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
             ) -> tuple[tuple[list[int], dict] | None, tuple[str, str] | None]:
-    got, why = _credited(key, ledger, window, session, salt, calls, served, rounds, draw, verify)
+    got, why = _credited(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, verify)
     if why is not None:
         return None, why
-    why = CC.rounds(key, ledger, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds], verify)
+    why = CC.rounds(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
+                    verify)
     if why is not None:
         return None, why
     why = _a_link(rounds, entries, len(calls))
@@ -746,13 +752,15 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     return (None, why) if why is not None else ((got, layout), None)
 
 
-def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-           descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
+def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+           rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
            ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`:
 
-    1. `_credited`: the credit bits fixed before the draw coin, read through the challenger's session;
+    1. `_credited`: the credit bits fixed before the draw coin, read through the challenger's session, one the host's
+       pins log `pins` records as run from a commit the verifier's copy of main's first-parent history `main` holds
+       (`challenger.pinned_session`);
     2. `core_check.rounds`: the round log's roots are the ones the challenger's log shows it received, in order, each
        round's coin (its ``coin``) opened once after its root;
     3. `_a_link`: each A value among the window's registered `entries` is the tree over the segments those round roots
@@ -769,8 +777,8 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
        that descriptor and opened its registered values at their registered roots, its K's A value among them.
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
-    got, why = _window(key, ledger, window, session, salt, calls, served, rounds, draw, descriptor, entries, proofs, k,
-                       verify)
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, descriptor, entries,
+                       proofs, k, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -837,16 +845,18 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     return k, None
 
 
-def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
+def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
                   ) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
     window's credited calls in the close's order, the K the period's open committed (`committed_k`), the δ the ε is
     reported at (`DELTA`), and each window's ε, what its draw of K established over its credited work (`established`;
     null when it establishes no ε <= 1). The period's windows
-    are exactly its close's (`period`), its open committed K (``budget``), each window proves the circuit the period's
-    open committed (``circuit``: its ``descriptor``, the bytes in hex of the circuit its proofs were verified against,
-    hashes to it, `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls,
-    descriptor, entries, served, rounds, draw, proofs}``, as `window` reads it, under the same ledger) is credited by
+    are exactly its close's (`period`), its open committed K (``budget``), each window's session ran a commit the host's
+    pins log `pins` records on the verifier's copy of main's first-parent history `main` and the window proves the
+    circuit the period's open committed (``circuit``: the pin first, then its ``descriptor``, the bytes in hex of the
+    circuit its proofs were verified against, hashing to it, `challenger.credited_session`), and each window's
+    evidence (``{window, session, salt, calls, descriptor, entries, served, rounds, draw, proofs}``, as `window` reads
+    it, under the same ledger) is credited by
     `window`, every step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period (``circuit`` or
     ``window``), so a period earns only when every window in it does."""
     if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(PERIOD_KEYS) for w in windows)):
@@ -864,12 +874,12 @@ def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Ver
         if not (type(w["descriptor"]) is str and _HEX.fullmatch(w["descriptor"])):
             return None, ("circuit", f"window {i} of period {name}: {DESCRIPTOR_HEX}")
         try:
-            Ch.credited_session(ledger, w["window"], k, bytes.fromhex(w["descriptor"]), verify)
+            Ch.credited_session(ledger, w["window"], k, pins, main, bytes.fromhex(w["descriptor"]), verify)
         except Ch.CoinError as e:
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
-        got, why = _window(key, ledger, w["window"], w["session"], w["salt"], w["calls"], w["served"], w["rounds"],
-                           w["draw"], w["descriptor"], w["entries"], w["proofs"], big_k, verify)
+        got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
+                           w["rounds"], w["draw"], w["descriptor"], w["entries"], w["proofs"], big_k, verify)
         if why is not None:
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")

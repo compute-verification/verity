@@ -7,10 +7,13 @@ manifest rows (the serving process's call rows, each with its credit bit, a cred
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
 the window's registered entries (each K's A and B values, their domains one-stage's registration's under the window's
 open root and its circuit, `registered.domain`), and the draw: `credit.draw_root` over them, recorded by the
-challenger, then its draw coin opened after it; the auditor's ledger opens and ends the session for the window. Then one
-mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit flipped after the draw coin with the draw root recomputed
-(``changed``, RT4-INT-32's withdrawn verdict), a row changed likewise, a missing or malformed bit, a credited row with no
-z root, the draw root left stale, no draw coin, a coin of another family, and the forms.
+challenger, then its draw coin opened after it; the auditor's ledger opens and ends the session for the window, its
+open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
+(``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
+flipped after the draw coin with the draw root recomputed (``changed``, RT4-INT-32's withdrawn verdict), a row changed
+likewise, a missing or malformed bit, a credited row with no z root, the draw root left stale, no draw coin, a coin of
+another family, a session pinned to a commit the log doesn't record (``unpinned``) or to a logged one off main's
+first-parent line (``branch-pin``), and the forms.
 
 A `drawn` case is a draw coin, the draw's stream, registration and receipt, a window's layout
 (`circuit.h1window.program`'s arguments, `layout`): linears at one or two K, called step by step in a shuffled order, so
@@ -53,8 +56,9 @@ never opened or no period, forge the ledger, refuse one window, make one window 
 descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone credits it), give one the descriptor
 of another layout (``alt-layout``), open the period committing no circuit or one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
 units, prove one window's draw at another K (``other-k``), present one window's round log the challenger never received
-(``never-received``), give one window's proof another registration's root (``proof-other-registration``), and break
-the forms.
+(``never-received``), give one window's proof another registration's root (``proof-other-registration``), pin one
+window's session to a logged branch commit off main's first-parent line (``branch-pin``, refused by
+`challenger.credited_session`'s pin check before its circuit's), and break the forms.
 
 An `a_link` case is a window's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
@@ -79,6 +83,7 @@ import random
 import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
@@ -181,7 +186,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         d["draw"]["coin"] = ch.open(Wd.DRAW, 0, draw_after(s.rounds)).to_json()
     else:
         d["draw"]["coin"] = s.draw[0].to_json()
-    return {"key": s.key(), "window": window, "session": s.files(), **d}, s
+    return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
 
 
 def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
@@ -193,6 +198,9 @@ def _flip_bit(d: dict, rng: random.Random, to: bool | None = None) -> None:
 
 
 def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> None:
+    if rc.pin_mutation(d, name, rng, lambda opened: rc.ledger_lines(rc.ledger_events(rng, d["window"], s, opened=opened),
+                                                                     rc._key(0))):
+        return
     calls, j = d["calls"], rng.randrange(len(d["calls"]))
     match name:
         case "changed":
@@ -253,8 +261,8 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
 
 CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "bit-form", "no-z", "index", "row-form",
                 "calls-form", "salt-form", "served-form", "rounds-form", "draw-form", "no-draw", "draw-coin", "key-form",
-                "forged-ledger"]
-CREDIT_KEYS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw")
+                "forged-ledger", "unpinned", "branch-pin"]
+CREDIT_KEYS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "rounds", "draw")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -772,12 +780,12 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
                       "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-unregistered", "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
-                "credit-changed", "credit-no-draw", "credit-forged-ledger", "k-form", "k-past-units", "never-received",
-                "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES]
-WINDOW_KEYS = ("key", "ledger", *Cr.WINDOW_KEYS, "k")
+                "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
+                "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES]
+WINDOW_KEYS = ("key", "ledger", "pins", "main", *Cr.WINDOW_KEYS, "k")
 #: `credit.window`'s arguments, in order
-WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "descriptor",
-               "entries", "proofs", "k")
+WINDOW_ARGS = ("key", "ledger", "pins", "main", "window", "session", "salt", "calls", "served", "rounds", "draw",
+               "descriptor", "entries", "proofs", "k")
 
 
 def window_args(d: dict) -> tuple:
@@ -826,8 +834,15 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
                     d["proofs"] = _window_proofs(rng, d, _served_units(d, k=past))
     events = [("period-open", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, **committed, "pinned": "ab" * 20,
                                      "key_sha512": hashlib.sha512(pub).hexdigest()})]
-    for (d, s), end in zip(wins, ends):
-        events += [("open", s.sid, rc._open(rng, d["window"], pub)), ("end", s.sid, rc._end(s, **end))]
+    pins = list(rc.PINS)
+    branch = rng.randrange(n) if name == "branch-pin" else None
+    if branch is not None:
+        pins.append(Ch.pin_line(rc.BRANCH, rc.MAIN[0], "2026-10-23T03:05:00Z"))
+    for i, ((d, s), end) in enumerate(zip(wins, ends)):
+        o = rc._open(rng, d["window"], pub)
+        if i == branch:
+            o.update(pinned=rc.BRANCH, pins=Ch.pins_seal(pins))
+        events += [("open", s.sid, o), ("end", s.sid, rc._end(s, **end))]
     outcomes = [{"root": d["window"]["root"], "session": s.sid, "complete": end.get("complete", True)}
                 for (d, s), end in zip(wins, ends)]
     events.append(("period-close", None, {"period": pname, "lane": rc.LANE, "by": rc.LANE, "windows": outcomes,
@@ -839,11 +854,11 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
     ledger = rc.ledger_lines(events if name != "no-close" else [e for e in events if e[0] != "period-close"], key,
                              leaves if name != "no-close" else [q for q, e in zip(leaves, events) if e[0] != "period-close"])
     windows = [_evidence(d) for d, _s in wins]
-    out = {"key": wins[0][0]["key"], "ledger": ledger, "name": pname}
+    out = {"key": wins[0][0]["key"], "ledger": ledger, "pins": pins, "main": list(rc.MAIN), "name": pname}
     i = rng.randrange(n)
     match name:
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
-              | "bad-circuit" | "never-received" | "other-circuit"):
+              | "bad-circuit" | "never-received" | "other-circuit" | "branch-pin"):
             pass
         case "other-k":
             d = wins[i][0]
@@ -892,8 +907,8 @@ def period_instance(rng: random.Random, name: str = "honest") -> dict:
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
-                "proof-other-registration"]
-PERIOD_KEYS = ("key", "ledger", "name", "windows")
+                "proof-other-registration", "branch-pin"]
+PERIOD_KEYS = ("key", "ledger", "pins", "main", "name", "windows")
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:

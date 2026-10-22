@@ -574,6 +574,17 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
     assert CC.draw(*passes.draw_args(honest)) is None
 
 
+#: the refusal each mutation of the session's pin aims at, `rounds`' and `salt`'s alike
+PIN_EXPECT = {
+    "unpinned": ("coin", f"ran commit {rounds_cases.UNLOGGED}, which the host's pins log doesn't record as a commit of "
+                         "main's history"),
+    "branch-pin": ("coin", f"ran commit {rounds_cases.BRANCH}, which the host's pins log records but which is not on "
+                           "main's first-parent line in the verifier's copy"),
+    "unsealed-pins": ("coin", "seals no pins log (pins: {lines, sha512})"),
+    "no-pins": ("coin", f"not trusted: {Ch.NO_PINS}"), "no-main": ("coin", f"not trusted: {Ch.NO_MAIN}"),
+    "main-form": ("coin", f"not trusted: the verifier's copy of main's history is malformed: {Ch.MAIN_FORM}"),
+}
+
 #: the refusal each rounds mutation aims at: its code and a part of its reason
 ROUNDS_EXPECT = {
     "honest": None, "key-form": ("coin", "the verifier's challenger key is malformed: "),
@@ -610,6 +621,7 @@ ROUNDS_EXPECT = {
     "tampered": ("coin", ": coin does not open against"), "malformed": ("coin", ": coin opening is malformed"),
     "too-many": ("coin", "roots recorded, more than the epoch's"),
     "label": ("coin", "pouw/round coin 0: coin is the epoch's pouw/salt coin 0, not its pouw/round coin 0"),
+    **PIN_EXPECT,
 }
 
 
@@ -618,7 +630,8 @@ def test_every_rounds_mutation_hits_its_refusal():
     auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
     an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
     second session for the window's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
-    it didn't seal, roots the challenger didn't receive, a coin opened twice,
+    it didn't seal, a session the host's pins log doesn't pin or pins off main's first-parent line, an open sealing no
+    pins log, no pins log or copy of main, roots the challenger didn't receive, a coin opened twice,
     one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
     aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
@@ -646,7 +659,7 @@ SALT_EXPECT = {
     "after": ("coin", "the salt's coin was not opened after what the verifier recorded"),
     "label": ("coin", "coin 0, not its pouw/salt coin 0"), "foreign": ("coin", "the salt's coin does not open against"),
     "foreign-epoch": ("coin", "the salt's coin is epoch "), "tampered": ("coin", "the salt's coin does not open against"),
-    "malformed": ("coin", "the salt's coin opening is malformed"),
+    "malformed": ("coin", "the salt's coin opening is malformed"), **PIN_EXPECT,
 }
 
 
@@ -654,7 +667,8 @@ def test_every_salt_mutation_hits_its_refusal():
     """`core_check.salt` accepts an honest live window's salt coin, read through the challenger's signed session the
     auditor's signed ledger reserves, opens and ends for the window, and refuses each mutation with the refusal it aims
     at: the session's (no ledger, a forged one, an in-process challenger's coins, a log the ledger didn't seal, another
-    session's files), a session opened without a reserve, the open root under another session's id than the reserve's
+    session's files, a session not pinned to a logged commit on main's first-parent line), a session opened without a
+    reserve, the open root under another session's id than the reserve's
     or of another window's weights or requests (so one session salts one window), H1's salt before the open root (the
     session opened on the weights' root, the same in every window), a log showing another root, and a coin that isn't
     the epoch's salt coin opened after it."""
