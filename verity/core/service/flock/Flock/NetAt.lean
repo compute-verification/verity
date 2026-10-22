@@ -187,6 +187,13 @@ structure TmplUnit where
   laid : Tmpl.layoutM t mode = .ok lays
   unrolled : Tmpl.unrollAt t lays = .ok net
 
+/-- A layout mode by its name: `iv` (lenient), `iv/strict`, `iv/hybrid` (`T = 0`) or `iv/hybrid/T`. -/
+def Tmpl.modeOf : String → Option Tmpl.Mode
+  | "iv" => some .lenient
+  | "iv/strict" => some .strict
+  | "iv/hybrid" => some (.hybrid 0)
+  | s => if s.startsWith "iv/hybrid/" then ((s.drop 10).toString.toNat?).map .hybrid else none
+
 /-- `t` read at `mode`: refused unless well-formed, laid out and unrolled. -/
 def TmplUnit.read (t : Tmpl.Tmpl) (mode : Tmpl.Mode) : V TmplUnit :=
   if wf : t.wellFormed = true then
