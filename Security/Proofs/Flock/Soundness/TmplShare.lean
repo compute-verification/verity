@@ -29,7 +29,7 @@ theorem slotBase_net (st : Stmt) (alpha : F128) (lw rho : Array F128) {i sl : �
     (h : (st.c.nets.getD i default).2.unitLog = sl) :
     st.slotBase alpha lw rho (.net i, sl) = .ok (Stmt.baseOf alpha (Stmt.tensor lw (rho.extract 0 (sl - 6)))
       (st.c.nets.getD i default).2.a (st.c.nets.getD i default).2.b (st.c.nets.getD i default).2.lookup sl) := by
-  simp [Stmt.slotBase, h]
+  subst h; simp [Stmt.slotBase]
 
 /-- **A templated unit's share is the projection of its slot's base**: what `unitShare` returns is the range's net's
 slot base, projected, entry by entry. -/
@@ -42,6 +42,7 @@ theorem unitShare_get {st : Stmt} {alpha : F128} {lw rho rr p : Array F128} {r :
   unfold Stmt.unitShare at h
   split at h
   · rename_i tu i htu hk
+    dsimp only at h
     split at h
     · rename_i hc
       simp only [Bool.and_eq_true, beq_iff_eq, Option.isNone_iff_eq_none, withPtrEq, decide_eq_true_eq] at hc
@@ -86,11 +87,9 @@ theorem partialRangesT_eq (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : 
               (eqTable (rr.extract (r.slotLog - 6) rr.size))[r.pos0 + k]!) *
               (Stmt.project b (eqTable (rr.extract 0 (r.slotLog - 6))))[s.val]!) := by
         intro b hb
-        rw [hsb] at hb
-        cases hb
-        congr 1
-        funext s
-        rw [hp s.val s.isLt]
+        rw [hsb, Except.ok.injEq] at hb
+        subst hb
+        exact congrArg (fun f => Array.ofFn (n := 64) f) (funext fun s => by rw [hp s.val s.isLt])
       cases hf : b2.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
       | some kb =>
         have hkey : kb.1 = (r.kind, r.slotLog) := of_decide_eq_true (Array.find?_some hf)
