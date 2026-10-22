@@ -1,13 +1,16 @@
 /-
 PROTOCOL.md §16.10 (registered reads), a value the verifier registers at known content (`Registered.KNOWN_KEY`): the known
-content binds a statement's row only where the circuit reads it. `check` refuses a circuit one of whose input ports the
-`--registered` file names at known content has a row bit that no computed row of the unit reads, at any copy: the
-statement would then not depend on that bit, and its known content would bind nothing there.
+content binds a statement's row only where the circuit reads or returns it. `check` refuses a circuit one of whose ports
+the `--registered` file names at known content is not a `sha512/row/v2` row of the known rows' words, or has a row bit
+that no computed row of the unit reads (an input row) or no copy returns (an output row): the statement would then not
+depend on that bit, and its known content would bind nothing there.
 
-For each such bit it finds a copy and an input column holding it (`cands`, a search the proof does not rely on) and accepts
-the bit only where the parsed circuit itself says so: the copy is one of the unit's (`upv`), a computed row reads the
-column (`RecResiduals.readIns`), and Δ's source key at the column is that bit of the port (`srcMsg`, which mirrors the
-proof's `srcKey` at a message bit from a leaf). Its cost is the known bits times the unit's input ports, never the unit's gates.
+For each such bit it finds a copy and a column holding it (`cands`, `outCands`, searches the proof does not rely on) and
+accepts the bit only where the parsed circuit itself says so. At an input row: the copy is one of the unit's (`upv`), a
+computed row reads the column (`RecResiduals.readIns`), and Δ's source key at the column is that bit of the port
+(`srcMsg`, which mirrors the proof's `srcKey` at a message bit from a leaf). At an output row: the copy is one of the
+unit's, one of its leaf's outputs is the bit's output word (`outAt`), and the bit's column of the output group is a
+computed one. Its cost is the known bits times the unit's ports, never the unit's gates.
 -/
 import Flock.RegKnown
 import Flock.RecResiduals
@@ -60,23 +63,58 @@ def bitRead (c : Circuit) (mask : Array Bool) (pc : Array (Nat × Nat)) (rd : Ar
     let y := pc[p]!.1 + k % 16
     decide (u < c.upv) && rd.getD y false && decide (srcMsg c mask pc u y = some (q, k / 8, k % 8))
 
-/-- **Every bit of every known input port is read** (PROTOCOL.md §16.10): each port of the circuit's input rows
-(`HmOut.nIn`) that the `--registered` file names at known content has each bit of its `16 · words`-bit row read by a
-computed row of the unit, at some copy (`bitRead`). An output row the file names is the circuit's own output, not read. -/
+/-- Output port `j`'s first word among the circuit's output words. -/
+def outAt (c : Circuit) (j : Nat) : Nat := ((c.outPorts.toList.take j).map (·.2)).sum
+
+/-- **Where each output word sits among the copies' returned outputs**: word `w`'s `(copy, output)` pairs, every copy
+below `upv` and every output of its leaf whose word is `w`. -/
+def outCands (c : Circuit) : Array (List (Nat × Nat)) :=
+  (List.range c.upv).foldl (fun m u =>
+    let lo := c.leavesOut.getD u #[]
+    (List.range lo.size).foldl (fun m j => m.modify lo[j]! ((u, j) :: ·)) m) (Array.replicate c.outWords [])
+
+/-- **Bit `k` of output row port `q` is returned**: its word is word `k / 16` of output port `q - nIn`, and at one of the
+candidates `cs` copy `u` of the unit returns that word as its output `j`, bit `k % 16` at a computed column of the
+unit's output group. -/
+def bitOut (c : Circuit) (cs : List (Nat × Nat)) (q k : Nat) : Bool :=
+  let w := outAt c (q - HmOut.nIn c) + k / 16
+  decide (w < outAt c (q - HmOut.nIn c + 1)) && cs.any fun (u, j) =>
+    let col := (c.unit.outGroups.getD 0 default).col * WORD + (16 * j + k % 16)
+    decide (u < c.upv) && decide (j < (c.leavesOut.getD u #[]).size) && decide ((c.leavesOut.getD u #[])[j]! = w) &&
+      decide (c.unit.inWords * WORD ≤ col) && decide (col < c.unit.constPos)
+
+/-- **A known port's row is a known value's**: a `sha512/row/v2` row without segments, of each known row's words. -/
+def shapeOk (p : Port) (ks : Array (Array Nat × ByteArray)) : Bool :=
+  p.v2 && p.segs.isNone && ks.all (·.1.size == p.words)
+
+/-- **Every bit of every known port is read or returned** (PROTOCOL.md §16.10): each port of the circuit that the
+`--registered` file names at known content is a `sha512/row/v2` row without segments of each known row's words, and
+has each bit of its `16 · words`-bit row read by a computed row of the unit at some copy (`bitRead`), at an input row
+(`HmOut.nIn`), or returned by some copy (`bitOut`), at an output row. -/
 def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
   let mask := ProvedScope.portMask c.unit.inGroups (c.unit.inWords * WORD)
   let pc := portCols c.unit.inGroups
   let rd := RecResiduals.readIns c.unit
   let st := starts c
   let cs := cands c (c.ports.foldl (· + ·.words) 0)
-  known.toList.forM fun (name, _) =>
-    (List.range (HmOut.nIn c)).forM fun q =>
+  let co := outCands c
+  known.toList.forM fun (name, ks) =>
+    (List.range c.ports.size).forM fun q =>
       if c.ports[q]!.name = name then
-        match (List.range (16 * c.ports[q]!.words)).find?
-            (fun k => !bitRead c mask pc rd (cs.getD (st[q]! + k / 16) []) q k) with
-        | some k =>
-          throw s!"registered reads: known port {name}: no computed row of the circuit reads bit {k} of its row, so its known content binds nothing there"
-        | none => pure ()
+        if !shapeOk c.ports[q]! ks then
+          throw s!"registered reads: known port {name}: the circuit's row is not a {HmRow.ROW_SCHEMA_V2} row without segments of its known rows' {c.ports[q]!.words} words"
+        else if q < HmOut.nIn c then
+          match (List.range (16 * c.ports[q]!.words)).find?
+              (fun k => !bitRead c mask pc rd (cs.getD (st[q]! + k / 16) []) q k) with
+          | some k =>
+            throw s!"registered reads: known port {name}: no computed row of the circuit reads bit {k} of its row, so its known content binds nothing there"
+          | none => pure ()
+        else
+          match (List.range (16 * c.ports[q]!.words)).find?
+              (fun k => !bitOut c (co.getD (outAt c (q - HmOut.nIn c) + k / 16) []) q k) with
+          | some k =>
+            throw s!"registered reads: known port {name}: no copy of the unit returns bit {k} of its row, so its known content binds nothing there"
+          | none => pure ()
       else pure ()
 
 end KnownRead
