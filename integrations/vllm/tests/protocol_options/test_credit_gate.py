@@ -22,6 +22,7 @@ from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord  # noqa: E402
 from verity_vllm import protocol_options as PO  # noqa: E402
@@ -515,7 +516,8 @@ def _record(run):
 
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
-                             _descriptor() if descriptor is None else descriptor, statements, k, run=run)
+                             _descriptor() if descriptor is None else descriptor, statements, k, run=run,
+                             pins=[host.ledger.pins_path])
 
 
 #: core's credit reads statements from #3143 on; on a tree before it every window is refused with `NO_STATEMENTS`
@@ -589,6 +591,10 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert out["manifest"] is None and out["weights"] is None and out["k"] == k, out
     assert out["drawn"] == PHC.drawn_of(rec, auditor.window, k, _descriptor())[0] == [0, 1]
     assert out["window"][0] == NOT_YET and out["credit"] is None
+    unpinned = PHC.credit_reason(rec, auditor.directory, [auditor.ledger.path], auditor.window, auditor.key,
+                                 _descriptor(), pins=None)
+    assert unpinned["window"] == ("coin", f"the window's coins, session or salt can't be read ({LC.NO_PINS})")
+    assert unpinned["credit"] is None
     ev = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
     keys = CR.WINDOW_KEYS if PHC.STATEMENTS else tuple(sorted({*CR.WINDOW_KEYS} - {"proofs"} | {"statements"}))
     assert tuple(sorted(ev)) == keys and ev["entries"] == entries and ev["statements"] == []
@@ -665,10 +671,13 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key)
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path])
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor())
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "k": k, "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
+    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key)
+    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+        "coin", f"window 0 of period {PERIOD}: the window's session can't be read ({LC.NO_PINS})")
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     layer = Linear(64, 1, None)
@@ -691,7 +700,7 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["k"] is None and out["credit"] is None
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key)
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path])
     reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
@@ -772,7 +781,7 @@ def _two_window_period(tmp_path):
         sessions.append(s)
         roots.append(root)
     ledger.period_close(PERIOD)
-    return PHC.Ledger.of([ledger.lines], ledger.key), sessions, roots
+    return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS]), sessions, roots
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):

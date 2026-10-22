@@ -4,8 +4,10 @@ pair, the serving side's `RemoteChallenger` on the other; the session's close is
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. #2643's `tests/check/challenger_host.py`,
-over any challenger."""
+`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. Each seals the host's
+pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as the gate does (``pins: {lines, sha512}``),
+and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
+session to it. #2643's `tests/check/challenger_host.py`, over any challenger."""
 from __future__ import annotations
 
 import hashlib
@@ -27,6 +29,15 @@ from verity.ml.crypto import lms
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
+#: the commit every open here was run from (``pinned``), and the host's pins log recording it as main's
+PINNED = "0" * 40
+PINS = (LC.pin_line(PINNED, PINNED, "2026-10-20T10:00:00Z"),)
+
+
+def write_pins(path: Path, pins=PINS) -> Path:
+    """`pins` (the host's pins log, its lines) at `path`, as infra publishes it (the gate's ``pins``)."""
+    path.write_text("".join(line + "\n" for line in pins))
+    return path
 
 
 def entropy(seed: int):
@@ -66,6 +77,7 @@ class Gate:
 
     def __init__(self, private: lms.PrivateKey, key: LC.ChallengerKey, leaf: int = 0) -> None:
         self.private, self.key, self._leaf, self.lines, self._opens = private, key, leaf, [], {}
+        self.pins = list(PINS)
         self._reserves: dict[str, dict] = {}
         self._periods: dict[str, dict] = {}
         self._current: dict[str, str] = {}
@@ -86,7 +98,7 @@ class Gate:
         expires = (datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=minutes)).strftime(
             "%Y-%m-%dT%H:%M:%SZ")
         body = {"by": by, **({"for": for_} if for_ else {}), "peer": "vy-nebius-1", "scheme": scheme, "epoch": epoch,
-                "families": [list(f) for f in families], "minutes": minutes, "pinned": "0" * 40, "key_sha512": self.pin,
+                "families": [list(f) for f in families], "minutes": minutes, "pinned": PINNED, "key_sha512": self.pin,
                 "host": f"{HOST}.{session}", "started_utc": started, "expires_utc": expires, **override}
         e = self.append("reserve", session, body)
         self._reserves[session] = e
@@ -99,7 +111,7 @@ class Gate:
         proof service's committed draw K, `credit.K_FIELD`) when given."""
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
                 **({"circuit": circuit} if circuit is not None else {}),
-                **({CR.K_FIELD: draw_k} if draw_k is not None else {}), "pinned": "0" * 40, "key_sha512": self.pin,
+                **({CR.K_FIELD: draw_k} if draw_k is not None else {}), "pinned": PINNED, "key_sha512": self.pin,
                 "opened_utc": "2026-10-20T11:00:00Z", **override}
         self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
         return self.append("period-open", None, body)
@@ -145,11 +157,12 @@ class Gate:
         if reserved is not None:
             rb = reserved["body"]
             body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in LC.RESERVED if k in rb},
-                    "opened_by": by, "pinned": "0" * 40, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
-                    "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
+                    "opened_by": by, "pinned": PINNED, "pins": LC.pins_seal(self.pins),
+                    "key_sha512": key_sha512 or self.pin, "host": rb["host"], "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
                     "started_utc": rb["started_utc"]}
         else:
-            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": "0" * 40,
+            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": PINNED,
+                    "pins": LC.pins_seal(self.pins),
                     "host": f"{HOST}.{session}", "key_sha512": key_sha512 or self.pin,
                     "peer": "vy-nebius-1", "port": 7811, "scheme": scheme, "epoch": epoch,
                     "families": [list(f) for f in families], "minutes": 10, "started_utc": "2026-10-20T11:08:46Z",
@@ -188,18 +201,26 @@ class Gate:
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self) -> PHC.Ledger:
-        return PHC.Ledger.of([self.lines], self.key)
+    def ledger(self, pins=None) -> PHC.Ledger:
+        """The ledger as `pouw_h1_challenger.Ledger` reads it, under the host's pins log `pins` (its lines; by default
+        the gate's own)."""
+        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)])
+
+    def pins_head(self, path: Path) -> Path:
+        """The gate's pins log at `path`, as infra publishes it."""
+        return write_pins(path, self.pins)
 
 
 class Ledger:
     """The auditor's ledger at `path`, its entries signed under key `seed` at the next of `leaves` (shared with the
     challenger's own signatures under that key, of height `H`), naming key `named` in its opens (by default its own);
-    `reserve` reserves a session, whose `open` then binds that reserve (the gate's two-step open)."""
+    `reserve` reserves a session, whose `open` then binds that reserve (the gate's two-step open). Its opens seal the
+    host's pins log `PINS`, which it writes beside `path` (`pins_path`, infra's published ``pins.jsonl``)."""
 
     def __init__(self, path: Path, seed: int, leaves: Iterator[int] | None = None,
                  named: LC.ChallengerKey | None = None, H: int = 4) -> None:
         self.path, self.lines = path, []
+        self.pins_path = write_pins(path.parent / f"{path.stem}.pins.jsonl")
         self.private, self.key = challenger_key(seed, H)
         self.leaves = itertools.count() if leaves is None else leaves
         self.key_sha512 = hashlib.sha512((named or self.key).public).hexdigest()
@@ -244,7 +265,8 @@ class Ledger:
     def open(self, session: str, window: dict, leaf: int | None = None) -> None:
         reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
-        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
+        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": PINNED,
+                                      "pins": LC.pins_seal(PINS),
                                       "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
         self._roots[session] = window.get("root")
 

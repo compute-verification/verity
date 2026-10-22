@@ -659,11 +659,12 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 
 
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
-                     window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None
-                     ) -> dict[str, Any]:
+                     window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None,
+                     pins: list[str] | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
-    every head infra published of the auditor's signed ledger. With `window_file` (the window's ``{root}``) `directory` is
+    every head infra published of the auditor's signed ledger and `pins` every head of the host's pins log (infra's
+    ``pins.jsonl``, the gate's ``pins``; none refuses every session: `pouw_h1_challenger.pins_head`). With `window_file` (the window's ``{root}``) `directory` is
     the challenger run's ``out/`` (``research fetch RUN --all``), as the session the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.load`, core's check), the window held to the session it opened for its Commit's root
@@ -681,7 +682,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     d = tree if window_file is not None else tree / "out"
     sid = (rec["commitment"].get("session") or {}).get("session")
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
-                           "pinned_public_sha512": public_sha512, "ledger": ledger, "window_file": window_file,
+                           "pinned_public_sha512": public_sha512, "ledger": ledger, "pins": pins,
+                           "window_file": window_file,
                            "coin_source": rec["commitment"].get("coin_source")}
     key = None
     try:
@@ -689,21 +691,21 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         doc["key"] = {"W": key.W, "H": key.H, "public_sha512": hashlib.sha512(key.public).hexdigest()}
         if window_file is not None:
             doc["window"] = json.loads(Path(window_file).read_text())
-            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key)
+            doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key, pins=pins)
         else:
-            newest = PHC.Ledger.load(ledger, key)
+            newest = PHC.Ledger.load(ledger, key, pins=pins)
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor)
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, pins=pins)
     if period is not None:
         try:
             if key is None:
                 raise ValueError("no key the pin names, so the auditor's ledger is unread")
-            newest = PHC.Ledger.load(ledger, key)
+            newest = PHC.Ledger.load(ledger, key, pins=pins)
             root = (doc.get("window") or {}).get("root") or (rec["commitment"].get("session") or {}).get("root")
             accepted = [sid] if doc["reason"] is None else []
             doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root])}
@@ -752,6 +754,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ledger", metavar="HEAD", action="append",
                     help="with --check-challenger: a published head of the auditor's signed ledger (infra's windows.jsonl), "
                          "once a head infra labelled")
+    ap.add_argument("--pins", metavar="HEAD", action="append",
+                    help="with --check-challenger: a published head of the host's pins log (infra's pins.jsonl, "
+                         "labelled challenger-pins head), once a head; none refuses every session")
     ap.add_argument("--window", metavar="WINDOW_JSON", help="the window's identity, {root}, its window-open root; "
                                                             "CHALLENGER_DIR then the challenger run's out/, else the "
                                                             "session's tree")
@@ -802,7 +807,8 @@ def main(argv: list[str] | None = None) -> int:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc)["ok"] else 1
+        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
+                                     a.pins)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1
