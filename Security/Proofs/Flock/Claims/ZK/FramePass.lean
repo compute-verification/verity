@@ -18,7 +18,7 @@ namespace Claims.ZKServer
 open _root_.Flock (V F128 u64OfLE)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree inFree firstDiff passes)
-open FlockSoundness.Refine (Frame encs colBytes toBytes_length header_length)
+open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 open FlockSoundness.Discharge.ZkView (get!_eq u64OfLE_eq)
 
 /-! ## Any 16 bytes are a value's -/
@@ -130,7 +130,7 @@ theorem frame_refill (f : Frame) (w : List UInt8) (hl : w.length = f.enc.length)
     rw [Frame.enc_length] at hl
     simp only [Frame.payLen] at hl
     rw [enc_one] at h
-    have hw := head_of_agree w _ _ (header_length 3 1 1) fun i hi => h i fun hv => by
+    have hw := head_of_agree w _ _ (Frame.header_length 3 1 1) fun i hi => h i fun hv => by
       simp only [valByte] at hv; omega
     refine ⟨.one (readWord (w.drop 16)), trivial, ?_⟩
     rw [enc_one, toBytes_readWord _ (by rw [List.length_drop]; omega)]
@@ -139,7 +139,7 @@ theorem frame_refill (f : Frame) (w : List UInt8) (hl : w.length = f.enc.length)
     rw [Frame.enc_length] at hl
     simp only [Frame.payLen] at hl
     rw [enc_vec] at h
-    have hw := head_of_agree w _ _ (header_length 3 2 vs.length) fun i hi => h i fun hv => by
+    have hw := head_of_agree w _ _ (Frame.header_length 3 2 vs.length) fun i hi => h i fun hv => by
       simp only [valByte] at hv; omega
     obtain ⟨vs', hl', hc⟩ := colBytes_read vs.length (w.drop 16) (by rw [List.length_drop]; omega)
     refine ⟨.vec vs', hl'.symm, ?_⟩
