@@ -19,10 +19,11 @@ A primitive is taken as the descriptor declares it, as C-Flock's decoder takes i
     check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
 
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
-prover's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s codes
-in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by `expand_baseline`.
-θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output` among them, is
-refused `theta-provenance`.
+deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
+codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
+`expand_baseline`. θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output`
+among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its first record, the first
+run's own included; any other record is refused `theta-not-at-deployment-start`.
 """
 from __future__ import annotations
 
@@ -351,10 +352,9 @@ def provenance(inst, tr, node) -> None:
         D = p["registration"]
         if D not in T["digests"]:
             raise Malformed("theta-record-unknown")
-        d = T["digests"].index(D)
-        if d >= T["run"]:
-            raise Malformed("theta-not-earlier")
-        e = last_with(T["log"][d], "registered", "value", p["value"])
+        if T["digests"].index(D) != 0:
+            raise Malformed("theta-not-at-deployment-start")
+        e = last_with(T["log"][0], "registered", "value", p["value"])
         if e is None or e.get("root") != p["root"]:
             raise Malformed("theta-root")
         if run.get("program") != digest or own[k] is None:

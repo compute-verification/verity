@@ -14,8 +14,10 @@ the session is `firewall_finish_agree.sh`'s check; a replay cannot repeat the fi
 OS). Then one `flock-firewall finish FINISH_ARG...` process (the session's statement: `--circuit`, `--public`, `--draw`
 its `session.json`, ...) gets every table's request, answered with the root of record. Each rep's request with its passed
 values moved (`table{T}-rep{R}.vals` says where they sit), in a process of its own after its table and its salts
-(`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Writes DIR/result.json;
-exits 1 on any disagreement.
+(`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). And each rep's
+`table{T}-rep{R}.skel`, the algebraic phase's rounds `flock-circuit`'s `Checker::scheduled` releases, must be byte for byte
+the ones one `flock-firewall skeleton FINISH_ARG...` process computes from the statement and the table's root
+(`Flock.Firewall.Skeleton.rounds`), every rep having one. Writes DIR/result.json; exits 1 on any disagreement.
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]
 
 
 STOPPED = "stopped on perturbed values"
+SKELETON = "algebraic phase's scheduled rounds"
 
 
 def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
@@ -106,6 +109,23 @@ def main(argv=None) -> int:
             break
     p.stdin.close()
     p.wait()
+    p = subprocess.Popen([a.lean, "skeleton", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    for t in tables:
+        cap = (a.dump / f"table{t}.root").read_bytes()
+        for f in sorted(a.dump.glob(f"table{t}-rep*.skel")):
+            r = int(re.fullmatch(rf"table{t}-rep(\d+)\.skel", f.name).group(1))
+            got, head = ask(p, f"skeleton {t} {r}", cap)
+            want = f.read_bytes()
+            row = {"what": f"table {t} rep {r} {SKELETON}", "ok": got == want, "lean": head,
+                   "rounds": int.from_bytes(want[:8], "little")}
+            if got is not None and got != want:
+                row["first_diff"] = first_diff(got, want)
+            rows.append(row)
+            ok &= row["ok"]
+            if got is None:
+                break
+    p.stdin.close()
+    p.wait()
     for t in tables:
         for f in sorted(a.dump.glob(f"table{t}-rep*.vals")):
             r = int(re.fullmatch(rf"table{t}-rep(\d+)\.vals", f.name).group(1))
@@ -114,9 +134,10 @@ def main(argv=None) -> int:
             ok &= row["ok"]
     reps = [r for r in rows if r["what"].endswith("proof file")]
     stops = [r for r in rows if r["what"].endswith(STOPPED)]
-    ok &= bool(reps) and bool(stops)
-    summary = {"ok": ok, "tables": len(tables), "reps": len(reps), "stops": len(stops), "agree": sum(r["ok"] for r in rows),
-               "rows": rows}
+    skels = [r for r in rows if r["what"].endswith(SKELETON)]
+    ok &= bool(reps) and bool(stops) and len(skels) == len(reps)
+    summary = {"ok": ok, "tables": len(tables), "reps": len(reps), "stops": len(stops), "skeletons": len(skels),
+               "agree": sum(r["ok"] for r in rows), "rows": rows}
     (a.out / "result.json").write_text(json.dumps(summary, indent=1))
     for r in rows:
         print(("AGREE " if r["ok"] else "DIFFER ") + json.dumps(r))

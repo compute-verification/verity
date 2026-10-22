@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Claims.Recursion.InnerAccepts
+import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.C3.VStarList.Shape
 
 /-!
@@ -12,13 +13,10 @@ import Proofs.Flock.C3.VStarList.Shape
   `checkCandidate3`: `FlockC3.VStarList.holo_of_list`), so no statement the reader reads is at the sparse form
   (`not_parse_sparse`), and `SchedMatches` holds there vacuously (`schedMatches_sparse`).
 * **Dense.** The verifier's setup holds its inner shape's `m`, `k_log`, regions and claims to the inner statement's as
-  its files set it up (`RecSetup.checkShape`, in `RecScope.accepts`: `checkShape_files`). Where Flock's plain verifier
-  sets the inner statement up as one table at those numbers (`InnerSetupIsFiles`, a named premise), its rounds are
-  `2 + 2R` at the plain schedule (`k_plain`), so `SchedMatches` holds at the dense form (`schedMatches_dense`).
-
-`InnerSetupIsFiles` is not a property of the code: the compiled verifier reads the inner statement's files and record,
-never the tags, table count or draw the plain verifier sets the inner statement up at, so nothing it checks rules out
-an inner statement at two tables, or whose drawn table is smaller than the files' one.
+  its files set it up, and the inner statement to the files' setup (`RecSetup.checkShape`, `RecSetup.checkForm`, in
+  `RecScope.accepts`: `checkShape_files`), so Flock's plain verifier sets the inner statement up as one table at those
+  numbers (`innerSetup_files`), its rounds are `2 + 2R` at the plain schedule (`k_plain`), and `SchedMatches` holds at
+  the dense form (`schedMatches_dense`).
 -/
 
 namespace RecDeploy
@@ -46,27 +44,13 @@ theorem not_parse_sparse {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x =
   rw [Option.isSome_map] at hs
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
-  obtain ⟨⟨⟨ss, hss⟩, -⟩, -⟩ := ha
+  obtain ⟨⟨⟨⟨ss, hss⟩, -⟩, -⟩, -⟩ := ha
   have h1 : r.shape.holo = true := FlockC3.VStarList.holo_of_list (i := r.shape) hss hs
   exact Bool.false_ne_true (hh.symm.trans h1)
 
 /-- **`SchedMatches` at the sparse form**, vacuously: no statement the reader reads is at it (`not_parse_sparse`). -/
 theorem schedMatches_sparse : SchedMatches Claims.Recursion.Form.Sparse :=
   fun _ _ hst hf => absurd hf (not_parse_sparse hst)
-
-/-- **The setup's shape check**: where `RecSetup.checkShape` passes on the inner statement's files, the inner shape's
-`m`, `k_log`, regions and claims are the ones the files set the inner statement up at. -/
-theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit} {spec : SessionSpec} {st : Stmt}
-    (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) (hf : f.stmt "the inner session" = .ok (spec, st)) :
-    i.m = st.m ∧ i.kLog = st.c.kLog ∧ i.regions = st.regions.size ∧
-      i.claims = 2 + spec.points * st.regions.size := by
-  unfold RecSetup.checkShape at h
-  simp only [hf, bind, Except.bind] at h
-  by_cases hc : (i.m != st.m || i.kLog != st.c.kLog || i.regions != st.regions.size ||
-      i.claims != 2 + spec.points * st.regions.size) = true
-  · simp [hc, throw, throwThe, MonadExceptOf.throw] at h
-  · simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hc
-    exact ⟨hc.1.1.1, hc.1.1.2, hc.1.2, hc.2⟩
 
 /-- **The inner shape the verifier's list accepts has a rep schedule**: `RecVStar.checkTopsListed` refuses one without. -/
 theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
@@ -78,32 +62,23 @@ theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h :
   | none => rw [hrs] at ht; cases ht
   | some rs => exact ⟨rs, rfl⟩
 
-/-- **Flock's plain verifier sets the inner statement up as its files do** (a named premise): at every compiled
-statement the reader reads at public circuits, the verifier holds the inner statement's files (`filesOf`), and Flock's
-plain verifier (`FlockDeploy.setupOf false`) sets the inner statement up as one table at the `m`, `k_log` and region
-count, and with the points, that the files set it up at (`RecCoins.Files.stmt`, which `RecSetup.checkShape` holds the
-inner shape to). -/
-def InnerSetupIsFiles : Prop :=
-  ∀ x r, readX x = some r → r.shape.holo = false →
-    ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
-      FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
-      st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.regions.size = st'.regions.size ∧ spec.points = spec'.points
-
-/-- **`SchedMatches` at the dense form**, under `InnerSetupIsFiles`: the setup holds the inner shape to the files'
-numbers (`checkShape_files`), the plain verifier sets the inner statement up as one table at them, and its rounds are
-`2 + 2R` there (`k_plain`, at `k_log ≥ 6`, which V*'s list needs: `RecScope.statements_ok`). -/
-theorem schedMatches_dense (hI : InnerSetupIsFiles) : SchedMatches Claims.Recursion.Form.Dense := by
+/-- **`SchedMatches` at the dense form**: Flock's plain verifier sets the inner statement up as one table at the
+files' numbers (`innerSetup_files`), the setup holds the inner shape to them (`checkShape_files`), and the plain
+verifier's rounds are `2 + 2R` there (`k_plain`, at `k_log ≥ 6`, which V*'s list needs: `RecScope.statements_ok`). -/
+theorem schedMatches_dense : SchedMatches Claims.Recursion.Form.Dense := by
   intro x st hst hf
   obtain ⟨r, hr, ha, rfl⟩ := parse_read hst
   have hh : r.shape.holo = false := hf.1
-  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts⟩ := hI x r hr hh
+  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts⟩ := innerSetup_files hr ha
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
-  obtain ⟨⟨⟨ss, hss⟩, -⟩, ⟨u, hsh⟩⟩ := ha
+  obtain ⟨⟨⟨⟨ss, hss⟩, -⟩, ⟨u, hsh⟩⟩, -⟩ := ha
   have hss : RecVStar.statements r.shape = .ok ss := hss
   have hsh : RecSetup.checkShape (some r.shape) (filesOf r) = .ok u := hsh
   rw [hfs] at hsh
-  obtain ⟨e1, e2, -, e4⟩ := checkShape_files hsh hstm
+  obtain ⟨spec'', st'', hstm', e1, e2, -, e4, -⟩ := checkShape_files hsh
+  rw [hstm] at hstm'
+  cases hstm'
   obtain ⟨-, -, hk6, -, -⟩ := RecScope.statements_ok hss
   obtain ⟨rs, hrs⟩ := repSched_of_statements hss
   have hrs' : RecVStar.repRounds r.shape.m r.shape.kLog r.shape.claims = some rs := by

@@ -1219,7 +1219,9 @@ struct FirewallDraws {
 /// `FC_FINISH_DUMP=DIR`: each firewalled table's level-0 request to `flock-firewall finish` (`table{T}.req`, `T` the session's
 /// table), the root of record (`table{T}.root`) and the session's Lean finish's (`.finish_root`); and each rep's request
 /// (`Flock.Firewall.Finish.parseRep`) beside the session's Lean finish's proof file of it (`table{T}-rep{R}.req`, `.lean`),
-/// and where the request's passed values sit (`.vals`: their byte offset and word count): `firewall_finish_agree`'s inputs.
+/// where the request's passed values sit (`.vals`: their byte offset and word count), and the algebraic phase's rounds
+/// [`flock_live::firewall::Checker::scheduled`] releases (`.skel`, as `Flock.Firewall.Skeleton.encode` writes them):
+/// `firewall_finish_agree`'s inputs.
 fn finish_dump() -> Option<std::path::PathBuf> {
     std::env::var_os("FC_FINISH_DUMP").map(Into::into)
 }
@@ -1558,6 +1560,21 @@ impl Firewall {
                                                 |r| zkv::replay(&st.r1cs, &zc, &lc, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), r)
                                                     .map(|rp| names = rp.cons.iter().map(|c| c.0).collect()))?;
         flock_live::firewall_transcript::with(|t| t.begin_rep(rep, lay, &zk.pads, &zk.ic.root(), &domain(&st.c, rep), &self.cm, &items, &names));
+        if let Some(dir) = &self.dump {
+            let mut ck = flock_live::firewall::Checker::new(items.clone(), lay.piop_exposed());
+            let mut rounds = Vec::new();
+            while let Some(r) = ck.scheduled() {
+                rounds.push(r);
+            }
+            let mut b = (rounds.len() as u64).to_le_bytes().to_vec();
+            for (c, n) in &rounds {
+                b.extend((*n as u64).to_le_bytes());
+                b.extend((c.len() as u64).to_le_bytes());
+                b.extend(c);
+            }
+            let p = dir.join(format!("table{}-rep{rep}.skel", self.table));
+            std::fs::write(&p, b).unwrap_or_else(|e| panic!("FC_FINISH_DUMP: {}: {e}", p.display()));
+        }
         self.relations = names;
         let mut lean = zk.lean.lock().unwrap_or_else(PoisonError::into_inner).take()
             .unwrap_or_else(|| Err(flock_live::firewall::refused("a firewalled rep without its Lean frame")))?;

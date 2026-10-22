@@ -482,6 +482,22 @@ def test_the_reported_eps_is_of_the_credited_work():
     assert Cr.established(lay, [], k) is None
 
 
+def test_the_record_k_establishes_about_0_1125_percent_at_u_eight_ninths():
+    """At K = `plan.RECORD_K` = 27,713, the K that establishes 0.1% of a window's work at `DELTA`, a window credited 8
+    of its 9 equal calls reports about 0.1125%, 9/8 of it: the miss bound reads only the missed work εC/W, and
+    `Properties.Pouw.Credit.EpsAtSound` holds at the ε `eps_at` answers, so its K′ is at most 27,713 and the grid
+    point below needs more."""
+    lay = {"calls": [["w", 0]] * 9, "linears": [["w", 4096, 1 << 20]], "m": 16, "tile": [16, 16]}
+    size, work = Cr.call_work(lay)[0]
+    total, credited = 9 * size * work, 8 * size * work
+    eps = Cr.established(lay, list(range(8)), plan.RECORD_K)
+    assert eps == Wd.eps_at(plan.RECORD_K, Cr.DELTA, credited, total, 1)
+    assert Fraction(1_124, 1_000_000) < eps < Fraction(1_126, 1_000_000)
+    assert Wd.k_prime(eps, Cr.DELTA, credited, total, 1) <= plan.RECORD_K
+    assert Wd.k_prime(eps - Fraction(1, 1 << Wd.EPS_BITS), Cr.DELTA, credited, total, 1) > plan.RECORD_K
+    assert Fraction(8, 9) * eps == pytest.approx(Wd.eps_at(plan.RECORD_K, Cr.DELTA, total, total, 1), rel=1e-5)
+
+
 def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -> Fraction:
     """The largest probability that the work law's draw (each stratum (n_s, w_s, k_s) drawn k_s of its n_s units
     without replacement) misses a set holding at least a share `eps` of the work `total`, over two strata: for each
@@ -518,6 +534,27 @@ def test_the_eps_holds_at_the_work_laws_cap():
     by_units = Wd.eps_at(2000, Cr.DELTA, total, 2000, 1000)
     assert by_units == Fraction(1, 1 << Wd.EPS_BITS)
     assert _worst_miss(drawn, Fraction(500, total), total) > Fraction(1, 5) > Cr.DELTA
+
+
+@pytest.mark.parametrize("light, heavy", [((1000, 1), (1000, 1000)), ((400, 1), (100, 100)), ((600, 2), (200, 300)),
+                                          ((300, 1), (300, 64)), ((500, 1), (50, 1000))])
+def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
+    """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work law
+    draws a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
+    share of the work is missed with probability above 9/10. At the same draw the work form (C, W, 1) holds, every set
+    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
+    (n_a, w_a), (n_b, w_b) = light, heavy
+    lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
+    n = n_a + n_b
+    ss, why = Cr.strata(lay)
+    assert why is None and Cr.law(ss, n) is None
+    drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
+    total = sum(size * w for size, w, _k in drawn)
+    assert drawn[0][0] == n_a and drawn[0][2] < n_a and drawn[1][2] == n_b
+    by_units = Wd.eps_at(n, Cr.DELTA, total, n, w_b)
+    assert by_units == Fraction(1, 1 << Wd.EPS_BITS) and _worst_miss(drawn, by_units, total) > Fraction(9, 10)
+    eps = Cr.established(lay, [0, 1], n)
+    assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(drawn, eps, total) <= Cr.DELTA
 
 
 @pytest.mark.parametrize("seed", SEEDS)
