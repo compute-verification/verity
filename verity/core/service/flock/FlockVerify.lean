@@ -247,6 +247,15 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
+/-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
+(`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
+def programDigest (b : ByteArray) : Option String := do
+  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  let bare := match j with
+    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -313,9 +322,10 @@ registered root, leaf count, row width and domain, and the position each unit re
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
-the root of that content (`Registered.checkKnownAll`). -/
-def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
-    IO (Except String (Option (Array Registered.Port))) := do
+the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
+statement (`Registered.completeOf`, `Registered.checkComplete`). -/
+def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+    IO (Except String (Option (Array Registered.Port × Bool))) := do
   let some f := argOf args flag | return .ok none
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
@@ -328,12 +338,17 @@ def registeredInput (args : List String) (flag : String := "--registered") (ctx 
       | .ok _, some k =>
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
-        let own : V (Array Registered.Port) := do
+        let r : V (Array Registered.Port × Bool) := do
           let own ← Registered.ofJson j
           Registered.checkKnownAll own (← Registered.knownOf j)
-          return own
-        return (own.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
+          return (own, ← Registered.completeOf j)
+        return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
+
+/-- `registeredFile`'s ports. -/
+def registeredInput (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
+    IO (Except String (Option (Array Registered.Port))) :=
+  return (← registeredFile args flag ctx).map (·.map Prod.fst)
 
 /-- `--identifier F`: the verifier's own identifier, a JSON object (a path, or with `--archive` its SHA-512), and its RFC 8785
 form (`checkIdentifier`). -/
@@ -695,7 +710,8 @@ proved to how its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`):
 verity/flock-circuit+plain-leaves`, `--rec-inner-statement-coins os`, no `--rec-inner-tables`, and a `--rec-inner-draw`
 of every unit in order.
 Each DIR holds `session.json`
-and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
+and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
+naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
 soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
@@ -752,8 +768,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let closure ← match ← closureInput args with
     | .ok c => pure c
     | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
-    | .ok r => pure r
+  let (registered, complete) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, r.any Prod.snd)
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -802,6 +818,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         RecSetup.checkInner recInner recCoins recBound
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
+        if complete then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c (registered.getD #[])
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
         if zk then r.2.forM Zk.shapeOk
@@ -814,11 +831,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
-        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null)
+        (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
+  let programSha := program.bind programDigest
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
-  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json)) := #[]
+  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -828,7 +846,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
     let key := draw.map fun d => (canon d).toOption.getD ""
-    let mut st : Except String (SessionSpec × Array Setup × Lean.Json) := .error "setup: none"
+    let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
     match setups.find? (·.1 == key) with
     | some (_, s) => st := s
     | none =>
@@ -867,10 +885,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
-    let part := match st with | .ok (_, _, p) => p | .error _ => Lean.Json.null
+    let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++
       (if part.isNull then [] else [("partition", part)]) ++
+      (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
       (match registered with | some r => [("registered", Registered.finding r)] | none => []) ++
+      (if opened.isNull then [] else [("openings", opened)]) ++
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []))
@@ -910,8 +930,8 @@ def statementCmd (args : List String) : IO UInt32 := do
   let program ← match ← programInput args with
     | .ok p => pure p
     | .error e => IO.eprintln e; return 2
-  let registered ← match ← registeredInput args with
-    | .ok r => pure r
+  let (registered, complete) ← match ← registeredFile args with
+    | .ok r => pure (r.map Prod.fst, r.any Prod.snd)
     | .error e => IO.eprintln e; return 2
   let publicInputs ← match ← publicInputsInput args with
     | .ok p => pure p
@@ -948,6 +968,7 @@ def statementCmd (args : List String) : IO UInt32 := do
       RecSetup.checkInner recInner recCoins recBound
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
+      if complete then Registered.checkComplete st.c (registered.getD #[])
       if recInner.isSome then
         RecSetup.checks recInner recCommits stmtTags tables #[st] circuitB partition program registered recPart
           recBindings recRows
