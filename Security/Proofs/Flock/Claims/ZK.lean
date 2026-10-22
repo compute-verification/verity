@@ -96,6 +96,7 @@ import Proofs.Flock.Claims.ZK.FrameShape
 import Proofs.Flock.Claims.ZK.FrameOwn
 import Proofs.Flock.Claims.ZK.FramePass
 import Proofs.Flock.Claims.ZK.FrameLoop
+import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -669,6 +670,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
   `Frame.run` over `Drive.reqsAt` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
   `ProgReads` holds by definition (`ofLoop_progReads`).
+* `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
+  monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
+  opening at two tables of one shape whatever its salts for levels ≥ 1 (`openStep_alike`), and so a rep's scheduled
+  rounds so far (`schedSoFar_alike`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
