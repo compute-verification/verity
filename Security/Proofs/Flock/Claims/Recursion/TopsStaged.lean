@@ -16,7 +16,9 @@ off the run (`StagedB`, `stagedB_deployRec`) and needs no `RunPairs`. `HeldB` co
 `plainCallsBindOrSlack_sha512`. What stays open at the dense form is the last round's pieces (`FinPieces`),
 `PartChecksB` and `PartOpensB` at the coin server's transcript (`showsTr`, `cmtTr`), `DecompB`, the readers' three
 facts, and that transcript being injective at the compiled statements (`b.tr x`, a fact about the brings).
-`bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`).
+`bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`). At `finOpen`,
+`FinPieces` holds (`finPieces_finOpen`), and `ksLin2_deployed_open` and `bitsLin2_deployed_open` (`FinOpen.lean`)
+drop it.
 -/
 
 namespace RecDeploy

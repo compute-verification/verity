@@ -165,8 +165,9 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
 `ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
-RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, open), and `VstarShowsB`, `PartChecksB`, `PartOpensB`
-and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no number by itself: those premises are open.
+RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
+`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
+number by itself: those premises are open.
 -/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :

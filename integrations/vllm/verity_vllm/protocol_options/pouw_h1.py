@@ -47,7 +47,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   ``admission`` is ``per-round`` (`pouw_h1_requests.ADMISSIONS`).
 * **Round values.** Each call's A table (its slots' s8 rows and f32 scales), its served y and its exact z when the run has
   one are hiding tables of the call (``tables`` in its manifest row), so round s's root commits them before round s's
-  coin; round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
+  coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's draw coin
   (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor host's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
@@ -360,7 +360,10 @@ class H1Run:
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
     `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
-    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing.
+    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
+    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also committed as the window Program's
+    registered values as the call is recorded, their roots in the call's tables (``registered``) under its round's root;
+    the commitment carries their entries (``served``).
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -368,7 +371,7 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None) -> None:
+                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         if (salt is None) == (opener is None):
@@ -389,7 +392,7 @@ class H1Run:
         self._recorded: tuple[Call, Any] | None = None
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
-        self.rounds, self._key = rounds, key if key is not None else os.urandom(32)
+        self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
         #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
         self.tables: dict[int, dict[str, str | None]] = {}
@@ -473,6 +476,8 @@ class H1Run:
         self.calls.append(call)
         if self.commit:
             self._commit_tables(call, a, s_a, y, z)
+            if self.served is not None:
+                self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, y, z)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -648,14 +653,16 @@ class H1Run:
                 a = weight.new_zeros((0, k)) if weight is not None else None
                 self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
         self._close_rounds(self.steps - 1)
-        bound = all("root_a" in self.bound.get(c.index, {}) for c in self.calls if c.m)
+        if self.served is not None:
+            self.served.close(self)
+        unbound = RQ.tables_reason(self.salt, self.round_log, self.manifest())
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
                                     "coin_source": self.coin_source, "admission": self.admission,
-                                    "a_roots": "bound" if bound else "unbound: the slot tables name A-table leaves of tables "
-                                                                     "no round root commits"}
+                                    "a_roots": "bound: each call's A table is under its round's root" if unbound is None
+                                    else f"unbound: {unbound}"}
         self.details["static"] = self.static()
         self.details["step_rows"] = self.step_rows()
         self.details["u"] = str(self.utilization())
@@ -733,11 +740,9 @@ class H1Run:
         return self._rows(self.calls)
 
     def calls_root(self) -> bytes:
-        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound)."""
-        h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + self.salt)
-        for row in self.manifest():
-            h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-        return h.digest()
+        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
+        ``served`` its registered trees' entries."""
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest())
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -747,6 +752,8 @@ class H1Run:
             return
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
+        if self.served is not None:
+            self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
@@ -767,6 +774,14 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
+def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None) -> bytes:
+    """`H1Run.calls_root` over the manifest rows `manifest`, and the served trees' digest `served` when the window has them."""
+    h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + salt)
+    for row in manifest:
+        h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
+    return h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+
+
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
     """Each call's (root(A), root(B)) from what its listeners bound (``root_a``, ``root_b``, hex), None where either is missing."""
     out: list[tuple[bytes, bytes] | None] = []
@@ -777,6 +792,6 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
-           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "check_tiles", "compiled",
-           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots", "table_leaves", "units",
-           "utilization", "weight_root"]
+           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
+           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
+           "table_leaves", "units", "utilization", "weight_root"]

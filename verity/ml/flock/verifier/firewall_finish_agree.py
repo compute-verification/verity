@@ -17,7 +17,12 @@ values moved (`table{T}-rep{R}.vals` says where they sit), in a process of its o
 (`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). And each rep's
 `table{T}-rep{R}.skel`, the algebraic phase's rounds `flock-circuit`'s `Checker::scheduled` releases, must be byte for byte
 the ones one `flock-firewall skeleton FINISH_ARG...` process computes from the statement and the table's root
-(`Flock.Firewall.Skeleton.rounds`), every rep having one. Writes DIR/result.json; exits 1 on any disagreement.
+(`Flock.Firewall.Skeleton.rounds`), every rep having one. And what `flock-circuit` drove each rep's Lean frame with, its
+start (`table{T}-rep{R}.start`), its opening's request (`.open`: the extra claims and the algebraic phase's coins) and
+every request after the start (`.frame`), must be byte for byte (the start as JSON) what one `flock-firewall drive
+FINISH_ARG...` process computes from the statement, the table's level 0, the session's `Commit` coins (`link.bin`), the
+rep's salts (`.hi`) and the coins (`Flock.Firewall.Drive.driveAt`), every rep having them. Writes DIR/result.json; exits
+1 on any disagreement.
 """
 from __future__ import annotations
 
@@ -44,6 +49,17 @@ def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]
 
 STOPPED = "stopped on perturbed values"
 SKELETON = "algebraic phase's scheduled rounds"
+DRIVE = ("frame start", "extra claims and algebraic-phase coins", "frame requests")
+
+
+def blobs(b: bytes) -> list[bytes | None]:
+    """`Drive.driveAt`'s answer: its blobs, each after its `u64` length."""
+    out, o = [], 0
+    while o + 8 <= len(b):
+        n = int.from_bytes(b[o:o + 8], "little")
+        out.append(b[o + 8:o + 8 + n])
+        o += 8 + n
+    return (out + [None] * 3)[:3]
 
 
 def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
@@ -126,6 +142,24 @@ def main(argv=None) -> int:
                 break
     p.stdin.close()
     p.wait()
+    p = subprocess.Popen([a.lean, "drive", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    for t in tables:
+        for f in sorted(a.dump.glob(f"table{t}-rep*.frame")):
+            r = int(re.fullmatch(rf"table{t}-rep(\d+)\.frame", f.name).group(1))
+            got, head = ask(p, f"drive {t} {r}", str(a.dump.resolve()).encode())
+            parts = blobs(got) if got is not None else [None] * 3
+            for what, gb, want in zip(DRIVE, parts, (f.with_suffix(".start"), f.with_suffix(".open"), f)):
+                want = want.read_bytes()
+                same = gb is not None and (json.loads(gb) == json.loads(want) if what == DRIVE[0] else gb == want)
+                row = {"what": f"table {t} rep {r} {what}", "ok": same, "lean": head, "bytes": len(want)}
+                if gb is not None and not same:
+                    row["first_diff"] = first_diff(gb, want)
+                rows.append(row)
+                ok &= row["ok"]
+            if got is None:
+                break
+    p.stdin.close()
+    p.wait()
     for t in tables:
         for f in sorted(a.dump.glob(f"table{t}-rep*.vals")):
             r = int(re.fullmatch(rf"table{t}-rep(\d+)\.vals", f.name).group(1))
@@ -135,8 +169,10 @@ def main(argv=None) -> int:
     reps = [r for r in rows if r["what"].endswith("proof file")]
     stops = [r for r in rows if r["what"].endswith(STOPPED)]
     skels = [r for r in rows if r["what"].endswith(SKELETON)]
-    ok &= bool(reps) and bool(stops) and len(skels) == len(reps)
+    drives = [r for r in rows if r["what"].endswith(DRIVE[2])]
+    ok &= bool(reps) and bool(stops) and len(skels) == len(reps) and len(drives) == len(reps)
     summary = {"ok": ok, "tables": len(tables), "reps": len(reps), "stops": len(stops), "skeletons": len(skels),
+               "drives": len(drives),
                "agree": sum(r["ok"] for r in rows), "rows": rows}
     (a.out / "result.json").write_text(json.dumps(summary, indent=1))
     for r in rows:

@@ -90,6 +90,7 @@ import Proofs.Flock.Claims.ZK.FrameOpen
 import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
+import Proofs.Flock.Claims.ZK.FrameState
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -113,6 +114,7 @@ import Proofs.Flock.Claims.ZK.FinishLive
 import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.FinishStopAt
 import Proofs.Flock.Claims.ZK.FinishSwSrc
+import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -551,6 +553,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
   `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
   (**`Masked.swCutE_masked_of_rowsAt`**).
+* `FinishSwSv`: that source's switched vectors. The switched view moves only pads, masked values and `Y₁`, so its `ŝ`
+  and region claims are the honest view's (`Table.swPre_sHat`, `Table.swPre_sReg`), and so are the switched source's
+  switched vectors (`Masked.swSrcE_sv`): `src_sv` holds there at every worker's values (**`Masked.swSrc_sv`**), the
+  switched vectors `repCut_fw`'s `hpiop` asks of it.
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
@@ -615,9 +621,16 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`L0Sent`, `l0Sent_ood`, `l0Sent_lane`, `l0Sent_pair`, `l0Sent_zero`), which the frame releases as the body at the
   pads (`L0Sent.release`, `L0Sent.roundHonest`, `L0Sent.roundFrames`); both openings, cut (`ligeritoPZk_cutL0_live`).
 * `FramePhase`: level 0's phase labels. The opening's label starts level 0's masked phase and its round leaves as it
-  came (`label_open`, `roundFree_open`; the binding, `openBind`, `LeanRelease.release_openBind`); level 0's closing
-  label, with every masked value absorbed and the `ρ` coins taken, ends it, the frames after it leaving as they came
-  (`label_close`, `roundFree_close`, `LeanRelease.release_close`).
+  came (`label_open`, `roundFree_open`; the binding, `openBind`, `roundFree_openBind`, `LeanRelease.release_openBind`);
+  level 0's closing label, with every masked value absorbed and the `ρ` coins taken, ends it, the frames after it
+  leaving as they came (`label_close`, `roundFree_close`, `LeanRelease.release_close`).
+* `FrameState`: the frame's state across level 0's opening. Where the scheduled round carries no free value, the state
+  the frame's `check` returns on any device round is the scheduled round's but for `stopped` (`check_l0`, from
+  `passes_eq`; the free offsets: `roundFree_on_fr`, `roundFree_openBind`), and under the transport's trust that within
+  a rep its state after a released round is its `check`'s (`LeanRelease.ProgChecks`; `answered_of_scheduled`) the
+  binding starts level 0's phase at the algebraic phase's position (`answered_openBind`), each masked round moves it
+  by its values (`answered_l0`), the pair's sums reach the layout's end and take `ρ_0` (`answered_l0_last`,
+  `answer_rho_first`), and `ρ_1`'s round takes `ρ_1` (`answered_rho1`), the state the closing round reads.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
