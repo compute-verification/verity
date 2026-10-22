@@ -55,7 +55,7 @@ theorem e_chunk (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β al a : ℕ
         (eqHalf pt.rho 0 (β + al - 6)).at ((a + 2 ^ β * (P % 2 ^ al)) / 64)) * hiE pt (β + al - 6) H (P / 2 ^ al) := by
   have hq := chunk_low (al := al) (P := P) ha
   unfold FoldPt.e hiE
-  rw [chunk_pos, split_mod _ _ _ h6, split_div _ _ _ h6, hT, eqTail_split' pt.rho _ _ _ hL (split_lo _ _ h6 hq)]
+  rw [chunk_pos, split_mod _ _ _ h6, split_div _ _ _ h6, hT, of_mul, eqTail_split' pt.rho _ _ _ hL (split_lo _ _ h6 hq)]
   simp only [of_mul]
   rw [eqHalf_at _ _ _ _ (split_lo _ _ h6 hq)]
   ring
@@ -192,16 +192,14 @@ theorem addChild_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → 
   rw [hsum_fold_bump ch.S o.S _ fun k v => (((rm k.1).1, (cm k.2).1), ls * v * (rm k.1).2 * (cm k.2).2),
     hsum_fold_bump ch.C o.C _ fun k v => ((rm k).1, lc * v * (rm k).2)]
   unfold hsum
-  simp only [of_mul, List.sum_map_mul_left, List.sum_map_mul_right]
-  have e1 : ∀ l : List ((ℕ × ℕ) × F128), (l.map fun e => of ls * of e.2 * of (rm e.1.1).2 * of (cm e.1.2).2 *
-      (hiE pt L H (rm e.1.1).1 * hiG pt L H (cm e.1.2).1)).sum =
-      of ls * (l.map fun e => of e.2 * (of (rm e.1.1).2 * hiE pt L H (rm e.1.1).1 *
-        (of (cm e.1.2).2 * hiG pt L H (cm e.1.2).1))).sum := by
-    intro l; rw [← List.sum_map_mul_left]; congr 1; refine List.map_congr_left fun e _ => ?_; ring
-  have e2 : ∀ l : List (ℕ × F128), (l.map fun e => of lc * of e.2 * of (rm e.1).2 * hiE pt L H (rm e.1).1).sum =
-      of lc * (l.map fun e => of e.2 * (of (rm e.1).2 * hiE pt L H (rm e.1).1)).sum := by
-    intro l; rw [← List.sum_map_mul_left]; congr 1; refine List.map_congr_left fun e _ => ?_; ring
-  rw [e1, e2]
+  have e1 : ∀ e : (ℕ × ℕ) × F128, of (ls * e.2 * (rm e.1.1).2 * (cm e.1.2).2) *
+      (hiE pt L H (rm e.1.1).1 * hiG pt L H (cm e.1.2).1) =
+      of ls * (of e.2 * (of (rm e.1.1).2 * hiE pt L H (rm e.1.1).1 * (of (cm e.1.2).2 * hiG pt L H (cm e.1.2).1))) := by
+    intro e; simp only [of_mul]; ring
+  have e2 : ∀ e : ℕ × F128, of (lc * e.2 * (rm e.1).2) * hiE pt L H (rm e.1).1 =
+      of lc * (of e.2 * (of (rm e.1).2 * hiE pt L H (rm e.1).1)) := by
+    intro e; simp only [of_mul]; ring
+  simp only [e1, e2, List.sum_map_mul_left]
   ring
 
 /-- **The re-key**: a child table at chunk origin `Hc = H · 2^(al' − alc) + oc / 2^alc` (offset `oc` a multiple of its
@@ -260,7 +258,16 @@ theorem bind_tabExp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (
         of (kf.2 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
           refX D pt s L H A B as gL pos iv kf.1 ((c.bound id j).toArray.getD e.1.1 0)).sum).sum := by
   unfold Tab.bind
-  exact fold_val (tabExp pt s L H iv) _ _ (fun o e v => foldl_ref_exp D pt s L H A B as gL pos iv _ v _ _ _ o) _ _
+  dsimp only
+  rw [fold_val (tabExp pt s L H iv) _ (fun e v => ((wk e.2.1 j).map fun kf =>
+      of (kf.2 * v * (rm e.2.2).2) * hiE pt L H (rm e.2.2).1 *
+        refX D pt s L H A B as gL pos iv kf.1 ((c.bound id j).toArray.getD e.1 0)).sum) ?_]
+  · rfl
+  · rintro o' ⟨t', kc, cx⟩ v
+    dsimp only
+    generalize rm cx = p
+    obtain ⟨px, fx⟩ := p
+    exact foldl_ref_exp D pt s L H A B as gL pos iv px v fx _ _ o'
 
 theorem bind_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (gl gc : GF128) (iv : ℕ → GF128) (c : Call) (o : Tab) (j : ℕ) (ch : Tab) (rm : ℕ → ℕ × F128)
@@ -270,6 +277,15 @@ theorem bind_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL
         of (kf.2 * e.2 * (rm e.1.2.2).2) * hiE pt L H (rm e.1.2.2).1 *
           refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1.1 0)).sum).sum := by
   unfold Tab.bind
-  exact fold_val (tabSum pt L H gl gc iv) _ _ (fun o e v => foldl_ref_sum D pt L H A B as gL pos gl gc iv _ v _ _ _ o) _ _
+  dsimp only
+  rw [fold_val (tabSum pt L H gl gc iv) _ (fun e v => ((wk e.2.1 j).map fun kf =>
+      of (kf.2 * v * (rm e.2.2).2) * hiE pt L H (rm e.2.2).1 *
+        refS D pt L H A gL pos gl gc iv kf.1 ((c.bound id j).toArray.getD e.1 0)).sum) ?_]
+  · rfl
+  · rintro o' ⟨t', kc, cx⟩ v
+    dsimp only
+    generalize rm cx = p
+    obtain ⟨px, fx⟩ := p
+    exact foldl_ref_sum D pt L H A B as gL pos gl gc iv px v fx _ _ o'
 
 end FlockSoundness.TmplFold
