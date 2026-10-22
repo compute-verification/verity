@@ -1,8 +1,9 @@
 import Flock.Tmpl
 
 /-!
-`flock-tmpl read TMPL` and `flock-tmpl diff TMPL CIRCUIT`: the templated unit's read (`Flock.Tmpl.parse`, its text's read,
-line split and form checks, O(description)), and the difftest of its unroll against the circuit file's flat unit:
+`flock-tmpl read TMPL`, `flock-tmpl unroll TMPL` and `flock-tmpl diff TMPL CIRCUIT`: the templated unit's read
+(`Flock.Tmpl.parse`, its text's read, line split and form checks, O(description)), the read then `Tmpl.unroll` (the flat
+net, through `Net.ofRows`'s matrices and checks: what a verifier that unrolls would hold), and the difftest of its unroll against the circuit file's flat unit:
 `Tmpl.unroll`, then each line `Tmpl.flatLines` would print compared byte for byte with the circuit's block of the same
 net name, read a line at a time. One `PHASE {json}` line per phase on stdout: milliseconds, RSS and peak RSS in MB.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
@@ -93,6 +94,15 @@ def diff (t : Tmpl.Tmpl) (n : Net) (circuit : String) : IO Bool := do
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["read", tp] => return if (← readTmpl tp).isSome then 0 else 1
+  | ["unroll", tp] =>
+    let some t ← readTmpl tp | return 1
+    let t0 ← IO.monoNanosNow
+    match Tmpl.unroll t with
+    | .error e => report "unroll" t0 [("error", Json.str e)]; return 1
+    | .ok n =>
+      report "unroll" t0 [("useful", toJson n.useful), ("nnz", toJson ((n.a.data.size + n.b.data.size) / 4)),
+        ("unit_log", toJson n.unitLog)]
+      return 0
   | ["diff", tp, circuit] =>
     let some t ← readTmpl tp | return 1
     let t0 ← IO.monoNanosNow
@@ -102,4 +112,4 @@ def main (args : List String) : IO UInt32 := do
       report "unroll" t0 [("useful", toJson n.useful), ("nnz", toJson ((n.a.data.size + n.b.data.size) / 4)),
         ("unit_log", toJson n.unitLog)]
       return if ← diff t n circuit then 0 else 1
-  | _ => IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl diff TMPL CIRCUIT"; return 2
+  | _ => IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT"; return 2

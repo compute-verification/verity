@@ -3,7 +3,8 @@
 # `python -m verity_flock.struct_lower` lowers the unit with each specialized Definition once and its calls kept as calls,
 # writes it as flock-ir-tmpl/v1 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
 # Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
-# --check K, the unit at K is unrolled and evaluated against the flat lowering first. Run from a clone:
+# --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
+# template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl). Run from a clone:
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
 # $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
@@ -31,7 +32,13 @@ root = "Main"
 EOF
 (cd "$S/tmpl" && lake build flock-tmpl) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
 X=$S/tmpl/.lake/build/bin/flock-tmpl
+unroll=0
 while [ $# -gt 0 ]; do
+  if [ "$1" = --unroll ]; then
+    unroll=1
+    shift
+    continue
+  fi
   if [ "$1" = --check ]; then
     k=$2
     shift 2
@@ -50,6 +57,12 @@ while [ $# -gt 0 ]; do
   /usr/bin/time -v "$X" read "$t" > "$O/read-$tag.out" 2> "$O/read-time-$tag.txt" \
     || { cat "$O/read-$tag.out" "$O/read-time-$tag.txt" >&2; exit 1; }
   grep '^PHASE ' "$O/read-$tag.out" | sed 's/^PHASE //' | tee "$O/read-$tag.jsonl"
+  if [ $unroll = 1 ]; then
+    /usr/bin/time -v "$X" unroll "$t" > "$O/unroll-$tag.out" 2> "$O/unroll-time-$tag.txt" \
+      || { cat "$O/unroll-$tag.out" "$O/unroll-time-$tag.txt" >&2; exit 1; }
+    grep '^PHASE ' "$O/unroll-$tag.out" | sed 's/^PHASE //' | tee "$O/unroll-$tag.jsonl"
+    grep -E 'Maximum resident|Elapsed' "$O/unroll-time-$tag.txt"
+  fi
   grep -E 'Maximum resident|Elapsed' "$O"/{struct,read}-time-$tag.txt
   [ "$(stat -c %s "$t")" -lt 1000000000 ] && mv "$t" "$O/" || rm -f "$t"
 done
