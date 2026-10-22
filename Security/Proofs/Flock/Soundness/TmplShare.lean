@@ -29,7 +29,7 @@ theorem slotBase_net (st : Stmt) (alpha : F128) (lw rho : Array F128) {i sl : �
     (h : (st.c.nets.getD i default).2.unitLog = sl) :
     st.slotBase alpha lw rho (.net i, sl) = .ok (Stmt.baseOf alpha (Stmt.tensor lw (rho.extract 0 (sl - 6)))
       (st.c.nets.getD i default).2.a (st.c.nets.getD i default).2.b (st.c.nets.getD i default).2.lookup sl) := by
-  subst h; simp [Stmt.slotBase]
+  subst h; simp [Stmt.slotBase, pure, Except.pure]
 
 /-- **A templated unit's share is the projection of its slot's base**: what `unitShare` returns is the range's net's
 slot base, projected, entry by entry. -/
@@ -59,6 +59,81 @@ theorem unitShare_get {st : Stmt} {alpha : F128} {lw rho rr p : Array F128} {r :
     · simp at h
   · simp at h
 
+/-- The slot-type lookup `partialRanges` and `partialRangesT` share. -/
+def slotLook (st : Stmt) (alpha : F128) (lw rho : Array F128) (key : Kind × ℕ)
+    (b : Array ((Kind × ℕ) × Array F128)) :
+    V (Array F128 × Array ((Kind × ℕ) × Array F128)) :=
+  match b.find? (fun kb => decide (kb.1 = key)) with
+  | some (_, y) => pure (y, b)
+  | none => do
+    let y ← st.slotBase alpha lw rho key
+    pure (y, b.push (key, y))
+
+/-- A range's step on the 64 entries, its share `p`. -/
+def rangeAcc (r : Range) (rho rr out p : Array F128) : Array F128 :=
+  Array.ofFn (n := 64) fun s => out[s.val]! + Stmt.sumUpTo r.count (fun k =>
+    (eqTable (rho.extract (r.slotLog - 6) rho.size))[r.pos0 + k]! *
+      (eqTable (rr.extract (r.slotLog - 6) rr.size))[r.pos0 + k]!) * p[s.val]!
+
+theorem partialRanges_cons (st : Stmt) (alpha : F128) (lw rho rr : Array F128) (r : Range) (rs : List Range)
+    (b : Array ((Kind × ℕ) × Array F128)) (out : Array F128) :
+    st.partialRanges alpha lw rho rr (r :: rs) b out = (slotLook st alpha lw rho (r.kind, r.slotLog) b >>= fun x =>
+      st.partialRanges alpha lw rho rr rs x.2
+        (rangeAcc r rho rr out (Stmt.project x.1 (eqTable (rr.extract 0 (r.slotLog - 6)))))) := by
+  rw [Stmt.partialRanges]; unfold slotLook
+  cases Array.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) b with
+  | some kb => rfl
+  | none => cases st.slotBase alpha lw rho (r.kind, r.slotLog) <;> rfl
+
+theorem partialRangesT_some (st : Stmt) (alpha : F128) (lw rho rr : Array F128) {r : Range} (rs : List Range)
+    (b : Array ((Kind × ℕ) × Array F128)) (out : Array F128) {p : Array F128}
+    (h : st.unitShare alpha lw rho rr r = some p) :
+    st.partialRangesT alpha lw rho rr (r :: rs) b out =
+      st.partialRangesT alpha lw rho rr rs b (rangeAcc r rho rr out p) := by
+  rw [Stmt.partialRangesT, h]; rfl
+
+theorem partialRangesT_none (st : Stmt) (alpha : F128) (lw rho rr : Array F128) {r : Range} (rs : List Range)
+    (b : Array ((Kind × ℕ) × Array F128)) (out : Array F128) (h : st.unitShare alpha lw rho rr r = none) :
+    st.partialRangesT alpha lw rho rr (r :: rs) b out = (slotLook st alpha lw rho (r.kind, r.slotLog) b >>= fun x =>
+      st.partialRangesT alpha lw rho rr rs x.2
+        (rangeAcc r rho rr out (Stmt.project x.1 (eqTable (rr.extract 0 (r.slotLog - 6)))))) := by
+  rw [Stmt.partialRangesT, h]; dsimp only; unfold slotLook
+  cases Array.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) b with
+  | some kb => rfl
+  | none => cases st.slotBase alpha lw rho (r.kind, r.slotLog) <;> rfl
+
+theorem slotLook_ok {st : Stmt} {alpha : F128} {lw rho : Array F128} {key : Kind × ℕ} {y : Array F128}
+    {b : Array ((Kind × ℕ) × Array F128)} (hb : CacheOk st alpha lw rho b)
+    (hy : st.slotBase alpha lw rho key = .ok y) :
+    ∃ b', CacheOk st alpha lw rho b' ∧ slotLook st alpha lw rho key b = .ok (y, b') := by
+  unfold slotLook
+  cases hf : b.find? (fun kb => decide (kb.1 = key)) with
+  | some kb =>
+    have hk := Array.find?_some hf
+    have hkey : kb.1 = key := of_decide_eq_true hk
+    have h := hb kb (Array.mem_of_find?_eq_some hf)
+    rw [hkey, hy, Except.ok.injEq] at h
+    subst h
+    exact ⟨b, hb, rfl⟩
+  | none =>
+    refine ⟨_, cacheOk_push hb hy, ?_⟩
+    simp only [bind, Except.bind, hy, pure, Except.pure]
+
+theorem slotLook_error {st : Stmt} {alpha : F128} {lw rho : Array F128} {key : Kind × ℕ} {e : String}
+    {b : Array ((Kind × ℕ) × Array F128)} (hb : CacheOk st alpha lw rho b)
+    (he : st.slotBase alpha lw rho key = .error e) :
+    slotLook st alpha lw rho key b = .error e := by
+  unfold slotLook
+  cases hf : b.find? (fun kb => decide (kb.1 = key)) with
+  | some kb =>
+    have hk := Array.find?_some hf
+    have hkey : kb.1 = key := of_decide_eq_true hk
+    have h := hb kb (Array.mem_of_find?_eq_some hf)
+    rw [hkey, he] at h
+    cases h
+  | none =>
+    simp only [bind, Except.bind, he]
+
 /-- **The templated fold is the flat one**: `partialRangesT` is `partialRanges`, on any two caches of `slotBase`'s
 values. -/
 theorem partialRangesT_eq (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : ∀ (rs : List Range)
@@ -70,7 +145,6 @@ theorem partialRangesT_eq (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : 
   | nil => intro b1 b2 out _ _; rfl
   | cons r rs ih =>
     intro b1 b2 out h1 h2
-    simp only [Stmt.partialRangesT, Stmt.partialRanges]
     cases hu : st.unitShare alpha lw rho rr r with
     | some p =>
       obtain ⟨i, hk, hsl, hp⟩ := unitShare_get hu
@@ -78,62 +152,23 @@ theorem partialRangesT_eq (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : 
           (Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) (st.c.nets.getD i default).2.a
           (st.c.nets.getD i default).2.b (st.c.nets.getD i default).2.lookup r.slotLog) := by
         rw [hk]; exact slotBase_net st alpha lw rho hsl
-      have hout : ∀ (b : Array F128), st.slotBase alpha lw rho (r.kind, r.slotLog) = .ok b →
-          (Array.ofFn (n := 64) fun s => out[s.val]! + Stmt.sumUpTo r.count (fun k =>
-            (eqTable (rho.extract (r.slotLog - 6) rho.size))[r.pos0 + k]! *
-              (eqTable (rr.extract (r.slotLog - 6) rr.size))[r.pos0 + k]!) * p[s.val]!) =
-          (Array.ofFn (n := 64) fun s => out[s.val]! + Stmt.sumUpTo r.count (fun k =>
-            (eqTable (rho.extract (r.slotLog - 6) rho.size))[r.pos0 + k]! *
-              (eqTable (rr.extract (r.slotLog - 6) rr.size))[r.pos0 + k]!) *
-              (Stmt.project b (eqTable (rr.extract 0 (r.slotLog - 6))))[s.val]!) := by
-        intro b hb
-        rw [hsb, Except.ok.injEq] at hb
-        subst hb
-        exact congrArg (fun f => Array.ofFn (n := 64) f) (funext fun s => by rw [hp s.val s.isLt])
-      cases hf : b2.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
-      | some kb =>
-        have hkey : kb.1 = (r.kind, r.slotLog) := of_decide_eq_true (Array.find?_some hf)
-        have hkb : st.slotBase alpha lw rho (r.kind, r.slotLog) = .ok kb.2 := by
-          rw [← hkey]; exact h2 kb (Array.mem_of_find?_eq_some hf)
-        simp only [bind, Except.bind, pure, Except.pure]
-        rw [hout kb.2 hkb]
-        exact ih b1 b2 _ h1 h2
-      | none =>
-        simp only [bind, Except.bind, pure, Except.pure, hsb]
-        rw [hout _ hsb]
-        exact ih b1 _ _ h1 (cacheOk_push h2 hsb)
+      obtain ⟨b2', hb2', he2⟩ := slotLook_ok h2 hsb
+      rw [partialRangesT_some st alpha lw rho rr rs b1 out hu, partialRanges_cons, he2]
+      have ha : rangeAcc r rho rr out p = rangeAcc r rho rr out (Stmt.project (Stmt.baseOf alpha
+          (Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) (st.c.nets.getD i default).2.a
+          (st.c.nets.getD i default).2.b (st.c.nets.getD i default).2.lookup r.slotLog)
+          (eqTable (rr.extract 0 (r.slotLog - 6)))) :=
+        congrArg (fun f => Array.ofFn (n := 64) f) (funext fun s => by rw [hp s.val s.isLt])
+      rw [ha]
+      exact ih b1 b2' _ h1 hb2'
     | none =>
-      simp only [bind, Except.bind, pure, Except.pure]
+      rw [partialRangesT_none st alpha lw rho rr rs b1 out hu, partialRanges_cons]
       cases hsb : st.slotBase alpha lw rho (r.kind, r.slotLog) with
       | error e =>
-        have hn : ∀ b, CacheOk st alpha lw rho b → b.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) = none := by
-          intro b hb
-          cases hf : b.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
-          | none => rfl
-          | some kb =>
-            have hkey : kb.1 = (r.kind, r.slotLog) := of_decide_eq_true (Array.find?_some hf)
-            have := hb kb (Array.mem_of_find?_eq_some hf)
-            rw [hkey, hsb] at this
-            cases this
-        rw [hn b1 h1, hn b2 h2]
-      | ok x =>
-        have hv : ∀ b, CacheOk st alpha lw rho b → ∃ b', CacheOk st alpha lw rho b' ∧
-            (match b.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
-              | some (_, y) => (Except.ok (y, b) : V (Array F128 × Array ((Kind × ℕ) × Array F128)))
-              | none => match st.slotBase alpha lw rho (r.kind, r.slotLog) with
-                | .error e => .error e
-                | .ok y => .ok (y, b.push ((r.kind, r.slotLog), y))) = .ok (x, b') := by
-          intro b hb
-          cases hf : b.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
-          | some kb =>
-            have hkey : kb.1 = (r.kind, r.slotLog) := of_decide_eq_true (Array.find?_some hf)
-            have := hb kb (Array.mem_of_find?_eq_some hf)
-            rw [hkey, hsb] at this
-            cases this
-            exact ⟨b, hb, rfl⟩
-          | none => exact ⟨_, cacheOk_push hb hsb, by rw [hsb]⟩
-        obtain ⟨b1', hb1', he1⟩ := hv b1 h1
-        obtain ⟨b2', hb2', he2⟩ := hv b2 h2
+        rw [slotLook_error h1 hsb, slotLook_error h2 hsb]; rfl
+      | ok y =>
+        obtain ⟨b1', hb1', he1⟩ := slotLook_ok h1 hsb
+        obtain ⟨b2', hb2', he2⟩ := slotLook_ok h2 hsb
         rw [he1, he2]
         exact ih b1' b2' _ hb1' hb2'
 
