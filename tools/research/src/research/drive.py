@@ -302,10 +302,16 @@ def _each(fn, items: list, jobs: int = STATUS_JOBS) -> list:
         return list(ex.map(fn, items))
 
 
-def cancel_runs(repo: Path, ids: list[str], reason: str) -> None:
+def cancel_runs(repo: Path, ids: list[str], reason: str) -> dict[str, str]:
+    """`research cancel` of each of ``ids``: {run id: why} of each cancel that failed (21 Oct: drive's cancels of a rebuilt
+    train's queued touched-suites runs failed unseen, and 12 of them held vy-nebius-2's agent-test line for hours; CI-146)."""
+    failed = {}
     for rid in ids:
-        subprocess.run([sys.executable, "-m", "research", "cancel", rid, "--by", "ci", "--reason", reason], cwd=repo,
-                       capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-m", "research", "cancel", rid, "--by", "ci", "--reason", reason], cwd=repo,
+                           capture_output=True, text=True)
+        if r.returncode:
+            failed[rid] = (r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}"
+    return failed
 
 
 def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
@@ -585,7 +591,7 @@ class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
-                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], None] = cancel_runs,
+                 now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], dict[str, str] | None] = cancel_runs,
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, defer: frozenset[str] = frozenset(),
                  regenerate_locks: bool = False, per_pr_shadow: int = 0):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
@@ -1600,6 +1606,19 @@ class Driver:
             drive.get("resent", {}).pop(c, None)
             self.q.log(f"research queue drive: cancelled {' '.join(live)}: {why}")
 
+    def _cancel_orphans(self, drive: dict) -> None:
+        """Cancel again each run whose cancel failed (`drive["orphans"]`, run id: why) while it is still queued or running; one
+        that has ended, or that is cancelled now, leaves the list, so no run of a train drive dropped is left holding a line."""
+        orphans = drive.get("orphans") or {}
+        if not orphans:
+            return
+        live = [rid for rid, (st, *_) in self._states(list(orphans)).items() if st in ACTIVE and st != "unknown"]
+        why = f"drive: a run of a train no longer on `{self.q.branch}`; an earlier cancel failed"
+        stuck = (self.cancel(self.repo, live, why) or {}) if live else {}
+        drive["orphans"] = {rid: orphans[rid] for rid in stuck}
+        if gone := [r for r in live if r not in stuck]:
+            self.q.log(f"research queue drive: cancelled {' '.join(gone)} on a retry: their trains left `{self.q.branch}`")
+
     def _launch(self, drive: dict, m: Member, main: str) -> tuple[list[str], str]:
         """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
         the launch: (the check's run ids, train.sh's output's tail)."""
@@ -2075,14 +2094,20 @@ class Driver:
                         c.get("handle"))
         on_chain = {m.commit for m in members}
         following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
+        if not dry_run:
+            self._cancel_orphans(drive)
         for c, v in drive["launched"].items():
             if c not in on_chain and not dry_run and not set(v["ids"]) & following:
                 live = [rid for rid, (st, *_) in self._states([*v["ids"], *(v.get("touched") or [])]).items()
                         if st in ACTIVE and st != "unknown"]
                 if live:                                   # a failed one too: drive acted on its failure, and its slot is a
                                                            # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)
-                    self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
-                    q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
+                    why = f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands"
+                    stuck = self.cancel(self.repo, live, why) or {}
+                    drive.setdefault("orphans", {}).update({rid: why for rid in stuck})
+                    q.log(f"research queue drive: cancelled {' '.join(r for r in live if r not in stuck) or 'none'}: "
+                          f"{c[:12]} is no longer on `{q.branch}`"
+                          + "".join(f"; {rid}'s cancel failed ({e[-160:]}): it is retried each tick" for rid, e in stuck.items()))
         for c, v in drive.get("base", {}).items():
             if (c != main or v["for"] not in on_chain) and not dry_run:
                 if live := [rid for rid, (st, *_) in self._states(v["ids"]).items() if st in ACTIVE and st != "unknown"]:
