@@ -98,6 +98,7 @@ import Proofs.Flock.Claims.ZK.FramePass
 import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.FrameProg
+import Proofs.Flock.Claims.ZK.FrameCount
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -711,6 +712,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   placeholder's check of its alike scheduled round against itself releases one from the same state, its state the same
   but for `stopped` (`check_alike_self`), and the loop's frame state one scheduled round on is that check's
   (`repState_step`), so `ProgChecks`' step holds at a scheduled round past a rep's first (`ofLoop_progChecks_step`).
+* `FrameCount`: the algebraic phase's scheduled rounds squeeze the masked replay's counts (`rounds_counts`,
+  `piop_counts`: `replayCoins` with its zeros dropped), each round's count as its squeeze header holds it (`Tally`, over
+  the recording channel `Skeleton.recAsks`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
