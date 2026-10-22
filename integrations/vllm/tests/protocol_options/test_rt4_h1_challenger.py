@@ -11,7 +11,7 @@
   window outside it and a window of it abandoned after its coins are refused.
 * RT4-INT-19: the window's draw coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early draw, a draw from another family and a session closed with no draw are refused.
-* RT4-INT-20: round s's root commits the A, y and z tables of its calls and round s - 1's receipts.
+* RT4-INT-20: round s's root commits the A and z tables of its calls and round s - 1's receipts.
 * RT4-INT-21: a window whose coins were held in the serving process is no session's and credits nothing; pouw-serve
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * RT4-INT-22: a window admits in round 0 only unless its ``admission`` is ``per-round``.
@@ -654,8 +654,8 @@ def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_
         "the challenger's session closed with no draw coin opened, so the window has no draw of the challenger's")
 
 
-def test_round_roots_commit_the_windows_a_y_and_z_and_the_receipts_before_them(monkeypatch):
-    """RT4-INT-20: round s's root, the one round s's coin follows, changes with the A the window serves (its A, y and z
+def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(monkeypatch):
+    """RT4-INT-20: round s's root, the one round s's coin follows, changes with the A the window serves (its A and z
     tables are in the step's manifest rows), is the same for the same A, and changes with round s - 1's receipts."""
     monkeypatch.setattr(PH.os, "urandom", lambda n: bytes(n))
     served = [_serve(T._settings(), seed) for seed in (9, 10, 9)]
@@ -696,7 +696,7 @@ def test_round_roots_commit_the_windows_a_y_and_z_and_the_receipts_before_them(m
     with pytest.raises(RuntimeError, match="after the root that commits round 1's receipts"):
         signed.receipt(2, b"\4" * 64)
     row = signed.manifest()[1]
-    assert set(row["tables"]) == {"a", "y", "z"} and row["tables"]["z"] is None and row["tables"]["y"] is None
+    assert set(row["tables"]) == {"a", "z"} and row["tables"]["z"] is None
     assert signed.manifest()[-1]["tables"]["a"] != row["tables"]["a"]
 
 

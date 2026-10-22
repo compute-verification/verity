@@ -377,6 +377,8 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["serve"] = {"ok": serve_doc["ok"], "u": h.get("u"), "same_tokens": h.get("same_tokens"),
                         "decode_step_s_median": h.get("decode_step_s_median"), "close_s": h.get("close_s"),
                         "handoff": h.get("handoff"), "a_roots": (h.get("requests") or {}).get("a_roots"),
+                        "credit": h.get("credit"), "step_rows": h.get("step_rows"),
+                        "z_exact": [z.get("y_exact") for z in h.get("z") or []],
                         "challenger": h.get("challenger"), "served": {k: v for k, v in (h.get("served") or {}).items()
                                                                       if k != "entries"},
                         "served_values": [(e["value"], e["leaves"], e["words"]) for e in (h.get("served") or {}).get("entries", [])]}
