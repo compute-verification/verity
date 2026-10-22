@@ -8,8 +8,8 @@ The per-target tests are marked `circuit_suite` and collected only under `-m cir
 same checks as `circuit-check --all`.
 
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
-that runs one builds circuit-check's catalog first (conftest.py), in seconds from `check`'s records and in about 40 minutes
-without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+that runs one builds circuit-check's catalog first (conftest.py), in about 8 minutes from `check`'s records and in about an
+hour without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
 """
 from __future__ import annotations
 
