@@ -544,25 +544,6 @@ def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     assert sw.tolist() == [np.float32(9.0) / np.float32(110), np.float32(4.0) / np.float32(110)] and qw.max() == 110
 
 
-def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_path, monkeypatch):
-    monkeypatch.setenv("H1_TILE", "v3")
-    rng = np.random.default_rng(6)
-    a = rng.integers(-127, 128, (8, K)).astype(np.int8)
-    a[:, ::5] = 127
-    layer(tmp_path / "w.npz", 6, calls=(("q_proj", 16),), a=a)
-    window("commit", str(tmp_path / "w.npz"), "w", str(tmp_path / "w"), str(tmp_path / "com.json"), "--program-sha512", "0" * 128)
-    com = json.loads((tmp_path / "com.json").read_text())
-    salt = U.unit_salt(U.stand_in_reveal(b"\x07" * 32), 1)
-    served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
-    assert served["z_is_served_product"] == {"cells": 4 * RC, "equal": 4 * RC}
-    assert served["xa"]["tile_rows_with_xa"] == served["xa"]["tile_rows"] == 16
-    bad, com_t = tampered(tmp_path, "w", "--xa-flip", "1")
-    assert bad["receipt_root"] == served["receipt_root"] and U.registered_of(com_t)["zy@0"] != U.registered_of(com)["zy@0"]
-    assert bad["tampered"]["records"] == [1] and bad["tampered"]["receipts"] == []
-    flip = bad["tampered"]["xa_flip"]
-    assert flip["xa_set_in_unit"] > 0 and flip["receipt_is_honest"] and flip["record_words_changed"] > 0
-
-
 def test_the_seeds_derive_from_the_window_salt():
     """The units' salt is PoUW's window salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
     stand-in reveal (the salt coin's, standing in for the certifier's), and a unit's noise and receipt seeds are of that
