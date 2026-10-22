@@ -80,9 +80,12 @@ the decodes and of the registered files the verifier hands the 33 sessions:
   decode to one leaf and one partials record;
 * the known content the verifier hands each session (`known x w i k`) is each lane's salt, position, roots, admit bits
   and index `l` (distinct `l = 0..31`), and every statement's `ok` row, at the ports the decodes read them from
-  (#3131's `SampledProofs.Produced.known`). That the registrants' rows at those ports are that content is no longer
-  asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it from flock-verify's known-content check
-  (`Flock.Registered.checkKnownAll`) unless the known-content tie collides (`LeafKnownColl`). -/
+  (#3131's `SampledProofs.Produced.known`). `LeafLanesSound` fixes it to those rows of the path's public inputs
+  (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), where they fix the decodes' admit, salt, position,
+  roots, index and `ok` fields (`Accounting.TS.Lanes.laneKnownHolds`, `combKnownOk`). That the registrants' rows at
+  those ports are that content is no longer asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it
+  from flock-verify's known-content check (`Flock.Registered.checkKnownAll`) unless the known-content tie collides
+  (`LeafKnownColl`). -/
 def LeafReads {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
     (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)

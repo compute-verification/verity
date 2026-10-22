@@ -145,11 +145,34 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
 
 end Accounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
-/-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`). -/
-theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw Pub sess out known ok dq part decL decC pub parts receipt leaf right δ hCR hLaw hk hN hS hok hδ
-    hδ0 hC hSh
+open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open Pouw.RelativeSecurity (Paths) in
+open scoped ENNReal in
+/-- **A leaf's 33 linked C-Flock sessions realize one unit, at any public inputs and known content**: the leaf layer is
+sound at `33 δ` under `Accounting.Guarantees.TS.LeafLanesSound`'s hypotheses with any type `Pub` of public inputs and
+any known content `known` (the guarantee's is `knownOf` of the path's public inputs). -/
+theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ} {Pub : Type}
+    (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
+    (out : ∀ x w i k, (sess x w i k).Out) (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
+    (ok : String) (dq : List ℤ → ℤ)
+    (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
+    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
+    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
+    (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
+    (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
+    (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ)
+    (hCR : ∀ x w i k, (sess x w i k).CR)
+    (hLaw : ∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k))
+    (hk : ∀ x w i k, (sess x w i k).kd = (sess x w i k).n)
+    (hN : ∀ x w i k (q q' : Fin (sess x w i k).c.ports.size),
+      (sess x w i k).c.ports[q].name = (sess x w i k).c.ports[q'].name → q = q')
+    (hS : ∀ x w i k u, (sess x w i k).ServedRegistered u)
+    (hok : ∀ x w i k, (∃ q : Fin (sess x w i k).c.ports.size, (sess x w i k).c.ports[q].name = ok) ∧
+      ∃ pt ∈ (sess x w i k).own, pt.name = ok)
+    (hδ : ∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ)
+    (hC : ∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) decL decC)
+    (hSh : Accounting.Assumptions.TS.LeafReads sess known decL decC pub parts receipt leaf) :
+    (leafLayer sess out known dq part pub receipt leaf right).SoundAt (33 * δ) := by
   have hSound : ∀ k, (checkedLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
       (fun _ _ => True)).SoundAt δ := fun k =>
     (Accounting.SecurityProofs.TS.CheckedSessionSound (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
@@ -192,3 +215,11 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
           (Pouw.RelativeSecurity.prob_or_le _ _).trans
             ((add_le_add (hSound k w i) (hUndrawn k w i)).trans (add_zero δ).le)
     _ = 33 * δ := by simp
+
+open Accounting.TS.Lanes in
+/-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
+`leafLanes_soundAt` at the known content of the path's public inputs (`knownOf`). -/
+theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
+  intro Ω _ S nπ K nw sess out salts ok dq part decL decC pub parts receipt leaf right δ
+  exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k) ok dq part decL decC pub parts
+    receipt leaf right δ
