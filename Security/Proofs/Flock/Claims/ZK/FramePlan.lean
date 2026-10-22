@@ -345,8 +345,7 @@ theorem plan_sched (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.S
     (hph : Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi))
     (hs : Loop.schedSoFar t (k % 2) dom xs hi cr = .ok sched) (hlt : i < sched.size)
     (hpts : link.size / sts[k / 2]!.mPts = spec.points) (hdom : dom.size < 2 ^ 64)
-    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
-    (hx : spec.points * sts[k / 2]!.regions.size + 2 < 2 ^ 64) :
+    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64) :
     (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD i 0 = (sched.getD i (.empty, 0)).2 := by
   obtain ⟨hts, ⟨tp, hsch⟩, hxs⟩ := placeholder_tab hph
   have hxn : xs.size = spec.points * sts[k / 2]!.regions.size := by
@@ -357,7 +356,7 @@ theorem plan_sched (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.S
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
   have hpre := sched_prefix t (k % 2) dom xs hi cr sched hs hdom hdg hcn (by rw [hts]; exact Nat.lt_trans hm (by decide))
-    (by omega) hk hn hq
+    hx hk hn hq
   rw [hts, hxn] at hpre
   refine getD_of_prefix (hpre.trans ?_) hlt
   rw [repPlan_list hsch, Nat.add_comm]
