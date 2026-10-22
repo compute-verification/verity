@@ -121,9 +121,10 @@ noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
 
 /-- **The scheduled round in the device's place after the decoded coins `cs`** at `x`, on the rep's own table and salts
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
-salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. None past the rep's
-schedule (the inner proof's rounds, whose round the firewall sends itself), where the schedule is refused, or where `x`
-sets up no session. -/
+salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. The empty round where
+the rep's table or its schedule is refused: the loop has no round there (`Frames.placeOf` refuses it, and the session
+stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, whose round
+the firewall sends itself), or where `x` sets up no session. -/
 noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) :
     Option ByteArray :=
   match FlockDeploy.setupOf true x, cs.length with
@@ -136,8 +137,8 @@ noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) 
       match schedSoFar t (ki.1 % 2) (spec.domain (spec.tables[ki.1 / 2]!) (ki.1 % 2)).toUTF8
           (_root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st (wordsAt x cs 0))) hi cr with
       | .ok sched => sched[ki.2]?.map (·.1)
-      | .error _ => none
-    | .error _ => none
+      | .error _ => some .empty
+    | .error _ => some .empty
   | _, _ => none
 
 /-- Round `j`'s rep at `x`: rep round `j - 2`'s stream (`CoinLayer.locate`), past `Hello` and the link. -/

@@ -565,6 +565,36 @@ theorem schedOf_eq (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array 
   simp only [hreal, hs, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.map_some,
     Option.getD_some]
 
+/-- Where the located rep's own table is refused, the loop has no round in the device's place: the empty round. -/
+theorem schedOf_real_error (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (x : Msg)
+    (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1) {e : String}
+    (hreal : real (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = .error e) :
+    schedOf real x cs = some .empty := by
+  unfold schedOf
+  rw [hx, hq]
+  simp only [hreal]
+
+/-- Where the located rep's schedule so far is refused, the loop has no round in the device's place: the empty
+round. -/
+theorem schedOf_sched_error (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (x : Msg)
+    (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
+    {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    (hreal : real (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = .ok (t, hi)) {e : String}
+    (hs : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
+      (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
+        ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
+      (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+          (wordsAt x cs 0))) hi
+      ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
+        fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1)) = .error e) :
+    schedOf real x cs = some .empty := by
+  unfold schedOf
+  rw [hx, hq]
+  simp only [hreal, hs]
+
 /-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero draws at `Drive.start`'s layout
 and mask slot, the stream's domain and the extra claims at the link points. -/
 theorem placeholder_ok {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link : Array F128} {c' : Cfg}
@@ -626,10 +656,11 @@ theorem repState_zero_owed (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep
     split_ifs <;> rfl
 
 /-- **The loop's frame state owes coins only at a rep's round past its first**: after the decoded coins `cs`, where `x`
-sets up a session and `cs` holds `q + 1` coins, at rep stream `k`'s round `j + 1`. -/
+sets up a session and `cs` holds `q + 1` coins, at rep stream `k`'s round `j + 1`, whose placeholder is one. -/
 theorem progOf_owed (x : Msg) (cs : List FlockDeploy.Coin) (ho : (progOf x cs).owed ≠ none) :
-    ∃ s0 spec sts q k j, FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ cs.length = q + 1 ∧
-      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) := by
+    ∃ s0 spec sts q k j c' t dom xs hi, FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ cs.length = q + 1 ∧
+      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) ∧
+      placeholder spec sts k (wordsAt x cs 0) = .ok (c', t, dom, xs, hi) := by
   rcases hx : FlockDeploy.setupOf true x with _ | ⟨s0, spec, sts⟩
   · exact absurd (show (progOf x cs).owed = none by unfold progOf; rw [hx]) ho
   · rcases hq : cs.length with _ | q
@@ -645,7 +676,15 @@ theorem progOf_owed (x : Msg) (cs : List FlockDeploy.Coin) (ho : (progOf x cs).o
           obtain ⟨c, t, dom, xs, hi⟩ := r
           rw [progOf_at x cs hx hq hph, hl]
           exact repState_zero_owed _ _ _ _ _ _ _ _ _
-      · exact ⟨s0, spec, sts, q, k, j, rfl, rfl, hl⟩
+      · cases hph : placeholder spec sts k (wordsAt x cs 0) with
+        | error e =>
+          refine absurd ?_ ho
+          unfold progOf
+          rw [hx, hq]
+          simp only [hl, hph]
+        | ok r =>
+          obtain ⟨c', t, dom, xs, hi⟩ := r
+          exact ⟨s0, spec, sts, q, k, j, c', t, dom, xs, hi, rfl, rfl, hl, hph⟩
 
 end Loop
 
@@ -843,8 +882,9 @@ theorem ofLoop_progChecks_round (T : ZKMal.CoinLayer.TableData)
     (h : List (Msg × Msg)) {m : Masker} {out : ByteArray}
     (hA : (ofLoop T L₀ real).answered x ρ h = .ok m)
     (hex : ∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why)) :
-    ∃ e0 h1 s0 spec sts q k j, h = e0 :: h1 ∧ FlockDeploy.setupOf true x = some (s0, spec, sts) ∧
-      h1.length = q + 1 ∧ ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) := by
+    ∃ e0 h1 s0 spec sts q k j c' t dom xs hi, h = e0 :: h1 ∧ FlockDeploy.setupOf true x = some (s0, spec, sts) ∧
+      h1.length = q + 1 ∧ ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) ∧
+      placeholder spec sts k (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi) := by
   obtain ⟨v, s', why, hv⟩ := hex
   cases h with
   | nil =>
@@ -860,9 +900,35 @@ theorem ofLoop_progChecks_round (T : ZKMal.CoinLayer.TableData)
     (coinsAt x (e0 :: h1)) = .ok m at hF
   by_cases ho : (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).owed = none
   · exact absurd hF (answer_owed_none _ ho)
-  · obtain ⟨s0, spec, sts, q, k, j, hx, hq, hl⟩ := progOf_owed x _ ho
+  · obtain ⟨s0, spec, sts, q, k, j, c', t, dom, xs, hi, hx, hq, hl, hph⟩ := progOf_owed x _ ho
     rw [List.length_map] at hq
-    exact ⟨e0, h1, s0, spec, sts, q, k, j, rfl, hx, hq, hl⟩
+    exact ⟨e0, h1, s0, spec, sts, q, k, j, c', t, dom, xs, hi, rfl, hx, hq, hl, hph⟩
+
+open Loop in
+/-- **Where the loop has no round in the device's place, the frame's check refuses every device round**: after a
+history past `Hello` whose round's scheduled round is the empty round (`schedOf`, where the rep's table or schedule is
+refused). -/
+theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg))
+    (hs : schedOf (real x w ρ) x (h1.map fun p => ZKMal.CoinLayer.rd p.2) = some .empty) (m : Masker) (st : Bool)
+    (v : Msg) (q : ByteArray × Masker × Option String) :
+    (ofLoop T L₀ real).checkAt x w ρ (e0 :: h1) m st v ≠ .ok q := by
+  have hsc : ∀ vals, (ofLoop T L₀ real).scheduled x w ρ (e0 :: h1) vals = [] := fun vals => by
+    show (match schedOf (real x w ρ) x (h1.map fun p => ZKMal.CoinLayer.rd p.2) with
+      | some r => r.data.toList
+      | none => L₀.scheduled x w ρ (e0 :: h1) vals) = _
+    rw [hs]
+    rfl
+  unfold checkAt
+  rw [hsc]
+  exact check_empty _ _ _ _ _
 
 end LeanRelease
 
