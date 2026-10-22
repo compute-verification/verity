@@ -898,6 +898,317 @@ theorem repState_own_step {c : Cfg} (hz : ZeroCfg c) (t : _root_.Flock.Firewall.
     rw [e] at ha
     cases ha
 
+/-! ## The inner proof's count along the loop -/
+
+/-- A round the frame takes comes before the inner proof's last. -/
+theorem roundFree_ok_inner {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (h : roundFree c s xb n = .ok q) : s.inner ≠ some INNER_ROUNDS := by
+  intro e
+  have hb : (s.inner == some INNER_ROUNDS) = true := by rw [e]; exact beq_self_eq_true _
+  unfold roundFree at h
+  simp only [hb, ↓reduceIte] at h
+  cases h
+
+theorem roundFree_done {c : Cfg} {s : Masker} (hs : s.inner = some INNER_ROUNDS) (xb : ByteArray) (n : ℕ) :
+    ∃ e, roundFree c s xb n = .error e := by
+  have hb : (s.inner == some INNER_ROUNDS) = true := by rw [hs]; exact beq_self_eq_true _
+  unfold roundFree
+  simp only [hb, ↓reduceIte]
+  exact ⟨_, rfl⟩
+
+open _root_.Flock.Firewall.Frame (check standIn passes) in
+/-- **The frame's check refuses every round past the inner proof's last**, whatever the device's and the scheduled
+round. -/
+theorem check_inner_done {c : Cfg} {s : Masker} (hs : s.inner = some INNER_ROUNDS) (v r : ByteArray) (n : ℕ)
+    (q : ByteArray × Masker × Option String) : check c s v r n ≠ .ok q := by
+  obtain ⟨e, he⟩ := roundFree_done (c := c) hs r n
+  obtain ⟨e', he'⟩ := roundFree_done (c := c) (s := { s with stopped := true }) hs r n
+  intro h
+  unfold check passes standIn _root_.Flock.Firewall.Frame.round at h
+  cases hst : s.stopped <;> simp only [hst, he, he', Bool.false_eq_true, ↓reduceIte, bind, Except.bind] at h <;>
+    cases h
+
+/-- The frame's steps over the firewall's own round 0, where it takes them, start the inner proof's count. -/
+theorem roundFree_own0_inner {c : Cfg} {m s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) {n : ℕ}
+    {q : ByteArray × Masker × Array ℕ} (h : roundFree c m (ownRound c s w t n 0) n = .ok q) : q.2.1.inner = some 0 := by
+  have hs := roundFree_ok_inner h
+  have hR : ownRound c s w t n 0 = ByteArray.mk (encs (ownFrames c s w t 0) ++ (Frame.sq 1 1).enc).toArray := by
+    have e := ownRound_encs (c := c) (s := s) (n := n) hw ht (k := 0) (by norm_num)
+    simp only [ownSq] at e
+    rw [← e, Array.toArray_toList]
+  have hn : n = 1 := (sqOk_frames (xb := ownRound c s w t n 0) (by rw [hR]) (by norm_num) (roundFree_sq hs h)).1.symm
+  subst hn
+  rw [hR, roundFree_encs c m _ 1 1 hs (ownFrames0_mid c s w t) (.inr ⟨rfl, rfl⟩) (by decide) (by norm_num)] at h
+  cases hf : (ownFrames c s w t 0).foldlM (stepAt c) (m, ByteArray.empty, #[], 0) with
+  | error e => rw [hf] at h; cases h
+  | ok r =>
+    have hr := foldlM_own0_inner c s w t _ r hf
+    rw [hf] at h
+    simp only [bind, Except.bind, hr] at h
+    cases hio : innerOwn c r.1 0 (ByteArray.mk (encs (ownFrames c s w t 0) ++ (Frame.sq 1 1).enc).toArray) 1 with
+    | error e => rw [hio] at h; cases h
+    | ok u =>
+      rw [hio] at h
+      cases h
+      rfl
+
+/-- **The frame's step at the inner proof's round**, where it neither ends the rep nor leaves it owing no coins: the
+frame took the round, which kept the rep inside the inner proof, and the state is the round's. -/
+theorem run_own1 (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (n : ℕ) (r : ByteArray)
+    (h2 : (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).1.m.owed ≠ none) :
+    ∃ out s' fr, roundFree c S.m r n = .ok (out, s', fr) ∧ s'.inner.isSome = true ∧
+      (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).1.m = s' := by
+  cases hS : S.m.owed with
+  | some k =>
+    simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS,
+      _root_.Flock.Firewall.Frame.Reply.ends] at h2
+    cases h2
+  | none =>
+    cases hr : roundFree c S.m r n with
+    | error e =>
+      have hR : _root_.Flock.Firewall.Frame.round c S.m r n = .error e := by
+        unfold _root_.Flock.Firewall.Frame.round; rw [hr]; rfl
+      by_cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP = true
+      · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, bind, Except.bind,
+          hst, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at h2
+        cases h2
+      · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, bind, Except.bind,
+          hst, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at ho
+        exact absurd rfl ho
+    | ok p =>
+      obtain ⟨out, s', fr⟩ := p
+      have hR := round_of_roundFree hr
+      cases hin : s'.inner.isNone with
+      | true =>
+        by_cases hst : ("a round with no scheduled round in its place, outside the inner proof").startsWith
+            _root_.Flock.Firewall.Frame.STOP = true
+        · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+            Except.bind, throw, throwThe, MonadExceptOf.throw, hst, ↓reduceIte,
+            _root_.Flock.Firewall.Frame.Reply.ends] at h2
+          cases h2
+        · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+            Except.bind, throw, throwThe, MonadExceptOf.throw, hst, Bool.false_eq_true,
+            ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at ho
+          exact absurd rfl ho
+      | false =>
+        refine ⟨out, s', fr, rfl, by cases e : s'.inner <;> simp_all, ?_⟩
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+          Except.bind, pure, Except.pure, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+
+/-- Coins the frame takes without ending the rep are its answer to them. -/
+theorem run_coins_cons (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (cs : Array F128)
+    (L : List _root_.Flock.Firewall.Frame.Req) (h : (_root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L)).2 = false) :
+    ∃ s1, S.m.answer c cs = .ok s1 ∧
+      _root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L) = _root_.Flock.Firewall.Frame.run c { S with m := s1 } L := by
+  cases ha : S.m.answer c cs with
+  | error e =>
+    exfalso
+    have h' : (_root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L)).2 = true := by
+      cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hst, Bool.false_eq_true,
+          ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+    rw [h'] at h
+    cases h
+  | ok s1 =>
+    exact ⟨s1, rfl, by
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha,
+        _root_.Flock.Firewall.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]⟩
+
+/-- `run_own1` past any requests `L`. -/
+theorem run_snoc_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (L : List _root_.Flock.Firewall.Frame.Req)
+    (n : ℕ) (r : ByteArray) (h2 : (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).1.m.owed ≠ none) :
+    ∃ out s' fr, roundFree c (_root_.Flock.Firewall.Frame.run c st L).1.m r n = .ok (out, s', fr) ∧
+      s'.inner.isSome = true ∧ (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).1.m = s' := by
+  rw [run_append] at h2 ho ⊢
+  cases hb : (_root_.Flock.Firewall.Frame.run c st L).2
+  · simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ho ⊢
+    exact run_own1 c _ n r h2 ho
+  · simp only [hb, ↓reduceIte, Bool.true_eq_false] at h2
+
+/-- The frame's coins, then the inner proof's round, past any requests `L`, where neither ends the rep nor leaves it
+owing no coins: the frame took the coins at `L`'s state, then the round. -/
+theorem run_snoc_coins_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State)
+    (L : List _root_.Flock.Firewall.Frame.Req) (cs : Array F128) (n : ℕ) (r : ByteArray)
+    (h2 : (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).1.m.owed ≠ none) :
+    (_root_.Flock.Firewall.Frame.run c st L).2 = false ∧
+      ∃ s1, (_root_.Flock.Firewall.Frame.run c st L).1.m.answer c cs = .ok s1 ∧
+        ∃ out s' fr, roundFree c s1 r n = .ok (out, s', fr) ∧ s'.inner.isSome = true ∧
+          (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).1.m = s' := by
+  rw [run_append] at h2 ho ⊢
+  cases hb : (_root_.Flock.Firewall.Frame.run c st L).2
+  · refine ⟨rfl, ?_⟩
+    simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ho ⊢
+    obtain ⟨s1, ha, he⟩ := run_coins_cons c _ cs _ h2
+    rw [he] at h2 ho ⊢
+    exact ⟨s1, ha, run_own1 c _ n r h2 ho⟩
+  · simp only [hb, ↓reduceIte, Bool.true_eq_false] at h2
+
+/-- After coins, then `finish`, the frame's state owes no coins. -/
+theorem run_coins_finish_owed (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (cs : Array F128) :
+    (if (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).2 then ({} : Masker)
+      else (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).1.m).owed = none := by
+  cases ha : S.m.answer c cs with
+  | error e =>
+    have h : (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).2 = true := by
+      cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hst, Bool.false_eq_true,
+          ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+    rw [h]
+    rfl
+  | ok s1 =>
+    have ho := answer_owed ha
+    cases hu : s1.unfinished c <;>
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hu, ho,
+        _root_.Flock.Firewall.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]
+
+/-- **The inner proof's count along the loop's requests**: where the requests up to the inner proof's round `i` neither
+end the rep nor leave it owing no coins, the rep is at the inner proof's round `i`. Round 0 is the firewall's own. -/
+theorem run_ownReqs_inner (c : Cfg) (prior : Array F128) (sched own : Array (ByteArray × ℕ))
+    (cr : Array (Array F128)) (h0 : ∃ s w t n, w.size = 16 ∧ t.size = 64 ∧ own.getD 0 (.empty, 0) = (ownRound c s w t n 0, n)) :
+    ∀ i, (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).2 = false →
+      (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).1.m.owed ≠ none →
+      (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).1.m.inner = some i
+  | 0, h2, ho => by
+    obtain ⟨s, w, t, n, hw, ht, he⟩ := h0
+    have e : ownReqs prior sched own cr 0 =
+        ((if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+          (List.range sched.size).flatMap (fun k =>
+            [.round (sched.getD k (.empty, 0)).2 (sched.getD k (.empty, 0)).1 (.sched (sched.getD k (.empty, 0)).1),
+              .coins (.ok (cr.getD k #[]))])) ++ [.round n (ownRound c s w t n 0) .own] := by
+      unfold ownReqs
+      rw [he]
+      simp only [List.range_zero, List.flatMap_nil, List.append_nil]
+    rw [e] at h2 ho ⊢
+    obtain ⟨out, s', fr, hr, -, hm⟩ := run_snoc_own c {} _ n _ h2 ho
+    rw [hm]
+    exact roundFree_own0_inner hw ht hr
+  | i + 1, h2, ho => by
+    rw [ownReqs_succ] at h2 ho ⊢
+    obtain ⟨hb, s1, ha, out, s', fr, hr, -, hm⟩ := run_snoc_coins_own c {} _ _ _ _ h2 ho
+    have hI := run_ownReqs_inner c prior sched own cr h0 i hb (fun e => answer_owed_none _ e ha)
+    rw [hm]
+    exact roundFree_inner_some (roundFree_ok_inner hr) (answer_inner_some hI ha) hr
+
+theorem zeros_size (n : ℕ) : (zeros n).size = n := by simp [zeros, ByteArray.size]
+
+/-- **The inner proof's count at the loop's state**: where the frame takes coins at the rep's state after the inner
+proof's round `i`, it is at round `i + 1`. -/
+theorem repState_own_inner (c c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) {i : ℕ}
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hi4 : i < INNER_ROUNDS) {cs : Array F128} {m : Masker}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (sched.size + i + 1)).answer c' cs = .ok m) : m.inner = some (i + 1) := by
+  rw [repState_own_at c t rep dom xs hi cr0 cr ns i hal hs hi4] at ha
+  dsimp only at ha
+  generalize hR : _root_.Flock.Firewall.Frame.run c {}
+    (ownReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched
+      (ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)) cr i) = R at ha
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | true =>
+    simp only [↓reduceIte] at ha
+    exact absurd ha (answer_owed_none cs rfl)
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha
+    have hI := run_ownReqs_inner c _ sched _ cr ⟨_, zeros 16, zeros 64, _, zeros_size 16, zeros_size 64,
+      ownRounds_getD c _ _ (show 0 < INNER_ROUNDS by decide)⟩ i (by rw [hR])
+      (by rw [hR]; exact fun e => answer_owed_none cs e ha)
+    rw [hR] at hI
+    exact answer_inner_some hI ha
+
+theorem ownReqs_zero (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {j : ℕ}
+    (hS : sched.size = j + 1) :
+    ownReqs prior sched own cr 0 = schedReqs prior sched cr j ++
+      [.coins (.ok (cr.getD j #[])), .round (own.getD 0 (.empty, 0)).2 (own.getD 0 (.empty, 0)).1 .own] := by
+  unfold ownReqs schedReqs
+  rw [hS, List.range_succ, List.flatMap_append, List.flatMap_singleton]
+  simp only [List.range_zero, List.flatMap_nil, List.append_nil, List.append_assoc, List.cons_append, List.nil_append]
+
+/-- **The loop's frame state one round on, into the inner proof**: where the rep's schedule is complete on its coins
+`cr` and on those before the last, its last round `j` is the last `cr` covers, the frame takes that round's coins at the
+rep's state after it, at the state `m`, and takes the inner proof's round 0 there, the rep's state after it on one more
+round's coins is that round's. -/
+theorem repState_own0_step {c : Cfg} (hz : ZeroCfg c) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ)
+    (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ)
+    (a : Array F128) (j : ℕ) {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched)
+    (hcr : cr.size = j + 1) (hS : sched.size = j + 1) (s₀ : Masker) {m s' : Masker} {out : ByteArray}
+    {fr : Array ℕ} (ha : (repState c t rep dom xs hi cr0 cr ns (j + 1)).answer c (cr.getD j #[]) = .ok m)
+    (hr : roundFree c m (ownRound c s₀ (zeros 16) (zeros 64) (ns (j + 1)) 0) (ns (j + 1)) = .ok (out, s', fr))
+    (hin : s'.inner.isSome) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (j + 2) = s' := by
+  rw [show j + 2 = sched.size + 0 + 1 by omega,
+    repState_own_at c t rep dom xs hi cr0 (cr.push a) ns 0 hal (by rw [Array.pop_push]; exact hs') (by decide),
+    ownReqs_push _ _ _ _ _ (by omega), ownReqs_zero _ _ _ _ hS,
+    ownRounds_zero hz ((cr.push a).extract sched.size (cr.push a).size) (cr.extract sched.size cr.size),
+    ownRounds_getD _ _ _ (show 0 < INNER_ROUNDS by decide)]
+  rw [repState_at c t rep dom xs hi cr0 cr ns j hal hs (by omega)] at ha
+  rw [ownRound_zero hz _ s₀ _ _ _ (show 0 < 4 by decide)]
+  dsimp only at ha ⊢
+  rw [show sched.size + 0 = j + 1 by omega, run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j) = R at ha ⊢
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha ⊢
+    rw [run_coins_own c S _ _ _ ha hr hin]
+    rfl
+  | true =>
+    have e : (({} : Masker).answer c (cr.getD j #[])) = .error "coins for no round" := rfl
+    simp only [↓reduceIte] at ha
+    rw [e] at ha
+    cases ha
+
+theorem reqs_length (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
+    (coins : Array (Array F128)) :
+    (_root_.Flock.Firewall.Drive.reqs prior sched own dev coins).length =
+      (if prior.isEmpty then 0 else 1) + 2 * sched.size + 2 * own.size + 1 := by
+  unfold _root_.Flock.Firewall.Drive.reqs
+  simp only [List.length_append, List.length_singleton]
+  rw [flatMap_range_length _ fun _ => rfl, flatMap_range_length _ fun _ => rfl]
+  split <;> simp
+
+/-- **Past the inner proof's last round's coins the loop's state owes no coins**: there the rep has taken every
+round's coins, then `finish`. -/
+theorem repState_past (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) {N : ℕ}
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hN : sched.size + INNER_ROUNDS + 1 ≤ N) :
+    (repState c t rep dom xs hi cr0 cr ns N).owed = none := by
+  unfold repState
+  rw [hal]
+  simp only [bind, Except.bind, hs, pure, Except.pure]
+  generalize (if rep = 0 then (#[] : Array F128) else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) = prior
+  generalize hown : ownRounds c (cr.extract sched.size cr.size) (fun j => ns (sched.size + j)) = own
+  have ho4 : own.size = 4 := by rw [← hown, ownRounds_size]; rfl
+  have hN5 : sched.size + 5 ≤ N := by
+    have : INNER_ROUNDS = 4 := rfl
+    omega
+  rw [List.take_of_length_le (by rw [reqs_length, ho4]; split <;> omega)]
+  have e : _root_.Flock.Firewall.Drive.reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) cr =
+      ownReqs prior sched own cr 3 ++ [.coins (.ok (cr.getD (sched.size + 3) #[])), .finish] := by
+    unfold _root_.Flock.Firewall.Drive.reqs ownReqs
+    simp only [ho4, show List.range 4 = List.range 3 ++ [3] from rfl, List.flatMap_append, List.flatMap_singleton,
+      List.append_assoc, List.cons_append, List.nil_append]
+  rw [e, run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr 3) = R
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | true => rfl
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    exact run_coins_finish_owed c S _
+
 end Loop
 
 end Claims.ZKServer
