@@ -12,10 +12,9 @@ template adds past a call's support), constants folded or carried as inputs, dea
 AND's operands, each of which leaves every bit's value as it was: so it proves, by construction, that the template computes
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
-A form is held as its fingerprint, the XOR of its nodes' labels, node i's label being SHA-512(key ‖ i) for a key drawn for
-the check (and recorded in its report), since a unit's accumulator bits are forms of thousands of nodes. Two distinct forms
-share a fingerprint with probability 2^-512, so among the M forms a check builds it identifies two that differ with
-probability at most M² / 2^513, SHA-512 taken as a random function; short of that the table is the exact one.
+A form is interned, so two forms are one exactly when their ids are, with no premise on a hash: as the one text its set of
+nodes decides (`Canon`), its nodes in ascending order or, when that is longer, its bitmap, so a hash unit's state bits,
+forms of about half the unit's nodes each, take a bit per node they span.
 
 **Semantic.** When the forms differ (a builder that chose a different structure for a constant it was given as an input, say),
 the report says which output bits differ and both are evaluated, bit-sliced: on every input when the template has at most
@@ -30,8 +29,6 @@ table, which rows carry as more than gates.
 """
 from __future__ import annotations
 
-import hashlib
-import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -44,51 +41,153 @@ EXHAUSTIVE_BITS = 16
 VECTORS = 4096
 WORD = 128
 ZERO = 0
+IDS = (1 << 40) - 1
+NODE = np.dtype("<i4")
+LIMB = np.dtype("<u8")
+_ONE = np.uint64(1)
 
 
 class Canon:
-    """The canonical gates both sides are read into. A bit is one int, its form's fingerprint shifted up one and its
-    constant in bit 0. Nodes ``0 .. inputs - 1`` are the inputs (`inputs`, their bits); each AND node takes the next."""
+    """The canonical gates both sides are read into. A bit is one int, its form's id shifted up one and its constant in
+    bit 0; form 0 is the empty form. Nodes ``0 .. inputs - 1`` are the inputs (`inputs`, their bits); each AND node takes
+    the next.
 
-    def __init__(self, inputs: int, key: bytes) -> None:
-        self.key = key
+    A form, a set of nodes, is interned as one text (`forms`, by id), which the set alone decides: its nodes in ascending
+    order, 4 bytes each, or, when that is longer than its bitmap, the bitmap's first 64-node word index (4 bytes) and its
+    words from the first nonzero one to the last, 8 bytes each (`dense` marks those). The table finds a text by its hash and
+    compares it byte for byte, so two forms are equal exactly when their ids are."""
+
+    def __init__(self, inputs: int) -> None:
+        self.forms: list[bytes] = [b""]
+        self.dense = bytearray(1)
+        self.ids: tuple[dict[bytes, int], dict[bytes, int]] = ({b"": 0}, {})
+        self.ands: dict[int, int] = {}
         self.next = 0
-        self.inputs = [self._node() for _ in range(inputs)]
-        self.ands: dict[tuple[int, int], int] = {}
+        self.inputs = [self._node() << 1 for _ in range(inputs)]
+
+    def _id(self, text: bytes, dense: int) -> int:
+        ids = self.ids[dense]
+        f = ids.get(text)
+        if f is None:
+            f = ids[text] = len(self.forms)
+            self.forms.append(text)
+            self.dense.append(dense)
+        return f
 
     def _node(self) -> int:
-        h = hashlib.sha512(self.key + self.next.to_bytes(8, "little")).digest()
         self.next += 1
-        return int.from_bytes(h, "little") << 1
+        return self._id((self.next - 1).to_bytes(4, "little"), 0)
+
+    def _sparse(self, s: np.ndarray) -> int:
+        """The form of the ascending nodes ``s``."""
+        if len(s) and 2 * (int(s[-1] >> 6) - int(s[0] >> 6) + 1) + 1 < len(s):
+            lo = int(s[0]) >> 6
+            w = np.zeros(int(s[-1] >> 6) - lo + 1, LIMB)
+            d = s - (lo << 6)
+            np.bitwise_xor.at(w, d >> 6, _ONE << (d & 63).astype(LIMB))
+            return self._id(lo.to_bytes(4, "little") + w.tobytes(), 1)
+        return self._id(s.astype(NODE, copy=False).tobytes(), 0)
+
+    def _words(self, lo: int, w: np.ndarray) -> int:
+        """The form of the bitmap ``w`` whose first word is word ``lo``."""
+        nz = np.flatnonzero(w)
+        if not len(nz):
+            return 0
+        w, lo = w[nz[0]:nz[-1] + 1], lo + int(nz[0])
+        if 2 * len(w) + 1 < int(np.bitwise_count(w).sum()):
+            return self._id(lo.to_bytes(4, "little") + w.tobytes(), 1)
+        s = np.flatnonzero(np.unpackbits(w.view(np.uint8), bitorder="little")) + (lo << 6)
+        return self._id(s.astype(NODE).tobytes(), 0)
+
+    def _bitmap(self, f: int) -> tuple[int, np.ndarray]:
+        t = self.forms[f]
+        return int.from_bytes(t[:4], "little"), np.frombuffer(t, LIMB, offset=4)
+
+    def nodes(self, bit: int) -> np.ndarray:
+        """The nodes of ``bit``'s form, ascending."""
+        f = bit >> 1
+        if not self.dense[f]:
+            return np.frombuffer(self.forms[f], NODE)
+        lo, w = self._bitmap(f)
+        return np.flatnonzero(np.unpackbits(w.view(np.uint8), bitorder="little")) + (lo << 6)
+
+    def size(self, bit: int) -> int:
+        f = bit >> 1
+        if self.dense[f]:
+            return int(np.bitwise_count(self._bitmap(f)[1]).sum())
+        return len(self.forms[f]) // 4
+
+    def _fold(self, ts: list[int]) -> int:
+        """The XOR of the forms ``ts``, at least one of them dense."""
+        maps = [self._bitmap(t) for t in ts if self.dense[t]]
+        s = [np.frombuffer(self.forms[t], NODE) for t in ts if not self.dense[t]]
+        s = np.concatenate(s).astype(np.int64) if s else np.zeros(0, np.int64)
+        lo = min([m[0] for m in maps] + ([int(s.min()) >> 6] if len(s) else []))
+        hi = max([m[0] + len(m[1]) for m in maps] + ([(int(s.max()) >> 6) + 1] if len(s) else []))
+        w = np.zeros(hi - lo, LIMB)
+        for at, m in maps:
+            w[at - lo:at - lo + len(m)] ^= m
+        if len(s):
+            d = s - (lo << 6)
+            np.bitwise_xor.at(w, d >> 6, _ONE << (d & 63).astype(LIMB))
+        return self._words(lo, w)
+
+    def _x(self, f: int, g: int) -> int:
+        """The form f + g."""
+        if f == g:
+            return 0
+        if not f or not g:
+            return f or g
+        if self.dense[f] or self.dense[g]:
+            return self._fold([f, g])
+        a, b = (np.frombuffer(self.forms[t], NODE) for t in (f, g))
+        return self._sparse(np.setxor1d(a, b, assume_unique=True))
+
+    def xor(self, a: int, b: int) -> int:
+        return self._x(a >> 1, b >> 1) << 1 | ((a ^ b) & 1)
+
+    def xor_all(self, bits) -> int:
+        """The XOR of ``bits``: each node in an odd number of their forms."""
+        c, ts = 0, []
+        for b in bits:
+            c ^= b & 1
+            if b > 1:
+                ts.append(b >> 1)
+        if len(ts) < 3:
+            return (self._x(*ts) if len(ts) == 2 else ts[0] if ts else 0) << 1 | c
+        if any(self.dense[t] for t in ts):
+            return self._fold(ts) << 1 | c
+        s = np.sort(np.frombuffer(b"".join([self.forms[t] for t in ts]), NODE))
+        run = np.flatnonzero(np.diff(s, prepend=-1, append=-1))
+        return self._sparse(s[run[:-1][np.diff(run) & 1 == 1]]) << 1 | c
 
     def AND(self, a: int, b: int) -> int:
-        """``a · b``: (f + x)(g + y) = fg + y f + x g + x y, with fg the node of the two smallest of f, g and f + g (by
-        their fingerprints), since f (f + g) = f + fg."""
+        """``a · b``: (f + x)(g + y) = fg + y f + x g + x y. The three forms f, g and f + g have one node, the product of
+        the two the first AND of them wrote, and since f (f + g) = f + fg, fg is that node plus the operand it shares
+        with another of their pairs: an AND that writes the pair its node was made for, as both sides mostly do, is that
+        node alone."""
         x, y = a & 1, b & 1
-        f, g = a ^ x, b ^ y
+        f, g = a >> 1, b >> 1
         if not f:
             return b if x else ZERO
         if not g:
             return a if y else ZERO
         if f == g:
             return a if x == y else ZERO
-        lo, mid, top = sorted((f, g, f ^ g))
-        n = self.ands.get((lo, mid))
-        if n is None:
-            n = self.ands[lo, mid] = self._node()
-        fg = n ^ (g if top == f else f if top == g else 0)
+        h = self._x(f, g)
+        i, j, _k = sorted((f, g, h))
+        v = self.ands.get(i << 40 | j)
+        if v is None:
+            fg = self._node()
+            self.ands[i << 40 | j] = fg << 40 | h
+        else:
+            n, e = v >> 40, v & IDS
+            fg = n if e == h else self._x(n, g if e == f else f)
         if y:
-            fg ^= f
+            fg = self._x(fg, f)
         if x:
-            fg ^= g
-        return fg | (x & y)
-
-
-def _xor(bits) -> int:
-    acc = 0
-    for v in bits:
-        acc ^= v
-    return acc
+            fg = self._x(fg, g)
+        return fg << 1 | (x & y)
 
 
 class Refused(ValueError):
@@ -180,7 +279,7 @@ def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
         if c in val:
             continue
         a, b = flat.row(c)
-        val[c] = K.AND(_xor(val[r] for r in a), _xor(val[r] for r in b))
+        val[c] = K.AND(K.xor_all([val[r] for r in a]), K.xor_all([val[r] for r in b]))
         copy = (k,) in (a, b)
         copies += copy
         ands += bool(a and b) and not copy
@@ -226,7 +325,7 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
     live = sorted(C.live())
 
     def ev(f) -> int:
-        return _xor(val[v] for v in f.s) ^ f.c
+        return K.xor_all([val[v] for v in f.s]) ^ f.c
 
     ands = 0
     for v in live:
@@ -278,20 +377,18 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
 
 
 def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
-          seed: int = CK.Options.seed, key: bytes | None = None, label: str | None = None) -> dict:
+          seed: int = CK.Options.seed, label: str | None = None) -> dict:
     """``tmpl`` (a `verity_flock.tmpl.Tmpl`, or its text) held to ``target``'s flat lowering: a result as `checks.check_definition` gives
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
-    ``refused``), the counts on both sides, the labels' key (fresh unless ``key`` is given), and why the forms differ when
-    they do."""
+    ``refused``), the counts on both sides, and why the forms differ when they do."""
     from verity_flock import tmpl as TM
 
     from verity.ml.circuits.evaluation.reference import resolve
 
     t = resolve(target)
     name = label or t.id
-    key = os.urandom(32) if key is None else key
     F = CK.Findings()
-    rec: dict[str, Any] = {"definition": t.id, "labels": {"hash": "sha512", "key": key.hex()}}
+    rec: dict[str, Any] = {"definition": t.id}
     try:
         if not isinstance(tmpl, TM.Tmpl):
             try:
@@ -305,7 +402,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
         except (AssertionError, IndexError, ValueError) as e:
             raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
         C, ins, words = _lowered(t)
-        K = Canon(sum(map(len, ins)), key)
+        K = Canon(sum(map(len, ins)))
         mine, rec["template"] = template_bits(flat, K)
         widths = rec["template"].pop("input_widths")
         if widths != [len(w) for w in ins]:
@@ -318,6 +415,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
         rec["verdict"] = "refused"
         return {"failures": F.failures, "warnings": F.warnings, "structural": rec}
     rec["canonical_nodes"] = K.next
+    rec["forms"] = len(K.forms)
     differ = [j for j, (a, b) in enumerate(zip(mine, theirs)) if a != b]
     if not differ:
         rec["verdict"] = "syntactic"

@@ -4,7 +4,9 @@ other gates computing the same bits, and refused by name when it computes anythi
 from __future__ import annotations
 
 import dataclasses as dc
+import functools
 import json
+import operator
 
 import pytest
 from circuit_check import cli
@@ -45,18 +47,19 @@ def _codes(r: dict) -> list[str]:
 # --- the canonical gates ---------------------------------------------------------------------------------------------
 
 def test_an_and_is_one_node_whichever_way_round_and_through_whichever_pair_it_is_written():
-    K_ = ST.Canon(3, b"key")
+    K_ = ST.Canon(3)
     x, y, z = K_.inputs
+    X = K_.xor_all
     xy = K_.AND(x, y)
     assert K_.AND(y, x) == xy
-    assert K_.AND(x, x ^ y) == x ^ xy                    # x (x + y) = x + xy
-    assert K_.AND(x ^ y, y) == y ^ xy                    # (x + y) y = y + xy
-    assert K_.AND(x ^ 1, y ^ 1) == xy ^ x ^ y ^ 1        # (x + 1)(y + 1) = xy + x + y + 1
+    assert K_.AND(x, X([x, y])) == X([x, xy])            # x (x + y) = x + xy
+    assert K_.AND(X([x, y]), y) == X([y, xy])            # (x + y) y = y + xy
+    assert K_.AND(x ^ 1, y ^ 1) == X([xy, x, y, 1])      # (x + 1)(y + 1) = xy + x + y + 1
     assert K_.AND(x, z) != xy and K_.next == 5
 
 
 def test_constants_and_repeats_fold():
-    K_ = ST.Canon(2, b"key")
+    K_ = ST.Canon(2)
     x, _y = K_.inputs
     assert K_.AND(x, 1) == x and K_.AND(1, x) == x
     assert K_.AND(x, ST.ZERO) == ST.ZERO
@@ -64,11 +67,73 @@ def test_constants_and_repeats_fold():
     assert K_.next == 2
 
 
-def test_a_verdict_does_not_depend_on_the_labels_key_which_the_report_records():
-    tm = _emitted(SB.E4m3ToF32)
-    a, b = (ST.check(SB.E4m3ToF32, tm, key=k)["structural"] for k in (b"one", b"two"))
-    assert a["verdict"] == b["verdict"] == "syntactic" and a["canonical_nodes"] == b["canonical_nodes"]
-    assert (a["labels"], b["labels"]) == ({"hash": "sha512", "key": b"one".hex()}, {"hash": "sha512", "key": b"two".hex()})
+def test_two_forms_are_one_id_exactly_when_they_are_one_set():
+    """XORs of random sets of nodes, spread over many 64-node blocks and built in random orders, against frozensets."""
+    import random
+
+    rng = random.Random(84)
+    n = 3000
+    K_ = ST.Canon(n)
+    forms = []
+    for _ in range(400):
+        s = frozenset(rng.sample(range(n), rng.choice([1, 2, 5, 40, 700])))
+        parts = [frozenset(rng.sample(sorted(s), len(s) // 3)) for _ in range(rng.randrange(3))]
+        rest = s
+        for p in parts:
+            rest = rest ^ p
+        bits = [K_.inputs[i] for i in rest] + [K_.xor_all([K_.inputs[i] for i in p]) for p in parts]
+        rng.shuffle(bits)
+        f = K_.xor_all(bits) if rng.random() < 0.7 else _fold(K_, bits)
+        assert K_.size(f) == len(s) and set(K_.nodes(f).tolist()) == s
+        forms.append((s, f))
+    for s, f in forms:
+        for t, g in forms[:60]:
+            assert (s == t) == (f == g)
+
+
+def _fold(K_, bits):
+    acc = ST.ZERO
+    for b in bits:
+        acc = K_.xor(acc, b)
+    return acc
+
+
+def test_a_form_is_one_text_whichever_kind_its_parts_were():
+    """Four nodes in one 64-node word are a bitmap and three are an array, so XORing one node in or out changes the form's
+    kind; a bitmap XORed down to a few nodes is the array of those nodes, and a bitmap widened is the bitmap built whole."""
+    K_ = ST.Canon(400)
+    I, X = K_.inputs, K_.xor_all
+    three, four = X(I[0:3]), X(I[0:4])
+    assert (K_.dense[three >> 1], K_.dense[four >> 1]) == (0, 1)
+    assert K_.xor(four, I[3]) == three and K_.xor(three, I[3]) == four
+    d, e = X(I[10:300]), X(I[12:300])
+    assert K_.dense[d >> 1] and K_.xor(d, e) == K_.xor(I[10], I[11]) and K_.xor(d, K_.xor(I[10], I[11])) == e
+    assert X([d, I[5], I[399], 1]) == X(I[5:6] + I[10:300] + I[399:400]) ^ 1 == _fold(K_, [I[399], d, I[5], 1])
+    assert K_.xor(d, d) == ST.ZERO and K_.size(X([d, I[5]])) == 291
+
+
+ZW = definition("StructuralTestZW", 1, lambda C, x, y, z, w: [C.AND(z[0], w[0])],
+                (("x", SB.BIT), ("y", SB.BIT), ("z", SB.BIT), ("w", SB.BIT)), SB.BIT, register=False)
+
+
+def test_two_forms_whose_fingerprints_were_forced_equal_still_differ():
+    """#3150 held a form as the XOR of its nodes' SHA-512 labels: with z's label forced to x's XOR y's, x + y and z had one
+    fingerprint, so (x + y)·w and z·w were one AND node and a template computing the first passed as a lowering of the
+    second. Interned, they are two forms and two nodes, and the template is refused on every input."""
+    K_ = ST.Canon(4)
+    x, y, z, w = K_.inputs
+    label = {0: 0b001, 1: 0b010, 3: 0b100}
+    label[2] = label[0] ^ label[1]
+
+    def fingerprint(bit: int) -> int:
+        return functools.reduce(operator.xor, (label[int(n)] for n in K_.nodes(bit)), 0)
+
+    xy = K_.xor(x, y)
+    assert fingerprint(xy) == fingerprint(z) and xy != z
+    assert K_.AND(xy, w) != K_.AND(z, w)
+    v, r = _verdict(ZW, _unit([1, 1, 1, 1], [1], [(W, (0, 1), (3,)), (2 * W, (W,), (K,))]))      # (x + y) w
+    assert v == "refused" and _codes(r) == ["mismatch"] and r["failures"][0]["exhaustive"]
+    assert _verdict(ZW, _unit([1, 1, 1, 1], [1], [(W, (2,), (3,)), (2 * W, (W,), (K,))]))[0] == "syntactic"
 
 
 # --- accepted --------------------------------------------------------------------------------------------------------
