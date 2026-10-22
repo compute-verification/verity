@@ -15,6 +15,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm import protocol_options as PO  # noqa: E402
+from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
@@ -22,7 +23,7 @@ from verity_vllm.protocol_options import pouw_h1_handoff as HO  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_window as PHW  # noqa: E402
 
-from tests.protocol_options.test_pouw_h1 import K, Linear, Model, _entry, _host, _remote, _so  # noqa: E402
+from tests.protocol_options.test_pouw_h1 import K, Int8Arm, Linear, Model, _entry, _host, _remote, _so  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -30,10 +31,28 @@ def _linear_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
 
 
-def _served(settings, n=40):
-    """Two served steps of a 3-step window under `settings` (its second linear's N `n`), its option's hooks off and its
-    release not run: the run, as its serving process holds it before its close."""
+class ZyArm(Int8Arm):
+    """`Int8Arm` as `engine.int8_vllm.Int8PlainLinearMethod` serves under H1: with ``zy_rows`` (which H1's install sets)
+    ``int8_ops.linear_zy`` over that many slots, its records handed to ``observe`` as z."""
+
+    zy_rows: int | None = None
+
+    def apply(self, layer, x, bias=None):
+        self.calls += 1
+        xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
+        self.observe(layer, xq, s_a, y, zy)
+        return y
+
+    def observe(self, layer, xq, s_a, y, z=None):
+        pass
+
+
+def _served(settings, n=40, arm=Int8Arm):
+    """Two served steps of a 3-step window under `settings` (its second linear's N `n`, its linears on `arm`), its option's
+    hooks off and its release not run: the run, as its serving process holds it before its close."""
     model, runner = Model(Linear(32, 1), Linear(n, 2)), settings["pouw"]["runner"]
+    for layer in model.layers:
+        layer.quant_method = arm()
     comp = PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings))
     g = torch.Generator().manual_seed(9)
     for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
@@ -104,7 +123,7 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     the session closed and each call's A table under its round's root."""
     from tests.protocol_options import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
-    run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64)), retain_steps=6), n=64)
+    run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
     HO.suspend(run, tmp_path / "state")
     fd = os.dup(run.rounds.challenger._wire.sock.fileno())
     run.rounds.challenger._wire.sock.close()

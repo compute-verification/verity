@@ -16,10 +16,13 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
-Its `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` against `credit.credited`, `credit.drawn`,
-`credit.outcome`, `credit.window`, `credit.period_credit` and `credit.a_link`: one `Port` each, over the cases
+Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
+`drawn`, `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
+`credit._a_link` (`PouwCheck.Credit.Internal`'s): one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
-the units a draw coin draws from a window's layout and each of them proved, a served window whole, a period of the
+the units a draw coin draws from a window's layout and each of them proved, a served window whole with its layout read
+from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
+to its A trees, a period of the
 auditor's ledger and its windows, a window's A trees under its round roots, then one mutation each aimed at every
 refusal), compared output for output: the credited calls, the drawn units or null, or the same refusal.
 
@@ -238,7 +241,7 @@ def _counted(refused: tuple[str, str] | None, what: str) -> None:
 
 
 def credit(case: dict) -> dict:
-    got, refused = Cr.credited(*credit_cases.credit_args(case))
+    got, refused = Cr._credited(*credit_cases.credit_args(case))
     _counted(refused, "credit")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
@@ -250,7 +253,7 @@ def drawn(case: dict) -> dict:
 
 
 def outcome(case: dict) -> dict | None:
-    refused = Cr.outcome(*(case[k] for k in credit_cases.OUTCOME_KEYS))
+    refused = Cr._outcome(*(case[k] for k in credit_cases.OUTCOME_KEYS))
     _counted(refused, "outcome")
     return None if refused is None else {"refused": list(refused)}
 
@@ -268,7 +271,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr.a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
@@ -291,8 +294,8 @@ def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, and every other refusal of `credit.credited`, `credit.drawn`, `credit.outcome`, `credit.window`,
-    `credit.period_credit` and `credit.a_link`."""
+    didn't commit, a window's round log the challenger never received, and every other refusal of `credit.window`,
+    `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400))}
@@ -323,9 +326,19 @@ def test_credit(pass_server):
                  "drawn budget: the draw's K is not",
                  "drawn budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
+                 "window layout: the window's circuit's units are not its record's tiles",
+                 "window layout: the window's circuit is not an H# window",
+                 "window layout: the window's template at K = # is not h#window's",
+                 "window layout: the window's descriptor is not a verity-ir/descriptor/v#",
+                 "window layout: the window's TILES are at K = ", "window layout: the window's layout is not",
+                 "window layout: a call of lm_head", "so the period earns nothing: layout: ",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
-                 "a-link a-link: the window registers no A value", "which is no registered A value"):
+                 "a-link a-link: the window registers no A value", "which is no registered A value",
+                 "window rounds: the round roots are not the roots the challenger's log shows it received",
+                 "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
+                 "window a-link: the window registers no A value",
+                 "so the period earns nothing: rounds: the round roots are not"):
         assert any(part in k for k in CREDITED), part
 
 

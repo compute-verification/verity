@@ -50,6 +50,7 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
+from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 #: the rows' format: the tile's port rows
@@ -137,8 +138,9 @@ class Served:
     of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
     ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
     From the first call: ``program`` (`declared` under the window's `prefix`; None when refused), ``root`` (the window's
-    open root its values' domains bind, hex), ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each
-    value's `registered.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
+    open root its values' domains bind, hex), ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's);
+    ``registered`` (each value's `registered.Registered`, in registration order) and ``refused`` (why the window has no
+    trees)."""
 
     tile: tuple[int, int] = PH.TILE
     unit: Callable[[int], Any] | None = None
@@ -199,10 +201,12 @@ class Served:
         elif not (np.array_equal(held[1], w) and np.array_equal(self._scales[call.layer], s)):
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
-    def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any, y: Any, z: Any) -> dict[str, str]:
-        """Register call ``call``'s A and z tables (its served rows ``a`` [m, K] and scales ``s_a`` [m], its exact z [m, n]
-        and served y [m, n]), and ``b/<K>`` once K's linears' weights are all held: ``{value: root}``, what the call's
-        manifest row commits under its round's root. Nothing once the window is refused."""
+    def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
+               records: np.ndarray | None) -> dict[str, str]:
+        """Register call ``call``'s A and z tables (its served rows ``a`` [m, K] and scales ``s_a`` [m], and its z/y
+        ``records`` over its T slots, `pouw_h1_records`', split back to z and y and laid out in the Program's tile), and
+        ``b/<K>`` once K's linears' weights are all held: ``{value: root}``, what the call's manifest row commits under its
+        round's root. Nothing once the window is refused."""
         if self.program is None and not self.refused:
             self.open(run)
         if not self.refused:
@@ -210,8 +214,8 @@ class Served:
         if not self.refused and (call.index >= len(self.calls) or call.index != call.step * len(self.linears) + call.layer):
             self.refused.append(f"call {call.index} (step {call.step}, linear {call.layer}) is off the declared Program's "
                                 "order")
-        if not self.refused and call.m and (z is None or y is None):
-            self.refused.append(f"call {call.index}: no z/y record (its exact z and served y)")
+        if not self.refused and call.m and records is None:
+            self.refused.append(f"call {call.index}: no z/y record (its arm handed over no scaled_mm_zy records)")
         if self.refused:
             return {}
         codes, scales = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
@@ -219,7 +223,7 @@ class Served:
         if call.m:
             codes[:call.m] = PH.numpy_of(a).reshape(call.m, call.k)
             scales[:call.m] = PH.numpy_of(s_a).reshape(-1)
-            zv, yv = PH._words(z, call.m, "<i4"), PH._words(y, call.m, "<i2")
+            zv, yv = ZR.split(records, call.rows, call.n)
         out = {}
         for name, words in (("a", row_words(codes, scales)), ("zy", record_words(zv, yv, self.m, self.tile))):
             value = HW.table(self.program, name, call.index)

@@ -998,3 +998,15 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="not a live window's: the coin commitment's scheme is vllm/commit"):
         _serve_window(_remote())
     assert vllm.ended() is None
+
+
+@pytest.mark.parametrize("n,width,nonce", [(1, 7, 0), (64, 68, RQ.REQUESTS_NONCE + 3), (37, 6144, RQ.TABLES_NONCE + 3 * 2175 + 2)])
+def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, width, nonce):
+    """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 at the same salt
+    key and nonce, leaf for leaf: its one RFC 8439 stream is `audit.hm96_salt`'s blocks."""
+    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    rng, key = random.Random(n), hashlib.sha256(b"key").digest()
+    values = [rng.randbytes(width) for _ in range(n)]
+    want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
+    got = RQ.hiding_rows(SALT, 5, values, key, nonce)
+    assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(n))
