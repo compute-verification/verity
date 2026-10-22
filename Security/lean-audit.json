@@ -947,7 +947,7 @@
   },
   "Nci.Assumptions.ActivationChained": {
    "owner": "@compute-accounting",
-   "digest": "a60a642a92c5614626c667d4adebdff83809c51d47aec6200d0a6c6989564055"
+   "digest": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da"
   },
   "Nci.Assumptions.ActivationsIncompressible": {
    "owner": "@lean",
@@ -983,7 +983,7 @@
   },
   "Nci.Assumptions.ParameterHard": {
    "owner": "@compute-accounting",
-   "digest": "2098eb70159130e9a8ba99d9600f8a95ee0768d0fba30a673cfb2a2bbdbf0956"
+   "digest": "59bc2194b3f3767baac5bd7b98552da53e114e14f1f164a541180cc5c16ef813"
   },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
@@ -1432,6 +1432,10 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
+  },
+  "Nci.Covering.Covers": {
+   "owner": "@compute-accounting",
+   "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   }
  },
  "meaning": [
@@ -14732,28 +14736,28 @@
    ]
   },
   "Definitions.Nci.Covering": {
-   "digest": "879f9ce517618ea1a268ad7b2fcdfff4b7e9778f81bdb5eae43162d0f18703fe",
+   "digest": "e87493a09175845b1f3cff2bc23d2de4a197853a99f1892dfa665d6dfd6c36c6",
    "definitions": {
-    "Nci.Covers": "5bc718e26204932f118bb225de2fc567b74270da0a4f5514808469708b011460",
-    "Nci.FeedsWithin": "cc7e54001b9c142772db302e622e6566875deb33af3ae479b1fbccc69a01122b",
-    "Nci.FeedsWithin.refl": "30c910cec8eda57b72b87393a25502a045d6ee32b447a497bbf55b9546a53a7c",
-    "Nci.FeedsWithin.step": "612d357603ba5e817ff0dcc4990d45a3c0e01d7c2d3ca68366254d0f50a2f5dc",
-    "Nci.InferenceBlock": "2217a8bb993e2a287210aaba8566714e0b4360b494743fb90e5ed1859804d711",
-    "Nci.MulBlocks": "e10884af91dd38043f216d99dfa6acfd8e6c0b9e967efe6006d215a0feb1f081",
-    "Nci.MulBlocks.Completes": "bc2fc0d1ac005c1d31ea244edcd985fabb6876e69e61e0e2b99d9b6a443f0328",
-    "Nci.MulBlocks.Cuts": "db60d2b7e069715f451b573283a7eaee67bc14b9cffcc37c92282acfb5797482",
-    "Nci.MulBlocks.P": "48722d58ec7ffe846c7e4350b4cda122aa324e9feebe8362317a6140181aaa59",
-    "Nci.MulBlocks.T": "48ab2bcb1b248166047a7a0ffba215d98c9e8a085a31a78cd32ce53869d8b8f6",
-    "Nci.MulBlocks.m": "9e2ea3f3ff5c930c25248774c6163b932ffab2c62ac697e5274e2fbd51d77f4a",
-    "Nci.MulBlocks.nt": "4a936060561db35c7cfa42a8a35a290d4b881fc3b5464fcaa885125863c294c9",
-    "Nci.MulBlocks.nw": "19dfd9775369a231a66d0c1954990e286ff6b310dc27091e4e2652489a8e2dbc",
-    "Nci.MulBlocks.o": "003088fbf2999aa5205b3a6ed2b349a79e996b5f18b1d7edadb90cb69a380f94",
-    "Nci.MulBlocks.weightsCompleted": "0c808ac199f48c11569b2c06282a533d14640671c03f1cbd43c98cfe1aca696e",
-    "Nci.Subcircuit": "a7f4f42f53cd548b1413584fc300ff58fd461a5c4f5f40ef354e00aa63922882",
-    "Nci.Subcircuit.gates": "5a3663cbce49c12b8b445faba6cc24afaf5d9854c2cf0a058cef1d8121c89a49",
-    "Nci.Subcircuit.inner": "b0a86683e322e4edc14983e582ba4c69418e79a2ed597ea13a21f3bdb8a53aad",
-    "Nci.Subcircuit.ins": "fd11849e517b9ede9bcdbe1d680f7ff8538697b0753e9c0b139cc41f90fff3dd",
-    "Nci.sources": "348a2571e659fbd90db96312dffa0acbef694589ab8a9ed9b5ea40e27aa44cf1"
+    "Nci.Covering.Covers": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2",
+    "Nci.Covering.FeedsWithin": "e8436f33e45d7ae626b2043cc4cf69b8946b8908628beeeaa686f877ecc8dea4",
+    "Nci.Covering.FeedsWithin.refl": "8d90703f53e34226d55d0071dbafa06f5dd88c90a50f4cb17feb2dfe5c4158f5",
+    "Nci.Covering.FeedsWithin.step": "84a6ad8850b2f524fc572dab4bc666643677a4fa957bbf75e746e33a87976c5b",
+    "Nci.Covering.InferenceBlock": "592979b1785b3206dd675a6a54e0e98f79915784d10f7400055fb2b91fbc4c4c",
+    "Nci.Covering.MulBlocks": "031334dd7fa3df14b1451724deb798317285970016e53c590523892295b1d861",
+    "Nci.Covering.MulBlocks.Completes": "ee0e6230b8f8757407f64bc132a9defa4c5df0b24022aaedcaa05974d02d0156",
+    "Nci.Covering.MulBlocks.Cuts": "31ce2e1e7ecac3924fa0b23ff82050a10e265d641529531d3de7013dce362d38",
+    "Nci.Covering.MulBlocks.P": "881fd2804c631433ca9bef8c2d29df251acc8dd03dbdf11c7b0723d3a13b2ebb",
+    "Nci.Covering.MulBlocks.T": "62a03c8f6fc73cdd6fc8651b5714b6987244793249debd33d7bee6b3e21bf5b6",
+    "Nci.Covering.MulBlocks.m": "fbddeec26e63d6f576424ee1a68446190a7a18b456bbc68d3a5c58f6c7a13f06",
+    "Nci.Covering.MulBlocks.nt": "5aac78a47e2a8335adece8e62aba4ceb952ab84eec418f4ff1fe5b5d4a191d90",
+    "Nci.Covering.MulBlocks.nw": "9b0e30b61ec5329d917afe9d88a732f23675333d9d38aa60c2b380933d17ed1d",
+    "Nci.Covering.MulBlocks.o": "0c5a4453d3a2d716ec136849b71bbb05960df69214b74f1cc00d237e90f224c6",
+    "Nci.Covering.MulBlocks.weightsCompleted": "2719e6793fa80f098b94712796c0a5577b89b538b9a022a4f677542e964211f2",
+    "Nci.Covering.Subcircuit": "16606093da57780c33886270bfe19dcd4afa9afe87ef8e97441f7d0bd7938ff6",
+    "Nci.Covering.Subcircuit.gates": "cc5a8e2573c16298a53fea3413bc5ad67c3c5ebc2458c9599a7c53a2cb21ca1d",
+    "Nci.Covering.Subcircuit.inner": "53262932088b54e316e8facd177542dca4c24f35244eacfde08b285c91084cc6",
+    "Nci.Covering.Subcircuit.ins": "7f43bb2cdc5f6d654f627d3404a73a718a10a0a998cebff2c128a3c96caa586e",
+    "Nci.Covering.sources": "44f69afea9a52095487a6242bfebd1c0237a99e37f99a1f5e336340b697cf353"
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
   },
@@ -26438,11 +26442,11 @@
    ]
   },
   "Models.Nci.Assumptions.Covering": {
-   "digest": "b2291d5ba47be8f3547743539bd5dbe9d5c11dadd63572b09bc2b142425c9312",
+   "digest": "4ad4d4b3fc5e7a3fa22aa86d692e765b1959ff61fcf2fbcf810cd50aa414145f",
    "definitions": {
-    "Nci.Assumptions.ActivationChained": "a60a642a92c5614626c667d4adebdff83809c51d47aec6200d0a6c6989564055",
-    "Nci.Assumptions.ParameterHard": "2098eb70159130e9a8ba99d9600f8a95ee0768d0fba30a673cfb2a2bbdbf0956",
-    "Nci.Assumptions.chainedBlocks": "57ecd35fd8a391dbe4e8bd4a9315e6c7e204367d6d7d753834a10409497f170a"
+    "Nci.Assumptions.ActivationChained": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da",
+    "Nci.Assumptions.ParameterHard": "59bc2194b3f3767baac5bd7b98552da53e114e14f1f164a541180cc5c16ef813",
+    "Nci.Assumptions.chainedBlocks": "ec0d8738d3b107c7c26990e85b75951a262e1b0cf1059f9a9a59a7c735504182"
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
   },
@@ -26624,9 +26628,9 @@
    ]
   },
   "Models.Nci.Guarantees.Covering": {
-   "digest": "f52ccf3f3570ffaf6ba2e5ac85c861d96e881b2a2be6ae1f5dc3e0f078345468",
+   "digest": "16e0d16fc4e352d45128cfca5ecb127bc3ab42b27c1754f7c982d8d699f600e7",
    "definitions": {
-    "Nci.Guarantees.CoveringBound": "e22efc031e623a75d8b72320dfb0976832fc244754574155c3145fb738d7be15"
+    "Nci.Guarantees.CoveringBound": "19a82c84031d0920c7145a871632219c5322dcbc559eee7f27930db159628318"
    },
    "guarantees": ["Nci.SecurityProofs.CoveringBound"]
   },
