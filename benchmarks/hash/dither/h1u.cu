@@ -25,8 +25,10 @@
 //              blocks t = lane RB + c, the columns' 32 RB + lane CB + c), its 16 words to the caller's workspace
 //   h1u<WS>    h1u reading those blocks instead of hashing them
 // Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
-// the fused form with H1U_PF), in a ring of H1U_PD register sets; H1U_L2PF also prefetches into L2 the A and B lines 16
-// segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the warps a CTA (one a unit).
+// the fused form with H1U_PF), in a ring of H1U_PD register sets (H1U_RING = 1: H1U_PD + 1 sets, each segment's load
+// going to the set the segment before it read, so a load never waits on the copy out of its set); H1U_L2PF also
+// prefetches into L2 the A and B lines 16 segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the
+// warps a CTA (one a unit).
 // H1U_SPLIT builds h1p in h1u's place: a pair of warps a unit, for calls whose units leave most of the GPU idle (decode).
 // Warp p of the pair multiplies n-tiles p and p + 2 (T and Y), so it holds exactly the entries chains 4 p .. 4 p + 3 absorb
 // (key t = 2 i + p), and folds those; it hashes (or loads) one of the chunk's two blocks a lane, p = 0 the rows', p = 1 the
@@ -49,6 +51,10 @@
 //   kh_one_noise(the same), kh_one_units(the same)   kh_one's noise launch and its units launch, apart
 //   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
+//   kh_seeds_at(data, idx, pos, U, seeds, stream)   kh_seeds of U units anywhere: unit u's at position pos[u] from
+//              data's record idx[u] (kh_seeds' data, 30 words a record)
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//              (option A's partials, partials.py; at the end of this file)
 //   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
@@ -66,6 +72,9 @@ constexpr int WARPS = H1U_WARPS;
 #endif
 #ifndef H1U_PD
 #define H1U_PD 1
+#endif
+#ifndef H1U_RING
+#define H1U_RING 0
 #endif
 #ifndef H1U_L2PF
 #define H1U_L2PF 0
@@ -92,9 +101,40 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_RONLY
 #define H1K_RONLY 0
 #endif
+// H1K_PD = D >= 1: h1k's producers load their A and B words D rounds ahead in a ring of D + 1 register sets, round r's
+// load going to the set round r - 1 read; 0 keeps one set, copied out and reloaded a round ahead (h1k<4> runs one CTA an
+// SM and h1k<2> two, whatever their registers). H1K_NXD = 1: a chunk's noise blocks, loaded at its first round, are stored
+// at its second round's end rather than its first's, so a round hides their load. H1K_L2PF = S: the producer whose
+// segment is S segments before a 128-byte line's first prefetches that line of the unit's 32 B rows into L2 (A's rows,
+// every unit's of the row block, stay in L2)
+#ifndef H1K_PD
+#define H1K_PD 0
+#endif
+#ifndef H1K_NXD
+#define H1K_NXD 0
+#endif
+#ifndef H1K_L2PF
+#define H1K_L2PF 0
+#endif
+// H1K_CPA = S >= 2 (in H1K_PD's place): h1k's producers copy their A and B words with cp.async into a ring of S stages in
+// dynamic shared memory (S x 2 KiB a producer), round r + S - 1's issued at round r into the stage round r - 1 read
+// (behind that round's barrier), so S - 1 rounds of loads are in flight and none holds a register
+#ifndef H1K_CPA
+#define H1K_CPA 0
+#endif
+// H1U_CARVE = 1: kh_one's units kernels ask for the maximum shared-memory carveout, once a process each, before their
+// first launch (the driver's default on an RTX PRO 6000 holds one 42 KB h1u CTA an SM, where registers allow two)
+#ifndef H1U_CARVE
+#define H1U_CARVE 0
+#endif
 static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(!H1K_RONLY || H1U_KSPLIT, "H1K_RONLY is kh_one's K split without z and y: build it with H1U_KSPLIT");
-static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
+static_assert(16 % (H1U_PD + H1U_RING) == 0, "a chunk's 16 segments are whole rings of H1U_PD (+ 1 with H1U_RING) sets");
+static_assert(!H1U_RING || !H1U_SPLIT, "H1U_RING is h1u's ring; h1p keeps H1U_PD sets");
+static_assert(H1K_PD >= 0 && H1K_PD <= 3, "h1k's ring: 0 (one set) to 3 rounds ahead");
+static_assert(H1K_L2PF % 4 == 0, "h1k's L2 prefetch distance is whole 128-byte lines of segments");
+static_assert(H1K_CPA == 0 || (H1K_CPA >= 2 && H1K_CPA <= 8 && !H1K_PD && !H1K_L2PF),
+              "h1k's cp.async ring: 2 to 8 stages, in place of H1K_PD's register ring and H1K_L2PF");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
 
@@ -156,6 +196,140 @@ __device__ __forceinline__ u32 wrapw(u32 b, u32 v) {
 
 __device__ __forceinline__ void prefetch_l2(const void* p) { asm volatile("prefetch.global.L2 [%0];" ::"l"(p)); }
 
+// H1U_L2HINT = 64 | 128 | 256 (h1u's and h1k's A and B segment loads) and H1U_L2HINT_WS (their workspace loads): the
+// load's L2 prefetch size, so a miss brings the line the next segments (blocks) read instead of the one 32-byte sector
+#ifndef H1U_L2HINT
+#define H1U_L2HINT 0
+#endif
+#ifndef H1U_L2HINT_WS
+#define H1U_L2HINT_WS 0
+#endif
+template <int H>
+__device__ __forceinline__ uint2 ld2(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint2*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint2 v;
+    if constexpr (H == 64) asm("ld.global.nc.L2::64B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else if constexpr (H == 128) asm("ld.global.nc.L2::128B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    else asm("ld.global.nc.L2::256B.v2.u32 {%0, %1}, [%2];" : "=r"(v.x), "=r"(v.y) : "l"(p));
+    return v;
+  }
+}
+template <int H>
+__device__ __forceinline__ uint4 ld4(const void* p) {
+  if constexpr (H == 0) {
+    return __ldg(reinterpret_cast<const uint4*>(p));
+  } else {
+    static_assert(H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    uint4 v;
+    if constexpr (H == 64)
+      asm("ld.global.nc.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    else
+      asm("ld.global.nc.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+    return v;
+  }
+}
+
+// L2 eviction priorities, the bytes unchanged: H1U_EVF = 1 h1u's and h1k's B (weight) and workspace loads evict first
+// (each is read once a step), H1S_EVL = 1 h1s_noise's workspace stores evict last (the units read them a few calls later)
+#ifndef H1U_EVF
+#define H1U_EVF 0
+#endif
+#ifndef H1S_EVL
+#define H1S_EVL 0
+#endif
+// H1U_EVFU = 0 (with H1U_EVF): h1u's B loads keep the normal policy, since a warp reads a row's 128-byte line over four
+// segments and an evict-first line can go before its last; h1k's producers read a line in one round
+#ifndef H1U_EVFU
+#define H1U_EVFU 1
+#endif
+template <int H, bool EF>
+__device__ __forceinline__ uint2 ld2e(const void* p) {
+  if constexpr (!EF) {
+    return ld2<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint2 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v2.u32 {%0, %1}, [%2], %3;" : "=r"(v.x), "=r"(v.y) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <int H, bool EF>
+__device__ __forceinline__ uint4 ld4e(const void* p) {
+  if constexpr (!EF) {
+    return ld4<H>(p);
+  } else {
+    static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    uint4 v;
+    if constexpr (H == 0)
+      asm("ld.global.nc.L2::cache_hint.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 64)
+      asm("ld.global.nc.L2::cache_hint.L2::64B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else if constexpr (H == 128)
+      asm("ld.global.nc.L2::cache_hint.L2::128B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    else
+      asm("ld.global.nc.L2::cache_hint.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
+          : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p), "l"(pol));
+    return v;
+  }
+}
+template <bool EL>
+__device__ __forceinline__ void st4l(uint4* p, uint4 v) {
+  if constexpr (!EL) {
+    *p = v;
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(pol));
+    asm volatile("st.global.L2::cache_hint.v4.u32 [%0], {%1, %2, %3, %4}, %5;" ::"l"(p), "r"(v.x), "r"(v.y), "r"(v.z),
+                 "r"(v.w), "l"(pol)
+                 : "memory");
+  }
+}
+// 8 bytes global -> shared through cp.async (H1K_CPA), with ld2e's L2 prefetch size and eviction policy
+#define H1U_CP8(Q) asm volatile("cp.async.ca.shared.global" Q " [%0], [%1], 8;" ::"r"(d), "l"(p) : "memory")
+#define H1U_CP8P(Q) asm volatile("cp.async.ca.shared.global.L2::cache_hint" Q " [%0], [%1], 8, %2;" ::"r"(d), "l"(p), "l"(pol) : "memory")
+template <int H, bool EF>
+__device__ __forceinline__ void cp8e(void* s, const void* p) {
+  static_assert(H == 0 || H == 64 || H == 128 || H == 256, "an L2 prefetch size is 64, 128 or 256 bytes");
+  const u32 d = (u32)__cvta_generic_to_shared(s);
+  if constexpr (!EF) {
+    if constexpr (H == 0) H1U_CP8("");
+    else if constexpr (H == 64) H1U_CP8(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8(".L2::128B");
+    else H1U_CP8(".L2::256B");
+  } else {
+    u64 pol;
+    asm("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pol));
+    if constexpr (H == 0) H1U_CP8P("");
+    else if constexpr (H == 64) H1U_CP8P(".L2::64B");
+    else if constexpr (H == 128) H1U_CP8P(".L2::128B");
+    else H1U_CP8P(".L2::256B");
+  }
+}
+#undef H1U_CP8
+#undef H1U_CP8P
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
+template <int N>
+__device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
+
 __device__ __forceinline__ void mma_s8(int (&d)[4], const u32 (&a)[4], const u32 (&b)[2]) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -191,6 +365,24 @@ __device__ __forceinline__ u32 ring_xor(const Sm& S, u32 row) {
   return x;
 }
 
+// the lane records (DG, OneOut::lr): a chunk's 32 ring rows (receipt words at .. at + 31) as every lane's own, lane l's
+// at l W + at of the unit's record, thread r writing word at + r of each lane (row r, column l: no bank conflict)
+template <class Sm>
+__device__ __forceinline__ void lane_put(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll 8
+  for (int l = 0; l < 32; ++l) lw[(u64)l * W + at + lane] = S.ring[lane][l];
+}
+
+// the tail's 2 MD ring rows (receipt words at .. at + 2 MD - 1) of every lane
+template <int MD, class Sm>
+__device__ __forceinline__ void lane_tail(const Sm& S, u32* lw, u32 W, u32 at, u32 lane) {
+#pragma unroll
+  for (int i = 0; i < 2 * MD; ++i) {
+    const u32 k = 32 * i + lane, l = k / (2 * MD), r = k % (2 * MD);
+    lw[(u64)l * W + at + r] = S.ring[r][l];
+  }
+}
+
 __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u64 base, u32 U, u64* __restrict__ out) {
   const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
   if (u >= U) return;
@@ -201,6 +393,30 @@ __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u6
     msg[0] = pos;
 #pragma unroll
     for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? data[3 * tag + w] : data[3 + w]) ^ pos;
+    msg[28] = 0x8000000000000000ULL;
+    msg[29] = 0;
+    msg[30] = 0;
+    msg[31] = 224 * 8;
+    u64 s[8];
+    sha512_words(msg, 2, s);
+#pragma unroll
+    for (int j = 0; j < 8; ++j) out[16 * (u64)u + 8 * tag + j] = s[j];
+  }
+}
+
+// h1_seeds of units anywhere (kh_seeds_at): unit u at position pos[u], from data's record idx[u]
+__global__ void __launch_bounds__(128) h1_seeds_at(const u64* __restrict__ data, const u32* __restrict__ idx,
+                                                   const u64* __restrict__ at, u32 U, u64* __restrict__ out) {
+  const u32 u = blockIdx.x * blockDim.x + threadIdx.x;
+  if (u >= U) return;
+  const u64 pos = at[u];
+  const u64* d = data + 30 * (u64)idx[u];
+#pragma unroll 1
+  for (int tag = 0; tag < 2; ++tag) {
+    u64 msg[32];
+    msg[0] = pos;
+#pragma unroll
+    for (int w = 0; w < 27; ++w) msg[1 + w] = (w < 3 ? d[3 * tag + w] : d[3 + w]) ^ pos;
     msg[28] = 0x8000000000000000ULL;
     msg[29] = 0;
     msg[30] = 0;
@@ -234,7 +450,7 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
     uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
 #pragma unroll
     for (int q = 0; q < 4; ++q)
-      o[q] = make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]);
+      st4l<H1S_EVL>(o + q, make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]));
   }
 }
 
@@ -291,25 +507,29 @@ struct OneOut {
   u32 M;
   u32 band = 1;         // J10 banded (kh_one_band; measured only): unit (ri, cj)'s rows from its band leader
                         // (ri, (cj / band) band)'s workspace region, its columns from its own
+  u32* lr = nullptr;    // DG (kh_lanes): unit u's record of its 32 lanes' words at lr + 32 u W (W = kh_words(K))
 };
 
 // PL (kh_one_peel; CA's peel, 11:02Z): z = A B^T, the served model's own product, from the same stream: with xa = [A = 127
 // and b = 1] (where the int8 X = A + b wraps, X = A + b - 256 xa), X (B + c)^T - X c^T - b B^T + 256 xa B^T = A B^T, so
 // z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T): two more MMAs a fragment (X by the coins c, the
 // dither bits b by B) into a fourth accumulator, and xa by B into the wrap term's, in a segment where a lane has an xa.
-template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false>
+// DG (kh_lanes): the units are the diagonal of gathered A [M, K] and B [M, K], unit u rows 32 u .. of both (N unused),
+// each writing its lane record (OneOut::lr) beside its receipt; no other instantiation writes one.
+template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
+  static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   constexpr bool PF = WS || H1U_PF;
-  constexpr int PD = H1U_PD;
+  constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
-  const u32 ncb = N / 32, units = (M / 32) * ncb;
+  const u32 ncb = DG ? 1 : N / 32, units = (M / 32) * ncb;
   const u32 u = blockIdx.x * WARPS + wp;
   if (u >= units) return;
-  const u32 ri = u / ncb, cj = u % ncb;
+  const u32 ri = u / ncb, cj = DG ? u : u % ncb;
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
@@ -348,6 +568,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     return;
   }
+  u32* const lw = DG ? oo.lr + (u64)u * 32 * nwords : nullptr;
   WarpSmem& S = smem[wp];
   const u64* sd = seeds + 16 * (u64)u;
 
@@ -412,14 +633,14 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
-  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % PD
-  uint2 pa[PD][4], pb[PD][4];
+  // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % NS
+  uint2 pa[NS][4], pb[NS][4];
   const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
   if (PF) {
@@ -438,7 +659,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
         const uint4* src = reinterpret_cast<const uint4*>((jb == 0 ? wsr : wsu) + 16 * t);
 #pragma unroll
         for (int w = 0; w < 4; ++w) {
-          const uint4 v = __ldg(src + w);
+          const uint4 v = ld4e<H1U_L2HINT_WS, H1U_EVF>(src + w);
           dst[4 * w] = v.x;
           dst[4 * w + 1] = v.y;
           dst[4 * w + 2] = v.z;
@@ -489,16 +710,23 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
 #pragma unroll 1
-    for (u32 j0 = 0; j0 < 16; j0 += PD) {
+    for (u32 j0 = 0; j0 < 16; j0 += NS) {
 #pragma unroll
-      for (int jj = 0; jj < PD; ++jj) {
+      for (int jj = 0; jj < NS; ++jj) {
         const u32 j = j0 + jj, sg = 16 * blk + j;
         uint2 ca[4], cw[4];
         if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
           prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
-        if (PF) {
+        if (PF && H1U_RING) {
+          if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
+#pragma unroll
+          for (int r = 0; r < 4; ++r) {
+            ca[r] = pa[jj][r];
+            cw[r] = pb[jj][r];
+          }
+        } else if (PF) {
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
             ca[r] = pa[jj][r];
@@ -509,8 +737,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
           const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
-            ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-            cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+            ca[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+            cw[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
           }
         }
         u32 af[2][4], bf[4][2];
@@ -594,6 +822,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     }
     __syncwarp();
     if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
+    if constexpr (DG) lane_put(S, lw, nwords, 32 * blk, lane);
     __syncwarp();
   }
 
@@ -673,6 +902,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   }
   __syncwarp();
   if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (DG) lane_tail<MD>(S, lw, nwords, 2 * ks, lane);
   if constexpr (OS) {
     // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
 #pragma unroll
@@ -773,7 +1003,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     for (int m = 0; m < KNI; ++m) {
       const u32 k = pi + 32 * KP * m, kb = k >> 2, w = k & 3;
       const u64 t = kb < 32 ? (u64)kb * rb + blk : 32ull * rb + (u64)(kb - 32) * cb + blk;
-      v[m] = __ldg(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
+      v[m] = ld4e<H1U_L2HINT_WS, H1U_EVF>(reinterpret_cast<const uint4*>((kb < 32 ? wsr : wsu) + 16 * t) + w);
     }
   };
   const auto store_noise = [&](u32 bf, const uint4(&v)[KNI]) {
@@ -858,30 +1088,73 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
     const u32 kofs = 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
-      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
-      b[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+      a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      b[r] = ld2e<H1U_L2HINT, H1U_EVF>(Bb + (u64)(8 * r + g) * K + kofs);
     }
   };
-  uint2 pa[4], pb[4];
-  if (wp) load_seg(pp, pa, pb);
+  // round r's segment in ring slot r % NS, loaded KD rounds ahead
+  constexpr int KD = H1K_PD ? H1K_PD : 1, NS = H1K_PD ? H1K_PD + 1 : 1;
+  uint2 pa[NS][4], pb[NS][4];
   const u32 R = ks / KP;
-#pragma unroll 1
-  for (u32 r = 0; r <= R; ++r) {
+#if H1K_CPA
+  // stage st's [0 A | 1 B][producer][r][lane]
+  extern __shared__ uint2 h1k_cp[];
+  constexpr u32 CS = H1K_CPA;
+  const auto cp_seg = [&](u32 sg, u32 st) {
+    const u32 kofs = 32 * sg + 8 * q;
+    uint2* sa = h1k_cp + (2 * st * KP + pp) * 128 + lane;
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      cp8e<H1U_L2HINT, false>(sa + 32 * r, Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+      cp8e<H1U_L2HINT, H1U_EVF>(sa + KP * 128 + 32 * r, Bb + (u64)(8 * r + g) * K + kofs);
+    }
+  };
+  if (wp) {
+#pragma unroll
+    for (u32 d = 0; d + 1 < CS; ++d) {
+      if (d < R) cp_seg(KP * d + pp, d);
+      cp_commit();
+    }
+  }
+#else
+  if (wp) {
+#pragma unroll
+    for (int d = 0; d < KD; ++d)
+      if (KP * d + pp < ks) load_seg(KP * d + pp, pa[d], pb[d]);
+  }
+#endif
+  uint4 nv[KNI];
+  const auto run_round = [&](u32 r, uint2(&ra)[4], uint2(&rb4)[4], uint2(&na)[4], uint2(&nb)[4]) {
     if (wp) {
       if (r < R) {
         const u32 sg = KP * r + pp, blk = sg >> 4, j = sg & 15;
-        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (its buffer's last reader, chunk
-        // blk - 1, finished before this round's barrier)
+        // the next chunk's blocks: loaded at a chunk's first round, stored at its end (H1K_NXD: its second round's; its
+        // buffer's last reader, chunk blk - 1, finished before this round's barrier, and its next is chunk blk + 1)
         const bool nx = ((KP * r) & 15) == 0 && blk + 1 < chunks;
-        uint4 nv[KNI];
+        const bool sx = H1K_NXD ? r >= 1 && ((KP * (r - 1)) & 15) == 0 && blk + 1 < chunks : nx;
         if (nx) load_noise(blk + 1, nv);
         uint2 ca[4], cw[4];
+#if H1K_CPA
+        if (r + CS - 1 < R) cp_seg(sg + KP * (CS - 1), (r + CS - 1) % CS);
+        cp_commit();
+        cp_wait<CS - 1>();
+        const uint2* sa = h1k_cp + (2 * (r % CS) * KP + pp) * 128 + lane;
 #pragma unroll
         for (int i = 0; i < 4; ++i) {
-          ca[i] = pa[i];
-          cw[i] = pb[i];
+          ca[i] = sa[32 * i];
+          cw[i] = sa[KP * 128 + 32 * i];
         }
-        if (sg + KP < ks) load_seg(sg + KP, pa, pb);
+#else
+        if (H1K_PD && sg + KP * KD < ks) load_seg(sg + KP * KD, na, nb);
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          ca[i] = ra[i];
+          cw[i] = rb4[i];
+        }
+        if (!H1K_PD && sg + KP < ks) load_seg(sg + KP, ra, rb4);
+#endif
+        if (H1K_L2PF && ((sg + H1K_L2PF) & 3) == 0 && sg + H1K_L2PF < ks)
+          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + H1K_L2PF));
         const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][0][0][0]);
         const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.bits[blk & 1][1][0][0]);
         u32 af[2][4], bf[4][2];
@@ -961,7 +1234,7 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
         }
 #pragma unroll
         for (int t = 0; t < 8; ++t) S.dt[r & 1][pp][t][lane] = make_int4(dT[t][0], dT[t][1], dT[t][2], dT[t][3]);
-        if (nx) store_noise((blk + 1) & 1, nv);
+        if (sx) store_noise((blk + 1) & 1, nv);
       }
     } else if (r) {
       const u32 r1 = r - 1;
@@ -987,6 +1260,12 @@ __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict
       }
     }
     __syncthreads();
+  };
+#pragma unroll 1
+  for (u32 r0 = 0; r0 <= R; r0 += NS) {
+#pragma unroll
+    for (int d = 0; d < NS; ++d)
+      if (r0 + d <= R) run_round(r0 + d, pa[d], pb[d], pa[(d + KD) % NS], pb[(d + KD) % NS]);
   }
   // the producers' Y, Cw and Pz to warp 0 as sums
   if (wp) {
@@ -1497,12 +1776,46 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
 #endif
 }
 
+// H1U_CARVE's attribute for kernel F (a failure leaves the driver's default, and clears the error it set)
+template <auto F>
+static void carve() {
+#if H1U_CARVE
+  static const bool set = [] {
+    if (cudaFuncSetAttribute((const void*)F, cudaFuncAttributePreferredSharedMemoryCarveout,
+                             (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess)
+      return true;
+    (void)cudaGetLastError();
+    return false;
+  }();
+  (void)set;
+#endif
+}
+
 #if H1U_KSPLIT
+// h1k<MD, PL, KP>'s dynamic shared memory (H1K_CPA's stages), its attributes set once a process before the first launch
+// or occupancy query (a failure surfaces as the launch's error)
+template <int MD, bool PL, int KP>
+static unsigned h1k_dyn() {
+  constexpr unsigned b = H1K_CPA * 2 * KP * 128 * sizeof(uint2);
+  if constexpr (b != 0) {
+    static const bool set = [] {
+      const void* f = (const void*)h1k<MD, PL, KP>;
+      return cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)b) == cudaSuccess
+             && cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                     (int)cudaSharedmemCarveoutMaxShared) == cudaSuccess;
+    }();
+    (void)set;
+  }
+  return b;
+}
+
 template <int MD, bool PL, int KP>
 static void launch_k(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                      const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
-  h1k<MD, PL, KP><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                                  (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
+  carve<h1k<MD, PL, KP>>();
+  h1k<MD, PL, KP><<<units, 32 * (KP + 1), h1k_dyn<MD, PL, KP>(), s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
+                                                                       (const u64*)seeds, (const uint8_t*)live, (u32*)out,
+                                                                       (const u32*)ws, oo);
 }
 
 // h1k<MD, PL, KP>'s CTAs resident at once (SMs x the occupancy calculator's CTAs an SM; 0 if either query fails), read
@@ -1512,7 +1825,8 @@ static unsigned h1k_wave() {
   static const unsigned w = [] {
     int dev = 0, sms = 0, per = 0;
     if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess
-        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), 0) != cudaSuccess)
+        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), h1k_dyn<MD, PL, KP>())
+               != cudaSuccess)
       return 0u;
     return (unsigned)(sms * per);
   }();
@@ -1544,6 +1858,7 @@ static void launch_one(unsigned units, cudaStream_t s, const void* A, const void
 #endif
   }
 #endif
+  carve<h1u<MD, WS, !RO, J10, PL>>();
   h1u<MD, WS, !RO, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
                                                                               K, (const u64*)seeds, (const uint8_t*)live,
                                                                               (u32*)out, (const u32*)ws, oo);
@@ -1555,6 +1870,13 @@ extern "C" unsigned kh_words(unsigned K) { return 2 * (K / 32 + n_digits((int)(K
 extern "C" int kh_seeds(const void* data, unsigned long long base, unsigned U, void* seeds, void* stream) {
   if (!U) return 0;
   h1_seeds<<<(U + 127) / 128, 128, 0, (cudaStream_t)stream>>>((const u64*)data, base, U, (u64*)seeds);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+extern "C" int kh_seeds_at(const void* data, const void* idx, const void* pos, unsigned U, void* seeds, void* stream) {
+  if (!U) return 0;
+  h1_seeds_at<<<(U + 127) / 128, 128, 0, (cudaStream_t)stream>>>((const u64*)data, (const u32*)idx, (const u64*)pos, U,
+                                                                 (u64*)seeds);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
@@ -1719,3 +2041,33 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 }
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
+
+// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
+// seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
+// leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes
+// in order (lane 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1)), word 2 s the XOR of its 8 chains' y
+// after set s and 2 s + 1 of their z, so the XOR over a record's lanes is its receipt. The fused h1u, every unit live.
+template <int MD>
+static void launch_lanes(unsigned L, cudaStream_t s, const void* A, const void* B, unsigned K, const void* seeds,
+                         void* out, const OneOut& oo) {
+  carve<h1u<MD, false, false, false, false, true>>();
+  h1u<MD, false, false, false, false, true><<<(L + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(
+      (const int8_t*)A, (const int8_t*)B, 32 * L, 32, K, (const u64*)seeds, nullptr, (u32*)out, nullptr, oo);
+}
+
+extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, const void* seeds, void* out, void* lr,
+                        void* stream) {
+  if (K % 512 || !out || !lr || L > (1u << 26)) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  if (!L) return 0;
+  OneOut oo{};
+  oo.lr = (u32*)lr;
+  cudaStream_t s = (cudaStream_t)stream;
+  if (m == 2)
+    launch_lanes<2>(L, s, A, B, K, seeds, out, oo);
+  else
+    launch_lanes<3>(L, s, A, B, K, seeds, out, oo);
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}

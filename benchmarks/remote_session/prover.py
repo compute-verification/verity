@@ -57,7 +57,8 @@ released since the last root sent, as runs, with those among them the trace with
 encode landed, so never written: `Session.release(released, withdrawn)`), and the pass's plan as a change from the
 last one sent (`Session.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
 residency to its encode (`deferred`, a backend's attribute, False if it has none), which the verifier refuses under a
-lifetime of one window.  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
+lifetime of one window, and whether any session of the plan appends (`appends`, false for a plan of `BANDWIDTH` modes
+only, whose sessions then reserve no append coins).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
 takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
@@ -111,6 +112,9 @@ DROPPED_LISTED = 4096
 BOUNDARIES = ("coin", "close", "end")
 MODES = ("honest", "skip", "kv", "kvdrop", "kvoverwrite", "serve", "servedrop")
 TRACED = ("kv", "kvdrop", "kvoverwrite")
+BANDWIDTH = ("honest", "skip")
+"""The modes whose sessions read the registered store and append nothing: a plan of only these says so in its hello
+(`appends: false`), and its sessions reserve no append coins (`verifier.Verifier.register`)."""
 
 
 @dataclass
@@ -660,7 +664,8 @@ class ProverSide:
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
                         "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows,
-                        "layout": layout, "deferred": bool(getattr(self.backend, "deferred", False))})
+                        "layout": layout, "deferred": bool(getattr(self.backend, "deferred", False)),
+                        "appends": any(mode not in BANDWIDTH for mode, _ in self.plan)})
         head, _, _ = self.expect("registration")
         self.registration = wire.registration_of(head["registration"])
         if self.registration.payload_root != root or self.registration.blocks != self.backend.blocks:
