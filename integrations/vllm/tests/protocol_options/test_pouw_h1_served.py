@@ -31,6 +31,7 @@ from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
+from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
@@ -82,8 +83,9 @@ def _codes(rng, n, k):
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
-    same weights (step 1's q on ``changed`` when given); the later steps are empty. Returns the run, each linear's weight
-    and scales, and each served call's (a, s_a, z, y) by its index."""
+    same weights (step 1's q on ``changed`` when given), each call's z/y records `scaled_mm_zy`'s over its T slots; the
+    later steps are empty. Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its
+    index, z its exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile), blocks, window=served_key or key))
@@ -95,10 +97,10 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
         for w, (a, (wt, sw)) in enumerate(zip(inputs, ws)):
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
-            z = torch.from_numpy(rng.integers(-(1 << 20), 1 << 20, (SERVED, n), dtype=np.int32))
-            y, s_a = torch.randn(SERVED, n).bfloat16(), torch.rand(SERVED) + 0.5
-            call = run.record(w, a, s_a, wt, sw, z=None if no_z else z, y=y)
-            got[call.index] = (a, s_a, z, y)
+            s_a = torch.rand(SERVED) + 0.5
+            y, zy = OPS.scaled_mm_zy(a, s_a, wt, sw, rows) if n % PH.TILE[1] == 0 else (None, None)
+            call = run.record(w, a, s_a, wt, sw, z=None if no_z else zy)
+            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, y)
     run.close()
     return run, ws, got
 
