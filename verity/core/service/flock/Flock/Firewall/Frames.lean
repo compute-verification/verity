@@ -199,8 +199,8 @@ def roundPlace (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom conten
       match Frame.step p.cfg p.st (.prior prior.size (wordBytes prior)) with
       | (.ok, st') => p := { p with st := st' }
       | (a, _) => throw s!"rep 0's algebraic-phase coins: {replyWhy a}"
-  let (place, _, p) ← placeOf R.salts l0 s p (s.spec.domain name r).toUTF8
-  return (p, place, first)
+  let (place, _, p') ← placeOf R.salts l0 s p (s.spec.domain name r).toUTF8
+  return (p', place, first)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
 the rank check's result where the round made it, and the round and why the rep stopped where the round stopped it. -/
@@ -230,7 +230,7 @@ def roundStep (R : Registry) (L0 : Level0.Registry) (sid i r : Nat) (dom content
         rank := (match p.st.m.rank, st'.m.rank with
           | none, some k => some k
           | _, _ => none)
-        stops := if v.startsWith " fail" then some (p.coins.size, v.drop 5) else none }
+        stops := if v.startsWith " fail" then some (p.coins.size, s!"{v.drop 5}") else none }
     | (a, st') => { out := .error (replyWhy a), put := some { p with st := st' } }
 
 /-- **Session `sid`'s device round `content` of table `i`'s rep `r`** in the loop: `roundStep` on the loop's frames and
