@@ -5,7 +5,8 @@ written out here by hand, and `Tmpl.flatLines` prints that text byte for byte, s
 `flock-ir-unit/v2` writes it, with the carried `LEAVES` line, and so does the same unit with its bindings as two-level
 segments. The forms `Tmpl.parse` and `Tmpl.unroll` refuse: overlapping
 copies, a callee that is not an earlier definition, segments that don't cover the callee's inputs or bind past the
-caller's references, a column written twice, a root with inputs, a copy reading a later column.
+caller's references, a column written twice, a root with inputs, a copy reading a later column, a Definition of `2^64`
+columns.
 -/
 import Flock.Tmpl
 
@@ -118,5 +119,8 @@ def refuses (lines : Array String) : Bool := (unrolled lines).toOption.isNone
 #guard refuses (tmplLines "CALL 1 2 128 3 1 1 0 1 2 400")
 -- run 1 reading input padding (bits 3 and 4) past the group's 3 ports
 #guard refuses (tmplLines "CALL 1 2 128 3 1 1 0 1 2 3")
+-- a root of `2^64` columns, past what `locate` halves
+#guard (_root_.Flock.Tmpl.parse #["flock-ir-tmpl/v2 t 0 0 0", "DEF 18446744073709551616 0 0 0"]).toOption.isNone
+#guard (_root_.Flock.Tmpl.parse #["flock-ir-tmpl/v2 t 0 0 0", "DEF 18446744073709551615 0 0 0"]).toOption.isSome
 
 end Flock.Test.Tmpl
