@@ -29,6 +29,7 @@ theorem refX_eq (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.h
     rw [show as.getD k 0 + 2 ^ β * (H * 2 ^ al + off) + 2 ^ β * Flock.Tmpl.posIn t lays (t.defs.size + 1) d v =
         as.getD k 0 + 2 ^ β * (H * 2 ^ al + (off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v)) by ring,
       g_chunk pt hR h6 hL hk]
+    split_ifs <;> simp
   · by_cases h2 : v < (t.defs.getD d default).cols + (t.defs.getD d default).ins
     · simp only [h1, h2, ↓reduceIte]
     · simp only [h1, h2, ↓reduceIte]
