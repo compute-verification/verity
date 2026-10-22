@@ -92,6 +92,7 @@ import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
 import Proofs.Flock.Claims.ZK.FrameState
 import Proofs.Flock.Claims.ZK.FrameRun
+import Proofs.Flock.Claims.ZK.FrameShape
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -630,6 +631,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameRun`: the frame's fold over its requests (`Frame.run`): over `qs ++ rs` it is over `qs`, then over `rs` where
   that did not end the rep (`run_append`, `run_snoc`); a round with its scheduled round in its place is `check`
   (`step_sched`), and coins are `Masker.answer` (`step_coins`).
+* `FrameShape`: the frame's round reads a round's shape alone: two rounds whose frames are alike (`Alike`: the same
+  kinds, sizes, labels and lengths) leave the same masker state and the same error (`roundFree_alike`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
