@@ -1218,6 +1218,60 @@ theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteAr
 
 end Skel
 
+theorem forall₂_append {α β : Type} {R : α → β → Prop} {l₁ l₂ : List α} {l₁' l₂' : List β}
+    (h₁ : List.Forall₂ R l₁ l₁') (h₂ : List.Forall₂ R l₂ l₂') : List.Forall₂ R (l₁ ++ l₂) (l₁' ++ l₂') := by
+  induction h₁ with
+  | nil => exact h₂
+  | cons h _ ih => exact .cons h ih
+
+theorem roundsAt_append {rs rs' qs qs' : Array (ByteArray × ℕ)} (h : RoundsAt rs rs') (hq : RoundsAt qs qs') :
+    RoundsAt (rs ++ qs) (rs' ++ qs') := by
+  unfold RoundsAt
+  rw [Array.toList_append, Array.toList_append]
+  exact forall₂_append h hq
+
+/-- **A rep's scheduled rounds so far at two tables of one shape**, on the same coins: rounds of one shape, or both
+refused, whatever the salts for levels ≥ 1. -/
+theorem schedSoFar_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi hi' : Array ByteArray) (cr : Array (Array F128)) (hst : t.st = t'.st)
+    (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad) (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0)
+    (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64) (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64)
+    (hn : t.sch.n + 1 < 2 ^ 64) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 64) (hp : 2 * t.tPad < 2 ^ 64)
+    (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64) :
+    RelV RoundsAt (Loop.schedSoFar t rep dom xs hi cr) (Loop.schedSoFar t' rep dom xs hi' cr) := by
+  unfold Loop.schedSoFar
+  rw [← hst, ← hsch]
+  refine relV_bind (rounds_alike t.st t.sch.k0 (flat t.cm0.cap) (flat t'.cm0.cap) dom hcm.1 hdg hcm.2 hdom hm)
+    fun alg alg' ha => ?_
+  have hsz : alg.size = alg'.size := by
+    have := ha.length_eq
+    simpa using this
+  rw [← hsz]
+  by_cases hlt : cr.size < alg.size
+  · simp only [hlt, ↓reduceIte]
+    exact ha
+  · simp only [hlt, ↓reduceIte]
+    obtain ⟨hs, hrs⟩ := stepRel_feed (cr.extract alg.size cr.size).toList (rs := #[]) (rs' := #[])
+      (openStep_alike t t' rep dom xs hi hi' (cr.extract 0 alg.size) hst hsch htp hg hcm hdom hdg hm hx hn hq hp hd)
+      List.Forall₂.nil
+    revert hs hrs
+    generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+      (cr.extract alg.size cr.size).toList #[] = A
+    generalize (_root_.Flock.Firewall.Drive.openStep t' rep dom xs hi' (cr.extract 0 alg.size)).feed
+      (cr.extract alg.size cr.size).toList #[] = B
+    obtain ⟨sA, rsA⟩ := A
+    obtain ⟨sB, rsB⟩ := B
+    intro hs hrs
+    dsimp only at hs hrs
+    cases hs with
+    | done => exact roundsAt_append ha hrs
+    | fail => exact True.intro
+    | ask hc _ =>
+      refine roundsAt_append ha ?_
+      unfold RoundsAt
+      rw [Array.toList_push, Array.toList_push]
+      exact forall₂_push hrs hc
+
 end Sched
 
 end Claims.ZKServer
