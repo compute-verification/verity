@@ -1791,6 +1791,35 @@ def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, run
         return False
 
 
+#: a `git revert` commit's own line naming what it reverted
+REVERTS = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
+#: each `landed` label (`label_landed`) whose value is its check run's own source commit: the head that run checked
+CHECKED_HEADS_SQL = """SELECT DISTINCT lv.value, lt.value FROM records l
+JOIN fields lt ON lt.id = l.id AND lt.path = 'target'
+JOIN fields lv ON lv.id = l.id AND lv.path = 'value'
+JOIN fields rs ON rs.id = lt.value AND rs.path IN ('source.commit', 'execution.remote.source_sha')
+WHERE l.type = 'label' AND l.kind = 'landed' AND rs.value = lv.value"""
+
+
+def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
+    """(commit, run) for each commit on ``tip``'s first-parent line whose own `check` passed and landed it: a train's head.
+    `label_landed` labels every commit of a train on its one check run, but the run checked only its source commit, so a
+    label counts only when its value is that commit (the store index ``idx``, `bucket_index.reader`). Oldest first, less
+    each head whose train holds a commit a later `git revert` on the line names: it broke `main` after its check."""
+    line = _git(repo, "rev-list", "--first-parent", "--reverse", tip).stdout.split()
+    pos = {c: i for i, c in enumerate(line)}
+    found: dict[str, str] = {}
+    for commit, run in sorted(idx.query(CHECKED_HEADS_SQL)[1]):
+        if commit in pos:
+            found.setdefault(commit, run)
+    heads = sorted(found, key=pos.__getitem__)
+    bad = set()
+    for r in REVERTS.findall(_git(repo, "log", "--first-parent", "--format=%B", tip).stdout):
+        if r in pos and (h := next((h for h in heads if pos[h] >= pos[r]), None)):
+            bad.add(h)
+    return [(h, found[h]) for h in heads if h not in bad]
+
+
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
     """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported

@@ -91,6 +91,15 @@ import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
 import Proofs.Flock.Claims.ZK.FrameState
+import Proofs.Flock.Claims.ZK.FrameRun
+import Proofs.Flock.Claims.ZK.FrameShape
+import Proofs.Flock.Claims.ZK.FrameOwn
+import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.Claims.ZK.FrameLoop
+import Proofs.Flock.Claims.ZK.FrameSched
+import Proofs.Flock.Claims.ZK.FrameProg
+import Proofs.Flock.Claims.ZK.FrameCount
+import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -122,6 +131,7 @@ import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishSwFw
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -600,6 +610,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   view, `Masked.LaneAt`) have the layout's length (`Composed.replay_asz`, `Masked.lanesAt_asz`), so the firewall's
   constraints are seven of that length (`Composed.fwCons_asz`), and where their rows are `rowsSwE`'s as whole forms
   (as `Composed.tauFw` gives them) they are `SwRows` (**`Masked.swRows_of`**).
+* `FinishSwFw`: `hinner` at the switched source. `Composed.tauFw_at` at the worker's view reads the deployed rep's
+  coins from its base (`czExe`'s), the view's masked values below `zp 64` (`Masked.swViewMasked` with
+  `Masked.swSrcE_hmk_frame`) and the model's fold, and the inner proof begins at `repSlot … (innerOff 0)`, so
+  `InnerSrc` holds at the switched source wherever the ring switch's vectors are the view's and level 0 is read at the
+  view (**`Masked.swSrcE_hinner`**, those two its premises).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
@@ -674,6 +689,35 @@ import Proofs.Flock.Claims.ZK.SessionLean
   binding starts level 0's phase at the algebraic phase's position (`answered_openBind`), each masked round moves it
   by its values (`answered_l0`), the pair's sums reach the layout's end and take `ρ_0` (`answered_l0_last`,
   `answer_rho_first`), and `ρ_1`'s round takes `ρ_1` (`answered_rho1`), the state the closing round reads.
+* `FrameRun`: the frame's fold over its requests (`Frame.run`): over `qs ++ rs` it is over `qs`, then over `rs` where
+  that did not end the rep (`run_append`, `run_snoc`); a round with its scheduled round in its place is `check`
+  (`step_sched`), and coins are `Masker.answer` (`step_coins`).
+* `FrameShape`: the frame's round reads a round's shape alone: two rounds whose frames are alike (`Alike`: the same
+  kinds, sizes, labels and lengths), at configurations alike but for their draws (`CfgAlike`) and states equal but for
+  `stopped`, leave the same state but for `stopped` and the same error (`roundFree_alike`), and where both are taken,
+  inside the inner proof too, the same state (`roundFree_alike_ok`).
+* `FrameOwn`: the frame's check of the inner proof takes the firewall's own rounds (`ownRound`) at every configuration
+  and state (`innerOwn_ownRound`).
+* `FramePass`: a device round that passes the frame's check at a scheduled round of frames `fs` is the bytes of frames
+  alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
+  (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
+* `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
+  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
+  `ProgReads` holds by definition (`ofLoop_progReads`).
+* `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
+  monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
+  opening at two tables of one shape whatever its salts for levels ≥ 1 (`openStep_alike`), and so a rep's scheduled
+  rounds so far (`schedSoFar_alike`), which only grow with one more round's coins (`schedSoFar_snoc`).
+* `FrameProg`: toward `ProgChecks` at `ofLoop`: where the deployed frame's check of a device round releases a round, the
+  placeholder's check of its alike scheduled round against itself releases one from the same state, its state the same
+  but for `stopped` (`check_alike_self`), and the loop's frame state one scheduled round on is that check's
+  (`repState_step`), so `ProgChecks`' step holds at a scheduled round past a rep's first (`ofLoop_progChecks_step`).
+* `FrameCount`: the algebraic phase's scheduled rounds squeeze the masked replay's counts (`rounds_counts`,
+  `piop_counts`: `replayCoins` with its zeros dropped), each round's count as its squeeze header holds it (`Tally`, over
+  the recording channel `Skeleton.recAsks`).
+* `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
+  opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
+  round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
