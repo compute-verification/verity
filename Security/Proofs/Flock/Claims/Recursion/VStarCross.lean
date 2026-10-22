@@ -18,8 +18,9 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   round and at least three more (`roundsMargin_V`), each inner and staging round answered by its coin's bytes
   (`run_inner`), which `FlockDeploy.decCoin` reads back.
 * **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
-  read back through the coin server's transcript (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape,
-  that transcript determines the rounds (`b.tr x` injective) and the layout spans no more than the inner rounds.
+  read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the coin
+  server's transcript of an accepted run's inner rounds back to them (`ReadsBack`, which `b.tr x` injective gives at its
+  left inverse, `readsBack_invTr`) and the layout spans no more than the inner rounds.
   `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
   coins.
@@ -44,7 +45,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   them. With those calls admitted as public (`VStar.LogDecompPub`, which `VStarParts` asks for with the public calls
   the V* setup's own evaluations, `VStar.PubReg`), it is the verdict's calls alone that must be the parts'
   (`VerdictCut`, `logDecompPub_of_cut`).
-* **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `b.tr x` injective
+* **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `ReadsBack`
   (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `HeldPub` holds where the registered
   ports cover the message rounds (`heldPub_layoutOf`). The layout records no call, so `PartLogs` leaves each part no
   inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
@@ -120,33 +121,56 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
 
 /-! ## The staged statements show the run -/
 
-/-- **The rounds a V\* statement's transcript shows**: its transcript, read back through the coin server's transcript
-`b.tr x`. -/
-noncomputable def shownOf (b : Brings) (x xO : Msg) : Option (List (Msg × Out)) :=
-  ((decodeRec xO).bind RecRaw.transcript).map (Function.invFun (b.tr x))
+/-- **A reader of the coin server's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say. -/
+abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Out))
+
+/-- **The reader reads the coin server's transcript back at an accepted run** (a named premise): at each compiled
+statement of the shape, on every accepted run of `V IV b.st`, `untr` reads `b.tr x` of the run's inner rounds back to
+those rounds. It asks nothing at a list of rounds no accepted run sends (`readsBack_invTr`: `b.tr x` injective gives
+it at `invTr b`). -/
+def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
+    (untr : TrReader) : Prop :=
+  ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
+    (r : Fin ((V IV b.st).k x) → Coin), (run H P (V IV b.st) x ω r).out = .acc →
+      untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) =
+        some ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))
+
+/-- **The left inverse of the coin server's transcript**, as a reader. -/
+noncomputable def invTr (b : Brings) : TrReader := fun x t => some (Function.invFun (b.tr x) t)
+
+/-- **Where `b.tr x` is injective, its left inverse reads it back**, at every run. -/
+theorem readsBack_invTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
+    (shape : Claims.Recursion.Form → Prop)
+    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x)) :
+    ReadsBack H IV b shape (invTr b) :=
+  fun x st hst hf _ _ _ _ _ => congrArg some (Function.leftInverse_invFun (htr x st hst hf) _)
+
+/-- **The rounds a V\* statement's transcript shows**: its transcript, read by `untr`. -/
+def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Out)) :=
+  ((decodeRec xO).bind RecRaw.transcript).bind (untr x)
 
 /-- **The coins a V\* statement shows**: its transcript's rounds are each answered by the coin's bytes. -/
-def showsTr (b : Brings) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
-  ∃ ps, shownOf b x xO = some ps ∧ ∀ i < ps.length, (ps.getD i ([], .rej)).2 = .msg (c i).bytes
+def showsTr (untr : TrReader) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
+  ∃ ps, shownOf untr x xO = some ps ∧ ∀ i < ps.length, (ps.getD i ([], .rej)).2 = .msg (c i).bytes
 
 /-- **The commit string a V\* statement shows at inner round `i`**: its transcript's prover message there. -/
-noncomputable def cmtTr (b : Brings) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
-  ((shownOf b x xO).map fun ps => (ps.map Prod.fst).getD i []).getD []
+def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
+  ((shownOf untr x xO).map fun ps => (ps.map Prod.fst).getD i []).getD []
 
 /-- **`Staged` at `deployRec`**, at every shape: each V* statement of an accepted run is part `s`'s staged one at the
 run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the coin
-server's transcript of the run's inner rounds; read back through `b.tr x`, wherever it is injective, those rounds are
-answered by the run's coins (`run_inner`) and their prover messages are the run's commit strings, at each round the
-layout spans, which are inner rounds. -/
+server's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
+those rounds are answered by the run's coins (`run_inner`) and their prover messages are the run's commit strings, at
+each round the layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
-    (b : Brings) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x))
+    (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
+    (hrb : ReadsBack H I.V b shape untr)
     (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x)) :
-    Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsTr b) (cmtTr b) := by
+    Claims.Recursion.VStar.Staged H (deployRec I.V ivScope b) I L shape (showsTr untr) (cmtTr untr) := by
   intro x st hst hf Ω P ω r hacc s hs
-  have htr := htr x st hst hf
   have hL := hL x st hst hf
   change (run H P (V I.V b.st) x ω r).out = .acc at hacc
+  have hrb := hrb x st hst hf Ω P ω r hacc
   change s < nS x at hs
   have hne := staged_ne_nil H I.V b.st x P ω r hacc hs
   obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
@@ -167,13 +191,14 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
       omega
     · intro i h₁ h₂
       simp only [List.getElem_dropLast, List.getElem_take]
-  have hshown : shownOf b x (staged b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s) =
+  have hshown : shownOf untr x (staged b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s) =
       some ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x))) := by
     unfold shownOf
     rw [hd, Option.bind_some]
-    show Option.map (Function.invFun (b.tr x))
-      (some (b.tr x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)).dropLast)) = _
-    rw [Option.map_some, Function.leftInverse_invFun htr _, hdl]
+    show Option.bind
+      (some (b.tr x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)).dropLast)) (untr x) = _
+    rw [Option.bind_some, hdl]
+    exact hrb
   rw [hv]
   refine ⟨⟨_, hshown, fun i hi => ?_⟩, fun i hi => ?_⟩
   · have hi' : i < I.V.k (xIOf x) := by
@@ -806,17 +831,17 @@ theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable
 
 /-! ## At the registered ports' layout -/
 
-/-- **`Staged` at `layoutOf`**, at every shape, wherever the coin server's transcript determines the rounds: the layout
-spans exactly the inner verifier's rounds. -/
+/-- **`Staged` at `layoutOf`**, at every shape, wherever the reader reads the coin server's transcript back
+(`ReadsBack`): the layout spans exactly the inner verifier's rounds. -/
 theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
-    (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x)) :
+    (untr : TrReader) (shape : Claims.Recursion.Form → Prop)
+    (hrb : ReadsBack H (FlockDeploy.V false) b.atPorts shape untr) :
     Claims.Recursion.VStar.Staged H (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) layoutOf shape (showsTr b.atPorts)
-      (cmtTr b.atPorts) :=
-  staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts layoutOf
-    shape htr fun _ _ _ _ => le_rfl
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) layoutOf shape (showsTr untr)
+      (cmtTr untr) :=
+  staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts untr
+    layoutOf shape hrb fun _ _ _ _ => le_rfl
 
 /-- **`PartLogs` at `layoutOf` leaves the part no inner calls**: the layout records none, so wherever the part's outer
 relation holds at a V* statement showing the coins, its inner check makes no call on messages agreeing with what it
