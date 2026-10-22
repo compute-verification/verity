@@ -129,21 +129,22 @@ theorem decComb_eq {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {
   · simp [h.ok]
 
 /-- **`LeafReads` from the rows**: where every proof's committed leaf is in range and, where its sessions' registrants'
-rows agree, each lane's opened port bits hold its words (`LaneHolds`) and the combine's hold the partials and the receipt
+rows agree and the known rows hold (`KnownHeld`), each lane's opened port bits hold its words (`LaneHolds`) and the combine's hold the partials and the receipt
 (`CombHolds`), `LeafReads` holds at `decL` and `decC`. -/
 theorem leafReads_of_holds {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
     {sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession}
+    {known : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known}
     {pub : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → LanePub}
     {parts : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32}
     {receipt : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32}
     {leaf : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Leaf K}
     (hR : ∀ x w i, LeafInRange (leaf x w i))
-    (h : ∀ x w i, RowsAgree (sess x w i) →
+    (h : ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
       (∀ l, LaneHolds K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) (leaf x w i)
         (pub x w i) (parts x w i l) l) ∧
       CombHolds nw T (portBit (sess x w i none) (openedReg (sess x w i none))) (parts x w i) (receipt x w i)) :
-    Accounting.Assumptions.TS.LeafReads sess (decL K nw T) (decC nw T) pub parts receipt leaf :=
-  (leafReads_iff T sess pub parts receipt leaf).2 fun x w i hA =>
-    ⟨fun l => decLane_eq (hR x w i) ((h x w i hA).1 l), decComb_eq (h x w i hA).2⟩
+    Accounting.Assumptions.TS.LeafReads sess known (decL K nw T) (decC nw T) pub parts receipt leaf :=
+  (leafReads_iff T sess known pub parts receipt leaf).2 fun x w i hA hK =>
+    ⟨fun l => decLane_eq (hR x w i) ((h x w i hA hK).1 l), decComb_eq (h x w i hA hK).2⟩
 
 end Accounting.TS.Lanes

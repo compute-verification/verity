@@ -91,6 +91,11 @@ import Proofs.Flock.Claims.ZK.FrameOpenCut
 import Proofs.Flock.Claims.ZK.FrameOpenLive
 import Proofs.Flock.Claims.ZK.FramePhase
 import Proofs.Flock.Claims.ZK.FrameState
+import Proofs.Flock.Claims.ZK.FrameRun
+import Proofs.Flock.Claims.ZK.FrameShape
+import Proofs.Flock.Claims.ZK.FrameOwn
+import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -680,6 +685,21 @@ import Proofs.Flock.Claims.ZK.SessionLean
   binding starts level 0's phase at the algebraic phase's position (`answered_openBind`), each masked round moves it
   by its values (`answered_l0`), the pair's sums reach the layout's end and take `ρ_0` (`answered_l0_last`,
   `answer_rho_first`), and `ρ_1`'s round takes `ρ_1` (`answered_rho1`), the state the closing round reads.
+* `FrameRun`: the frame's fold over its requests (`Frame.run`): over `qs ++ rs` it is over `qs`, then over `rs` where
+  that did not end the rep (`run_append`, `run_snoc`); a round with its scheduled round in its place is `check`
+  (`step_sched`), and coins are `Masker.answer` (`step_coins`).
+* `FrameShape`: the frame's round reads a round's shape alone: two rounds whose frames are alike (`Alike`: the same
+  kinds, sizes, labels and lengths), at configurations alike but for their draws (`CfgAlike`) and states equal but for
+  `stopped`, leave the same state but for `stopped` and the same error (`roundFree_alike`), and where both are taken,
+  inside the inner proof too, the same state (`roundFree_alike_ok`).
+* `FrameOwn`: the frame's check of the inner proof takes the firewall's own rounds (`ownRound`) at every configuration
+  and state (`innerOwn_ownRound`).
+* `FramePass`: a device round that passes the frame's check at a scheduled round of frames `fs` is the bytes of frames
+  alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
+  (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
+* `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
+  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
+  `ProgReads` holds by definition (`ofLoop_progReads`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
