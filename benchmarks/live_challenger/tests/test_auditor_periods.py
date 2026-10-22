@@ -310,6 +310,39 @@ def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(ho
     assert set(checked(host)) == {"p1", "k1", "v1"}
 
 
+def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit verifies each window's statements on the circuit file its period's open committed for the call's K
+    (`circuit_files`, ``{k<K>: SHA-512}``, credit's `committed_files`), signed before window 0's first coin beside its
+    draw K and weights' root, whatever order or spacing the JSON came in."""
+    files = {"k4096": "1a" * 64, "k64": "2b" * 64}
+    given = shlex.quote(json.dumps({"k64": "2b" * 64, "k4096": "1a" * 64}, indent=1))
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --weights-root "
+                                  f"{'5e' * 64} --circuit-files {given}", "hash"))
+    assert opened["body"]["circuit_files"] == files and opened["body"]["draw_k"] == 27
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} "
+                                  f"--circuit-files {shlex.quote(json.dumps(files))}"))["body"]
+    assert body["circuit_files"] == files and "draw_k" not in body and "weights_root" not in body
+    lines = [json.loads(e) for e in A.read_ledger(host.ledger)]
+    assert [e["body"].get("circuit_files") for e in lines if e["kind"] == "period-open"] == [files, files]
+    assert set(checked(host)) == {"p1", "k1"}
+
+
+@pytest.mark.parametrize("files", [
+    "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
+    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}',
+    '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
+])
+def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
+    rc, out = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --circuit-files {shlex.quote(files)}",
+                  "hash")
+    assert rc == 3 and "--circuit-files" in out["refused"]
+    assert A.read_ledger(host.ledger) == []
+    assert len(A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 65)}))) == 64
+    with pytest.raises(A.Refused, match="1 to 64 distinct K"):
+        A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
+
+
 @pytest.mark.parametrize("args", [
     ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "weights_root=" + "5e" * 64, "weights_root=" + "5e" * 64],
     ["period-open", "p1", "hash", "hash", "2", "ab" * 64, "pinned=" + "5e" * 20],
