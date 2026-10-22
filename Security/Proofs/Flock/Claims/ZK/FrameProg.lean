@@ -565,6 +565,67 @@ theorem schedOf_eq (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array 
   simp only [hreal, hs, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.map_some,
     Option.getD_some]
 
+/-- The frame refuses the empty round: it has no squeeze. -/
+theorem roundFree_empty (c : Cfg) (s : Masker) (n : ℕ) : ∃ e, roundFree c s ByteArray.empty n = .error e := by
+  unfold roundFree
+  by_cases hi : (s.inner == some INNER_ROUNDS) = true
+  · simp only [hi, ↓reduceIte]
+    exact ⟨_, rfl⟩
+  · simp only [hi, Bool.false_eq_true, ↓reduceIte, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+      ByteArray.size_empty]
+    exact ⟨_, rfl⟩
+
+/-- **The frame's check refuses the empty scheduled round**, whatever the device round and the rep's state. -/
+theorem check_empty (c : Cfg) (s : Masker) (v : ByteArray) (n : ℕ) (q : ByteArray × Masker × Option String) :
+    check c s v ByteArray.empty n ≠ .ok q := by
+  obtain ⟨e, he⟩ := roundFree_empty c s n
+  obtain ⟨e', he'⟩ := roundFree_empty c { s with stopped := true } n
+  intro h
+  unfold check passes _root_.Flock.Firewall.Frame.standIn _root_.Flock.Firewall.Frame.round at h
+  cases hs : s.stopped <;> simp only [hs, he, he', Bool.false_eq_true, ↓reduceIte, bind, Except.bind] at h <;>
+    cases h
+
+/-- A state that owes no round's coins refuses any. -/
+theorem answer_owed_none {c : Cfg} {s : Masker} (cs : Array F128) (hs : s.owed = none) {m : Masker} :
+    s.answer c cs ≠ .ok m := by
+  intro h
+  unfold _root_.Flock.Firewall.Frame.Masker.answer at h
+  rw [hs] at h
+  cases h
+
+/-- Before a rep's first round its state owes no coins. -/
+theorem repState_zero_owed (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) :
+    (repState c t rep dom xs hi cr0 cr ns 0).owed = none := by
+  unfold repState
+  split
+  · rfl
+  · dsimp only
+    split_ifs <;> rfl
+
+/-- **The loop's frame state owes coins only at a rep's round past its first**: after the decoded coins `cs`, where `x`
+sets up a session and `cs` holds `q + 1` coins, at rep stream `k`'s round `j + 1`. -/
+theorem progOf_owed (x : Msg) (cs : List FlockDeploy.Coin) (ho : (progOf x cs).owed ≠ none) :
+    ∃ s0 spec sts q k j, FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ cs.length = q + 1 ∧
+      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) := by
+  rcases hx : FlockDeploy.setupOf true x with _ | ⟨s0, spec, sts⟩
+  · exact absurd (show (progOf x cs).owed = none by unfold progOf; rw [hx]) ho
+  · rcases hq : cs.length with _ | q
+    · exact absurd (show (progOf x cs).owed = none by unfold progOf; rw [hx, hq]) ho
+    · rcases hl : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q with ⟨k, _ | j⟩
+      · refine absurd ?_ ho
+        cases hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) with
+        | error e =>
+          unfold progOf
+          rw [hx, hq]
+          simp only [hph]
+        | ok r =>
+          obtain ⟨c, t, dom, xs, hi⟩ := r
+          rw [progOf_at x cs hx hq hph, hl]
+          exact repState_zero_owed _ _ _ _ _ _ _ _ _
+      · exact ⟨s0, spec, sts, q, k, j, by first | exact hx | rfl, by first | exact hq | rfl,
+          by first | exact hl | rfl⟩
+
 end Loop
 
 namespace LeanRelease
@@ -668,6 +729,43 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
   rw [hcr, readCoins_eq x cs hq1] at hF
   exact progOf_check_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hj hrs
     (by rw [hk1]; exact hs') hlt hF hin hI hv'
+
+open Loop in
+/-- **Where `ProgChecks` asks anything at the loop's own frames**: where the frame takes the coins after `h` and its
+check of some device round releases a round, `h` is past `Hello`, `x` sets up a session, and the next round is round
+`j + 1` of some rep stream `k`. Elsewhere the frame's state owes no coins (`progOf_owed`), or the round is the `Hello`'s,
+whose scheduled round, the empty round, the check refuses (`check_empty`). -/
+theorem ofLoop_progChecks_round (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (h : List (Msg × Msg)) {m : Masker} {out : ByteArray}
+    (hA : (ofLoop T L₀ real).answered x ρ h = .ok m)
+    (hex : ∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why)) :
+    ∃ e0 h1 s0 spec sts q k j, h = e0 :: h1 ∧ FlockDeploy.setupOf true x = some (s0, spec, sts) ∧
+      h1.length = q + 1 ∧ ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) := by
+  obtain ⟨v, s', why, hv⟩ := hex
+  cases h with
+  | nil =>
+    unfold checkAt at hv
+    exact absurd hv (check_empty _ _ _ _ _)
+  | cons e0 h1 =>
+  have hF : (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) = .ok m := by
+    unfold answered at hA
+    split at hA
+    · exact hA
+    · cases hA
+  change (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+    (coinsAt x (e0 :: h1)) = .ok m at hF
+  by_cases ho : (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).owed = none
+  · exact absurd hF (answer_owed_none _ ho)
+  · obtain ⟨s0, spec, sts, q, k, j, hx, hq, hl⟩ := progOf_owed x _ ho
+    rw [List.length_map] at hq
+    exact ⟨e0, h1, s0, spec, sts, q, k, j, rfl, hx, hq, hl⟩
 
 end LeanRelease
 

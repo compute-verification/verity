@@ -710,7 +710,7 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameProg`: toward `ProgChecks` at `ofLoop`: where the deployed frame's check of a device round releases a round, the
   placeholder's check of its alike scheduled round against itself releases one from the same state, its state the same
   but for `stopped` (`check_alike_self`), and the loop's frame state one scheduled round on is that check's
-  (`repState_step`).
+  (`repState_step`), so `ProgChecks`' step holds at a scheduled round past a rep's first (`ofLoop_progChecks_step`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.

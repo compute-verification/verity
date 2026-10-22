@@ -159,7 +159,8 @@ namespace LeanRelease
 /-- `L₀` with the loop's own frames: its transport's state is `Loop.progOf` of the decoded coins, each round's rep is
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
-proof's rounds, `L₀`'s. -/
+proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
+empty round, which the frame's check refuses. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -174,9 +175,12 @@ noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     slot := fun x k => (Loop.startOf x k).toOption.map (·.2)
     prog := fun x h => Loop.progOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2)
     scheduled := fun x w ρ h vals =>
-      match Loop.schedOf (real x w ρ) x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) with
-      | some r => r.data.toList
-      | none => L₀.scheduled x w ρ h vals }
+      match h with
+      | [] => []
+      | _ :: ops =>
+        match Loop.schedOf (real x w ρ) x (ops.map fun p => ZKMal.CoinLayer.rd p.2) with
+        | some r => r.data.toList
+        | none => L₀.scheduled x w ρ h vals }
 
 /-- **The release at the session loop's own frames**: `loop`'s, at `withFrames`. -/
 noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
