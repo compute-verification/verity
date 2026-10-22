@@ -29,6 +29,11 @@ leaf at K = 64.
   `l`'s `pub` and `admit`, and statement `i`'s `o0`, value `ok<i>`, the row 1; statement `i` is lane `i`, then the
   combine). STAND-IN: `a`, `b`, `zy` and `receipt` are the leaf's own rows, as `leaf_lanes` reads them; in a served window
   they are the window's table rows (`circuit.h1window`).
+* **The unit's input wires** (`wires?`, `wireOf?`): the input ports' rows one after another in port order, wire `w` the
+  unit's input column `w`, so port `p`'s row bit `b` is wire `b` past the bits of the ports before it
+  (`class_statement.unit_lowering`, whose input leaf `j` is row word `j`: META `leaves_in` the identity). The test holds it
+  to the lowered circuits' own port records (`unit_lowering`'s rows and input columns, `UnitStager`'s META `ports`,
+  `row_schemas` and `leaves_in`), and C-Flock's refusals to `wires?`'s.
 
 Code: Lean core only, never `Security/`, so proofs' decoders (`Security/Proofs/Accounting/TS/Session/Lanes`) import it
 from `pouw_window` through `security_properties`.
@@ -177,5 +182,31 @@ def combine? (T : Tile) : Except String (List Port) := do
 /-- The port holding the input or output at `path`, and its field there. -/
 def fieldOf? (ps : List Port) (path : String) : Option (Port × Field) :=
   ps.findSome? fun p => (p.fields.find? (·.path == path)).map (p, ·)
+
+/-- The field holding bit `b` of the port's row, if one does. -/
+def Port.fieldAt? (p : Port) (b : Nat) : Option Field :=
+  p.fields.find? fun f => f.bit ≤ b ∧ b < f.bit + f.bits
+
+/-- **The unit's input wires**: each input port with its first wire, in `class_statement.unit_lowering`'s leaf order. The
+input ports' rows come one after another, each from its bit 0, and wire `w` is the unit's input column `w`: input leaf
+`w / 16` (the u16 input `in<w / 16>`, which META `leaves_in` places on row word `w / 16` of the input rows in order, the
+identity) at its bit `w % 16`. So port `p`'s row bit `b` is wire `first + b`, and its 16-bit word `j`'s bit `t` is wire
+`first + 16 j + t`. The output `o0` holds no input wire. -/
+def inputWires (ps : List Port) : List (Port × Nat) := go (ps.filter fun p => !p.output) 0
+where
+  go : List Port → Nat → List (Port × Nat)
+    | [], _ => []
+    | p :: rest, w => (p, w) :: go rest (w + p.bits)
+
+/-- The unit's input wires, where every input row is whole 16-bit words, which `unit_lowering` takes only. -/
+def wires? (ps : List Port) : Except String (List (Port × Nat)) := do
+  for p in ps do
+    if !p.output && p.bits % 16 != 0 then throw s!"row {p.name} is {p.bits} bits, not whole u16 words"
+  pure (inputWires ps)
+
+/-- The port input wire `w` is in and the bit of the port's row it holds; none past the input rows' bits (the unit's input
+group's zero padding). -/
+def wireOf? (ps : List Port) (w : Nat) : Option (Port × Nat) :=
+  (inputWires ps).findSome? fun (p, lo) => if lo ≤ w ∧ w < lo + p.bits then some (p, w - lo) else none
 
 end PouwWindow.Lanes
