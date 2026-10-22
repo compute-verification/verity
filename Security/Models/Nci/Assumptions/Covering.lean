@@ -5,8 +5,8 @@ import Mathlib.Basic.Real.Basic
 # The covering bound's two assumptions, at one width `b` and one compression rate `r`
 
 Daniel's covering bound (22 Oct 2026) charges weights and activations at one rate: `b` bits per weight and per
-activation, compressible at most to a fraction `r ∈ (0, 1]` of it, so `c = r · b` bits each. Separate widths `b_w`, `b_a`
-(`Nci.F`) are the special case the one-width form simplifies away.
+activation, compressible at most to a fraction `r ∈ (0, 1]` of it, so `c = r · b` bits each, where `Nci.F` keeps separate
+widths `b_w`, `b_a`. The guarantee needs no bound on `r` or `b`: `c D > k` alone makes `c` positive.
 
 * **Parameter-hardness** (`ParameterHard`): a small subcircuit reads `c` bits outside the registered parameters for
   every updated weight whose multiplications it completes.
