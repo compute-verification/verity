@@ -126,6 +126,33 @@ theorem check_alike_self {c c' : Cfg} (hc : CfgAlike c c') (m : Masker) (st : Bo
     obtain ⟨w', hw⟩ := check_self_any (round_of_roundFree hq)
     exact ⟨o', s', w', hw, (congrArg Prod.fst he).symm⟩
 
+theorem midFrame_alike {f f' : Frame} (h : Alike f f') (hm : midFrame f) : midFrame f' := by
+  cases f <;> cases f' <;> simp only [Alike, midFrame] at h hm ⊢ <;>
+    first | omega | (obtain ⟨rfl, rfl⟩ := h; exact hm)
+
+theorem midAll_alike {fs fs' : List Frame} (hA : List.Forall₂ Alike fs fs') : MidAll fs → MidAll fs' := by
+  induction hA with
+  | nil => exact fun h => h
+  | cons ha _ ih =>
+    intro hM g hg
+    rcases List.mem_cons.mp hg with rfl | hg
+    · exact midFrame_alike ha (hM _ List.mem_cons_self)
+    · exact ih (fun f hf => hM f (List.mem_cons_of_mem _ hf)) g hg
+
+/-- **Two rounds of one shape are frames**: `encs` of alike mid-frames, then one squeeze, of its kind and count. -/
+theorem roundAt_frames {r r' : ByteArray × ℕ} (h : RoundAt r r') :
+    ∃ (fs fs' : List Frame) (k : UInt8), r.1 = ByteArray.mk (encs fs ++ (Frame.sq k r.2).enc).toArray ∧
+      r'.1 = ByteArray.mk (encs fs' ++ (Frame.sq k r.2).enc).toArray ∧ r'.2 = r.2 ∧ List.Forall₂ Alike fs fs' ∧
+      MidAll fs ∧ MidAll fs' ∧ (k = 2 ∨ (k = 1 ∧ r.2 = 1)) ∧ ¬ (r.2 = 0 ∧ k = 2) ∧ r.2 < 2 ^ 64 := by
+  obtain ⟨hn2, p, p', k, ⟨fs, fs', hp, hp', hA, hM⟩, h1, h1', hk, h0, hn⟩ := h
+  have hL : ∀ q : ByteArray, (q ++ _root_.Flock.Transcript.header 4 k r.2).data.toList =
+      q.data.toList ++ (Frame.sq k r.2).enc := fun q => by
+    simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
+  have e : ∀ b : ByteArray, b = ByteArray.mk b.data.toList.toArray := fun b => by rw [Array.toArray_toList]
+  refine ⟨fs, fs', k, ?_, ?_, hn2.symm, hA, hM, midAll_alike hA hM, hk, fun h => h0 h.1, hn⟩
+  · rw [e r.1, h1, hL, hp]
+  · rw [e r'.1, h1', hL, hp']
+
 end Sched
 
 namespace Loop
@@ -274,6 +301,36 @@ theorem repState_step (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : �
     simp only [↓reduceIte] at ha
     rw [e] at ha
     cases ha
+
+/-- **The loop's frame state one scheduled round on is the deployed check's** but for `stopped`: where the frame takes
+round `j`'s coins at the rep's placeholder state after it, at the state `m` outside the inner proof, and the deployed
+frame's check at an alike configuration `c` of a device round `v` against a round of one shape with the placeholder's
+round `j + 1` (`RoundAt`, the real table's) releases a round, the rep's placeholder state after round `j + 1` is that
+check's, but for `stopped`. `hI`: the placeholder round's frames enter no inner proof. -/
+theorem repState_check_step {c c' : Cfg} (hc : CfgAlike c c') (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ)
+    (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ)
+    (a : Array F128) (j : ℕ) {alg sched sched' : Array (ByteArray × ℕ)} {r : ByteArray × ℕ}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched')
+    (hcr : cr.size = j + 1) (hj : j + 1 < sched'.size) (hR : Sched.RoundAt r (sched'.getD (j + 1) (.empty, 0)))
+    {m : Masker} (ha : (repState c' t rep dom xs hi cr0 cr ns (j + 1)).answer c' (cr.getD j #[]) = .ok m)
+    (hin : m.inner ≠ some INNER_ROUNDS)
+    (hI : ∀ (fs : List Frame) (k : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+        ByteArray.mk (encs fs ++ (Frame.sq k r.2).enc).toArray →
+      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
+    {st : Bool} {v out : ByteArray} {s : Masker} {why : Option String}
+    (h : check c { m with stopped := st } v r.1 r.2 = .ok (out, s, why)) :
+    repState c' t rep dom xs hi cr0 (cr.push a) ns (j + 2) =
+      { s with stopped := (repState c' t rep dom xs hi cr0 (cr.push a) ns (j + 2)).stopped } := by
+  obtain ⟨fs, fs', k, h1, h1', hn2, hA, hM, hM', hk, h0, hn⟩ := Sched.roundAt_frames hR
+  rw [h1] at h
+  obtain ⟨out', s', w, hc', hu⟩ :=
+    Sched.check_alike_self hc m st fs fs' k r.2 hin hM hM' hk h0 hn hA (hI fs' k h1') h
+  have hstep := repState_step c' t rep dom xs hi cr0 cr ns a j hal hs hs' hcr hj ha
+    (by rw [h1', hn2]; exact hc')
+  rw [hstep]
+  exact eq_unstop hu
 
 theorem words_size (b : ByteArray) (o n : ℕ) : (_root_.Flock.Firewall.Frame.words b o n).size = n := by
   unfold _root_.Flock.Firewall.Frame.words

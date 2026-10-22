@@ -1347,7 +1347,7 @@ theorem locate_snd_le : ∀ (rs : List ℕ) (k i : ℕ), (ZKMal.CoinLayer.locate
   | [], _, _ => Nat.le_refl _
   | c :: cs, k, i => by
     by_cases h : i < c
-    · rw [locate_cons_lt h] <;> exact Nat.le_refl _
+    · rw [locate_cons_lt h]
     · rw [locate_cons_ge h]
       exact Nat.le_trans (locate_snd_le cs (k + 1) (i - c)) (Nat.sub_le _ _)
 
