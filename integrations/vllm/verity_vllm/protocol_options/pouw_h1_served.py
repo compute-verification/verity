@@ -221,7 +221,7 @@ class Served:
     of its parameter shape in tests). ``blocks``: each linear's input block within a step (default each its own;
     ``(0, 0, 0, 1)`` for q, k, v and o). ``window``: the window's key, else the window-open root its commitment names.
     ``weights``: the period's registered `Weights`, or ``weights_key`` the period's key to register them with from the
-    served model at install (`pouw._install_h1`, `declare` then `register_weights`); without either the window
+    served model at install (`weights_root`, from `pouw._install_h1`); without either the window
     registers its own ``b/<K>``. ``program``: the period's declared Program (`declared` under ``prefix``), given or
     declared at the first call. From the first call: ``root`` (the window's open root its tables' domains bind, hex),
     ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
@@ -267,6 +267,16 @@ class Served:
         S, self.program_digest = self.program.fn.S(), P.program_digest(self.program)
         self.linears, self.calls, self.m = [tuple(x) for x in S.LINEARS], [tuple(x) for x in S.CALLS], int(S.M)
         return self.program_digest
+
+    def weights_root(self, shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
+                     layers: Sequence[Any], register: bool = True) -> bytes | None:
+        """The period's weights' root (`Weights.root`, the period-open's ``--weights-root``): ``weights``', or, with only
+        ``weights_key`` and ``register``, registered now from the served ``layers`` under the declared Program, before any
+        salt (VLLM-71); else None."""
+        if self.weights is None and self.weights_key is not None and register:
+            self.weights = register_weights(self.declare(shapes, modules, rows, steps), shapes, weights_of(layers),
+                                            self.weights_key, self.prefix)
+        return None if self.weights is None else self.weights.root()
 
     def open(self, run: Any) -> None:
         """The window's open root, from its key, and the period's Program, at its first call (after its salt opened)."""
