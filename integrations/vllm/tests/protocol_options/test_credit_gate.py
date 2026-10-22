@@ -644,6 +644,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
+    assert auditor.ended() is None
     rec = _record(run)
     out = _credit(auditor, rec)
     assert out["window"][0] == "missing" and out["credit"] is None, out
