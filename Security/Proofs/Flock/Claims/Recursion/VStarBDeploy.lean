@@ -95,6 +95,7 @@ theorem setupO_staged_none {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : 
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
   obtain ⟨-, hsrc⟩ := RecRaw.ins_inner_src (toOption_eq_some h')
   unfold sourceOf at hsrc
+  rw [formOf_partRaw] at hsrc
   dsimp only [partRaw] at hsrc
   cases hq : r.innerRaw.partition with
   | none => rw [hq] at hsrc; simp at hsrc

@@ -80,7 +80,7 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
         ev, eid = data.get("event") or {}, data.get("event_id")
         if data.get("type") != "event_callback" or not eid:
             return JSONResponse({"ok": True, "ignored": data.get("type")})
-        if ev.get("bot_id") and ev.get("bot_id") == d.registry.get("bot_id"):
+        if ev.get("bot_id") and ev.get("bot_id") == d.registry.get("bot_id") and not d.rs.external_post(ev, d.registry):
             return JSONResponse({"ok": True, "ignored": "our bot's post"})
         return await enqueue(d, {"kind": "event", "event_id": eid, "event": ev, "team_id": data.get("team_id"),
                                  "source": "events"})

@@ -29,6 +29,8 @@ SEEDS = {
 }
 UNITS = {
     "verity/core/protocols/pouw/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
+    "verity/core/protocols/pouw/circuit/h1zy.py::_unit_ports":
+        "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
     "verity/core/protocols/pouw/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
     "verity/core/protocols/pouw/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
     "verity/core/protocols/pouw/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
