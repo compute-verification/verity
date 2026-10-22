@@ -1,15 +1,15 @@
-"""`protocol_options.pouw_h1_served`: an H1 window that mixes K, committed as compute accounting's window Program's
-parameters (`h1window.program` on vllm's 32 × 32 tile, one template per K), is each K's A codes and B rows as
-``hm96-sha512/row/v2`` trees whose shapes, rows and roots are the ones the Program's units read (`h1window.unit_reads`),
-recomputed here from the served tensors. B is each linear's weight rows once a window. One `registered.reads` and
-`registered.reads_file` over the whole window resolve every unit's ports (`h1window.window_ports`), each K's own
-(``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31``; ``a_k<K>`` → ``a_k<K>_0`` for a tile of one row,
-``b_k<K>`` → ``b_k<K>_0`` for one column),
-to the trees' rows, and a read opened with a row of another A block or another B row is refused; `register` registers
-the window once, in one file, through `register_served` under the window's open root. A call whose codes aren't its shared
-block's is refused; y, z and the scale stay under the round roots only; a second window reusing the first's key is
-refused (R7-held); `calls_root` binds the trees. A stand-in tile unit of the H1 tile's parameter shape (one-bit A and B
-leaves, 8K a row, its receipt a sink of the salt as `test_circuit_h1window`'s) keeps the Program small."""
+"""`protocol_options.pouw_h1_served`: an H1 window that mixes K, served under compute accounting's window Program
+(`h1window.program` on vllm's 32 × 32 tile, one template per K), registers each call's tables as it is recorded: its A
+table ``a/<K>@<c>`` (M slot rows, each its codes then its f32 s_a) and its z table ``zy@<c>`` (one z/y record a unit, in
+tile order), and the weights' ``b/<K>`` (each linear's rows once, codes then s_w), as ``hm96-sha512/row/v2`` trees whose
+rows and roots recompute here from the served tensors, under domains bound to the window's open root. Each root is in its
+call's manifest row, so its round's root commits it before the round's coin. A call's statement file
+(`h1window.table_reads_file`) resolves each of its units' ports (`h1window.window_ports`, each K's own; ``a_k<K>`` →
+``a_k<K>_0`` for a tile of one row, ``b_k<K>`` → ``b_k<K>_0`` for one column) to its own tables and the weights', and no
+other call's unit reads them; a read opened with another row is refused. A weight that changes, blocks that aren't one
+per linear, an odd K, n off C and a served call with no z/y record register nothing; a second window reusing the first's
+key is refused (R7-held). A stand-in tile unit of the zy unit's parameter shape (`h1zy.ROW` rows, its `h1zy.RECORD`, a
+receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
@@ -22,10 +22,11 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.ml.circuits.refs import coll_concat  # noqa: E402
+from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
 from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
@@ -48,17 +49,21 @@ XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, la
 XOR16 = PrimitiveDefinition("H1ServedTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
 FOLD16 = PrimitiveDefinition("H1ServedTestFold16", 1, (("key", V16), ("x", V16)), V16, lambda key, x: key ^ x,
                              register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
-OUT = Record(("z", V1), ("receipt", V16))
+OUT = Record(("receipt", V16), ("ok", V1))
 
 
 def _sig(S):
-    return ((("a", Array(S.R, Array(8 * S.K, V1))), ("b", Array(S.C, Array(8 * S.K, V1))), ("salt", Array(4, V16)),
-             ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
+    return ((("a", Array(S.R, Z.ROW(S.K))), ("b", Array(S.C, Z.ROW(S.K))), ("zy", Z.RECORD(S.R, S.C)),
+             ("salt", Array(4, V16)), ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
 
 
-def _body(B, S, a, b, salt, position, roots):
-    return coll_concat(OUT, [B.call(XOR1, a[0][0], b[0][0]),
-                             B.call(FOLD16, salt[0], B.call(XOR16, position, roots[0][0]))])
+def _first(c):
+    return Coll(V1, c.refs.slice(0, 1))
+
+
+def _body(B, S, a, b, zy, salt, position, roots):
+    ok = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), _first(zy))
+    return coll_concat(OUT, [B.call(FOLD16, salt[0], B.call(XOR16, position, roots[0][0])), ok])
 
 
 StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False,
@@ -74,228 +79,199 @@ def _codes(rng, n, k):
     return torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8))
 
 
-def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, k_input=None,
-            steps=STEPS, served=1, changed=None, modules=MODULES, tile=TILE, rows=T):
-    """A window: its first ``served`` steps serve 5 rows each, q and k on one input x (k on ``k_input`` when given), o
-    on another, every step with the same weights (step 1's q on ``changed`` when given); the later steps are empty.
-    Returns the run, each linear's weight and each served step's inputs."""
+def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
+            served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False):
+    """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
+    same weights (step 1's q on ``changed`` when given); the later steps are empty. Returns the run, each linear's weight
+    and scales, and each served call's (a, s_a, z, y) by its index."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile), blocks, window=served_key or key))
-    ws = [_codes(rng, n, k) for n, k in shapes]
-    steps_in = []
+    ws = [(_codes(rng, n, k), torch.rand(n, 1) + 0.5) for n, k in shapes]
+    got = {}
     for s in range(served):
         x = _codes(rng, SERVED, shapes[0][1])
-        inputs = [x, x if k_input is None else k_input] + [_codes(rng, SERVED, k) for _n, k in shapes[2:]]
-        for w, (a, wt) in enumerate(zip(inputs, ws)):
+        inputs = [x, x] + [_codes(rng, SERVED, k) for _n, k in shapes[2:]]
+        for w, (a, (wt, sw)) in enumerate(zip(inputs, ws)):
             wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
             z = torch.from_numpy(rng.integers(-(1 << 20), 1 << 20, (SERVED, n), dtype=np.int32))
-            run.record(w, a, torch.rand(SERVED) + 0.5, wt, torch.ones(n, 1), z=z, y=torch.randn(SERVED, n).bfloat16())
-        steps_in.append(inputs)
+            y, s_a = torch.randn(SERVED, n).bfloat16(), torch.rand(SERVED) + 0.5
+            call = run.record(w, a, s_a, wt, sw, z=None if no_z else z, y=y)
+            got[call.index] = (a, s_a, z, y)
     run.close()
-    return run, ws, steps_in
+    return run, ws, got
 
 
-def _expected(run, ws, steps_in, tile=TILE):
-    """Each unit's (K, its A codes, its B codes), written out from the served tensors independently of the Program: call
-    (s, w)'s row block ti of its T slots and its linear's weight rows [C tj, C tj + C)."""
-    (r, c), m, out = tile, HW.slot(run.rows, tile), []
-    for s in range(run.steps):
-        for w, (n, k) in enumerate(run.shapes_):
-            codes = np.zeros((m, k), np.int8)
-            if s < len(steps_in):
-                codes[:SERVED] = steps_in[s][w].numpy()
-            out += [(k, codes[r * ti:r * ti + r], ws[w].numpy()[c * tj:c * tj + c]) for ti in range(m // r)
-                    for tj in range(n // c)]
-    return out
-
-
-def _root(reg: G.Registered, codes: np.ndarray, key: bytes, i: int) -> str:
-    """`reg`'s tree recomputed from the raw int8 bytes of `codes`: a row's bit row is its codes' memory."""
+def _tree(reg: G.Registered, rows: list[bytes], key: bytes, first: int) -> str:
+    """`reg`'s tree recomputed from each row's raw bytes, its bit row's memory, under row j's salt at nonce ``first``."""
     dom, inst = reg.domain, hm96.SHA512
-    bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row.tobytes(), 8 * len(row)), hm96_salt(key, SV.nonce(i), j))
-           for j, row in enumerate(codes)]
+    bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row, 8 * len(row)), hm96_salt(key, first, j))
+           for j, row in enumerate(rows)]
     return tree_levels(dom, [row_leaf(dom, j, inst.tree_leaf(inst.default_key, bc), SV.V2)
                              for j, bc in enumerate(bcs)])[-1][0].hex()
 
 
-def test_a_mixed_k_window_commits_the_rows_its_programs_units_read():
-    """Each K's A then B, named as the Program's parameters, its rows K/2 words under the registered-value domain of the
-    Program's digest; every unit's A rows (`unit_reads`) hold its call's codes (the served rows, zero past them, step 1
-    all zero) and its B rows its linear's weight rows, and every root recomputes from the tensors."""
-    run, ws, steps_in = _window(W1)
-    served, trees = run.served, SV.trees(run)
-    prog, pre = served.program, SV.prefix(W1)
-    sig, digest = dict(prog.fn.signature()[0]), P.program_digest(prog)
-    assert served.m == T and served.linears == [("q", 16, 64), ("k", 16, 32), ("o", 32, 32)]
+def _a_rows(a, s_a, m, k):
+    """A table rows from the tensors: each served row's codes then its f32 scale, then zero rows of scale 0."""
+    rows = [a[i].numpy().tobytes() + np.float32(s_a[i]).tobytes() for i in range(len(a))]
+    return rows + [bytes(k + 4)] * (m - len(rows))
+
+
+def _records(z, y, m, n, tile=TILE):
+    """z table rows from the tensors, tile by tile: each cell's z (s32 LE), row-major, then each cell's y (bf16 bits)."""
+    (r, c), zf, yf = tile, np.zeros((m, n), "<i4"), np.zeros((m, n), "<i2")
+    zf[:len(z)], yf[:len(y)] = z.numpy(), y.view(torch.int16).numpy()
+    out = []
+    for ti in range(m // r):
+        for tj in range(n // c):
+            cells = [(ti * r + i, tj * c + j) for i in range(r) for j in range(c)]
+            out.append(b"".join(zf[p].tobytes() for p in cells) + b"".join(yf[p].tobytes() for p in cells))
+    return out
+
+
+def test_each_call_registers_its_tables_as_it_is_recorded():
+    """Every call's A and z tables are the Program's `h1window.table` values, M rows of K/2 + 2 words and one record of
+    3 R C words a unit, under the registered-value domain of the Program's digest bound to the window's open root; their
+    roots recompute from the served tensors (an empty call's from zeros), and each is in its call's manifest row, so its
+    round's root is over it."""
+    run, ws, got = _window(W1)
+    served, pre = run.served, SV.prefix(W1)
+    prog, digest = served.program, P.program_digest(served.program)
+    assert served.program_digest == digest and served.root == W1.hex() and served.m == T
+    assert served.linears == [("q", 16, 64), ("k", 16, 32), ("o", 32, 32)]
     assert served.calls == [(m, s) for s in range(STEPS) for m in ("q", "k", "o")]
-    assert [t.value for t in trees] == [pre + r for r in HW.roles(KS)[:4]]
-    assert [(t.leaves, t.words, t.word_bits, t.row_schema) for t in trees] == [
-        (sig[t.value].n, k // 2, 16, SV.V2) for t, k in zip(trees, (16, 16, 32, 32))]
-    assert served.root == W1.hex()
-    assert [t.domain for t in trees] == [G.domain(digest, t.value, t.words, t.leaves, window=W1.hex()).domain_id.hex()
-                                         for t in trees]
-    assert not {t.domain for t in trees} & {G.domain(digest, t.value, t.words, t.leaves).domain_id.hex() for t in trees}
-    tp = P.evaluate(prog, served.query())
-    want = _expected(run, ws, steps_in)
-    assert tp.population == len(want) == STEPS * (2 * 2 + 2 + 2)
-    rows = {r.value: np.asarray(r.rows, np.uint16) for r in served.registered}
-    for u, (k, a, b) in enumerate(want):
-        got = HW.unit_reads(prog, tp, u)
-        for i in range(TILE[0]):
-            v, row = got[f"a_k{k}[{i}]"]
-            assert v == pre + f"a/{k}" and (rows[v][row] == SV.row_words(a)[i]).all()
-        for j in range(TILE[1]):
-            v, row = got[f"b_k{k}[{j}]"]
-            assert v == pre + f"b/{k}" and (rows[v][row] == SV.row_words(b)[j]).all()
-        assert got["position"] == (pre + "position", u) and got["z"] == (pre + "z", u)
-    x0, o0 = steps_in[0][0].numpy(), steps_in[0][2].numpy()
-    a16, a32 = np.zeros((STEPS * T, 16), np.int8), np.zeros((STEPS * T, 32), np.int8)
-    a16[:SERVED], a32[:SERVED] = x0, o0
-    for i, codes in enumerate((a16, np.concatenate([ws[0].numpy(), ws[1].numpy()]), a32, ws[2].numpy())):
-        assert trees[i].root == _root(served.registered[i], codes, run._key, i)
+    assert list(served.registered) == [pre + "a/16@0", pre + "zy@0", pre + "a/16@1", pre + "zy@1", pre + "b/16",
+                                       pre + "a/32@2", pre + "zy@2", pre + "b/32",
+                                       *(pre + v for c, k in ((3, 16), (4, 16), (5, 32)) for v in (f"a/{k}@{c}", f"zy@{c}"))]
+    for c in run.calls:
+        n, k = run.shapes_[c.layer]
+        a, s_a, z, y = got.get(c.index) or (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n),
+                                             torch.zeros(0, n).bfloat16())
+        ra, rz = served.registered[HW.table(prog, "a", c.index)], served.registered[HW.table(prog, "zy", c.index)]
+        assert (ra.leaves, ra.words, rz.leaves, rz.words) == (T, k // 2 + 2, (T // 32) * (n // 32), 3 * 32 * 32)
+        assert ra.domain.domain_id.hex() == G.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
+        assert ra.domain.domain_id != G.domain(digest, ra.value, ra.words, ra.leaves).domain_id
+        assert ra.root.hex() == _tree(ra, _a_rows(a, s_a, T, k), run._key, SV.nonce(c.index, "a"))
+        assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
+        assert {ra.value: ra.root.hex(), rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
+    for r, log in enumerate(run.round_log):
+        assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
 
 
 @pytest.mark.parametrize("steps", [2, 3])
 def test_b_is_each_linears_weight_once_a_window(steps):
-    """b/<K> is Σn rows of K's linears whatever the window's steps, every step's units reading the same rows, and a
-    second served step with the same weight commits nothing more."""
-    run, _ws, _inputs = _window(W1, steps=steps, served=2)
-    pre, tp = SV.prefix(W1), P.evaluate(run.served.program, run.served.query())
-    assert {t.value: t.leaves for t in SV.trees(run) if "/b/" in t.value} == {pre + "b/16": 64 + 32, pre + "b/32": 32}
+    """b/<K> is Σn rows of K's linears, codes then s_w, whatever the window's steps, registered at the call that completes
+    K's weights in step 0 and in that call's manifest row only; every step's units read the same rows."""
+    run, ws, _got = _window(W1, steps=steps, served=2)
+    served, pre = run.served, SV.prefix(W1)
+    b16, b32 = served.registered[pre + "b/16"], served.registered[pre + "b/32"]
+    assert (b16.leaves, b32.leaves) == (64 + 32, 32)
+    rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
+    assert b16.root.hex() == _tree(b16, rows, run._key, SV.B_NONCE)
+    assert [c.index for c in run.calls if pre + "b/16" in run.tables[c.index]["registered"]] == [1]
+    assert [c.index for c in run.calls if pre + "b/32" in run.tables[c.index]["registered"]] == [2]
+    tp = P.evaluate(served.program, served.query())
     per = tp.population // steps
-    assert all(_b0(HW.unit_reads(run.served.program, tp, u)) == _b0(HW.unit_reads(run.served.program, tp, u % per))
-               for u in range(tp.population))
+    first = [next(v for key, v in HW.table_reads(served.program, tp, u).items() if key.startswith("b_k") and
+                  key.endswith("[0]")) for u in range(tp.population)]
+    assert all(first[u] == first[u % per] for u in range(tp.population))
 
 
-def _b0(reads: dict) -> tuple[str, int]:
-    """A unit's read of its first B row, under its K's template's key."""
-    return next(v for key, v in reads.items() if key.startswith("b_k") and key.endswith("[0]"))
-
-
-def test_one_read_resolves_every_units_ports_across_k_and_refuses_another_row():
-    """One `registered.reads` over the whole mixed-K window (bit rows count K/2 words as 8K one-bit leaves) gives each unit
-    its K's ``a_k<K>[i]`` and ``b_k<K>[j]`` rows, exactly those `unit_reads` gives, and none of the other K's; each K's A
-    and B is one value, B once a window. `reads_file` names them as each K's own ports ``a_k<K>_0`` .. ``a_k<K>_31`` and
-    ``b_k<K>_0`` .. ``b_k<K>_31`` in row/v2, each with its value's root, width and domain; each read opens its tree at its
-    row, while the same position opened with a row of another A block or the next B row is refused."""
-    run, _ws, _inputs = _window(W1)
+def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
+    """Each call's file names its K's ports, ``a_k<K>_0`` .. ``a_k<K>_31``, ``b_k<K>_0`` .. ``b_k<K>_31`` and ``zy``, each in
+    row/v2 with its tree's value, root, rows, width and domain (the window's): the A ports and the record at the call's
+    own tables, B at the weights'. Only the call's units read them, at the rows `h1window.table_reads` gives, and each read
+    opens its tree at its row, while the same path with another row is refused."""
+    run, _ws, _got = _window(W1)
     served = run.served
-    prog, q = served.program, served.query()
-    tp = P.evaluate(prog, q)
-    want = [HW.unit_reads(prog, tp, u) for u in range(tp.population)]
-    assert served.ks() == list(KS)
-    got = G.reads(prog, q, served.values(), served.schemas())
-    assert set(got) == set(served.ports()) == {f"{t}_k{k}[{i}]" for t in "ab" for k in KS for i in range(32)}
-    for key, entry in got.items():
-        assert entry["rows"] == [w[key][1] if key in w else None for w in want], key
-        assert all(w[key][0] == entry["value"] for w in want if key in w), key
-    assert [sum(r is not None for r in got[f"a_k{k}[0]"]["rows"]) for k in KS] == [STEPS * 6, STEPS * 2]
-    by = {r.value: r for r in served.registered}
-    pre = SV.prefix(W1)
-    assert sorted(by) == sorted(pre + f"{t}/{k}" for t in "ab" for k in KS), "each K's A and B is one value"
-    roots = {r.value: r.root.hex() for r in served.registered}
-    f = G.reads_file(prog, q, served.values(), roots, ports=served.ports(), schemas=served.schemas(), window=served.root)
-    assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for k in KS for i in range(32)}
-    assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
-    for k in KS:
-        for t in "ab":
-            p, reg = f["ports"][f"{t}_k{k}_0"], by[pre + f"{t}/{k}"]
-            assert (p["value"], p["root"], p["words"], p["leaves"], p["domain"]) == (
-                reg.value, reg.root.hex(), k // 2, reg.leaves, reg.domain.domain_id.hex())
-        for port, (key, other) in {f"a_k{k}_0": (f"a_k{k}[0]", T), f"b_k{k}_0": (f"b_k{k}[0]", 1)}.items():
-            reg = by[f["ports"][port]["value"]]
-            for u, row in enumerate(f["ports"][port]["reads"]):
-                if row is None:
-                    assert key not in want[u]
+    prog, tp = served.program, P.evaluate(served.program, served.query())
+    reg = SV.register(run)
+    for c, (u0, n) in enumerate(HW.call_units(prog)):
+        k, f = run.shapes_[run.calls[c].layer][1], reg.files[c]
+        assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy"}
+        assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
+        assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
+            HW.table(prog, "a", c), HW.table(prog, "zy", c), SV.prefix(W1) + f"b/{k}"}
+        for port, p in f["ports"].items():
+            r = served.registered[p["value"]]
+            assert (p["root"], p["words"], p["leaves"], p["domain"]) == (
+                r.root.hex(), r.words, r.leaves, r.domain.domain_id.hex())
+            key = port if port == "zy" else f"{port.rsplit('_', 1)[0]}[{port.rsplit('_', 1)[1]}]"
+            for u, row in enumerate(p["reads"]):
+                if not u0 <= u < u0 + n:
+                    assert row is None
                     continue
-                assert want[u][key] == (reg.value, row)
-                wrong = (row + other) % reg.leaves
-                assert G.verify_read(reg.domain, reg.root, row, reg.bcs[row], reg.path(row), SV.V2)
-                assert not G.verify_read(reg.domain, reg.root, row, reg.bcs[wrong], reg.path(row), SV.V2)
+                assert HW.table_reads(prog, tp, u)[key] == (p["value"], row)
+                assert G.verify_read(r.domain, r.root, row, r.bcs[row], r.path(row), SV.V2)
+                assert not G.verify_read(r.domain, r.root, row, r.bcs[(row + 1) % r.leaves], r.path(row), SV.V2)
 
 
 @pytest.mark.parametrize("tile, lone", [((1, 32), "a"), ((32, 1), "b")], ids=["R=1", "C=1"])
 def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
-    """With R = 1 `registered.reads` keys a unit's A row ``a_k<K>``, not ``a_k<K>[0]``, and `window_ports` maps it to
-    ``a_k<K>_0``; likewise B's with C = 1. One read over a mixed-K window still names each K's port."""
-    run, _ws, _inputs = _window(W1, shapes=[(32, 16), (32, 16), (32, 32)], steps=1, tile=tile, rows=32)
+    """With R = 1 `registered.reads` keys a unit's A row ``a_k<K>`` and `h1window.table_reads` ``a_k<K>[0]``, and the
+    window's ports map both to ``a_k<K>_0``; likewise B's with C = 1. Each call's file names its K's port, read by each of
+    its units."""
+    run, _ws, _got = _window(W1, shapes=[(32, 16), (32, 16), (32, 32)], steps=1, tile=tile, rows=32)
     served = run.served
     ports = served.ports()
-    assert all(ports[f"{lone}_k{k}"] == f"{lone}_k{k}_0" and f"{lone}_k{k}[0]" not in ports for k in KS)
-    prog, q = served.program, served.query()
-    got = G.reads(prog, q, served.values(), served.schemas())
-    assert set(got) == set(served.ports()) and all(f"{lone}_k{k}" in got for k in KS)
-    f = G.reads_file(prog, q, served.values(), {r.value: r.root.hex() for r in served.registered}, ports=served.ports(),
-                     schemas=served.schemas())
+    assert all(ports[f"{lone}_k{k}"] == ports[f"{lone}_k{k}[0]"] == f"{lone}_k{k}_0" for k in KS)
+    assert HW.window_ports(served.program).items() <= ports.items()
+    reg = SV.register(run)
     other = "b" if lone == "a" else "a"
-    assert set(f["ports"]) == {f"{lone}_k{k}_0" for k in KS} | {f"{other}_k{k}_{i}" for k in KS for i in range(32)}
-    reads = {k: f["ports"][f"{lone}_k{k}_0"]["reads"] for k in KS}
-    if lone == "a":
-        assert reads[16] == list(range(32)) * 2 + [None] * 32 and reads[32] == [None] * 64 + list(range(32))
-    else:
-        assert reads[16] == list(range(32)) + list(range(32, 64)) + [None] * 32 and reads[32] == [None] * 64 + list(range(32))
+    for c, (u0, n) in enumerate(HW.call_units(served.program)):
+        k = run.shapes_[c][1]
+        assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy"} | {f"{other}_k{k}_{i}" for i in range(32)}
+        reads = reg.files[c]["ports"][f"{lone}_k{k}_0"]["reads"]
+        assert [u for u, r in enumerate(reads) if r is not None] == list(range(u0, u0 + n))
 
 
 def test_a_k32_and_k322_window_names_every_read_its_own_port():
     """At K = 32 and 322 a port without `window_ports`' separator would make ``a_k32[20]`` and ``a_k322[0]`` one port
-    ``a_k3220``, which `reads_file` would merge; the window's 4 × 32 reads are 4 × 32 ports, ``a_k32_20`` and
-    ``a_k322_0`` among them."""
+    ``a_k3220``; the window's 4 × 32 reads are 4 × 32 ports, ``a_k32_20`` and ``a_k322_0`` among them."""
     prog = HW.program([("q", 32, 32), ("o", 322, 32)], [("q", 0), ("o", 0)], T, TILE, SV.prefix(W1), _unit())
     ports = SV.Served(program=prog).ports()
     assert len(ports) == len(set(ports.values())) == 4 * 32
     assert (ports["a_k32[20]"], ports["a_k322[0]"]) == ("a_k32_20", "a_k322_0")
 
 
-def test_y_z_and_the_scale_stay_under_the_round_roots_alone():
-    """The registered rows are A's codes and B's: no y, z or scale. Each call's A (with its scale), y and z tables stay
-    committed, and each round's root is over them."""
-    run, _ws, _inputs = _window(W1)
-    assert all(r.words == k // 2 for r, k in zip(run.served.registered, (16, 16, 32, 32)))
-    assert not any(t.value.endswith(("/z", "/receipt")) for t in SV.trees(run))
-    assert all(set(run.tables[c.index]) == {"a", "y", "z"} and None not in run.tables[c.index].values() for c in run.calls)
-    for r, log in enumerate(run.round_log):
-        assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
-
-
-def test_calls_root_binds_the_trees():
-    run, _ws, _inputs = _window(W1)
+def test_calls_root_binds_the_tables():
+    """A call's registered roots are in the manifest, and the served digest beside it: another root moves calls_root."""
+    run, _ws, _got = _window(W1)
     served, got = run.served, run.calls_root()
     run.served = None
     assert got == hashlib.sha512(run.calls_root() + served.digest()).digest()
     run.served = served
-    a = served.registered[0]
-    served.registered[0] = G.Registered.commit(a.program, a.value, [[w ^ 1 for w in r] for r in a.rows], a.salts,
-                                               schema=SV.V2, window=a.window)
+    value = next(iter(run.tables[0]["registered"]))
+    run.tables[0]["registered"][value] = "00" * 64
     assert run.calls_root() != got
 
 
 @pytest.mark.parametrize("why, kw", [
-    ("aren't those of its block 0", {"k_input": torch.zeros(SERVED, 16, dtype=torch.int8)}),
     ("weight changed within the window", {"served": 2, "changed": torch.zeros(64, 16, dtype=torch.int8)}),
     ("one input block for each", {"blocks": (0, 1)}),
     ("whole u16 words", {"shapes": [(64, 15), (32, 15), (32, 32)]}),
     ("whole blocks", {"shapes": [(48, 16), (32, 16), (32, 32)]}),
-], ids=["a-block-mismatch", "weight-changed", "blocks-off", "odd-k", "n-off-c"])
-def test_a_window_off_the_programs_layout_commits_no_tree(why, kw):
-    """k on another input than q's shared block, a weight changed between steps, blocks that aren't one per linear, an
-    odd K and n off the tile's C: `close` commits nothing, and `trees` says why."""
-    run, _ws, _inputs = _window(W1, **kw)
-    assert run.served.registered == [] and any(why in r for r in run.served.refused)
+    ("no z/y record", {"no_z": True}),
+], ids=["weight-changed", "blocks-off", "odd-k", "n-off-c", "no-record"])
+def test_a_window_off_the_programs_layout_is_refused(why, kw):
+    """A weight changed between steps, blocks that aren't one per linear, an odd K, n off the tile's C and a served call
+    with no z/y record: no table from then on, and `trees` says why."""
+    run, _ws, _got = _window(W1, **kw)
+    assert any(why in r for r in run.served.refused)
     with pytest.raises(ValueError, match="trees were refused"):
         SV.trees(run)
 
 
 def test_a_second_window_reusing_the_first_windows_key_is_refused():
     """R7-held: a later window keyed as the first commits under the first's names and domains with other roots, and
-    `register_served` refuses it; keyed as its own window its names and domains are its own, and it registers."""
-    first, _ws, _inputs = _window(W1)
+    `register` refuses it; keyed as its own window its names and domains are its own, and it registers."""
+    first, _ws, _got = _window(W1)
     log = [{"registered": SV.register(first).registered}]
-    again, _ws, _inputs = _window(W2, seed=1, served_key=W1)
+    again, _ws, _got = _window(W2, seed=1, served_key=W1)
     with pytest.raises(ValueError, match="R7-held"):
         SV.register(again, log=log)
-    own, _ws, _inputs = _window(W2, seed=1)
+    own, _ws, _got = _window(W2, seed=1)
     SV.register(own, log=log)
     mine, theirs = SV.trees(own), log[0]["registered"]
     assert not {t.value for t in mine} & {e["value"] for e in theirs}
@@ -317,38 +293,13 @@ def test_a_window_whose_rows_arent_registered_values_is_refused():
         SV.trees(run)
 
 
-def test_register_registers_the_whole_window_once_in_one_file(tmp_path, monkeypatch):
-    """`register` calls `register_served` once, over every K's A and B tree, with the window's ports (each K's own), and
-    writes its one ``--registered`` file; ``ports`` overrides them."""
-    run, _ws, _inputs = _window(W1)
-    calls = []
-
-    class Reg:
-        def write(self, path):
-            path.write_text("registered")
-
-    def fake(program, query, served, log=(), ports=None, window_root=None):
-        calls.append((program, query, [t.value for t in served], ports, window_root))
-        return Reg()
-
-    monkeypatch.setattr(SV, "register_served", fake)
-    SV.register(run, directory=tmp_path)
-    pre = SV.prefix(W1)
-    assert calls == [(run.served.program, run.served.query(), [pre + r for r in HW.roles(KS)[:4]],
-                      HW.window_ports(run.served.program), W1.hex())]
-    assert sorted(p.name for p in tmp_path.iterdir()) == [SV.FILE] == ["pouw-h1-registered.json"]
-    SV.register(run, directory=tmp_path, ports={"a_k16[0]": "a0"})
-    assert calls[-1][3] == {"a_k16[0]": "a0"}
-
-
-def test_the_window_registers(tmp_path):
-    """`register_served` takes the window's row/v2 trees under its root: one registered entry a tree, each port of the
-    window's `--registered` file in row/v2 with its tree's root and domain, and the file written as `FILE`."""
-    run, _ws, _inputs = _window(W1)
-    reg = SV.register(run, directory=tmp_path)
-    by = {t.value: t for t in SV.trees(run)}
-    assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(by)
-    assert set(reg.ports) == set(HW.window_ports(run.served.program).values())
-    assert all((p["row_schema"], p["root"], p["domain"]) == (SV.V2, by[p["value"]].root, by[p["value"]].domain)
-               for p in reg.ports.values())
-    assert (tmp_path / SV.FILE).read_bytes() == reg.file_bytes()
+def test_register_writes_each_calls_file(tmp_path):
+    """`register` gives the record's entries, one a tree, and writes each asked call's file as `file_name`, canonical
+    JSON of `reads_file`."""
+    run, _ws, _got = _window(W1)
+    reg = SV.register(run, calls=[0, 2], directory=tmp_path)
+    assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(run.served.registered)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [SV.file_name(0), SV.file_name(2)] == [
+        "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
+    from verity.ml.circuits.codec import canonical_json
+    assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
