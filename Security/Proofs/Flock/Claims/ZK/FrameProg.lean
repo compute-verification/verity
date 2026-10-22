@@ -565,6 +565,28 @@ theorem schedOf_eq (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array 
   simp only [hreal, hs, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.map_some,
     Option.getD_some]
 
+/-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero draws at `Drive.start`'s layout
+and mask slot, the stream's domain and the extra claims at the link points. -/
+theorem placeholder_ok {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link : Array F128} {c' : Cfg}
+    {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
+    (h : placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
+    ∃ lay mask, _root_.Flock.Firewall.Drive.start sts[k / 2]! = .ok (lay, mask) ∧
+      c' = Cfg.ofDraws lay (Draws.ofBytes lay (zeros (_root_.Flock.Firewall.Frame.drawBytes lay))) (some mask) ∧
+      dom = (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8 ∧
+      xs = _root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! link) := by
+  have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
+    intro α β x f b hb
+    cases x with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  unfold placeholder at h
+  obtain ⟨⟨lay, mask⟩, hs, h⟩ := bok h
+  obtain ⟨⟨sch, tPad⟩, -, h⟩ := bok h
+  obtain ⟨l0, -, h⟩ := bok h
+  obtain ⟨t0, -, h⟩ := bok h
+  cases h
+  exact ⟨lay, mask, hs, rfl, rfl, rfl⟩
+
 /-- The frame refuses the empty round: it has no squeeze. -/
 theorem roundFree_empty (c : Cfg) (s : Masker) (n : ℕ) : ∃ e, roundFree c s ByteArray.empty n = .error e := by
   unfold roundFree
@@ -728,6 +750,82 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
   rw [hcr, readCoins_eq x cs hq1] at hF
   exact progOf_check_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hj hrs
     (by rw [hk1]; exact hs') hlt hF hin hI hv'
+
+open Loop in
+/-- **`ProgChecks` at a scheduled round, from the rep's own table**: as `ofLoop_progChecks_step`, where the rep's own
+table (`real`) is of the placeholder's shape (`TabAlike`, at the bounds `schedSoFar_alike` reads) and its schedule so
+far holds round `j + 1`. The placeholder's schedule is then of the real one's shape (`schedSoFar_alike`), and the
+configuration at the tape's draws alike the placeholder's (`cfgAlike_ofBytes`). -/
+theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (h : List (Msg × Msg)) (a : Msg) {m : Masker} {out : ByteArray}
+    (hA : (ofLoop T L₀ real).answered x ρ h = .ok m)
+    (hrep : (ofLoop T L₀ real).rep x (h.length + 1) = (ofLoop T L₀ real).rep x h.length)
+    (hex : ∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why))
+    {cs : List FlockDeploy.Coin} (hcs : h.tail.map (fun p => ZKMal.CoinLayer.rd p.2) = cs)
+    {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2) {k j : ℕ}
+    (hki : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1))
+    {c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray} (hph : placeholder spec sts k (wordsAt x cs 0) = .ok (c', t, dom, xs, hi))
+    {tr : _root_.Flock.Firewall.Finish.Tab} {hr : Array ByteArray} (hreal : real x w ρ k = .ok (tr, hr))
+    (hT : Sched.TabAlike tr t) (hdom : dom.size < 2 ^ 64) (hdg : tr.st.digest.size < 2 ^ 64) (hm : tr.st.m < 2 ^ 64)
+    (hxs : xs.size + 2 < 2 ^ 64) (hn : tr.sch.n + 1 < 2 ^ 64) (hlq : ∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64)
+    (hp : 2 * tr.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64)
+    {rsched : Array (ByteArray × ℕ)}
+    (hrs0 : schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
+      .ok rsched)
+    (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
+    (hin : m.inner ≠ some INNER_ROUNDS)
+    (hI : ∀ sched', schedSoFar t (k % 2) dom xs hi
+        ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched' →
+      ∀ (fs : List Frame) (k' : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+        ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
+      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
+    ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
+      (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
+        { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
+  obtain ⟨lay, mask, hst, hc', hdm, hxe⟩ := placeholder_ok hph
+  have hR := Sched.schedSoFar_alike tr t (k % 2) dom xs hr hi
+    ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) hT.1 hT.2.1 hT.2.2.1 hT.2.2.2.1
+    hT.2.2.2.2 hdom hdg hm hxs hn hlq hp hd
+  rw [hrs0] at hR
+  cases hs' : schedSoFar t (k % 2) dom xs hi
+      ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) with
+  | error e => rw [hs'] at hR; exact (hR : False).elim
+  | ok sched' =>
+  rw [hs'] at hR
+  have hrk : (ofLoop T L₀ real).rep x h.length = k := by
+    show repOf x h.length = k
+    unfold repOf
+    rw [hx, hq]
+    simp only [Nat.add_sub_cancel]
+    rw [hki]
+  have hso : startOf x k = .ok (lay, mask) := by
+    unfold startOf
+    rw [hx]
+    exact hst
+  have hc : CfgAlike ((ofLoop T L₀ real).cfg x ρ h) c' := by
+    unfold cfg drawsAt
+    rw [hrk, hc']
+    have e1 : (ofLoop T L₀ real).lay x k = lay := by
+      show ((startOf x k).toOption.map (·.1)).getD default = lay
+      rw [hso]
+      rfl
+    have e2 : (ofLoop T L₀ real).slot x k = some mask := by
+      show (startOf x k).toOption.map (·.2) = some mask
+      rw [hso]
+      rfl
+    rw [e1, e2]
+    exact cfgAlike_ofBytes lay _ _ (some mask)
+  exact ofLoop_progChecks_step T L₀ real x w ρ h a hA hrep hex hcs hx hq hki hph hc hreal (by rw [← hdm, ← hxe]; exact hrs0)
+    hR hs' hlt hcoins hin (hI sched' hs')
 
 open Loop in
 /-- **Where `ProgChecks` asks anything at the loop's own frames**: where the frame takes the coins after `h` and its
