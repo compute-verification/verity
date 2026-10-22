@@ -136,4 +136,88 @@ theorem foldDef_exp_rows {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (
     unfold readExp
     split_ifs <;> rfl
 
+/-! ## A copy's inputs, bound -/
+
+theorem bound_map (c : Flock.Tmpl.Call) (g : ℕ → ℕ) (j : ℕ) : c.bound g j = (c.bound id j).map g := by
+  simp [Flock.Tmpl.Call.bound, List.map_flatMap]
+
+theorem zipIdx_sum (F : ℕ → ℕ → GF128) : ∀ (L : List ℕ) (n : ℕ),
+    ((L.zipIdx n).map fun x => F x.1 x.2).sum = ∑ t ∈ Finset.range L.length, F (L.getD t 0) (n + t)
+  | [], n => by simp
+  | a :: L, n => by
+    rw [List.zipIdx_cons, List.map_cons, List.sum_cons, zipIdx_sum F L (n + 1), List.length_cons,
+      Finset.sum_range_succ']
+    simp only [List.getD_cons_succ, List.getD_cons_zero, Nat.add_zero]
+    rw [add_comm (F a n)]
+    congr 1
+    exact Finset.sum_congr rfl fun t _ => by rw [show n + 1 + t = n + (t + 1) by omega]
+
+theorem getD_bound (c : Flock.Tmpl.Call) (g : ℕ → ℕ) (j t d : ℕ) (ht : t < (c.bound id j).length) :
+    (c.bound g j).getD t d = g ((c.bound id j).getD t 0) := by
+  rw [bound_map]
+  simp [List.getD_eq_getElem?_getD, ht]
+
+/-- **An explicit class binds a callee's copy**: for each bound input `(v, t')` and each class copy `k`, `v` read with
+weight `val t' k`. -/
+theorem bind_exp (pt : FoldPt) {s ins nk cols : ℕ} (hs : s < 64) (ip : ℕ → List ℕ) (q : ℕ → ℕ → ℕ)
+    (val : ℕ → ℕ → F128) : ∀ (L : List (ℕ × ℕ)) (o : Out), Shape ins nk o →
+    Shape ins nk (L.foldl (fun o x => (List.range nk).foldl (fun o k =>
+        o.ref pt false cols ins x.1 k (val x.2 k) fun y o =>
+          { p := addAt o.p (q k y) (val x.2 k * pt.g (q k y)), s := o.s, c := o.c, u := o.u, work := o.work }) o) o) ∧
+      expVal s ins nk (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) (L.foldl (fun o x => (List.range nk).foldl
+        (fun o k => o.ref pt false cols ins x.1 k (val x.2 k) fun y o =>
+          { p := addAt o.p (q k y) (val x.2 k * pt.g (q k y)), s := o.s, c := o.c, u := o.u, work := o.work }) o) o) =
+        expVal s ins nk (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) o +
+          (L.map fun x => ∑ k ∈ Finset.range nk, of (val x.2 k) * Gs pt s
+            (if x.1 < cols then q k x.1 else if x.1 < cols + ins then (ip k).getD (x.1 - cols) pt.qc else pt.qc)).sum := by
+  intro L o hsh
+  refine foldl_sum _ _ _ L o hsh fun x _ b hb => ?_
+  have key := foldl_sum (expVal s ins nk (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (Shape ins nk)
+    (fun k => of (val x.2 k) * Gs pt s
+      (if x.1 < cols then q k x.1 else if x.1 < cols + ins then (ip k).getD (x.1 - cols) pt.qc else pt.qc))
+    (List.range nk) b hb ?_
+  · rw [list_range_sum] at key
+    exact key
+  intro k hk b hb
+  refine (ref_exp pt hs (List.mem_range.mp hk) _ _ _ (of (val x.2 k) * Gs pt s (q k x.1)) hb
+    (fun _ => own_exp pt hs _ _ _ hb)).imp id (fun e => e.trans ?_)
+  split_ifs <;> rfl
+
+/-! ## Lane bits, and the layout facts the fold reads -/
+
+/-- The most lane bits a copy of Definition `d` adds below it. -/
+def lanes (t : Tmpl) (lays : Array Lay) : ℕ → ℕ → ℕ
+  | 0, _ => 0
+  | fuel + 1, d => (List.range (t.defs.getD d default).calls.size).foldl (fun n i =>
+      max n ((if ((lays.getD d default).places.getD i default).ms = 1 then 0
+        else ((lays.getD d default).places.getD i default).ms.log2) +
+          lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_)) 0
+
+theorem le_foldl_max (F : ℕ → ℕ) : ∀ (l : List ℕ) (n : ℕ),
+    n ≤ l.foldl (fun n i => max n (F i)) n ∧ ∀ x ∈ l, F x ≤ l.foldl (fun n i => max n (F i)) n
+  | [], n => ⟨le_refl _, fun x hx => absurd hx List.not_mem_nil⟩
+  | a :: l, n => by
+    obtain ⟨h1, h2⟩ := le_foldl_max F l (max n (F a))
+    refine ⟨(le_max_left _ _).trans h1, fun x hx => ?_⟩
+    rcases List.mem_cons.mp hx with rfl | hx
+    · exact (le_max_right _ _).trans h1
+    · exact h2 x hx
+
+theorem lanes_call (t : Tmpl) (lays : Array Lay) (fuel d i : ℕ) (hi : i < (t.defs.getD d default).calls.size) :
+    (if ((lays.getD d default).places.getD i default).ms = 1 then 0
+        else ((lays.getD d default).places.getD i default).ms.log2) +
+      lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_ ≤ lanes t lays (fuel + 1) d :=
+  (le_foldl_max _ _ 0).2 i (List.mem_range.mpr hi)
+
+/-- What the fold reads of the layout: each copy binds its callee's inputs, and a run of lanes takes `2^m ≥ count`
+lanes, its copies side by side (`cs = 1`). -/
+structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
+  bound : ∀ d i j, i < (t.defs.getD d default).calls.size →
+    (((t.defs.getD d default).calls.getD i default).bound id j).length =
+      (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins
+  lanes : ∀ d i, i < (t.defs.getD d default).calls.size → ((lays.getD d default).places.getD i default).ms ≠ 1 →
+    ((lays.getD d default).places.getD i default).cs = 1 ∧
+      2 ^ ((lays.getD d default).places.getD i default).ms.log2 = ((lays.getD d default).places.getD i default).ms ∧
+      ((t.defs.getD d default).calls.getD i default).count ≤ ((lays.getD d default).places.getD i default).ms
+
 end FlockSoundness.TmplFold
