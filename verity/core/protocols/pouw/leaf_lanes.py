@@ -37,15 +37,23 @@ input its ok's cone reads (the lane index's ``pub`` among them) or an output row
 * **The known ports** (`known`): ``pub``, ``admit`` and ``o0`` the verifier registers at their known content
   (`produced.known_port`): lane l's ``pub`` row (value ``pub<l>``) holds index l, so a lane whose index isn't the
   verifier's l opens no root; every statement's ``o0`` (value ``ok<i>``, i its place in `statements`) is the row 1.
+* **Their rows** (`known_rows`, the served path's one producer of them): lane l's ``pub`` (`pub_words`: the unit's salt,
+  position and roots as its seed reads them, `seeds.leaves` and `seeds.position_leaves`, 100 words, then l as the 101st),
+  ``admit`` (the leaf's R admit bits, `bits_words`) and ``o0`` (`OK_ROW`); the salts they're committed under are the
+  caller's. Read least significant bit first, as `Accounting.TS.Lanes.decLane` reads a field, the salt is its 16
+  big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. The
+  difftest against BRIDGE2's Lean `Accounting.TS.knownRows` (the rows `LeafLanesSound` is to take) is not yet written:
+  its reference is `lean/window/tests/test_lanes.py`'s `known_rows`.
 
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
 window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -53,7 +61,11 @@ PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
 #: the lane statement's public row's fields, in order
 PUBLIC = ("salt", "position", "roots", "lane")
+#: their bits: a digest, a u64, two digests and the lane index's u16 word
+PUBLIC_BITS = (512, 64, 1024, 16)
 PUB, OK = "pub", "o0"
+#: every statement's ``o0`` row: ok = 1
+OK_ROW = (1,)
 #: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
 COMPLETE = "complete"
 LANE_ROWS, LANE_COLS = 4, 8
@@ -145,6 +157,44 @@ def own(r: int, c: int, kind: str, ln: int | None = None) -> set[str]:
     return set(reads(r, c, kind, ln)) | set(known(r, c, kind, ln))
 
 
+def bits_words(bits: Sequence[int]) -> list[int]:
+    """A row's u16 words from its bits: bit t is bit t mod 16 of word t // 16, the last word's missing bits 0."""
+    b = [int(x) for x in bits]
+    if any(x not in (0, 1) for x in b):
+        raise ValueError("a row's bits are 0 or 1")
+    return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
+
+
+def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> list[int]:
+    """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
+    (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
+    ln as the 101st."""
+    if len(salt) != 64 or len(roots) != 2 or any(len(x) != 64 for x in roots):
+        raise ValueError("the salt and the two roots are 64-byte digests")
+    if not 0 <= int(ln) < 1 << 16:
+        raise ValueError(f"the lane index is a u16 word, not {ln!r}")
+    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    assert len(bits) == sum(PUBLIC_BITS[:-1])
+    return bits_words(bits) + [int(ln)]
+
+
+def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, salt: bytes | None = None, position: int | None = None,
+               roots: Sequence[bytes] | None = None, admit: Sequence[int] | None = None) -> dict[str, tuple[str, list[int]]]:
+    """A statement's `known` ports' rows, each ``(value, words)``: lane l's ``pub`` (`pub_words` of the unit's ``salt``,
+    ``position`` and ``roots``) and ``admit`` (the leaf's R ``admit`` bits), and every statement's ``o0`` (`OK_ROW`), the
+    combine's one known port."""
+    vals = known(r, c, kind, ln)
+    out = {OK: (vals[OK], list(OK_ROW))}
+    if kind == LANE:
+        if salt is None or position is None or roots is None or admit is None:
+            raise ValueError("a lane's known rows are of the unit's salt, position and roots and the leaf's admit bits")
+        if len(admit) != r:
+            raise ValueError(f"an {r}-row leaf has {r} admit bits, not {len(admit)}")
+        out[PUB] = (vals[PUB], pub_words(salt, position, roots, int(ln)))
+        out[ADMIT] = (vals[ADMIT], bits_words(admit))
+    return out
+
+
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
                     known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
@@ -171,20 +221,25 @@ __all__ = [
     "LANE_COLS",
     "LANE_ROWS",
     "OK",
+    "OK_ROW",
     "PARTIALS",
     "PUB",
     "PUBLIC",
+    "PUBLIC_BITS",
     "RECEIPT",
     "ZY",
     "A",
     "B",
+    "bits_words",
     "key_block",
     "known",
+    "known_rows",
     "lane_cols",
     "lane_rows",
     "lanes",
     "n_digits",
     "own",
+    "pub_words",
     "reads",
     "registered_file",
     "statements",
