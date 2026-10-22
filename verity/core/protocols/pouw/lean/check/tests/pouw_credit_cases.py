@@ -914,7 +914,7 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
         case "other-prefix":
             entries.append({**e, "value": rng.choice(["x/", "h1/w-4/", "h1/w-3/h1/w-3/"]) + e["value"]})
         case "other-leaves":
-            e["leaves"] = rng.choice([e["leaves"] + 1, e["leaves"] - 1, float(e["leaves"]), True, None])
+            e["leaves"] = rng.choice([e["leaves"] + 1, e["leaves"] - 1, str(e["leaves"]), True, None])
         case "other-words":
             e["words"] = rng.choice([e["words"] + 1, k // 2, k, str(e["words"])])
         case "other-domain":
