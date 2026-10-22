@@ -9,8 +9,10 @@ sources `in(C)` are the gates with no predecessors (`sources`), and `θ ⊆ in(C
 baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate is a bit.
 
 * A **subcircuit** `S` (`Subcircuit`) is a set of gates with inputs `in(S) ⊆ S`, every gate of `S \ in(S)` having all its
-  predecessors in `S`: `S` computes `S \ in(S)` (`inner`) from `in(S)`. An IU `R` of a division is the subcircuit
-  `R ∪ into R` with inputs `into R`.
+  predecessors in `S`: `S` computes `S \ in(S)` (`inner`) from `in(S)`. A gate of `in(C)` in `S` is one of its inputs,
+  since a gate with no predecessors is given, not computed: otherwise a block could hold a prompt's bits, or an
+  unregistered weight, as gates it computes and read them for nothing. An IU `R` of a division is the subcircuit
+  `R ∪ into R` with inputs `into R` and the input gates of `C` in `R`.
 * An **`(s, k)`-inference block** (`InferenceBlock`) is a subcircuit with `|S| ≤ s` and `|in(S) \ θ| ≤ k`. An
   **`(s, k)`-covering** (`Covers`) is a family of them that together compute `C \ in(C)`: every gate with a predecessor
   is computed by some block. Blocks may overlap and recompute, so a covering need not be a `Partition`. Its slowdown is
@@ -22,7 +24,7 @@ baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate i
   completes some `m_{i,j}`.
 -/
 
-namespace Nci
+namespace Nci.Covering
 
 open Verity Finset
 
@@ -35,12 +37,13 @@ inductive FeedsWithin (C : Circuit) (R : Finset (Fin C.N)) : Fin C.N → Fin C.N
   | step {g h t : Fin C.N} : g ∈ R → g ∈ C.reads h → FeedsWithin C R h t → FeedsWithin C R g t
 
 /-- A subcircuit `S` of `C`: its gates, and its inputs `in(S) ⊆ S`; every gate of `S \ in(S)` has all its predecessors
-in `S`. -/
+in `S`, and every gate of `in(C)` in `S` is an input of `S`. -/
 structure Subcircuit (C : Circuit) where
   gates : Finset (Fin C.N)
   ins : Finset (Fin C.N)
   ins_sub : ins ⊆ gates
   closed : ∀ g ∈ gates, g ∉ ins → C.reads g ⊆ gates
+  sources_ins : ∀ g ∈ gates, g ∈ sources C → g ∈ ins
 
 /-- `S \ in(S)`: the gates `S` computes. -/
 def Subcircuit.inner {C : Circuit} (S : Subcircuit C) : Finset (Fin C.N) := S.gates \ S.ins
@@ -93,4 +96,4 @@ def Cuts (j : Fin B.nt) (A X : Finset (Fin d.D.N)) (i' : Fin B.nw) : Prop :=
 
 end MulBlocks
 
-end Nci
+end Nci.Covering

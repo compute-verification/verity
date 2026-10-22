@@ -11,7 +11,7 @@ its multiplication blocks are any disjoint gate sets with an output gate, not a 
 
 namespace Nci.Guarantees
 
-open Verity
+open Verity Nci.Covering
 
 /-- **The covering bound** ([COVERING-BOUND]): if `C` is `(s, r, b)`-parameter-hard (`Assumptions.ParameterHard`) and
 `c D > k` with `c = r · b`, every `(s, k)`-covering `𝓘` of `C` by `n` blocks has `|𝓜*| ≤ n · ((k / c)² + k)`, where `𝓜*`

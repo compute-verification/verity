@@ -15,11 +15,9 @@ the inputs of `S` in `T_j` cut the activation off from every weight outside `θ'
 activation, which `S` reads), so they are at least `c` and `|J_S| ≤ k / c`.
 -/
 
-namespace Nci.SecurityProofs
+namespace Nci.SecurityProofs.Covering
 
-open Verity Finset
-
-section Covering
+open Verity Finset Nci.Covering
 
 variable {C : Circuit}
 
@@ -68,7 +66,11 @@ theorem mul_card_le_of_disjoint {ι α : Type*} [DecidableEq α] (F : Finset ι)
     _ = ((F.biUnion fun i => f i ∩ Y).card : ℝ) := by rw [hU]; push_cast; rfl
     _ ≤ Y.card := by exact_mod_cast hY
 
-end Covering
+end Nci.SecurityProofs.Covering
+
+namespace Nci.SecurityProofs
+
+open Verity Finset Nci.Covering Nci.SecurityProofs.Covering
 
 theorem CoveringBound : Guarantees.CoveringBound := by
   classical

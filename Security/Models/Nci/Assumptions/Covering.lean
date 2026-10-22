@@ -20,7 +20,7 @@ In a transformer each (weight, token) pair is exactly one multiplication of the 
 
 namespace Nci.Assumptions
 
-open Verity
+open Verity Nci.Covering
 
 /-- **Parameter-hardness** `(s, r, b)` ([PARAMETER-HARDNESS]): every subcircuit `S` of `d` with `|S| ≤ s` reads at
 least `c = r · b` bits outside the registered parameters for each weight whose multiplications it completes,
