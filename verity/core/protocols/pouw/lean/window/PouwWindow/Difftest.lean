@@ -33,8 +33,9 @@ to Python.
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
 * a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
   `coin`, `round`, `root`).
-* a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports`): `n_digits` (`ks`); `lane_ports` (`r`,
-  `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those, `lane` null for the combine, and `path`).
+* a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
+  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those,
+  `lane` null for the combine, and `path`); `wires` (those); `wire_of` (those and `wire`).
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -230,6 +231,20 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     let path ← str j "path"
     pure <| match Lanes.fieldOf? (← leafPorts j) path with
       | none => Json.null
-      | some (p, f) => Json.mkObj ([("port", toJson p.name), ("source", sourceJson p.source)] ++ leafFieldJson f))]
+      | some (p, f) => Json.mkObj ([("port", toJson p.name), ("source", sourceJson p.source)] ++ leafFieldJson f)),
+  ("wires", fun j => do
+    pure (Json.arr ((← Lanes.wires? (← leafPorts j)).map fun (pw : Lanes.Port × Nat) => Json.mkObj
+      [("port", toJson pw.1.name), ("source", sourceJson pw.1.source), ("wire", toJson pw.2),
+       ("wires", toJson pw.1.bits)]).toArray)),
+  ("wire_of", fun j => do
+    let ps ← leafPorts j
+    let _ ← Lanes.wires? ps
+    let w ← nat j "wire"
+    pure <| match Lanes.wireOf? ps w with
+      | none => Json.null
+      | some (p, b) => Json.mkObj ([("port", toJson p.name), ("source", sourceJson p.source), ("bit", toJson b)] ++
+          match p.fieldAt? b with
+          | none => []
+          | some f => [("field", toJson f.path), ("field_bit", toJson (b - f.bit))]))]
 
 end PouwWindow.Difftest
