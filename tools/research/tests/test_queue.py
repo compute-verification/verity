@@ -637,6 +637,20 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
 
 
+def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
+    """CI-134: an eject waiting for drive's tick withdrew the mark of a head pushed meanwhile (21 Oct: #3111 at its fix,
+    0422424ec7).  With `--sha` it acts only while that head is the PR's, and a newer head keeps its mark."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    old = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    world.gh.put(1, world.change({"a.txt": "fixed\n"}))
+    new = next(p.head for p in world.gh.open_prs() if p.number == 1)
+    with pytest.raises(QueueError, match=f"#1 is at {new[:12]} now, not {old[:12]}"):
+        q.eject(1, "breaks a suite", "ci", sha=old)
+    assert "1" not in q.load_state()["ejected"] and not world.store.labels(label_target(1, new), key=vocab.READY)
+    assert q.eject(1, "breaks a suite", "ci", sha=new[:12]).head == new and q.load_state()["ejected"]["1"]["head"] == new
+
+
 def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
     """13 Oct: `research queue eject 1847` wrote its notice only as a handoff note on the ejecting VM, which syncs no notes, and
     logged that it told circuits, who heard through a relay."""
