@@ -173,6 +173,29 @@ structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
       2 ^ ((lays.getD d default).places.getD i default).ms.log2 = ((lays.getD d default).places.getD i default).ms ∧
       ((t.defs.getD d default).calls.getD i default).count ≤ ((lays.getD d default).places.getD i default).ms
 
+theorem getD_lanes (as : Array ℕ) (B n k : ℕ) (hk : k < as.size * n) :
+    ((Array.range (as.size * n)).map fun i => as.getD (i / n) 0 + B * (i % n)).getD k 0 =
+      as.getD (k / n) 0 + B * (k % n) := by
+  simp [Array.getD_eq_getD_getElem?, hk]
+
+theorem divmod_div {k c j : ℕ} (hc0 : 0 < c) (hj : j < c) : (k * c + j) / c = k := by
+  rw [Nat.add_comm, Nat.add_mul_div_right _ _ hc0, Nat.div_eq_of_lt hj, Nat.zero_add]
+
+theorem divmod_mod {k c j : ℕ} (hj : j < c) : (k * c + j) % c = j := by
+  rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
+
+theorem lane_lt {a β j m : ℕ} (ha : a < 2 ^ β) (hj : j < 2 ^ m) : a + 2 ^ β * j < 2 ^ (β + m) := by
+  rw [Nat.pow_add]
+  have := Nat.mul_le_mul_left (2 ^ β) (Nat.succ_le_of_lt hj)
+  rw [Nat.mul_succ] at this
+  omega
+
+/-- A run's lanes, copy by copy: index `k · c + j` is lane `j` of copy `k`. -/
+theorem sum_lanes {M : Type} [AddCommMonoid M] (G : ℕ → M) (c : ℕ) : ∀ n,
+    ∑ i ∈ Finset.range (n * c), G i = ∑ k ∈ Finset.range n, ∑ j ∈ Finset.range c, G (k * c + j)
+  | 0 => by simp
+  | n + 1 => by rw [Nat.add_mul, Nat.one_mul, Finset.sum_range_add, sum_lanes G c n, Finset.sum_range_succ]
+
 /-! ## What a class's fold means -/
 
 /-- An explicit class `(d, β, h, as)`: with copy `k`'s inputs at `ip k`, its `expVal` is its copies' `refVal`s. -/
@@ -288,7 +311,86 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         rw [zero_add]
         refine Finset.sum_congr rfl fun k _ => ?_
         rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
-      · sorry
+      · have hm' : ¬ ((((lays.getD d default).places.getD i default).ms == 1) = true) := by rw [beq_iff_eq]; exact hm
+        rw [if_neg hm'] at hr
+        by_cases hal : ((h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms != 0) = true
+        · rw [if_pos hal] at hr; cases hr
+        rw [if_neg hal] at hr
+        have hal' : (h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms = 0 := by simpa using hal
+        obtain ⟨hcs, hpow, hcnt⟩ := hlay.lanes d i hi hm
+        have hl := lanes_call t lays fuel d i hi
+        rw [if_neg hm] at hl
+        have hB : 2 ^ β * ((lays.getD d default).places.getD i default).ms = 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) := by rw [Nat.pow_add, hpow]
+        have hh : h + ((lays.getD d default).places.getD i default).nb = ((lays.getD d default).places.getD i default).ms * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) :=
+          (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hal')).symm
+        by_cases hlt : β + ((lays.getD d default).places.getD i default).ms.log2 < 6
+        · rw [if_pos hlt] at hr
+          obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
+          obtain ⟨b4, hJ, hr⟩ := except_bind_ok hr
+          cases hr
+          refine ⟨_, rfl, ?_⟩
+          have hsz : ((Array.range (as.size * ((t.defs.getD d default).calls.getD i default).count)).map fun i' => as.getD (i' / ((t.defs.getD d default).calls.getD i default).count) 0 + 2 ^ β * (i' % ((t.defs.getD d default).calls.getD i default).count)).size = as.size * ((t.defs.getD d default).calls.getD i default).count := by simp
+          obtain ⟨hchS, hchV⟩ := (ih _ _ _ _ ch hch (by omega) (by omega)).1 (by omega) (fun k hk => by
+            rw [hsz] at hk
+            have hc0 : 0 < ((t.defs.getD d default).calls.getD i default).count := Nat.pos_of_ne_zero fun h0 => by rw [h0, Nat.mul_zero] at hk; omega
+            rw [getD_lanes _ _ _ _ hk]
+            exact lane_lt (has _ (Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm] at hk)))
+              (lt_of_lt_of_le (Nat.mod_lt _ hc0) (hcnt.trans_eq hpow.symm)))
+          have keyJ := forIn_range_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (Shape (t.defs.getD d default).ins as.size)
+            (fun j => ∑ t' ∈ Finset.range (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins, ∑ k ∈ Finset.range as.size,
+              of ((ch.u.getD t' #[]).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0) *
+                Gs pt s (readExp t lays pt d β h as ip k ((((t.defs.getD d default).calls.getD i default).bound id j).getD t' 0)))
+            hJ (add_exp hs (fun _ _ => 0) 0 0 hq hchS.1).1 ?_
+          · obtain ⟨hqJ, hsJ⟩ := keyJ
+            refine ⟨hqJ, hsJ.trans ?_⟩
+            refine (congrArg₂ (· + ·) (add_exp hs (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) 0 0 hq hchS.1).2 rfl).trans ?_
+            refine (add_assoc _ _ _).trans (congrArg (HAdd.hAdd _) ?_)
+            have eR : ∀ k ∈ Finset.range as.size, ∀ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count,
+                refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_ (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs))
+                  (2 ^ β * ((lays.getD d default).places.getD i default).ms) (((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip k) j) =
+                refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_ (((Array.range (as.size * ((t.defs.getD d default).calls.getD i default).count)).map fun i' => as.getD (i' / ((t.defs.getD d default).calls.getD i default).count) 0 + 2 ^ β * (i' % ((t.defs.getD d default).calls.getD i default).count)).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0 +
+                  2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms)) (2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2)) ((fun i' => ((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip (i' / ((t.defs.getD d default).calls.getD i default).count)) (i' % ((t.defs.getD d default).calls.getD i default).count)) (k * ((t.defs.getD d default).calls.getD i default).count + j)) := by
+              intro k hk j hj
+              have hk := Finset.mem_range.mp hk
+              have hj := Finset.mem_range.mp hj
+              have hc0 : 0 < ((t.defs.getD d default).calls.getD i default).count := by omega
+              have hlt' : k * ((t.defs.getD d default).calls.getD i default).count + j < as.size * ((t.defs.getD d default).calls.getD i default).count :=
+                lt_of_lt_of_le (Nat.add_lt_add_left hj _) (by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hk)
+              have e1 : ((Array.range (as.size * ((t.defs.getD d default).calls.getD i default).count)).map fun i' => as.getD (i' / ((t.defs.getD d default).calls.getD i default).count) 0 + 2 ^ β * (i' % ((t.defs.getD d default).calls.getD i default).count)).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0 = as.getD k 0 + 2 ^ β * j := by
+                rw [getD_lanes _ _ _ _ hlt', divmod_div hc0 hj, divmod_mod hj]
+              have e2 : as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs) =
+                  as.getD k 0 + 2 ^ β * j + 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) := by
+                rw [hcs, Nat.mul_one, ← hB, Nat.mul_assoc, ← hh]; ring
+              rw [e1, e2, hB]
+              simp only [divmod_div hc0 hj, divmod_mod hj]
+            refine Eq.trans ?_ ((Finset.sum_congr rfl fun k hk => Finset.sum_congr rfl fun j hj => eR k hk j hj).trans
+              ((sum_lanes (fun i' => refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_ (((Array.range (as.size * ((t.defs.getD d default).calls.getD i default).count)).map fun i' => as.getD (i' / ((t.defs.getD d default).calls.getD i default).count) 0 + 2 ^ β * (i' % ((t.defs.getD d default).calls.getD i default).count)).getD i' 0 +
+                  2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms)) (2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2)) ((fun i' => ((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip (i' / ((t.defs.getD d default).calls.getD i default).count)) (i' % ((t.defs.getD d default).calls.getD i default).count)) i')) _ _).symm.trans
+                ((congrArg (fun n => ∑ i' ∈ Finset.range n, refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_ (((Array.range (as.size * ((t.defs.getD d default).calls.getD i default).count)).map fun i' => as.getD (i' / ((t.defs.getD d default).calls.getD i default).count) 0 + 2 ^ β * (i' % ((t.defs.getD d default).calls.getD i default).count)).getD i' 0 +
+                  2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms)) (2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2)) ((fun i' => ((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip (i' / ((t.defs.getD d default).calls.getD i default).count)) (i' % ((t.defs.getD d default).calls.getD i default).count)) i')) hsz).symm.trans
+                  (hchV (fun i' => ((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip (i' / ((t.defs.getD d default).calls.getD i default).count)) (i' % ((t.defs.getD d default).calls.getD i default).count))).symm))).symm
+            unfold expVal
+            refine congrArg (HAdd.hAdd _) ?_
+            rw [hsz]
+            refine Finset.sum_comm.trans (Finset.sum_congr rfl fun t' ht' => ?_)
+            rw [sum_lanes]
+            refine Finset.sum_comm.trans (Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun j hj => ?_)
+            have hj := Finset.mem_range.mp hj
+            simp only [divmod_div (show 0 < ((t.defs.getD d default).calls.getD i default).count by omega) hj, divmod_mod hj]
+            rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+          intro j _ b r hr hq
+          cases hr
+          refine ⟨_, rfl, ?_⟩
+          refine (bind_exp pt hs ip
+            (fun k y => as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
+            (fun t' k => (ch.u.getD t' #[]).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0)
+            (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ hq).imp id (fun e => e.trans ?_)
+          refine congrArg (HAdd.hAdd _) ((zipIdx_sum (fun v t' => ∑ k ∈ Finset.range as.size,
+            of ((ch.u.getD t' #[]).getD (k * ((t.defs.getD d default).calls.getD i default).count + j) 0) * Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_)
+          rw [hlay.bound d i j hi]
+          exact Finset.sum_congr rfl fun t' _ => by rw [zero_add]
+        · rw [if_neg hlt] at hr
+          sorry
     · intro ⟨x, ra, rb⟩ _ b r hr hq
       dsimp only at hr
       obtain ⟨b1, hk, hr⟩ := except_bind_ok hr
