@@ -177,63 +177,68 @@ def walkChild (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) (w : Nat →
     let T ← w e β' as' oc al'
     return (T, ident, ident)
 
+/-- Call `i` of Definition `d`'s class `(β, as)` at local offset `off` in chunks of `2^al`, its column halves `gL`:
+its callee's tables (`child`) added to `o`, and their open inputs bound. -/
+def walkCall (t : Tmpl) (lays : Array Lay) (pt : FoldPt)
+    (child : Nat → Nat → Array Nat → Nat → Nat → SV (Tab × (Nat → Nat × F128) × (Nat → Nat × F128)))
+    (d β : Nat) (as : Array Nat) (off al : Nat) (gL : Half) (o : Tab) (i : Nat) : SV Tab := do
+  let D := t.defs.getD d default
+  let summed := 6 ≤ β
+  let B := 2 ^ β
+  let nk := if summed then 1 else as.size
+  let c := D.calls.getD i default
+  let pl := (lays.getD d default).places.getD i default
+  let bind := Tab.bind (Tab.ref D pt summed (2 ^ al) B as gL fun y => off + posIn t lays (t.defs.size + 1) d y) c
+  if pl.ms == 1 then
+    if summed && c.count != 1 then throw "split fold: copies side by side below the root"
+    (List.range c.count).foldlM (fun o j => do
+      let (ch, rm, cm) ← child c.def_ β as (off + pl.nb + j * pl.cs) al
+      pure (bind (o.addChild ch rm cm 1 1) j ch rm fun kc _ => [(kc, 1)])) o
+  else
+    let M := pl.ms
+    let m := Nat.log2 M
+    if (off + pl.nb) % M != 0 || al < m then throw "split fold: a run of lanes is not aligned to its lanes"
+    let oc := (off + pl.nb) / M
+    if summed then
+      let (ch, rm, cm) ← child c.def_ (β + m) #[] oc (al - m)
+      let rb := fun (b : Nat) => pt.rho.getD (β - 6 + b) 0
+      let tb := fun (b : Nat) => pt.r.getD (β - 6 + b) 0
+      let lrr := laneSum (fun b bit => if bit then rb b * tb b else (rb b + 1) * (tb b + 1)) m c.count
+      let lr := laneSum (fun b bit => if bit then rb b else rb b + 1) m c.count
+      pure (Tab.binds bind (o.addChild ch rm cm lrr lr) c.count ch rm fun _ j => [(0, eqAt pt.rho (β - 6) m j)])
+    else if β + m < 6 then
+      let as' := (Array.range (nk * c.count)).map fun i => as.getD (i / c.count) 0 + B * (i % c.count)
+      let (ch, rm, cm) ← child c.def_ (β + m) as' oc (al - m)
+      pure (Tab.binds bind (o.addChild ch rm cm 0 0) c.count ch rm
+        fun kc j => if kc % c.count == j then [(kc / c.count, 1)] else [])
+    else
+      let β' := β + m
+      let (ch, rm, cm) ← child c.def_ β' #[] oc (al - m)
+      let eLow := fun (a : Nat) => pt.lw.getD (a % 64) 0 * eqAt pt.rho 0 (β' - 6) (a / 64)
+      let lows := (List.range nk).flatMap fun k => (List.range c.count).map fun j => as.getD k 0 + B * j
+      let W := lows.foldl (fun W a => addAt W a (eLow a * eqAt pt.r 0 (β' - 6) (a / 64))) (Array.replicate 64 0)
+      let EL := lows.foldl (fun EL a => EL + eLow a) 0
+      pure (Tab.binds bind (Tab.slots pt W EL (nk * c.count) o ch rm cm) c.count ch rm fun _ j =>
+        (List.range nk).map fun k => (k, eLow (as.getD k 0 + B * j)))
+
 /-- **Walk Definition `d`'s class** `(β, as)` at local offset `off` in chunks of `2^al` (`fuel` bounds the depth;
-`multi`: reached on more than one path). A call's class is `walkChild`'s. -/
+`multi`: reached on more than one path): its own rows, then each call's (`walkCall`), a call's class `walkChild`'s. -/
 def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     Nat → Nat → Nat → Array Nat → Nat → Nat → SV Tab
   | 0, _, _, _, _, _ => throw "split fold: calls nest deeper than the definitions"
   | fuel + 1, d, β, as, off, al => do
     let D := t.defs.getD d default
-    let L := lays.getD d default
     let summed := 6 ≤ β
     if !summed && β + al < 6 then throw s!"split fold: definition {d}: chunks below 64 slots"
-    let B := 2 ^ β
-    let A := 2 ^ al
-    let nk := if summed then 1 else as.size
-    let pos := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
     let lo := if summed then β - 6 else 0
     let n := if summed then al else β + al - 6
     let eL ← half pt true lo n
     let gL ← half pt false lo n
-    let ref := Tab.ref D pt summed A B as gL pos
-    let child := walkChild lays multi pt (walk t lays multi pt fuel)
-    let mut o : Tab := Tab.rows ref (Tab.rowLow pt summed A B as eL) pt.alpha nk A pos D.rows {}
-    for i in [0:D.calls.size] do
-      let c := D.calls.getD i default
-      let pl := L.places.getD i default
-      let bind := Tab.bind ref c
-      if pl.ms == 1 then
-        if summed && c.count != 1 then throw "split fold: copies side by side below the root"
-        for j in [0:c.count] do
-          let (ch, rm, cm) ← child c.def_ β as (off + pl.nb + j * pl.cs) al
-          o := bind (o.addChild ch rm cm 1 1) j ch rm fun kc _ => [(kc, 1)]
-      else
-        let M := pl.ms
-        let m := Nat.log2 M
-        if (off + pl.nb) % M != 0 || al < m then throw "split fold: a run of lanes is not aligned to its lanes"
-        let oc := (off + pl.nb) / M
-        if summed then
-          let (ch, rm, cm) ← child c.def_ (β + m) #[] oc (al - m)
-          let rb := fun (b : Nat) => pt.rho.getD (β - 6 + b) 0
-          let tb := fun (b : Nat) => pt.r.getD (β - 6 + b) 0
-          let lrr := laneSum (fun b bit => if bit then rb b * tb b else (rb b + 1) * (tb b + 1)) m c.count
-          let lr := laneSum (fun b bit => if bit then rb b else rb b + 1) m c.count
-          o := Tab.binds bind (o.addChild ch rm cm lrr lr) c.count ch rm fun _ j => [(0, eqAt pt.rho (β - 6) m j)]
-        else if β + m < 6 then
-          let as' := (Array.range (nk * c.count)).map fun i => as.getD (i / c.count) 0 + B * (i % c.count)
-          let (ch, rm, cm) ← child c.def_ (β + m) as' oc (al - m)
-          o := Tab.binds bind (o.addChild ch rm cm 0 0) c.count ch rm
-            fun kc j => if kc % c.count == j then [(kc / c.count, 1)] else []
-        else
-          let β' := β + m
-          let (ch, rm, cm) ← child c.def_ β' #[] oc (al - m)
-          let eLow := fun (a : Nat) => pt.lw.getD (a % 64) 0 * eqAt pt.rho 0 (β' - 6) (a / 64)
-          let lows := (List.range nk).flatMap fun k => (List.range c.count).map fun j => as.getD k 0 + B * j
-          let W := lows.foldl (fun W a => addAt W a (eLow a * eqAt pt.r 0 (β' - 6) (a / 64))) (Array.replicate 64 0)
-          let EL := lows.foldl (fun EL a => EL + eLow a) 0
-          o := Tab.binds bind (Tab.slots pt W EL (nk * c.count) o ch rm cm) c.count ch rm fun _ j =>
-            (List.range nk).map fun k => (k, eLow (as.getD k 0 + B * j))
-    return o
+    let pos := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
+    let o := Tab.rows (Tab.ref D pt summed (2 ^ al) (2 ^ β) as gL pos) (Tab.rowLow pt summed (2 ^ al) (2 ^ β) as eL)
+      pt.alpha (if summed then 1 else as.size) (2 ^ al) pos D.rows {}
+    (List.range D.calls.size).foldlM
+      (walkCall t lays pt (walkChild lays multi pt (walk t lays multi pt fuel)) d β as off al gL) o
 
 /-- **The unit's fold, split**: `Tmpl.fold`'s, with the tables; its work (the walks' entries and bindings, and each
 placement's re-keyed entries), the tables, and the work spent building them. -/

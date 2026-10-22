@@ -300,7 +300,7 @@ theorem cachedTab_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   unfold cachedTab at h
   obtain ⟨s0, st0, hg, h⟩ := sv_bind_ok h
   obtain ⟨rfl, rfl⟩ := sv_get_ok hg
-  cases hk : s0.tabs.get? (e, β', as') with
+  cases hk : st0.tabs.get? (e, β', as') with
   | some T' =>
     simp only [hk] at h
     obtain ⟨rfl, rfl⟩ := sv_pure_ok h
@@ -373,9 +373,7 @@ theorem walkChild_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
 
 theorem hsum_empty {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHashable κ] [DecidableEq κ] (f : κ → GF128) :
     hsum ({} : HashMap κ F128) f = 0 := by
-  first
-  | simp [hsum]
-  | (rw [hsum_superset _ f ∅ fun x hx => absurd hx HashMap.not_mem_emptyc]; rfl)
+  simp [hsum]
 
 theorem tabExp_empty (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) : tabExp pt s L H iv {} = 0 := by
   unfold tabExp
@@ -388,16 +386,14 @@ theorem tabSum_empty (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF1
 theorem mem_of_toList {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHashable κ] {m : HashMap κ F128}
     {e : κ × F128} (he : e ∈ m.toList) : e.1 ∈ m := by
   have h := (HashMap.mem_toList_iff_getElem?_eq_some).1 he
-  first
-  | exact HashMap.mem_iff_isSome_getElem?.2 (by rw [h]; rfl)
-  | exact HashMap.mem_of_getElem?_eq_some h
-  | simp [HashMap.mem_iff_isSome_getElem?, h]
+  exact HashMap.mem_iff_isSome_getElem?.2 (by rw [h]; rfl)
 
 theorem tabExp_congr_U (pt : FoldPt) (s L H : ℕ) (iv iv' : ℕ → ℕ → GF128) (T : Tab)
     (h : ∀ x, x ∈ T.U → iv x.1 x.2.1 = iv' x.1 x.2.1) : tabExp pt s L H iv T = tabExp pt s L H iv' T := by
   unfold tabExp hsum
   congr 1
   refine congrArg List.sum (List.map_congr_left fun e he => ?_)
+  dsimp only
   rw [h e.1 (mem_of_toList he)]
 
 theorem tabSum_congr_U (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv iv' : ℕ → GF128) (T : Tab)
@@ -405,6 +401,7 @@ theorem tabSum_congr_U (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv iv' : ℕ �
   unfold tabSum hsum
   congr 1
   refine congrArg List.sum (List.map_congr_left fun e he => ?_)
+  dsimp only
   rw [h e.1 (mem_of_toList he)]
 
 /-- `rm`, `cm` re-key a child's chunks at origin `Hc` (high factors from `Lc`) into its caller's at `H` (from `L`). -/
@@ -558,18 +555,5 @@ theorem child_expW (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A 
     exact Finset.sum_congr rfl fun k _ => List.sum_map_mul_left _ _ _
   simp only [e2]
   ring
-
-theorem walk_shape {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {F d β off al : ℕ}
-    {as : Array ℕ} {st st' : SplitSt} {T : Tab}
-    (h : (walk t lays multi pt (F + 1) d β as off al).run st = .ok (T, st')) (h6 : 6 ≤ β + al) : False := by
-  rw [walk] at h
-  simp only [show (!decide (6 ≤ β) && decide (β + al < 6)) = false by simp; omega, Bool.false_eq_true,
-    ↓reduceIte] at h
-  obtain ⟨eL, st1, hE, h⟩ := sv_bind_ok h
-  obtain ⟨gL, st2, hG, h⟩ := sv_bind_ok h
-  obtain ⟨o, st3, hF, h⟩ := sv_bind_ok h
-  clear hF
-  trace_state
-  sorry
 
 end FlockSoundness.TmplFold
