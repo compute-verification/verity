@@ -41,7 +41,7 @@ theorem foldSplit_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rh
   split_ifs
   · simp only [FoldPt.e, FoldPt.g, of_mul, of_add, ← one_eq]
     ring
-  · rw [add_zero]
+  · simp
 
 /-- **A templated unit slot's fold is the flat slot's**: `foldUnit` on a well-formed template at `layoutM`'s layouts is
 the flat statement's fold of the slot on `unrollAt`'s net of `sl` bits, entry by entry. -/
@@ -82,7 +82,7 @@ theorem foldUnit_eq_project {t : Tmpl} {mode : Mode} {lays : Array Lay} {sl : �
     by_cases hd : d < t.defs.size
     · exact (wf_call hwf d hd i hi).1
     · rw [getD_out hd] at hi
-      first | exact absurd hi (Nat.not_lt_zero _) | simp at hi
+      exact absurd hi (Nat.not_lt_zero _)
   have hlay : LayOk t lays :=
     ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2⟩
   obtain ⟨P, w1, w2, w3⟩ := v
