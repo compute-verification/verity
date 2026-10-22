@@ -3,8 +3,9 @@ socket pair: a session whose coins that service released is accepted, and what i
 (`Session.released_reason`). Under the auditor's ledger (`Session.trusted_reason`) a session's coins are those of the one
 challenger session the ledger opens for the session's own window R inside its period, so coins from a second challenger
 session over the same registration are refused, as is a ledger that opens a second session for R; a coin opened
-before its window's root is refused; and a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin
-before it, the challenger's log as if each had gone alone."""
+before its window's root is refused; a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin
+before it, the challenger's log as if each had gone alone; and a session that appends nothing reserves no append
+family, so its challenger releases every coin it committed to."""
 from __future__ import annotations
 
 import contextlib
@@ -53,10 +54,10 @@ class Service:
     to `directory` before it serves (`remote.open_session`), served on a thread over a socket pair whose other end is
     `client`, the verifier's `remote.RemoteChallenger`."""
 
-    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes) -> None:
+    def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS) -> None:
         directory.mkdir()
         self.directory, self.id, self.reason = directory, sid, None
-        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, APPENDS), Entropy(label))
+        challenger = C.LiveChallenger(coins.SCHEME, epoch, coins.families(windows, appends), Entropy(label))
         self.session = R.open_session(challenger, key(), f"{HOST}.{sid}", sign, directory, sid)
         (directory / R.HELLOS).write_text("")
         ours, theirs = socket.socketpair()
@@ -130,6 +131,38 @@ def test_a_session_through_a_challenger_service_is_accepted_and_holds_to_what_it
     other = Service(tmp_path / "s-1", sign, "s-1", 0, params().windows, b"another")
     assert other.close() is None
     assert "another coin commitment" in s.released_reason(*other.signed())
+
+
+@pytest.mark.parametrize("appends", [0, APPENDS])
+def test_a_session_that_appends_nothing_reserves_no_append_family_so_its_challenger_releases_every_coin(
+        store, tmp_path, sign, appends):
+    """A session reserves exactly the coins it will use (`coins.families`): with no append coins the layout is W
+    challenges and W openings coins, every one of which the honest session's challenger released, so the gate's end
+    reads it complete. Append coins reserved and never taken stay unreleased, and an honest session reads incomplete,
+    as every gate run's window did before."""
+    service = Service(tmp_path / "s-0", sign, "s-0", 0, params().windows, b"service", appends)
+    s, verdicts = served_session(store, service)
+    assert all(v.accepted for v in verdicts) and service.close() is None
+    signed, received = service.signed()
+    assert s.released_reason(signed, received) is None and coins.layout_reason(signed, 0, params().windows) is None
+    assert [label for label, _ in signed.families] == [coins.CHALLENGE, coins.OPENINGS] + [coins.APPEND] * (appends > 0)
+    assert all(len(received.get(label, ())) == n for label, n in signed.families) is (appends == 0)
+
+
+def test_a_coin_layout_is_challenge_and_openings_with_an_append_family_only_for_a_session_that_appends():
+    w = params().windows
+
+    def layout(families) -> C.LiveCommitment:
+        return C.LiveCommitment(coins.SCHEME, 0, tuple(families), bytes(64))
+
+    assert coins.families(w, 0) == ((coins.CHALLENGE, w), (coins.OPENINGS, w))
+    assert coins.families(w, 3) == ((coins.CHALLENGE, w), (coins.OPENINGS, w), (coins.APPEND, 3))
+    assert coins.layout_reason(layout(coins.families(w, 0)), 0, w) is None
+    assert coins.layout_reason(layout(coins.families(w, 3)), 0, w) is None
+    for bad in [[(coins.CHALLENGE, w)], [(coins.CHALLENGE, w), (coins.APPEND, 3)],
+                [(coins.OPENINGS, w), (coins.CHALLENGE, w)], [(coins.CHALLENGE, w), (coins.OPENINGS, w + 1)],
+                [(coins.CHALLENGE, w), (coins.OPENINGS, w), ("other", 1)]]:
+        assert "not challenge" in coins.layout_reason(layout(bad), 0, w)
 
 
 def test_coins_from_a_second_session_for_the_registration_are_refused(store, tmp_path, sign):

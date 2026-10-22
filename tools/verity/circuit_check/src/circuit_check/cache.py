@@ -1983,6 +1983,16 @@ def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | Non
     return _digests(root, got, fresh=True)
 
 
+def seen_all(root: Path, gots: list[dict[str, list[str]]]) -> list[dict[str, dict[str, str | None]]]:
+    """`seen` of each read set in ``gots``, every read among them digested once, now: what each gives on its own while the tree
+    is unchanged (`circuit_check.units` stores hundreds of records whose reads are mostly the same modules)."""
+    if not gots:
+        return []
+    every = {k: sorted({r for g in gots for r in g.get(k, ())}) for k in {"files", "dirs", *(k for g in gots for k in g)}}
+    now = seen(root, every)
+    return [{k: {r: v[r] for r in g.get(k, ())} for k, v in now.items()} for g in gots]
+
+
 def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
     """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
     (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
@@ -2039,5 +2049,5 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
+           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
            "unit_files", "unit_reads", "untraced", "version"]

@@ -30,12 +30,12 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`)."""
+    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself)."""
 
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z, y=y)
+            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
     return observe
 
 

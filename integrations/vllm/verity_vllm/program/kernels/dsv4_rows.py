@@ -2,7 +2,8 @@
 twin its Definition is held to: `mhc_twin` (the six mHC families), `dsv4_compressor_twin` (the head-512 compressed rows),
 `flashmla_twin` / `flashmla_prefill_twin` (the sparse FP8 decode, the prefill and its workspace gather), `dsv4_qnorm_insert_twin`
 (the query norm and KV insert), `dsv4_moe_twin` (the two routers and the clamped SwiGLU), `dsa_norm_rows.block_rmsnorm_rows` (the
-q / kv norm over a masked block), and the hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the
+q / kv norm over a masked block), `dsv4_indexer_twin` (the compressor state's score and the o-projection input's inverse-RoPE FP8
+quantisation), and the hash router's `GatherI32x{V}` lookup, which is wiring only.  A row is one token: the
 twins' leading token axis is 1, and each Tuple's fields are ports "0", "1", ... in the Definition's return order.  The twins are
 checked word for word against their Definitions (tests/program/test_mhc.py, the kernel self-check), and on the H200 by the
 captures `EVALUATOR_PROVENANCE` names, which also names the gaps.  A FlashMLA row whose DOT is not the Hopper k16 step the twins
@@ -57,8 +58,8 @@ EVALUATORS = {
                                 "NHP x (DN + DR) bf16, the NoPE e4m3 bytes, the scale bytes and pad, the RoPE bf16",
     "TritonBlockRMSNorm_v1": "verity_vllm.program.kernels.dsa_norm_rows.block_rmsnorm_rows (TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: per "
                              "thread of 32 WARPS an FMA chain over its dsa_norm.layout registers of the BLOCK, the elements from N +0, "
-                             "each warp's xor-butterfly, the warp sums' halving tree, r = RsqrtApprox(eps + DivFullScaleA(sum, N) * "
-                             "DivFullRcp(N)), y = F2fpBf16((r * x) * w)) -> N bf16",
+                             "each warp's xor-butterfly, the warp sums' halving tree, r = RsqrtApprox(fma(DivFullScaleA(sum, N), "
+                             "DivFullRcp(N), eps)), y = F2fpBf16((r * x) * w)) -> N bf16",
     "MoeRouterSqrtSoftplus_v1": "verity_vllm.program.kernels.dsv4_moe_twin.router_twin (MoeRouterSqrtSoftplus_v1{E,SCALE}: "
                                 "Dsv4SqrtSoftplus_v1 per expert, current = score + bias (a NaN -1e30), six slots of the first maximum "
                                 "of current, the lane-0 sum, w * div.full(SCALE, sum > 0 ? sum : 1)) -> six f32 weights, six i32 ids",
@@ -67,6 +68,12 @@ EVALUATORS = {
                         "w * SCALE / (sum > 0 ? sum : 1), FMUL then div.rn) -> six f32 weights",
     "SiluMulClamp_v1": "verity_vllm.program.kernels.dsv4_moe_twin.clamp_twin (SiluMulClamp_v1{I,LIMIT}: SiluMulClampBf16_v1 per "
                        "column, bf16(fminf(gate, LIMIT)) and bf16(fmaxf(fminf(up, LIMIT), -LIMIT)), then SiluMulBf16_v2) -> I bf16",
+    "Dsv4CompressorScore_v1": "verity_vllm.program.kernels.dsv4_indexer_twin.score_twin (Dsv4CompressorScore_v1{W}: F32AddV2_v1 of "
+                              "score[i] and ape[i], a NaN sum 0x7FFFFFFF) -> W f32",
+    "Dsv4InvRopeQuantHead_v1": "verity_vllm.program.kernels.dsv4_indexer_twin.heads_twin (Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}: "
+                               "the Definition's body on numpy words, the first CHUNKS*QG - ROPE words Bf16ToF32_v1, the last ROPE "
+                               "Dsv4InvRope_v1's FMA rotation, then per group of QG Dsv4InvRopeQuant_v1's halving-tree amax, ue8m0 "
+                               "scale ex2, div.full and min.xorsign.abs to e4m3) -> CHUNKS*QG e4m3 bytes, CHUNKS f32 scales",
 }
 
 _MHC_PROVENANCE = {
@@ -149,19 +156,66 @@ _MOE_PROVENANCE = {
 
 _BLOCK_NORM_PROVENANCE = {
     "property": None,
-    "run": None,
+    "run": "r20261021-092814-0b1c",
     "art": None,
-    "gap": "no hardware capture of vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel yet (registry.dsa_norm: model-untested): the "
-           "reduction tree is read from the cc 9.0 PTX Triton 3.7.1 compiles for it, not pinned on the device",
+    "device": "cc 9.0, the eight devices of the row's attempt-3 Commit (the run above), vLLM d9105ea80, Triton 3.7.1",
+    "captured_utc": "2026-10-21",
+    "cases": "the q norm (N 1536 of a 2048 block on 8 warps, eps 1e-6): 1,230 committed rows (308 distinct) on 8 ranks, read by "
+             "r20261021-180952-300c (out/rows.npz) from the Commit's bundles and the checkpoint's q_norm weights, every committed "
+             "output the Definition's; eps + DivFullScaleA(sum, N) * DivFullRcp(N) in two roundings misses 5 of the 308 by 1-4 "
+             "bf16 words, which tests/properties/fixtures/dsv4_q_norm_commit_20261021.json holds with 4 controls",
+    "sass": "r20261021-181759-65f9: the served kernel's cc 9.0 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the scaled "
+            "SIZE, FFMA rcp, scaled sum, eps, then MUFU.RSQ",
+    "gap": "no probe launch of _fused_q_kv_rmsnorm_kernel: the reduction tree is the PTX's, pinned on the device only by committed "
+           "rows; the kv norm (N 512, a power of two, so either epilogue) only by the re-judge's sampled kv rows (306 a rank, all "
+           "equal, r20261021-171352-1d9c and r20261021-171402-5673)",
     "model": "tests/program/test_dsa_norm.py::test_block_definition_matches_the_ptx_model (the Definition against a model of that "
-             "PTX at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
+             "PTX and SASS at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
     "related": "glm53_fused_rmsnorm_capture (art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74): the same "
                "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
                "_fused_norm_rope_kernel",
-    "tests": ["tests/program/test_dsa_norm.py (the Definition against the PTX model)",
+    "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed rows)",
+              "tests/program/test_dsa_norm.py (the Definition against the PTX model)",
               "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
               "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
     "definitions": "verity_vllm/program/registry/dsa_norm.py (the reference; the twin is checked against it, never the other way round)",
+}
+
+_INDEXER_TESTS = ["tests/properties/test_dsv4_indexer_capture.py (NumpyOps' steps against dsv4_indexer.WORD's primitives on special "
+                  "and random words; score_twin and heads_twin against their Definitions at the served statics)",
+                  "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
+                  "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"]
+_INDEXER_DEFINITIONS = ("verity_vllm/program/registry/dsv4_indexer.py (the reference; the twins run its bodies and are checked against "
+                        "it, never the other way round)")
+
+_INV_ROPE_PROVENANCE = {
+    "property": "dsv4_indexer_capture (verity-vllm/dsv4-indexer-capture/v1), tests/properties/dsv4_indexer_capture_gpu.py",
+    "run": "r20261013-090135-4fbc",
+    "art": "art:87f0fbe8e76cbbc95828f7676225a4e5eefce363f0c9e98cf83bd10602c8488f",
+    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
+    "captured_utc": "2026-10-13",
+    "cases": "inv_rope/served: fused_inv_rope_fp8_quant as deep_gemm_fp8_o_proj calls it, twice, on 16 heads of 512 of a 64-head "
+             "FlashMLA output over 510 tokens with special heads and rotary rows: each of the 8,160 (token, head)s' 512 e4m3 bytes "
+             "and 4 f32 scales against heads_twin and Dsv4InvRopeQuantHead_v1{4,128,64}, 0 mismatches",
+    "tests": _INDEXER_TESTS,
+    "definitions": _INDEXER_DEFINITIONS,
+}
+
+_SCORE_PROVENANCE = {
+    "property": "dsv4_compressor_capture (verity-vllm/dsv4-compressor-capture/v1), tests/properties/dsv4_compressor_capture_gpu.py",
+    "run": "r20261013-211655-2a70",
+    "art": "art:914dd281ad207ce67db3affd9378d3fa2088a27e00508046ab9f9dce09922048",
+    "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
+    "captured_utc": "2026-10-13",
+    "cases": "score/c4 (W 1024, the ratio-4 attention state, the served row's width; 2,308 rows) and score/c128 (W 512; 6,146 "
+             "rows): each state row save_partial_states writes, its score half against Dsv4CompressorScore_v1{W} of its score row and "
+             "ape[pos % ratio], with zero, infinite and NaN scores, 0 mismatches",
+    "also": {"property": "dsv4_indexer_capture", "run": "r20261013-090135-4fbc",
+             "art": "art:87f0fbe8e76cbbc95828f7676225a4e5eefce363f0c9e98cf83bd10602c8488f",
+             "cases": "score/served (W 256, the indexer's state; 4,868 rows): each score half against score_twin and the Definition, "
+                      "0 mismatches"},
+    "tests": _INDEXER_TESTS,
+    "definitions": _INDEXER_DEFINITIONS,
 }
 
 #: family -> what pinned its twin to the H200, or the gap where nothing has yet (a family absent here has no hardware-specific
@@ -174,6 +228,8 @@ PROVENANCE = {
     "Dsv4QNormRopeKvInsert_v1": _INSERT_PROVENANCE,
     **{f: _MOE_PROVENANCE for f in ("MoeRouterSqrtSoftplus_v1", "MoeRouterHash_v1", "SiluMulClamp_v1")},
     "TritonBlockRMSNorm_v1": _BLOCK_NORM_PROVENANCE,
+    "Dsv4CompressorScore_v1": _SCORE_PROVENANCE,
+    "Dsv4InvRopeQuantHead_v1": _INV_ROPE_PROVENANCE,
 }
 
 
@@ -404,6 +460,21 @@ def silu_mul_clamp(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[s
     return _ports(T.clamp_twin(_bf16(ops[0], 1, 2 * int(S["I"])), float(S["LIMIT"])).astype(np.uint16))
 
 
+def dsv4_compressor_score(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`Dsv4CompressorScore_v1{W}(score, ape)` -> W f32 words."""
+    from verity_vllm.program.kernels import dsv4_indexer_twin as IT
+    W = int(statics["W"])
+    return _ports(IT.score_twin(_f32(ops[0], 1, W), _f32(ops[1], 1, W)))
+
+
+def dsv4_inv_rope_quant_head(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}(x, cs)` -> ports 0 (CHUNKS*QG e4m3 bytes) and 1 (CHUNKS f32 scales)."""
+    from verity_vllm.program.kernels import dsv4_indexer_twin as IT
+    CHUNKS, QG, ROPE = (int(statics[k]) for k in ("CHUNKS", "QG", "ROPE"))
+    q, s = IT.heads_twin(_bf16(ops[0], 1, CHUNKS * QG), _f32(ops[1], 1, ROPE), QG, ROPE)
+    return _ports(q, s)
+
+
 #: family -> (row kernel, the ports it returns in the Definition's return order)
 ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = {
     "MhcPost_v1": (mhc_post, ("0",)),
@@ -423,6 +494,8 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "MoeRouterSqrtSoftplus_v1": (moe_router_sqrt_softplus, ("0", "1")),
     "MoeRouterHash_v1": (moe_router_hash, ("0",)),
     "SiluMulClamp_v1": (silu_mul_clamp, ("0",)),
+    "Dsv4CompressorScore_v1": (dsv4_compressor_score, ("0",)),
+    "Dsv4InvRopeQuantHead_v1": (dsv4_inv_rope_quant_head, ("0", "1")),
 }
 
 
@@ -486,6 +559,28 @@ def _sample_clamp(rng: np.random.Generator, n: int, params: Sequence[Any], *, I:
     return [np.where(rng.random(gu.shape) < 0.2, rng.choice(edges, gu.shape), gu).astype(np.uint16)]
 
 
+def _sample_score(rng: np.random.Generator, n: int, params: Sequence[Any], *, W: int) -> list[np.ndarray]:
+    """Score and ape words, one in ten at `_ROUTER_EDGES` (so sums overflow, cancel to +-0, and meet infinities and NaNs)."""
+    return [_f32_words(rng, (n, W), 4.0, 0.1), _f32_words(rng, (n, W), 0.5, 0.1)]
+
+
+def _sample_head(rng: np.random.Generator, n: int, params: Sequence[Any], *, CHUNKS: int, QG: int, ROPE: int) -> list[np.ndarray]:
+    """Heads at a scale per head (bf16 subnormals, 2^-20, 1, 3, 2^100), one in eight zero and one in eight signed powers of two
+    times 448 (the clamp's edge); rotary rows of random angles, one in eight cos 0 and sin -1, one in eight an infinite cos and a
+    NaN sin."""
+    hd, half = CHUNKS * QG, ROPE // 2
+    x = rng.standard_normal((n, hd)) * rng.choice([2.0 ** -130, 2.0 ** -20, 1.0, 3.0, 2.0 ** 100], (n, 1))
+    kind = rng.integers(0, 8, n)
+    x[kind == 0] = 0
+    x[kind == 1] = 448.0 * np.exp2(rng.integers(-8, 8, ((kind == 1).sum(), hd))) * rng.choice([-1.0, 1.0], ((kind == 1).sum(), hd))
+    ang = rng.uniform(0, 2 * np.pi, (n, half))
+    cs = np.concatenate([np.cos(ang), np.sin(ang)], axis=1).astype(np.float32).view(np.uint32)
+    rot = rng.integers(0, 8, n)
+    cs[rot == 0, :half], cs[rot == 0, half:] = 0, 0xBF800000
+    cs[rot == 1, 0], cs[rot == 1, ROPE - 1] = 0x7F800000, 0x7FC00000
+    return [(x.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16), cs]
+
+
 SAMPLES: dict[str, Callable[[], Callable[..., list[np.ndarray]]]] = {
     "Dsv4MlaCompressC4_v1": lambda: _sample_compress("Dsv4MlaCompressC4_v1"),
     "Dsv4MlaCompressC128_v1": lambda: _sample_compress("Dsv4MlaCompressC128_v1"),
@@ -495,6 +590,8 @@ SAMPLES: dict[str, Callable[[], Callable[..., list[np.ndarray]]]] = {
     "MoeRouterSqrtSoftplus_v1": lambda: _sample_router,
     "MoeRouterHash_v1": lambda: _sample_hash,
     "SiluMulClamp_v1": lambda: _sample_clamp,
+    "Dsv4CompressorScore_v1": lambda: _sample_score,
+    "Dsv4InvRopeQuantHead_v1": lambda: _sample_head,
 }
 
 
@@ -504,6 +601,7 @@ def check_targets(family: str) -> list:
     from verity_vllm.program.registry import dsa_norm as DN
     from verity_vllm.program.registry import dsv4_compressor as C
     from verity_vllm.program.registry import dsv4_decode_indices as DI
+    from verity_vllm.program.registry import dsv4_indexer as IX
     from verity_vllm.program.registry import dsv4_moe as MO
     from verity_vllm.program.registry import dsv4_qnorm_insert as QI
     from verity_vllm.program.registry import flashmla as FM
@@ -536,6 +634,9 @@ def check_targets(family: str) -> list:
         "MoeRouterSqrtSoftplus_v1": [bind(MO.MoeRouterSqrtSoftplus, E=e, SCALE=2.5) for e in (6, 16)],
         "MoeRouterHash_v1": [bind(MO.MoeRouterHash, E=e, SCALE=2.5) for e in (8, 16)],
         "SiluMulClamp_v1": [bind(MO.SiluMulClamp, I=i, LIMIT=lim) for i, lim in ((8, 10.0), (9, 10.0), (4, 0.5))],
+        "Dsv4CompressorScore_v1": [bind(IX.Dsv4CompressorScore, W=w) for w in (8, 64)],
+        "Dsv4InvRopeQuantHead_v1": [bind(IX.Dsv4InvRopeQuantHead, CHUNKS=c, QG=g, ROPE=r)
+                                    for c, g, r in ((2, 8, 4), (1, 16, 16), (3, 4, 2), (2, 32, 8))],
     }[family]
 
 

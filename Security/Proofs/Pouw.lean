@@ -3,6 +3,7 @@ import Proofs.Pouw.Barrier
 import Proofs.Pouw.Barrier.Proofs
 import Proofs.Pouw.BudgetAbort
 import Proofs.Pouw.Copy
+import Proofs.Pouw.Credit
 import Proofs.Pouw.Deadline
 import Proofs.Pouw.EndToEndWindow.Statement
 import Proofs.Pouw.Eps1

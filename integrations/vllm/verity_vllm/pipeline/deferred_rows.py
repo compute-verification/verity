@@ -39,7 +39,8 @@ def stand_in(run_root: str, bundle_manifest_sha256: str) -> dict[str, Any]:
 def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | None = None) -> SimpleNamespace:
     """A deferred Commit's sealed replay bundle opened against the Commit's record beside it as the CPU replay opens it
     (`cpu_replay.of_record`, decided or not), with the Build's Programs of record under ``row_dir`` (`c2_replay.programs_of_record`)
-    and the replay's arrivals.  A slim bundle holds the replay's picks only: refused."""
+    and the replay's arrivals.  A slim bundle holds the replay's picks only: refused.  The Definitions the Build bound are not held to
+    this tree's: no row is evaluated here, and the one-stage proof is over the verifier's own template."""
     b = RB.open_bundle(bundle)
     ctx, bdir = b["context"], Path(b["path"])
     if ctx.get("slim"):
@@ -50,7 +51,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     _path, man = CPU.manifest_of(o, ctx, args)
     site = SimpleNamespace(args=args, manifest=man, reqs=ctx["requests"], sampling=ctx["sampling"], row=row)
     rl = C2.request_labels(ctx["requests"])
-    loaded, digs = C2.programs_of_record(site, rl)
+    loaded, digs = C2.programs_of_record(site, rl, definitions=False)
     arrivals, _moved = C2.arrivals(site, rl)
     return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
                            manifest=man, loaded=loaded, digests=digs, programs={k: v["instances"] for k, v in loaded.items()},

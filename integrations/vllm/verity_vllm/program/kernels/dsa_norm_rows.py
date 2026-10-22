@@ -25,12 +25,14 @@ def dsa_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float) -> dict[str, np.n
 
     N = np.shape(x)[-1]
     DN.check_statics(N, eps)
-    return block_rmsnorm_rows(x, w, eps, N, DN.THREADS // DN.WARP)
+    return block_rmsnorm_rows(x, w, eps, N, DN.THREADS // DN.WARP, fused_eps=False)
 
 
-def block_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float, block: int, warps: int) -> dict[str, np.ndarray]:
+def block_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float, block: int, warps: int, *, fused_eps: bool = True
+                       ) -> dict[str, np.ndarray]:
     """`TritonBlockRMSNorm_v1{N, BLOCK=block, WARPS=warps, EPS=eps}` over rows, `dsa_rmsnorm_rows`' outputs: the block's elements
-    from N load +0, so a thread wholly past N sums +0 (no lane's sum is -0, so its +0 in the trees is the Definition's absent lane)."""
+    from N load +0, so a thread wholly past N sums +0 (no lane's sum is -0, so its +0 in the trees is the Definition's absent lane).
+    ``fused_eps`` as `dsa_norm.rms_norm`'s: ``mean`` is then the fma `scale_a(sum) * rcp(N) + eps` that rsqrt takes."""
     from verity_vllm.program.registry import dsa_norm as DN
     from verity_vllm.program.registry.prims import bits_of
 
@@ -54,8 +56,13 @@ def block_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float, block: int, war
             v = DR.add_rn(v[..., :h], v[..., h:])
         total = v[:, 0]
         n = np.full(R, bits_of(np.float32(N)), dtype=np.uint32)
-        mean = DR.mul_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n))
-        r = DR.rsqrt_approx(DR.add_rn(np.full(R, bits_of(np.float32(eps)), dtype=np.uint32), mean))
+        e = np.full(R, bits_of(np.float32(eps)), dtype=np.uint32)
+        if fused_eps:
+            mean = DR.fma_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n), e)
+            r = DR.rsqrt_approx(mean)
+        else:
+            mean = DR.mul_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n))
+            r = DR.rsqrt_approx(DR.add_rn(e, mean))
         y = DR.mul_rn(DR.mul_rn(r[:, None], xf), DR.bf16_to_f32_words(w2))
     return {"out": DR.f2fp_bf16(y), "sum": total, "mean": mean, "r": r}
 

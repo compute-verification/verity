@@ -46,6 +46,12 @@ theorem EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat := by
   intro n Reg I ht c hc
   exact EndToEndHiddenDrawn n Reg I ht (.single c) (Flock.Desc.parse_single hc)
 
+/-- `EndToEndHiddenPerTest` gives its flat form, at `Desc.single c`. -/
+theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest) :
+    Flock.Guarantees.EndToEndHiddenPerTestFlat := by
+  intro n Reg I ht c hc
+  exact h n Reg I ht (.single c) (Flock.Desc.parse_single hc)
+
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
 /-- **The hidden-output statements' reference setup exists at every draw flock-verify accepts, at any number of
