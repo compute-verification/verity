@@ -81,7 +81,7 @@ first coin.
 - **The model registry** (`/var/lib/vy-challenger/models.jsonl`, auditor's, `chattr +a`; `models.py`) is one line a
   registration, vy-admin's `model-register` run as `auditor`. It refuses a checkpoint whose
   files aren't the pinned `checkpoints-int8.json` role's, or that root or auditor alone can't write, or whose digest
-  isn't core's pin (`verity/core/protocols/pouw/models.json`), and a descriptor whose linears aren't the model's decoder
+  isn't core's pin (`verity/core/protocols/pouw/lean/check/models.json`), and a descriptor whose linears aren't the model's decoder
   layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
   (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
   public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.

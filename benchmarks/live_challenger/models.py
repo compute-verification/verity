@@ -8,7 +8,7 @@ its own salts, so a period's weights' root is never the prover's choice.
   - DIR and every file the manifest lists are regular, not symlinks, and writable by no one but root and `auditor`
     (`check_owned`), so nothing changes them between the hash and the read;
   - each of those files has its pinned size and sha256 (`check_files`), and the SHA-512 of their `{file: SHA-512}` map
-    (`checkpoint_sha512`) is the role's pin in core's `PINS` (`verity/core/protocols/pouw/models.json`,
+    (`checkpoint_sha512`) is the role's pin in core's `PINS` (`verity/core/protocols/pouw/lean/check/models.json`,
     ``{role: {"checkpoint_sha512": hex}}``), which credit holds each open's ``model`` to;
   - the descriptor's linears are exactly the model's decoder linears, ``qkv_proj``, ``o_proj``, ``gate_up_proj`` and
     ``down_proj`` of each of config.json's ``num_hidden_layers`` in turn (`DECODER`, `check_linears`), so the root it
@@ -42,7 +42,7 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.ml.circuits.codec import canonical_json
 
 MANIFEST = Path("integrations/vllm/manifests/checkpoints-int8.json")
-PINS = Path("verity/core/protocols/pouw/models.json")
+PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 #: vLLM's merged modules at TP = 1: a fused linear's rows are its parts' rows in turn, its scales the same
 FUSED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
 #: a decoder layer's int8 linears in vLLM's module order, the window's linear order
