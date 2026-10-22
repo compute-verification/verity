@@ -130,13 +130,16 @@ theorem midFrame_alike {f f' : Frame} (h : Alike f f') (hm : midFrame f) : midFr
   cases f <;> cases f' <;> simp only [Alike, midFrame] at h hm ⊢ <;>
     first | omega | (obtain ⟨rfl, rfl⟩ := h; exact hm)
 
+theorem notLabel_alike {f f' : Frame} {b : ByteArray} (h : Alike f f') (hf : f ≠ .label b) : f' ≠ .label b := by
+  cases f <;> cases f' <;> simp only [Alike] at h <;> first | nofun | (subst h; exact hf)
+
 theorem midAll_alike {fs fs' : List Frame} (hA : List.Forall₂ Alike fs fs') : MidAll fs → MidAll fs' := by
   induction hA with
   | nil => exact fun h => h
   | cons ha _ ih =>
     intro hM g hg
     rcases List.mem_cons.mp hg with rfl | hg
-    · exact midFrame_alike ha (hM _ List.mem_cons_self)
+    · exact ⟨midFrame_alike ha (hM _ List.mem_cons_self).1, notLabel_alike ha (hM _ List.mem_cons_self).2⟩
     · exact ih (fun f hf => hM f (List.mem_cons_of_mem _ hf)) g hg
 
 /-- **Two rounds of one shape are frames**: `encs` of alike mid-frames, then one squeeze, of its kind and count. -/
@@ -152,6 +155,97 @@ theorem roundAt_frames {r r' : ByteArray × ℕ} (h : RoundAt r r') :
   refine ⟨fs, fs', k, ?_, ?_, hn2.symm, hA, hM, midAll_alike hA hM, hk, fun h => h0 h.1, hn⟩
   · rw [e r.1, h1, hL, hp]
   · rw [e r'.1, h1', hL, hp']
+
+/-! ## The inner proof starts at its label alone -/
+
+theorem inner_label_false {b : ByteArray} (hb : b ≠ _root_.Flock.Zk.LABEL_INNER.toUTF8) :
+    _root_.Flock.Firewall.Frame.isLabel b _root_.Flock.Zk.LABEL_INNER = false := by
+  unfold _root_.Flock.Firewall.Frame.isLabel
+  cases e : (b.data == _root_.Flock.Zk.LABEL_INNER.toUTF8.data) with
+  | false => rfl
+  | true =>
+    exfalso
+    apply hb
+    have := beq_iff_eq.1 e
+    cases b
+    cases h : _root_.Flock.Zk.LABEL_INNER.toUTF8
+    rw [h] at this
+    cases this
+    rfl
+
+theorem exMap_throw {α β : Type} (f : α → β) (e : String) : (throw e : V α).map f = throw e := rfl
+
+theorem throw_bindV {α β : Type} (e : String) (k : α → V β) : ((throw e : V α) >>= k) = throw e := rfl
+
+/-- A label other than the inner proof's leaves the inner proof's count as it was. -/
+theorem label_inner (c : Cfg) (s : Masker) (b : ByteArray) {q : Masker × ByteArray}
+    (hb : b ≠ _root_.Flock.Zk.LABEL_INNER.toUTF8) (h : s.label c b = .ok q) : q.1.inner = s.inner := by
+  have hl := inner_label_false hb
+  have key : (s.label c b).map (fun q => q.1.inner) = (s.label c b).map (fun _ => s.inner) := by
+    unfold Masker.label
+    cases hm : c.mask <;>
+    simp only [hl, Bool.false_eq_true, ↓reduceIte, apply_ite (Except.map _), exMap_bind, exMap_pure, exMap_throw,
+      throw_bindV]
+  rw [h] at key
+  exact Except.ok.inj key
+
+theorem absorb_inner (c : Cfg) (s : Masker) (v : F128) {q : Masker × F128} (h : s.absorb c v = .ok q) :
+    q.1.inner = s.inner := by
+  unfold Masker.absorb at h
+  repeat' split at h
+  all_goals first | (cases h; rfl) | cases h
+
+theorem absorb1_inner (c : Cfg) (r r' : Masker × ByteArray × Array ℕ × ℕ) (v : F128) (h : absorb1 c r v = .ok r') :
+    r'.1.inner = r.1.inner := by
+  unfold absorb1 at h
+  cases hb : r.1.absorb c v with
+  | error e => rw [hb] at h; cases h
+  | ok b => rw [hb] at h; cases h; exact absorb_inner c r.1 v hb
+
+theorem foldlM_absorb1_inner (c : Cfg) : ∀ (vs : List F128) (r r' : Masker × ByteArray × Array ℕ × ℕ),
+    vs.foldlM (absorb1 c) r = .ok r' → r'.1.inner = r.1.inner
+  | [], r, r', h => by cases h; rfl
+  | v :: vs, r, r', h => by
+    rw [List.foldlM_cons] at h
+    cases ha : absorb1 c r v with
+    | error e => rw [ha] at h; cases h
+    | ok q => rw [ha] at h; rw [foldlM_absorb1_inner c vs q r' h, absorb1_inner c r q v ha]
+
+/-- A frame's step leaves the inner proof's count as it was, but at the inner proof's label. -/
+theorem stepAt_inner (c : Cfg) (r r' : Masker × ByteArray × Array ℕ × ℕ) (f : Frame)
+    (hf : f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8) (h : stepAt c r f = .ok r') : r'.1.inner = r.1.inner := by
+  cases f with
+  | dom b => cases h; rfl
+  | label b =>
+    simp only [stepAt] at h
+    cases hl : r.1.label c b with
+    | error e => rw [hl] at h; cases h
+    | ok q => rw [hl] at h; cases h; exact label_inner c r.1 b (fun e => hf (by rw [e])) hl
+  | bytes b => cases h; rfl
+  | one v => have e := foldlM_absorb1_inner c [v] _ r' h; exact e
+  | vec vs => have e := foldlM_absorb1_inner c vs _ r' h; exact e
+  | sq k n => cases h; rfl
+
+theorem foldlM_stepAt_inner (c : Cfg) : ∀ (fs : List Frame) (r r' : Masker × ByteArray × Array ℕ × ℕ),
+    (∀ f ∈ fs, f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8) → fs.foldlM (stepAt c) r = .ok r' →
+    r'.1.inner = r.1.inner
+  | [], r, r', _, h => by cases h; rfl
+  | f :: fs, r, r', hf, h => by
+    rw [List.foldlM_cons] at h
+    cases ha : stepAt c r f with
+    | error e => rw [ha] at h; cases h
+    | ok q =>
+      rw [ha] at h
+      rw [foldlM_stepAt_inner c fs q r' (fun g hg => hf g (List.mem_cons_of_mem _ hg)) h,
+        stepAt_inner c r q f (hf f List.mem_cons_self) ha]
+
+/-- **A scheduled round starts no inner proof**: from a state outside the inner proof, the frame's steps over a
+scheduled round's frames (`MidAll`, none the inner proof's label) stay outside it. -/
+theorem foldlM_midAll_inner {c : Cfg} {m : Masker} (hm : m.inner = none) {fs : List Frame} (hM : MidAll fs)
+    {q : Masker × ByteArray × Array ℕ × ℕ} (h : fs.foldlM (stepAt c) (m, ByteArray.empty, #[], 0) = .ok q) :
+    q.1.inner = none := by
+  rw [foldlM_stepAt_inner c fs _ q (fun f hf => (hM f hf).2) h]
+  exact hm
 
 end Sched
 
@@ -316,7 +410,7 @@ theorem repState_check_step {c c' : Cfg} (hc : CfgAlike c c') (t : _root_.Flock.
     (hcr : cr.size = j + 1) (hj : j + 1 < sched'.size) (hR : Sched.RoundAt r (sched'.getD (j + 1) (.empty, 0)))
     {m : Masker} (ha : (repState c' t rep dom xs hi cr0 cr ns (j + 1)).answer c' (cr.getD j #[]) = .ok m)
     (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ (fs : List Frame) (k : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+    (hI : ∀ (fs : List Frame) (k : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
         ByteArray.mk (encs fs ++ (Frame.sq k r.2).enc).toArray →
       ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
     {st : Bool} {v out : ByteArray} {s : Masker} {why : Option String}
@@ -326,7 +420,8 @@ theorem repState_check_step {c c' : Cfg} (hc : CfgAlike c c') (t : _root_.Flock.
   obtain ⟨fs, fs', k, h1, h1', hn2, hA, hM, hM', hk, h0, hn⟩ := Sched.roundAt_frames hR
   rw [h1] at h
   obtain ⟨out', s', w, hc', hu⟩ :=
-    Sched.check_alike_self hc m st fs fs' k r.2 hin hM hM' hk h0 hn hA (hI fs' k h1') h
+    Sched.check_alike_self hc m st fs fs' k r.2 hin (fun f hf => (hM f hf).1) (fun f hf => (hM' f hf).1) hk h0 hn hA
+      (hI fs' k hM' h1') h
   have hstep := repState_step c' t rep dom xs hi cr0 cr ns a j hal hs hs' hcr hj ha
     (by rw [h1', hn2]; exact hc')
   rw [hstep]
@@ -512,7 +607,7 @@ theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
       ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched')
     (hlt : j + 1 < rsched.size) {m : Masker} (ha : (progOf x cs).answer c (wordsAt x cs q) = .ok m)
     (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ (fs : List Frame) (k : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+    (hI : ∀ (fs : List Frame) (k : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
         ByteArray.mk (encs fs ++ (Frame.sq k (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
       ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
     {st : Bool} {v out : ByteArray} {s : Masker} {why : Option String}
@@ -726,7 +821,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
       .ok sched')
     (hlt : j + 1 < rsched.size) (hcoins : L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2)
     (hin : m.inner ≠ some INNER_ROUNDS)
-    (hI : ∀ (fs : List Frame) (k' : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+    (hI : ∀ (fs : List Frame) (k' : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
         ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
       ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
@@ -824,7 +919,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     (hin : m.inner ≠ some INNER_ROUNDS)
     (hI : ∀ sched', schedSoFar t (k % 2) dom xs hi
         ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched' →
-      ∀ (fs : List Frame) (k' : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+      ∀ (fs : List Frame) (k' : UInt8), Sched.MidAll fs → (sched'.getD (j + 1) (.empty, 0)).1 =
         ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
       ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
     ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
@@ -933,7 +1028,8 @@ theorem ofLoop_checkAt_empty (T : ZKMal.CoinLayer.TableData)
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
 round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads, the round's coin
-count is the scheduled round's, and its frames enter no inner proof. At the inner proof's rounds, past the rep's
+count is the scheduled round's, and the loop's state is outside the inner proof, which no scheduled round's frames
+start (`Sched.foldlM_midAll_inner`). At the inner proof's rounds, past the rep's
 schedule (`hO`): `ProgChecks`' own conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or
 the loop has no round in the device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
@@ -957,12 +1053,7 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
         xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
         2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64) ∧
-        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2 ∧ m.inner ≠ some INNER_ROUNDS ∧
-        ∀ sched', schedSoFar t (k % 2) dom xs hi ((Array.range (j + 1)).map
-            fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok sched' →
-          ∀ (fs : List Frame) (k' : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
-            ByteArray.mk (encs fs ++ (Frame.sq k' (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
-          ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
+        L₀.coins x h.length = (rsched.getD (j + 1) (.empty, 0)).2 ∧ m.inner = none)
     (hO : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (a : Msg) (m : Masker) (out : ByteArray) (s0 : _) (spec : SessionSpec)
       (sts : Array Stmt) (q k j : ℕ) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
@@ -1003,10 +1094,11 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
   | ok rsched =>
   by_cases hlt : j + 1 < rsched.size
-  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins, hin, hI⟩ :=
+  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd, hcoins, hnone⟩ :=
       hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
     exact ofLoop_progChecks_sched T L₀ real x w ρ (e0 :: h1) a hA hrep hex rfl hx hq2 hki hph hr0 hT hdom hdg hm hxs
-      hn hlq hp hd hrs hlt hcoins hin hI
+      hn hlq hp hd hrs hlt hcoins (by rw [hnone]; nofun)
+      fun _ _ fs _ hM _ _ hq => Sched.foldlM_midAll_inner hnone hM hq
   · exact hO ρ (e0 :: h1) a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs (by omega) hA
       hrep hex
 

@@ -12,7 +12,8 @@ the tape's (`note:20261022T0001Z-report-zkfin-stageb`). Both are the firewall's 
 what is left is that the two runs send rounds of one shape. The prover is generic in its monad, so the comparison is
 too:
 
-* `PendAlike`, `TrAlike`, `RoundAlike`: pending bytes that are `encs` of alike frames (`Alike`), mid-frames all;
+* `PendAlike`, `TrAlike`, `RoundAlike`: pending bytes that are `encs` of alike frames (`Alike`), mid-frames all and
+  none the inner proof's label (each transcript step's label is the prover's own, `sim_label`);
   transcripts with such pending bytes; and a squeeze's framed bytes over them, with the squeeze's header as `roundFree`
   takes it (`roundFree_alike`'s and `passes_frames`' hypotheses).
 * `Lift`: a relation between two runs in a monad `M` that keeps `pure`, `bind`, `throw`, an `ok` lifted from `V`, and
@@ -35,10 +36,11 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Sched
 
-/-- Every frame a mid-frame. -/
-def MidAll (fs : List Frame) : Prop := ∀ f ∈ fs, midFrame f
+/-- Every frame a mid-frame, and none the inner proof's label (`Masker.label`'s start of the inner proof). -/
+def MidAll (fs : List Frame) : Prop := ∀ f ∈ fs, midFrame f ∧ f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8
 
-/-- **Two pending byte strings of one shape**: `encs` of alike frames, all mid-frames. -/
+/-- **Two pending byte strings of one shape**: `encs` of alike frames, all mid-frames and none the inner proof's label
+(`MidAll`). -/
 def PendAlike (p p' : ByteArray) : Prop :=
   ∃ fs fs' : List Frame, p.data.toList = encs fs ∧ p'.data.toList = encs fs' ∧ List.Forall₂ Alike fs fs' ∧ MidAll fs
 
@@ -66,7 +68,7 @@ theorem encs_snoc (fs : List Frame) (f : Frame) : encs (fs ++ [f]) = encs fs ++ 
 /-- **A frame more on each side** keeps the shape. -/
 theorem pendAlike_snoc {p p' q q' : ByteArray} {f f' : Frame} (h : PendAlike p p')
     (hq : q.data.toList = p.data.toList ++ f.enc) (hq' : q'.data.toList = p'.data.toList ++ f'.enc) (hf : Alike f f')
-    (hm : midFrame f) : PendAlike q q' := by
+    (hm : midFrame f) (hi : f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8) : PendAlike q q' := by
   obtain ⟨fs, fs', hp, hp', hA, hM⟩ := h
   refine ⟨fs ++ [f], fs' ++ [f'], ?_, ?_, forall₂_snoc hA hf, ?_⟩
   · rw [hq, hp, encs_snoc]
@@ -74,7 +76,7 @@ theorem pendAlike_snoc {p p' q q' : ByteArray} {f f' : Frame} (h : PendAlike p p
   · intro g hg
     rcases List.mem_append.1 hg with hg | hg
     · exact hM g hg
-    · rw [List.mem_singleton.1 hg]; exact hm
+    · rw [List.mem_singleton.1 hg]; exact ⟨hm, hi⟩
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
@@ -163,25 +165,29 @@ theorem le64_size (x : UInt64) : (_root_.Flock.le64 x).size = 8 := by
   have := congrArg List.length (FlockSoundness.Refine.le64_data x)
   simpa using this
 
-theorem sim_label (l : String) (hl : l.toUTF8.size < 2 ^ 64) :
+theorem sim_label (l : String) (hl : l.toUTF8.size < 2 ^ 64) (hi : l.toUTF8 ≠ _root_.Flock.Zk.LABEL_INNER.toUTF8) :
     Sim L (· = ·) (liftTM (label l) : TMW M Unit) (liftTM (label l)) :=
   sim_liftTM_mod (fun _ => rfl) (fun _ => rfl) fun t t' ht =>
     pendAlike_snoc ht (FlockSoundness.Refine.label_enc _ l) (FlockSoundness.Refine.label_enc _ l) rfl hl
+      fun e => hi (Frame.label.inj e)
 
 theorem sim_absorbF (v v' : F128) : Sim L (· = ·) (liftTM (absorbF v) : TMW M Unit) (liftTM (absorbF v')) :=
   sim_liftTM_mod (fun _ => rfl) (fun _ => rfl) fun t t' ht =>
     pendAlike_snoc ht (FlockSoundness.Refine.absorbF_enc _ v) (FlockSoundness.Refine.absorbF_enc _ v') trivial trivial
+      nofun
 
 theorem sim_absorbSlice {vs vs' : Array F128} (h : vs.size = vs'.size) (hn : vs.size < 2 ^ 64) :
     Sim L (· = ·) (liftTM (absorbSlice vs) : TMW M Unit) (liftTM (absorbSlice vs')) :=
   sim_liftTM_mod (fun _ => rfl) (fun _ => rfl) fun t t' ht =>
     pendAlike_snoc ht (FlockSoundness.Refine.absorbSlice_enc _ vs) (FlockSoundness.Refine.absorbSlice_enc _ vs')
       (show vs.toList.length = vs'.toList.length by simpa using h) (show vs.toList.length < 2 ^ 64 by simpa using hn)
+      nofun
 
 theorem sim_absorbBytes {b b' : ByteArray} (h : b.size = b'.size) (hn : b.size < 2 ^ 64) :
     Sim L (· = ·) (liftTM (absorbBytes b) : TMW M Unit) (liftTM (absorbBytes b')) :=
   sim_liftTM_mod (fun _ => rfl) (fun _ => rfl) fun t t' ht =>
     pendAlike_snoc ht (FlockSoundness.Refine.absorbBytes_enc _ b) (FlockSoundness.Refine.absorbBytes_enc _ b') h hn
+      nofun
 
 theorem sim_absorbK (v v' : F256) : Sim L (· = ·) (liftTM (absorbK v) : TMW M Unit) (liftTM (absorbK v')) :=
   sim_absorbSlice rfl (show 2 < 2 ^ 64 by decide)
@@ -198,7 +204,7 @@ theorem sim_squeezeP (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧ n
     have hk2 : kind = 2 := hk.resolve_right fun h => absurd h.2 (by decide)
     simp only [↓reduceIte]
     exact L.pure ⟨rfl, pendAlike_snoc ht (FlockSoundness.Refine.framed_enc t kind 0)
-      (FlockSoundness.Refine.framed_enc t' kind 0) ⟨rfl, rfl⟩ ⟨hk2, rfl⟩⟩
+      (FlockSoundness.Refine.framed_enc t' kind 0) ⟨rfl, rfl⟩ ⟨hk2, rfl⟩ nofun⟩
   · simp only [h0, ↓reduceIte]
     refine L.bind (L.round ⟨t.pending, t'.pending, kind, n, ht, rfl, rfl, hk, h0, hn⟩) fun a b hab => ?_
     subst hab
@@ -281,11 +287,11 @@ theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _roo
     (hm : m < 2 ^ 64) :
     Sim L (· = ·) (zerocheckFw io m digest cap root lay mk) (zerocheckFw io m digest cap' root lay mk) := by
   rw [zerocheckFw_split, zerocheckFw_split]
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind (sim_absorbBytes rfl hd) fun _ _ _ => ?_
   refine sim_bind (sim_absorbBytes hc hcn) fun _ _ _ => ?_
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind (sim_absorbBytes rfl hr) fun _ _ _ => ?_
   refine sim_bind (sim_sampleVecP 6 (by decide)) fun _ _ _ => ?_
   exact zcRest_sim m lay mk hm
@@ -295,7 +301,7 @@ theorem lincheckFw_sim (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pad
     (zc : _root_.Flock.ZcOut) :
     Sim L (· = ·) (lincheckFw io c lay mk zc) (lincheckFw io c lay mk zc) := by
   unfold lincheckFw
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind sim_sampleP fun a a' h => ?_
   subst h
   refine sim_bind sim_sampleP fun b b' h => ?_
@@ -344,13 +350,13 @@ theorem ringSwitchP_sim (sv sv' : ℕ → Array F128) (claims : Array _root_.Flo
     (hs : ∀ k, (sv k).size = (sv' k).size) (hn : ∀ k, (sv k).size < 2 ^ 64) (hc : claims.size < 2 ^ 64) :
     Sim L (fun r r' => r.2.2 = r'.2.2) (ringSwitchP io sv claims) (ringSwitchP io sv' claims) := by
   unfold ringSwitchP
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind (sim_forIn _ _ _ (fun _ u u' => u.snd.snd = u'.snd.snd) (fun k _ u u' hu => ?_) rfl)
     fun u u' h => ?_
   · obtain ⟨ss, betas, pc⟩ := u
     obtain ⟨ss', betas', pc'⟩ := u'
     obtain rfl : pc = pc' := hu
-    refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+    refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
     refine sim_bind (sim_absorbSlice (hs k) (hn k)) fun _ _ _ => ?_
     refine sim_bind (sim_sampleVecP 7 (by decide)) fun a b h => ?_
     subst h
@@ -568,10 +574,10 @@ theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ →
       (ligeritoPZk io commit ms sch T' cm0' t' b lay h rep tPad extra' lanePad' salt' nonce') := by
   unfold ligeritoPZk
   dsimp only
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
   refine sim_bind (sim_absorbBytes hcm.1 hcm.2) fun _ _ _ => ?_
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide) (by decide)) fun _ _ _ => ?_
   refine sim_bind (sim_run (S := fun _ _ => True) ?_ ⟨by simp [embedF, ht], rfl⟩) fun r r' _ => ?_
   rotate_left
   · obtain ⟨⟨_, _, _, _, _, _, _, _, _⟩, _⟩ := r
@@ -605,7 +611,7 @@ theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ →
       subst hc
       refine simL_ite _ (fun _ => ?_) (fun _ => ?_)
       · exact simL_bind (L := L) (S := fun _ _ => False) (simL_throw _ _) fun _ _ h => h.elim
-      refine simL_bind (simL_liftT (sim_label _ (by decide))) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT (sim_label _ (by decide) (by decide))) fun _ _ _ => ?_
       refine simL_bind (simL_liftT (sim_absorbK _ _)) fun _ _ _ => ?_
       refine simL_bind (simL_liftT (sim_absorbSlice ?_ ?_)) fun _ _ _ => ?_
       · rw [splitK_size', splitK_size']; simp only [Array.size_map, Array.size_range]
@@ -930,7 +936,7 @@ theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
     by simp [encs, FlockSoundness.Refine.init_enc], .cons rfl .nil, fun f hf => by
       simp only [List.mem_singleton] at hf
       subst hf
-      exact hd⟩
+      exact ⟨hd, nofun⟩⟩
 
 /-- **Two opening programs alike, run** from alike transcripts at one state: alike resumptions. -/
 theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S : α → β → Prop}
@@ -1086,10 +1092,12 @@ theorem zerocheckFw_head (m : ℕ) (digest cap root dom : ByteArray) (lay : _roo
   rw [zerocheckFw_split]
   rfl
 
-theorem pendAlike_label {p p' : ByteArray} (h : PendAlike p p') (l : String) (hl : l.toUTF8.size < 2 ^ 64) :
+theorem pendAlike_label {p p' : ByteArray} (h : PendAlike p p') (l : String) (hl : l.toUTF8.size < 2 ^ 64)
+    (hi : l.toUTF8 ≠ _root_.Flock.Zk.LABEL_INNER.toUTF8) :
     PendAlike (p ++ header 2 0 l.toUTF8.size ++ _root_.Flock.Transcript.padded l.toUTF8)
       (p' ++ header 2 0 l.toUTF8.size ++ _root_.Flock.Transcript.padded l.toUTF8) :=
   pendAlike_snoc h (FlockSoundness.Refine.label_enc _ l) (FlockSoundness.Refine.label_enc _ l) rfl hl
+    fun e => hi (Frame.label.inj e)
 
 theorem pendAlike_bytes {p p' b b' : ByteArray} (h : PendAlike p p') (hb : b.size = b'.size)
     (hn : b.size < 2 ^ 64) :
@@ -1099,13 +1107,13 @@ theorem pendAlike_bytes {p p' b b' : ByteArray} (h : PendAlike p p') (hb : b.siz
 
 theorem zcPre_alike (digest cap cap' dom : ByteArray) (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64)
     (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) : PendAlike (zcPre digest cap dom) (zcPre digest cap' dom) :=
-  pendAlike_label (pendAlike_bytes (pendAlike_bytes (pendAlike_label (trAlike_init dom hdom) _ (by decide)) rfl hd)
-    hc hcn) _ (by decide)
+  pendAlike_label (pendAlike_bytes (pendAlike_bytes (pendAlike_label (trAlike_init dom hdom) _ (by decide) (by decide))
+    rfl hd) hc hcn) _ (by decide) (by decide)
 
 theorem zcPend_alike (digest cap cap' root dom : ByteArray) (hc : cap.size = cap'.size)
     (hd : digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) :
     PendAlike (zcPend digest cap root dom) (zcPend digest cap' root dom) :=
-  pendAlike_bytes (pendAlike_label (zcPre_alike digest cap cap' dom hc hd hcn hdom) _ (by decide)) rfl hr
+  pendAlike_bytes (pendAlike_label (zcPre_alike digest cap cap' dom hc hd hcn hdom) _ (by decide) (by decide)) rfl hr
 
 theorem head_eq (st : _root_.Flock.Setup) (cap dom : ByteArray) :
     _root_.Flock.Firewall.Skeleton.head st cap dom = zcPre st.digest cap dom := by
