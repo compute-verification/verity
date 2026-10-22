@@ -115,6 +115,7 @@ import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishSwLigE
+import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -577,6 +578,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`Masked.swSrcE_restart`); the honest source's are the session's at the coins (`ligY1E`, `ligYbarE`, `ligSaltE`). So
   at the deployed rep's coins, packed table, basis and the tape's extra lanes, lane paddings and salts, `LigHyp` holds at
   the switched source with `l0Clear` as level 0's part and the request's pads (**`Masked.swSrcE_ligHyp_E`**).
+* `FinishSwInner`: `repCut_fw`'s `hinner` at that source. The switched view keeps `ρ_in`, `σ_in` (`padShift` moves
+  `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
+  switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
+  request's pads are the tape's wherever the tape's pads are its draws' (`Masked.pads_frame_eq`), so at the inner
+  proof's slot `InnerSrc` holds at the switched source and the request's pads, given the batched constraint and `τ`'s
+  commitment there (**`Masked.swSrcE_innerSrc_frame`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
