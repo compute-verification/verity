@@ -77,6 +77,7 @@ import Flock.Firewall.Level0
 import Flock.Firewall.Hello
 import Flock.Firewall.Session
 import Flock.Firewall.Skeleton
+import Flock.Firewall.Drive
 import Flock.Witness
 import Flock.With.Returns
 import Flock.With.ReturnsWalk
