@@ -110,17 +110,18 @@ theorem decC_congr {nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → �
   rw [e]
 
 /-- **`LeafReads` at these decodes is a statement of the sessions' port bits**: on every path, at proof `i` of round
-`w`, where the registrants' rows agree, lane `l`'s committed port bits (`portBit` at `openedReg`) read through
+`w`, where the registrants' rows agree and the known rows hold, lane `l`'s committed port bits (`portBit` at `openedReg`) read through
 `decLane` are `laneView` of the leaf, its public inputs, its partials row and `l`, and the combine's through `decComb`
 are the partials rows, the receipt and `ok = 1`. -/
 theorem leafReads_iff {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
     (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
+    (known : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
     (pub : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → LanePub)
     (parts : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
     (leaf : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Leaf K) :
-    Accounting.Assumptions.TS.LeafReads sess (decL K nw T) (decC nw T) pub parts receipt leaf ↔
-      ∀ x w i, RowsAgree (sess x w i) →
+    Accounting.Assumptions.TS.LeafReads sess known (decL K nw T) (decC nw T) pub parts receipt leaf ↔
+      ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
         (∀ l, decLane K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) =
           laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
         decComb nw T (portBit (sess x w i none) (openedReg (sess x w i none))) = ⟨parts x w i, receipt x w i, true⟩ :=
