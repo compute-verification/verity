@@ -48,6 +48,11 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
+    research queue checked-heads [--tip REV] [--json]
+                                                   the commits on REV's first-parent line (default origin/main) whose own `check`
+                                                   passed and landed them, oldest first, one a line: each train's head, by drive's
+                                                   `landed` labels in the store index (`merge.checked_heads`), less a head whose
+                                                   train a later `git revert` names; what an auditor passes as main's line
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -2000,10 +2005,29 @@ def _stats(a: argparse.Namespace) -> int:
     return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
 
 
+def _checked_heads(a: argparse.Namespace) -> int:
+    from .merge import Refused, checked_heads
+    from .store import bucket_index as BI
+    from .store.local import LocalStore
+
+    idx = BI.reader(LocalStore(a.store).root)
+    if idx is None:
+        print(f"research queue checked-heads: no store index: set ${BI.READER_ENV} (store_private's read-only URL) or build one "
+              "here with `research data index`", file=sys.stderr)
+        return 1
+    try:
+        heads = checked_heads(Path(_out(Path.cwd(), "rev-parse", "--show-toplevel")), a.tip, idx)
+    except (QueueError, Refused, RuntimeError) as e:
+        print(f"research queue checked-heads: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps([{"commit": c, "run": r} for c, r in heads], indent=1) if a.json else "\n".join(c for c, _ in heads))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
-                                            "stats"])
+                                            "stats", "checked-heads"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -2065,6 +2089,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
+    ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
@@ -2080,6 +2105,8 @@ def main(argv: list[str]) -> int:
         if a.log is None:
             ap.error("stats needs --log FILE (drive's log), or --per-pr")
         return _stats(a)
+    if a.command == "checked-heads":
+        return _checked_heads(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
             ap.error("open needs --head BRANCH, --title T and --body-file F")
