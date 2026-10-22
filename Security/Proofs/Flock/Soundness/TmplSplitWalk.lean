@@ -92,7 +92,7 @@ theorem flatMap_sum (c : ℕ) (f : ℕ → ℕ → ℕ) (g : ℕ → GF128) : �
   | n + 1 => by
     rw [List.range_succ, List.flatMap_append, List.map_append, List.sum_append, flatMap_sum c f g n,
       Finset.sum_range_succ, ← list_range_sum (fun j => g (f n j))]
-    simp
+    simp [Function.comp_def]
 
 /-- A run of lanes's position: lane `j` of copy `a` at chunk origin `H` is the caller's position of the copy's `j`-th
 child. -/
@@ -139,7 +139,7 @@ theorem iv_exp (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.ha
         ((c.bound id j).toArray.getD t' 0) =
       Gs pt s ((c.bound (readAt t lays pt d (as.getD k 0 + 2 ^ β * (H * 2 ^ al + off)) (2 ^ β) (ip k)) j).getD t'
         pt.qc) := by
-  rw [refX_eq t lays pt hR h6 hL hk, getD_toArray, getD_bound c _ j t' pt.qc ht]
+  rw [refX_eq t lays pt hR h6 hL hk, getD_toArray (c.bound id j), getD_bound c _ j t' pt.qc ht]
 
 theorem iv_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {d s β al off H a : ℕ}
     (h6 : 6 ≤ β) (hL : β + al - 6 ≤ pt.r.size) (ha : a < 2 ^ β) (ip : List ℕ) (c : Call) {j t' : ℕ}
@@ -148,7 +148,7 @@ theorem iv_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.ha
         (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (gLow pt s β a) (Gs pt s pt.qc)
         (fun t' => Gs pt s (ip.getD t' pt.qc)) ((c.bound id j).toArray.getD t' 0) =
       Gs pt s ((c.bound (readAt t lays pt d (a + 2 ^ β * (H * 2 ^ al + off)) (2 ^ β) ip) j).getD t' pt.qc) := by
-  rw [refS_eq t lays pt hR h6 hL ha, getD_toArray, getD_bound c _ j t' pt.qc ht]
+  rw [refS_eq t lays pt hR h6 hL ha, getD_toArray (c.bound id j), getD_bound c _ j t' pt.qc ht]
 
 /-- `child_expW`, its open inputs read through `Z`. -/
 theorem child_expW' (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half)
@@ -279,7 +279,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
           have hc0 : 0 < c.count := Nat.pos_of_ne_zero fun h0 => by rw [h0, Nat.mul_zero] at hk; omega
           rw [getD_lanes _ _ _ _ hk]
           exact lane_lt (has h6 _ (Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm] at hk)))
-            (lt_of_lt_of_le (Nat.mod_lt _ hc0) hc')⟩
+            (Nat.lt_of_lt_of_le (Nat.mod_lt _ hc0) hc')⟩
       obtain ⟨hst3, al'', off'', hsp, hH⟩ := walkChild_ok hT hR hcall hw hc hst he hpc
       have hchU := hsp.1
       simp only [nkOf, show ¬ 6 ≤ β + pl.ms.log2 by omega, ↓reduceIte, Array.size_map, Array.size_range] at hchU
@@ -303,7 +303,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
       have hj := Finset.mem_range.mp hj
       have hc0 : 0 < c.count := by omega
       have hlt' : k * c.count + j < as.size * c.count :=
-        lt_of_lt_of_le (Nat.add_lt_add_left hj _) (by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hk)
+        Nat.lt_of_lt_of_le (Nat.add_lt_add_left hj _) (by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hk)
       rw [getD_lanes _ _ _ _ hlt', divmod_div hc0 hj, divmod_mod hj, lane_pos hpow hal1 hal2 hcs, hB]
     · -- a run of lanes from an explicit class into a summed one
       rename_i hlt
@@ -330,7 +330,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
           flatMap_sum c.count (fun k j => as.getD k 0 + 2 ^ β * j) _ as.size, slot_glue]
         refine congrArg (HAdd.hAdd _) (Finset.sum_congr rfl fun k hk => Finset.sum_congr rfl fun j hj => ?_)
         have hk := Finset.mem_range.mp hk
-        have hjm : j < 2 ^ pl.ms.log2 := lt_of_lt_of_le (Finset.mem_range.mp hj) hc'
+        have hjm : j < 2 ^ pl.ms.log2 := Nat.lt_of_lt_of_le (Finset.mem_range.mp hj) hc'
         have ha := lane_lt (has h6 k hk) hjm
         rw [← lane_pos hpow hal1 hal2 hcs, ← hHc, hB, ← hsp.2.2 h6' Hc _ ha]
         unfold tabSum
@@ -428,17 +428,17 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
         else (pt.rho.getD (β - 6 + b) 0 + 1) * (pt.r.getD (β - 6 + b) 0 + 1)) pl.ms.log2 c.count) =
         ∑ j ∈ Finset.range c.count, of (Tmpl.eqAt pt.rho (β - 6) pl.ms.log2 j) * of (Tmpl.eqAt pt.r (β - 6) pl.ms.log2 j) := by
       rw [laneSum_eq _ _ _ hc']
-      exact Finset.sum_congr rfl fun j hj => prod_lane2 pt.rho pt.r (β - 6) _ j (lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
+      exact Finset.sum_congr rfl fun j hj => prod_lane2 pt.rho pt.r (β - 6) _ j (Nat.lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
     have hL : of (Tmpl.laneSum (fun b bit => if bit then pt.rho.getD (β - 6 + b) 0 else pt.rho.getD (β - 6 + b) 0 + 1)
         pl.ms.log2 c.count) = ∑ j ∈ Finset.range c.count, of (Tmpl.eqAt pt.rho (β - 6) pl.ms.log2 j) := by
       rw [laneSum_eq _ _ _ hc']
-      exact Finset.sum_congr rfl fun j hj => prod_lane1 pt.rho (β - 6) _ j (lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
+      exact Finset.sum_congr rfl fun j hj => prod_lane1 pt.rho (β - 6) _ j (Nat.lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
     rw [child_sumL' _ pt _ _ _ _ _ _ as _ _ _ _ _ c o ch c.count rm cm _ _ _ ⟨hr1, hr2⟩
       (fun j t' => Gs pt s ((c.bound (readAt t lays pt d (a + 2 ^ β * (H * 2 ^ al + off)) (2 ^ β) ip) j).getD t'
         pt.qc)) fun j x hx => iv_sum t lays pt hR h6 hL2 ha ip c (by rw [hbd]; exact (hchU x hx).1),
       hLR, hL, lane_glue2]
     refine congrArg (HAdd.hAdd _) (Finset.sum_congr rfl fun j hj => ?_)
-    have hjm : j < 2 ^ pl.ms.log2 := lt_of_lt_of_le (Finset.mem_range.mp hj) hc'
+    have hjm : j < 2 ^ pl.ms.log2 := Nat.lt_of_lt_of_le (Finset.mem_range.mp hj) hc'
     rw [← lane_pos hpow hal1 hal2 hcs, ← hHc, hB, ← hsp.2.2 h6' Hc _ (lane_lt ha hjm), eLow_lane pt h6 ha hjm,
       gLow_lane pt h6 ha hjm]
     unfold tabSum
@@ -495,8 +495,16 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     have hP := rowLow_e_sum (as := as) (k := 0) pt hT h6 hL1 ha H (off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)
     rw [show a + 2 ^ β * (H * 2 ^ al + off) + 2 ^ β * Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1 =
       a + 2 ^ β * (H * 2 ^ al + (off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)) by ring]
-    congr 1 <;> refine congrArg List.sum (List.map_congr_left fun v _ => ?_) <;>
-      rw [refS_eq t lays pt hR h6 hL2 ha] <;> simp only [of_mul, ← one_eq] <;> rw [← hP] <;> ring
+    refine congrArg₂ (· + ·) (congrArg List.sum (List.map_congr_left fun v _ => ?_))
+      (congrArg List.sum (List.map_congr_left fun v _ => ?_))
+    · rw [refS_eq t lays pt hR h6 hL2 ha]
+      simp only [of_mul]
+      rw [← hP]
+      ring
+    · rw [refS_eq t lays pt hR h6 hL2 ha]
+      simp only [of_mul, ← one_eq]
+      rw [← hP]
+      ring
   · simp only [h6, decide_false, ↓reduceIte, Bool.false_eq_true, eq_self_iff_true, if_true] at h
     obtain ⟨hq, hv⟩ := foldlM_sumF
       (fun (x : ℕ × (ℕ → List ℕ)) (o : Tab) =>
@@ -530,8 +538,16 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     have hP := rowLow_e (k := k) pt hT h6a hL1 hk' H (off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)
     rw [show as.getD k 0 + 2 ^ β * (H * 2 ^ al + off) + 2 ^ β * Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1 =
       as.getD k 0 + 2 ^ β * (H * 2 ^ al + (off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)) by ring]
-    congr 1 <;> refine congrArg List.sum (List.map_congr_left fun v _ => ?_) <;>
-      rw [refX_eq t lays pt hR h6a hL2 hk'] <;> simp only [of_mul, ← one_eq] <;> rw [← hP] <;> ring
+    refine congrArg₂ (· + ·) (congrArg List.sum (List.map_congr_left fun v _ => ?_))
+      (congrArg List.sum (List.map_congr_left fun v _ => ?_))
+    · rw [refX_eq t lays pt hR h6a hL2 hk']
+      simp only [of_mul]
+      rw [← hP]
+      ring
+    · rw [refX_eq t lays pt hR h6a hL2 hk']
+      simp only [of_mul, ← one_eq]
+      rw [← hP]
+      ring
 
 /-- **Every walk means its class's**, at every depth. -/
 theorem walk_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
