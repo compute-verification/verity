@@ -62,22 +62,21 @@ theorem vb_bit_row (v : Layout.BitVal (Finset.univ.sup (portRowW s.c) + 1)) {g :
     (h : HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, k⟩)) :
     s.vb.bit v g = v.get k.val := by
   rw [show v.get k.val = v.2 ⟨k.val, rowW_lt q k.isLt⟩ by
-    unfold Layout.BitVal.get; rw [dif_pos (rowW_lt q k.isLt)]]
+    unfold Layout.BitVal.get; rw [dite_eq_left (rowW_lt q k.isLt)]]
   dsimp only [RowsSession.vb, ZkReg.rsZHJS, ZkBind.HmRowsZX.bindingZ, ZkBind.LayoutZ.bindingZ, ZkHidden.layZHJ,
     ZkBind.LayoutZ.ofShadow, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
     HiddenExec.keyReadersH, Layout.Readers.ofRows]
-  first
-    | rw [h] <;> rfl
-    | (simp only [h]) <;> rfl
+  rw [h]
+  rfl
 
 /-- **The opened rows at a read row bit**: where unit `u`'s registrant reads its served roots' rows
 (`ServedRegistered`) and every port of the circuit is a port of `own` (`Flock.Registered.checkComplete`), the opened
 rows at an input gate that carries bit `k` of `u`'s row of port `q` and is a wire of `u` are that bit of the value
 `u`'s registrant opened there. -/
 theorem openedReg_row {u : Fin s.n} (hS : s.ServedRegistered u)
-    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {g : Fin (keyN s.c s.hU s.n)}
+    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {g : Fin s.Circ.N}
     {q : Fin s.c.ports.size} {k : Fin (portRowW s.c q)}
-    (hk : keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, k⟩)) (hg : (g : Fin s.Circ.N) ∈ s.P.io u)
+    (hk : keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, k⟩)) (hg : g ∈ s.P.io u)
     {a : ℕ} (ha : u.val = a) :
     openedReg s a g.val = some ((rowVal s u q).get k.val) := by
   subst ha
@@ -105,11 +104,11 @@ theorem portBit_opened (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = 
         keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u', ⟨q', b⟩) ∧ (g : Fin s.Circ.N) ∈ s.P.io u' :=
     ⟨g₀, u, q, ⟨k, hk⟩, hu, rfl, rfl, hk₀, hg₀⟩
   unfold portBit
-  rw [dif_pos hex]
+  rw [dite_eq_left hex]
   obtain ⟨u', q', b, hu', hn, hb, hkey, hio⟩ := Classical.choose_spec hex
   obtain rfl : u' = u := Fin.ext (hu'.trans hu.symm)
   obtain rfl : q' = q := hN _ _ hn
-  rw [openedReg_row hS hcomp hkey hio hu, hb]
+  exact (openedReg_row (g := Classical.choose hex) hS hcomp hkey hio hu).trans (by rw [hb])
 
 /-- **A `sha512/row/v2` row's bits from its bytes**: at a port without segments whose rows are `sha512/row/v2`'s, a
 registrant's value whose row bytes (`rsOf`'s encoding) are `rowBytesV2 row` has bit `k`, within the row's width, the
@@ -124,7 +123,7 @@ theorem rowVal_bit {u : Fin s.n} {q : Fin s.c.ports.size} (hseg : s.c.ports[q.va
   have h2 := (congrFun (FlockVBridge.Family.encPortH_of_none hseg) (rowVal s u q)).symm.trans h'
   rw [hv2] at h2
   unfold Layout.BitVal.get
-  rw [dif_pos (rowW_lt q hk)]
+  rw [dite_eq_left (rowW_lt q hk)]
   exact FlockC3.RegLevels.bits_of_v2 h2 k _
 
 /-- **`portBit` at a read bit, from the row's bytes**: `portBit_opened` and `rowVal_bit`. -/
