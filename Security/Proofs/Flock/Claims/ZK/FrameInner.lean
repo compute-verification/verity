@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.FrameOwn
+import Proofs.Flock.Claims.ZK.FramePass
 
 /-!
 # What the frame takes at the inner proof's rounds (Stage B, R3)
@@ -91,5 +92,52 @@ theorem innerOwn_inv {c : Cfg} {s : Masker} {X : ByteArray} {n : ℕ} :
   | k + 4, h => by
     unfold innerOwn at h
     cases h
+
+/-! ## The firewall's own rounds as frames -/
+
+open FlockSoundness.Refine (Frame encs colBytes padded_data)
+
+/-- The frames the firewall's own round `k` absorbs (`ownRound`), before its squeeze. -/
+def ownFrames (c : Cfg) (s : Masker) (w t : ByteArray) : ℕ → List Frame
+  | 0 => [.label _root_.Flock.Zk.LABEL_INNER.toUTF8, .one (readWord w.data.toList)]
+  | 1 => [.vec (#[s.eps * c.h[c.lay.fa]! + c.h[c.lay.tx]!, c.h[c.lay.fb]! + c.h[c.lay.ty]!] : Array F128).toList]
+  | 2 => [.bytes t]
+  | _ => [.vec ((c.rowH.zip c.rowMu).map fun (a, b) => a + s.beta * b).toList]
+
+/-- The squeeze that ends the firewall's own round `k`. -/
+def ownSq (n : ℕ) : ℕ → Frame
+  | 0 => .sq 1 1
+  | 1 => .sq 2 n
+  | 2 => .sq 1 1
+  | _ => .sq 2 n
+
+theorem wordBytes_data (v : Array F128) : (wordBytes v).data.toList = colBytes v.toList :=
+  FlockSoundness.Refine.rowBytes_data v
+
+theorem enc_sq (k : UInt8) (n : ℕ) : (Frame.sq k n).enc = (header 4 k n).data.toList := List.append_nil _
+
+/-- **The firewall's own round is frames:** `ownFrames`, then `ownSq`. -/
+theorem ownRound_encs {c : Cfg} {s : Masker} {w t : ByteArray} {n : ℕ} (hw : w.size = 16) (ht : t.size = 64) :
+    ∀ {k : ℕ}, k < 4 → (ownRound c s w t n k).data.toList = encs (ownFrames c s w t k) ++ (ownSq n k).enc
+  | 0, _ => by
+    have e1 : (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).data.toList =
+        (Frame.label _root_.Flock.Zk.LABEL_INNER.toUTF8).enc := by
+      unfold labelFrame; rw [ByteArray.toList_data_append]; rfl
+    have e2 : (Frame.one (readWord w.data.toList)).enc = (header 3 1 1).data.toList ++ w.data.toList := by
+      rw [enc_one, toBytes_readWord _ (by rw [Array.length_toList]; exact hw)]
+    simp only [ownRound, ownFrames, ownSq, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      ByteArray.toList_data_append, e1, e2, enc_sq, List.append_assoc]
+  | 1, _ => by
+    simp only [ownRound, ownFrames, ownSq, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      ByteArray.toList_data_append, enc_vec, wordBytes_data, enc_sq, List.append_assoc]
+    rfl
+  | 2, _ => by
+    have e : (Frame.bytes t).enc = (header 5 0 64).data.toList ++ t.data.toList := by
+      simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay, padded_data, ht]
+    simp only [ownRound, ownFrames, ownSq, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      ByteArray.toList_data_append, e, enc_sq, List.append_assoc]
+  | 3, _ => by
+    simp only [ownRound, ownFrames, ownSq, encs, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      ByteArray.toList_data_append, enc_vec, wordBytes_data, enc_sq, List.append_assoc, Array.length_toList]
 
 end Claims.ZKServer
