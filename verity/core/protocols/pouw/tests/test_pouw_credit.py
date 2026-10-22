@@ -15,6 +15,7 @@ from fractions import Fraction
 
 import pytest
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import plan
@@ -30,7 +31,7 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 
-#: each `credited` mutation's refusal: its code and its reason's start
+#: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
     "changed": ("draw", Cr.CHANGED), "withdrawn": ("draw", Cr.CHANGED), "row-changed": ("draw", Cr.CHANGED),
     "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
@@ -42,6 +43,8 @@ CREDIT_EXPECT = {
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
 }
 NOT_DRAWN = "has a proof outcome and was not drawn"
+UNTIED = "Register the A value whose rows each round's root committed"
+NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
 FEWER = "units are fewer than K = "
 NO_K = "commits no draw K (draw_k"
 DRAWN_EXPECT = {
@@ -67,6 +70,8 @@ WINDOW_EXPECT = {
     "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
+    "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
+    "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -82,8 +87,8 @@ PERIOD_EXPECT = {
     "other-k": ("window", "so the period earns nothing"),
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
+    "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
 }
-UNTIED = "Register the A value whose rows each round's root committed"
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
     "extra": "`credit.cover`", "swapped": "`credit.cover`", "misaligned": "`credit.cover`",
@@ -95,7 +100,7 @@ A_LINK_EXPECT = {
 
 def _credited(name: str, seed: int):
     d = cases.credit_instance(random.Random(f"{name}/{seed}"), name)
-    return d, Cr.credited(*cases.credit_args(d))
+    return d, Cr._credited(*cases.credit_args(d))
 
 
 def test_every_mutation_is_aimed():
@@ -144,9 +149,9 @@ def test_failed_or_missing_drawn_unit_refuses_the_window(seed):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_tree_not_tied_to_the_round_roots_is_refused(seed):
     """RT4-INT-34: an A tree registered over rows other than those each round's root committed before its coin."""
-    assert Cr.a_link(**cases.a_link_instance(random.Random(f"honest/{seed}"))) is None
+    assert Cr._a_link(**cases.a_link_instance(random.Random(f"honest/{seed}"))) is None
     for name in ("untied", "late-rows", "rewritten"):
-        refused = Cr.a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
+        refused = Cr._a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
         assert refused[0] == "a-link" and UNTIED in refused[1]
 
 
@@ -197,7 +202,7 @@ def _drawn(name: str, seed: int):
 
 def _outcome(name: str, seed: int):
     d = cases.outcome_instance(random.Random(f"{name}/{seed}"), name)
-    return Cr.outcome(*(d[k] for k in cases.OUTCOME_KEYS))
+    return Cr._outcome(*(d[k] for k in cases.OUTCOME_KEYS))
 
 
 def _window(name: str, seed: int):
@@ -222,7 +227,7 @@ def test_a_draw_at_the_record_k():
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_drawn_units_are_the_draw_coins(seed):
-    """`credit.outcome` derives the drawn units from the draw coin: each stratum's units are its own, its count the work
+    """`credit.drawn` derives the drawn units from the draw coin: each stratum's units are its own, its count the work
     law's k_s, and another coin, stream, registration or receipt draws another set; never a list handed in."""
     d = cases.drawn_instance(random.Random(f"honest/{seed}"))
     args = [d[k] for k in cases.DRAWN_KEYS]
@@ -303,6 +308,45 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
         for name, code in (("alt-layout", "circuit"), ("bad-circuit", "window")):
             got, refused = _period(name, seed)
             assert got is None and refused[0] == code, (name, refused)
+
+
+def test_window_and_period_credit_are_the_only_entries():
+    """A caller can't credit a window with a step skipped: the steps `window` composes are internal."""
+    for step in ("credited", "outcome", "a_link"):
+        assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
+    assert {"window", "period_credit"} <= set(Cr.__all__) and not {"_credited", "_outcome", "_a_link"} & set(Cr.__all__)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_round_log_the_challenger_never_received_refuses(seed):
+    """The composed check's counterexample: a round log the challenger never received, its coins carried as if opened
+    after its roots and the draw root over it, has every credit bit fixed before the draw coin (`_credited` credits its
+    calls) and its A trees tied to its roots (`_a_link` accepts). Only `core_check.rounds` holds the log's roots to the
+    ones the challenger received, and `window` runs it, so the window, and the period it's in, earn nothing."""
+    d = cases.window_instance(random.Random(f"never-received/{seed}"), "never-received")
+    got, refused = Cr._credited(*cases.credit_args(d))
+    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    rounds = CC.rounds(d["key"], d["ledger"], d["window"], d["session"], [x["root"] for x in d["rounds"]],
+                       [x["coin"] for x in d["rounds"]], rc.lms_verify)
+    assert rounds == ("rounds", NOT_RECEIVED)
+    assert Cr.window(*cases.window_args(d)) == (None, rounds)
+    got, refused = _period("never-received", seed)
+    assert got is None and refused[0] == "window" and refused[1].endswith(f"rounds: {NOT_RECEIVED}")
+
+
+def test_a_refused_outcome_credits_nothing_though_credited_would():
+    """No partial credit is `window`'s, not its caller's: with a drawn unit's proof rejected, `_credited` still returns
+    the calls whose bits were fixed before the draw coin, and `window` returns none of them."""
+    credited = 0
+    for seed in range(6):
+        d = cases.window_instance(random.Random(f"failed/{seed}"), "failed")
+        got, refused = Cr._credited(*cases.credit_args(d))
+        assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+        credited += len(got)
+        assert Cr.window(*cases.window_args(d))[0] is None
+        assert Cr.window(*cases.window_args(d))[1][0] == "failed"
+    assert credited
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -491,7 +535,7 @@ def test_a_drawn_count_other_than_k_refuses(seed):
 @pytest.mark.parametrize("name", sorted(A_LINK_EXPECT))
 def test_a_link_mutation(name):
     for seed in range(5):
-        refused = Cr.a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
+        refused = Cr._a_link(**cases.a_link_instance(random.Random(f"{name}/{seed}"), name))
         assert refused[0] == "a-link" and A_LINK_EXPECT[name] in refused[1], (seed, refused)
 
 
