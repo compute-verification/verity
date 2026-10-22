@@ -49,6 +49,7 @@ import Proofs.Accounting.TS.Session.Lanes.Decode
 import Proofs.Accounting.TS.Session.Lanes.Range
 import Proofs.Accounting.TS.Session.Lanes.Holds
 import Proofs.Accounting.TS.Session.Lanes.PortBits
+import Proofs.Accounting.TS.Session.Lanes.KnownBits
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.TileSound
 import Proofs.Accounting.Actual
