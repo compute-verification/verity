@@ -138,16 +138,16 @@ DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its p
 #: the descriptor schema `layout_of` reads
 SCHEMA = "verity-ir/descriptor/v1"
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
-WINDOW_FN = "PouwH1Window_v2"
+WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
 #: K's template, `h1window.template`, and its parameters after its A and B rows (`h1window.SHARED`)
 TILE_FN = "PouwH1WindowTile_v1"
-SHARED = ("salt", "position", "roots")
+SHARED = ("zy", "salt", "position", "roots")
 _INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
 DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
                    "root")
-NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is not PouwH1Window_v2{TILES=…,LINEARS=…,"
+NOT_WINDOW = ("the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…,"
               "CALLS=…,M=…,PREFIX=…}, each binding canonical JSON, its TILES [[K, {\"fn\": template}], ...] by "
               "ascending K and its PREFIX a string (h1window.program's Program)")
 BODY = ("the window's circuit's units are not its record's tiles: its root's nodes other than its inputs are not, in "

@@ -279,16 +279,28 @@ def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
     at_ := at_ + size
   pure out
 
+/-- `credit.law`: the strata under the work law `work:k` at the committed K `k`, each stratum's `k_s`
+`Flock.Draw.workK`; else the refusal (`budget`): `k` isn't a positive integer at most `MAX_K`, or the window has fewer
+than K units. -/
+def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Stratum) := do
+  let some k := (nat? k).filter (fun k => 1 ≤ k && k ≤ MAX_K) | throw ("budget", K_FORM)
+  let n := ss.foldl (fun a s => a + s.size) 0
+  if n < k then
+    throw ("budget", s!"the window's {n} units are fewer than K = {k}, the K its period committed, so its draw " ++
+      s!"would not be K's: the proof service commits a K at most every window's units ({K_FIELD} in the period-open)")
+  let total := Flock.Draw.totalWork ss
+  pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
+
 def SCHEMA : String := "verity-ir/descriptor/v1"
-def WINDOW_FN : String := "PouwH1Window_v2"
+def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
-def SHARED : List String := ["salt", "position", "roots"]
+def SHARED : List String := ["zy", "salt", "position", "roots"]
 def DESCRIPTOR_FORM : String :=
   "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
 def NOT_WINDOW : String :=
-  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v2{TILES=…,LINEARS=…," ++
+  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
   "CALLS=…,M=…,PREFIX=…}, each binding canonical JSON, its TILES [[K, {\"fn\": template}], ...] by ascending K and " ++
   "its PREFIX a string (h1window.program's Program)"
 def BODY : String :=
@@ -413,18 +425,6 @@ def layoutOf (descriptor : ByteArray) : R Json := do
     got := got.push (t, n)
   unless runs got.toList == want do layoutRefuse BODY
   pure layout
-
-/-- `credit.law`: the strata under the work law `work:k` at the committed K `k`, each stratum's `k_s`
-`Flock.Draw.workK`; else the refusal (`budget`): `k` isn't a positive integer at most `MAX_K`, or the window has fewer
-than K units. -/
-def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Stratum) := do
-  let some k := (nat? k).filter (fun k => 1 ≤ k && k ≤ MAX_K) | throw ("budget", K_FORM)
-  let n := ss.foldl (fun a s => a + s.size) 0
-  if n < k then
-    throw ("budget", s!"the window's {n} units are fewer than K = {k}, the K its period committed, so its draw " ++
-      s!"would not be K's: the proof service commits a K at most every window's units ({K_FIELD} in the period-open)")
-  let total := Flock.Draw.totalWork ss
-  pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
 /-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
 `strata` accepted. -/
