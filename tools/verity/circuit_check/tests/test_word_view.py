@@ -1,5 +1,4 @@
-"""The word view of a Boolean Definition with a port of single bits (kept apart from `test_circuit_check`, whose import builds the
-whole suite)."""
+"""The word view of a Boolean Definition with a port of single bits, without circuit-check's catalog."""
 from __future__ import annotations
 
 import numpy as np
