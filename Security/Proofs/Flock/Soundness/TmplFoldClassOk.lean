@@ -250,8 +250,7 @@ theorem bind_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.
     fun x _ b hb => ?_
   simp only [List.range_one, List.foldl_cons, List.foldl_nil]
   obtain ⟨h1, h2, h3⟩ := ref_sum pt (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc)) (val x.2 0)
-    (fun y o => { p := o.p, s := o.s + val x.2 0 * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y), c := o.c, u := o.u,
-      work := o.work }) (gLow pt s β a * of (val x.2 0 * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x.1))) hb.1
+    (fun y o => { p := o.p, s := o.s + val x.2 0 * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y), c := o.c, u := o.u, work := o.work }) (gLow pt s β a * of (val x.2 0 * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x.1))) hb.1
     (fun _ => own_sum _ _ _ _ hb.1)
   refine ⟨⟨h1, fun i hi => by rw [h2]; exact hb.2 i hi⟩, ?_⟩
   rw [h3, mul_add, sum_read t lays pt hR h6 hk ha ip]
@@ -647,8 +646,7 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
       cases hr
       refine ⟨_, rfl, ?_⟩
       obtain ⟨h1, h2, h3⟩ := ref_sum pt (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc)) (cc.2 * Tmpl.eqTail pt.rhoT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x))
-        (fun y o => { p := o.p, s := o.s + cc.2 * Tmpl.eqTail pt.rhoT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x) * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y), c := o.c, u := o.u,
-          work := o.work }) (gLow pt s β a * of (cc.2 * Tmpl.eqTail pt.rhoT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x) * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v))) hq.1
+        (fun y o => { p := o.p, s := o.s + cc.2 * Tmpl.eqTail pt.rhoT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x) * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y), c := o.c, u := o.u, work := o.work }) (gLow pt s β a * of (cc.2 * Tmpl.eqTail pt.rhoT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x) * Tmpl.eqTail pt.rT (β - 6) (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v))) hq.1
         (fun _ => own_sum _ _ _ _ hq.1)
       refine ⟨⟨h1, fun i hi => by rw [h2]; exact hq.2 i hi⟩, ?_⟩
       rw [h3, mul_add, sum_read t lays pt hR h6 hk2 ha ip]
