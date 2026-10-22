@@ -198,7 +198,7 @@ def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
                                      "input_widths": [len(p) for p in ins]}
 
 
-def _lowered(target: Any) -> tuple[Any, list[list], list[list]]:
+def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
     from verity_flock import ir_lower as IL
 
     from verity.ml.circuits.boolean.forms import Circuit
@@ -207,7 +207,7 @@ def _lowered(target: Any) -> tuple[Any, list[list], list[list]]:
     args = list(root.args)
     if len(set(args)) != len(args):
         raise Refused("ports", f"{getattr(target, 'id', target)}: its standalone call repeats an argument leaf")
-    C = Circuit()
+    C = Circuit() if C is None else C
     ins = [C.input(f"in{a}", IL._width(root.circuit.gate(a).prim)) for a in args]
     words = IL.lower(C, target, ins)
     for j, w in enumerate(words):

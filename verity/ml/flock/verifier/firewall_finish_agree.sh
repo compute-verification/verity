@@ -8,7 +8,8 @@
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
 # Each rep's algebraic phase must also be released as the statement schedules it: the rounds flock-circuit's checker
-# releases (`.skel`) are held byte for byte to `flock-firewall skeleton`'s (`Flock.Firewall.Skeleton`).
+# releases (`.skel`) are held byte for byte to `flock-firewall skeleton`'s (`Flock.Firewall.Skeleton`), and what drove each
+# rep's Lean frame (`.start`, `.open`, `.frame`) to `flock-firewall drive`'s (`Flock.Firewall.Drive`).
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
 # configs (FF_CONFIG, default hidden:256: a hiding tile, whose rows are a form the soundness proof covers, where a plain
 # tile's are refused) over FF_N instances (default 1), all drawn, or h1:K, the H1 tile unit at contraction K with one

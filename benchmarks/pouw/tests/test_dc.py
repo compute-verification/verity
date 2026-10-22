@@ -551,26 +551,30 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     assert "M's description is regenerated" not in capsys.readouterr().err
 
 
-def test_census_prices_a_memory_lane_and_keeps_the_issue_only_classes(tmp_path):
+def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tmp_path):
     """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
-    scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write keeps the issue lines of the
-    classes no run prices (STS32, STG32), and gives the classes that carry the scalar coefficient without a lane in this
-    run (NOROW, and ATOMS32 from r20261021-070616-d06c) the new hull's joint issue lines."""
+    scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write gives the classes that carry the
+    scalar coefficient without a lane in this run (NOROW, ATOMS32 from r20261021-070616-d06c, and STS32 and STG32 from
+    r20261021-161119-62ac) the new hull's joint issue lines, and keeps their issue lines."""
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+
+    def lines():
+        with open(dev / "census.csv", newline="") as f:
+            return {(ln["kind"], ln["row"]): ln["cycles"] for ln in csv.DictReader(f) if ln["kind"] != "UNI"}
+
+    before = lines()
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
     _rows(run / "mem", {"s_lde": {"0:LD.E*": 0.5}, "wgU_lde": {f"0:{WGI}": 128 / 4096, "1:LD.E*": 0.25}})
     _gate(run / "mem", {"wgU_lde": [(8, {WGI: 4}), (20, {"LD.E*": 16})]})
     assert census.main(["sm90", str(run), "--write", str(dev)]) == 0
-    with open(dev / "census.csv", newline="") as f:
-        after = {(ln["kind"], ln["row"]): ln["cycles"] for ln in csv.DictReader(f) if ln["kind"] != "UNI"}
+    after = lines()
     ji = [r for k, r in after if k == "FFMA" and census.JI_ROW.fullmatch(r)]
-    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] == after["ATOMS32", r] for r in ji)
-    assert {("UNLISTED", "issue"), ("ATOMS32", "issue"), ("STS32", "issue"), ("STG32", "issue"),
-            ("NOROW", "issue")} <= set(after)
-    assert not any(k in ("STS32", "STG32") and census.JI_ROW.fullmatch(r) for k, r in after)
+    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] == after["ATOMS32", r]
+                      == after["STS32", r] == after["STG32", r] for r in ji)
+    assert all(after[k, "issue"] == before[k, "issue"] for k in ("UNLISTED", "ATOMS32", "STS32", "STG32", "NOROW"))
     assert census.analyze.lane_of("wgU_lds128_r32") == "lds128" and census.analyze.lane_of("wgmix_atome_r16") == "atome"
 
 

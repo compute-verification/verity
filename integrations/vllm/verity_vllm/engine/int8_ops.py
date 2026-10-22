@@ -113,6 +113,14 @@ def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> tuple[torch.T
     return xq, s_a, scaled_mm(xq, s_a, w, s_w)
 
 
+def linear_zy(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+              rows: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The plain linear as ``row_quant`` then ``scaled_mm_zy`` over `rows` slots: (xq, s_a, y, zy), y bit for bit `linear`'s."""
+    xq, s_a = row_quant(x)
+    y, zy = scaled_mm_zy(xq, s_a, w, s_w, rows)
+    return xq, s_a, y, zy
+
+
 @torch.library.custom_op(f"{LIBRARY}::kv_quant", mutates_args=())
 def kv_quant(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.Tensor, s: int,
              k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:

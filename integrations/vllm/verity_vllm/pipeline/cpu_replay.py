@@ -4,20 +4,21 @@
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
-required manifest and the Build's Programs of record (under `D`).  The weights the relations consume are read from the checkpoint and
-OPENED against the committed weights root: every registered tensor the checkpoint composes (`weights_of_record.compose`, in its
-registered dtype) must hash to its tensor root in the committed tree, the tree must fold to the root of record, and a tensor that
-does not open fails the replay by name (`weights_check.equal` False).  The registered buffers and engine constants no checkpoint holds
-are the bundle's bytes, opened against the same root.  A tensor the checkpoint cannot compose is not served (a relation that reads it
-is not evaluated, named).
+required manifest and the Build's Programs of record (under `D`), with the Definitions they bound.  The weights the relations
+consume are read from the checkpoint and OPENED against the committed weights root: every registered tensor the checkpoint composes
+(`weights_of_record.compose`, in its registered dtype) must hash to its tensor root in the committed tree, the tree must fold to the
+root of record, and a tensor that does not open fails the replay by name (`weights_check.equal` False).  The registered buffers and
+engine constants no checkpoint holds are the bundle's bytes, opened against the same root.  A tensor the checkpoint cannot compose is
+not served (a relation that reads it is not evaluated, named).
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
 Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick too large for this host's memory: `driver.PoolDoesNotFit`).
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
-later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, under other Definition bodies,
-without serving again (the sample is seeded from the run root, so it draws the same picks):
+later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
+serving again (the sample is seeded from the run root, so it draws the same picks).  Not under other Definition bodies: the replay is
+refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
                       linkage opened, folding to the run root

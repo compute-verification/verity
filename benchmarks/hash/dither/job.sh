@@ -22,9 +22,10 @@
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 #   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
-#            receipts.py and the base's every word, then timed: each call's units and the step's 128); with
-#            UNITS_LR=NAME (an h1c build shipped, e.g. h1c_kch) also --lr, the lane records and their tables
+#            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
+#   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py with PARTIALS_LIB each (option
+#            A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu backend)
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
 #            commit.py and the base's every word, then each set's h1c_build timed)
@@ -43,7 +44,7 @@
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|z|zprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -159,8 +160,6 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); ul+=" --lib ${v#h1u_}=$f"
       done
       [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
-      # UNITS_LR=NAME: --lr, the lane records' tables built by $LIBS/NAME.so (an h1c build)
-      [ -n "${UNITS_LR:-}" ] && { NEED+=("$UNITS_LR"); ul+=" --lr --h1c $LIBS/$UNITS_LR.so"; }
       if [ "$b" = units ]; then
         CMDS+=("$PY $HERE/unitsbench.py$ul --out $OUT ${BENCH_ARGS:-}")
       else
@@ -168,6 +167,14 @@ for b in ${BENCH//,/ }; do
         CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
       fi ;;
+    partials)
+      # every h1u*.so shipped: test_partials.py with PARTIALS_LIB, its gpu test (kh_seeds_at and kh_lanes) on each
+      for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v")
+        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py")
+      done
+      [ -f "$LIBS/h1u.so" ] || { echo "job.sh: partials needs $LIBS/h1u.so" >&2; exit 2; } ;;
     z|zprof)
       # h1c.so (today's libh1c.so) as the base, then every h1c_*.so shipped
       zl=""

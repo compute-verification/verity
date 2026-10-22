@@ -545,6 +545,10 @@ def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
 
 
 def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_path, monkeypatch):
+    """v3 serves z = A Bᵀ exactly where A rows hold 127, and `window.py tamper --xa-flip` flips one entry's X wrap bit xa
+    in a unit's record: the record moves, its receipt doesn't. Which entries set xa follows the dither bits, which come
+    from roots `window.py commit` blinds with os.urandom, so a tile row sets none with probability about 2^-13: the test
+    asserts only that some row does, and the flipped unit's four rows all missing is about 2^-52."""
     monkeypatch.setenv("H1_TILE", "v3")
     rng = np.random.default_rng(6)
     a = rng.integers(-127, 128, (8, K)).astype(np.int8)
@@ -555,7 +559,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_
     salt = U.unit_salt(U.stand_in_reveal(b"\x07" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
     assert served["z_is_served_product"] == {"cells": 4 * RC, "equal": 4 * RC}
-    assert served["xa"]["tile_rows_with_xa"] == served["xa"]["tile_rows"] == 16
+    assert 0 < served["xa"]["tile_rows_with_xa"] <= served["xa"]["tile_rows"] == 16
     bad, com_t = tampered(tmp_path, "w", "--xa-flip", "1")
     assert bad["receipt_root"] == served["receipt_root"] and U.registered_of(com_t)["zy@0"] != U.registered_of(com)["zy@0"]
     assert bad["tampered"]["records"] == [1] and bad["tampered"]["receipts"] == []
