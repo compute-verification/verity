@@ -819,6 +819,77 @@ theorem ownRounds_zero {c : Cfg} (hz : ZeroCfg c) (ci ci' : Array (Array F128)) 
   rw [ownRound_zero hz { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 }
     { eps := (ci'.getD 0 #[]).getD 0 0, beta := (ci'.getD 2 #[]).getD 0 0 } _ _ _ hj]
 
+theorem ownRounds_getD (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) {j : ℕ} (hj : j < INNER_ROUNDS) :
+    (ownRounds c ci ns).getD j (.empty, 0) =
+      (ownRound c { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 } (zeros 16) (zeros 64) (ns j) j,
+        ns j) := by
+  unfold ownRounds
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hj, ↓reduceIte, Option.map_some,
+    Option.getD_some]
+
+/-- **The frame's coins, then the inner proof's round**: where the frame takes the coins `cs` and the round `r` there,
+its state after both is the round's. -/
+theorem run_coins_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (cs : Array F128) (n : ℕ) (r : ByteArray)
+    {s1 s' : Masker} {out : ByteArray} {fr : Array ℕ} (ha : st.m.answer c cs = .ok s1)
+    (hr : roundFree c s1 r n = .ok (out, s', fr)) (hin : s'.inner.isSome) :
+    _root_.Flock.Firewall.Frame.run c st [.coins (.ok cs), .round n r .own] = ({ m := s', begun := true }, false) := by
+  have ho := answer_owed ha
+  have hr' := round_of_roundFree hr
+  have hn : s'.inner.isNone = false := by cases h : s'.inner <;> simp_all
+  simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, ho, hr', hn, bind, Except.bind,
+    pure, Except.pure, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+
+theorem ownReqs_push (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128))
+    (a : Array F128) {i : ℕ} (hi : sched.size + i ≤ cr.size) :
+    ownReqs prior sched own (cr.push a) i = ownReqs prior sched own cr i := by
+  have hg : ∀ k, k < cr.size → (cr.push a).getD k #[] = cr.getD k #[] := fun k hk => by
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, show k ≠ cr.size by omega, ↓reduceIte]
+  unfold ownReqs
+  rw [flatMap_range_congr (i := sched.size) fun k hk => by rw [hg k (by omega)],
+    flatMap_range_congr (i := i) fun j hj => by rw [hg (sched.size + j) (by omega)]]
+
+/-- **The loop's frame state one round on, inside the inner proof**: where the rep's schedule is complete on its coins
+`cr` and on those before the last, `cr` covers the inner proof's round `i`, the frame takes that round's coins at the
+rep's state after it, at the state `m`, and takes the inner proof's round `i + 1` there, the rep's state after round
+`i + 1` on one more round's coins is that round's. -/
+theorem repState_own_step {c : Cfg} (hz : ZeroCfg c) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ)
+    (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ)
+    (a : Array F128) (i : ℕ) {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched)
+    (hcr : cr.size = sched.size + i + 1) (hi4 : i + 1 < INNER_ROUNDS) (s₀ : Masker) {m s' : Masker}
+    {out : ByteArray} {fr : Array ℕ}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (sched.size + i + 1)).answer c (cr.getD (sched.size + i) #[]) = .ok m)
+    (hr : roundFree c m (ownRound c s₀ (zeros 16) (zeros 64) (ns (sched.size + (i + 1))) (i + 1))
+      (ns (sched.size + (i + 1))) = .ok (out, s', fr)) (hin : s'.inner.isSome) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (sched.size + i + 2) = s' := by
+  rw [show sched.size + i + 2 = sched.size + (i + 1) + 1 by omega,
+    repState_own_at c t rep dom xs hi cr0 (cr.push a) ns (i + 1) hal (by rw [Array.pop_push]; exact hs') hi4,
+    ownReqs_succ, ownReqs_push _ _ _ _ _ (by omega),
+    ownRounds_zero hz ((cr.push a).extract sched.size (cr.push a).size) (cr.extract sched.size cr.size),
+    ownRounds_getD _ _ _ hi4]
+  rw [repState_own_at c t rep dom xs hi cr0 cr ns i hal hs (by omega)] at ha
+  have hg : (cr.push a).getD (sched.size + i) #[] = cr.getD (sched.size + i) #[] := by
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, show sched.size + i ≠ cr.size by omega, ↓reduceIte]
+  rw [hg, ownRound_zero hz _ s₀ _ _ _ hi4]
+  dsimp only at ha ⊢
+  rw [run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (ownReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched
+      (ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)) cr i) = R at ha ⊢
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha ⊢
+    rw [run_coins_own c S _ _ _ ha hr hin]
+    rfl
+  | true =>
+    have e : (({} : Masker).answer c (cr.getD (sched.size + i) #[])) = .error "coins for no round" := rfl
+    simp only [↓reduceIte] at ha
+    rw [e] at ha
+    cases ha
+
 end Loop
 
 end Claims.ZKServer
