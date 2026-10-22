@@ -104,6 +104,7 @@ import Proofs.Flock.Claims.ZK.FramePlan
 import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameRep
+import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -734,6 +735,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
+* `FrameInner`: at the inner proof's rounds the frame takes only the firewall's own round (`innerOwn_inv`,
+  `roundFree_own_frames`), and where the deployed frame's check releases one, the placeholder's own round at zero pads
+  (`ZeroCfg`) from the same state but for `stopped` leaves the same state but for `stopped`: past the inner proof's
+  label (`check_own_ok`), and at it where the scheduled round in its place is the firewall's own round 0
+  (`check_own0_ok`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).

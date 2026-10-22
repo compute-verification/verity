@@ -10,6 +10,15 @@ import Proofs.Flock.Soundness.Refine.Arith
 At the inner proof's rounds the frame fixes every frame and value it computes from its draws and the coins
 (`innerOwn`), so a round it takes there is the firewall's own (`ownRound`) at its configuration and state, whatever
 `final_c'` and `τ`'s commitment it carries: `innerOwn_inv`, the converse of `innerOwn_ownRound`.
+
+* `ownRound_encs`: the firewall's own round `k` is frames (`ownFrames`), then its squeeze (`ownSq`).
+* `innerOwn_zero`: at zero pads (`ZeroCfg`, the placeholder's, `zeroCfg_ofDraws`) the own round reads no coin.
+* `roundFree_sq`, `roundFree_inner_some`: a round the frame takes ends in its squeeze (`SqOk`), and inside the inner
+  proof keeps its count, so there it is the firewall's own round's frames (`roundFree_own_frames`).
+* `roundFree_own_ok`: the placeholder's own round at zero pads passes where the deployed frame took a round of its
+  shape, from the deployed state but for `stopped`, and leaves the same state but for `stopped`; so where the deployed
+  frame's check releases a round past the inner proof's label (`check_own_ok`), and at it where the scheduled round in
+  its place is the firewall's own round 0 at some `final_c'` (`check_own0_ok`).
 -/
 
 namespace Claims.ZKServer
