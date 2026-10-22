@@ -25,6 +25,7 @@
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
+#      H1_SPILL_NEG (0; 1: after staging, spill_neg.py's row-count negatives on the honest statement, nothing proved)
 #      H1_FIREWALL (1)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
@@ -91,6 +92,15 @@ grep -E '^(BUILT|STAGED|FAILED)' "$OUT/stage.out" | cut -c1-600 | tee -a "$OUT/j
 cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
 [ $rc = 0 ] || { log "prepare FAILED (exit $rc): $(tail -3 "$OUT/stage.err")"; exit 1; }
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registered.json "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
+if [ "${H1_SPILL_NEG:-0}" = 1 ]; then
+  read -r HPUB HREG < <(awk -F'\t' '$1 == "C" && $2 == "honest" {print $4, $5}' "$WK/plan.tsv")
+  log "spill negatives: the honest statement's circuit, one row's compressions one off the parser's"
+  "$PY" "$H/spill_neg.py" "$SW/circuit.txt" "$LEAN" "$HPUB" "$HREG" "$WK/verifier/partition.json" \
+    "$WK/verifier/program.json" "$W/spill" "$OUT" 2>&1 | tee -a "$OUT/job.log"
+  rc=${PIPESTATUS[0]}
+  log "h1-prove: spill negatives done (exit $rc)"
+  exit "$rc"
+fi
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
 # a firewalled prover's Lean Hello sets each session up at the verifier's own statement, partition and window Program (live
