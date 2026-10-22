@@ -184,10 +184,11 @@ OUT_PORTS = {"receipt": "o0", "ok": "o1"}
 
 def ports(template) -> dict[str, str]:
     """The statement's port of each row a unit of ``template`` (the window's at its K, `h1window.template`) reads, by
-    `h1window.unit_reads`' and `registered.reads`' keys (its parameters' ``a_k<K>[i]``, ``b_k<K>[j]`` and ``zy``): A row i's
-    ``a<i>``, B row j's ``b<j>``, the record's ``zy``."""
+    `h1window.unit_reads`' and `registered.reads`' keys (its parameters' ``a_k<K>[i]``, ``b_k<K>[j]`` and ``zy``,
+    `h1window.row_key`): A row i's ``a<i>``, B row j's ``b<j>``, the record's ``zy``."""
     (a, at), (b, bt), (zy, _t) = template.signature()[0][:3]
-    return {**{f"{a}[{i}]": f"a{i}" for i in range(at.n)}, **{f"{b}[{j}]": f"b{j}" for j in range(bt.n)}, zy: "zy"}
+    return {**{HW.row_key(a, at.n, i): f"a{i}" for i in range(at.n)}, **{HW.row_key(b, bt.n, j): f"b{j}" for j in range(bt.n)},
+            zy: "zy"}
 
 
 def window_ports(program) -> dict[str, str]:

@@ -924,6 +924,8 @@ and `DE` the deployed plain record at plain leaves with only its verifier's step
 * a later round's `c_k`: the registered value V*'s algebra opens that round's row against, which the setup builds from
   `c_k` (`RecSetup.commits`, `checkInner`);
 * each round's coins: `innerCommits` (the record's coins are the coin server's);
+* the rounds themselves: `checkSchedule` (`RecSetup.commits`, at the verifier's inner shape: each stream's rounds, in
+  the schedule's order, with its coin, top, level-0 and `c_k` counts, in a record that ends `finish`, `checkFinished`);
 * the last message: the rows, salts and proof files are the parts' hidden values, and `IVStar`'s own openings hold
   them to the earlier rounds' commit strings (`Bound.opens`, binding where `Bound.Binds`).
 

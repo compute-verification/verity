@@ -4,7 +4,8 @@ The sampled replay evaluates a row with its family's row kernel, which answers f
 the Commit bound the Program the Build compiled.  A small Llama's request Program in a Build dir: both loaders
 (`tp.rank_replay.load`, `c2_replay.programs_of_record`) take it as built, and refuse it by name once the Build's descriptor holds
 another body for a specialization the replay evaluates (the Program a Build at another body of that Definition compiles, digest
-of record and all), or is not the Program of record.  Two Definitions under one id show that the check reads bodies, not ids."""
+of record and all), or is not the Program of record.  Two Definitions under one id show that the check reads bodies, not ids.
+Both also refuse a row kernel that fails its self-check against its Definition."""
 from __future__ import annotations
 
 import copy
@@ -94,6 +95,24 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
     with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(not the Definitions of record\)") as e:
         _c2(tmp_path / "moved", moved)
     assert fid in str(e.value)
+
+
+def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
+    """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
+    name before any row is graded, by the kernel's self-check."""
+    from verity_vllm.program.kernels import derived_rows as DR
+
+    dg = _build(tmp_path / "built", program)
+    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    assert DF.kernel_refusal(DF.evaluated_specs(_instance_rows(program))) is None
+    right = DR.rmsnorm_triton_rows
+    monkeypatch.setattr(DR, "rmsnorm_triton_rows", lambda x, w, eps: {"out": right(x, w, eps)["out"] ^ 1})
+    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v1: "):
+        _rank(tmp_path / "built", dg)
+    monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
+    with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v1: .* mismatches"):
+        _c2(tmp_path / "built", dg)
 
 
 def test_a_build_whose_descriptor_is_not_the_program_of_record_is_refused(tmp_path, program):

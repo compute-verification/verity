@@ -1373,7 +1373,7 @@ PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: each failed one of them, costing its train its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
-PREFLIGHT_UNCOLLECTED = {"tools/verity/circuit_check": "its collection builds every target: over 10 min and 10 GB (18 Oct)"}
+PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
