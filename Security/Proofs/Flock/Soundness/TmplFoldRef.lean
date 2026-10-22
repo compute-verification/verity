@@ -1,4 +1,5 @@
 import Proofs.Flock.Level3.Folded
+import Proofs.Flock.Soundness.ExecRows
 import Flock.TmplFold
 import Flock.NetAt
 
@@ -171,5 +172,70 @@ theorem eqTail_halves (r : Array F128) (u : ℕ) (hu : u < 2 ^ r.size) :
     rfl
   rw [e1, eqAt_split]
   simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.zero_add]
+
+/-! ## The committed side: `project ∘ baseOf` -/
+
+theorem list_sum_range {β : Type} [AddCommMonoid β] (f : ℕ → β) : ∀ l : List ℕ,
+    (l.map f).sum = ∑ t ∈ Finset.range l.length, f (l.getD t 0)
+  | [] => by simp
+  | a :: l => by
+    rw [List.map_cons, List.sum_cons, list_sum_range f l, List.length_cons, Finset.sum_range_succ']
+    simp [add_comm]
+
+theorem project_get (base eLo : Array F128) {s : ℕ} (hs : s < 64) :
+    of (Stmt.project base eLo)[s]! = ∑ u ∈ Finset.range eLo.size, of base[s + 64 * u]! * of eLo[u]! := by
+  unfold Stmt.project
+  rw [getElem!_pos _ s (by simp [hs])]
+  simp only [Array.getElem_ofFn]
+  rw [sumUpTo_eq]
+  simp only [of_mul]
+
+theorem tensor_get (lw rho : Array F128) (hlw : lw.size = 64) {p : ℕ} (hp : p < 64 * 2 ^ rho.size) :
+    of (Stmt.tensor lw rho)[p]! = of (lw.getD (p % 64) 0 * Tmpl.eqTail (Tmpl.halves rho) 0 (p / 64)) := by
+  have hq : p / 64 < 2 ^ rho.size := by omega
+  have hsz : p < (Stmt.tensor lw rho).size := by simp [Stmt.tensor, hlw, eqTable_size]; omega
+  rw [getElem!_pos _ p hsz]
+  simp only [Stmt.tensor, Array.getElem_ofFn, hlw]
+  rw [of_mul, of_mul, eqTail_halves rho _ hq]
+  congr 1
+  rw [getElem!_pos lw _ (by rw [hlw]; omega), Array.getD_eq_getD_getElem?,
+    Array.getElem?_eq_getElem (by rw [hlw]; omega)]
+  rfl
+
+theorem sparse_ofRows_dims {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m) :
+    m.rows = rows.size ∧ m.width = width := by
+  unfold Sparse.ofRows at h
+  simp only at h
+  obtain ⟨st, -, h⟩ := except_bind_ok h
+  cases h
+  exact ⟨rfl, rfl⟩
+
+/-- Row `p` of a matrix `Sparse.ofRows` built: its length and its columns are `rows[p]`'s. -/
+theorem sparse_col {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
+    (hw : width ≤ 2 ^ 32) {p : ℕ} (hp : p < rows.size) :
+    m.len[p]! = (rows.getD p #[]).size ∧ ∀ t < (rows.getD p #[]).size, m.col p t = (rows.getD p #[])[t]! := by
+  obtain ⟨-, hs, hl, -⟩ := ofRows_spec h
+  have hsz : p < m.start.size := by
+    have := congrArg List.length hs
+    simp only [Array.length_toList, rowStarts_length] at this
+    omega
+  have hlsz : p < m.len.size := by
+    have := congrArg List.length hl
+    simp only [Array.length_toList, List.length_map] at this
+    omega
+  have hlen : m.len.getD p 0 = (rows.getD p #[]).size := by
+    simp only [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hl, List.getElem?_map]
+    cases rows.toList[p]? <;> rfl
+  have hrow := ofRows_row h hw p
+  refine ⟨?_, fun t ht => ?_⟩
+  · rw [getElem!_pos _ p hlsz]
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlsz] at hlen
+    exact hlen
+  · have ht' : t < (m.row p).size := by rw [hrow]; exact ht
+    have e : (m.row p)[t]! = m.col p t := by
+      rw [getElem!_pos _ t ht']
+      simp only [Sparse.row, Sparse.col, Array.getElem_map, Array.getElem_range, Array.getD_eq_getD_getElem?,
+        Array.getElem?_eq_getElem hsz, Option.getD_some, getElem!_pos m.start p hsz]
+    rw [← e, hrow]
 
 end FlockSoundness.TmplFold
