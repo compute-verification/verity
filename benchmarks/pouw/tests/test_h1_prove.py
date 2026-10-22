@@ -414,6 +414,19 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
             ST.check_against_reference(got, {"o0": got["w_o0"], "o1": got["w_o1"]})
 
 
+def test_the_h1_statement_is_flat_unless_h1_tmpl_names_a_layout_mode(monkeypatch):
+    """`h1unit.layout`, what every H1 stager passes `UnitStager` as its ``layout``: unset or empty the flat statement, a mode
+    the templated one, and anything else refused by name."""
+    monkeypatch.delenv("H1_TMPL", raising=False)
+    assert U.layout() is None
+    for value, want in (("", None), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
+        monkeypatch.setenv("H1_TMPL", value)
+        assert U.layout() == want
+    monkeypatch.setenv("H1_TMPL", "hybrid/4")
+    with pytest.raises(ValueError, match="'hybrid/4' is not a layout mode"):
+        U.layout()
+
+
 def test_the_numpy_records_are_h1zys_words():
     """`h1unit.dequant` and `h1unit.records` (numpy, what `window.py` commits) are `h1zy.dequant` and `h1zy.records` (the
     unit's word reference, `PouwZyDequant_v1`) on random and edge-case z, s_a and s_w: zeros of both signs, |z| at 2^31

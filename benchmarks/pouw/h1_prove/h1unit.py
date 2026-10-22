@@ -111,6 +111,19 @@ def tile() -> str:
     return t
 
 
+def layout() -> str | None:
+    """The statement's form: ``H1_TMPL`` unset or empty, the flat statement (``flock-circuit``, the unit's netlist in the
+    file); else a layout mode (`verity_flock.tmpl.mode_of`, TMPL1's ``iv/hybrid/4``), the templated statement
+    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as its template, which the Lean verifier refuses
+    until the templated statement's proof lands."""
+    import os
+    from verity_flock import tmpl as TM
+    m = os.environ.get("H1_TMPL") or None
+    if m is not None:
+        TM.mode_of(m)
+    return m
+
+
 def stand_in_reveal(coin: bytes) -> bytes:
     """A STAND-IN for the network certifier's salt for the window, its ``reveal(p)`` (`pouw.salt.revealed`), which this
     harness has no certifier to give: SHA-512 of the epoch's opened salt coin (`pouw.coins`) under this harness's tag.
@@ -447,13 +460,14 @@ class Shape:
 
     def stager(self, name: str, circuit=None, bind: dict | None = None):
         """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to
-        ``bind`` (``{"partition", "program"}``: the window's partition and Program, `Shape.window`)."""
+        ``bind`` (``{"partition", "program"}``: the window's partition and Program, `Shape.window`), flat or templated as
+        `layout` says."""
         from verity_flock import class_statement as CS
         template = self.definition()
         reads = {port: key for key, port in ports(template).items()}
         bits = {p.name: p.bits for p in self.ports()}
         in_rows = [(p, V2, bits[p], [reads[p]]) for p in self.in_rows] + [("pub", V2, PUB_BITS, list(PUBLIC))]
-        return CS.UnitStager(template, name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind)
+        return CS.UnitStager(template, name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind, layout=layout())
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------
