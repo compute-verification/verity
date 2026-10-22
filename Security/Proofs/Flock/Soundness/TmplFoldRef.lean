@@ -116,6 +116,15 @@ theorem foldl_rowStep_get (l : List ℕ) (p : Array F128) {s : ℕ} (hs : s < p.
     rw [ih _ (by rw [rowStep_size]; exact hs), rowStep_get _ _ _ _ _ _ hs, add_assoc]
 
 /-- **`foldRef`'s entry `s`**: every logical row's share, summed. -/
+theorem foldRefRows_size : (foldRefRows pt π ra rb).size = 64 := by
+  unfold foldRefRows
+  suffices h : ∀ (l : List ℕ) (p : Array F128), (l.foldl (rowStep pt π ra rb) p).size = p.size by
+    rw [h]; simp
+  intro l
+  induction l with
+  | nil => intro p; rfl
+  | cons a l ih => intro p; rw [List.foldl_cons, ih, rowStep_size]
+
 theorem foldRefRows_get {s : ℕ} (hs : s < 64) :
     of ((foldRefRows pt π ra rb).getD s 0) = ((List.range ra.size).map (rowTerm pt π ra rb s)).sum := by
   unfold foldRefRows
@@ -273,11 +282,14 @@ theorem side_sum {rows : Array (Array ℕ)} {W M : ℕ} {m : Sparse} (h : Sparse
       ∑ p ∈ Finset.range rows.size, ∑ t ∈ Finset.range (rows.getD p #[]).size,
         if (rows.getD p #[])[t]! = s + 64 * u then w * of eLo[p]! * g u else 0 := by
     intro u _
-    rw [sparseT_rows h hw eLo hN, Finset.mul_sum, Finset.sum_mul]
-    refine Finset.sum_congr rfl fun p _ => ?_
-    rw [Finset.mul_sum, Finset.sum_mul]
-    refine Finset.sum_congr rfl fun t _ => ?_
-    split <;> simp
+    rw [sparseT_rows h hw eLo hN]
+    refine ((congrArg (· * g u) (Finset.mul_sum _ _ _)).trans (Finset.sum_mul _ _ _)).trans
+      (Finset.sum_congr rfl fun p _ => ?_)
+    refine ((congrArg (· * g u) (Finset.mul_sum _ _ _)).trans (Finset.sum_mul _ _ _)).trans
+      (Finset.sum_congr rfl fun t _ => ?_)
+    split
+    · rfl
+    · exact (congrArg (· * g u) (mul_zero w)).trans (zero_mul _)
   rw [Finset.sum_congr rfl e1, Finset.sum_comm]
   refine Finset.sum_congr rfl fun p hp => ?_
   rw [Finset.sum_comm, list_sum_range, Array.length_toList]
@@ -333,5 +345,166 @@ theorem project_baseOf_rows {rowsA rowsB : Array (Array ℕ)} {sl : ℕ} {A B : 
     side_sum hA hw hW _ (by rw [hE]; exact hNA) (of alpha) (fun u => of (eqTable r)[u]!) hs,
     side_sum hB hw hW _ (by rw [hE, hNB]; exact hNA) 1 (fun u => of (eqTable r)[u]!) hs, hNB,
     ← Finset.sum_add_distrib]
+
+/-! ## The committed rows, back to the logical ones -/
+
+/-- A sum over the committed rows (`Net.placed`) is the sum over the logical rows, each at its position: `pos` is
+one-to-one, and the gaps are empty. -/
+theorem sum_placed {useful inCols size : ℕ} {pos : Array ℕ} {inv : Array (Option ℕ)}
+    (h : Net.posOk useful inCols size pos inv = true) (ra rb : Array (Array ℕ))
+    (F : ℕ → Array ℕ → Array ℕ → GF128) (hF : ∀ p, F p #[] #[] = 0) :
+    ∑ p ∈ Finset.range size, F p ((Net.placed pos inv ra).getD p #[]) ((Net.placed pos inv rb).getD p #[]) =
+      ∑ x ∈ Finset.range useful,
+        F (pos.getD x 0) ((ra.getD x #[]).map (pos.getD · 0)) ((rb.getD x #[]).map (pos.getD · 0)) := by
+  have e : ∀ x ∈ Finset.range useful,
+      F (pos.getD x 0) ((ra.getD x #[]).map (pos.getD · 0)) ((rb.getD x #[]).map (pos.getD · 0)) =
+        F (pos.getD x 0) ((Net.placed pos inv ra).getD (pos.getD x 0) #[])
+          ((Net.placed pos inv rb).getD (pos.getD x 0) #[]) := fun x hx => by
+    rw [Net.placed_at h ra (Finset.mem_range.mp hx), Net.placed_at h rb (Finset.mem_range.mp hx)]
+  have hinj : Set.InjOn (fun x => pos.getD x 0) (Finset.range useful : Set ℕ) := by
+    intro x hx y hy he
+    exact Net.posOk_inj h (by simpa using hx) (by simpa using hy) he
+  refine Eq.trans ?_ ((Finset.sum_congr rfl e).trans
+    (Finset.sum_image (f := fun p => F p ((Net.placed pos inv ra).getD p #[]) ((Net.placed pos inv rb).getD p #[]))
+      hinj).symm).symm
+  refine (Finset.sum_subset (fun p hp => ?_) fun p _ hp => ?_).symm
+  · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.mp hp
+    exact Finset.mem_range.mpr (Net.posOk_lt h (Finset.mem_range.mp hx))
+  · have hn : ∀ x < useful, pos.getD x 0 ≠ p := fun x hx he =>
+      hp (Finset.mem_image.mpr ⟨x, Finset.mem_range.mpr hx, he⟩)
+    show F p ((Net.placed pos inv ra).getD p #[]) ((Net.placed pos inv rb).getD p #[]) = 0
+    rw [Net.placed_gap h ra hn, Net.placed_gap h rb hn, hF]
+
+/-! ## The unrolled rows' count -/
+
+theorem write_size {acc acc' : Acc} {c : ℕ} {a b : Array ℕ} (h : write acc c a b = .ok acc') :
+    acc'.ra.size = acc.ra.size ∧ acc'.rb.size = acc.rb.size := by
+  unfold write at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+  · cases h
+    simp
+
+theorem foldlM_inv {α : Type} (P : Acc → Prop) (f : Acc → α → V Acc)
+    (hf : ∀ acc a acc', f acc a = .ok acc' → P acc → P acc') :
+    ∀ (l : List α) (acc acc' : Acc), l.foldlM f acc = .ok acc' → P acc → P acc'
+  | [], acc, acc', h, hp => by
+    rw [List.foldlM_nil] at h
+    cases h
+    exact hp
+  | a :: l, acc, acc', h, hp => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨b, hb, h⟩ := except_bind_ok h
+    exact foldlM_inv P f hf l b acc' h (hf acc a b hb hp)
+
+theorem place_size (defs : Array Def) (k : ℕ) : ∀ (fuel d o : ℕ) (inp : List ℕ) (acc acc' : Acc),
+    place defs k fuel d o inp acc = .ok acc' → acc'.ra.size = acc.ra.size ∧ acc'.rb.size = acc.rb.size
+  | 0, d, o, inp, acc, acc', h => by
+    rw [place] at h
+    simp [throw, throwThe, MonadExceptOf.throw] at h
+  | fuel + 1, d, o, inp, acc, acc', h => by
+    rw [place] at h
+    cases hd : defs[d]? with
+    | none => simp [hd, throw, throwThe, MonadExceptOf.throw] at h
+    | some df =>
+      simp only [hd] at h
+      obtain ⟨acc1, h1, h2⟩ := except_bind_ok h
+      let P : Acc → Prop := fun a => a.ra.size = acc.ra.size ∧ a.rb.size = acc.rb.size
+      have p1 : P acc1 := foldlM_inv P _ (fun a _ b hab ha => by
+          have e := write_size hab
+          exact ⟨e.1.trans ha.1, e.2.trans ha.2⟩) _ acc acc1 h1 ⟨rfl, rfl⟩
+      exact foldlM_inv P _ (fun a _ b hab ha => foldlM_inv P _ (fun a' _ b' hab' ha' => by
+          have e := place_size defs k fuel _ _ _ a' b' hab'
+          exact ⟨e.1.trans ha'.1, e.2.trans ha'.2⟩) _ a b hab ha) _ acc1 acc' h2 p1
+
+/-- `Tmpl.rows` has one row per column of the root. -/
+theorem rows_size {t : Tmpl} {acc : Acc} (h : t.rows = .ok acc) :
+    acc.ra.size = (t.defs.getD t.root default).cols ∧ acc.rb.size = (t.defs.getD t.root default).cols := by
+  unfold Tmpl.rows at h
+  obtain ⟨a, ha, h⟩ := except_bind_ok h
+  have h1 := place_size _ _ _ _ _ _ _ _ ha
+  have h2 := write_size h
+  simp only [Acc.empty, Array.size_replicate] at h1
+  exact ⟨h2.1.trans h1.1, h2.2.trans h1.2⟩
+
+/-! ## The fold's reference is `project ∘ baseOf` -/
+
+theorem getElem!_getD (p : Array F128) {s : ℕ} (hs : s < p.size) : p[s]! = p.getD s 0 := by
+  rw [getElem!_pos p s hs, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hs, Option.getD_some]
+
+theorem list_range_sum {β : Type} [AddCommMonoid β] (f : ℕ → β) (n : ℕ) :
+    ((List.range n).map f).sum = ∑ x ∈ Finset.range n, f x := by
+  induction n with
+  | zero => simp
+  | succ n ih => simp [List.range_succ, Finset.sum_range_succ, ih]
+
+/-- **The template fold's reference is `project ∘ baseOf`** at the matrices `unrollAt` commits: entry `s < 64` of
+`foldRef` is entry `s` of `project (baseOf α (lw ⊗ eq(ρ, ·)) A B none unitLog) (eq(r, ·))`. -/
+theorem foldRef_eq_project {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128} {n' : Net}
+    (hP : foldRef t lays alpha lw rho r = .ok P) (hU : Flock.Tmpl.unrollAt t lays = .ok n')
+    (hlw : lw.size = 64) (hrho : rho.size + 6 = n'.unitLog) (hr : r.size = rho.size) (hsl : n'.unitLog ≤ 32)
+    {s : ℕ} (hs : s < 64) :
+    of P[s]! = of (Stmt.project (Stmt.baseOf alpha (Stmt.tensor lw rho) n'.a n'.b none n'.unitLog) (eqTable r))[s]! := by
+  rw [foldRef_eq_rows] at hP
+  obtain ⟨acc, hR, hP⟩ := except_bind_ok hP
+  cases hP
+  unfold Flock.Tmpl.unrollAt at hU
+  obtain ⟨acc2, hR2, hU⟩ := except_bind_ok hU
+  rw [hR] at hR2
+  cases hR2
+  obtain ⟨n, -, -, -, hul, ha, hb, -, -, -, -, -, hpos, -, -⟩ := Net.ofRowsAt_ok hU
+  generalize posMap t lays = π at ha hb hpos hul ⊢
+  have hfit : π.getD t.constPos 0 + 1 ≤ 2 ^ n'.unitLog := by
+    rw [hul]
+    exact (le_two_pow_log2ceil _).trans (Nat.pow_le_pow_right (by norm_num) (le_max_right _ _))
+  generalize Net.invOf π (π.getD t.constPos 0 + 1) = inv at ha hb hpos
+  generalize π.getD t.constPos 0 + 1 = size at hpos hfit
+  obtain ⟨-, hinv, -, -, -⟩ := Net.posOk_parts hpos
+  have hNA : (Net.placed π inv acc.ra).size ≤ 2 ^ n'.unitLog := by rw [Net.placed_size, hinv]; exact hfit
+  have hNB : (Net.placed π inv acc.rb).size = (Net.placed π inv acc.ra).size := by
+    rw [Net.placed_size, Net.placed_size]
+  rw [project_baseOf_rows ha hb hsl alpha lw rho r hlw hrho hr hNA hNB hs, Net.placed_size, hinv]
+  refine Eq.trans ?_ (sum_placed hpos acc.ra acc.rb (fun p ra' rb' =>
+      (ra'.toList.map fun c =>
+          if c % 64 = s then of alpha * of (Stmt.tensor lw rho)[p]! * of (eqTable r)[c / 64]! else 0).sum +
+        (rb'.toList.map fun c =>
+          if c % 64 = s then 1 * of (Stmt.tensor lw rho)[p]! * of (eqTable r)[c / 64]! else 0).sum)
+      fun p => by simp).symm
+  rw [getElem!_getD _ (by rw [foldRefRows_size]; exact hs), foldRefRows_get _ _ _ _ hs, list_range_sum,
+    (rows_size hR).1]
+  refine Finset.sum_congr rfl fun x hx => ?_
+  have hx' := Finset.mem_range.mp hx
+  have hpx : π.getD x 0 < 64 * 2 ^ rho.size := by
+    have := Net.posOk_lt hpos hx'
+    have h64 : 2 ^ n'.unitLog = 64 * 2 ^ rho.size := by rw [← hrho, pow_add]; ring
+    omega
+  have hcol : ∀ (rows : Array (Array ℕ)) (m : Sparse),
+      Sparse.ofRows (Net.placed π inv rows) (2 ^ n'.unitLog) = .ok m →
+      ∀ v ∈ (rows.getD x #[]).toList, π.getD v 0 / 64 < 2 ^ r.size := by
+    intro rows m hm v hv
+    have hrow := Net.placed_at hpos rows hx'
+    have hlt : π.getD x 0 < (Net.placed π inv rows).size := by
+      rw [Net.placed_size, hinv]; exact Net.posOk_lt hpos hx'
+    have hmem : (Net.placed π inv rows).getD (π.getD x 0) #[] ∈ (Net.placed π inv rows).toList := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
+      exact Array.getElem_mem_toList hlt
+    have hc := (ofRows_spec hm).2.2.2 _ hmem (π.getD v 0) (by
+      rw [hrow, Array.toList_map]; exact List.mem_map.mpr ⟨v, hv, rfl⟩)
+    have h64 : 2 ^ n'.unitLog = 64 * 2 ^ r.size := by rw [← hrho, hr, pow_add]; ring
+    omega
+  unfold rowTerm
+  simp only [Array.toList_map, List.map_map, Function.comp_def]
+  refine congrArg₂ (· + ·) (congrArg List.sum (List.map_congr_left fun v hv => ?_))
+    (congrArg List.sum (List.map_congr_left fun v hv => ?_))
+  · by_cases hc : π.getD v 0 % 64 = s
+    · simp only [hc, ↓reduceIte]
+      rw [of_mul, of_mul, tensor_get lw rho hlw hpx, ← eqTail_halves r _ (hcol acc.ra n'.a ha v hv)]
+      all_goals rfl
+    · simp only [hc, ↓reduceIte]
+  · by_cases hc : π.getD v 0 % 64 = s
+    · simp only [hc, ↓reduceIte]
+      rw [of_mul, tensor_get lw rho hlw hpx, ← eqTail_halves r _ (hcol acc.rb n'.b hb v hv), one_mul]
+      all_goals rfl
+    · simp only [hc, ↓reduceIte]
 
 end FlockSoundness.TmplFold
