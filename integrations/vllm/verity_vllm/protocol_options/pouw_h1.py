@@ -360,7 +360,9 @@ class H1Run:
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given; nothing persists it or the tables, so their leaves open only while the run is held (`open_request`,
     `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
-    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing.
+    `CHALLENGER` only for coins from the auditor host's challenger, and any other credits nothing. With ``served``
+    (`pouw_h1_served.Served`) each call's A and z/y tables, and the weights' B, are also committed as the window Program's
+    registered values as the call is recorded, their roots in the call's tables (``registered``) under its round's root.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
     (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
@@ -368,7 +370,7 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None) -> None:
+                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         if (salt is None) == (opener is None):
@@ -389,7 +391,7 @@ class H1Run:
         self._recorded: tuple[Call, Any] | None = None
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
-        self.rounds, self._key = rounds, key if key is not None else os.urandom(32)
+        self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
         #: each call's table roots (hex; z None when the run has no exact Y for it) and each call's receipt root
         self.tables: dict[int, dict[str, str | None]] = {}
@@ -473,6 +475,8 @@ class H1Run:
         self.calls.append(call)
         if self.commit:
             self._commit_tables(call, a, s_a, y, z)
+            if self.served is not None:
+                self.tables[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, y, z)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -648,6 +652,8 @@ class H1Run:
                 a = weight.new_zeros((0, k)) if weight is not None else None
                 self._call(s, w, a, scale.reshape(-1).new_zeros(0) if scale is not None else None, weight, scale)
         self._close_rounds(self.steps - 1)
+        if self.served is not None:
+            self.served.close(self)
         bound = all("root_a" in self.bound.get(c.index, {}) for c in self.calls if c.m)
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
@@ -733,11 +739,12 @@ class H1Run:
         return self._rows(self.calls)
 
     def calls_root(self) -> bytes:
-        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound)."""
+        """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
+        ``served`` its registered trees' entries."""
         h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + self.salt)
         for row in self.manifest():
             h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-        return h.digest()
+        return h.digest() if self.served is None else hashlib.sha512(h.digest() + self.served.digest()).digest()
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
