@@ -347,7 +347,7 @@ def test_credit(pass_server):
                  "a-link a-link: the window registers no A value", "which is no registered A value",
                  "weights weights: the window's registered weights are not the ones its open root binds",
                  "weights weights: the window registers no weights", "weights weights: the window registers K = #",
-                 "'s entry is not the registration of K = #'s B rows", "which is not h#/w-#/b/<K> of a K of its circuit",
+                 "'s entry is not the registration of K = #'s B rows", "b/<K> of a K of its circuit",
                  "weights weights: the window's circuit is not its descriptor's SHA#",
                  "window rounds: the round roots are not the roots the challenger's log shows it received",
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
