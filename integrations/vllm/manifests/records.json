@@ -3,14 +3,14 @@
  "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
  "rows": {
   "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": null,
+   "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
    "tier": "heavy",
    "pinned_from": {
-    "build": "art:4d1d79cea8435abf35bba0ea131bb657594e79c3a6cf6d8ba0783f95840cb91f",
-    "run": "r20261021-185325-449a",
-    "tree": "cursor/dsv4-v2-21f3@50ec25756e3a82edb08a8f5ed12caf87ee46a8f0"
+    "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
+    "build": "art:ff43e935d9bee5b6a400f336722a6e1fd95de5220251ab5115213dd6a8d18a8e",
+    "tree": "cursor/dsv4-v2-21f3@943a4cb958fd8a3cdbbb0bc40c2fc04d8e85bfb6"
    },
-   "manifest_digest": null,
+   "manifest_digest": "9f1b0902b0f1009f96f0cbe56bbdedb18e26da2b9dbd63a2369a9dd43a5e7444",
    "programs": {
     "0": {
      "step": "c51e2e0ee9eaf68fa44c616307061c62fae475c5206794e58c17911f422cc02cae500526c224d91d7e69f93e43a5b62c4fc4f91d2e87c047a284ce031b8013cc",
