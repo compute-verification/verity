@@ -259,13 +259,13 @@ def outcome(case: dict) -> dict | None:
 
 
 def window(case: dict) -> dict:
-    got, refused = Cr.window(*credit_cases.window_args(case))
+    got, refused = Cr._window_outcomes(*credit_cases.window_args(case))
     _counted(refused, "window")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
 def period(case: dict) -> dict:
-    got, refused = Cr.period_credit(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
+    got, refused = Cr._period_outcomes(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
     _counted(refused, "period")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 

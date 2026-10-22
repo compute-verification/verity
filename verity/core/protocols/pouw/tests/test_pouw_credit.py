@@ -221,12 +221,12 @@ def _outcome(name: str, seed: int):
 
 
 def _window(name: str, seed: int):
-    return Cr.window(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
+    return Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
 
 
 def _period(name: str, seed: int):
     d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
-    return Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    return Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
 
 
 def test_a_draw_at_the_record_k():
@@ -351,18 +351,20 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
     for seed in SEEDS:
         d = cases.period_instance(random.Random(f"honest/{seed}"))
         d["windows"][0] = {**d["windows"][0], "layout": lay}
-        assert Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
+        assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
         for name, code in (("alt-layout", "circuit"), ("bad-circuit", "window")):
             got, refused = _period(name, seed)
             assert got is None and refused[0] == code, (name, refused)
 
 
 def test_window_and_period_credit_are_the_only_entries():
-    """A caller can't credit a window with a step skipped: the steps `window` composes are internal."""
-    for step in ("credited", "outcome", "a_link", "registration"):
+    """A caller can't credit a window with a step skipped: the steps `window` composes are internal, and so are the
+    forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier of record)."""
+    for step in ("credited", "outcome", "a_link", "registration", "verified", "window_outcomes", "period_outcomes"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
     assert {"window", "period_credit"} <= set(Cr.__all__)
-    assert not {"_credited", "_outcome", "_a_link", "_registration"} & set(Cr.__all__)
+    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_window_outcomes",
+                "_period_outcomes"} & set(Cr.__all__)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -373,7 +375,7 @@ def test_entries_of_another_registration_refuse(seed):
     refused."""
     d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
     assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
 
@@ -400,7 +402,7 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     call's. The window is credited."""
     d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest", per_call=True)
     assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
 
 
@@ -411,7 +413,7 @@ def test_a_call_table_registered_without_the_window_root_refuses(seed):
     opened it: its domain is not the one the window's registration gives it, so the window is refused."""
     d = cases.window_instance(random.Random(f"a-call-unbound/{seed}"), "a-call-unbound")
     assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
 
@@ -423,7 +425,7 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
     assert Cr._outcome(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
                        {"receipts": d["draw"]["receipts"]}, Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], d["k"],
                        d["proofs"]) is None
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
     got, refused = _period("proof-other-registration", seed)
     assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
@@ -434,7 +436,7 @@ def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
     """An entry whose registered root differs from the one the drawn units' sessions opened is refused: the entries are
     held to the verified sessions, never taken from the evidence as presented."""
     d = cases.window_instance(random.Random(f"entry-root/{seed}"), "entry-root")
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
 
 
@@ -451,7 +453,7 @@ def test_a_round_log_the_challenger_never_received_refuses(seed):
     rounds = CC.rounds(d["key"], d["ledger"], d["window"], d["session"], [x["root"] for x in d["rounds"]],
                        [x["coin"] for x in d["rounds"]], rc.lms_verify)
     assert rounds == ("rounds", NOT_RECEIVED)
-    assert Cr.window(*cases.window_args(d)) == (None, rounds)
+    assert Cr._window_outcomes(*cases.window_args(d)) == (None, rounds)
     got, refused = _period("never-received", seed)
     assert got is None and refused[0] == "window" and refused[1].endswith(f"rounds: {NOT_RECEIVED}")
 
@@ -465,15 +467,15 @@ def test_a_refused_outcome_credits_nothing_though_credited_would():
         got, refused = Cr._credited(*cases.credit_args(d))
         assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
         credited += len(got)
-        assert Cr.window(*cases.window_args(d))[0] is None
-        assert Cr.window(*cases.window_args(d))[1][0] == "failed"
+        assert Cr._window_outcomes(*cases.window_args(d))[0] is None
+        assert Cr._window_outcomes(*cases.window_args(d))[1][0] == "failed"
     assert credited
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
 
 
@@ -482,7 +484,7 @@ def test_a_period_counts_only_closed_and_complete(seed):
     """RT4-INT-42: a closed, complete period earns each window's credit, in its close's order; with no close, a window
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None
     assert got["windows"] == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
     for name in ("no-close", "incomplete", "missing", "order", "foreign"):
@@ -498,8 +500,8 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     for w in d["windows"]:
         args = (w[k] for k in cases.WINDOW_ARGS[2:-1])
-        assert Cr.window(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+        assert Cr._window_outcomes(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the period earns nothing" in refused[1]
     got, refused = _period("no-circuit", seed)
@@ -518,7 +520,7 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     ε is at most K, and at the next grid point down more than K, and a window whose draw establishes no ε <= 1 reports
     none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
     grid = Fraction(1, 1 << Wd.EPS_BITS)
