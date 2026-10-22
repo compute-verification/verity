@@ -270,10 +270,7 @@ theorem msgCol_hm (c : Circuit) (g p : ℕ) {n o t : ℕ} (hs : c.ports[p]!.segs
 /-- **Block `k` of a row's message holds only row bits** where the row's bits fill it (`1024 (k + 1) ≤ bits`). -/
 theorem constBit_row (p : Port) (tl : ByteArray) {k t : ℕ} (ht : t < 1024) (h : 1024 * (k + 1) ≤ p.bits) :
     HmRow.constBit p tl k t = none := by
-  have hj1 : (HmRow.blockBit t).1 = 8 * (t / 64) + (7 - t % 64 / 8) := by unfold HmRow.blockBit; omega
-  have hj2 : (HmRow.blockBit t).2 = t % 8 := rfl
-  unfold HmRow.constBit
-  simp only [hj1, hj2]
+  unfold HmRow.constBit HmRow.blockBit
   exact if_pos (by omega)
 
 /-- **A row's block's bits**, for a row of `16 · words` bits: block `K + 1` of the row's message after the prefix, padded,
