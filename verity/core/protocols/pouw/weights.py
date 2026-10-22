@@ -6,7 +6,9 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
 * **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the window's order, committed as
   `registered.Registered.commit` commits them: under `registered.domain` of the circuit's SHA-512, the name, `b_words(K)`
   words and Σn leaves, binding no window (a value held across windows), in ``hm96-sha512/row/v2``, row j's salt
-  `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending.
+  `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending. The auditor
+  hands that key to every lane serving the model (`model-key`), so it salts these rows only, never a window's A or z/y:
+  those stay under the prover's own key.
 * `weights_roots` computes each K's root streaming: it keeps each row's 64-byte leaf, never the rows, so the auditor's
   host commits Llama-3.1-8B's 1.39M rows in a few hundred MB. Its roots are `Registered.commit`'s, and `entry` is the
   registration's entry (`Registered.entry`), which credit's `_weights` checks.
