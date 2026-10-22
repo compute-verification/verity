@@ -179,7 +179,7 @@ theorem sum_u {ins t0 : ℕ} (ht : t0 < ins) (gl gc : GF128) (iv : ℕ → GF128
       of (((o.u.modify t0 (·.modify 0 (· + w))).getD t #[]).getD 0 0) * iv t = _
   rw [Finset.sum_congr rfl fun t _ => hterm t, Finset.sum_add_distrib, hz]
   unfold sumVal
-  rw [add_assoc]
+  ring
 
 /-- **A summed class's reference**: `v` read with weight `w` adds `w` times its factor, an own column's as `gOwn` adds
 it (`X`), an input's `iv`, the constant's `gc`; `p` is untouched. -/
