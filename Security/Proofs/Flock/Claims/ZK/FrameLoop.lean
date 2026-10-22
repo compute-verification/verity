@@ -102,7 +102,7 @@ noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
   match FlockDeploy.setupOf true x, cs.length with
   | some (_, spec, sts), q + 1 =>
     let rs := roundsOf spec sts
-    let ki := CoinLayer.locate rs 0 q
+    let ki := ZKMal.CoinLayer.locate rs 0 q
     let start := q - ki.2
     let n0 := rs.getD (ki.1 - 1) 0
     let crAt := fun (s n : ℕ) => (Array.range n).map fun j => wordsAt x cs (s + j + 1)
@@ -115,7 +115,7 @@ noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
 /-- Round `j`'s rep at `x`: rep round `j - 2`'s stream (`CoinLayer.locate`), past `Hello` and the link. -/
 noncomputable def repOf (x : Msg) (j : ℕ) : ℕ :=
   match FlockDeploy.setupOf true x with
-  | some (_, spec, sts) => (CoinLayer.locate (roundsOf spec sts) 0 (j - 2)).1
+  | some (_, spec, sts) => (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (j - 2)).1
   | none => 0
 
 /-- Rep stream `k`'s start at `x` (`Drive.start` at table `k / 2`'s statement): its layout and mask slot. -/
@@ -130,31 +130,32 @@ namespace LeanRelease
 
 /-- `L₀` with the loop's own frames: its transport's state is `Loop.progOf` of the decoded coins, and each round's rep is
 its rep stream, started as the loop starts it. -/
-noncomputable def withFrames (T : CoinLayer.TableData)
+noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)) :
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)) :
     LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand) :=
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
   { L₀ with
     rep := Loop.repOf
     lay := fun x k => ((Loop.startOf x k).toOption.map (·.1)).getD default
     slot := fun x k => (Loop.startOf x k).toOption.map (·.2)
-    prog := fun x h => Loop.progOf x (h.tail.map fun p => CoinLayer.rd p.2) }
+    prog := fun x h => Loop.progOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) }
 
 /-- **The release at the session loop's own frames**: `loop`'s, at `withFrames`. -/
-noncomputable def ofLoop (T : CoinLayer.TableData)
+noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)) :
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)) :
     LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand) :=
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
   loop Loop.loopNr T (withFrames T L₀)
 
 /-- **The loop's frame state reads the history only through the decoded coins**, at `Loop.progOf`: by definition, on
 every history past `Hello`, and with no salt. -/
-theorem ofLoop_progReads (T : CoinLayer.TableData)
+theorem ofLoop_progReads (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
-      ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)) (x : Msg) :
-    ProgReads (CoinLayer.session Loop.loopNr T) (ofLoop T L₀) Loop.progOf x :=
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (x : Msg) :
+    ProgReads (ZKMal.CoinLayer.session Loop.loopNr T) (ofLoop T L₀) Loop.progOf x :=
   fun _ _ _ _ _ _ => rfl
 
 end LeanRelease
