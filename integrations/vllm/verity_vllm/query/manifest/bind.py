@@ -130,17 +130,18 @@ class Binder:
         self.aliases = {k: (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         #: engine step -> (op_path, member, invocation) -> (family, port, position)
         self.rows: dict[int, dict[tuple[str, str, int], tuple[str, str, tuple]]] = defaultdict(dict)
-        #: engine step -> (op_path, member, invocation) -> the requests whose rows spell it
-        self.requests: dict[int, dict[tuple[str, str, int], set[str]]] = defaultdict(dict)
+        #: engine step -> (op_path, member, invocation) -> {request whose rows spell it: the row's position in that request's Program}
+        self.requests: dict[int, dict[tuple[str, str, int], dict[str, tuple]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         for row in rows:
             r = {**row, **(row.get("identity") or {})}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
                 continue
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))
+            pos = tuple(r.get("position") or ())
             for st in _engine_steps(r, arrivals, declared or {}):
-                self.rows[st].setdefault(key, (_family(r.get("spec")), str(r.get("port", key[1])), tuple(r.get("position") or ())))
-                self.requests[st].setdefault(key, set()).add(_request(r, declared or {}))
+                self.rows[st].setdefault(key, (_family(r.get("spec")), str(r.get("port", key[1])), pos))
+                self.requests[st].setdefault(key, {}).setdefault(_request(r, declared or {}), pos)
                 if r.get("promoted"):
                     self.promoted[st].add(key)
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
@@ -172,12 +173,15 @@ class Binder:
         return [k for k in keys if rows[k][0] in port.families and rows[k][1] == port.port]
 
     def _per_request(self, step: int, cands: list[tuple[str, str, int]], n: int | None = None) -> dict[str, list[tuple[str, str, int]]]:
-        """A call-boundary port's `cands` at `step` as each request spells them, in Program order, when every request has as many (`n`
-        if given); else {}."""
+        """A call-boundary port's `cands` at `step` as each request spells them, in (invocation, Program) order of the request's own
+        Program, when every request has as many (`n` if given); else {}.  A key two requests at different steps of their own both spell
+        (the module's own output) sits at a different place in each one's Program, and `rows` keeps only the first request's position."""
         reqs, each = self.requests.get(step, {}), defaultdict(list)
         for c in cands:
             for q in sorted(reqs.get(c, ())):
                 each[q].append(c)
+        for q, ks in each.items():
+            ks.sort(key=lambda c: (c[2], reqs[c][q], c[1]))
         sizes = {len(v) for v in each.values()}
         return dict(sorted(each.items())) if "*" not in each and len(sizes) == 1 and n in (None, *sizes) else {}
 

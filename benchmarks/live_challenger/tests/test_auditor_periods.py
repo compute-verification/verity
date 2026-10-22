@@ -276,8 +276,27 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
         "k1": (2, "ab" * 64, [first, held]), "k2": (1, CIRCUIT, [last])}
 
 
+def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, signer):
+    """PoUW's credit reads the period's draw K from its open (`draw_k`), signed before window 0's first coin."""
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27713", "hash"))
+    assert opened["body"]["draw_k"] == 27713
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    assert "draw_k" not in ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT}"))["body"]
+    assert ok(admin(host, signer, f"period-open --name v1 --lane vllm --cap 1 --circuit {CIRCUIT} --draw-k {2 ** 24}"))[
+        "body"]["draw_k"] == 2 ** 24
+    lines = A.read_ledger(host.ledger)
+    assert [json.loads(e)["body"].get("draw_k") for e in lines if json.loads(e)["kind"] == "period-open"] == [27713, None,
+                                                                                                              2 ** 24]
+    assert set(checked(host)) == {"p1", "k1", "v1"}
+
+
 @pytest.mark.parametrize("args, why", [
     ("--name p1", "the following arguments are required: --cap, --circuit"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 0", "--draw-k '0'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k -3", "--draw-k"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k 07", "--draw-k '07'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k {2 ** 24 + 1}", f"--draw-k '{2 ** 24 + 1}'"),
+    (f"--name p1 --cap 2 --circuit {CIRCUIT} --draw-k many", "--draw-k 'many'"),
     (f"--name p1 --circuit {CIRCUIT}", "required: --cap"),
     ("--name p1 --cap 2", "required: --circuit"),
     (f"--name p1 --cap 0 --circuit {CIRCUIT}", "--cap '0'"),

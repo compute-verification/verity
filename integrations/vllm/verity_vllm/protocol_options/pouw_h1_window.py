@@ -126,6 +126,16 @@ def session(entry: str, at: str, steps: int, root: bytes,
     return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root)
 
 
+def at_port(at: str, port: Any) -> str:
+    """The challenger's address for a session the gate opened on `port` (its open answer's ``port``, which the gate takes
+    at the open as the first one no live session holds): `at`'s host at that port, else `at` when the answer names none."""
+    if port is None:
+        return at
+    if type(port) is not int or not 0 < port < 1 << 16:
+        raise ValueError(f"the gate's answer names port {port!r}, not a TCP port")
+    return f"{at.rpartition(':')[0]}:{port}"
+
+
 #: ``gate(session, root)``: the gate's answer (`pouw_h1_challenger.session_of`'s form) to ``open --session SESSION --root ROOT`` (ROOT 128
 #: lowercase hex), its ``commitment`` the session's (``status SESSION``'s when the open answer's is null)
 Gate = Callable[[str, str], Mapping[str, Any]]
@@ -135,7 +145,8 @@ class Window:
     """An H1 window's session on the challenger at `at`, reserved on infra's gate (`reserved`, the gate's reserve answer,
     `reserved_of`) and opened by `open` once round 0's request table is committed (`pouw_h1.H1Run.open_window`): the gate
     opens it (`gate`) on the window's open root, `salt.window_open_root` of the weights' root `weights_root`, that
-    table's root and the session, and the salt coin opens after that root. `close` closes the session."""
+    table's root and the session, and the salt coin opens after that root, on the port the answer names (`at_port`).
+    `close` closes the session."""
 
     def __init__(self, entry: str, at: str, steps: int, weights_root: bytes, reserved: Mapping[str, Any],
                  gate: Gate) -> None:
@@ -160,7 +171,7 @@ class Window:
             raise ValueError(f"{self.entry}: the gate's answer is not session {sid} opened on the window's open root "
                              f"{root.hex()[:16]}... (salt.window_open_root of its weights' root, round 0's request table "
                              "and the session)")
-        client, c = _live(self.entry, self.at, self.steps, answer)
+        client, c = _live(self.entry, at_port(self.at, answer.get("port")), self.steps, answer)
         try:
             opening = LiveRecord(client, Wd.SALT).record(root)
         except BaseException:
@@ -195,5 +206,5 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["Gate", "RESERVE_FIELDS", "Window", "connect", "finish", "refusals", "reserved_of", "session",
+__all__ = ["Gate", "RESERVE_FIELDS", "Window", "at_port", "connect", "finish", "refusals", "reserved_of", "session",
            "session_setting"]

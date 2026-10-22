@@ -3,8 +3,8 @@ connection: a prover connects to it as it would to the auditor, and each connect
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
 `Register` and other frames relayed as they are, the `Hello` that leaves the Lean one at the auditor's draw (at the
 fixture's statement, `test_lean_hello.py`'s recorded `Hello` at the loop's nonce) and never the prover's, `Hello`'s
-answer and every coin checked, and every coin after a refusal refused. The loop serves the reps' frames on a port of its
-own, where a frame takes only the coins a session's opening fed it. `flock-circuit`'s firewalled sessions through it
+answer and every coin checked, and every coin after a refusal refused. The loop starts the reps' frames on a port of its
+own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled sessions through it
 are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import sys
 import threading
 
 import pytest
-from test_firewall_frame import ALG, LAY, rep_rounds, wire
 from test_lean_hello import (  # noqa: F401
     BIN,
     FIXTURE,
@@ -235,29 +234,43 @@ class TcpFrame:
         self.s.close()
 
 
-def test_a_frame_on_the_loops_port_draws_and_releases_but_takes_no_coins_the_loop_did_not_open(loop):
-    """The loop serves the reps' frames itself: a frame on its frames port starts and releases as `flock-firewall frame`
-    does, but its `coins` are the ones a session's opening fed it, and with no session's `Round` carrying its release
-    there are none, so the coins the request brings are refused and end the rep."""
+@pytest.mark.parametrize("line, why", [
+    (json.dumps({"layout": {"n_mlv": 1, "n_lc": 1, "n_ood0": 1, "k0": 1}}), "err a request `{line}`"),
+    ("rep " + "ab" * 64 + " 0 0", "err a rep for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
+    ("rep " + "ab" * 64 + " 0 2", "err rep 2: a table has reps 0 and 1"),
+    ("rep x 0", "err a request `rep x 0`"),
+])
+def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
+    """The loop drives the reps' frames itself: a frame starts on its frames port only as `rep SESSION TABLE REP`, for a
+    session it is serving, at the statement's start. A start the prover brings (`flock-firewall frame`'s layout line) is
+    refused, as is a rep of a session the loop isn't serving."""
     _, lp = loop
     f = TcpFrame(lp)
-    start = f.ask(json.dumps({"layout": LAY}))
-    assert isinstance(start, tuple) and len(start[1]) == int(start[0].split()[1]), start
-    r0, n = rep_rounds(ALG)[0]
-    out = f.ask(f"round {n} {len(r0)} {len(r0)}", r0 + r0)
-    assert isinstance(out, tuple) and out[0].endswith(" pass"), out
-    assert f.ask(f"coins {n}", wire([2] * n)) == "err coins for a round whose coins the session loop has not opened"
-    assert f.r.readline() == b""
+    assert f.ask(line) == why.format(line=line)
     f.close()
 
 
-def test_each_frame_draws_its_own(loop):
-    _, lp = loop
-    a, b = TcpFrame(lp), TcpFrame(lp)
-    da, db = a.ask(json.dumps({"layout": LAY})), b.ask(json.dumps({"layout": LAY}))
+@pytest.mark.slow
+def test_each_reps_frame_draws_its_own(zk):
+    """Each rep's frame the loop starts for a live session draws its own randomness at the statement's start, and starts
+    once: the two reps' draws have one size and differ, a rep started again is refused, and so is a table the session
+    doesn't have."""
+    S = Sessions(_args(zk, "pub-16.bin"))
+    s, name = S.session()
+    a, b = TcpFrame(S.lp), TcpFrame(S.lp)
+    da, db = a.ask(f"rep {name} 0 0"), b.ask(f"rep {name} 0 1")
+    assert isinstance(da, tuple) and isinstance(db, tuple), (da, db)
     assert da[0] == db[0] and da[1] != db[1]
+    c = TcpFrame(S.lp)
+    assert c.ask(f"rep {name} 0 0") == "err table 0 rep 0's frame started already"
+    c.close()
+    c = TcpFrame(S.lp)
+    assert c.ask(f"rep {name} 9 0") == "err table 9 of the session's 1"
+    c.close()
     a.close()
     b.close()
+    s.close()
+    S.lp.close()
 
 
 @pytest.fixture(scope="module")

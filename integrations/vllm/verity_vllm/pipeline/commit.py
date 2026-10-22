@@ -71,11 +71,11 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import remote_session as RS  # noqa: E402
+from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -411,6 +411,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
+        if getattr(args, "commit_scheme", None) == SR.NAME:
+            raise ValueError(f"--committer {kind} commits vllm-v1 only: {SR.NAME} is native_collect_v2b's (or name --commit-scheme vllm-v1)")
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, populate_threads=getattr(args, "pinned_populate_threads", None),
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
                                    batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)), regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
@@ -694,7 +696,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     elif comp is not None and not comp.get("ok"):                                  # [R15 B8] an omitted / relabelled / duplicated request, named
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=comp.get("error") or "composition check failed")
     ctx_ok, ctx_why = B.map_context_check(bmap, rc)
-    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode())
+    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode(), **CC.identities(rc))
     bound = [(i, e, leaf) for i, e, leaf in picks if e is not None]
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
     ops, ok = [], []
@@ -760,7 +762,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     freed = frozen.release_staging(levels_to_host=True)
     retained_after = frozen._retained_device_bytes()
     has_host = all(b is not None and not b.is_cuda for b, _u in frozen._gpu_blocks.values()) and bool(frozen._gpu_blocks)
-    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=b"after-release/" + str(pair).encode()))
+    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=b"after-release/" + str(pair).encode(), **CC.positions(rc)))
     forced: list[tuple[int, int]] = []
     steps_sorted = sorted(frozen._layouts)
     forced_why: dict[tuple[int, int], str] = {}
@@ -823,6 +825,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         com.pool = com.pool.fresh()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
         try:
+            com.replay_row_keys = dict(frozen.row_keys) if getattr(com, "rows", False) else None   # rows-sha512: the run's salts, or no root to match
             com.reset()
             com.install()
             r2 = run_workload(eng, reqs, sampling)
@@ -1016,7 +1019,8 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, "vllm-v1"), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name (any other committer, an old record's configuration)")
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
@@ -1066,8 +1070,8 @@ class Options:
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
-    replay_challenger: str | None = option("--replay-challenger", default=None, metavar="HOST:PORT", help="the served C2 replay's challenge from the auditor host's challenger (verity_vllm.pipeline.replay_coin: its replay coin 0, opened after the run root); without it the challenge is --replay-challenge or this process's own, recorded as such")
-    replay_session: str | None = option("--replay-session", default=None, metavar="JSON", help="with --replay-challenger: the challenger gate's open answer for the Commit's session, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (verity_vllm.protocol_options.pouw_h1_challenger.session_of), which the replay challenge's record carries")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (ssh -R)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
@@ -1186,8 +1190,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_manifest = None
     if getattr(args, "padded_finalize", False) and not args.required_manifest:
         raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record (B9.1); nothing to pad without it")
-    from verity_vllm.pipeline import replay_coin as RCN
-    replay_session = RCN.session_option(args.replay_challenger, args.replay_challenge, getattr(args, "replay_session", None))
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
@@ -1217,6 +1219,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
+    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
     coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
@@ -1953,10 +1956,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
+                # the run's coins, drawn once its root of record is fixed (the auditor host's session; without one, this process's own)
                 from verity_vllm.commit.challenge import challenge_positions, run_root_of
-
-                sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
+                sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode(), **CC.positions(rc, coins))
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
                 skipped = None
@@ -2243,7 +2245,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"steps {ckc.get('sampled_steps')} {ckc.get('mismatch', [])[:2]} {ckc.get('missing', [])[:2]} {ckc.get('errors', [])[:1]} {ckc.get('error', '')}", flush=True)
                 if served is not None:
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
-                    _chal, _chal_rec = RCN.drawn(args.replay_challenger, rc.run_root, replay_session, args.replay_challenge)
+                    _chal, _chal_rec = CC.replay_challenge(rc, args.replay_challenge)
                     _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge drawn after the run root
                     components.update(_sc2["components"])
                     components["replay_challenge"] = _chal_rec
@@ -2472,6 +2474,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               + (f" ({_delta.get('why')})" if not _delta.get("ok") else ""), flush=True)
     for c in coms.values():
         c.close()
+    if coins is not None and (_why := coins.close()):
+        print(f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {_why}", flush=True)
     TL.start("closure.summary")
     if args.only_arm:
         # [R15 compiled] one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
