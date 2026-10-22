@@ -326,7 +326,8 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         refine Finset.sum_congr rfl fun t' ht' => ?_
         rw [zero_add]
         refine Finset.sum_congr rfl fun k _ => ?_
-        rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+        beta_reduce
+        rw [getD_bound ((t.defs.getD d default).calls.getD i default) (readExp t lays pt d β h as ip k) j t' pt.qc (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
       · have hm' : ¬ ((((lays.getD d default).places.getD i default).ms == 1) = true) := by rw [beq_iff_eq]; exact hm
         rw [if_neg hm'] at hr
         by_cases hal : ((h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms != 0) = true
@@ -393,7 +394,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
             refine Finset.sum_comm.trans (Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun j hj => ?_)
             have hj := Finset.mem_range.mp hj
             simp only [divmod_div (show 0 < ((t.defs.getD d default).calls.getD i default).count by omega) hj, divmod_mod hj]
-            rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+            rw [getD_bound ((t.defs.getD d default).calls.getD i default) (readExp t lays pt d β h as ip k) j t' pt.qc (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
           intro j _ b r hr hq
           cases hr
           refine ⟨_, rfl, ?_⟩
@@ -435,12 +436,13 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
                 rw [hcs, Nat.mul_one, ← hB, Nat.mul_assoc, ← hh]; ring
               rw [e2, hB, ← hchV _ (lane_lt (has k hk') (lt_of_lt_of_le hj' (hcnt.trans_eq hpow.symm))) _]
               unfold sumVal
-              rw [mul_add, Finset.mul_sum]
-              refine congrArg₂ (· + ·) ?_ (Finset.sum_congr rfl fun t' ht' => ?_)
+              rw [mul_add]
+              refine congrArg₂ (· + ·) ?_ ((Finset.sum_congr rfl fun t' ht' => ?_).trans (Finset.mul_sum _ _ _).symm)
               · unfold gLow Gs eLow
                 rw [mul_add]
                 refine congrArg₂ (· + ·) ?_ ?_ <;> split_ifs <;> simp only [of_mul, mul_zero, zero_mul] <;> ring
-              · rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+              · beta_reduce
+                rw [getD_bound ((t.defs.getD d default).calls.getD i default) (readExp t lays pt d β h as ip k) j t' pt.qc (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
                 simp only [eLow, of_mul, mul_assoc]
             intro j _ b r hr hq
             cases hr
