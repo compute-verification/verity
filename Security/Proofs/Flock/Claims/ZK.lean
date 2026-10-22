@@ -118,6 +118,7 @@ import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishSwFw
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -596,6 +597,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   view, `Masked.LaneAt`) have the layout's length (`Composed.replay_asz`, `Masked.lanesAt_asz`), so the firewall's
   constraints are seven of that length (`Composed.fwCons_asz`), and where their rows are `rowsSwE`'s as whole forms
   (as `Composed.tauFw` gives them) they are `SwRows` (**`Masked.swRows_of`**).
+* `FinishSwFw`: `hinner` at the switched source. `Composed.tauFw_at` at the worker's view reads the deployed rep's
+  coins from its base (`czExe`'s), the view's masked values below `zp 64` (`Masked.swViewMasked` with
+  `Masked.swSrcE_hmk_frame`) and the model's fold, and the inner proof begins at `repSlot … (innerOff 0)`, so
+  `InnerSrc` holds at the switched source wherever the ring switch's vectors are the view's and level 0 is read at the
+  view (**`Masked.swSrcE_hinner`**, those two its premises).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
