@@ -25,8 +25,8 @@ This is a bound on a number under named premises, not a proved security level. `
 `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512 collision assumptions. At the deployed records
 `λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`), so at the deployment's dense statements `Pr[acc ∧ ¬R] ≤ t·2^{-100}`
 holds once `KSLin2On` at `RecDeploy.DenseAt` does, which only follows from premises still open: `FinPieces`,
-`VstarShowsB`, `PartChecksB`, `PartOpensB`, `DecompB`, `RunPairs` and the readers' three facts
-(`RecDeploy.ksLin2_deployed_caps`). Holo statements are candidate 3's own model.
+`PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript being injective
+(`RecDeploy.ksLin2_deployed_staged`). Holo statements are candidate 3's own model.
 -/
 
 namespace Claims.Recursion
@@ -500,8 +500,9 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
 at `B_I`, `Fdev`, `FCI` and `F0I` as premises, the named SHA-512 collision assumptions. At the deployed records, where
 `λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`) and `SessionAccepts` holds (`RecDeploy.sessionAccepts`), this makes
 `Pr[acc ∧ ¬R] ≤ t·2^{-100}` follow from `KSLin2` there. At the deployment `KSLin2` is shown only at the dense
-statements, from premises still open (`RecDeploy.ksLin2_deployed_caps`), so the deployed form is
-`bitsLin2On_of_ksLin2On`: a bound on a number under named premises, not a proved security level. -/
+statements, from premises still open (`RecDeploy.ksLin2_deployed_staged`), so the deployed form is
+`bitsLin2On_of_ksLin2On` (`RecDeploy.bitsLin2_deployed_staged`): a bound on a number under named premises, not a proved
+security level. -/
 theorem bitsLin2_of_ksLin2 [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} (hS : SessionAccepts (D.record Bd.IVStar))
     (h : KSLin2 H D Bd DO Cp) : BitsLin2 H D Bd DO Cp := by
