@@ -171,4 +171,30 @@ def Tmpl.unrollAt (t : Tmpl.Tmpl) (lays : Array Tmpl.Lay) : V Net := do
   Net.ofRowsAt t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb
     (Tmpl.posMap t lays)
 
+deriving instance DecidableEq for Group
+deriving instance DecidableEq for Sparse
+deriving instance DecidableEq for LookupTable
+deriving instance DecidableEq for Net
+
+/-- A templated unit as the verifier read it: a well-formed template, the layouts `layoutM` gave for its mode, and the
+net `unrollAt` built at them, the facts `Tmpl.foldUnit`'s value rests on. -/
+structure TmplUnit where
+  t : Tmpl.Tmpl
+  mode : Tmpl.Mode
+  lays : Array Tmpl.Lay
+  net : Net
+  wf : t.wellFormed = true
+  laid : Tmpl.layoutM t mode = .ok lays
+  unrolled : Tmpl.unrollAt t lays = .ok net
+
+/-- `t` read at `mode`: refused unless well-formed, laid out and unrolled. -/
+def TmplUnit.read (t : Tmpl.Tmpl) (mode : Tmpl.Mode) : V TmplUnit :=
+  if wf : t.wellFormed = true then
+    match laid : Tmpl.layoutM t mode with
+    | .error e => throw e
+    | .ok lays => match unrolled : Tmpl.unrollAt t lays with
+      | .error e => throw e
+      | .ok net => pure ⟨t, mode, lays, net, wf, laid, unrolled⟩
+  else throw "template: not well-formed"
+
 end Flock
