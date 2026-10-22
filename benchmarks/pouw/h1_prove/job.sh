@@ -4,23 +4,30 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
-#   2. layer.py records the window's int8 codes from the checkpoint (layer L's q/k/v/gate/up at H1's quantizers; a second
-#      window from other tokens) and run.py prepare commits, serves, draws, opens, checks the openings and has the drawn
-#      units staged, while stage.py builds the unit's circuit (the long step at K = 4096), bound to the window's Program
-#      once the commitment gives its shape
-#   3. one loopback --zk session per statement (the drawn units; the other window's unit; the drawn units on a tampered A
-#      row; the in-proof negatives, each also as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
-#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and registered reads
-#      (--program, --partition, --registered: honest ACCEPT with its units derived; flipped-z, wrong-receipt, other-window
-#      REJECT; other-window-own ACCEPT; tampered-a REJECT by its registered reads; in-receipt, in-z and their -skip runs
-#      REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
+#      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
+#      tiles' z/y records, and the weights' B rows), serves, draws, opens, checks the openings and has the drawn units
+#      staged, one statement a drawn call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
+#      the window's Program once the commitment gives its shape
+#   3. one loopback --zk session per statement (each drawn call's units, honest the first drawn unit's call; the other
+#      window's unit; honest's units on a tampered A row, with their ok rows committed afresh, and on in-z's window
+#      computing ok = 0; the in-proof negatives on honest's units, each also as
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the firewall (FC_FIREWALL=1:
+#      the Lean session loop, its level-0 draw and Lean finish) unless H1_FIREWALL=0
+#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
+#      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
+#      units derived; flipped-zy, wrong-receipt, other-window
+#      REJECT; other-window-own ACCEPT; tampered-a, ok-zero and ok-unregistered REJECT by their registered reads, each
+#      against its own public file; in-receipt, in-d, the record negatives
+#      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
+#      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
+#      H1_FIREWALL (1)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
@@ -53,6 +60,14 @@ log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER qua
   echo $! > "$W/stager.pid" )
 STAGER=$(cat "$W/stager.pid")
 setup
+FW=${H1_FIREWALL:-1}
+if [ "$FW" = 1 ]; then
+  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
+    > "$OUT/build-firewall.log" 2>&1
+  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame beside $LEAN"; kill $STAGER; exit 1; }
+  sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+fi
 
 LPY=$(cached venv-layer numpy2.5.3-tokenizers0.22.1 build_layer_venv)/bin/python
 [ -x "$LPY" ] || LPY=$PY
@@ -80,6 +95,17 @@ cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registered.json "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
+# a firewalled prover's Lean Hello sets each session up at the verifier's own statement, partition and window Program (live
+# PROTOCOL.md §10.4); the registered reads are the offline verifier's, outside the session's spec
+VLIMIT=$(declare -f vlimit)
+if [ "$FW" = 1 ]; then
+  export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
+  export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
+  # the firewall's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
+  vlimit() { :; }
+fi
+log "prove: firewall $FW"
 while IFS=$'\t' read -r kind tag D n; do
   [ "$kind" = S ] || continue
   ln -sf "$SW/circuit.txt" "$D/circuit.txt" && cp "$SW/pin.txt" "$D/pin.txt"
@@ -91,6 +117,8 @@ while IFS=$'\t' read -r kind tag D n; do
   unset FC_ZK_SELF_CHECK
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
+unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+eval "$VLIMIT"
 
 # ---- Lean: the plan's checks, then the selftest build's controls on the drawn units' statement ----------------------------
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
@@ -113,7 +141,8 @@ done < "$WK/plan.tsv"
 wait
 HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
 N=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
-if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
+HREG=$(awk -F'\t' '$1 == "C" && $2 == "honest" {print $5}' "$WK/plan.tsv")
+if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
   CASES=$CONTROLS PROVE_GB=$STAGE_GB
   controls "$HD" "$OUT/honest" tile
   for s in "$HD"/st/*/; do
@@ -121,12 +150,12 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
     c=$(basename "$s"); pub=$HD/pub.bin; [ -e "$s/pub.bin" ] && pub=$s/pub.bin
     while [ "$(jobs -rp | wc -l)" -ge "$par" ]; do wait -n; done
     $TIME "$OUT/lean/st-$c.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $HD/circuit.txt \
-      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $WK/verifier/w1.registered.json \
+      --statement verity/flock-circuit+seed-injection --public $pub $BOUND --registered $HREG \
       --session $s" > "$OUT/lean/st-$c.out" 2> "$OUT/lean/st-$c.err" &
   done
 fi
 wait
-"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --firewall "$FW" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 du -sh "$SW/circuit.txt" "$HD/sessions" 2>/dev/null | tee -a "$OUT/job.log"
 log "h1-prove: done (exit $rc)"

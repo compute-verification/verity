@@ -40,6 +40,17 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_read.sh 256 1024
 ~~~
 
+`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v1` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
+builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
+repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
+against the circuit's flat unit byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
+unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
+~~~
+
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's

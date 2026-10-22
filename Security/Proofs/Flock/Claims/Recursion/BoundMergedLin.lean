@@ -37,7 +37,8 @@ gives witnesses open round `j` differently, at two draws forked at `j` (`fork_fo
 collision among their recorded calls, the pair `linkOut` outputs. -/
 theorem Bound.linkOut_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
     {M : ℕ} (j : Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x))) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (u : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
     (us : Fin M → (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
@@ -62,7 +63,8 @@ theorem Bound.linkOut_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFloc
 `Pr_badO_le_fork` is `√(k_I·Σ_j Pr[forkColl j])`. -/
 theorem Bound.Pr_badO_le_lin (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
     [Fintype Ω] [Nonempty Ω] (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI D x)) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
         Bd.BadO decI H D DO decO P x t.1 t.2) ≤
@@ -135,7 +137,8 @@ theorem Bound.Pr_badO_le_lin (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
 protocol takes no rounds. -/
 theorem Bound.Pr_badO_le_PrFdev (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
     [Fintype Ω] [Nonempty Ω] (M : ℕ) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
         Bd.BadO decI H D DO decO P x t.1 t.2) ≤
@@ -204,7 +207,7 @@ theorem Bound.innerLin_of_plainKSAbort_binds [DecidableEq Col'] [Zero Col'] (dec
       Real.sqrt ((Inner.ofFlock Bd.deploy decI).γ (xI D x) * PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x) :=
     Real.sqrt_le_sqrt (mul_le_mul hγ h3 hBA0 (hγ0.trans hγ))
   have h4 := mul_le_mul_of_nonneg_left (Bound.Pr_badO_le_PrFdev (decO := decO) (P := P) (x := x)
-    hB hV hT hL hFk hA M) (Nat.cast_nonneg (NI D (Inner.ofFlock Bd.deploy decI) x))
+    hB hV hT hL (hFk.toAt x) (hA.toAt x) M) (Nat.cast_nonneg (NI D (Inner.ofFlock Bd.deploy decI) x))
   have h6 := Pr_innerRejects_le_PrBI hA hT hN0 hM decO x P
   have h7 : Real.sqrt ((Inner.ofFlock Bd.deploy decI).γ (xI D x) * PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x) +
       PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x ≤

@@ -684,7 +684,7 @@ lean)
   # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
   # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and

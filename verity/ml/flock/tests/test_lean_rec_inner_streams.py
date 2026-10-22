@@ -557,12 +557,12 @@ def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse,
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
     `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
-    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at public inner
-    circuits since a private session has no statements yet: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
+    holds the statement's message ports as `RecVStar.checkOwn` asks (`rec-statements --registered`, at 2d61's private
+    inner circuits, the only ones a sparse phase runs over: `ownPorts` and RecSparse's other messages, `sparseMsgs`)."""
     unit = f"rec-sparse/n{SPARSE[0]}-e{SPARSE[1]}-s{SPARSE[2]}-t{SPARSE[3]}"
     ports = {k: x["value"] for k, x in json.loads((sparse / "registered.json").read_text())["ports"].items()}
     assert {"rec-sparse-u", "rec-sparse-v"} <= set(ports.values()), ports
-    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path, holo=False), "--unit", unit, "--instances", "2",
+    p = subprocess.run([str(BIN), "rec-statements", *_shape(tmp_path), "--unit", unit, "--instances", "2",
                         "--registered", str(sparse / "registered.json")], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     (port,) = [k for k, v in ports.items() if v == "rec-sparse-u"]
@@ -767,8 +767,11 @@ def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     (tmp_path / "empty").write_bytes(b"")
+    draw = _write(tmp_path / "draw.json", {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
-             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-session", str(PLAIN / "session"),
+             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-statement",
+             "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(draw),
+             "--rec-inner-session", str(PLAIN / "session"),
              *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
     inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
     if cmd == "statement":

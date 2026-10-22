@@ -32,17 +32,17 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.BaselineDifftestMain": {
-   "why": "1,210 declarations with θ, θ's provenance and the service's trusted input (the registration log in R6's chain, the accepted record digests, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 10 pinned on a declaration worked by hand (one accepted, one negative per refusal code, theta-not-registered among them), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+   "why": "1,211 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 11 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, and theta-not-registered), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
    "args": [
     "{baseline_difftest/cases.jsonl}",
     "{baseline_difftest/expanded.jsonl}",
     "{baseline_difftest/python.jsonl}",
-    "1210"
+    "1211"
    ],
    "data": {
-    "baseline_difftest/cases.jsonl": "de3aac5d942a487ca748b3c3ce6398b71a3aa8e5fc02cbdfee56b3a2a81e76f4",
-    "baseline_difftest/expanded.jsonl": "3a96702afbc0aaea8646981aa1599a7ffcb812217ab51205bd270bc78d0e08a3",
-    "baseline_difftest/python.jsonl": "6d6a5fb2415d59e40fd2295de3a3cbb313645f434927f129102b9c4f589d18c8"
+    "baseline_difftest/cases.jsonl": "93c1bc1cd1f75038f6745282d4ab5cba45cd0cab9551c41280ba113156fe4560",
+    "baseline_difftest/expanded.jsonl": "04e7377c14f721f8ecd205fb86b021e1b35963df94fbe96990bd69734acefaad",
+    "baseline_difftest/python.jsonl": "2bcea153a2af0595349922c515d3bd7e337271f3561af6d482c3f2aee0e4a1af"
    },
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
