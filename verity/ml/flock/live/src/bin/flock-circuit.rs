@@ -1873,7 +1873,7 @@ fn interned(name: String) -> &'static str {
 fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, mch: zkv::Masking<Gate<C>>, tp: Instant, t_upstream: f64,
                                                                      mut bk: Value, g: &Arc<Mutex<Firewall>>, end: RepEnd) -> (Vec<u8>, Value) {
     use flock_live::firewall::refused;
-    let (mut inner_ch, coins, _coins_l0) = mch.finish();
+    let (mut inner_ch, coins, _coins_l0) = if end.failed { mch.finish_failed() } else { mch.finish() };
     let tz = Instant::now();
     let RepEnd { failed, mut req, finish: fin } = end;
     let relations = g.lock().unwrap_or_else(PoisonError::into_inner).relations.clone();
