@@ -354,9 +354,10 @@ def test_the_sidecar_combine_has_no_circuit_file() -> None:
         _lowering({"r": SIDECAR[0], "c": SIDECAR[1], "k": SIDECAR[2], "lane": None}, stage=True)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("VERITY_POUW_WINDOW_LOWERED_LANES"),
-                    reason="a lane's lowering is about 2M ANDs, several minutes and GBs each: set "
-                           "VERITY_POUW_WINDOW_LOWERED_LANES=1")
+                    reason="a lane's lowering is about 2M ANDs: about 150 s at 16 × 16 and 460 s at the served leaf, "
+                           "32 GB at most; set VERITY_POUW_WINDOW_LOWERED_LANES=1")
 @pytest.mark.parametrize("r,c,k,lane", LOWERED_LANES, ids=lambda v: str(v))
 def test_the_lanes_circuit_files_ports(r: int, c: int, k: int, lane: int, server) -> None:
     """A lane's circuit file holds its rows as Lean's wires say, at the least leaf whose admit row is whole words (16 × 16,
