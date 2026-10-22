@@ -332,6 +332,24 @@ mod tests {
     }
 
     #[test]
+    fn v2_rows_are_the_parsers() {
+        // Lean's Flock/Test/SpillRows.lean, case for case: a row of w leaves is in scope at the compressions the parser
+        // derives from its length, input or output row, and at one more or one fewer not
+        let serial = |w: usize| (2 * w + 17 + 127) / 128 - 1;
+        for w in 0..=2048 {
+            assert!(v2_row(&port(w, serial(w), 16 * w, true, None)), "{w}");
+            assert!(!v2_row(&port(w, serial(w) + 1, 16 * w, true, None)), "{w}");
+            assert!(serial(w) == 0 || !v2_row(&port(w, serial(w) - 1, 16 * w, true, None)), "{w}");
+        }
+        assert!(serial(56) == 1 && v2_row(&port(56, 1, 896, true, None)) && !v2_row(&port(56, 0, 896, true, None)));
+        let row = |w: usize, n: usize| port(w, n, 16 * w, true, None);
+        assert!(bit_rows(&[row(56, 1), row(1, 0)], &[1]));
+        assert!(bit_rows(&[row(1, 0), row(56, 1)], &[1]));
+        assert!(bit_rows(&[row(120, 2), row(248, 4)], &[1]));
+        assert!(!bit_rows(&[row(1, 0), row(56, 2)], &[1]));
+    }
+
+    #[test]
     fn only_hidden_outputs_admit_v2_rows() {
         let v1 = [port(64, 1, 1024, false, None)];
         let v2 = [port(64, 1, 1024, true, None), port(32, 0, 512, true, None)];
