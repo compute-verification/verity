@@ -44,7 +44,7 @@ theorem hsum_bump {κ : Type} [BEq κ] [LawfulBEq κ] [Hashable κ] [LawfulHasha
   have hK' : ∀ x, x ∈ bump m k v → x ∈ K := fun x hx => by
     unfold bump at hx
     rcases HashMap.mem_insert.1 hx with h | h
-    · rw [beq_iff_eq.1 h]; exact Finset.mem_insert_self _ _
+    · rw [← beq_iff_eq.1 h]; exact Finset.mem_insert_self _ _
     · exact hK x h
   rw [hsum_superset _ f K hK', hsum_superset m f K hK]
   have hpt : ∀ x ∈ K, of ((bump m k v).getD x 0) * f x =

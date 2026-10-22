@@ -86,6 +86,37 @@ def half (pt : FoldPt) (rho : Bool) (lo n : Nat) : SV Half := do
 
 def ident (c : Nat) : Nat × F128 := (c, 1)
 
+/-- A row's low factor at local position `P`, class copy `k`: `eq(ρ[β−6 ..], P mod 2^al)` summed, else
+`lw[q mod 64] · eq(ρ, ⌊q/64⌋)` at the low part `q = as[k] + 2^β (P mod 2^al)`. -/
+def Tab.rowLow (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (eL : Half) (k P : Nat) : F128 :=
+  if summed then eL.at (P % A)
+  else
+    let q := as.getD k 0 + B * (P % A)
+    pt.lw.getD (q % 64) 0 * eL.at (q / 64)
+
+/-- Caller reference `v` with weight `w` for a row of chunk `cx`, low part `k`: an own column at local position `pos v`
+adds at its column chunk (and slot, while explicit), an input opens, the constant adds at the row chunk. -/
+def Tab.ref (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (o : Tab) (k cx : Nat) (w : F128) (v : Nat) : Tab :=
+  if v < D.cols then
+    let P := pos v
+    if summed then { o with S := bump o.S (cx, P / A) (w * gL.at (P % A)) }
+    else
+      let q := as.getD k 0 + B * (P % A)
+      { o with P := bump o.P (cx, P / A, q % 64) (w * gL.at (q / 64)) }
+  else if v < D.cols + D.ins then { o with U := bump o.U (v - D.cols, k, cx) w }
+  else if summed then { o with C := bump o.C cx w }
+  else { o with PC := bump o.PC (cx, pt.qc % 64) (w * pt.g pt.qc) }
+
+/-- Copy `j`'s bindings of child table `ch`'s open inputs through `ref`: `wk kc j` the low parts and weights an entry at
+`kc` opens to, its row chunk re-keyed by `rm`. -/
+def Tab.bind (ref : Tab → Nat → Nat → F128 → Nat → Tab) (c : Call) (o : Tab) (j : Nat) (ch : Tab)
+    (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) : Tab :=
+  let bd := (c.bound id j).toArray
+  ch.U.fold (fun o (t', kc, cx) v =>
+    let (px, fx) := rm cx
+    (wk kc j).foldl (fun o (k, f) => ref o k px (f * v * fx) (bd.getD t' 0)) o) { o with work := o.work + ch.U.size }
+
 /-- **Walk Definition `d`'s class** `(β, as)` at local offset `off` in chunks of `2^al` (`fuel` bounds the depth;
 `multi`: reached on more than one path). A call's class is its table re-keyed if its Definition is reached on more than
 one path and placed at a multiple of its `palign`, else walked directly in `d`'s chunks. -/
@@ -105,22 +136,8 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     let n := if summed then al else β + al - 6
     let eL ← half pt true lo n
     let gL ← half pt false lo n
-    let rowLow := fun (k P : Nat) =>
-      if summed then eL.at (P % A)
-      else
-        let q := as.getD k 0 + B * (P % A)
-        pt.lw.getD (q % 64) 0 * eL.at (q / 64)
-    -- caller reference `v` with weight `w` for a row of chunk `cx`, low part `k`
-    let ref := fun (o : Tab) (k cx : Nat) (w : F128) (v : Nat) =>
-      if v < D.cols then
-        let P := pos v
-        if summed then { o with S := bump o.S (cx, P / A) (w * gL.at (P % A)) }
-        else
-          let q := as.getD k 0 + B * (P % A)
-          { o with P := bump o.P (cx, P / A, q % 64) (w * gL.at (q / 64)) }
-      else if v < D.cols + D.ins then { o with U := bump o.U (v - D.cols, k, cx) w }
-      else if summed then { o with C := bump o.C cx w }
-      else { o with PC := bump o.PC (cx, pt.qc % 64) (w * pt.g pt.qc) }
+    let rowLow := Tab.rowLow pt summed A B as eL
+    let ref := Tab.ref D pt summed A B as gL pos
     -- callee `e`'s class `(β', as')` at child-unit offset `oc`, `d`'s chunks `2^al'` in child units
     let child := fun (e β' : Nat) (as' : Array Nat) (oc al' : Nat) =>
       (do
@@ -153,12 +170,7 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     for i in [0:D.calls.size] do
       let c := D.calls.getD i default
       let pl := L.places.getD i default
-      -- copy `j`'s bindings of `ch`'s open inputs: `wk kc j` the low parts of `d` and weights an entry at `kc` opens to
-      let bind := fun (o : Tab) (j : Nat) (ch : Tab) (rm : Nat → Nat × F128) (wk : Nat → Nat → List (Nat × F128)) =>
-        let bd := (c.bound id j).toArray
-        ch.U.fold (fun o (t', kc, cx) v =>
-          let (px, fx) := rm cx
-          (wk kc j).foldl (fun o (k, f) => ref o k px (f * v * fx) (bd.getD t' 0)) o) { o with work := o.work + ch.U.size }
+      let bind := Tab.bind ref c
       if pl.ms == 1 then
         if summed && c.count != 1 then throw "split fold: copies side by side below the root"
         for j in [0:c.count] do
