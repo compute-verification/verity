@@ -12,8 +12,9 @@ import Proofs.Flock.VBridge.Decode
 * `rowBitRead_of_col`: that gives `RowBitRead` at every unit: the column's gate in the unit's own instance is that row
   bit (`FlockVBridge.Decode.keyRowOf_instC`) and, read by a row of the unit and no gate of it, is a wire of the unit
   (`IsRowsUnit.mem_io_of_read`);
-* `known_bytes`: where the known rows hold (`KnownHeld`), under flock-verify's complete check, a registrant's row of a
-  port the known content names has that known row's `sha512/row/v2` bytes;
+* `known_held_at`, `known_bytes`, `known_readAt_zero`: where the known rows hold (`KnownHeld`), under flock-verify's
+  complete check, a registrant's row of a port the known content names is read at a position of the known rows and has
+  that known row's `sha512/row/v2` bytes; a one-row known value is read at row 0;
 * `portBit_known`, `holds_known`: so `portBit` at the port's name reads the known row's bits.
 -/
 
@@ -56,13 +57,13 @@ theorem rowBitRead_of_col (u : Fin s.n) {q : Fin s.c.ports.size} {k : ℕ} (hk :
   exact key _ (Placed.rows_circuitProg s.c s.hU s.n (keyB s.c s.hU) (Aliased.keyIdx s.c (keyB s.c s.hU)) u) i x hx
     hxn rfl hkey
 
-/-- **A known port's registered row has the known row's bytes**: where the known rows hold (`KnownHeld`) and every
-port of the circuit is a port of `own` (`Flock.Registered.checkComplete`), unit `u`'s registrant's row of a port `q`
-the known content names, with rows `ks`, has the `sha512/row/v2` bytes of the known row at its read's position. -/
-theorem known_bytes {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hS : s.ServedRegistered u)
+/-- **A known port's registered row is a known row**: where the known rows hold (`KnownHeld`) and every port of the
+circuit is a port of `own` (`Flock.Registered.checkComplete`), unit `u`'s registrant's row of a port `q` the known
+content names, with rows `ks`, is read at a position of `ks` and has the `sha512/row/v2` bytes of the known row there. -/
+theorem known_held_at {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {q : Fin s.c.ports.size}
     {ks : Array (Array ℕ × ByteArray)} (hm : (s.c.ports[q].name, ks) ∈ known) :
-    (rsOf s).enc (Sum.inl (u, q)) (rowVal s u q) =
+    (s.rdU u).readAt (Sum.inl (u, q)) < ks.size ∧ (rsOf s).enc (Sum.inl (u, q)) (rowVal s u q) =
       (_root_.Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt (Sum.inl (u, q))]!.1).data.toList := by
   have hn := _root_.Flock.Registered.checkComplete_ok hcomp _ (Array.getElem_mem q.isLt)
   have hread : (s.rdU u).isRead (Sum.inl (u, q)) := (hS.1 _).2 ⟨q, rfl, hn⟩
@@ -71,6 +72,22 @@ theorem known_bytes {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hS :
     obtain ⟨pt, hpt, hpn⟩ := hn
     exact Held.find_name_eq (l := s.own.toList) (Array.mem_toList_iff.2 hpt) hpn
   exact hK _ _ hm u _ hread hname
+
+/-- A known port's registered row has the known row's bytes at its read's position (`known_held_at`). -/
+theorem known_bytes {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hS : s.ServedRegistered u)
+    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {q : Fin s.c.ports.size}
+    {ks : Array (Array ℕ × ByteArray)} (hm : (s.c.ports[q].name, ks) ∈ known) :
+    (rsOf s).enc (Sum.inl (u, q)) (rowVal s u q) =
+      (_root_.Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt (Sum.inl (u, q))]!.1).data.toList :=
+  (known_held_at hK hS hcomp hm).2
+
+/-- **A one-row known value is read at row 0**: a known port whose known content is one row is read at its position 0. -/
+theorem known_readAt_zero {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hS : s.ServedRegistered u)
+    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {q : Fin s.c.ports.size}
+    {r : Array ℕ × ByteArray} (hm : (s.c.ports[q].name, #[r]) ∈ known) :
+    (s.rdU u).readAt (Sum.inl (u, q)) = 0 := by
+  have h := (known_held_at hK hS hcomp hm).1
+  simpa using h
 
 /-- **`portBit` at a known port**: at a read bit `k` of unit 0's row of a `sha512/row/v2` port `q` without segments
 that the known content names with rows `ks`, `portBit` at `q`'s name is bit `k` of the known row at the read's
