@@ -5,8 +5,8 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
 which the Lean takes as given until it runs that verifier in-process.
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
-step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, the draw,
-`_verified`, `_outcome`'s rule, `_registration` and its period's `_weights`. `period_credit` runs `window` on each window
+step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
+`_weights`, the draw, `_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window
 of a closed, complete period. The steps are internal, so no caller credits a window with a step skipped: `_credited`
 returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the round log's roots, which only
 `core_check.rounds` holds to the ones the challenger received before each coin.
@@ -794,7 +794,7 @@ def other_registration(v: str) -> str:
             "session for): the entry is another registration's, another window's or another circuit's")
 
 
-def _registration(window: str, program: str, entries: list, ss: list[dict], layout: dict, proofs: list
+def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list
                   ) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
@@ -802,8 +802,10 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
     open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
     value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
-    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in). A step of `window`, after
-    `_a_link` has held each A value's root to the segments the round roots commit."""
+    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in), and its K's B rows, the
+    window's ``<prefix>b/<K>`` (`prefix` the descriptor's ``PREFIX``). A step of `window`, after `_a_link` has held each
+    A value's root to the segments the round roots commit and `_period_weights` each ``<prefix>b/<K>`` to the weights'
+    root its period signed."""
     def held(v: str, e: dict) -> str | None:
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
@@ -830,7 +832,7 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
             return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
                                     "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
                                     "verify every drawn unit's session against the window's committed circuit")
-        opened = False
+        opened, weights = False, False
         for port, v, root in _finding(p["registered"]):
             if names.count(v) != 1:
                 return "registration", (f"drawn unit {u}'s proof opened port {port} against {v}, which the window "
@@ -848,10 +850,15 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
                                         "another registration, or the window's entry is not the root its sessions opened")
             got = a_value(v)
             opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c)))
+            weights = weights or v == f"{prefix}b/{k}"
         if not opened:
             return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of "
                                     "the window, so nothing ties the A rows it proved to the ones the round roots "
                                     "committed: verify each drawn unit's session with the window's A value registered")
+        if not weights:
+            return "registration", (f"drawn unit {u}'s proof opened no weights {prefix}b/{k} of the window, so nothing "
+                                    "ties the B rows it proved to the ones its period registered: verify each drawn "
+                                    "unit's session with the window's weights registered")
     return None
 
 
@@ -948,6 +955,10 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     layout, why = layout_of(bytes.fromhex(descriptor))
     if why is not None:
         return None, why
+    program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
+    why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
+    if why is not None:
+        return None, why
     ss, _ = strata(layout)
     if len(calls) != len(layout["calls"]):
         return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
@@ -959,12 +970,8 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
         proofs, why = proved(layout, bytes.fromhex(descriptor), units)
     if why is None:
         why = _proved(units, proofs)
-    program = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest()
     if why is None:
-        why = _registration(window["root"], program, entries, ss, layout, proofs)
-    if why is None:
-        why = _period_weights(key, ledger, window, rounds, layout, entries, program, _prefix(bytes.fromhex(descriptor)),
-                              verify)
+        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -1039,21 +1046,22 @@ def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any
     3. `_a_link`: each A value among the window's registered `entries` is the tree over the segments those round roots
        commit;
     4. the layout of its circuit (`layout_of` of `descriptor`, the bytes in hex of the circuit its proofs were verified
-       against), the manifest one row per call of it (``manifest``);
-    5. `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
-       arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
-       for), the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
-       ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier of record's verdict
-       for a drawn unit's session (`PROOF_KEYS`);
-    6. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
-       (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
-       that descriptor and opened its registered values at their registered roots, its K's A value among them;
-    7. `_weights`, its period's: the window's registered ``<PREFIX>b/<K>`` (``PREFIX`` the descriptor's) are each K's
+       against);
+    5. `_weights`, its period's: the window's registered ``<PREFIX>b/<K>`` (``PREFIX`` the descriptor's) are each K's
        B rows once, binding no window, and their `weights_root` is the one the open of the period holding the window
        signed (`committed_weights`), and with round 0's ``requests`` in `rounds` and the session the auditor's ledger
        opened for the window it is the window's open root (`salt.window_open_root`). So every window of a period opens
        the B rows, codes and s_w, the period registered before its first window's salt, and a window of no period, or
-       of one whose open signs no weights' root, is refused."""
+       of one whose open signs no weights' root, is refused before any of its proofs is read;
+    6. the manifest one row per call of the layout (``manifest``), and `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
+       arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
+       for), the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
+       ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier of record's verdict
+       for a drawn unit's session (`PROOF_KEYS`);
+    7. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
+       (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
+       that descriptor and opened its registered values at their registered roots, its K's A value and its K's
+       ``<PREFIX>b/<K>`` among them."""
     got, why = _window(key, ledger, window, session, salt, calls, served, rounds, draw, descriptor, entries,
                        lambda *_: (proofs, None), k, verify)
     return (None, why) if got is None else (got[0], None)

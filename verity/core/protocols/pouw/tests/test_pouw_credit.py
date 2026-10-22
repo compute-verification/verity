@@ -87,12 +87,13 @@ WINDOW_EXPECT = {
     "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
     "other-registration": ("registration", OTHER_REGISTRATION), "a-call-unbound": ("registration", OTHER_REGISTRATION),
     "proof-other-registration": ("registration", OTHER_ROOT),
-    "entry-root": ("registration", OTHER_ROOT),
+    "entry-root": ("weights", Cr.OTHER_WEIGHTS),
     "proof-other-circuit": ("registration", "was verified against another circuit than the window's"),
     "proof-no-a": ("registration", "opened no A value …/a/"),
+    "proof-no-b": ("registration", "'s proof opened no weights "),
     "proof-other-call": ("registration", "opened no A value …/a/"),
     "proof-unregistered": ("registration", "which the window registers not"),
-    "entry-twice": ("registration", "which the window registers twice"),
+    "entry-twice": ("weights", "'s weights twice ("),
     "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
     "weights-period": ("weights", OTHER_PERIOD_WEIGHTS), "weights-unsigned": ("weights", UNSIGNED),
     "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
@@ -461,11 +462,12 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
-    """An entry whose registered root differs from the one the drawn units' sessions opened is refused: the entries are
-    held to the verified sessions, never taken from the evidence as presented."""
+    """An opened B entry whose registered root differs from the one the drawn units' sessions opened is refused before
+    any proof is read: its root no longer folds to the weights' root the window's open root binds (`_weights`). The
+    entries are held to the window's open root and the verified sessions, never taken from the evidence as presented."""
     d = cases.window_instance(random.Random(f"entry-root/{seed}"), "entry-root")
     got, refused = Cr._window_outcomes(*cases.window_args(d))
-    assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
+    assert got is None and refused == ("weights", Cr.OTHER_WEIGHTS)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

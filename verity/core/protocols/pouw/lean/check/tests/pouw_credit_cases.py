@@ -41,8 +41,9 @@ commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`)
 window's open root or another circuit, their trees under those domains so `_a_link` accepts them
 (``other-registration``), give one proof's session another registration's root for a value it opened
 (``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
-the sessions opened), verify one proof against another circuit, drop a proof's A ports, open an unregistered value or
-one registered twice, and break an opened entry's form. A window may instead register main's per-call form
+the sessions opened, which the weights step refuses before any proof is read) or register it twice, verify one proof
+against another circuit, drop a proof's A ports or every proof's B ports (``proof-no-b``), open an unregistered value,
+and break an opened A entry's form. A window may instead register main's per-call form
 (``per_call``): each call's A table ``…/a/<K>@<c>`` and z/y ``…/zy@<c>`` (`h1window.table`), every value but the
 weights' binding the window's open root, each drawn unit's proof opening its own call's table. Its mutations register a
 call's A table with no window root (``a-call-unbound``) and point a proof at another call's table (``proof-other-call``).
@@ -775,7 +776,11 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
         case "manifest-count":
             lin = d["layout"]["linears"][0][0]
             d["layout"]["calls"].insert(rng.randrange(len(d["layout"]["calls"]) + 1), [lin, 0])
-            d["descriptor"] = descriptor(rng, d["layout"])
+            prefix = Cr._prefix(bytes.fromhex(d["descriptor"]))
+            d["descriptor"] = descriptor(rng, d["layout"], prefix)
+            program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
+            b = {e["value"] for e in d["weights"]}
+            d["entries"] = [e for e in d["entries"] if e["value"] not in b] + _rehome(d["weights"], program, prefix)
         case "chosen":
             d, s = honest_window(rng)
             while True:
@@ -823,6 +828,9 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
         case "proof-no-a":
             p = rng.choice(d["proofs"])
             p["registered"] = {port: x for port, x in p["registered"].items() if not port.startswith("a")}
+        case "proof-no-b":
+            for p in d["proofs"]:
+                p["registered"] = {port: x for port, x in p["registered"].items() if not port.startswith("b")}
         case "proof-unregistered":
             p = rng.choice(d["proofs"])
             p["registered"]["c0"] = {"value": "h1/c/" + str(rng.randrange(100)), "root": _hex(rng)}
@@ -830,11 +838,10 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
             v = _opened(rng, d, "b")
             d["entries"].append(dict(next(e for e in d["entries"] if e["value"] == v)))
         case "entry-form":
-            v = _opened(rng, d, rng.choice("ab"))
+            v = _opened(rng, d, "a")
             e = next(e for e in d["entries"] if e["value"] == v)
             k, bad = rng.choice([("words", 0), ("words", None), ("words", True), ("words", Cr.MAX_ROWS + 1),
-                                 (G.WIDTH_KEY, 16), (G.WIDTH_KEY, 8), (G.WIDTH_KEY, "32"), ("extra", 1)]
-                                + [("leaves", Cr.MAX_ROWS + 1), ("root", "zz"), ("domain", None)] * (e["value"].split("/")[-2] == "b"))
+                                 (G.WIDTH_KEY, 16), (G.WIDTH_KEY, 8), (G.WIDTH_KEY, "32"), ("extra", 1)])
             e[k] = bad
         case "weights-period":
             e = rng.choice(d["weights"])
@@ -874,7 +881,8 @@ WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-no-period
                         "weights-no-requests", "weights-leaves"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
-                      "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-unregistered", "entry-twice", "entry-form"]
+                      "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-unregistered",
+                      "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "k-form", "k-past-units", "never-received",
                 "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES]
