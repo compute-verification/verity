@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# The analysis of record for a gate run: auditor_line.py's credited line over the verifier run RUN, its dir on this
+# machine (vy-nebius-1), copied to scratch with any files the node evicted to the store restored
+# (run-files.evicted.json: only verifier.json and the challenger's files, the line's inputs; hence --store-read).
+# PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
+# lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
+# (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
+# zero. Writes $OUT/auditor_line.json and $OUT/credit.md, each session's four checks and the line.
+#
+#   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
+#     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
+#     -- bash benchmarks/remote_session/auditor.sh
+set -u
+HERE=$(cd "$(dirname "$0")" && pwd)
+GATE=${GATE:-research@204.12.178.84}
+KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
+S=$(mktemp -d)
+trap 'rm -rf "$S"' EXIT
+cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
+: > "$OUT/fetch.log"
+if [ -f "$RUN/run-files.evicted.json" ]; then
+  art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
+    "$RUN/run-files.evicted.json")
+  uv run research data fetch "$art" --to "$S" --path 'out/verifier.json' --path 'out/challenger/*' \
+    > "$OUT/restore.log" 2>&1
+  echo "restore $art rc $?" >> "$OUT/fetch.log"
+fi
+gate() { ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$KEY" "$GATE" "$@"; }
+gate ledger > "$OUT/ledger.jsonl"
+L=$?
+echo "ledger rc $L" >> "$OUT/fetch.log"
+[ $L = 0 ] || exit 3
+PINS=()
+if gate pins > "$OUT/pins.jsonl"; then
+  PINS=(--pins "$OUT/pins.jsonl")
+  echo "pins rc 0, $(grep -c . "$OUT/pins.jsonl") lines" >> "$OUT/fetch.log"
+else
+  echo "pins rc $?: the gate serves no pins log ($(head -c 400 "$OUT/pins.jsonl"))" >> "$OUT/fetch.log"
+  mv "$OUT/pins.jsonl" "$OUT/pins.refused"
+fi
+uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
+  --period "${PERIOD:?}" --commit "${COMMIT:?}" --ledger "$OUT/ledger.jsonl" "${PINS[@]}" --table "$OUT/credit.md" \
+  > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
+W=$?
+cat "$OUT/fetch.log" "$OUT/credit.md"
+exit $W
