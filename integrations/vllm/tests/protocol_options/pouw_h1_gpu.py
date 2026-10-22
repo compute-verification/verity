@@ -47,7 +47,10 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 
 ``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
 (`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
-the trees and `pouw_h1_served.register`'s outcome (`served_check`). ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--weights-key FILE`` the weights' ``b/<K>`` are
+the period's (`pouw_h1_served.Weights`, registered from the served model under that key before the salt), and
+``--weights-only OUT`` registers them, writes their root (the period-open's ``--weights-root``) and serves nothing.
+``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -368,6 +371,20 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                            max_num_seqs=args.pop("max_num_seqs"), engine_args=args)
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
                      "effective": eng.effective, "args": decl.engine_args()}
+    entry_name = f"pouw:{PH.SCHEME}"
+    wkey = Path(a.weights_key).read_bytes() if a.weights_key else None
+    if wkey is not None and len(wkey) != 32:
+        raise ValueError(f"--weights-key {a.weights_key}: the period's weights key is 32 bytes, not {len(wkey)}")
+    if a.weights_only:
+        served = SV.Served(prover=a.prover_dir, weights_key=wkey)
+        ctx = PO.Context(stage="serve", enabled=(entry_name,),
+                         settings=h1_settings(eng, decl.rows, decl.steps, admission="round-0", served=served))
+        PO.install(eng.model, ctx).close()
+        weights = {"weights_root": served.weights.root().hex(), "circuit": served.weights.circuit,
+                   "entries": served.weights.entries()}
+        Path(a.weights_only).write_text(json.dumps(weights, indent=1) + "\n")
+        print(f"[fill] weights {weights['weights_root'][:16]}... under circuit {weights['circuit'][:16]}...", flush=True)
+        return {**doc, "weights": weights, "ok": True}
     try:
         cfg = eng.llm.llm_engine.vllm_config
         doc["engine"]["scheduler"] = {"max_num_seqs": cfg.scheduler_config.max_num_seqs,
@@ -393,12 +410,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     "static": static_check(plain + plain_solo, cap), "tokens_digest": tokens_digest(plain),
                     "solo_is_first_of_fill": plain_solo[0]["token_ids"] == plain[0]["token_ids"]}
     print(f"[fill] plain {json.dumps(doc['plain'])}", flush=True)
-    entry_name = f"pouw:{PH.SCHEME}"
     layers = None
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
-        served = SV.Served(prover=a.prover_dir) if a.served and name == "fill" else None
+        served = SV.Served(prover=a.prover_dir, weights_key=wkey) if a.served and name == "fill" else None
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -752,6 +768,12 @@ def main(argv: list[str] | None = None) -> int:
                                                             "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
+    ap.add_argument("--weights-key", metavar="FILE", help="fill with --served: the period's weights key (32 bytes, kept "
+                                                          "by pouw_h1_prover.keep_key), under which each K's b/<K> is "
+                                                          "registered before the window's salt (pouw_h1_served.Weights)")
+    ap.add_argument("--weights-only", metavar="FILE", help="fill with --weights-key: register the period's weights from "
+                                                           "the served model, write {weights_root, circuit, entries} to "
+                                                           "FILE (the period-open's --weights-root) and serve nothing")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
@@ -770,6 +792,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.stream_fd is None:
             ap.error("--close-from needs --stream-fd (the session's stream the holder took)")
         return 0 if fill_close(a)["ok"] else 1
+    if a.weights_only and not (a.weights_key and a.workload == "fill"):
+        ap.error("--weights-only is the fill workload's, with --weights-key")
     if a.handoff and not (a.handoff_state and a.challenger and a.workload == "fill"):
         ap.error("--handoff is the fill workload's, with --challenger and --handoff-state")
     if a.compile_from:

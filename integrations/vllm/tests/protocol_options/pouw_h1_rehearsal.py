@@ -4,16 +4,20 @@ fetched run on any CPU.
 
 **What it does.** Builds the window's declared Program first, on CPU (`build_program`: `pouw_h1_served.declared` for
 `pouw_h1.FILL` over Llama-3.1-8B, no window's prefix; its descriptor's SHA-512 is its `program_digest`, the period's
-circuit), unless ``--program DIR`` names a ``--program-only`` run's. Then opens the lane's period (``period-open --name P
---cap 1 --circuit DIGEST --draw-k K``, K the proof service's committed draw K, `declared_draw_k`, which core's credit
-reads as the open's ``draw_k``; infra's ``auditor.py`` takes ``--draw-k`` with the sealed pins log, and until then its
-``period-open`` refuses the flag, so the rehearsal stops there), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
+circuit), unless ``--program DIR`` names a ``--program-only`` run's. With ``--served`` it registers the period's weights
+first (`weights`: a fresh key kept in the prover's root, and ``pouw_h1_gpu.py --weights-only``, each K's ``b/<K>`` from
+the served model under the declared Program, VLLM-71), whose root W the period opens with. Then opens the lane's period
+(``period-open --name P --cap 1 --circuit DIGEST --draw-k K --weights-root W``, K the proof service's committed draw K,
+`declared_draw_k`, which core's credit reads as the open's ``draw_k``; infra's ``auditor.py`` takes ``--draw-k`` with
+the sealed pins log, and until then its ``period-open`` refuses the flag, so the rehearsal stops there; the gate has
+no verb yet for each K's circuit file's SHA-512, the open's ``circuit_files`` core's credit verifies statements
+against, so no window of it is credited), reserves the window's session (``reserve --peer PEER --scheme S --families F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
---challenger AT --session RESERVE --gate GATE``, under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
+--weights-key KEY --challenger AT --session RESERVE --gate GATE``, under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
 ``gpu-lease`` hands out): the window opens its session through ``GATE open --session S --root R`` once round
-0 is admitted, R = `salt.window_open_root(weights' root, round 0's request table root, S)`, its salt coin opens after R,
-and each call's A and z/y tables and the weights' B are committed as the window Program's registered values
+0 is admitted, R = `salt.window_open_root(W, round 0's request table root, S)`, its salt coin opens after R,
+and each call's A and z/y tables are committed as the window Program's registered values, beside the period's ``b/<K>``
 (`pouw_h1_served.Served`) under the round roots; the served Program's layout must be the declared one's. The serving process stops at its last
 served step: it hands the window and its session's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
 ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same session
@@ -32,11 +36,12 @@ after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the hon
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
 under its round's root (``a_roots``), its served layout is the declared one's, the salt key is kept past the close in
 the prover's own directory and published nowhere under ``$OUT`` (``key_custody``), and every red-team case is refused.
-Its ``credit`` is the gate-passed rows beside core's verdict (`pouw_h1_challenger.credit_reason`: ``credited``,
-``a_link``, ``outcome``), which credits nothing until each drawn unit's proof outcome exists.
+Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``weights``,
+``window``, ``calls``, ``eps``), which credits nothing until each drawn call's statement (its proof files) exists.
 
 **The rehearsal** (a research run on vy-nebius-2; the gate's tree is proofs' #2953, ``cursor/challenger-ledger-v2-7c3e``,
-whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``):
+whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the
+tree must be one whose ``period-open`` takes ``--weights-root``, #3165, on main from 5a6976c7ba):
 
     git archive --format=tar.gz -o gate-tree.tgz 882770e6009e73bdf015f4069fa77ef698d7f326 verity benchmarks/live_challenger
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz \\
@@ -184,7 +189,33 @@ def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
     return gate("status", session)
 
 
-def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path) -> dict[str, Any]:
+def weights(a: argparse.Namespace, out: Path, circuit: str) -> dict[str, Any]:
+    """The period's weights, registered once before its first window's salt (VLLM-71): a fresh key kept owner-only in
+    ``--prover-root``/period-P (`pouw_h1_prover.keep_key`), and ``pouw_h1_gpu.py --weights-only`` (under the lease with
+    ``--gpu-lease``), which registers each K's ``b/<K>`` from the served model under the declared Program and writes
+    their root, the period-open's ``--weights-root``. ``ok`` when it did, under the period's circuit."""
+    import os
+    from verity_vllm.protocol_options import pouw_h1_prover as PV
+    key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", os.urandom(32))
+    wfile = out / "weights.json"
+    argv = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out / "weights"),
+            "--weights-key", str(key), "--weights-only", str(wfile), "--at", a.pin_at, "--by", a.pin_by]
+    if a.gpu_lease:
+        argv = ["gpu-lease", "1", "--wait", "--max-min", str(a.gpu_lease), "--", *argv]
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / "weights.log", "wb") as log:
+        rc = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1]).returncode
+    doc: dict[str, Any] = {"rc": rc, "key": str(key)}
+    if rc == 0 and wfile.is_file():
+        w = json.loads(wfile.read_text())
+        doc.update(weights_root=w["weights_root"], circuit=w["circuit"],
+                   values=[(e["value"], e["leaves"], e["words"]) for e in w["entries"]])
+    doc["ok"] = rc == 0 and doc.get("circuit") == circuit
+    return doc
+
+
+def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path, weights_key: str | None = None
+          ) -> dict[str, Any]:
     """The window in two stages, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
     ``--gpu-lease``), which hands its window and its session's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
@@ -199,7 +230,8 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     scratch = Path(tempfile.mkdtemp(prefix="h1-handoff-"))
     holder = HO.Holder(scratch / "stream.sock")
     gpu = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
-    argv = [*gpu, *(["--served"] if a.served else []), "--challenger", a.at_addr, "--session", json.dumps(reserved),
+    argv = [*gpu, *(["--served"] if a.served else []), *(["--weights-key", weights_key] if weights_key else []),
+            "--challenger", a.at_addr, "--session", json.dumps(reserved),
             "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
             "--handoff", str(holder.path), "--handoff-state", str(prover / PV.STATE)]
     if a.gpu_lease:
@@ -323,7 +355,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
 
 
 def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64,
-             draw_k: int = 1) -> dict[str, Any]:
+             draw_k: int = 1, weights_root: str | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), sessions forged through it."""
     from verity.core.protocols.pouw import salt as PS
@@ -361,7 +393,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     if gate is not None:
         forged_period = f"{period}-forged"
         cases["forged_period_open"] = gate("period-open", "--name", forged_period, "--cap", "2", "--circuit", circuit,
-                                          "--draw-k", str(draw_k))
+                                          "--draw-k", str(draw_k),
+                                          *(["--weights-root", weights_root] if weights_root else []))
         forged = {}
         for name, root in (("forged_bare_weights_root", bytes.fromhex(weights)), ("forged_other_window_root", bytes.fromhex(other))):
             try:
@@ -415,8 +448,14 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
             doc["refused"] = "the gate's pubkey is not the pinned key (--key-sha512)"
             return doc
     doc["key_sha512"] = pin
+    wroot = None
+    if a.served:
+        doc["weights"] = weights(a, out, circuit)
+        if not doc["weights"]["ok"]:
+            return doc
+        wroot = doc["weights"]["weights_root"]
     doc["period_open"] = gate("period-open", "--name", a.period, "--cap", "1", "--circuit", circuit, "--draw-k",
-                              str(draw_k))
+                              str(draw_k), *(["--weights-root", wroot] if wroot else []))
     reserved = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.families(PH.FILL.steps),
                     "--minutes", str(a.minutes))
     doc["reserved"] = reserved
@@ -424,7 +463,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         doc["gate_log"] = gate.log
         return doc
     sid = reserved["session"]
-    doc["stages"] = serve(a, gate, reserved, out / "serve")
+    doc["stages"] = serve(a, gate, reserved, out / "serve", (doc.get("weights") or {}).get("key"))
     doc["serve_rc"] = doc["stages"]["rc"]
     doc["key_custody"] = key_custody(Path(doc["stages"]["prover"]["directory"]), out)
     status = gate("status", sid)
@@ -462,12 +501,12 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
             "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc),
         }
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
-                                   draw_k)
+                                   draw_k, wroot)
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
     cr = (v.get("trusted") or {}).get("credit") or {}
     doc["credit"] = {"gate_passed": ((doc.get("serve") or {}).get("gate") or {}).get("gate_passed"),
-                     **{k: cr.get(k) for k in ("credit", "calls", "credited", "a_link", "outcome", "manifest")}}
+                     **{k: cr.get(k) for k in ("credit", "calls", "manifest", "weights", "window", "k", "eps")}}
     doc["ok"] = bool(doc.get("serve", {}).get("ok") and (v.get("session") or {}).get("ok") and (v.get("trusted") or {}).get("ok")
                      and str(doc["serve"].get("a_roots")).startswith("bound") and doc["key_custody"]["ok"]
                      and (doc.get("red_team") or {}).get("all_refused")

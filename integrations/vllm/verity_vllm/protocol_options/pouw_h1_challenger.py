@@ -44,17 +44,20 @@ verifier's check that a served window's coins are that challenger's.
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
-* **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`, PRF-132), called, never copied. A period's
-  open commits its circuit, the SHA-512 of the declared window Program's descriptor (`pouw_h1_served.descriptor`),
-  and its draw K (``draw_k``, `draw_k`: the proof service's selection at `DRAW_EPS` for the credited share
-  `EXPECTED_CREDIT`) before any draw. A window's credit (`credit_reason`) is core's `credit.window` on its evidence
-  and that descriptor, whose layout core reads (`credit.layout_of`: the units of ``h1window.program``, one stratum per
-  K): the calls whose credit bits the draw coin followed, only when every unit the draw coin draws at its period's K
-  (`drawn_of`) has one accepted proof, every A value is the tree the round roots commit (`credit.a_link`), and its
-  rounds are the ones the challenger received (`trusted_rounds_reason`); it reports the ε the draw established at
-  δ = 2^-40 (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the
-  windows presented are exactly its close's, in order, the close complete, each window proving the period's circuit
-  and credited. The serving process's gate-passed count (`pouw_h1.H1Run.credit`) is never credit.
+* **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`, PRF-132), called through its one composed
+  entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
+  Program's descriptor (`pouw_h1_served.descriptor`), its draw K (``draw_k``, `draw_k`: the proof service's selection
+  at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
+  registered weights' root (`WEIGHTS_FIELD`) before any draw. A window's credit (`credit_reason`) is core's
+  `credit.window` on its evidence (`window_evidence`: its registered ``entries``, and each drawn call's `statement`,
+  proof files that credit verifies with the verifier of record itself, never a verdict) and that descriptor, whose
+  layout core reads (`credit.layout_of`): its round log the challenger's, every A table the tree its round root
+  commits, the units the draw coin draws at its period's K each with an accepted session, and the registration theirs.
+  Beside it, `weights_reason` holds the window's ``b/<K>`` to the period's signed weights' root (vllm's check of
+  `credit._weights`' rule until `credit.window` composes it). It reports the ε the draw established at δ = 2^-40
+  (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
+  presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
+  credited. The serving process's gate-passed count (`pouw_h1.H1Run.credit`) is never credit.
 """
 from __future__ import annotations
 
@@ -490,57 +493,130 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
     return CR.drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, layout, k)
 
 
-def _period_k(lines: list[str], window: Mapping[str, Any], key: ChallengerKey, verify: Any) -> tuple[int | None, Any]:
+#: the period-open's weights' root, the gate's ``--weights-root`` (`credit.weights_root` of each K's registered ``b/<K>``)
+WEIGHTS_FIELD = "weights_root"
+#: core's credit reads statements (proof files it verifies itself) only from #3143 on; before it, nothing is credited
+STATEMENTS = hasattr(CR, "STATEMENT_KEYS")
+NO_STATEMENTS = ("proof", "this tree's credit.window reads verdicts, not statements: credit verifies each drawn call's "
+                          "proof files itself from #3143 on, so no window is credited before it")
+
+
+def committed_weights(lines: Sequence[str], period: str) -> str | None:
+    """The weights' root period `period`'s open in the auditor's ledger `lines` signed (`WEIGHTS_FIELD`), or None."""
+    body = next((e["body"] for e in map(json.loads, lines)
+                 if e.get("kind") == "period-open" and e["body"].get("period") == period), {})
+    w = body.get(WEIGHTS_FIELD)
+    return w if isinstance(w, str) and _ROOT.match(w) else None
+
+
+def weights_reason(lines: Sequence[str], period: str, window: Mapping[str, Any], entries: Any, rounds: Any,
+                   descriptor: bytes, session: str) -> str | None:
+    """Why the window's registered weights aren't the ones period `period`'s open signed (VLLM-71); None when they are.
+    The open must sign a weights' root W (`committed_weights`); the window's `entries` must register, for each K of
+    `descriptor`'s layout (`credit.layout_of`), one ``…/b/<K>`` (`credit.is_held`), the registration of all of K's B rows
+    (K's linears' n in turn, `credit.b_words` words each) under the registered domain of its name and the circuit whose
+    descriptor is `descriptor`, binding no window, and no other; `credit.weights_root` of their roots must be W; and the
+    window's open root (``window.root``, the root the ledger opened `session` on) must be `salt.window_open_root` of W,
+    round 0's request table's root (`rounds`' first ``requests``) and `session`. So every code and s_w a drawn unit opens
+    at ``b/<K>`` is the period's, fixed before any window's salt. vllm's own check of `credit._weights`' rule, which
+    `credit.window` doesn't compose yet."""
+    from verity.core.protocols.pouw import salt as PS
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+
+    w = committed_weights(lines, period)
+    if w is None:
+        return (f"period {period}'s open signs no weights' root ({WEIGHTS_FIELD}, the gate's --weights-root): the period "
+                "registers each K's B rows before its first window's salt and opens with their root")
+    layout, why = _layout(descriptor)
+    if why is not None:
+        return f"{why[0]}: {why[1]}"
+    rows: dict[int, int] = {}
+    for _name, k, n in layout["linears"]:
+        rows[k] = rows.get(k, 0) + n
+    program = hashlib.sha512(bytes(descriptor)).hexdigest()
+    roots: dict[int, bytes] = {}
+    for e in entries if isinstance(entries, list) else ():
+        v = e.get("value") if isinstance(e, Mapping) else None
+        if not CR.is_held(v):
+            continue
+        k = int(v.rsplit("/", 1)[1])
+        if k not in rows or k in roots:
+            return f"the window registers weights {v}, which is not the one b/<K> of a K of its circuit"
+        n = rows[k]
+        if not (e.get("leaves") == n and e.get("words") == CR.b_words(k) and isinstance(e.get("root"), str)
+                and _ROOT.match(e["root"]) and e.get("domain") == G.domain(program, v, CR.b_words(k), n).domain_id.hex()):
+            return (f"registered weights {v} is not the registration of K = {k}'s {n} B rows of {CR.b_words(k)} words "
+                    "under the period's circuit, binding no window")
+        roots[k] = bytes.fromhex(e["root"])
+    if missing := sorted(set(rows) - set(roots)):
+        return f"the window registers no weights b/<K> of K = {missing}: every window registers its period's"
+    got = CR.weights_root(roots)
+    if got.hex() != w:
+        return (f"the window's registered weights' root {got.hex()[:16]}... is not {w[:16]}..., the one period {period}'s "
+                "open signed: a B row's codes or s_w differ from the ones the period registered before its salt")
+    requests = rounds[0].get("requests") if isinstance(rounds, list) and rounds and isinstance(rounds[0], Mapping) else None
     try:
-        name = audited_session(lines, window, key, verify).period
-    except CoinError as e:
-        return None, ("coin", f"the challenger's session is not trusted: {e}")
-    if name is None:
-        return None, ("budget", "the window is in no period of the auditor's ledger, so no period-open committed the K "
-                                f"it is drawn with ({CR.K_FIELD}): reserve its session inside a period")
-    return CR.committed_k(lines, name)
+        root = PS.window_open_root(got, bytes.fromhex(requests), session).hex()
+    except (TypeError, ValueError) as e:
+        return f"the window's open root can't be recomputed from its weights, round 0's request table and session ({e})"
+    if root != (window or {}).get("root"):
+        return ("the window's open root is not the one over the period's weights' root, its round-0 request table and its "
+                "session (salt.window_open_root)")
+    return None
+
+
+def statement(call: int, circuit: str | Path, public: str | Path, sessions: Sequence[str | Path]) -> dict[str, Any]:
+    """Call `call`'s statement as the window's evidence carries it (`credit.STATEMENT_KEYS`): its circuit file, its public
+    file and each drawn unit's session directory, its ``session.json`` and rep files (`flock-circuit --zk`), which
+    credit's verifier of record verifies itself (`proofs.verify`) against the ``--registered`` file credit builds from
+    the window's entries. Proof files, never verdicts. ValueError on a session with no ``session.json``."""
+    for s in sessions:
+        if not (Path(s) / "session.json").is_file():
+            raise ValueError(f"call {call}'s session {s} has no session.json")
+    return {"call": int(call), "circuit": str(circuit), "public": str(public), "sessions": [str(s) for s in sessions]}
 
 
 def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path], window: Mapping[str, Any],
-                  key: ChallengerKey, descriptor: bytes | None, proofs: Any = None, k: int | None = None,
-                  verify: Any = lms_verify) -> dict[str, Any]:
-    """One window's credit by core's rules (`credit`, PRF-132), on its record (`pouw_h1.CALLS_FILE`), its session
-    `directory` and ledger `heads` for `window` (``{root}``) under `key` (as `trusted_rounds_reason` reads them), the
-    bytes of the circuit its period committed `descriptor` (`pouw_h1_served.descriptor`, whose SHA-512 is the period's
-    ``circuit``) and the drawn units' proof outcomes `proofs` (``[{unit, verdict}]``). The refusal (or None) of
-    ``manifest`` (`manifest_reason`), ``rounds`` (`trusted_rounds_reason`: `core_check.salt` and `core_check.rounds` on
-    the window's log, the roots the challenger received before each coin), ``window`` (`credit.window`: each credit bit
-    fixed before the draw coin, the manifest one row per call of `descriptor`'s layout, and the units the draw coin
-    draws from it under the work law at K, each with one accepted proof) and ``a_link``; ``k``, the K the window's
-    period's open committed (`credit.committed_k`, or `k` when given); ``drawn``, the units core draws (`drawn_of`,
-    never a list the prover hands in); ``calls``, the credited calls `credit.window` returns; ``eps``, what the draw
-    established at δ (`credit.established`, a string, None when nothing); and ``credit``, the calls only when every
-    refusal is None, else None (no partial credit). A period's credit is `period_credit`'s: it counts only every window
-    of a closed, complete period, each proving its committed circuit."""
-    from verity_vllm.protocol_options import pouw_h1_served as SV
-    c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
-    out: dict[str, Any] = {"manifest": manifest_reason(record), "calls": None, "k": k, "drawn": None, "eps": None,
-                           "rounds": trusted_rounds_reason(c, directory, heads, window, key, verify)}
+                  key: ChallengerKey, descriptor: bytes | None, statements: Any = (), k: int | None = None,
+                  verify: Any = lms_verify, run: Any = None) -> dict[str, Any]:
+    """One window's credit by core's one composed entry (`credit.window`, PRF-132) on its evidence (`window_evidence`:
+    its record `pouw_h1.CALLS_FILE`, its session `directory`, `window` ``{root}``, `descriptor`, the bytes of the circuit
+    its period committed, and its drawn calls' `statements`), under the ledger at `heads` and `key`, the circuit files
+    its period's open committed (`credit.committed_files`) and its K (`credit.committed_k`, or `k`). `run` is the
+    verifier of record (default credit's own, `proofs.verify`). The refusal (or None) of ``manifest``
+    (`manifest_reason`), ``weights`` (`weights_reason`: the period's registered weights) and ``window`` (core's: each
+    credit bit fixed before the draw coin, the round log the challenger's, every A table the tree its round root
+    commits, the units the draw coin draws at K, each verified from its statement's proof files, and the window's
+    registration); ``k``; ``drawn``, the units core draws (`drawn_of`); ``calls``, the credited calls; ``eps``, what
+    the draw established at δ (`credit.established`); and ``credit``, the calls only when every refusal is None. A
+    period's credit is `period_credit`'s."""
+    out: dict[str, Any] = {"manifest": manifest_reason(record), "weights": None, "window": None, "calls": None, "k": k,
+                           "drawn": None, "eps": None}
     try:
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
-        files = remote.session_files(directory)
-        served = c.get("served")
-        digest = None if served is None else SV.digest_of(served["entries"], served["refused"]).hex()
-        salt = program_salt_of(c).hex()
-    except (CoinError, KeyError, TypeError, ValueError) as e:
-        out["window"] = ("coin", f"the window's coins or salt can't be read ({e})")
+        audited = audited_session(lines, window, key, verify)
+        ev = window_evidence(record, directory, window, statements, descriptor or b"")
+    except (CoinError, ValueError) as e:
+        out["window"] = ("coin", f"the window's coins, session or salt can't be read ({e})")
     else:
-        why = None
-        if k is None:
-            out["k"], why = _period_k(lines, window, key, verify)
+        why = None if audited.period is not None else (
+            "budget", f"the window is in no period of the auditor's ledger, so no period-open committed the K it is drawn "
+                      f"with ({CR.K_FIELD}): reserve its session inside a period")
+        files = None
+        if why is None:
+            out["weights"] = weights_reason(lines, audited.period, window, ev["entries"], ev["rounds"], descriptor or b"",
+                                            audited.session)
+            if out["k"] is None:
+                out["k"], why = CR.committed_k(lines, audited.period)
         if why is None:
             out["drawn"] = drawn_of(record, window, out["k"], descriptor)[0]
-            hexed = bytes(descriptor).hex() if isinstance(descriptor, (bytes, bytearray)) else None
-            out["calls"], why = CR.window(key.to_json(), lines, window, files, salt, rows, digest, c.get("rounds"),
-                                          c.get("draw"), hexed, proofs, out["k"], verify)
+            files, why = CR.committed_files(lines, audited.period) if STATEMENTS else (None, NO_STATEMENTS)
+        if why is None:
+            out["calls"], why = CR.window(key.to_json(), lines, ev["window"], ev["session"], ev["salt"], ev["calls"],
+                                          ev["served"], ev["rounds"], ev["draw"], ev["descriptor"], ev["entries"],
+                                          ev["statements"], files, out["k"], verify, **({} if run is None else {"run": run}))
         out["window"] = why
-    out["a_link"] = CR.a_link(c.get("rounds"), (c.get("served") or {}).get("entries"))
-    ok = all(out[x] is None for x in ("manifest", "rounds", "window", "a_link"))
+    ok = all(out[x] is None for x in ("manifest", "weights", "window"))
     if ok:
         e = CR.established(_layout(descriptor)[0], out["calls"], out["k"])
         out["eps"] = None if e is None else str(e)
@@ -548,13 +624,14 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     return out
 
 
-def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], proofs: Any,
+def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], statements: Any,
                     descriptor: bytes) -> dict[str, Any]:
-    """One window's evidence as core's `credit.period_credit` reads it (`credit.PERIOD_KEYS`, no layout: core reads the
-    layout from the descriptor), from its record (`pouw_h1.CALLS_FILE`), its session's ``out/`` `directory`, its drawn
-    units' proof outcomes `proofs` and `descriptor`, the bytes of the circuit its proofs were verified against
-    (`pouw_h1_served.descriptor`, whose SHA-512 the period's open committed as its circuit). ValueError on a record
-    whose served trees or salt can't be read."""
+    """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
+    record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw and registered ``entries``, every call table and
+    the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn calls' `statements` (`statement`: proof
+    files, never verdicts) and `descriptor`, the bytes of the circuit its period committed (`pouw_h1_served.descriptor`).
+    Round 0's ``requests`` in its round log is the request table's root its open root binds (`weights_reason`).
+    ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     c = record.get("commitment") or {}
     served = c.get("served")
@@ -564,20 +641,36 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
     except (CoinError, KeyError, TypeError) as e:
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e
     return {"calls": list(record.get("calls") or ()), "descriptor": bytes(descriptor).hex(), "draw": c.get("draw"),
-            "proofs": proofs, "rounds": c.get("rounds"), "salt": salt, "served": digest,
-            "session": remote.session_files(directory), "window": dict(window)}
+            "entries": list((served or {}).get("entries") or ()), "rounds": c.get("rounds"), "salt": salt,
+            "served": digest, "session": remote.session_files(directory), "statements": list(statements),
+            "window": dict(window)}
 
 
-def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, Any]], verify: Any = lms_verify
-                  ) -> tuple[dict | None, Any]:
-    """Period `period`'s credit and None, or None and core's refusal: `credit.period_credit` over the auditor's `ledger`
-    and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists, in its
-    order, the close complete, its open's ``draw_k`` committed, and every window credited at that K; the credit is
-    ``{windows, k, delta, eps}``."""
-    return CR.period_credit(ledger.key.to_json(), list(ledger.lines), period, [dict(w) for w in windows], verify)
+def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, Any]], verify: Any = lms_verify,
+                  run: Any = None) -> tuple[dict | None, Any]:
+    """Period `period`'s credit and None, or None and the refusal: core's `credit.period_credit` over the auditor's
+    `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
+    in its order, the close complete, its open's ``draw_k`` and circuit files committed, and every window credited at
+    that K, each drawn unit verified from its statement's proof files by `run` (default credit's verifier of record);
+    then each window's registered weights the ones the period's open signed (`weights_reason`, ``weights``). The
+    credit is ``{windows, k, delta, eps}``."""
+    if not STATEMENTS:
+        return None, NO_STATEMENTS
+    lines = list(ledger.lines)
+    got, why = CR.period_credit(ledger.key.to_json(), lines, period, [dict(w) for w in windows], verify,
+                                **({} if run is None else {"run": run}))
+    if why is not None:
+        return None, why
+    for i, w in enumerate(windows):
+        sid = audited_session(lines, w["window"], ledger.key, verify).session
+        why = weights_reason(lines, period, w["window"], w["entries"], w["rounds"], bytes.fromhex(w["descriptor"]), sid)
+        if why is not None:
+            return None, ("weights", f"window {i} of period {period}: {why}")
+    return got, None
 
 
 __all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS", "address", "carried",
-           "credit_reason", "draw_k", "draw_reason", "drawn_of", "evidence", "families", "held", "lms_verify",
-           "manifest_reason", "period_credit", "period_reason", "pinned_key", "program_salt_of", "session_of",
-           "session_reason", "trusted_rounds_reason", "window_evidence"]
+           "WEIGHTS_FIELD", "committed_weights", "credit_reason", "draw_k", "draw_reason", "drawn_of", "evidence",
+           "families", "held", "lms_verify", "manifest_reason", "period_credit", "period_reason", "pinned_key",
+           "program_salt_of", "session_of", "session_reason", "statement", "trusted_rounds_reason", "weights_reason",
+           "window_evidence"]
