@@ -1053,8 +1053,20 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
     seen := seen.insert h
   return out
 
+/-- **The inner session finished**: the coin server's record ends `finish` (`rec_live.Proxy`'s `Finish`). A stopped
+session's record (`end`: `stop`, a refusal or a connection that ended without `Finish`) is no inner proof, and neither is
+one that names no end. This refuses only what the record says: the proxy that holds a session to its schedule runs on
+the prover's side, so a record ending `finish` is not thereby on the schedule. -/
+def checkFinished (tr : Json) : V Unit := do
+  match tr.getObjValAs? String "end" with
+  | .ok "finish" => pure ()
+  | .ok e =>
+    throw s!"rec inner transcript: the inner session ended {e}, not finish: a stopped session is no inner proof"
+  | .error _ => throw "rec inner transcript: the coin server's record names no end; only a finished session is read"
+
 /-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
-`rec/inner-transcript/v1`), those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
+`rec/inner-transcript/v1`, of a session that finished: `checkFinished`),
+those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
 its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). The inner
 session's record (`--rec-inner-session`) is the prover's, the one check 5 reads, and holds the two reps alone: each rep's
 rounds' coins must be the record's at the same round, z_partial's split aside (`repCoins`). With candidate 3's streams beside
@@ -1069,6 +1081,7 @@ own count or its proof's header. -/
 def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (bound : Option String := none)
     (shape : Option StackedShape := none) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  checkFinished tr
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
   let rec_ ← match Json.parse record with
@@ -1356,7 +1369,8 @@ private def f128sOfHex (ctx : String) (xs : Array String) : V (Array F128) :=
   xs.mapM fun h => (f128OfHex h).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
 
 /-- **The circuit table's tops and the link points, as the coin server recorded them** (`--rec-inner-transcript`,
-`rec/inner-transcript/v1`): Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
+`rec/inner-transcript/v1`, of a session that finished: `checkFinished`):
+Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
 `t/rep0`'s and `t/rep1`'s rounds in round order (a round's copies of a level-0 top, `level0`, are not tops of their own),
 and the link points (`link.points`, `hello.link`'s `points × m` coins). The inner session's record `record` (the
 prover's, which check 5 reads, `RecCoins.Inner.load`) must hold those very points: check 5 takes the extra claims at the
@@ -1364,6 +1378,7 @@ record's points, and only the coin server's were drawn after `root_B`. -/
 def innerLink (tr : Json) (record : String) : V InnerLink := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then
     throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  checkFinished tr
   let hello := (tr.getObjVal? "hello").toOption.getD Json.null
   let tables := (hello.getObjValAs? (Array String) "tables").toOption.getD #[]
   let some t := (if tables.size == 1 then tables[0]? else none)
