@@ -45,6 +45,7 @@ import Proofs.Accounting.TS.SessionSound
 import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.LanesSound
 import Proofs.Accounting.TS.Session.Lanes.Layout
+import Proofs.Accounting.TS.Session.Lanes.Decode
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
