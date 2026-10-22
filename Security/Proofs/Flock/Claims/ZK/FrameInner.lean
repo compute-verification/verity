@@ -458,4 +458,75 @@ theorem roundFree_own_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (s 
   rw [← hin]
   exact congrArg (fun x : Masker => { x with owed := some n }) hu
 
+/-! ## Inside the inner proof a round keeps its count -/
+
+/-- The inner proof's label inside the inner proof is refused. -/
+theorem label_inner_twice (c : Cfg) (s : Masker) {j : ℕ} (hs : s.inner = some j) {q : Masker × ByteArray}
+    (h : s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 = .ok q) : False := by
+  have key : (s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8).map (fun _ => true) =
+      (s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8).map (fun _ => false) := by
+    unfold Masker.label
+    cases hm : c.mask <;>
+    simp only [isLabel_inner, hs, Option.isSome_some, ↓reduceIte, apply_ite (Except.map _), exMap_bind,
+      Sched.exMap_throw, Sched.throw_bindV]
+  rw [h] at key
+  exact Bool.noConfusion (Except.ok.inj key)
+
+/-- Inside the inner proof a label keeps the inner proof's count. -/
+theorem label_inner_some (c : Cfg) (s : Masker) {j : ℕ} (hs : s.inner = some j) (b : ByteArray)
+    {q : Masker × ByteArray} (h : s.label c b = .ok q) : q.1.inner = some j := by
+  by_cases hb : b = _root_.Flock.Zk.LABEL_INNER.toUTF8
+  · subst hb
+    exact (label_inner_twice c s hs h).elim
+  · rw [Sched.label_inner c s b hb h, hs]
+
+set_option maxHeartbeats 1000000 in
+/-- **Inside the inner proof a round the frame takes keeps the inner proof's count.** -/
+theorem roundFree_inner_some {c : Cfg} {s : Masker} {xb : ByteArray} {n j : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (hs : s.inner ≠ some INNER_ROUNDS) (hj : s.inner = some j) (h : roundFree c s xb n = .ok q) :
+    q.2.1.inner = some j := by
+  unfold roundFree at h
+  simp only [show (s.inner == some INNER_ROUNDS) = false from by simpa using hs, Bool.false_eq_true, ↓reduceIte,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨y, hy, hk⟩ := bindV_ok h
+  have hP := forIn_ok_inv (fun x => x.2.1.inner = some j ∧ ∀ r, x.1 = some r → r.2.1.inner = some j) _ ?hg _ _
+    ⟨hj, fun r hr => by cases hr⟩ y hy
+  · clear h hy
+    revert hk hP
+    obtain ⟨o, rest⟩ := y
+    cases o with
+    | none => intro hk _; cases hk
+    | some r => intro hk hP; cases hk; exact hP.2 _ rfl
+  · clear h hy hk
+    intro i x z hx hz
+    beta_reduce at hz
+    by_cases h1 : x.2.2.2.2 + 16 > xb.size
+    · rw [ite_cond_eq_true _ _ (eq_true h1)] at hz
+      rw [ite_eq_iff] at hz
+      rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩ <;> obtain ⟨_, h, _⟩ := bindV_ok hz <;> cases h
+    · rw [ite_cond_eq_false _ _ (eq_false h1)] at hz
+      split at hz
+      all_goals
+        repeat' (first
+          | (obtain ⟨_, _, hz⟩ := bindV_ok hz; try beta_reduce at hz)
+          | (rw [ite_eq_iff] at hz; rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩)
+          | (split at hz))
+      all_goals first
+        | contradiction
+        | (cases hz; done)
+        | (cases hz; refine ⟨hx.1, fun r hr => ?_⟩; cases hr; done)
+        | (cases hz; refine ⟨hx.1, fun r hr => ?_⟩; cases hr; exact hx.1)
+        | (cases hz
+           refine ⟨label_inner_some c x.2.1 hx.1 _ ‹Masker.label c x.2.1 _ = .ok _›, fun r hr => ?_⟩
+           cases hr)
+        | (cases hz
+           refine ⟨forIn_ok_inv (fun y : Masker × ByteArray × Array ℕ => y.1.inner = some j) _
+             (fun i y y' hy hy' => ?_) _ _ hx.1 _ ‹forIn _ _ _ = Except.ok _›, fun r hr => ?_⟩
+           · beta_reduce at hy'
+             split at hy' <;>
+               (obtain ⟨_, ha, hy'⟩ := bindV_ok hy'
+                cases hy'
+                exact (Sched.absorb_inner c _ _ ha).trans hy)
+           · cases hr)
+
 end Claims.ZKServer
