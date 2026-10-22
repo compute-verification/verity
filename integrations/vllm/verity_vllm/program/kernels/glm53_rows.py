@@ -4,7 +4,8 @@ Definition is held to where one exists (`cuda_rmsnorm_rows`, `bf16_gemm_check`, 
 `MoeRouterSigmoidBias_v1`: their Boolean forms do not fit a replay worker at GLM-5.3's statics).  The MoE rows read their plane
 inputs (`in_q` / `in_scale`, `act_q` / `act_scale`, `router_ids`, `router_w`) as the committed words the replay resolves, and gather
 the expert by the committed id.  A coordinate outside a twin's domain (a non-finite lane, an unregistered DOT / INV step, an expert
-id outside [0, E)) declines the row by name.  The row kernels register from `rows` (kernel "rows").
+id outside [0, E)) declines the row by name.  The row kernels register from `rows` (kernel "rows"), with `PROVENANCE`, the H200
+capture that holds a twin to the served kernel where the twin's Definition is not that capture's own.
 """
 from __future__ import annotations
 
@@ -25,6 +26,9 @@ EVALUATORS = {
                                   "BLOCK}: the bf16 residual add, four square-pair sums per vector, CUB BlockReduce, rsqrt.approx) -> out, residual",
     "LlBf16DotprodGemm_v1": "verity_vllm.program.registry.bf16_gemm_check.dotprod_rows (LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: BS thread "
                             "chains from +0, the VEC/2 tail, the FMA or FMUL+FADD rounds, each warp's butterfly, the warp sums in order) -> f32",
+    "LlBf16SplitKGemm_v1": "verity_vllm.program.registry.bf16_gemm_check.splitk_rows (LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT} at "
+                           "DOT HopperBF16WgmmaDot16_v1: per cluster rank and MMA warp one k16 DOT chain from +0 over its blocks, the "
+                           "warps' chains then the ranks' sums added in order from +0) -> f32",
     "Fp8GroupQuantUe8m0_v1": "verity_vllm.program.kernels.deepgemm_twins.ue8m0_group_quant_row (Fp8GroupQuantUe8m0_v1{K,G}: the fmaxf fold "
                              "from 1e-10, div.rn by 448, the ue8m0 ceiling, div.rn, cvt.rn.satfinite.e4m3) -> q, s",
     "MoeExpertFp8Gemm_v1": "verity_vllm.program.kernels.fp8_moe_rows.moe_expert_fp8_block_row over w[e], ws[e], e the committed router_ids "
@@ -45,6 +49,32 @@ EVALUATORS = {
     "MoeRouterSigmoidBias_v1": "registry.moe.MoeRouterSigmoidBias{E,TOPK,SCALE,KERNEL} by verity.ml.circuits.evaluation.evaluate_batch (the "
                                "word reference: _moe_C.grouped_topk's sigmoid, biased top-k and renormalisation) -> router_w f32, router_ids i32",
 }
+
+#: The H200 capture that holds cuteDSL `LLBf16SplitK`'s words to `bf16_gemm_check.splitk_rows`, word for word, at each gate's every
+#: split-K M (the dispatch table's SPLIT_K, the launch's grid.z): the split-K-off record and the served default's (vLLM's cuBLAS
+#: switch does not reach the cuteDSL tier).
+PROVENANCE = {"LlBf16SplitKGemm_v1": {
+    "property": "glm53_bf16_gemm_capture (verity-vllm/glm53-bf16-gemm-capture/v3), tests/properties/glm53_bf16_gemm_capture_gpu.py",
+    "run": "r20261016-234133-bbc8",
+    "record": "c0e09902b0a2057a77d81b7cda6ba8952fd15ee2836bd69f25dbac83b91d5100",
+    "record_served_default": "fe538de7a4602a9f1888c7f4eddafbf0f950db8b13008333f9488fb39aaf507f",
+    "art": {"record": "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf",
+            "run": "art:4bc894c68a07c3947a61c23263c4e062762359b73c7883dca4b3b2fca9ff16fc"},
+    "device": "vy-glm53-eu, cc 9.0 with 132 SMs, driver 580.173.02, torch 2.13.0+cu129, vLLM 0.28.1rc1.dev472+gd9105ea80",
+    "captured_utc": "2026-10-16",
+    "variants": {"split_k_off": "GO", "served_default": "GO"},
+    "cases": {
+        "glm53/router/mlp.gate": {"K": 6144, "N": 256, "TILE_K": 256, "WARPS": 4,
+                                  "SPLIT_K": {"5": 6, "8": 6, "9": 8, "11": 8, "12": 6, "16": 6}, "words": 15616, "mismatch": 0},
+        "dsv4-pro/router/mlp.gate": {"K": 7168, "N": 384, "TILE_K": 256, "WARPS": 4,
+                                     "SPLIT_K": {"5": 6, "6": 8, "7": 7, "8": 8, "12": 8, "13": 7, "16": 7}, "words": 25728, "mismatch": 0},
+    },
+    "kernels": "vLLM d9105ea80 kernels/linear/cute_dsl/ll_bf16.py LLBf16SplitK, one launch of grid (1, N/16, SPLIT_K), no reduction kernel",
+    "tests": ["tests/check/test_sampled_replay_glm53_rows.py::test_the_split_k_gate_at_glm53s_served_statics_is_the_definition",
+              "tests/program/test_kernel_self_check.py (LlBf16SplitKGemm_v1, kernel rows)"],
+    "definitions": "verity_vllm/program/registry/ll_bf16.py: LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT} (the reference; the kernel "
+                   "is checked against it, never the other way round)",
+}}
 
 
 def _float(v: Any) -> float:
@@ -104,6 +134,23 @@ def ll_dotprod_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
     N, K = int(statics["N"]), int(statics["K"])
     out = dotprod_rows(_bf16(ops[0], K)[None], _bf16(ops[1], N * K).reshape(N, K), BS=int(statics["BS"]), VEC=int(statics["VEC"]),
                        FMA=int(statics["FMA"]))
+    return {"0": np.asarray(out, dtype=np.uint32).reshape(N)}
+
+
+def ll_splitk_gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT}(x, w)` -> N f32 words."""
+    from verity_vllm.program.registry.bf16_gemm_check import splitk_rows
+    from verity_vllm.program.registry.mla_check import HOPPER
+    f = "LlBf16SplitKGemm_v1"
+    dot = prim_static(statics, "DOT", f)
+    if dot != HOPPER:
+        raise Declined(f"{f}: no twin for DOT={dot} (splitk_rows chains {HOPPER})")
+    N, K = int(statics["N"]), int(statics["K"])
+    try:
+        out = splitk_rows(_bf16(ops[0], K)[None], _bf16(ops[1], N * K).reshape(N, K), SPLIT_K=int(statics["SPLIT_K"]),
+                          TILE_K=int(statics["TILE_K"]), WARPS=int(statics["WARPS"]))
+    except (ValueError, ZeroDivisionError) as e:
+        raise Declined(f"{f}: {e}") from None
     return {"0": np.asarray(out, dtype=np.uint32).reshape(N)}
 
 
@@ -231,6 +278,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "RMSNormCudaVector8_v1": (rmsnorm_cuda_vector8, ("0",)),
     "RMSNormFusedCudaVector8_v1": (rmsnorm_fused_cuda_vector8, ("0", "1")),
     "LlBf16DotprodGemm_v1": (ll_dotprod_gemm, ("0",)),
+    "LlBf16SplitKGemm_v1": (ll_splitk_gemm, ("0",)),
     "Fp8GroupQuantUe8m0_v1": (fp8_group_quant_ue8m0, ("0", "1")),
     "MoeExpertFp8Gemm_v1": (moe_expert_fp8_gemm, ("0",)),
     "MoeExpertFp8GemmW_v1": (moe_expert_fp8_gemm_w, ("0",)),
@@ -263,6 +311,8 @@ def check_targets(family: str) -> list:
                                        for n, e, b in ((16, 1e-6, 2), (64, 1e-5, 3), (64, 1e-5, 16))],
         "LlBf16DotprodGemm_v1": [bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=k, BS=bs, VEC=v, FMA=f)
                                  for k, bs, v, f in ((128, 64, 2, 1), (128, 64, 2, 0), (160, 32, 4, 1))],
+        "LlBf16SplitKGemm_v1": [bind(ll_bf16.LlBf16SplitKGemmWord, N=n, K=k, SPLIT_K=s, TILE_K=t, WARPS=w, DOT=hop)
+                                for n, k, s, t, w in ((3, 128, 2, 32, 2), (3, 192, 4, 32, 2), (2, 256, 3, 64, 2))],
         "Fp8GroupQuantUe8m0_v1": [bind(deepgemm.Fp8GroupQuantUe8m0, K=256, G=128)],
         "MoeExpertFp8Gemm_v1": [bind(fp8_moe_experts.MoeExpertFp8Gemm, **c) for c in moe_cases],
         "MoeExpertFp8GemmW_v1": [bind(fp8_moe_experts.MoeExpertFp8GemmW, **c) for c in moe_cases],
@@ -275,13 +325,15 @@ def check_targets(family: str) -> list:
     }[family]
 
 
-def register_rows(evaluators: dict, row: Callable, sample: Callable) -> None:
-    """Register this module's row evaluators without growing the shared rows catalog (`sample(index)` = `rows._sample`)."""
+def register_rows(evaluators: dict, row: Callable, sample: Callable, provenance: dict) -> None:
+    """Register this module's row evaluators, with their provenance, without growing the shared rows catalog (`sample(index)` =
+    `rows._sample`)."""
     evaluators |= EVALUATORS
+    provenance |= PROVENANCE
     for family, (fn, returns) in ROWS.items():
         idx = _EXPERT_ARG.get(family)
         row(family, fn, returns, sample=sample({idx: "E"}) if idx is not None else None,
             check_targets=lambda rng, f=family: check_targets(f))
 
 
-__all__ = ["EVALUATORS", "ROWS", "check_targets", "register_rows"]
+__all__ = ["EVALUATORS", "PROVENANCE", "ROWS", "check_targets", "register_rows"]
