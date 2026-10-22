@@ -58,7 +58,7 @@ class _Sched:
 
 
 def committer(mp, *, retain: str = "none", retain_levels: bool = True, bounded: bool = False,
-              commit_scheme: str | None = None) -> NC.NativeCollectCommitter:
+              commit_scheme: str = "vllm-v1") -> NC.NativeCollectCommitter:
     for k in ENV:
         mp.delenv(k, raising=False)
     mp.setenv("VERITY_RETAIN", retain)

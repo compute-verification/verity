@@ -4,7 +4,8 @@ its own host when it is remote (`sampled_proofs.remote`), and each opened once, 
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings W, append A: window t's challenge σ_t, its openings coin, and append i's coin c_a
+families   challenge W, openings W, append A: window t's challenge σ_t, its openings coin, and append i's coin c_a;
+           no append family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
 R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
            the auditor's ledger, which opens one challenger session a root, ever
@@ -30,15 +31,16 @@ root, or a session whose coins are another challenger session's, is refused.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, audited_session,
-                                                             ledger_head, live_reason, order_reason)
+                                                             ledger_head, live_reason, order_reason, record_many)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -50,8 +52,10 @@ WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
 
 
 def families(windows: int, appends: int = APPENDS) -> tuple[tuple[str, int], ...]:
-    """The session's coin layout: W challenges, W openings coins and `appends` append coins."""
-    return ((CHALLENGE, windows), (OPENINGS, windows), (APPEND, appends))
+    """The session's coin layout: W challenges, W openings coins and `appends` append coins, with no append family
+    when `appends` is 0.  A session reserves exactly the coins it will use, so a challenger that released every coin
+    it committed to (the gate's `complete`) served a session that ran to its end."""
+    return ((CHALLENGE, windows), (OPENINGS, windows)) + (((APPEND, appends),) if appends != 0 else ())
 
 
 def window_root(registration: bytes, session: int) -> bytes:
@@ -81,9 +85,10 @@ def layout_reason(commitment: Any, session: int, windows: int) -> str | None:
         return (f"the coins are {commitment.scheme} epoch {commitment.epoch}'s, not {SCHEME} epoch {session}'s: "
                 "session k's coins are their own epoch")
     labels = tuple(label for label, _ in commitment.families)
-    if (labels != LABELS or commitment.family(CHALLENGE) != windows or commitment.family(OPENINGS) != windows):
+    if (labels not in (LABELS, LABELS[:2]) or commitment.family(CHALLENGE) != windows
+            or commitment.family(OPENINGS) != windows):
         return (f"the coins' layout is {[list(f) for f in commitment.families]}, not challenge {windows}, openings "
-                f"{windows}, append A")
+                f"{windows} and, if any, append A")
     return None
 
 
@@ -101,7 +106,8 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 class Coins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows, through
     `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`), committed before the session.  Each family's coins
-    open in order, each once, after the root recorded for it (`LiveRecord`, on `clock`)."""
+    open in order, each once, after the root recorded for it (`LiveRecord`, on `clock`); two the session asks for one
+    behind the other may go in one round trip (`ahead`)."""
 
     def __init__(self, challenger: Any, registration: bytes, session: int, windows: int, *,
                  clock: Callable[[], float] = time.monotonic) -> None:
@@ -110,17 +116,48 @@ class Coins:
             raise CoinError(why)
         self.challenger, self.registration, self.session, self.windows = challenger, registration, session, windows
         self.window = window_root(registration, session)
-        self._records = {label: LiveRecord(challenger, label, clock) for label in LABELS}
+        self._records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
+        self._ahead: tuple[str, int, bytes] | None = None
+        self._held: dict[tuple[str, int], LiveOpening] = {}
 
     @property
     def commitment(self) -> LiveCommitment:
         return self.challenger.commitment
 
+    @contextlib.contextmanager
+    def ahead(self, label: str, index: int, after: bytes) -> Iterator[None]:
+        """Inside, the next coin asked for is asked together with coin (`label`, `index`) after `after`, that coin
+        second, in one round trip to the challenger (`record_many`), and that coin is held until it is asked for, after
+        the same root.  For the coin the session asks for right after the next, after a root it already holds: a paced
+        session's boundary that leaves at once behind its window's close."""
+        self._ahead = (label, index, bytes(after))
+        try:
+            yield
+        finally:
+            self._ahead = None
+
     def _open(self, label: str, index: int, after: bytes) -> LiveOpening:
+        held = self._held.pop((label, index), None)
+        if held is not None:
+            if held.after != after:
+                raise CoinError(f"{label} coin {index} was asked for ahead after another root")
+            return held
+        if label not in self._records:
+            raise CoinError(f"the session's coins have no {label} family")
         r = self._records[label]
         if index != len(r.roots):
             raise CoinError(f"the next {label} coin is {len(r.roots)}, not {index}")
-        return r.record(after)
+        ahead, self._ahead = self._ahead, None
+        if ahead is None:
+            return r.record(after)
+        a_label, a_index, a_after = ahead
+        if a_label not in self._records:
+            raise CoinError(f"the session's coins have no {a_label} family")
+        q = self._records[a_label]
+        if a_index != len(q.roots) + (q is r):
+            raise CoinError(f"the {a_label} coin asked for ahead is {a_index}, not the next, {len(q.roots) + (q is r)}")
+        opening, self._held[a_label, a_index] = record_many([(r, after), (q, a_after)])
+        return opening
 
     def challenge(self, t: int, after: bytes) -> LiveOpening:
         """σ_t, released now, after `after`: R for σ_0, else the last root received."""
@@ -132,24 +169,24 @@ class Coins:
 
     def append(self, root: bytes) -> LiveOpening:
         """The next append's coin, released now, after the append's root."""
-        return self._open(APPEND, len(self._records[APPEND].roots), root)
+        return self._open(APPEND, self.appends, root)
 
     @property
     def appends(self) -> int:
         """The append coins released so far."""
-        return len(self._records[APPEND].roots)
+        return len(self.afters(APPEND))
 
     def afters(self, label: str) -> tuple[bytes, ...]:
-        """The roots family `label`'s coins were asked for after, in order."""
-        return tuple(self._records[label].roots)
+        """The roots family `label`'s coins were asked for after, in order (none for a family the layout hasn't)."""
+        return tuple(self._records[label].roots) if label in self._records else ()
 
     def opened(self, label: str) -> tuple[LiveOpening, ...]:
-        return tuple(self._records[label].openings)
+        return tuple(self._records[label].openings) if label in self._records else ()
 
     @property
     def log(self) -> tuple[dict, ...]:
         """Every family's release order on the record's clock (`LiveRecord.log`), family by family."""
-        return tuple(e for label in LABELS for e in self._records[label].log)
+        return tuple(e for r in self._records.values() for e in r.log)
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
@@ -172,7 +209,7 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     c = coins.commitment
     if signed != c:
         return "the challenger signed another coin commitment than the one the session's coins open against"
-    for label in LABELS:
+    for label, _ in c.families:
         why = order_reason(c, label, coins.afters(label), coins.opened(label))
         if why is not None:
             return why

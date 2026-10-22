@@ -631,7 +631,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
     if outside := requires_outside(lean):
         agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
                      f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
-    return [("lean-build", ["bash", "-c", ELAN + "lake build"], lean),
+    return [("lean-build", ["bash", "-c", SUITES.LAKE_BUILD], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
                                "--out", str(out / "lean-unit-cut")], ROOT),
             ("lean-audit", [sys.executable, str(Path(__file__).resolve()), "--lean-slot",
@@ -1084,7 +1084,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
+          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
           *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]

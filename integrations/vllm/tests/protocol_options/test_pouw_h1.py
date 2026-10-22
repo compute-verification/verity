@@ -20,6 +20,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
@@ -32,6 +34,7 @@ from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
@@ -338,7 +341,7 @@ def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
     other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "runner": Runner()}})
-    assert any("'runner', 'rounds' and 'admission' are H1's" in r for r in PO.refusals(other))
+    assert any("'runner', 'rounds', 'admission' and 'served' are H1's" in r for r in PO.refusals(other))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
     with pytest.raises(ValueError, match="loaded Model Runner V2"):
@@ -387,7 +390,27 @@ def test_the_option_serves_the_arms_y_and_records_each_call(tmp_path):
     record = json.loads((tmp_path / PH.CALLS_FILE).read_text())
     assert [c["base"] for c in record["calls"]] == [0, 2, 6, 8, 12, 14]
     assert record["commitment"]["rounds"] == commitment["rounds"] and record["details"]["requests"]["per_round"] == [1, 2, 0]
-    assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("unbound")
+    assert record["details"]["requests"]["gaps"] == [] and record["details"]["requests"]["a_roots"].startswith("bound")
+
+
+def test_the_served_setting_reaches_the_run_and_its_entries_the_commitment():
+    """The pouw setting ``served`` is the window's `pouw_h1_served.Served`: the install hands it to the run, which commits
+    its trees at its close and carries their entries and refusals in the commitment (here refused: n = 40 is no whole
+    block of the tile's 32 B rows)."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    with pytest.raises(ValueError, match="a fresh pouw_h1_served.Served"):
+        pouw.Settings.of({"served": object()})
+    served = SV.Served(window=bytes(64))
+    commitment, run = _serve_window(_settings(served=served))
+    assert run.served is served and any("whole blocks" in r for r in served.refused)
+    assert commitment["served"] == {"entries": [], "refused": served.refused}
+
+
+def test_the_window_connects_on_the_port_the_gate_answers():
+    from verity_vllm.protocol_options import pouw_h1_window as PHW
+    assert PHW.at_port("127.0.0.1:7811", 7812) == "127.0.0.1:7812" and PHW.at_port("h:1", None) == "h:1"
+    with pytest.raises(ValueError, match="not a TCP port"):
+        PHW.at_port("h:1", "7811")
 
 
 def test_a_layer_off_the_int8_arm_is_refused_at_install():
@@ -433,7 +456,7 @@ def _admitted_run():
     rng = np.random.default_rng(12)
     rounds, runner = _rounds(), Runner()
     run = PH.H1Run("t", SALT, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=rounds, key=KEY, admission=RQ.PER_ROUND)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     for so in (_so(("a", [1, 2, 3], 4)), _so(("b", [4], 2), ("c", [5, 6], 3), running={"a": 1}),
                _so(running={"a": 1, "b": 1, "c": 1})):
         step(so)
@@ -567,7 +590,7 @@ def test_a_request_resumed_after_a_preemption_keeps_its_one_entry():
     rng = np.random.default_rng(14)
     rounds, runner = _rounds(), Runner()
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 3, rounds=rounds, key=KEY)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     for so in (_so(("a", [1, 2], 4), ("b", [3], 4)), _so(running={"a": 1}), _so(("b", [3, 9], 4), running={"a": 1})):
         step(so)
         run.record(0, *_tap(rng, so.total_num_scheduled_tokens, 32))
@@ -586,7 +609,7 @@ def test_a_request_served_without_an_entry_is_a_gap_its_rows_are_refused_and_the
     rng = np.random.default_rng(15)
     rounds, runner = _rounds(2), Runner()
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=rounds, key=KEY)
-    step = PH.admitting(run, runner.execute_model, runner)
+    step = PHK.admitting(run, runner.execute_model, runner)
     so = _so(("a", [1], 2), running={"e": 3, "p": 1, "x": 1})
     so.scheduled_new_reqs += [SimpleNamespace(req_id="e", prompt_token_ids=None, prompt_embeds=object(),
                                               sampling_params=SimpleNamespace(max_tokens=2)),
@@ -615,7 +638,7 @@ def test_the_engines_admissions_go_to_the_next_steps_round_and_past_the_window_a
     rng = np.random.default_rng(13)
     run = PH.H1Run("t", SALT, {0: "q"}, [(32, K)], 32, 2, rounds=_rounds(2), key=bytes(32), admission=RQ.PER_ROUND)
     seen, runner = [], Runner()
-    step = PH.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
+    step = PHK.admitting(run, lambda so, *a, **kw: seen.append(so), runner)
     step(_so(("p", [1], 1)), None, True)
     step(_so(("q", [2], 1)), dummy_run=True)
     step(_so(("r", [3], 1), tokens=0))
@@ -655,17 +678,28 @@ def test_the_batch_order_is_model_runner_v2s():
 AUDITOR = "vy-challenger-1:7811"
 
 
-def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session="s-1", leaves=None,
-          ledger=None, window=None):
+def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=CH.session_id(1),
+          leaves=None, ledger=None, gated=True, reserved=True):
     """A challenger host serving one session over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
-    commitment `SESSION` (the gate's answer) names, the ledger `ledger` (its own, `<name>.jsonl`, unless given) opening it
-    for `window` (`CH.WINDOW` unless given)."""
+    commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its session, which the
+    ledger `ledger` (its own, `<name>.jsonl`, unless given) reserves (unless not `reserved`), and `_gate` opens it, the
+    ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once)."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed, session, leaves,
-                   ledger, window)
+                   ledger, gated=gated, reserved=reserved)
     monkeypatch.setattr(R.RemoteChallenger, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
     monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
+    monkeypatch.setitem(RESERVED, "session", session)
+    monkeypatch.setitem(_GATES, "host", host)
     return host
+
+
+_GATES: dict = {}
+
+
+def _gate(session, root):
+    """The gate (`pouw_h1_window.Gate`) of the host `_host` made last."""
+    return _GATES["host"].open(session, root)
 
 
 def _serve_window(settings):
@@ -688,28 +722,36 @@ def _serve_window(settings):
 
 #: the challenger gate's open answer for the window (RT4-INT-17): its Commit root and coin commitment (the host's, `_host`)
 SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
+#: the gate's reserve answer for an H1 window (its session `_host`'s), which the window opens itself (`_gate`)
+RESERVED = {"session": CH.session_id(1), "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
 
 
 def _remote(**kw):
-    return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": SESSION,
-                     "admission": "per-round", **kw}}
+    return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": RESERVED,
+                     "gate": _gate, "admission": "per-round", **kw}}
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
-    """With the setting ``challenger`` the window's one session on the auditor host opens its salt coin after the weights'
-    root and round s's coin after round s's root, and closes once the window has finished; the verifier, reading the
-    challenger's own directory under its key, trusts the window's coins (`trusted_rounds_reason`), and every request entry
-    and slot still opens under its round's root."""
+    """With the setting ``challenger`` the window's one session on the auditor host, reserved on the gate, is opened on the
+    window's open root once round 0 is admitted (over the weights' root, round 0's request table and the session), its
+    salt coin after that root and round s's coin after round s's root, and closes once the window has finished; the
+    verifier, reading the challenger's own directory under its key, trusts the window's coins (`trusted_rounds_reason`),
+    and every request entry and slot still opens under its round's root."""
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
     commitment, run = _serve_window(_remote())
     assert host.ended() is None and run.details["challenger"] == {"closed": True}
     coins = host.challenger.commitment
     assert commitment["coin_source"] == "challenger" and commitment["coins"] == commitment["round_coins"] == coins.to_json()
-    assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], CH.WINDOW, host.key) is None
+    root = PS.window_open_root(bytes.fromhex(commitment["weights_root"]), bytes.fromhex(commitment["requests_root"]),
+                                 CH.session_id(1))
+    assert host.window == {"root": root.hex()} and commitment["rounds"][0]["requests"] == commitment["requests_root"]
+    assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key) is None
     received = R.released_roots(host.directory / R.RELEASES, coins)
-    assert received[Wd.SALT] == (bytes.fromhex(commitment["weights_root"]),)
-    assert received[Wd.DRAW] == (bytes.fromhex(commitment["draw"]["root"]),) and commitment["session"] == SESSION
+    assert received[Wd.SALT] == (root,)
+    assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
+                                     "commitment": coins.root.hex()}
+    assert received[Wd.DRAW] == (bytes.fromhex(commitment["draw"]["root"]),)
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
     assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
                                  run.open_first(e.index), admission=RQ.PER_ROUND) is None for e in run.requests)
@@ -720,40 +762,154 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
         PHC.pinned_key(host.directory / R.KEY, "00" * 64)
 
 
+def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
+    """`pouw_h1_challenger.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
+    call's table root, a served tree's entry or a round's root changed is refused."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    _host(tmp_path, monkeypatch)
+    _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    assert PHC.manifest_reason(record) is None and record["commitment"]["served"]["refused"]
+
+    def edited(edit):
+        doc = json.loads(json.dumps(record))
+        edit(doc)
+        return PHC.manifest_reason(doc)
+    first = next(i for i, c in enumerate(record["calls"]) if c.get("tables"))
+    step = record["calls"][first]["step"]
+    assert f"step {step}'s calls in the record" in edited(lambda d: d["calls"][first]["tables"].update(a="00" * 64))
+    assert f"of step {step} has no A table root" in edited(lambda d: d["calls"][first].pop("tables"))
+    assert "which no round of the log closes" in edited(lambda d: d["commitment"]["rounds"].pop())
+    assert "calls_root is not over" in edited(lambda d: d["commitment"]["served"].update(refused=[]))
+    assert "round 1's root is not over" in edited(lambda d: d["commitment"]["rounds"][1].update(root="00" * 64))
+    assert "salt can't be derived" in edited(lambda d: d["commitment"].pop("salt_opening"))
+
+
+def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refused(tmp_path, monkeypatch):
+    """A window whose served calls commit no A table has round roots over calls without one, each opened in order before
+    its coin, and a calls_root over the same rows, so its slot tables name A-table leaves that no round root commits: the
+    run says so (``a_roots``) and `manifest_reason` refuses its record."""
+    _host(tmp_path, monkeypatch)
+    real = PH.H1Run._commit_tables
+
+    def bare(self, call, *args):
+        real(self, call, *args)
+        if call.m:
+            self.tables[call.index] = {**self.tables[call.index], "a": None}
+    monkeypatch.setattr(PH.H1Run, "_commit_tables", bare)
+    _commitment, run = _serve_window(_remote(transcript_dir=str(tmp_path / "w")))
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    first = next(c for c in record["calls"] if c["served"])
+    want = f"call {first['index']} of step {first['step']} has no A table root"
+    assert run.details["requests"]["a_roots"].startswith(f"unbound: {want}")
+    assert PHC.manifest_reason(record).startswith(want)
+
+
+def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
+    """`honest` (a served window's commitment) with its coins swapped for those of session `CH.session_id(seed)`, which
+    the auditor's ledger reserved (unless not `reserved`) and opened on `opened_on` and whose salt coin opened after
+    `salt_after`, then its round and draw coins after the window's own roots; and that session's host (`name`)."""
+    sid = CH.session_id(seed)
+    host = _host(tmp_path, monkeypatch, name=name, seed=seed, session=sid, reserved=reserved)
+    answer = host.open(sid, opened_on.hex())
+    salt = host.client.open(Wd.SALT, 0, salt_after)
+    log = [{**r, "coin": host.client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()}
+           for s, r in enumerate(honest["rounds"])]
+    root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
+    draw = host.client.open(Wd.DRAW, 0, root)
+    host.client.close()
+    assert host.ended() is None
+    coins = host.challenger.commitment.to_json()
+    return {**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
+            "session": PHC.carried(answer), "draw": {**honest["draw"], "root": root.hex(), "coin": draw.to_json()}}, host
+
+
+def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monkeypatch):
+    """VLLM-60: a served window's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
+    its round-0 request table's root (committed before the salt, round 0's ``requests``) and its session, the root the
+    auditor's ledger opened that session on (`core_check.salt`). Refused: a session the ledger opened on another window's
+    root, on the bare weights' root or on another session's open root, whatever its salt followed; a session opened on its
+    own root whose salt followed
+    another window's root or the bare weights' root; a window whose record names another round-0 table or another
+    session; and a round 0 whose request table isn't the one the open root is over. Each forged session's other coins
+    follow the window's own roots, so only the salt is off."""
+    a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))
+    honest, _ = _serve_window(_remote())
+    assert a.ended() is None
+    assert PHC.trusted_rounds_reason(honest, a.directory, [a.ledger.path], a.window, a.key) is None
+    weights, requests = bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"])
+    other = bytes.fromhex(a.window["root"])
+
+    def why(name, seed, opened_on, salt_after):
+        commits, host = _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after)
+        return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key)
+    def opens(seed):
+        return PS.window_open_root(weights, requests, CH.session_id(seed))
+    assert why("own", 2, opens(2), opens(2)) is None
+    assert why("other", 3, other, other) == f"the window's salt: {CC.OTHER_WINDOW}"
+    assert why("bare", 4, weights, weights) == f"the window's salt: {CC.OTHER_WINDOW}"
+    assert why("late", 5, opens(5), other) == f"the window's salt: {CC.NOT_RECEIVED}"
+    assert why("early", 6, opens(6), weights) == f"the window's salt: {CC.NOT_RECEIVED}"
+    assert why("seventh", 7, opens(2), opens(2)) == f"the window's salt: {CC.OTHER_WINDOW}"
+
+    def relabeled(**kw):
+        return PHC.trusted_rounds_reason({**honest, **kw}, a.directory, [a.ledger.path], a.window, a.key)
+    assert relabeled(requests_root="ee" * 64) == f"the window's salt: {CC.OTHER_WINDOW}"
+    assert relabeled(session={**honest["session"], "session": CH.session_id(2)}) == (
+        f"the window records session {CH.session_id(2)!r}, not {CH.session_id(0xa)}, the one the auditor's ledger "
+        "opened on its root")
+    assert relabeled(rounds=[{**honest["rounds"][0], "requests": "ee" * 64}, *honest["rounds"][1:]]) == (
+        "round 0's request table is not the one the window's open root is over (its requests_root)")
+
+
+def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
+    """VLLM-60: a window's open root binds the session the auditor's signed reserve entry names (S, `core_check.salt`), so
+    a session the ledger opened on the window's own open root without reserving it first is refused, its salt and every
+    other coin following the window's own roots."""
+    a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))
+    honest, _ = _serve_window(_remote())
+    assert a.ended() is None
+    own = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]),
+                              CH.session_id(2))
+    commits, host = _salted(tmp_path, monkeypatch, "unreserved", 2, honest, own, own, reserved=False)
+    assert [json.loads(line)["kind"] for line in host.ledger.lines] == ["open", "end"]
+    assert PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key) == (
+        f"the window's salt: {CC.NO_RESERVE}")
+
+
 def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     """The verifier trusts only the session the auditor's signed ledger opens and ends for the window, under the key the
     deployment pins, its record and log signed by its own challenger, and the roots that log shows: a window whose coins
     are held in the serving process, or come from a challenger host of the prover's under its own key, is refused; so is a
     missing ledger or an unsigned log, a ledger cut before the session's end, and a window whose round roots (each coin's
     ``after`` rewritten to match) or salt root aren't the ones the challenger received, or whose log is short."""
-    w = CH.WINDOW
-    auditor = _host(tmp_path, monkeypatch)
+    auditor = _host(tmp_path, monkeypatch, gated=False)
     auditor.client.close()
     assert auditor.ended() is None
     local, _ = _serve_window(_settings())
     assert local["coin_source"] == "in-process"
-    why = PHC.trusted_rounds_reason(local, auditor.directory, [auditor.ledger.path], w, auditor.key)
+    why = PHC.trusted_rounds_reason(local, auditor.directory, [auditor.ledger.path], CH.WINDOW, auditor.key)
     assert why.startswith("the window's round_coins ") and "coins from a challenger the verifier doesn't hold" in why
-    prover = _host(tmp_path, monkeypatch, name="prover", seed=2, session="s-2")
+    prover = _host(tmp_path, monkeypatch, name="prover", seed=2, session=CH.session_id(2))
     honest, _ = _serve_window(_remote())
     assert prover.ended() is None
-    ours = prover.ledger.path
+    ours, w = prover.ledger.path, prover.window
     assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key) is None
     assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, auditor.key).startswith(
-        "the challenger's session is not trusted: the auditor's ledger entry 0 is signed under challenger key ")
+        "the challenger's session is not trusted: the auditor's ledger entry 1 is signed under challenger key ")
     forged = CH.Ledger(tmp_path / "forged.jsonl", 2, named=auditor.key)
-    forged.open("s-2", w)
-    forged.end("s-2", prover.directory, True)
+    forged.open(CH.session_id(2), w)
+    forged.end(CH.session_id(2), prover.directory, True)
     assert PHC.trusted_rounds_reason(honest, prover.directory, [forged.path], w, auditor.key) == (
         "the challenger's session is not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify "
         "under the challenger key")
     assert PHC.trusted_rounds_reason(honest, prover.directory, [tmp_path / "none.jsonl"], w, prover.key).startswith(
         f"the challenger's session is not trusted: {LC.NO_AUDIT}")
     cut = tmp_path / "cut.jsonl"
-    cut.write_text(ours.read_text().splitlines(keepends=True)[0])
+    cut.write_text("".join(ours.read_text().splitlines(keepends=True)[:2]))
     assert PHC.trusted_rounds_reason(honest, prover.directory, [cut], w, prover.key) == (
-        "the challenger's session is not trusted: the auditor's ledger has no end for session s-2: the session never "
-        "ended, or the ledger is older than its end")
+        f"the challenger's session is not trusted: the auditor's ledger has no end for session {CH.session_id(2)}: the "
+        "session never ended, or the ledger is older than its end")
     (tmp_path / "empty").mkdir()
     assert PHC.trusted_rounds_reason(honest, tmp_path / "empty", [ours], w, prover.key) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger "
@@ -774,22 +930,23 @@ def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     assert PHC.trusted_rounds_reason({**honest, "rounds": log[:2]}, prover.directory, [ours], w, prover.key) == \
         "the window's round log has 2 rounds, not its 3 steps"
     assert PHC.trusted_rounds_reason({**honest, "weights_root": "ee" * 64}, prover.directory, [ours], w, prover.key) == \
-        "the challenger's log does not show the weights' root as the one root its salt coin followed"
+        f"the window's salt: {CC.OTHER_WINDOW}"
 
 
 def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path, monkeypatch):
     """Two sessions under one challenger key, each honest, can't both pass for one window: the auditor's ledger opens one
     session a window, so the other's coins are refused for it, and a ledger opening a second session for a window
     trusts no window."""
-    w, later = CH.WINDOW, CH.window(1)
     leaves = itertools.count()
     ledger = CH.Ledger(tmp_path / "windows.jsonl", 2, leaves)
-    first = _host(tmp_path, monkeypatch, name="first", seed=2, session="s-1", leaves=leaves, ledger=ledger, window=w)
+    first = _host(tmp_path, monkeypatch, name="first", seed=2, session=CH.session_id(1), leaves=leaves, ledger=ledger)
     one, _ = _serve_window(_remote())
     assert first.ended() is None
-    second = _host(tmp_path, monkeypatch, name="second", seed=2, session="s-2", leaves=leaves, ledger=ledger, window=later)
+    second = _host(tmp_path, monkeypatch, name="second", seed=2, session=CH.session_id(2), leaves=leaves, ledger=ledger)
     two, _ = _serve_window(_remote())
     assert second.ended() is None and first.key == second.key
+    w, later = first.window, second.window
+    assert w["root"] != later["root"]
     assert PHC.trusted_rounds_reason(one, first.directory, [ledger.path], w, first.key) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key) == (
@@ -798,7 +955,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     ledger.open("s-3", w)
     for coins, host, window in ((one, first, w), (two, second, later)):
         assert PHC.trusted_rounds_reason(coins, host.directory, [ledger.path], window, first.key) == (
-            f"the challenger's session is not trusted: the auditor's ledger is refused: entry 4: a second open for root "
+            f"the challenger's session is not trusted: the auditor's ledger is refused: entry 6: a second open for root "
             f"{w['root'][:16]}… or session s-3")
 
 
@@ -818,6 +975,16 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
                for r in refused({"pouw": {"challenger": AUDITOR, "session": SESSION}}, entry="pouw:ncp-v1"))
     assert any("needs 'session'" in r for r in refused(_remote(session=None)))
     assert any("'session' is the session of the challenger" in r for r in refused(_settings(session=SESSION)))
+    itself = "the window opens its session itself, on its window-open root"
+    assert any(itself in r for r in refused(_remote(gate=None))) and any(itself in r for r in refused(_remote(session=SESSION)))
+    assert any("'session' is the gate's open answer" in r for r in
+               refused({"pouw": {"challenger": AUDITOR, "session": RESERVED}}, entry="pouw:ncp-v2"))
+    assert any("'gate' opens an H1 window's session" in r for r in
+               refused({"pouw": {"challenger": AUDITOR, "session": SESSION, "gate": _gate}}, entry="pouw:ncp-v2"))
+    with pytest.raises(ValueError, match="pouw setting 'gate'"):
+        pouw.Settings.of({"gate": "ssh"})
+    with pytest.raises(ValueError, match="H1's pouw setting 'session' is the challenger gate's reserve answer"):
+        pouw.Settings.of({"challenger": AUDITOR, "session": {"session": "s/1"}})
     with pytest.raises(ValueError, match="pouw setting 'session'"):
         pouw.Settings.of({"challenger": AUDITOR, "session": {"id": "s"}})
     assert "coins" not in PO.own_auditor({"pouw": {"challenger": AUDITOR}}, SimpleNamespace(protocols=(_entry(),)))["pouw"]

@@ -31,7 +31,11 @@ One connection serves one registration and then `--sessions` sessions over it, e
 With `--paced K:T_MS:DRAWS:WINDOWS` each session is paced (`pace_of`, `audit.Pace(K, T)`): a coin every K passes,
 each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
-(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic.
+(`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
+root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
+fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
+then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
+(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -67,7 +71,11 @@ auditor host's challenger through its gate, a session reserved in the audit's pe
 window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
 (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
-fail it is refused as `coins`, the reason in its `challenger`.
+fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W openings coins
+and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the prover's hello says
+its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of
+such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
+under the Lean, whose session holds only the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
@@ -83,6 +91,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -668,6 +677,11 @@ class Pair:
         if self.case is not None:
             self.case.verify(t, self.frames.pop(t, []))
 
+    def passes_ended(self) -> None:
+        """The prover's passes are over: the transcript may write the openings it held back."""
+        if self.case is not None:
+            self.case.passes_ended()
+
     def verify(self, t: int, check: int, refused) -> None:
         """Window t's frames checked on the Lean's threads as check `check`, whose end comes as a `lean-done`;
         `refused(answer)` called on the Lean's reader thread where it refuses to start it."""
@@ -752,13 +766,14 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
-                 appends: int = coins.APPENDS) -> None:
+                 appends: int | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
+        self.appending = True
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
         self.disk_burst_bytes, self.link_burst_bytes = disk_burst_bytes, link_burst_bytes
@@ -853,6 +868,9 @@ class Verifier:
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
             self.deferred = audit.Params(1, 1, 1, lifetime=self.lifetime, deferred=hello.get("deferred", False)).deferred
+            if type(hello.get("appends", True)) is not bool:
+                raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
+            self.appending = hello.get("appends", True)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -886,6 +904,14 @@ class Verifier:
         ready, _, _ = self.expect("ready")
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
+
+    def appends_of(self) -> int:
+        """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
+        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
+        the prover will forgo: an append it sends then has no coin and refuses the session."""
+        if self.appends is not None:
+            return self.appends
+        return coins.APPENDS if self.appending else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -923,8 +949,9 @@ class Verifier:
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)))
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
+        appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, self.appends))
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends))
         case = None if self.transcript is None else lv.Transcript(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
@@ -1057,6 +1084,9 @@ class Verifier:
             if item is None:
                 if sent < W:
                     bound()
+                    while failure is None and K is not None and drawn < sent and len(session.windows[drawn].roots) >= K:
+                        close(drawn)
+                        drawn += 1
                 else:
                     close(drawn)
                     drawn += 1
@@ -1080,8 +1110,11 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
                     break
                 arrivals[t].append(stamp)
-                while drawn < t and failure is None:
-                    close(drawn)
+                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
+                    due = session.next_boundary_ns() if drawn == t and sent + 1 < W else None
+                    with (session.coins.ahead(coins.CHALLENGE, sent + 1, bytes.fromhex(head["root"]))
+                          if due is not None and due <= self.clock.now() else contextlib.nullcontext()):
+                        close(drawn)
                     drawn += 1
             elif kind == "append":
                 try:
@@ -1156,6 +1189,7 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
             elif kind == "closed":
                 self.clock.idle()
+                session.passes_ended()
             elif kind == "lost":
                 raise wire.Closed(head["why"])
         self.jobs.join()
@@ -1428,8 +1462,9 @@ def main() -> int:
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
-    ap.add_argument("--appends", type=int, default=coins.APPENDS,
-                    help="each session's append coins, the most appends it takes (`coins.families`)")
+    ap.add_argument("--appends", type=int, metavar="A",
+                    help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
+                         f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
@@ -1462,6 +1497,8 @@ def main() -> int:
         return 0
     if a.out is None:
         ap.error("--out is required")
+    if a.appends is not None and a.appends < 0:
+        ap.error("--appends is a count, 0 or more")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."

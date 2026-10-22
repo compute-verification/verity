@@ -10,6 +10,9 @@
     }
   ],
   "collaborators": [],
+  "external_posters": [
+    "Codex"
+  ],
   "channels": {
     "agent-coordination": {
       "id": "C0C5RCXL66N",
@@ -305,6 +308,7 @@
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
         "benchmarks/kv_lifetime/",
+        "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",

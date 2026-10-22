@@ -47,7 +47,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
    the previous pass's, a plan that repeats a block, or one that holds an appended block past L rejects the session.
    A window with fewer than `min_passes` roots is rejected.
-6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
+6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
+   paced session, the window holds its k roots and its boundary has left), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
    leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
@@ -827,8 +828,9 @@ class Session:
         return self.coins.commitment
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
-        """σ_t, after the last root received (R before any).  `now`, read before the challenger is asked, is its
-        release in the record: the coin leaves later, so the record's span is the longer."""
+        """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
+        challenger is asked, unless it was asked with the coin before it, `coins.Coins.ahead`), is its release in the
+        record: the coin leaves later, so the record's span is the longer."""
         opening = self.coins.challenge(t, self._latest)
         self.windows.append(_Window(coins.coin(opening), now))
         return opening
@@ -917,13 +919,13 @@ class Session:
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
-        append coins are all released."""
+        append coins are all released (or it reserved none: `coins.families`)."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
-                or self.coins.appends == self.coins.commitment.family(coins.APPEND)):
+                or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
         first, coin = self.extent, coins.coin(self.coins.append(root))
         self._appends.append((first, append_domain(self.registration.digest, first, count), Commitment(root, count),
@@ -1028,7 +1030,10 @@ class Session:
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
         """Window t's draws, from its openings coin released now: `s` distinct receipts (pass, position), uniform over
-        its `U_t = Σ_i L_i`, in order.  Refused until its roots are final; its rejection when it has fewer than
+        its `U_t = Σ_i L_i`, in order.  Refused until its roots are final: the next window's first root has arrived,
+        `D_t` has passed, or, in a paced session, the window holds its k roots, past which `receive` takes none, and
+        its boundary has left, so its record has its deadline; the challenger's log fixes a paced window's end at its
+        last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
@@ -1038,8 +1043,10 @@ class Session:
             raise SessionError("windows are drawn in order: a window's first pass chains from the window before")
         d = self.deadline(t)
         now = self.clock()
-        if not w.final and (d is None or now <= d):
-            raise SessionError(f"window {t}'s roots are not final before its deadline or the next window's first root")
+        full = self.params.pace is not None and d is not None and len(w.roots) >= self.params.pace.k
+        if not w.final and not full and (d is None or now <= d):
+            raise SessionError(f"window {t}'s roots are not final before its deadline, the next window's first root "
+                               "or, paced, its k-th root after its boundary")
         w.final = True
         if len(w.roots) < self.params.min_passes:
             return self._fail(t, "few")

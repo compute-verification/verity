@@ -558,7 +558,8 @@ before the last round its rows differ at some commit string, opened two ways (`o
 calls, which the witnesses record (`CallsLogColl`); at the last round `final` reads one message, so they open alike. -/
 theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBind H D (Inner.ofFlock Bd.deploy decI) DO) (hA : InnerAcceptsColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
     (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x ×
       (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x)
@@ -593,16 +594,16 @@ theorem Bound.fork_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock B
   have hright : (∃ u v, findColl (D.calls x ws') = some (u, v) ∧ Collision H u v) →
       forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := fun ⟨_, _, huv, _⟩ =>
     hlift _ (fun p hp => List.mem_append_right _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
-  rcases hA decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁ with hacc₁ | hc₁
+  rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁ with hacc₁ | hc₁
   swap
   · exact hleft hc₁
-  rcases hA decO x Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hacc₂ | hc₂
+  rcases hA decO Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hacc₂ | hc₂
   swap
   · exact hright hc₂
   by_cases hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
       ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
   swap
-  · exact hFk decO x Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
+  · exact hFk decO Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
   have hv₁ := hV decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁
   have hv₂ := hV decO x Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂
   have haccI₁ : (run H (replay ((D.innerView H x t.2.1 ws).msgs.map Prod.fst)) Bd.IVStar (xI D x) ()
@@ -715,7 +716,7 @@ theorem Bound.Pr_badO_le_fork (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFl
       (fun ω d => Bd.oMsg decI H D DO decO P x ω d j)
     refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt (Pr_mono fun t ht => ?_)))
     · simp only [Bound.opAtO, fork_preCoins]
-    · exact Bound.fork_collO hB hV hT hL hFk hA j j.isLt t ht
+    · exact Bound.fork_collO hB hV hT hL (hFk.toAt x) (hA.toAt x) j j.isLt t ht
   have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x))))
     (f := fun _ : Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x)) => (1 : ℝ))
     (g := fun j => Pr (forkColl H D (Inner.ofFlock Bd.deploy decI) DO decO P x j))

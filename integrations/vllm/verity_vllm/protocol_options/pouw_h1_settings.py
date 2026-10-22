@@ -9,6 +9,7 @@ from verity.core.protocols.pouw import window as Wd
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options import pouw_h1_window as PHW
 
 #: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
 #: ncp-v2's salt
@@ -16,8 +17,8 @@ CHALLENGED = (PH.SCHEME, "ncp-v2")
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session`` and ``admission`` of `raw`, in
-    that order; ValueError names the first bad one."""
+    """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate`` and
+    ``served`` of `raw`, in that order; ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -36,11 +37,21 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
         if why is not None or getattr(rounds, "label", None) != Wd.ROUND:
             raise ValueError(f"pouw setting 'rounds' is a LiveRecord of a live epoch's {Wd.ROUND} coins"
                              + (f": {why}" if why else ""))
-    challenger, session = PHC.address(raw.get("challenger")), PHC.session_of(raw.get("session"))
+    challenger, session = PHC.address(raw.get("challenger")), PHW.session_setting(raw.get("session"))
     admission = raw.get("admission")
     if admission is not None and admission not in RQ.ADMISSIONS:
         raise ValueError(f"pouw setting 'admission' is one of {', '.join(RQ.ADMISSIONS)}")
-    return rows, steps, runner, rounds, challenger, session, admission
+    gate = raw.get("gate")
+    if gate is not None and not callable(gate):
+        raise ValueError("pouw setting 'gate' is gate(session, root): the challenger gate's open of the reserved "
+                         "session on the window's open root (pouw_h1_window.Gate)")
+    served = raw.get("served")
+    if served is not None:
+        from verity_vllm.protocol_options import pouw_h1_served as SV
+        if not isinstance(served, SV.Served) or served.registered or served.refused:
+            raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: each call's A and z/y tables and "
+                             "the weights' B committed as the window Program's registered values")
+    return rows, steps, runner, rounds, challenger, session, admission, gate, served
 
 
 def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
@@ -58,14 +69,14 @@ def refusals(scheme: str, settings: Any, stage: str) -> list[str]:
                    "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
-                                  or settings.admission is not None):
-        out.append(f"{scheme}: the pouw settings 'runner', 'rounds' and 'admission' are H1's ({PH.SCHEME})")
+                                  or settings.admission is not None or settings.served is not None):
+        out.append(f"{scheme}: the pouw settings 'runner', 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
     if scheme not in CHALLENGED and settings.challenger is not None:
         out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
-    if settings.session is not None and settings.challenger is None:
+    if (settings.session is not None or settings.gate is not None) and settings.challenger is None:
         out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
-        out += PHC.refusals(scheme, settings, stage)
+        out += PHW.refusals(scheme, settings, stage, opens=scheme == PH.SCHEME)
     if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:

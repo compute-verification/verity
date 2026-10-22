@@ -3,13 +3,15 @@ an `act` value, a run input under the root of the round that admits it, committe
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
-  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1.admitting`, the option's wrap of the model runner's
+  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1_hooks.admitting`, the option's wrap of the model runner's
   ``execute_model``, hands those (`new_requests`) and the step's batch order (`batch_order`: Model Runner V2's own, each
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
-  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin. The salt is opened at install, before any
-  admission, so no request entry precedes it.
+  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
+  Round 0's request table comes before the salt: its root is in the window's open root (`salt.window_open_root`, over
+  the weights' root, it and the session), which the gate opens the session on and the salt coin opens after
+  (`pouw_h1.H1Run.open_window`), so its binding reads no salt (`requests_binding`) and every later round's does.
 * **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
   table (`slot_table`, T hm96 leaves) names the request whose row is slot i of step s's A tables, or none (`EMPTY_SLOT`). A
@@ -30,12 +32,15 @@ an `act` value, a run input under the root of the round that admits it, committe
   before that round's coin (RT4-INT-22).
 * **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales), its served
   y and, when the run has it, its exact z are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
-  so the step digest, and with it round s's root, commits them before round s's coin. Round s + 1's root also commits
-  round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the manifest, the last
-  round's receipts and every round's root and coin, so the draw follows every round coin by hash.
+  so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
+  table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
+  root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
+  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
+  manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
-  Commit's and circuits' check. The round root has no admit root (H1 has no admit unit yet), no producer hands the run a
-  receipt root yet, and no unit reads the round coins yet.
+  Commit's and circuits' check, and nothing yet ties it to the window Program's ``a/<K>`` tree (`pouw_h1_served`), which
+  is committed at the close, under the draw's root and after every round coin. The round root has no admit root (H1 has
+  no admit unit yet), no producer hands the run a receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -86,6 +91,7 @@ TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
 REQUESTS_TAG = "verity/pouw/h1/requests/v2"
+OPEN_REQUESTS_TAG = "verity/pouw/h1/requests/round-0/v1"
 SLOTS_TAG = "verity/pouw/h1/slots/v1"
 RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
@@ -103,8 +109,9 @@ def late_admission(r: int) -> str:
             f"so a window admits only in round 0 (the pouw setting 'admission': '{PER_ROUND}' admits in every round)")
 
 
-def requests_binding(salt: bytes, r: int) -> bytes:
-    return tagged(REQUESTS_TAG, salt, r)
+def requests_binding(salt: bytes | None, r: int) -> bytes:
+    """Round r's request table's binding. Round 0's reads no salt, since its root is committed before the salt opens."""
+    return tagged(OPEN_REQUESTS_TAG, 0) if r == 0 else tagged(REQUESTS_TAG, salt, r)
 
 
 def slots_binding(salt: bytes, r: int) -> bytes:
@@ -123,7 +130,7 @@ def slot_owner(leaf: bytes) -> int | None:
     return n - 1 if n else None
 
 
-def request_table(salt: bytes, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
+def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
     """Round r's request table: `rows` (T) hiding leaves, the entries the round admits in admission order, then
     `EMPTY_REQUEST`. Each admitted request schedules a token row in the step that admits it, so a step admits at most T."""
     if len(entries) > rows:
@@ -143,6 +150,40 @@ def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it)."""
     return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
+
+
+def _root64(h: Any) -> bool:
+    try:
+        return isinstance(h, str) and len(bytes.fromhex(h)) == 64
+    except ValueError:
+        return False
+
+
+def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
+    """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
+    and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
+    has no call, a call whose row carries no A table root (``tables``' ``a``, 64 bytes), or a step whose rows aren't the
+    ones its round's ``calls`` digest is over (`step_digest`); None when each call's A table is under its own round's
+    root, and so recorded before that round's coin."""
+    steps: dict[Any, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        steps.setdefault(row.get("step"), []).append(row)
+    logged = [x.get("round") for x in log]
+    for s, got in steps.items():
+        if s not in logged:
+            return (f"call {got[0].get('index')} is at step {s}, which no round of the log closes, so its A table is under "
+                    "no round root")
+    for x in log:
+        r, got = x.get("round"), steps.get(x.get("round"), [])
+        if not got:
+            return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
+        bare = next((m for m in got if not _root64((m.get("tables") or {}).get("a"))), None)
+        if bare is not None:
+            return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
+                    "leaves that no round root commits")
+        if step_digest(salt, r, got).hex() != x.get("calls"):
+            return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
+    return None
 
 
 def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
@@ -323,8 +364,9 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
     return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
 
 
-__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "PER_ROUND", "REQUESTS_NONCE", "ROUND0",
+__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
+           "REQUESTS_NONCE", "ROUND0",
            "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
            "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest"]
+           "sort_batch_req_ids", "step_digest", "tables_reason"]

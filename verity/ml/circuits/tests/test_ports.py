@@ -958,7 +958,7 @@ def test_many_seeds_read_one_coin_at_distinct_positions():
     roundtrip(Program(units("PortsTestUnitsOwn")))
     shared = comp("PortsTestUnitsShared", [*UNITS_IN[:3], ("position", V32)], Array(3, TupleT(V8, V32)),
                   lambda B, S, a, b, salt, position: B.batch(Unit, a, b, salt, position, axes=(0, 0, None, None)), ports=SEED)
-    refused("E_COIN_REUSE", lambda: Program(shared), "input node 3 leaf 0: a position seeds one unit, but 2 seeds read it",
+    refused("E_COIN_REUSE", lambda: Program(shared), "input node 3 leaf 0: a position seeds one unit, but 3 seeds read it",
             "member 0", "member 1", "PortsTestSeed_v1")
     twice = comp("PortsTestUnitsTwice", [("a", V8), ("b", V8), ("salt", V32), ("position", V32)], TupleT(TupleT(V8, V32), TupleT(V8, V32)),
                  lambda B, S, a, b, salt, position: tuple_of(B.call(Unit, a, b, salt, position), B.call(Unit, b, a, salt, position)),

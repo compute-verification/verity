@@ -316,7 +316,8 @@ Before a session the challenger draws its coins and commits to them, one epoch o
 
 ~~~text
 layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's index over its registration), families
-            challenge W, openings W and append A (`coins.APPENDS` unless the session names its own)
+            challenge W, openings W and append A, the appends the session may take (none, and no append family, for
+            a session that takes none: a session reserves exactly the coins it will use)
 c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
             a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
             window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
@@ -718,7 +719,10 @@ before it.)
 
 ## 6. Openings and the accept rule
 
-Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed. A window with
+Window \(t\)'s roots are final once the next window's first root has arrived, or \(D_t\) has passed, or, in a paced
+session (§7, "Pacing"), once it holds its \(k\) roots, past which it takes none, and its boundary has left (so \(D_t\) is
+set): so the challenger's signed log, where
+the openings coin's request names the window's last root, fixes a paced window's end at that root. A window with
 fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger releases the window's openings coin
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it
 (`Session.close`): `derive(c_(W+t), "verity/remote-bandwidth/openings/v0", {registration, window: t}).subset(min(s,

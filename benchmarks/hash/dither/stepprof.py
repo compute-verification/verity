@@ -32,7 +32,12 @@ import steps as ST
 PHASE_RANGE = "verity/dither/phase/"
 PHASE_PARTS = {"before": "A step (h1c_a_step) and the step's inputs", "admit_tables": "admit tables",
                "z_tables": "z tables", "step_trees": "round and step trees", "receipt_trees": "receipt trees",
-               "root_read": "root read", "record_host": "record (host)", "forward_wait": "forward wait"}
+               "root_read": "root read", "record_host": "record (host)", "forward_wait": "forward wait",
+               "stash": "ring copies (A slots; under -ov the records)", "ring_wait": "-ov: the host's wait on the rings",
+               "ov_leaf_tables": "-ov round: admit, z/y and served-y tables", "ov_round": "-ov round: step trees and round",
+               "ov_units_dispatch": "-ov units (seeds, units, commit, receipt trees)"}
+# dither_so -ov's sender and dispatcher threads: their launches run beside the next forward, not between steps
+BESIDE = "ov_"
 PARTS = [
     ("A table (h1c_a_call)", re.compile(r"h1c_a_call[23]?_k")),
     ("A step (h1c_a_step) and the step's inputs", re.compile(r"h1c_domains|h1c_a_pre_k|h1c_a_init_k")),
@@ -49,7 +54,7 @@ PARTS = [
 
 def part(name: str, phase: str | None) -> str:
     if phase is not None:
-        return "between: " + PHASE_PARTS.get(phase, phase)
+        return ("beside: " if phase.startswith(BESIDE) else "between: ") + PHASE_PARTS.get(phase, phase)
     for p, rx in PARTS:
         if rx.search(name):
             return p

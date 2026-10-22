@@ -1,9 +1,10 @@
 """The replay row kernel of `DsaRMSNorm_v1{N, EPS}` (`registry.dsa_norm`, `_fused_norm_rope_kernel`'s `_rms_norm`) and its vectorised
-twin, `dsa_rmsnorm_rows`: the registry body over rows, each step `derived_rows`' word function of its primitive.  The row kernel
-registers from `rows` (kernel "rows")."""
+twin, `dsa_rmsnorm_rows`: the registry body over rows, each step `derived_rows`' word function of its primitive.  `block_rmsnorm_rows`
+is the same body over a masked block, `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EPS}` (whose row kernel is `dsv4_rows`').  The row
+kernel registers from `rows` (kernel "rows")."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
 from typing import Any, Sequence
 
@@ -21,27 +22,47 @@ def dsa_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float) -> dict[str, np.n
     """`DsaRMSNorm_v1{N, EPS=eps}` over rows: x (R, N) bf16 words, w (N,) or (R, N) bf16 words.  Returns the bf16 ``out`` (R, N) and
     the f32 words ``sum``, ``mean`` and ``r`` (each (R,))."""
     from verity_vllm.program.registry import dsa_norm as DN
+
+    N = np.shape(x)[-1]
+    DN.check_statics(N, eps)
+    return block_rmsnorm_rows(x, w, eps, N, DN.THREADS // DN.WARP, fused_eps=False)
+
+
+def block_rmsnorm_rows(x: np.ndarray, w: np.ndarray, eps: float, block: int, warps: int, *, fused_eps: bool = True
+                       ) -> dict[str, np.ndarray]:
+    """`TritonBlockRMSNorm_v1{N, BLOCK=block, WARPS=warps, EPS=eps}` over rows, `dsa_rmsnorm_rows`' outputs: the block's elements
+    from N load +0, so a thread wholly past N sums +0 (no lane's sum is -0, so its +0 in the trees is the Definition's absent lane).
+    ``fused_eps`` as `dsa_norm.rms_norm`'s: ``mean`` is then the fma `scale_a(sum) * rcp(N) + eps` that rsqrt takes."""
+    from verity_vllm.program.registry import dsa_norm as DN
     from verity_vllm.program.registry.prims import bits_of
 
     x = np.ascontiguousarray(x, dtype=np.uint16)
     R, N = x.shape
-    DN.check_statics(N, eps)
+    DN.check_block(N, block, warps, eps)
     w2 = np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N))
     xf = DR.bf16_to_f32_words(x)
-    regs = xf[:, np.asarray(DN.layout(N))]
+    regs = np.pad(xf, ((0, 0), (0, block - N)))[:, np.asarray(DN.layout(block, DN.WARP * warps))]
     with np.errstate(over="ignore", under="ignore", invalid="ignore"):
         s = DR.fma_rn(regs[..., 0], regs[..., 0], DR.mul_rn(regs[..., 1], regs[..., 1]))
         for k in range(2, regs.shape[-1]):
             s = DR.fma_rn(regs[..., k], regs[..., k], s)
-        v = s.reshape(R, DN.THREADS // DN.WARP, DN.WARP)
+        v = s.reshape(R, warps, DN.WARP)
         while v.shape[-1] > 1:
             h = v.shape[-1] // 2
             v = DR.add_rn(v[..., :h], v[..., h:])
-        w4 = v[..., 0]
-        total = DR.add_rn(DR.add_rn(w4[:, 0], w4[:, 2]), DR.add_rn(w4[:, 1], w4[:, 3]))
+        v = v[..., 0]
+        while v.shape[-1] > 1:
+            h = v.shape[-1] // 2
+            v = DR.add_rn(v[..., :h], v[..., h:])
+        total = v[:, 0]
         n = np.full(R, bits_of(np.float32(N)), dtype=np.uint32)
-        mean = DR.mul_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n))
-        r = DR.rsqrt_approx(DR.add_rn(np.full(R, bits_of(np.float32(eps)), dtype=np.uint32), mean))
+        e = np.full(R, bits_of(np.float32(eps)), dtype=np.uint32)
+        if fused_eps:
+            mean = DR.fma_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n), e)
+            r = DR.rsqrt_approx(mean)
+        else:
+            mean = DR.mul_rn(DR.div_full_scale_a(total, n), DR.div_full_rcp(n))
+            r = DR.rsqrt_approx(DR.add_rn(e, mean))
         y = DR.mul_rn(DR.mul_rn(r[:, None], xf), DR.bf16_to_f32_words(w2))
     return {"out": DR.f2fp_bf16(y), "sum": total, "mean": mean, "r": r}
 

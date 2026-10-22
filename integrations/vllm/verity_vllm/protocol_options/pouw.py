@@ -70,7 +70,9 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_hooks as PHK
 from verity_vllm.protocol_options import pouw_h1_settings as PHS
+from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 from verity_vllm.protocol_options import pouw_native as PN
 from verity_vllm.protocol_options import pouw_pass as PP
@@ -95,7 +97,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -167,13 +169,20 @@ class Settings:
     rounds: Any = None
     #: H1's salt and round coins (``ncp-v2``'s salt) from the auditor host's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
-    #: nothing; ``session`` is the challenger gate's reply for the window's period and Commit
-    #: (`pouw_h1_challenger.session_of`)
+    #: nothing; ``session`` is the challenger gate's reply for the window: ncp-v2's its open answer for the window's
+    #: Commit (`pouw_h1_challenger.session_of`), H1's its reserve answer (`pouw_h1_window.reserved_of`), which
+    #: the window opens itself on its window-open root
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
     #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
     #: are fixed before the first coin), or ``per-round``
     admission: str | None = None
+    #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
+    #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
+    gate: Any = None
+    #: H1's served trees (`pouw_h1_served.Served`): each call's A and z/y tables and the weights' B committed as the
+    #: window Program's registered values as the calls are recorded, under their rounds' roots
+    served: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -636,7 +645,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
     Under H1, the int8_exact arm's int8 weight rows as they are served (`pouw_h1.weight_root`)."""
     if scheme == PH.SCHEME:
-        layers = PH.layers(target.model, linear_types())
+        layers = PHK.layers(target.model, linear_types())
         return {"weight_roots": {str(w): PH.weight_root(w, PH.numpy_of(m.weight)).hex() for w, m in enumerate(layers)},
                 "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
@@ -693,7 +702,7 @@ def install(scheme: str, target: Target) -> Option:
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     session = None
     if settings.challenger is not None:
-        session, commitment, opening, _rounds, salt = PHC.session(entry, settings.challenger, 0, weights_root(roots),
+        session, commitment, opening, _rounds, salt = PHW.session(entry, settings.challenger, 0, weights_root(roots),
                                                                     settings.session)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
@@ -721,7 +730,7 @@ def install(scheme: str, target: Target) -> Option:
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details,
-                  release=run.finish if session is None else lambda: PHC.finish(run, session))
+                  release=run.finish if session is None else lambda: PHW.finish(run, session))
 
 
 #: The live H1 runs by entry, for the Commit and its checks before the composition closes.
@@ -733,52 +742,57 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
-    """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every
-    scheme's, and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
-    (`pouw_h1.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
-    under the credit gate's trace (`pouw_h1.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
-    requests and its batch order to the run (`pouw_h1.admitting`), each entry and each served row's request under its
+    """H1 on the int8_exact arm: the epoch's salt `audit.salt_of` over the weights' root, as every scheme's, from the
+    challenger's salt coin (the auditor host's opened after the window's open root, once round 0 is admitted:
+    `pouw_h1.H1Run.open_window`), and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
+    (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
+    under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
+    requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
     round's root before the ``rounds`` coin, and the window's draw coin opens at release after its manifest. With the
     setting ``challenger`` the salt, round and draw coins are the auditor host's, from the one session infra's gate
-    opened for the window (``session``, the gate's answer, which the commitment carries without its secret;
-    `pouw_h1_challenger.session`), closed once the window has finished; without it the coins are this process's and the
+    reserved for the window (``session``, the gate's reserve answer) and ``gate`` opened on its window-open root (the
+    open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the window
+    has finished; without it the coins are this process's and the
     window credits nothing (`pouw_h1.IN_PROCESS`). ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
     only by default). The served values are the arm's, untouched."""
-    layers = PH.layers(target.model, linear_types())
+    layers = PHK.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in
                               ((int(w), s) for w, s in committed["shapes"].items())))
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
-    session, rounds = None, settings.rounds
+    session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
     if settings.challenger is not None:
-        session, commitment, opening, rounds, salt = PHC.session(entry, settings.challenger, settings.steps,
-                                                                 weights_root(roots), settings.session)
+        session = PHW.Window(entry, settings.challenger, settings.steps, weights_root(roots), settings.session,
+                             settings.gate)
+
+        def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
+            epoch_salt, *opened = session.open(requests_root)
+            return (PH.program_salt(epoch_salt), *opened)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
-        salt = Epoch.start(declared, roots, commitment, opening).salt
-    draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
+        salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
+        draw = LiveRecord(rounds.challenger, Wd.DRAW) if rounds is not None else None
     source = PH.CHALLENGER if session is not None else "in-process"
-    run = PH.H1Run(entry, PH.program_salt(salt), {w: f"linear {w}" for w in roots} | _named(target.model, layers),
+    run = PH.H1Run(entry, salt, {w: f"linear {w}" for w in roots} | _named(target.model, layers),
                    [tuple(int(d) for d in m.weight.shape) for m in layers], settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or RQ.ROUND0, coin_source=source)
-    run.commits.update(weights_root=weights_root(roots).hex(), coins=commitment.to_json(), salt_opening=opening.to_json(),
-                       coin_source=source)
-    if session is not None:
-        run.commits["session"] = PHC.carried(settings.session)
-    if rounds is not None:
-        run.commits["round_coins"] = rounds.challenger.commitment.to_json()
+                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
+    run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source)
+    if session is None:
+        run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
+        if rounds is not None:
+            run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
     if settings.runner is not None:
-        h.wrap(settings.runner, "execute_model", lambda orig: PH.admitting(run, orig, settings.runner))
+        h.wrap(settings.runner, "execute_model", lambda orig: PHK.admitting(run, orig, settings.runner))
     for w, layer in enumerate(layers):
-        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PH.observer(run, w, orig))
-        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.traced(run, w, orig))
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHC.finish(run, session))
+        h.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
+        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 
 def _named(model: Any, layers: list[Any]) -> dict[int, str]:
