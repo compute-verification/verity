@@ -295,8 +295,8 @@ class H1Run:
 
     Round s is step s. The engine's admissions and batch order (`admit`, from `admitting`) go to the round of the step about
     to run, and round s closes once step s's last linear is recorded (or at `close`): its root (`pouw_h1_requests.round_row`)
-    over the step's calls, its request table and its slot table, and with ``served`` the step's A rows of the window
-    Program's ``a/<K>`` values (`pouw_h1_served.Served.segments`), is recorded with
+    over the step's calls, its request table and its slot table, and with ``served`` each of the step's calls' A tables
+    ``a/<K>@<c>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's draw family) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless

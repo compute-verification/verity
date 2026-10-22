@@ -38,13 +38,14 @@ an `act` value, a run input under the root of the round that admits it, committe
   root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **The A rows under the round roots** (PRF-132, `credit.a_link`): the root round s's coin follows is over the round's
-  ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's rows of each of the window Program's
-  ``a/<K>`` values as aligned subtrees (`round_row`, `pouw_h1_served.Served.segments`), so the A rows a unit reads are
-  fixed before round s's coin, and the tree the close registers is the one over them.
-* **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
-  Commit's and circuits' check, and only the serving process ties it to its block of ``a/<K>`` (both hold the call's
-  codes). The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root yet, and
-  no unit reads the round coins yet.
+  ``inner`` root (all of the above, `round_root`) and its ``a`` segments: the A table ``a/<K>@<c>`` of each call c of
+  step s, whole, as the aligned subtrees of its registered tree (`round_row`, `pouw_h1_served.Served.segments`),
+  registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
+  round's root before that round's coin, and no other round lists them.
+* **Not yet.** ROOTS1: nothing ties a call's A table to the Commit's AROW root of its linear's input, or layer 0's A
+  rows to the request table's prompt tokens, so the A rows are the prover's own until it lands; only the serving
+  process holds them to both (it holds the call's codes). The round root has no admit root (H1 has no admit unit yet), no
+  producer hands the run a receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
