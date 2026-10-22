@@ -551,6 +551,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
   exact ⟨(key fun _ => []).1, fun ip => (key ip).2⟩
 
 /-- **A summed class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
+set_option maxHeartbeats 1000000 in
 theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) {fuel : ℕ}
     (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
