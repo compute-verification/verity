@@ -153,9 +153,35 @@ def innerOk (inner : Claims.Msg) : Except String Unit :=
     if s.read.draw.isNone then throw RecSetup.noInnerDraw
   | none => .error "rec: Flock's verifier does not set the inner statement up"
 
+/-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
+def partCircuit (p : PartX) : Option Circuit := do
+  let ins ← p.base.ins.toOption
+  (ProvedScope.circuitOf ins.read.tags p.base.circuit p.base.tables).toOption
+
+/-- **Each part's circuit names its statement's message-round ports**: wherever part `s`'s V* statement registers a
+port under a `rec-c<k>` (`RecVStar.ownPorts`, `RecVStar.cIndex`), the part's circuit, as the setup parses it
+(`partCircuit`), has a port of that name. Each session refuses a part without: `checkOwn` holds the reads file's
+message-round ports to the statement's, and `checkPubRows` finds each port registering a `rec-c<k>` among the
+circuit's rows. -/
+def portsNamed (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
+  (List.range vs.size).all fun s =>
+    let need := (RecVStar.ownPorts vs[s]!).filter fun q => (RecVStar.cIndex q.2.1).isSome
+    match parts[s]?.bind partCircuit with
+    | some c => need.all fun q => c.ports.any (·.name == q.1)
+    | none => need.isEmpty
+
+/-- **RecCap's part's circuit has its port `top`**: the last part's circuit, as the setup parses it (`partCircuit`), has
+a port named `top`, RecCap's one input (`VStar.capSub`). RecCap's session refuses a part without: `checkFile` holds the
+circuit's bytes to V*'s, and `checkParsed` its row ports to V*'s (`RecVStar.vstarRows`, `top` among them). -/
+def capPorted (parts : List PartX) : Bool :=
+  match parts[parts.length - 1]?.bind partCircuit with
+  | some c => c.ports.any (·.name == "top")
+  | none => false
+
 /-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
 and pass Flock's own setup and statement check with a draw (`innerOk`), the verifier's own inner shape reads
-(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape. -/
+(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape, whose circuit names the
+statement's message-round ports (`portsNamed`), the last part's RecCap's port `top` (`capPorted`). -/
 def readX (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
@@ -166,14 +192,19 @@ def readX (x : Claims.Msg) : Option XR := do
     innerOk w.inner
     pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
-  if w.parts.length ≠ vs.size then none
+  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false then none
   pure ⟨w, ri, partition, shape, dims⟩
 
+/-- How Flock's plain verifier is told to set the inner statement `w` up, as each staged V* statement hands it to the
+verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): its
+`--statement`, `--coins`, lookup tables and draw. -/
+def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.osCoins, w.tables, w.draw⟩
+
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
-`--rec-inner-public`, `--rec-inner-partition`), with no record (`RecCoins.Files.stmt` reads none); none without a
-partition, where no staged statement sets up. -/
+`--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`) and no record
+(`RecCoins.Files.stmt` reads none); none without a partition, where no staged statement sets up. -/
 def filesOf (r : XR) : Option RecCoins.Source :=
-  r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none⟩
+  r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none, some (innerFormOf r.innerRaw)⟩
 
 /-- **What the compiled verifier reads of the statement**, as `RecScope` reads it: the inner statement's bytes and
 files, its own inner shape, and no V* session's record, each being a run message. -/
@@ -240,8 +271,8 @@ def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArr
   transcript x ms := tr x ms.dropLast
 
 /-- Part `s`'s recursive statement: its Flock statement at the staged public file, the verifier's own inner shape,
-`--rec-part s`, the bindings and rows, the inner statement's files, the staged record and transcript, and the
-registration. -/
+`--rec-part s`, the bindings and rows, the inner statement's files, the staged record and transcript, the
+registration, and how the inner statement is set up (`innerFormOf`). -/
 def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
@@ -256,6 +287,10 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   innerSession := some (st.record x ms)
   transcript := some (st.transcript x ms)
   registration := r.w.registration
+  innerStatement := some r.innerRaw.statement
+  innerStatementCoins := some r.innerRaw.osCoins
+  innerTables := some r.innerRaw.tables
+  innerDraw := r.innerRaw.draw
 
 open Classical in
 /-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions: its encoding, where that reads back as

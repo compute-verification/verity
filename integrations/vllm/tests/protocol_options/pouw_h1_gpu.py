@@ -44,8 +44,8 @@ its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with ``--p
 with the window accepted (`pouw_h1_challenger.period_reason`). The batch workload admits the first prompt alone after the
 batch, so it admits per round; the fill workload admits in round 0 only.
 
-``--served`` (fill) commits the 64's window's A codes and B rows as its window Program's registered values
-(`pouw_h1_served.Served`, the pouw setting ``served``), which `calls_root` binds and the commitment carries, and records
+``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
+(`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
 the trees and `pouw_h1_served.register`'s outcome (`served_check`). ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
@@ -582,18 +582,17 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 
 
 def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
-    """The window's served trees (`pouw_h1_served`): each committed value's entry, what `close` refused, and the outcome of
-    `pouw_h1_served.register` (``register_served`` reads ``hm96-sha512/row/v1`` rows alone until proofs' REGV2 follow-up,
-    so it refuses the trees' v2 rows, ValueError, until then)."""
+    """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
+    `pouw_h1_served.register`, each call's ``--registered`` file written into ``tdir``."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
-    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "ks": served.ks() if served.registered else [],
+    doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20],
                            "committed": bool(served.registered) and not served.refused,
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
                                                                          "refused": list(served.refused)},
                            "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
     try:
-        SV.register(h1, directory=tdir)
-        doc["register"] = {"registered": SV.FILE}
+        reg = SV.register(h1, directory=tdir)
+        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "first": SV.file_name(0)}
     except ValueError as e:
         doc["register"] = {"refused": str(e)[:2000]}
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
@@ -736,8 +735,8 @@ def main(argv: list[str] | None = None) -> int:
                          "research@HOST), which opens the reserved session on the window's open root")
     ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
                                                      "the ledger must credit with it accepted")
-    ap.add_argument("--served", action="store_true", help="fill: commit the window's A codes and B rows as its Program's "
-                                                          "registered values (pouw_h1_served.Served) and try to register them")
+    ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
+                                                          "Program's registered values (pouw_h1_served.Served) and register them")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")

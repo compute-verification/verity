@@ -368,15 +368,14 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
 
 
 def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> int:
-    """Store each binding's record (each rebuilt one's, with ``only_rebuilt``), its reads digested now; the count stored."""
+    """Store each binding's record (each rebuilt one's, with ``only_rebuilt``), its reads digested now, each read once for all
+    of them (`cache.seen_all`); the count stored."""
     side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units]
+    todo = [e for e in entries if not (only_rebuilt and e.reused)]
+    reads = [CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots) for e in todo]
     n = 0
-    for e in entries:
-        if only_rebuilt and e.reused:
-            continue
-        reads = CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots)
-        rec = {"roots": e.root_ids, "nodes": e.nodes}
-        if CC.store(cache, e.key, repo, reads, rec, CC.seen(repo, reads)) is not None:
+    for e, got, now in zip(todo, reads, CC.seen_all(repo, reads)):
+        if CC.store(cache, e.key, repo, got, {"roots": e.root_ids, "nodes": e.nodes}, now) is not None:
             n += 1
     return n
 

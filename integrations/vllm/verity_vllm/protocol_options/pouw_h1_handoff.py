@@ -1,12 +1,14 @@
 """An H1 window handed from its serving process to a CPU process for its close (VLLM-68), so the GPU is held only while it
-serves: `H1Run.close` commits the window's served trees on the CPU (tens of minutes at 8B), and the serving process's GPU
-lease ends only when it exits.
+serves: `H1Run.close` commits the window's empty calls, their tables and its rounds on the CPU, and the serving process's
+GPU lease ends only when it exits.
 
 * **The window.** Once its last step is served, the serving process saves its `pouw_h1.H1Run` as it stands (`suspend`):
   its calls and their tables, its round log with each coin, its request entries and slot owners, its receipts, verdicts
-  and retained calls, its hm96 salt key, and its `pouw_h1_served.Served` (each call's A codes, each linear's weight
-  codes), every tensor as its host copy. `resume` rebuilds it in another process, each round's request and slot table
-  again from the entries, owners, salt and key, and refuses a table whose root isn't the one its round's root is over.
+  and retained calls, its hm96 salt key, and its `pouw_h1_served.Served` (each call's registered tables, each linear's
+  weight codes), every tensor as its host copy. `resume` rebuilds it in another process, each round's request and slot
+  table again from the entries, owners, salt and key, and the window Program from its public shapes and key
+  (`pouw_h1_served.declared`), and refuses a table whose root isn't the one its round's root is over, or a Program whose
+  digest isn't the one its tables were registered under.
   It drops the run's listeners (the resuming process adds its own) and its opener (the salt is open).
 * **The session's stream.** The window's coins come from one session on the auditor host's challenger, one TCP stream
   that its hello opened (`remote`), and a stream is never opened twice for a session. The serving process hands the
@@ -35,6 +37,7 @@ from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, Live
 
 from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocol_options import pouw_h1_served as SV
 
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 FILE = "h1-window.pkl"
@@ -104,7 +107,8 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     state["rounds"], state["draw"] = _record(run.rounds), _record(run.draw)
     state["request_rounds"], state["slot_rounds"] = sorted(run._tables), sorted(run._slot_tables)
     if served is not None:
-        state["served"] = (type(served), {k: v for k, v in served.__dict__.items() if k != "_weights"}, sorted(served._weights))
+        state["served"] = (type(served), {k: v for k, v in served.__dict__.items() if k not in ("_weights", "program")},
+                           sorted(served._weights))
     path = Path(directory) / FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
@@ -142,7 +146,20 @@ def resume(directory: str | Path, fd: int) -> tuple[PH.H1Run, Resumed]:
         run.served = kind.__new__(kind)
         run.served.__dict__.update(sstate)
         run.served._weights = {w: (run._weights[w][0], weights[w][0]) for w in layers}
+        _declare(run.served, run)
     return run, client
+
+
+def _declare(served: SV.Served, run: PH.H1Run) -> None:
+    """The resumed window's Program, declared again from the run's public shapes and the window's key: the saved state
+    holds its digest, not the Program (whose Definitions don't pickle)."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    served.program = None
+    if served.program_digest is not None:
+        served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,
+                                     SV.prefix(bytes.fromhex(served.root)), served.unit)
+        if P.program_digest(served.program) != served.program_digest:
+            raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 
 
 def send_stream(client: remote.RemoteChallenger, path: str | Path) -> None:

@@ -33,7 +33,11 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(','.join(str(l['level']) fo
 LEVELS=${LEVELS:-$ALL}; NEG_LEVEL=${NEG_LEVEL:-${ALL##*,}}
 LINK_ROWS=; [ "${LINK:-0}" = 1 ] && LINK_ROWS=--link-rows
 REC_STMT=${REC_STMT:-$INNER/stage}; REC_PUB=($REC_STMT/pub-*.bin)
+# how the inner statement was proved (RecSetup.checkForm): 80-rec-inner.sh's is verity/flock-circuit, which the verifier
+# refuses at setup, its files setting the inner statement up at plain leaves (88-rec-c3-inner.sh's)
+REC_INNER_STATEMENT=${REC_INNER_STATEMENT:-verity/flock-circuit}
 REC_INNER=(--rec-inner-circuit $REC_STMT/circuit.txt --rec-inner-public ${REC_PUB[0]} --rec-inner-partition $REC_STMT/partition.json
+  --rec-inner-statement $REC_INNER_STATEMENT --rec-inner-statement-coins os --rec-inner-draw $REC_STMT/draw.json
   --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json)
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }

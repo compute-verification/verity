@@ -30,7 +30,7 @@ control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `pre
 checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
 which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
 variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
-its `coins` (`pouw.challenged`), and makes each engine step one Pearl-C pass, as the experimental arm does; the passes'
+its `coins` (`pouw.challenged`). The adapter ends one Pearl-C pass per model forward itself; the passes'
 counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
 experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
 no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec

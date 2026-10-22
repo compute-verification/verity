@@ -49,8 +49,8 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     if served is not None:
         from verity_vllm.protocol_options import pouw_h1_served as SV
         if not isinstance(served, SV.Served) or served.registered or served.refused:
-            raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: the window's A codes and B rows "
-                             "committed as the window Program's registered values")
+            raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: each call's A and z/y tables and "
+                             "the weights' B committed as the window Program's registered values")
     return rows, steps, runner, rounds, challenger, session, admission, gate, served
 
 
