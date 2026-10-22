@@ -278,7 +278,8 @@ theorem lincheckFw_sim (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pad
 theorem repPiop_sim (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap cap' root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hc : cap.size = cap'.size) (hd : st.digest.size < 2 ^ 64)
     (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
-    Sim L (· = ·) (repPiop io st lay cap root extras mk) (repPiop io st lay cap' root extras mk) := by
+    Sim L (fun r r' => r = r' ∧ r.2.2.size = extras.size + 2) (repPiop io st lay cap root extras mk)
+      (repPiop io st lay cap' root extras mk) := by
   unfold repPiop
   refine sim_bind (zerocheckFw_sim st.m st.digest cap cap' root lay mk hc hd hcn hr hm) fun a a' h => ?_
   subst h
@@ -286,7 +287,11 @@ theorem repPiop_sim (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) 
   refine sim_bind (lincheckFw_sim st.fold lay mk zc) fun b b' h => ?_
   subst h
   obtain ⟨lp, lc⟩ := b
-  exact sim_pure rfl
+  refine sim_pure ⟨rfl, ?_⟩
+  show (_root_.Flock.abcClaims st.m st.kLog zc lc ++ extras).size = extras.size + 2
+  have : (_root_.Flock.abcClaims st.m st.kLog zc lc).size = 2 := rfl
+  rw [Array.size_append, this]
+  omega
 
 /-! ## The ring switch -/
 
@@ -507,8 +512,10 @@ theorem splitK_size' (f : Array F256) :
 /-- **The masked Ligerito at two tables of one size and two level-0 commitments of one shape**, every other input
 the prover's own or of one size, with `commit` taking tables of one size to commitments of one shape: alike runs. -/
 theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
-    (hcom : ∀ lv (g g' : Array F128) s s', g.size = g'.size → L.R CapAlike (commit lv g s) (commit lv g' s'))
-    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T T' : F128) (cm0 cm0' : Commit)
+    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule)
+    (hcom : ∀ i (g g' : Array F128) s s', g.size = g'.size →
+      L.R CapAlike (commit (sch.levels.getD i default) g s) (commit (sch.levels.getD i default) g' s'))
+    (T T' : F128) (cm0 cm0' : Commit)
     (t t' b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
     (extra extra' lanePad lanePad' : ℕ → ℕ → F128) (salt salt' : ℕ → ℕ → ByteArray)
     (nonce nonce' : ℕ → ℕ → UInt64) (hcm : CapAlike cm0 cm0') (ht : t.size = t'.size) (hn : sch.n + 1 < 2 ^ 64)
@@ -638,8 +645,10 @@ theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ →
 
 /-- **A rep's opening at two tables of one size and two level-0 commitments of one shape**: alike runs. -/
 theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
-    (hcom : ∀ lv (g g' : Array F128) s s', g.size = g'.size → L.R CapAlike (commit lv g s) (commit lv g' s'))
-    (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ)
+    (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule)
+    (hcom : ∀ i (g g' : Array F128) s s', g.size = g'.size →
+      L.R CapAlike (commit (sch.levels.getD i default) g s) (commit (sch.levels.getD i default) g' s'))
+    (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ)
     (g g' : Array F128) (cm0 cm0' : Commit) (claims : Array _root_.Flock.Claim) (h : Array F128)
     (extra extra' lanePad lanePad' : ℕ → ℕ → F128) (salt salt' : ℕ → ℕ → ByteArray) (hcm : CapAlike cm0 cm0')
     (hg : g.size = g'.size) (hc : claims.size < 2 ^ 64) (hn : sch.n + 1 < 2 ^ 64)
@@ -652,7 +661,7 @@ theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → 
   obtain ⟨ss, T, sws⟩ := r
   obtain ⟨ss', T', sws'⟩ := r'
   obtain rfl : sws = sws' := hr
-  refine sim_bind (ligeritoPZk_sim commit hcom _ sch T T' cm0 cm0' g g' _ lay h rep tPad extra extra' lanePad lanePad'
+  refine sim_bind (ligeritoPZk_sim commit _ sch hcom T T' cm0 cm0' g g' _ lay h rep tPad extra extra' lanePad lanePad'
     salt salt' _ _ hcm hg hn hq hp) fun r r' _ => ?_
   obtain ⟨_, _, _⟩ := r
   obtain ⟨_, _, _⟩ := r'
@@ -856,6 +865,69 @@ def openLift (coins : Array (Array F128)) (live : Bool) : Lift (M := OpenM) (ste
           fun _ => ?_
         exact orel_bind (orel_set _) fun _ _ _ => orel_pure rfl
       first | exact orel_ask hr | exact orel_pure rfl
+
+theorem sim_getThe (coins : Array (Array F128)) (live : Bool) :
+    Sim (openLift coins live) (· = ·) (getThe (Array (Array F128)) : TMW OpenM _) (getThe _) :=
+  fun _ _ ht _ => .done ⟨⟨rfl, ht⟩, rfl⟩
+
+/-- Every opening lift relates programs by `ORel`, whatever its coins are for. -/
+theorem sim_relift (coins : Array (Array F128)) (live live' : Bool) {α β : Type} {S : α → β → Prop}
+    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) : Sim (openLift coins live') S p q :=
+  h
+
+/-- A stream's transcript at its start, its domain a `u64` length. -/
+theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
+    TrAlike (Transcript.init #[] dom) (Transcript.init #[] dom) :=
+  ⟨[.dom dom], [.dom dom], by simp [encs, FlockSoundness.Refine.init_enc],
+    by simp [encs, FlockSoundness.Refine.init_enc], .cons rfl .nil, fun f hf => by
+      simp only [List.mem_singleton] at hf
+      subst hf
+      exact hd⟩
+
+/-- **Two opening programs alike, run** from alike transcripts at one state: alike resumptions. -/
+theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S : α → β → Prop}
+    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Transcript}
+    (ht : TrAlike t t') (s : Array (Array F128)) :
+    StepRel (fun _ _ => True) ((p.run' t).run' s) ((q.run' t').run' s) := by
+  refine stepRel_bind (T := fun _ _ => True) (stepRel_bind (T := fun _ _ => True) (h t t' ht s) fun _ _ _ => ?_)
+    fun _ _ _ => .done trivial
+  exact .done trivial
+
+/-- **A rep's opening at two tables of one shape**, the same statement, schedule and `t_pad`, packed tables of one
+size and level-0 commitments of one shape, on the same coins: alike resumptions, whatever the salts for levels ≥ 1. -/
+theorem openStep_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi hi' : Array ByteArray)
+    (coins : Array (Array F128)) (hst : t.st = t'.st) (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad)
+    (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0) (hdom : dom.size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64)
+    (hn : t.sch.n + 1 < 2 ^ 64) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 64) (hp : 2 * t.tPad < 2 ^ 64)
+    (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64) :
+    StepRel (fun _ _ => True) (openStep t rep dom xs hi coins) (openStep t' rep dom xs hi' coins) := by
+  obtain ⟨st, sch, tPad, g, extra, lanePad, cm0⟩ := t
+  obtain ⟨st', sch', tPad', g', extra', lanePad', cm0'⟩ := t'
+  obtain rfl : st = st' := hst
+  obtain rfl : sch = sch' := hsch
+  obtain rfl : tPad = tPad' := htp
+  unfold openStep
+  dsimp only
+  refine stepRel_run (coins := coins) (live := true) (S := fun _ _ => True) ?_ (trAlike_init dom hdom) _
+  have h1 := repPiop_sim (L := openLift coins false) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0)
+    (flat cm0.cap) (flat cm0'.cap) ByteArray.empty (_root_.Flock.Firewall.Finish.claimsOf xs) (fun _ => 0) hcm.1 hdg
+    hcm.2 (by decide) hm
+  refine sim_bind (sim_relift coins false true h1) fun r r' h => ?_
+  obtain ⟨rfl, hcs⟩ := h
+  have hc : r.2.2.size < 2 ^ 64 := by
+    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map] at hcs
+    omega
+  refine sim_bind (sim_getThe coins true) fun k k' h => ?_
+  subst h
+  refine sim_ite _ (fun _ => ?_) (fun _ => ?_)
+  · first
+    | exact sim_throw _ _
+    | exact sim_bind (S := fun _ _ => False) (sim_throw _ _) fun _ _ h => h.elim
+  exact sim_bind (S := fun _ _ => True) (repOpening_sim (L := openLift coins true)
+    (fun lv g salt => pure (_root_.Flock.Firewall.Finish.commitFw lv g salt)) st sch
+    (fun i g g' s s' _ => orel_pure (commitFw_capAlike _ g g' s s' (hd i))) _ tPad rep g g' cm0 cm0' r.2.2 _ extra
+    extra' lanePad lanePad' _ _ hcm hg hc hn hq hp) fun _ _ _ => sim_pure trivial
 
 end Sched
 
