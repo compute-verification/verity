@@ -208,8 +208,11 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
         for d in range(len(defs) - 1, -1, -1):
             for c, kind, M in kinds[d]:
                 scales[c.e] |= {s * M for s in scales[d]}
-        out["summary"] = {"whole_defs": sum(whole), "contexts": sum(len(s) for s in scales),
-                          "refs": sum(own[e] * len(scales[e]) for e in range(len(defs)))}
+        ctx = [len(s) for s in scales]
+        out["summary"] = {"whole_defs": sum(whole), "contexts": sum(ctx),
+                          "refs": sum(own[e] * ctx[e] for e in range(len(defs))),
+                          "pairs": sum(ctx[d] * sum(c.count * defs[c.e].ins for c in D.calls) for d, D in enumerate(defs)),
+                          "pairs_runs": sum(ctx[d] * sum(defs[c.e].ins for c in D.calls) for d, D in enumerate(defs))}
     if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
