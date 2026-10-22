@@ -218,6 +218,10 @@
    "owner": "@compute-accounting",
    "digest": "3a5cf6fec99a82206ca55ce1040805252587d207a2fad7f3d74e9cabf33b83e7"
   },
+  "Accounting.Assumptions.TS.TileChecks": {
+   "owner": "@compute-accounting",
+   "digest": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+  },
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
    "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
@@ -1432,10 +1436,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
-  "Accounting.Assumptions.TS.TileChecks": {
-   "owner": "@compute-accounting",
-   "digest": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
   }
  },
  "meaning": [
@@ -3861,6 +3861,12 @@
    "signature": ["Accounting.SecurityProofs.TS.TileLuck : Accounting.Guarantees.TS.TileLuck"],
    "assumptions": [],
    "type_hash": "cf8e0fefb25830e7e36b520d9afbda42ca3c6f38cc08f3fcbeabf060ac37d763"
+  },
+  "Accounting.SecurityProofs.TS.TileSessionSound": {
+   "owner": "@proofs",
+   "signature": ["Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound"],
+   "assumptions": [],
+   "type_hash": "9eafccfc82d9a72e311cbd132727750360cc8ac8490817c9e672634b61f7aca9"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -9073,12 +9079,6 @@
    "signature": ["Verity.SecurityProofs.ComposeCone : Verity.Guarantees.ComposeCone"],
    "assumptions": [],
    "type_hash": "f565132f61eb73cde2ed8d766ee1d4344bfd8d8939ae9d2120bb9790bcd6f6f7"
-  },
-  "Accounting.SecurityProofs.TS.TileSessionSound": {
-   "owner": "@proofs",
-   "signature": ["Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound"],
-   "assumptions": [],
-   "type_hash": "9eafccfc82d9a72e311cbd132727750360cc8ac8490817c9e672634b61f7aca9"
   }
  },
  "shape": {
@@ -27958,6 +27958,36 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
+  "Proofs.Accounting.TS.Session.Tile.Assumptions": {
+   "digest": "e25748d622db2603a44112158e86897111711e197e1dfa5c2dea5460d9cb6786",
+   "definitions": {
+    "Accounting.Assumptions.TS.TileChecks": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Proofs.Accounting.TS.Session.Tile.Guarantees": {
+   "digest": "ecb0213094d72459c7d014ab6acc6e67f95b3e8b32031fa90d3bd6b57926419d",
+   "definitions": {
+    "Accounting.Guarantees.TS.TileSessionSound": "c64e2962ad9ea6f9a2c2e76102901e6549cbc3a0de263c90732036b3143aea6b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Proofs.Accounting.TS.Session.Tile.Layer": {
+   "digest": "0e6446453e4c0e452d28a4715bd1afd7e72e838d40a12fe4d0b17d59f62717e5",
+   "definitions": {
+    "Accounting.TS.Tile.TileOk": "ff944d08030968d87e9cbdac193cb79a81b81ce1eda073a1ddff2bff43a34d30",
+    "Accounting.TS.Tile.TileRel": "974332624e2c08ea376324387a2f3deeea8bfb761225be71b17e46af81ce4fb2",
+    "Accounting.TS.Tile.TileView": "557611812649bf4eecd4692ced429f7f1e770b3eb317aae43abc9d83056373bd",
+    "Accounting.TS.Tile.TileView.a": "11372319f3c31d6c3f652895e93722e2552ff5a1a6a02f241c5d75a52cbc47fa",
+    "Accounting.TS.Tile.TileView.b": "431fedd3638fef8f45e3ab46252475c2ea5f806999ff4884bd18f614142a33c1",
+    "Accounting.TS.Tile.TileView.sa": "c2e44ec3d1f3dd1a69b70fb0b1c7435f6f52ad9aa99d2aafa9a5d9c6647e7f33",
+    "Accounting.TS.Tile.TileView.sb": "622d3726bbb10cdbbd47ed822853296250ea16b4243a5f4f55519ab911fee8ab",
+    "Accounting.TS.Tile.TileView.y": "bb3e2087ff344dd24dc2b48653d23e0190e3f76ad78d12fecc44fa00c0ece4d1",
+    "Accounting.TS.Tile.TileView.z": "bd322207ab93520c46c265e415e7b4ce97a5321abc20185802865252a0d62ba0",
+    "Accounting.TS.Tile.tileLayer": "39508d9a948a1deb411f41a3d6e865cb6dc73b13bf8dcda0f9c3bc05690af82e"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
   "Proofs.Flock.EndToEnd.Statement": {
    "digest": "ad40a08625b963990b9762baf1aee17069395d082076b64e8ccf81c8897ab308",
    "definitions": {
@@ -37275,36 +37305,6 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
-  },
-  "Proofs.Accounting.TS.Session.Tile.Assumptions": {
-   "digest": "e25748d622db2603a44112158e86897111711e197e1dfa5c2dea5460d9cb6786",
-   "definitions": {
-    "Accounting.Assumptions.TS.TileChecks": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
-  },
-  "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "ecb0213094d72459c7d014ab6acc6e67f95b3e8b32031fa90d3bd6b57926419d",
-   "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "c64e2962ad9ea6f9a2c2e76102901e6549cbc3a0de263c90732036b3143aea6b"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
-  },
-  "Proofs.Accounting.TS.Session.Tile.Layer": {
-   "digest": "0e6446453e4c0e452d28a4715bd1afd7e72e838d40a12fe4d0b17d59f62717e5",
-   "definitions": {
-    "Accounting.TS.Tile.TileOk": "ff944d08030968d87e9cbdac193cb79a81b81ce1eda073a1ddff2bff43a34d30",
-    "Accounting.TS.Tile.TileRel": "974332624e2c08ea376324387a2f3deeea8bfb761225be71b17e46af81ce4fb2",
-    "Accounting.TS.Tile.TileView": "557611812649bf4eecd4692ced429f7f1e770b3eb317aae43abc9d83056373bd",
-    "Accounting.TS.Tile.TileView.a": "11372319f3c31d6c3f652895e93722e2552ff5a1a6a02f241c5d75a52cbc47fa",
-    "Accounting.TS.Tile.TileView.b": "431fedd3638fef8f45e3ab46252475c2ea5f806999ff4884bd18f614142a33c1",
-    "Accounting.TS.Tile.TileView.sa": "c2e44ec3d1f3dd1a69b70fb0b1c7435f6f52ad9aa99d2aafa9a5d9c6647e7f33",
-    "Accounting.TS.Tile.TileView.sb": "622d3726bbb10cdbbd47ed822853296250ea16b4243a5f4f55519ab911fee8ab",
-    "Accounting.TS.Tile.TileView.y": "bb3e2087ff344dd24dc2b48653d23e0190e3f76ad78d12fecc44fa00c0ece4d1",
-    "Accounting.TS.Tile.TileView.z": "bd322207ab93520c46c265e415e7b4ce97a5321abc20185802865252a0d62ba0",
-    "Accounting.TS.Tile.tileLayer": "39508d9a948a1deb411f41a3d6e865cb6dc73b13bf8dcda0f9c3bc05690af82e"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   }
  },
  "dependencies": {
