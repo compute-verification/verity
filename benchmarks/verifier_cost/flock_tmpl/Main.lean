@@ -1,9 +1,11 @@
-import Flock.TmplLayout
+import Flock.TmplFold
 
 /-!
 `flock-tmpl layout TMPL`: `Tmpl.layout`, option (iv) lenient and strict, its size and the time it takes (O(description)),
 then the reference column map `Tmpl.posMap` and its digest (`h ← h · 1000003 + pos` over the columns, mod 2^64), which
-`tmpl_layouts.py --digest` computes on its own map.
+`tmpl_layouts.py --digest` computes on its own map. `flock-tmpl fold TMPL [--ref]`: `Tmpl.fold` on the lenient layout at a
+fixed point, its work and time against the template's row entries; with `--ref`, then the reference `Tmpl.foldRef`
+(O(unrolled)), which it must equal.
 `flock-tmpl read TMPL`, `flock-tmpl unroll TMPL` and `flock-tmpl diff TMPL CIRCUIT`: the templated unit's read
 (`Flock.Tmpl.parse`, its text's read, line split and form checks, O(description)), the read then `Tmpl.unroll` (the flat
 net, through `Net.ofRows`'s matrices and checks: what a verifier that unrolls would hold), and the difftest of its unroll against the circuit file's flat unit:
@@ -134,6 +136,31 @@ def main (args : List String) : IO UInt32 := do
         let h := m.foldl (fun h p => h * 1000003 + p.toUInt64) (0 : UInt64)
         report (name ++ "/map") t0 [("digest", Json.str s!"{h.toNat}"), ("columns", toJson m.size)]
     return if ok then 0 else 1
+  | "fold" :: tp :: opt =>
+    let some t ← readTmpl tp | return 1
+    let t0 ← IO.monoNanosNow
+    let .ok lays := Tmpl.layout t false | report "fold" t0 [("error", Json.str "layout refused")]; return 1
+    let sl := max 7 (log2ceil (lays.getD t.root default).size)
+    let pt := fun (i : Nat) => (⟨(0x9e3779b97f4a7c15 * (i.toUInt64 + 1)) ^^^ 0x5bd1e995,
+      0xc2b2ae3d27d4eb4f * (i.toUInt64 + 7)⟩ : F128)
+    let lw := (Array.range 64).map fun i => pt (100 + i)
+    let rho := (Array.range (sl - 6)).map fun i => pt (200 + i)
+    let r := (Array.range (sl - 6)).map fun i => pt (300 + i)
+    let t0 ← IO.monoNanosNow
+    match Tmpl.fold t lays (pt 7) lw rho r with
+    | .error e => report "fold" t0 [("error", Json.str e)]; return 1
+    | .ok (p, work) =>
+      let entries := t.defs.foldl (fun n d => d.rows.foldl (fun n r => n + r.2.1.size + r.2.2.size) n) 0
+      report "fold" t0 [("work", toJson work), ("entries", toJson entries), ("slot_log", toJson sl),
+        ("p0", Json.str (p.getD 0 0).toHex)]
+      if opt != ["--ref"] then return 0
+      let t0 ← IO.monoNanosNow
+      match Tmpl.foldRef t lays (pt 7) lw rho r with
+      | .error e => report "fold_ref" t0 [("error", Json.str e)]; return 1
+      | .ok q =>
+        report "fold_ref" t0 [("equal", toJson (p == q))]
+        return if p == q then 0 else 1
   | _ =>
-    IO.eprintln "usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | flock-tmpl layout TMPL"
+    IO.eprintln ("usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | " ++
+      "flock-tmpl layout TMPL | flock-tmpl fold TMPL [--ref]")
     return 2

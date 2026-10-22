@@ -106,23 +106,44 @@ def layDef (t : Tmpl) (lays : Array Lay) (strict : Bool) (d : Nat) : V Lay := do
 def layouts (t : Tmpl) (strict : Bool) : V (Array Lay) :=
   (List.range t.defs.size).foldlM (fun lays d => return lays.push (← layDef t lays strict d)) #[]
 
+/-- The first `i ∈ [lo, hi)` with `key i > x`, else `hi`, for `key` ascending (`fuel` halvings). -/
+def firstGt (key : Nat → Nat) (x : Nat) : Nat → Nat → Nat → Nat
+  | 0, lo, _ => lo
+  | fuel + 1, lo, hi =>
+    if hi ≤ lo then lo
+    else if key ((lo + hi) / 2) ≤ x then firstGt key x fuel ((lo + hi) / 2 + 1) hi
+    else firstGt key x fuel lo ((lo + hi) / 2)
+
+/-- Where Definition `d`'s column `x` is: in copy `j` of call `i`, at its column `x'` there, or its own, at position
+`p`. Calls ascend by base and runs by their first column, so each is found by halving. -/
+inductive Loc where
+  | call (i j x' : Nat)
+  | own (p : Nat)
+  | none
+
+def locate (t : Tmpl) (lays : Array Lay) (d x : Nat) : Loc :=
+  let D := t.defs.getD d default
+  let L := lays.getD d default
+  let i := firstGt (fun i => (D.calls.getD i default).base) x 64 0 D.calls.size
+  let c := D.calls.getD (i - 1) default
+  let Le := (t.defs.getD c.def_ default).cols
+  if 0 < i && x < c.base + c.count * Le then .call (i - 1) ((x - c.base) / Le) ((x - c.base) % Le)
+  else
+    let r := firstGt (fun r => (L.runs.getD r default).1) x 64 0 L.runs.size
+    let (a, b, p) := L.runs.getD (r - 1) default
+    if 0 < r && x < b then .own (p + (x - a)) else .none
+
 /-- Column `x` of Definition `d`'s copy, at its position in `d`'s layout (`fuel` bounds the call depth). -/
 def posIn (t : Tmpl) (lays : Array Lay) : Nat → Nat → Nat → Nat
   | 0, _, x => x
   | fuel + 1, d, x =>
-    let D := t.defs.getD d default
-    let L := lays.getD d default
-    match (List.range D.calls.size).find? fun i =>
-        let c := D.calls.getD i default
-        c.base ≤ x && x < c.base + c.count * (t.defs.getD c.def_ default).cols with
-    | some i =>
-      let c := D.calls.getD i default
-      let Le := (t.defs.getD c.def_ default).cols
-      let pl := L.places.getD i default
-      pl.nb + (x - c.base) / Le * pl.cs + pl.ms * posIn t lays fuel c.def_ ((x - c.base) % Le)
-    | none => match L.runs.find? fun (a, b, _) => a ≤ x && x < b with
-      | some (a, _, p) => p + (x - a)
-      | none => x
+    match locate t lays d x with
+    | .call i j x' =>
+      let c := (t.defs.getD d default).calls.getD i default
+      let pl := (lays.getD d default).places.getD i default
+      pl.nb + j * pl.cs + pl.ms * posIn t lays fuel c.def_ x'
+    | .own p => p
+    | .none => x
 
 /-- The root's column `x`, at its committed position. -/
 def posOf (t : Tmpl) (lays : Array Lay) (x : Nat) : Nat := posIn t lays (t.defs.size + 1) t.root x

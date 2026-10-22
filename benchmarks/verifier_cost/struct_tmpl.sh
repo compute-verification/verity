@@ -6,7 +6,9 @@
 # --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
 # template is also unrolled to its flat net (`flock-tmpl unroll`, unroll-SHAPE.jsonl); after --layouts, each later shape's
 # template gets tmpl_layouts.py's today and option (iv) layouts, lenient and strict (layouts-SHAPE.jsonl), and the Lean
-# layout's (`flock-tmpl layout`, lean-layout-SHAPE.jsonl), whose column maps must agree with them. Run from a clone:
+# layout's (`flock-tmpl layout`, lean-layout-SHAPE.jsonl), whose column maps must agree with them; after --fold, each
+# later shape's `Tmpl.fold` on the lenient layout (fold-SHAPE.jsonl), and after --fold-ref, also its reference
+# `Tmpl.foldRef` (O(unrolled)), which it must equal. Run from a clone:
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/struct_tmpl.sh --check 32 256 4096 "256 32 32"
 # $OUT gets check-K.json, and per shape struct-SHAPE.json, read-SHAPE.jsonl and each step's /usr/bin/time -v; a template
@@ -36,7 +38,13 @@ EOF
 X=$S/tmpl/.lake/build/bin/flock-tmpl
 unroll=0
 layouts=0
+fold=
 while [ $# -gt 0 ]; do
+  if [ "$1" = --fold ] || [ "$1" = --fold-ref ]; then
+    fold=$1
+    shift
+    continue
+  fi
   if [ "$1" = --unroll ]; then
     unroll=1
     shift
@@ -86,6 +94,14 @@ ln = {r["phase"]: r.get("digest") for r in map(json.loads, open(sys.argv[2]))}
 bad = [m for m, s in (("iv", False), ("iv/strict", True)) if py.get(s) is None or py.get(s) != ln.get(m + "/map")]
 sys.exit(f"Tmpl.layout's map is not tmpl_layouts.py's: {bad}" if bad else 0)
 EOF
+  fi
+  if [ -n "$fold" ]; then
+    ref=()
+    [ "$fold" = --fold-ref ] && ref=(--ref)
+    /usr/bin/time -v "$X" fold "$t" "${ref[@]}" > "$O/fold-$tag.out" 2> "$O/fold-time-$tag.txt" \
+      || { cat "$O/fold-$tag.out" "$O/fold-time-$tag.txt" >&2; exit 1; }
+    grep '^PHASE ' "$O/fold-$tag.out" | sed 's/^PHASE //' | tee "$O/fold-$tag.jsonl"
+    grep -E 'Maximum resident|Elapsed' "$O/fold-time-$tag.txt"
   fi
   grep -E 'Maximum resident|Elapsed' "$O"/{struct,read}-time-$tag.txt
   [ "$(stat -c %s "$t")" -lt 1000000000 ] && mv "$t" "$O/" || rm -f "$t"

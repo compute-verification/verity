@@ -29,6 +29,7 @@
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
   "Flock.Test.TmplLayout",
+  "Flock.Test.TmplFold",
   "Flock.Test.MaskLog",
   "VStar"
  ],
