@@ -605,7 +605,7 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
   exact ⟨(key fun _ => []).1, fun ip => (key ip).2⟩
 
 /-- **A summed class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
-theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64)
+theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) {fuel : ℕ}
     (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
     (hd : foldDef t lays pt (fuel + 1) d β h as = .ok o)
@@ -763,5 +763,44 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
       ring
   have k0 := key 0 (Nat.two_pow_pos β) []
   exact ⟨k0.1.1, k0.1.2, fun a ha ip => (key a ha ip).2⟩
+
+/-- **Every class's fold means what it should**, at every depth. -/
+theorem classOk {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64)
+    (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) :
+    ∀ fuel, ClassOk t lays pt s fuel
+  | 0 => fun d β h as o hd _ _ => by
+    rw [foldDef] at hd
+    simp [throw, throwThe, MonadExceptOf.throw] at hd
+  | fuel + 1 => fun _ _ _ _ _ hd hf1 hf2 =>
+    ⟨fun h6 has => exp_step hs hlay (classOk hs hT hR hlay fuel) hd hf1 hf2 h6 has,
+      fun h6 => sum_step hT hR hlay (classOk hs hT hR hlay fuel) hd hf1 hf2 h6⟩
+
+/-- **The unit's fold** at entry `s < 64` is the root copy's reference value at its committed positions, plus the
+constant's row `[const] · [const]`, while the lane bits fit the point and the root reads no inputs. -/
+theorem fold_refVal {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P : Array F128} {w : ℕ}
+    (hP : fold t lays alpha lw rho r = .ok (P, w)) (hlay : LayOk t lays) (hins : (t.defs.getD t.root default).ins = 0)
+    (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)
+    {s : ℕ} (hs : s < 64) :
+    of P[s]! =
+      refVal t lays { alpha, lw, rho, r, qc := posOf t lays ((t.defs.getD t.root default).cols - 1) } s (t.defs.size + 1)
+          t.root 0 1 [] +
+        if posOf t lays ((t.defs.getD t.root default).cols - 1) % 64 = s then
+          of ((alpha + 1) * FoldPt.e { alpha, lw, rho, r, qc := posOf t lays ((t.defs.getD t.root default).cols - 1) }
+              (posOf t lays ((t.defs.getD t.root default).cols - 1)) *
+            FoldPt.g { alpha, lw, rho, r, qc := posOf t lays ((t.defs.getD t.root default).cols - 1) }
+              (posOf t lays ((t.defs.getD t.root default).cols - 1)))
+        else 0 := by
+  unfold fold at hP
+  obtain ⟨o, ho, hP⟩ := except_bind_ok hP
+  cases pure_ok hP
+  obtain ⟨hsh, hv⟩ := (classOk hs rfl rfl hlay _ _ _ _ _ _ ho (by rw [Nat.zero_add]; exact hf1)
+    (by rw [Nat.zero_add]; exact hf2)).1 (by omega) fun k hk => by
+      obtain rfl : k = 0 := by simpa using hk
+      simp
+  have h1 := hv fun _ => []
+  unfold expVal at h1
+  rw [hins, Finset.sum_range_zero, add_zero, show (#[0] : Array ℕ).size = 1 from rfl, Finset.sum_range_one] at h1
+  rw [getElem!_getD _ (by rw [addAt_size, hsh.1]; exact hs), addAt_get _ _ _ (by rw [hsh.1]; exact hs), h1]
+  rfl
 
 end FlockSoundness.TmplFold
