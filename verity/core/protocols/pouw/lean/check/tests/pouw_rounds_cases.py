@@ -14,7 +14,7 @@ open names a commit the host's pins log `PINS` records and seals a prefix of the
 whole log and its own copy of main's first-parent history `MAIN`.  Then one mutation (`ROUNDS_NAMES`) aimed at one
 refusal of `rounds`: the session's (an in-process challenger's coins, an unsigned or tampered log, a ledger signed under
 another key, under v1, cut before the session's end or at a reused leaf, a second session for the window's root, an end
-naming another record leaf or no hellos, hellos it didn't seal, a pin the log doesn't record or that is off main's
+naming another record leaf or no hellos, hellos it didn't seal or not a list, a pin the log doesn't record or off main's
 first-parent line, an open sealing no log, no log or no copy of main, …) or the coin rule's.
 
 A salt case is an honest live window's salt coin read through its challenger's session the same way: the session S a
@@ -340,7 +340,9 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
             events = ledger_events(rng, d["window"], s, record_leaf=RECORD_LEAF + 1)
             d["ledger"] = ledger_lines(events, _key(0))
         case "hellos":
-            files["hellos"] = rng.choice([[canonical_json_text({"n": 0, "reason": "no hello"})], None, "x"])
+            files["hellos"] = [canonical_json_text({"n": 0, "reason": "no hello"})]
+        case "hellos-form":
+            files["hellos"] = rng.choice([None, "x"])
         case "reused-leaf":
             events = ledger_events(rng, d["window"], s)
             leaves = leaves_of(events)
@@ -408,7 +410,7 @@ def _mutate(d: dict, s: Session, name: str, rng: random.Random) -> None:
 
 ROUNDS_NAMES = ["key-form", "seeded-coins", "in-process", "not-live", "unsigned", "close-signature", "tampered-log",
                 "unclosed", "no-ledger", "no-session", "second-session", "v1-ledger", "end-form", "record-leaf", "hellos",
-                "reused-leaf", "other-session",
+                "hellos-form", "reused-leaf", "other-session",
                 "other-key", "forged-ledger", "truncated", "unsealed", "rewritten",
                 "roots-form", "openings-list", "openings-form", "twice", "early", "early-root", "never", "swapped",
                 "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "too-many", "label", *PIN_NAMES]
