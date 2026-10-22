@@ -125,6 +125,42 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
 
 
+#: the auditor's host runs the lowering on numpy and C-Flock's Python alone
+NO_TORCH = """
+import importlib.abc, sys
+class _Block(importlib.abc.MetaPathFinder):
+    def find_spec(self, name, path, target=None):
+        if name.partition(".")[0] in ("torch", "triton", "verity_numerical"):
+            raise ImportError(f"{name}: the auditor's lowering runs without it")
+sys.meta_path.insert(0, _Block())
+"""
+WRITE = """
+from verity.ml.circuits.boolean import BIT
+from verity.ml.circuits.boolean.forms import add
+from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.types import Array
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock import class_statement as CS
+d = bind(definition("TmplNoTorch", 1, lambda C, a, b, w: add(C, a, b, width=16, carry_out=True) + [C.AND(w[0], w[2047])],
+                    (("a", Array(16, BIT)), ("b", Array(16, BIT)), ("w", Array(2048, BIT))), Array(18, BIT), register=False))
+CS.UnitStager(d, "unit/tmpl-no-torch", [("ab", V2, 32, ["a", "b"]), ("w", V2, 2048, ["w"])], [(V2, (0,))], circuit=OUT,
+              layout=MODE)
+"""
+
+
+def test_the_templated_statement_is_written_without_torch(tmp_path):
+    """`UnitStager`'s templated statement, the file the auditor's lowering writes on a host with numpy and no torch, is
+    written with torch (and the numerical benchmarks) unimportable, byte for byte the file it writes with them."""
+    import sys
+    prog = NO_TORCH + f"from pathlib import Path\nOUT, MODE = Path({str(tmp_path / 'a.txt')!r}), {MODE!r}\n" + WRITE
+    p = subprocess.run([sys.executable, "-c", prog], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-2000:]
+    exec(WRITE, {"OUT": tmp_path / "b.txt", "MODE": MODE})
+    a = (tmp_path / "a.txt").read_text()
+    assert a.startswith(f"{FC.TMPL_FORMAT} unit/tmpl-no-torch\n") and a == (tmp_path / "b.txt").read_text()
+
+
 def _verifier() -> Path:
     if b := os.environ.get("FLOCK_VERIFY_TMPL"):
         return Path(b)

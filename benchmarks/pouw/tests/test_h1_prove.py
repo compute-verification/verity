@@ -427,6 +427,23 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_names_a_layout_mode(monkeypatch
         U.layout()
 
 
+def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
+    """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
+    (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
+    row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    for shape in (U.Shape(64), U.Shape(128)):
+        t = shape.definition()
+        bits = {p.name: p.bits for p in shape.ports()}
+        reads = {port: key for key, port in U.ports(t).items()}
+        want = [(p, U.V2, bits[p], [reads[p]]) for p in shape.in_rows] + [("pub", U.V2, U.PUB_BITS, list(U.PUBLIC))]
+        assert HW.statement_rows(t, U.ports(t)) == want
+        named = {key: port for key, port in HW.window_ports(shape.window([("q", 2 * shape.c)], 2 * shape.r)[0]).items()}
+        assert HW.statement_rows(t) == [(named.get(ps[0], p), s, b, ps) for p, s, b, ps in want]
+        assert [p for p, *_ in HW.statement_rows(t)][:2] == [f"a_k{shape.k}_0", f"a_k{shape.k}_1"]
+    assert HW.STATEMENT_OUT_ROWS == ((U.V2, (0,)), (U.V2, (1,)))
+
+
 def test_the_numpy_records_are_h1zys_words():
     """`h1unit.dequant` and `h1unit.records` (numpy, what `window.py` commits) are `h1zy.dequant` and `h1zy.records` (the
     unit's word reference, `PouwZyDequant_v1`) on random and edge-case z, s_a and s_w: zeros of both signs, |z| at 2^31
