@@ -57,3 +57,19 @@ def test_a_landing_outside_the_window_or_a_missing_record_counts_as_no_data(tmp_
     s = qs.summary(rows)
     assert s["steps"]["machine"] == {"n": 0} and s["steps"]["total"] == {"n": 0}
     assert "no data" in qs.render(s, utc("2026-10-19T00:00:00"), utc("2026-10-19T23:00:00"))
+
+
+def test_the_control_pods_log_stamps_a_landing_with_the_end_of_its_tick():
+    """drive.sh on the control pod writes `<time> tick rc=N <sha>` after each tick, not a time before it: from 20 Oct `stats`
+    found no tick, so no landing (22 Oct: '0 PR(s) landed' over a day of landings)."""
+    pod = """\
+research queue drive: checking bbbbbbbbbbbb (#1 #2 #3): r20261019-103100-0002 with agreement
+2026-10-19T10:32:00Z tick rc=0 5d78b25b1
+research queue drive: landed #1 #2 #3 on `main` at bbbbbbbbbbbb (check r20261019-103100-0002)
+research merge: 3 `landed` label(s) on the check runs of 5d78b25b13..bbbbbbbbbbbb
+2026-10-19T12:04:00Z tick rc=0 5d78b25b1
+research queue drive: landed #4 on `main` at cccccccccccc (check r20261019-120000-0003)
+"""
+    launches, landings = qs.parse(pod)
+    assert [(l.tip, sorted(l.prs)) for l in launches] == [("bbbbbbbbbbbb", [1, 2, 3])]
+    assert [(l.at, l.prs, l.check) for l in landings] == [(utc("2026-10-19T12:04:00"), [1, 2, 3], "r20261019-103100-0002")]

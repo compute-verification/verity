@@ -5,11 +5,11 @@ reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difft
 which the Lean takes as given until it runs that verifier in-process.
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
-step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, the draw,
-`_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window of a closed, complete period. The steps are internal, so
-no caller credits a window with a step skipped: `_credited` returns the credit bits whatever the proofs' outcome, and
-`_a_link` trusts the round log's roots, which only `core_check.rounds` holds to the ones the challenger received before
-each coin.
+step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
+`_weights`, the draw, `_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window
+of a closed, complete period. The steps are internal, so no caller credits a window with a step skipped: `_credited`
+returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the round log's roots, which only
+`core_check.rounds` holds to the ones the challenger received before each coin.
 
 * **The verdicts are credit's own** (`_verified`). A window's evidence carries its statements' proof files, one
   statement a call with a drawn unit (`STATEMENT_KEYS`: its circuit file, its public file and its sessions), never a
@@ -84,6 +84,15 @@ each coin.
   are the ones each drawn unit's proof opened, under this window's registration: entries of another window or circuit,
   a proof verified against another registration, and an entry whose root is not the one its sessions opened are
   refused.
+* **The weights are the period's, registered before the salt** (`_weights`, `committed_weights`): each K's
+  ``<PREFIX>b/<K>``, all the B rows (int8 codes and their s_w) of the window's linears of that K, is registered once
+  under the registered domain of its name and the window's circuit, binding no window, and
+  `weights_root` of their roots is the weights' root the window's open root binds (`salt.window_open_root`, with its
+  round-0 request table's root, round 0's ``requests`` in its round log, and the session the auditor's ledger opened for
+  it), which its salt coin opens after. That root is the one its period's open signed (`WEIGHTS_FIELD`, the gate's
+  ``--weights-root``) before any window, so every window of a period opens the same B rows: a B row the prover changes
+  after the salt, or between two windows of a period, its codes or its s_w, is refused, and so is a period whose open
+  signs no weights' root.
 
 `calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
@@ -100,6 +109,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs import challenger as Ch
@@ -122,8 +132,9 @@ LEVELS = 64
 #: an A value's rows: the verifier hashes each pad past them, at most as many again
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-_DIGITS = re.compile(r"[0-9]+")
-_A = re.compile(r"([0-9]+)(?:@([0-9]+))?")
+#: a contraction K in a registered value's name: a canonical decimal, no leading zero
+_DIGITS = re.compile(r"[1-9][0-9]*")
+_A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -145,6 +156,9 @@ K_FIELD = "draw_k"
 MAX_K = 1 << 24
 #: the δ the period's ε is reported at
 DELTA = Fraction(1, 1 << 40)
+#: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
+#: ``--weights-root``), signed before any window's salt
+WEIGHTS_FIELD = "weights_root"
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
 LAYOUT_KEYS = ("calls", "linears", "m", "tile")
@@ -785,7 +799,7 @@ def other_registration(v: str) -> str:
             "session for): the entry is another registration's, another window's or another circuit's")
 
 
-def _registration(window: str, program: str, entries: list, ss: list[dict], layout: dict, proofs: list
+def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list
                   ) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
@@ -793,8 +807,10 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
     open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
     value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
-    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in). A step of `window`, after
-    `_a_link` has held each A value's root to the segments the round roots commit."""
+    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in), and its K's B rows, the
+    window's ``<prefix>b/<K>`` (`prefix` the descriptor's ``PREFIX``). A step of `window`, after `_a_link` has held each
+    A value's root to the segments the round roots commit and `_period_weights` each ``<prefix>b/<K>`` to the weights'
+    root its period signed."""
     def held(v: str, e: dict) -> str | None:
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
@@ -821,7 +837,7 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
             return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
                                     "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
                                     "verify every drawn unit's session against the window's committed circuit")
-        opened = False
+        opened, weights = False, False
         for port, v, root in _finding(p["registered"]):
             if names.count(v) != 1:
                 return "registration", (f"drawn unit {u}'s proof opened port {port} against {v}, which the window "
@@ -839,10 +855,15 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], layo
                                         "another registration, or the window's entry is not the root its sessions opened")
             got = a_value(v)
             opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c)))
+            weights = weights or v == f"{prefix}b/{k}"
         if not opened:
             return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of "
                                     "the window, so nothing ties the A rows it proved to the ones the round roots "
                                     "committed: verify each drawn unit's session with the window's A value registered")
+        if not weights:
+            return "registration", (f"drawn unit {u}'s proof opened no weights {prefix}b/{k} of the window, so nothing "
+                                    "ties the B rows it proved to the ones its period registered: verify each drawn "
+                                    "unit's session with the window's weights registered")
     return None
 
 
@@ -940,6 +961,10 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     layout, why = layout_of(bytes.fromhex(descriptor))
     if why is not None:
         return None, why
+    program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
+    why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
+    if why is not None:
+        return None, why
     ss, _ = strata(layout)
     if len(calls) != len(layout["calls"]):
         return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
@@ -952,9 +977,45 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     if why is None:
         why = _proved(units, proofs)
     if why is None:
-        why = _registration(window["root"], hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), entries, ss, layout,
-                            proofs)
+        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs)
     return (None, why) if why is not None else ((got, layout), None)
+
+
+def _prefix(descriptor: bytes) -> str:
+    """The ``PREFIX`` of the program function's record of a descriptor `layout_of` accepted."""
+    return _loads(dict(_record(_loads(descriptor.decode())[1]["program_fn"]))["PREFIX"])[1]
+
+
+def no_weights(name: str) -> str:
+    return (f"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --weights-root): "
+            "the period registers each K's B rows before its first window's salt and opens with their root")
+
+
+def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: dict, entries: Any, program: str,
+                    prefix: str, verify: Ch.Verify) -> tuple[str, str] | None:
+    """None when the window's registered weights (`_weights`, over round 0's ``requests`` in its round log and the
+    session the auditor's ledger opened for it) fold to the weights' root its period's open signed (`committed_weights`);
+    else the refusal (``weights``, ``layout`` or ``coin``). A step of `window`, after `_credited` trusted the ledger."""
+    try:
+        audited = Ch.audited_session(ledger, window, Ch.ChallengerKey.from_json(key), verify)
+    except Ch.CoinError as e:
+        return "coin", f"the challenger's session is not trusted: {e}"
+    if audited.period is None:
+        return "weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the weights' "
+                           f"root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose open signs it")
+    signed, why = committed_weights(ledger, audited.period)
+    if why is not None:
+        return why
+    requests = rounds[0].get("requests") if rounds else None
+    w, why = _weights(window, layout, entries, requests, audited.session, program, prefix)
+    if why is not None:
+        return why
+    if w.hex() != signed:
+        return "weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., the one "
+                           f"period {audited.period}'s open signed: a B row's codes or s_w differ from the ones the "
+                           "period registered before its first window's salt. Open every window of a period on its "
+                           "registered B rows")
+    return None
 
 
 def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
@@ -993,15 +1054,22 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
     3. `_a_link`: each A value among the window's registered `entries` is the tree over the segments those round roots
        commit;
     4. the layout of its circuit (`layout_of` of `descriptor`, the bytes in hex of the circuit its proofs were verified
-       against), the manifest one row per call of it (``manifest``);
-    5. `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
+       against);
+    5. `_weights`, its period's: the window's registered ``<PREFIX>b/<K>`` (``PREFIX`` the descriptor's) are each K's
+       B rows once, binding no window, and their `weights_root` is the one the open of the period holding the window
+       signed (`committed_weights`), and with round 0's ``requests`` in `rounds` and the session the auditor's ledger
+       opened for the window it is the window's open root (`salt.window_open_root`). So every window of a period opens
+       the B rows, codes and s_w, the period registered before its first window's salt, and a window of no period, or
+       of one whose open signs no weights' root, is refused before any of its proofs is read;
+    6. the manifest one row per call of the layout (``manifest``), and `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
        for), the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
        ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier of record's verdict
        for a drawn unit's session (`PROOF_KEYS`);
-    6. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
+    7. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
        (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
-       that descriptor and opened its registered values at their registered roots, its K's A value among them."""
+       that descriptor and opened its registered values at their registered roots, its K's A value and its K's
+       ``<PREFIX>b/<K>`` among them."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, rounds, draw, descriptor, entries,
                        lambda *_: (proofs, None), k, verify)
     return (None, why) if got is None else (got[0], None)
@@ -1070,6 +1138,16 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     return k, None
 
 
+def committed_weights(ledger: list, name: str) -> tuple[str | None, tuple[str, str] | None]:
+    """The weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest: `weights_root` of each K's
+    registered ``b/<K>``) in the auditor's ledger `ledger`, one the challenger's checks have trusted, and None; or None
+    and the refusal (``weights``)."""
+    body = next(e["body"] for e in map(json.loads, ledger)
+                if e["kind"] == "period-open" and e["body"]["period"] == name)
+    w = body.get(WEIGHTS_FIELD)
+    return (w, None) if _digest(w) is not None else (None, ("weights", no_weights(name)))
+
+
 def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, str] | None]:
     """The circuit files period `name`'s open committed (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``: each K's template's
     circuit file, as the auditor's lowering built it) in the auditor's ledger `ledger`, one `period` has trusted, and
@@ -1101,15 +1179,15 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     itself. Period `name`'s credit and None, or None and the refusal. The credit is ``{windows, k, delta, eps}``: each
     window's credited calls in the close's order, the K the period's open committed (`committed_k`), the δ the ε is
     reported at (`DELTA`), and each window's ε, what its draw of K established over its credited work (`established`;
-    null when it establishes no ε <= 1). The period's windows
-    are exactly its close's (`period`), its open committed K (``budget``), each window's session ran a commit the host's
-    pins log `pins` records on the verifier's copy of main's first-parent history `main` and the window proves the
-    circuit the period's open committed (``circuit``: the pin first, then its ``descriptor``, the bytes in hex of the
-    circuit its proofs were verified against, hashing to it, `challenger.credited_session`), and each window's
-    evidence (``{window, session, salt, calls, descriptor, entries, served, rounds, draw, proofs}``, as `window` reads
-    it, under the same ledger) is credited by
-    `window`, every step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period (``circuit`` or
-    ``window``), so a period earns only when every window in it does."""
+    null when it establishes no ε <= 1). The period's windows are exactly its close's (`period`), its open committed K
+    (``budget``) and signed the weights' root (`committed_weights`, ``weights``) every window's registered B rows fold
+    to, each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's
+    first-parent history `main` and the window proves the circuit the period's open committed (``circuit``: the pin
+    first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
+    `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, descriptor, entries,
+    served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it, every
+    step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period
+    (``circuit`` or ``window``), so a period earns only when every window in it does."""
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
@@ -1123,6 +1201,8 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
+    if why is None:
+        _, why = committed_weights(ledger, name)
     if why is not None:
         return None, why
     files = None
@@ -1222,7 +1302,8 @@ def _segments(a: Any) -> dict[str, list[tuple[int, int, bytes]]] | None:
 def a_value(value: Any) -> tuple[str, str | None] | None:
     """A registered A value's contraction and call, as their digits: a name whose last two parts are ``a`` and either a
     contraction (``…/a/<K>``, the window's A rows of K, `h1window.roles`), its call None, or a contraction and a call
-    (``…/a/<K>@<call>``, that call's A table, `h1window.table`); None for any other name."""
+    (``…/a/<K>@<call>``, that call's A table, `h1window.table`); None for any other name.
+    K is a canonical decimal, no leading zero."""
     parts = value.split("/") if isinstance(value, str) else []
     m = _A.fullmatch(parts[-1]) if len(parts) >= 2 and parts[-2] == "a" else None
     return None if m is None else (m[1], m[2])
@@ -1235,7 +1316,7 @@ def is_a(value: Any) -> bool:
 
 def is_held(value: Any) -> bool:
     """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
-    (``…/b/<K>``, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
+    (``…/b/<K>``, K a canonical decimal, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
     among them, is the window's own."""
     parts = value.split("/") if isinstance(value, str) else []
     return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
@@ -1323,9 +1404,109 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
     return None
 
 
+#: an H1 window's weights' root: each K's registered ``…/b/<K>`` root (`weights_root`)
+WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+WINDOW_ROOT_FORM = "the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)"
+REQUESTS_FORM = "the window's round-0 request table's root is not a SHA-512 digest (128 lowercase hex)"
+SESSION_FORM = ("the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of "
+                "[A-Za-z0-9._:-], the first alphanumeric)")
+CIRCUIT_FORM = ("the window's circuit is not its descriptor's SHA-512 (128 lowercase hex) and its PREFIX (a string of "
+                "printable ASCII but \" and \\)")
+OTHER_WEIGHTS = ("the window's registered weights are not the ones its open root binds: weights_root of each K's …/b/<K> "
+                 "root, its round-0 request table's root and its session are not its open root (salt.window_open_root), "
+                 "so a B row, its codes or its s_w, is not the one registered before the window's salt. Register each "
+                 "K's B rows once, before the window opens, and open them at that root")
+
+
+def weights_root(roots: dict[int, bytes]) -> bytes:
+    """An H1 window's weights' root, the first part of its open root (`salt.window_open_root`): `tagged` of `WEIGHTS_TAG`
+    and each K's registered ``…/b/<K>`` root, ``K, root`` by ascending K (`roots`, ``{K: root}``). A ``…/b/<K>`` is the
+    B rows of the window Program's linears of that K, linear after linear, each row its K int8 codes then their f32 scale
+    s_w (`h1window`, `h1zy.ROW`), committed under the domain that binds no window (`registered.domain`), so this root
+    fixes every code and every s_w of the window's weights."""
+    return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
+
+
+def b_words(k: int) -> int:
+    """A B row's 16-bit words: its K int8 codes, then the 4 bytes of its f32 s_w (`h1zy.ROW`, `registered.bytes_leaves`)."""
+    return (k + 5) // 2
+
+
+def other_weights_entry(v: str, k: int, n: int) -> str:
+    return (f"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's {{value, root, "
+            f"leaves, words, domain}}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {b_words(k)} "
+            f"16-bit words (K codes then s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the "
+            "SHA-512 of its descriptor), binding no window (registered.domain)")
+
+
+def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any, program: Any, prefix: Any
+             ) -> tuple[bytes | None, tuple[str, str] | None]:
+    """The weights' root the window registered and None; or None and the refusal (``weights`` or ``layout``, and why).
+    `entries` (the window's registered entries, ``{value, root, …}``) must register, for each K of the window's
+    `layout` (`strata`), exactly ``<prefix>b/<K>`` (`prefix` its descriptor's ``PREFIX``) once, and no other ``…/b/<K>``;
+    each such entry must be the registration of all of K's B rows (K's linears' n in turn, each `b_words(K)` words),
+    under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
+    (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
+    (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt` reads it)
+    must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin opens only after that root,
+    so every code and s_w of a B row a drawn unit opens at its ``…/b/<K>`` root was fixed before the window's salt, and
+    a window whose B rows differ from the ones it opened on is refused. A step of `window` (`_period_weights`), which
+    also holds the root to the one the window's period signed."""
+    def no(why: str) -> tuple[None, tuple[str, str]]:
+        return None, ("weights", why)
+
+    r = _digest(window.get("root")) if isinstance(window, dict) else None
+    if r is None:
+        return no(WINDOW_ROOT_FORM)
+    t = _digest(requests)
+    if t is None:
+        return no(REQUESTS_FORM)
+    if not (type(session) is str and PS.SESSION.fullmatch(session)):
+        return no(SESSION_FORM)
+    if _digest(program) is None or not _printable(prefix):
+        return no(CIRCUIT_FORM)
+    _ss, why = strata(layout)
+    if why is not None:
+        return None, why
+    rows: dict[int, int] = {}
+    for _name, k, n in layout["linears"]:
+        rows[k] = rows.get(k, 0) + n
+    names = {f"{prefix}b/{k}": k for k in rows}
+    if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
+        return no(ENTRIES_FORM)
+    roots: dict[int, bytes] = {}
+    for e in entries:
+        v = e.get("value")
+        if not is_held(v):
+            continue
+        if v not in names:
+            return no(f"the window registers weights {v}, which is not {prefix}b/<K> of a K of its circuit: it "
+                      f"registers each of its K's B rows as {prefix}b/<K> ({prefix} its descriptor's PREFIX), and no "
+                      "other …/b/<K>")
+        k, n = names[v], rows[names[v]]
+        if k in roots:
+            return no(f"the window registers K = {k}'s weights twice ({v}): each K's B rows are one registered value "
+                      f"{prefix}b/<K>")
+        h = _digest(e.get("root"))
+        if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == n and type(e["leaves"]) is int
+                and e["words"] == b_words(k) and type(e["words"]) is int
+                and e["domain"] == G.domain(program, v, b_words(k), n).domain_id.hex()):
+            return no(other_weights_entry(v, k, n))
+        roots[k] = h
+    for k in sorted(rows):
+        if k not in roots:
+            return no(f"the window registers no weights {prefix}b/{k} of K = {k}: each K's B rows, their codes and s_w, "
+                      "are registered under the weights' root its open root binds, before its salt")
+    w = weights_root(roots)
+    if PS.window_open_root(w, t, session) != r:
+        return no(OTHER_WEIGHTS)
+    return w, None
+
+
 __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
            "MAX_K", "PARTITION_FORMAT", "PERIOD_KEYS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
-           "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WINDOW_FN", "WINDOW_KEYS", "call_work", "calls_root",
-           "committed_files", "committed_k", "cover", "domain_of", "draw_root", "drawn", "established", "a_value",
-           "is_a", "is_held", "law", "layout_of", "merkle_depth", "partition_of", "period", "period_credit",
-           "registered_file", "round_root", "shape_of", "strata", "tree_root", "window"]
+           "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WEIGHTS_TAG", "WINDOW_FN", "WINDOW_KEYS",
+           "b_words", "call_work", "calls_root", "committed_files", "committed_k", "committed_weights", "cover",
+           "domain_of", "draw_root", "drawn", "established", "a_value", "is_a", "is_held", "law", "layout_of",
+           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "round_root", "shape_of",
+           "strata", "tree_root", "weights_root", "window"]

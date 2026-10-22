@@ -188,11 +188,12 @@ def _bind(events: list) -> list:
 
 
 def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: bool = False, opened: dict | None = None,
-                  **end) -> list[tuple[str, str | None, dict]]:
+                  period: dict | None = None, **end) -> list[tuple[str, str | None, dict]]:
     """The window's session `s` opened (its open's body changed by `opened`, a None dropping its field) and ended closed
     (its end's body changed by `end`), sealing the log and hellos its challenger left, among up to two others, sometimes
-    inside a period of lane `LANE` that a close ends.  `reserved` reserves every session first, as the gate's two-step
-    open does (`_reserved`), among up to one other: the period counts its windows at their reserves."""
+    inside a period of lane `LANE` that a close ends, always when `period` (the further fields its open commits) is
+    given.  `reserved` reserves every session first, as the gate's two-step open does (`_reserved`), among up to one
+    other: the period counts its windows at their reserves."""
     o = {k: v for k, v in {**_open(rng, window, s.pub), **(opened or {})}.items() if v is not None}
     named = (_reserved(rng, s.sid, o) if reserved else [("open", s.sid, o)]) + [("end", s.sid, _end(s, **end))]
     others = []
@@ -205,11 +206,11 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
     events = []
     while any(queues):
         events.append(rng.choice([q for q in queues if q]).pop(0))
-    if rng.random() < 0.5:
+    if period is not None or rng.random() < 0.5:
         name = rng.choice(PERIODS)
         events.insert(0, ("period-open", None, {"period": name, "lane": LANE, "by": LANE, "cap": 4,
                                                 "circuit": rng.choice(CIRCUITS), "pinned": "ab" * 20,
-                                                "key_sha512": hashlib.sha512(s.pub).hexdigest()}))
+                                                "key_sha512": hashlib.sha512(s.pub).hexdigest(), **(period or {})}))
         if rng.random() < 0.5:
             roots = {sid: b["window"]["root"] for kind, sid, b in events if kind == "open"}
             windows = [{"root": roots[sid], "session": sid, "complete": True}
