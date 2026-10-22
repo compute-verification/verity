@@ -55,3 +55,29 @@ def test_the_known_rows_are_the_harness_own(seed: int):
         assert got == _old_known_rows(ctx, w, kind, ln, index), (kind, ln)
         if kind == LL.LANE:
             assert got[LL.PUB][1] == U.pub_words(leaf.salt, leaf.position, roots).tolist() + [ln]
+
+
+def _rows_or_refusal(fn, ctx, w, kind: str, ln: int | None, index: int):
+    try:
+        return fn(ctx, w, kind, ln, index)
+    except (ValueError, OverflowError):
+        return "refused"
+
+
+def test_off_the_served_leaf_the_known_rows_refuse_and_take_what_the_harness_did():
+    """Admit rows of any length and positions in and out of a u64 (the inputs `PouwWindow.knownRows`' difftest draws
+    through `known_rows`): the rows, or the refusal, are the old harness's."""
+    rng = random.Random(0)
+    refused = 0
+    for _ in range(200):
+        position = rng.choice((0, (1 << 32) - 1, 1 << 32, (1 << 64) - 1, rng.getrandbits(64), 1 << 64, -1))
+        leaf = RN.Leaf([], [], [], [], (), [rng.getrandbits(1) for _ in range(rng.choice((32, 0, 1, 15, 17, 79)))],
+                       rng.randbytes(64), position)
+        w = RN.World("honest", leaf, (rng.randbytes(64), rng.randbytes(64)), {}, "", "", None, {})
+        ctx = RN.Ctx(Path("."), "h1-lanes", 32, position)
+        ln = rng.choice((None, 0, 31, rng.randrange(32)))
+        kind, index = (LL.COMBINE, 32) if ln is None else (LL.LANE, ln)
+        got = _rows_or_refusal(RN.known_rows, ctx, w, kind, ln, index)
+        assert got == _rows_or_refusal(_old_known_rows, ctx, w, kind, ln, index), (position, len(leaf.admit), ln)
+        refused += got == "refused"
+    assert 0 < refused < 200

@@ -41,9 +41,9 @@ input its ok's cone reads (the lane index's ``pub`` among them) or an output row
   position and roots as its seed reads them, `seeds.leaves` and `seeds.position_leaves`, 100 words, then l as the 101st),
   ``admit`` (the leaf's R admit bits, `bits_words`) and ``o0`` (`OK_ROW`); the salts they're committed under are the
   caller's. Read least significant bit first, as `Accounting.TS.Lanes.decLane` reads a field, the salt is its 16
-  big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. The
-  difftest against BRIDGE2's Lean `Accounting.TS.knownRows` (the rows `LeafLanesSound` is to take) is not yet written:
-  its reference is `lean/window/tests/test_lanes.py`'s `known_rows`.
+  big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. Lean's
+  is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
+  `known_rows` (`benchmarks/pouw/h1_lanes/run.py`), a wrapper over it.
 
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
 window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
@@ -178,18 +178,17 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> li
     return bits_words(bits) + [int(ln)]
 
 
-def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, salt: bytes | None = None, position: int | None = None,
-               roots: Sequence[bytes] | None = None, admit: Sequence[int] | None = None) -> dict[str, tuple[str, list[int]]]:
+def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, admit: Sequence[int] | None = None,
+               salt: bytes | None = None, position: int | None = None,
+               roots: Sequence[bytes] | None = None) -> dict[str, tuple[str, list[int]]]:
     """A statement's `known` ports' rows, each ``(value, words)``: lane l's ``pub`` (`pub_words` of the unit's ``salt``,
-    ``position`` and ``roots``) and ``admit`` (the leaf's R ``admit`` bits), and every statement's ``o0`` (`OK_ROW`), the
-    combine's one known port."""
+    ``position`` and ``roots``) and ``admit`` (`bits_words` of the leaf's ``admit`` bits, its R), and every statement's
+    ``o0`` (`OK_ROW`), the combine's one known port. Lean's is `PouwWindow.knownRows`, with its arguments in this order."""
     vals = known(r, c, kind, ln)
     out = {OK: (vals[OK], list(OK_ROW))}
     if kind == LANE:
         if salt is None or position is None or roots is None or admit is None:
-            raise ValueError("a lane's known rows are of the unit's salt, position and roots and the leaf's admit bits")
-        if len(admit) != r:
-            raise ValueError(f"an {r}-row leaf has {r} admit bits, not {len(admit)}")
+            raise ValueError("a lane's known rows are of the leaf's admit bits and the unit's salt, position and roots")
         out[PUB] = (vals[PUB], pub_words(salt, position, roots, int(ln)))
         out[ADMIT] = (vals[ADMIT], bits_words(admit))
     return out

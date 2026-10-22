@@ -160,10 +160,10 @@ def test_a_lanes_pub_row_is_its_seeds_leaves_then_its_index():
 
 
 def test_each_statements_known_rows_are_its_known_ports():
-    """Each statement's `known_rows` are its `known` ports: lane l's ``pub`` (`pub_words` at l) and ``admit`` (row i's
-    bit i of the leaf's R, whole words), and every ``o0`` the row 1."""
+    """Each statement's `known_rows` are its `known` ports: lane l's ``pub`` (`pub_words` at l) and ``admit`` (bit i the
+    admit bit i, whole words, of any length, as Lean's `PouwWindow.knownRows` takes them), and every ``o0`` the row 1."""
     admit = [int(i % 3 == 0) for i in range(32)]
-    data = {"salt": SALT, "position": POSITION, "roots": ROOTS, "admit": admit}
+    data = {"admit": admit, "salt": SALT, "position": POSITION, "roots": ROOTS}
     for kind, ln in LL.statements(32, 32):
         got = LL.known_rows(32, 32, kind, ln, **data)
         assert {p: v for p, (v, _) in got.items()} == LL.known(32, 32, kind, ln) and got[LL.OK][1] == [1]
@@ -171,11 +171,10 @@ def test_each_statements_known_rows_are_its_known_ports():
             assert got[LL.PUB][1] == LL.pub_words(SALT, POSITION, ROOTS, ln) and got[LL.ADMIT][1] == [0x9249, 0x4924]
     assert LL.known_rows(32, 32, LL.COMBINE) == {LL.OK: ("ok32", [1])}
     assert LL.known_rows(8, 16, LL.LANE, 3, **{**data, "admit": admit[:8]})[LL.ADMIT][1] == [0x49]
+    assert LL.known_rows(32, 32, LL.LANE, 3, **{**data, "admit": admit[:17]})[LL.ADMIT][1] == [0x9249, 0]
     assert LL.bits_words([1] * 17) == [0xFFFF, 1] and LL.bits_words([]) == []
     with pytest.raises(ValueError, match="admit bits"):
         LL.known_rows(32, 32, LL.LANE, 3, salt=SALT, position=POSITION, roots=ROOTS)
-    with pytest.raises(ValueError, match="32 admit bits, not 31"):
-        LL.known_rows(32, 32, LL.LANE, 3, **{**data, "admit": admit[:31]})
     with pytest.raises(ValueError, match="lanes"):
         LL.known_rows(32, 32, LL.LANE, 32, **data)
     with pytest.raises(ValueError, match="0 or 1"):

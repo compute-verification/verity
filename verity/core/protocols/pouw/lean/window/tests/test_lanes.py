@@ -3,8 +3,7 @@ shared harness (`verity_difftest`): each port's fields to `h1zy.statement_ports`
 signatures), each port's row to `pouw.leaf_lanes`' (`reads`, `known`), each known port's row to `leaf_lanes.known_rows`
 (its words, and each field's bits where Lean's layout puts it), and the unit's input wires (`wires?`, `wireOf?`) to
 the circuits C-Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
-file's META as `UnitStager` writes it, as #3131's h1_lanes stages them). `known_rows` here is the reference of the
-difftest against BRIDGE2's Lean `Accounting.TS.knownRows`, which is not yet written.
+file's META as `UnitStager` writes it, as #3131's h1_lanes stages them).
 
 The drawn inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
 32-wide step, lane indices in and out of range, paths that are and aren't a statement's and wires in, between and past
@@ -75,20 +74,6 @@ def _source(lay: H.Layout, ln: int | None, port: str) -> dict:
     if port in reads:
         return {"read": reads[port][0], "row": reads[port][1]}
     return {"known": LL.known(lay.r, lay.c, kind, ln)[port]}
-
-
-def known_rows(x: dict) -> dict:
-    """The statement's known rows by port, each ``{"value", "words"}`` (`leaf_lanes.known_rows`), of ``x``'s leaf (``r``,
-    ``c``; ``lane`` None the combine) and, for a lane, its unit's ``salt``, ``position`` and ``roots`` (hex) and the
-    leaf's ``admit`` bits."""
-    ln = x.get("lane")
-    data = {} if ln is None else {"salt": bytes.fromhex(x["salt"]), "position": x["position"],
-                                  "roots": [bytes.fromhex(h) for h in x["roots"]], "admit": x["admit"]}
-    try:
-        rows = LL.known_rows(x["r"], x["c"], LL.COMBINE if ln is None else LL.LANE, ln, **data)
-    except ValueError as e:
-        raise D.Reject(str(e)) from e
-    return {p: {"value": v, "words": w} for p, (v, w) in rows.items()}
 
 
 def _bits_n(words: list[int], lo: int, n: int) -> int:
@@ -345,12 +330,13 @@ def test_the_known_rows_are_the_known_ports(r: int, c: int, k: int, server) -> N
         x = {"r": r, "c": c, "k": k, "lane": ln}
         got = json.loads(D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)[1])
         lean = {p["name"]: p for p in got if "known" in p["source"]}
-        mine = known_rows({**x, "salt": salt.hex(), "position": position, "roots": [h.hex() for h in roots], "admit": admit})
-        assert {p: m["value"] for p, m in mine.items()} == {p: q["source"]["known"] for p, q in lean.items()}
+        mine = LL.known_rows(r, c, LL.COMBINE if ln is None else LL.LANE, ln, admit=admit, salt=salt, position=position,
+                             roots=roots)
+        assert {p: v for p, (v, _) in mine.items()} == {p: q["source"]["known"] for p, q in lean.items()}
         assert ln is None or (lean["pub"]["words"], lean["admit"]["bits"]) == (101, r)
         assert lean["o0"]["words"] == 1
-        for p, m in mine.items():
-            words, port = m["words"], lean[p]
+        for p, (_v, words) in mine.items():
+            port = lean[p]
             assert len(words) == port["words"] and _bits_n(words, port["bits"], 16 * len(words) - port["bits"]) == 0, p
             for f in port["fields"]:
                 assert _bits_n(words, f["bit"], f["bits"]) == {**want, "lane": ln}[f["path"]], (ln, p, f["path"])
