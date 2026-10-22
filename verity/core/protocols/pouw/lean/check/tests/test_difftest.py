@@ -17,14 +17,15 @@ Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
-`drawn`, `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
-`credit._a_link` (`PouwCheck.Credit.Internal`'s): one `Port` each, over the cases
+`drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`, `credit.drawn`,
+`credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s): one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
 the units a draw coin draws from a window's layout and each of them proved, a served window whole with its layout read
 from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
 to its A trees, a period of the
-auditor's ledger and its windows, a window's A trees under its round roots, then one mutation each aimed at every
-refusal), compared output for output: the credited calls, the drawn units or null, or the same refusal.
+auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
+open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the drawn
+units, the weights' root or null, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
@@ -34,6 +35,7 @@ the same session, reserved before it opened (opened after the session's open roo
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import re
@@ -259,21 +261,38 @@ def outcome(case: dict) -> dict | None:
 
 
 def window(case: dict) -> dict:
-    got, refused = Cr.window(*credit_cases.window_args(case))
+    got, refused = Cr._window_outcomes(*credit_cases.window_args(case))
     _counted(refused, "window")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
 def period(case: dict) -> dict:
-    got, refused = Cr.period_credit(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
+    got, refused = Cr._period_outcomes(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
     _counted(refused, "period")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
+
+
+def weights(case: dict) -> dict:
+    got, refused = Cr._weights(*(case[k] for k in credit_cases.WEIGHTS_KEYS))
+    _counted(refused, "weights")
+    return {"weights": got.hex()} if refused is None else {"refused": list(refused)}
+
+
+def registered_file(case: dict) -> dict:
+    raw = bytes.fromhex(case["descriptor"])
+    lay, refused = Cr.layout_of(raw)
+    if refused is None:
+        program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"])
+    _counted(refused, "registered-file")
+    return {"refused": list(refused)} if refused is not None else {"file": got,
+                                                                   "partition": Cr.partition_of(program, shape)}
 
 
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:
@@ -288,30 +307,40 @@ OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
+WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)
+REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registered_file_instance,
+                        credit_cases.REGISTERED_FILE_NAMES)
 
 
 def test_credit(pass_server):
     """Generated served windows' credited sets, drawn units and their outcomes, whole windows and periods, and A rows,
     then each mutation over a few seeds (`replay`): a credit bit flipped after the draw coin, units the prover chose, a
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, a window's round log the challenger never received, and every other refusal of `credit.window`,
-    `credit.period_credit` and the steps they run."""
+    didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
+    registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
+    open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
+    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root, and every other
+    refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400))}
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+                             (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
+                                  (REGISTERED_FILE, credit_cases.registered_file_instance,
+                                   credit_cases.REGISTERED_FILE_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
                                   (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
-                                  (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)):
+                                  (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES),
+                                  (WEIGHTS, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)):
         swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
-            "a-link accept"} <= set(CREDITED)
+            "a-link accept", "weights accept", "registered-file accept"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
@@ -335,10 +364,33 @@ def test_credit(pass_server):
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
                  "a-link a-link: the window registers no A value", "which is no registered A value",
+                 "weights weights: the window's registered weights are not the ones its open root binds",
+                 "weights weights: the window registers no weights", "weights weights: the window registers K = #",
+                 "'s entry is not the registration of K = #'s B rows", "b/<K> of a K of its circuit",
+                 "weights weights: the window's circuit is not its descriptor's SHA#",
                  "window rounds: the round roots are not the roots the challenger's log shows it received",
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",
-                 "so the period earns nothing: rounds: the round roots are not"):
+                 "so the period earns nothing: rounds: the round roots are not",
+                 "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
+                 "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
+                 "window registration: drawn unit #'s proof opened port ",
+                 "against another root than the one the window registered for",
+                 "window registration: drawn unit #'s proof was verified against another circuit",
+                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "'s proof opened no weights ",
+                 "which the window registers not",
+                 "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
+                 "so the period earns nothing: registration: drawn unit #",
+                 "window weights: the window's registered weights' root ",
+                 "open signed: a B row's codes or s_w differ from the ones the period registered",
+                 "'s open signs no weights' root (weights_root, a SHA# digest",
+                 "window weights: the window is in no period of the auditor's ledger",
+                 "window weights: the window's round# request table's root is not",
+                 "window weights: the window's registered weights are not the ones its open root binds",
+                 "window weights: registered weights ", "period weights: period ",
+                 "so the period earns nothing: weights: the window's registered weights' root",
+                 "registered-file registration: call #'s statement reads ", "which the window registers not: register",
+                 "which the window registers twice: register"):
         assert any(part in k for k in CREDITED), part
 
 

@@ -47,8 +47,10 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (#3116's `pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
   is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
-  input, never an output, and a row of 8 (KS + m) bytes: `lane` and `combine` are staged only at a K whose rows the Lean
-  verifier and C-Flock take (`proved_k`: K >= 448, and not a K whose KS + m is 14 or 15 mod 16, as 896's is).
+  input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and C-Flock
+  proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
+  (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a
+  leaf whose R is a multiple of 16, since a lane reads the R admit bits as one row of whole 16-bit words.
   `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
   by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
   row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
@@ -68,7 +70,9 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
 ``(receipt, ok)``, `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
-combine's ok.
+combine's ok. `statement_rows` is a lane's and the combine's input rows as `class_statement.unit_lowering` takes them, and
+`statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
+`PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders.
 """
 from __future__ import annotations
 
@@ -408,43 +412,95 @@ PouwH1Combine = CompositeDefinition(
         "receipt's.")
 
 
-#: the least K at which a leaf's lanes and combine are proved (`proved_k`)
-LEAST_K = 448
+#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any positive K
+LEAST_K = 384
 
 
-def row_fits(bits: int) -> bool:
-    """A row of ``bits`` bits, in whole 16-bit words, is one the Lean verifier's hidden-output scope covers
-    (`Flock.ProvedScope.v2Row`): its bytes fill its compressions' blocks and end, with SHA-512's 17 bytes of padding, in its
-    last block, so its bytes mod 128 are at most 111."""
-    return 2 * -(-int(bits) // 16) % 128 <= 111
-
-
-def proved_k(k: int) -> int:
-    """``k``, if a leaf's lanes and combine can be proved at contraction K; else ValueError. A lane's partial and the
-    receipt are 2 (KS + m) u32, 8 (KS + m) bytes, each a row `row_fits` must take, and they are all the combine reads, so
-    they are at least a block: C-Flock needs a row of the statement that compresses before its last block. `LEAST_K` is
-    the least such K (K = 384's are 112 bytes), and past it a K whose KS + m is 14 or 15 mod 16 is out too (896, 928, ...)."""
-    n = 8 * H.Layout(4, 8, int(k)).sets
-    if n < 128 or not row_fits(8 * n):
-        raise ValueError(f"K = {k}: a lane's partial and the receipt are {n}-byte rows, but C-Flock needs one of the "
-                         f"combine's rows to compress before its last block (at least 128 bytes) and the Lean verifier a "
-                         f"row's bytes to end, with SHA-512's 17 bytes of padding, in its last block (bytes mod 128 at most "
-                         f"111, Flock.ProvedScope.v2Row): K = {LEAST_K} is the least K whose rows fit, and a K whose KS + m "
-                         f"is 14 or 15 mod 16 (896, 928, 1408, ...) has none")
-    return int(k)
+def _leaf(tile: Any) -> int:
+    """``tile``'s K, if its leaf's lanes and combine are staged; else ValueError. A leaf has a positive K (`leaf_lanes`'
+    word order), and a lane reads its R admit bits as one row, which C-Flock takes only as whole 16-bit words
+    (`class_statement.unit_lowering`), so its R is a multiple of 16 (the served leaf's is 32)."""
+    a = tile.signature()[0][0][1]
+    r, k = int(a.n), int(a.elem.n)
+    if k < 1:
+        raise ValueError(f"K = {k}: a leaf's lanes and combine are staged only at a positive K")
+    if r % 16:
+        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and C-Flock takes only a row of whole "
+                         f"16-bit words (class_statement.unit_lowering): a leaf's lanes and combine are staged only at an R "
+                         f"that is a multiple of 16, as the served 32 × 32 leaf's is")
+    return k
 
 
 def lane(tile: Any) -> Any:
-    """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s), at a K `proved_k`
-    takes: the lane a prover stages. A lane at another K (a bits test's) binds the Definition itself."""
-    proved_k(tile.signature()[0][0][1].elem.n)
+    """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s): the lane a prover
+    stages, at any K and R `_leaf` takes."""
+    _leaf(tile)
     return bind(PouwH1LaneZy, TILE=tile)
 
 
 def combine(tile: Any) -> Any:
-    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at a K `proved_k` takes."""
-    proved_k(tile.signature()[0][0][1].elem.n)
+    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
+    reads only the partials and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that
+    compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
+    `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
+    k = _leaf(tile)
+    n = 8 * H.Layout(4, 8, k).sets
+    if n + 17 <= 128:
+        raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
+                         f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
+                         f"K = {LEAST_K} is the least K the combine is proved at")
     return bind(PouwH1Combine, TILE=tile)
+
+
+# -- the statements' ports ------------------------------------------------------------------------------------------------------
+
+#: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order (#3116's
+#: `pouw.leaf_lanes.PUBLIC`)
+PUBLIC = ("salt", "position", "roots", "lane")
+
+
+def _fields(path: str, t: Any, bit: int) -> list[tuple[str, int, int]]:
+    """``t`` from bit ``bit`` of a row as its fields ``(path, first bit, bits)``: a record by its fields, anything else whole."""
+    out = []
+    for p, ft in ([(f"{path}.{n}", ft) for n, ft in t.fields] if isinstance(t, Record) else [(path, t)]):
+        out.append((p, bit, sum(ft.leaf_widths())))
+        bit += out[-1][2]
+    return out
+
+
+def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
+    """The input rows of a leaf's lane or combine statement, ``d`` `PouwH1LaneZy` or `PouwH1Combine` bound to its TILE, in
+    order, each ``(port, params)`` as `class_statement.unit_lowering` takes them (``a[0]`` row 0 of ``a``): a lane's ``a0``
+    .. ``a3`` (its A rows by row slot), ``b0`` .. ``b7``, ``admit``, ``zy``, ``partials`` and ``pub`` (`PUBLIC`); the
+    combine's ``p0`` .. ``p<lanes - 1>`` (its partials rows) and ``receipt``; as #3116's `pouw.leaf_lanes` reads them."""
+    ty = dict(d.signature()[0])
+    if d.defn is PouwH1LaneZy:
+        rows = ([(f"{n}{i}", [f"{n}[{i}]"]) for n in ("a", "b") for i in range(ty[n].n)]
+                + [(n, [n]) for n in ("admit", "zy", "partials")] + [("pub", list(PUBLIC))])
+    elif d.defn is PouwH1Combine:
+        rows = [(f"p{x}", [f"partials[{x}]"]) for x in range(ty["partials"].n)] + [("receipt", ["receipt"])]
+    else:
+        raise ValueError(f"a leaf's statement is PouwH1LaneZy_v1 or PouwH1Combine_v1, not {d.defn.id}")
+    if {p.partition("[")[0] for _port, ps in rows for p in ps} != set(ty):
+        raise AssertionError(f"{d.defn.id}: the ports {rows} are not its parameters {list(ty)}")
+    return rows
+
+
+def statement_ports(d: Any) -> list[tuple[str, list[tuple[str, int, int]]]]:
+    """The C-Flock ports of a leaf's lane or combine statement (``d`` as `statement_rows` takes it, at any K), in order:
+    each input row of `statement_rows` with its fields ``(path, first bit, bits)`` in its bit row, the Definition's inputs
+    it holds, their leaves concatenated in signature order (`class_statement.unit_lowering`; ``a[0].codes`` the codes of
+    row 0 of ``a``), and last the output port ``o0``, ``ok``. Lean states it as `PouwWindow.Lanes`."""
+    params, ret = d.signature()
+    ty = dict(params)
+    out = []
+    for port, ps in statement_rows(d):
+        fields: list[tuple[str, int, int]] = []
+        for p in ps:
+            name, _, row = p.partition("[")
+            fields += _fields(p, ty[name].elem if row else ty[name], fields[-1][1] + fields[-1][2] if fields else 0)
+        out.append((port, fields))
+    return out + [("o0", _fields("ok", ret.fields[0][1], 0))]
 
 
 # -- on words -----------------------------------------------------------------------------------------------------------------
@@ -525,7 +581,7 @@ def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int])
     return int(out == [v & M32 for v in receipt])
 
 
-__all__ = ["BF16", "F32", "LANE", "LEAST_K", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1TileZy",
-           "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "TILES", "check",
-           "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial", "lane_reference",
-           "proved_k", "records", "reference", "row_fits", "unit", "zy_cell"]
+__all__ = ["BF16", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8", "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy",
+           "PouwH1TileZy", "PouwMuxBit", "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW",
+           "TILES", "check", "combine", "combine_reference", "dequant", "lane", "lane_bits", "lane_cells", "lane_partial",
+           "lane_reference", "records", "reference", "statement_ports", "statement_rows", "unit", "zy_cell"]

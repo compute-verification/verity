@@ -118,6 +118,14 @@
    "owner": "@compute-accounting",
    "digest": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb"
   },
+  "Accounting.Assumptions.TS.LeafChecks": {
+   "owner": "@compute-accounting",
+   "digest": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
+  },
+  "Accounting.Assumptions.TS.LeafReads": {
+   "owner": "@proofs",
+   "digest": "52baeb42c2d6f6fa24a1412fdffc1ebc6d672b514ad38ed7b948723782a40bae"
+  },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
    "digest": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e"
@@ -209,6 +217,10 @@
   "Accounting.Assumptions.TS.StageLuck": {
    "owner": "@compute-accounting",
    "digest": "3a5cf6fec99a82206ca55ce1040805252587d207a2fad7f3d74e9cabf33b83e7"
+  },
+  "Accounting.Assumptions.TS.TileChecks": {
+   "owner": "@compute-accounting",
+   "digest": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
   },
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
@@ -945,6 +957,14 @@
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
   },
+  "Nci.Assumptions.ActivationChained": {
+   "owner": "@compute-accounting",
+   "digest": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da"
+  },
+  "Nci.Assumptions.ActivationChainedAt": {
+   "owner": "@compute-accounting",
+   "digest": "8597b9dd53964953ba6e5dab479371db257bb66179619b52014a2076899afd1c"
+  },
   "Nci.Assumptions.ActivationsIncompressible": {
    "owner": "@lean",
    "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
@@ -976,6 +996,14 @@
   "Nci.Assumptions.PackedTrainingIncompressible": {
    "owner": "@lean",
    "digest": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+  },
+  "Nci.Assumptions.ParameterHard": {
+   "owner": "@compute-accounting",
+   "digest": "59bc2194b3f3767baac5bd7b98552da53e114e14f1f164a541180cc5c16ef813"
+  },
+  "Nci.Assumptions.ParameterHardAt": {
+   "owner": "@compute-accounting",
+   "digest": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342"
   },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
@@ -1032,6 +1060,10 @@
   "Nci.Complies": {
    "owner": "@lean",
    "digest": "57196e4e385bfd389cdc6a3776b00da99c4df976b913c3e02e1c956b0f49c44e"
+  },
+  "Nci.Covering.Covers": {
+   "owner": "@compute-accounting",
+   "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -1459,6 +1491,8 @@
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Flock.Masked",
   "Proofs.Pouw.PearlC.FlockTile",
+  "PouwWindow.Lanes",
+  "PouwWindow.KnownRows",
   "Definitions.Accounting",
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
@@ -3604,6 +3638,12 @@
    "assumptions": [],
    "type_hash": "2a7a97f97088d84cba544f59a8af31d277ef7a011c9d793f4dd2a945f23b27f6"
   },
+  "Accounting.SecurityProofs.TS.LeafLanesSound": {
+   "owner": "@proofs",
+   "signature": ["Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound"],
+   "assumptions": [],
+   "type_hash": "7d6f085de620acb57a098c5d2bf42c2f0248b2b5f84aad583eb15a2f5c36aab8"
+  },
   "Accounting.SecurityProofs.TS.LiLowBit": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LiLowBit : Accounting.Guarantees.TS.LiLowBit"],
@@ -3849,6 +3889,12 @@
    "signature": ["Accounting.SecurityProofs.TS.TileLuck : Accounting.Guarantees.TS.TileLuck"],
    "assumptions": [],
    "type_hash": "cf8e0fefb25830e7e36b520d9afbda42ca3c6f38cc08f3fcbeabf060ac37d763"
+  },
+  "Accounting.SecurityProofs.TS.TileSessionSound": {
+   "owner": "@proofs",
+   "signature": ["Accounting.SecurityProofs.TS.TileSessionSound : Accounting.Guarantees.TS.TileSessionSound"],
+   "assumptions": [],
+   "type_hash": "9eafccfc82d9a72e311cbd132727750360cc8ac8490817c9e672634b61f7aca9"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -7190,6 +7236,18 @@
    "assumptions": [],
    "type_hash": "18449f5ab8514c9e3daab13c9c8dec476efecfcce491858edadebcdb323403e6"
   },
+  "Nci.SecurityProofs.CoveringBound": {
+   "owner": "@compute-accounting",
+   "signature": ["Nci.SecurityProofs.CoveringBound : Nci.Guarantees.CoveringBound"],
+   "assumptions": [],
+   "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c"
+  },
+  "Nci.SecurityProofs.CoveringBoundTwoCosts": {
+   "owner": "@compute-accounting",
+   "signature": ["Nci.SecurityProofs.CoveringBoundTwoCosts : Nci.Guarantees.CoveringBoundTwoCosts"],
+   "assumptions": [],
+   "type_hash": "977691a65aeb1cef599392e0fb308271d5502f07cbe550f93624f75e7e1ddc6a"
+  },
   "Nci.SecurityProofs.Dampener": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Dampener : Nci.Guarantees.Dampener"],
@@ -10060,7 +10118,11 @@
    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer.",
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
-   "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list."
+   "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (Security/Models/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content and complete checks, Flock.Registered.checkKnownAll and checkComplete; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafReads (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
+   "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
+   "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12783,6 +12845,7 @@
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
@@ -12793,6 +12856,7 @@
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
    ]
@@ -14238,6 +14302,8 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
@@ -14319,6 +14385,8 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.CoveringBound",
+    "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
@@ -14713,6 +14781,32 @@
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
+  },
+  "Definitions.Nci.Covering": {
+   "digest": "e87493a09175845b1f3cff2bc23d2de4a197853a99f1892dfa665d6dfd6c36c6",
+   "definitions": {
+    "Nci.Covering.Covers": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2",
+    "Nci.Covering.FeedsWithin": "e8436f33e45d7ae626b2043cc4cf69b8946b8908628beeeaa686f877ecc8dea4",
+    "Nci.Covering.FeedsWithin.refl": "8d90703f53e34226d55d0071dbafa06f5dd88c90a50f4cb17feb2dfe5c4158f5",
+    "Nci.Covering.FeedsWithin.step": "84a6ad8850b2f524fc572dab4bc666643677a4fa957bbf75e746e33a87976c5b",
+    "Nci.Covering.InferenceBlock": "592979b1785b3206dd675a6a54e0e98f79915784d10f7400055fb2b91fbc4c4c",
+    "Nci.Covering.MulBlocks": "031334dd7fa3df14b1451724deb798317285970016e53c590523892295b1d861",
+    "Nci.Covering.MulBlocks.Completes": "ee0e6230b8f8757407f64bc132a9defa4c5df0b24022aaedcaa05974d02d0156",
+    "Nci.Covering.MulBlocks.Cuts": "31ce2e1e7ecac3924fa0b23ff82050a10e265d641529531d3de7013dce362d38",
+    "Nci.Covering.MulBlocks.P": "881fd2804c631433ca9bef8c2d29df251acc8dd03dbdf11c7b0723d3a13b2ebb",
+    "Nci.Covering.MulBlocks.T": "62a03c8f6fc73cdd6fc8651b5714b6987244793249debd33d7bee6b3e21bf5b6",
+    "Nci.Covering.MulBlocks.m": "fbddeec26e63d6f576424ee1a68446190a7a18b456bbc68d3a5c58f6c7a13f06",
+    "Nci.Covering.MulBlocks.nt": "5aac78a47e2a8335adece8e62aba4ceb952ab84eec418f4ff1fe5b5d4a191d90",
+    "Nci.Covering.MulBlocks.nw": "9b0e30b61ec5329d917afe9d88a732f23675333d9d38aa60c2b380933d17ed1d",
+    "Nci.Covering.MulBlocks.o": "0c5a4453d3a2d716ec136849b71bbb05960df69214b74f1cc00d237e90f224c6",
+    "Nci.Covering.MulBlocks.weightsCompleted": "2719e6793fa80f098b94712796c0a5577b89b538b9a022a4f677542e964211f2",
+    "Nci.Covering.Subcircuit": "16606093da57780c33886270bfe19dcd4afa9afe87ef8e97441f7d0bd7938ff6",
+    "Nci.Covering.Subcircuit.gates": "cc5a8e2573c16298a53fea3413bc5ad67c3c5ebc2458c9599a7c53a2cb21ca1d",
+    "Nci.Covering.Subcircuit.inner": "53262932088b54e316e8facd177542dca4c24f35244eacfde08b285c91084cc6",
+    "Nci.Covering.Subcircuit.ins": "7f43bb2cdc5f6d654f627d3404a73a718a10a0a998cebff2c128a3c96caa586e",
+    "Nci.Covering.sources": "44f69afea9a52095487a6242bfebd1c0237a99e37f99a1f5e336340b697cf353"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBound", "Nci.SecurityProofs.CoveringBoundTwoCosts"]
   },
   "Definitions.Nci.Dampener": {
    "digest": "9e79c6755cea0343785155cd5a462c7ef001290ee919b4ee904728810d59f561",
@@ -19500,6 +19594,7 @@
     "Accounting.SecurityProofs.TS.GrindTail",
     "Accounting.SecurityProofs.TS.GrindUnion",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
@@ -19524,6 +19619,7 @@
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
@@ -19585,7 +19681,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Sampling.Binding_meets",
@@ -19665,7 +19763,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19810,7 +19910,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -19925,7 +20027,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -19999,7 +20103,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -20084,7 +20190,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -20143,7 +20251,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -20276,7 +20386,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -20376,7 +20488,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -20439,6 +20553,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -20529,7 +20645,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -20600,7 +20718,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -20707,7 +20827,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
@@ -20909,7 +21031,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -21005,7 +21129,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -21166,7 +21292,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -21372,7 +21500,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -21515,7 +21645,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -21581,7 +21713,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -21686,7 +21820,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -21761,7 +21897,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -21831,7 +21969,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -21940,7 +22080,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Sampling.Binding_meets",
@@ -22013,7 +22155,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22107,7 +22251,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22195,7 +22341,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22428,7 +22576,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22561,7 +22711,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22671,7 +22823,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Sampling.Binding_meets",
@@ -22793,7 +22947,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -22864,7 +23020,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23155,7 +23313,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23386,7 +23546,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23474,7 +23636,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23572,7 +23736,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23675,7 +23841,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -23916,7 +24084,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -23968,10 +24138,14 @@
     "Flock.Registered.knownPayload": "95c0f843bbe9566de2422e1406f3d155ee6bad1c6b6b210f8019b330838a6cf4",
     "Flock.Registered.rowBytesV2": "affced86a8e5d0b9ad7afc24bef4a37c01a20bf1001100e3ea46cba35528988c"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound"
+   ]
   },
   "Flock.Registered": {
-   "digest": "3e0aedcf5d3cccd3c1461676d3a4208cc8cf0777bc14d1df231db34e7888f3ca",
+   "digest": "04362d04f6a5c622dd2b5e3891e8e7c0f82d868dca7a78ce4be9b0dd1d780d0c",
    "definitions": {
     "Flock.Registered.Port": "b2ceab75d180399fb80178656c2a19ef13d5270040a19e96240d3caf5a006604",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -23991,10 +24165,12 @@
     "Flock.Registered.badInstance": "03932f62b94f8fdcdc0c2b285ed7e2c1eab64c21ef5edd38e49948a21faf7e66",
     "Flock.Registered.badRow": "c702aa7a7cdef880a0d0811966e322facce83d1237b04bf8749c4ae9112249d1",
     "Flock.Registered.check": "4b228ade32bb7e63505ba499fc5023ce7c1ad20c174e074192993e5297df771b",
+    "Flock.Registered.checkComplete": "0add672c27faa0d6c4d7f9d2d09bf4cdd54e28760d92cba985ec6416467ef3b9",
     "Flock.Registered.checkPort": "5aee71fc42cb1438af6f08da2787079b0e70003ee9fa7e608ff8f2acb42988a0",
     "Flock.Registered.checkPort._sparseCasesOn_1": "b8246ea527260928106879482836f843f36ca8b1c9c84cb9b9a1d20231ed7048",
     "Flock.Registered.climb": "409e735c27b6bbb1fbec2014a3beb48e70858eeff6e95502f99f10f95e6f56f3",
     "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
+    "Flock.Registered.complete": "fc4ad4af389395741337b9b56e83854ea866157305a8bb2410cf64bf3e4bd30d",
     "Flock.Registered.derived": "0751ce4385fd006c40af04446d935a4b7c9662e4b00d77c14606451776ffcac6",
     "Flock.Registered.domain": "2004c3cadc9987e7a4937852f500cf610965135abf26fb71b99bd94c4700e444",
     "Flock.Registered.entry": "33679b79172b2252c0e954b11fd386a06a136aa56539287c7e076683f87af733",
@@ -24021,7 +24197,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -24059,7 +24237,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -24137,7 +24317,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24245,7 +24427,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -24302,7 +24486,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24433,7 +24619,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -24519,7 +24707,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24597,7 +24787,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24685,7 +24877,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -24759,7 +24953,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24874,7 +25070,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -24939,7 +25137,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -25014,7 +25214,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -26394,6 +26596,24 @@
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
+  "Models.Nci.Assumptions.Covering": {
+   "digest": "4ad4d4b3fc5e7a3fa22aa86d692e765b1959ff61fcf2fbcf810cd50aa414145f",
+   "definitions": {
+    "Nci.Assumptions.ActivationChained": "d4bfbb246cc11cfcca2547991efc002a69eec1c219bb47cae59eb583e7ca21da",
+    "Nci.Assumptions.ParameterHard": "59bc2194b3f3767baac5bd7b98552da53e114e14f1f164a541180cc5c16ef813",
+    "Nci.Assumptions.chainedBlocks": "ec0d8738d3b107c7c26990e85b75951a262e1b0cf1059f9a9a59a7c735504182"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBound"]
+  },
+  "Models.Nci.Assumptions.CoveringTwoCosts": {
+   "digest": "4965f5ecb57ad599d5c56c135d6eedd25d98b72a6a27361aa523c8b97eac0372",
+   "definitions": {
+    "Nci.Assumptions.ActivationChainedAt": "8597b9dd53964953ba6e5dab479371db257bb66179619b52014a2076899afd1c",
+    "Nci.Assumptions.ParameterHardAt": "d777f337d5fdcbc5d7ea6d48f614a284b764038886ca18ec4b5a0f892056c342",
+    "Nci.Assumptions.chainedBlocksAt": "3b0afb53886322999c7c5f243a6a134c42c4c8831e2249a577ffaf92f1ff962b"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundTwoCosts"]
+  },
   "Models.Nci.Assumptions.Fit": {
    "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
    "definitions": {
@@ -26570,6 +26790,20 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn"
    ]
+  },
+  "Models.Nci.Guarantees.Covering": {
+   "digest": "16e0d16fc4e352d45128cfca5ecb127bc3ab42b27c1754f7c982d8d699f600e7",
+   "definitions": {
+    "Nci.Guarantees.CoveringBound": "19a82c84031d0920c7145a871632219c5322dcbc559eee7f27930db159628318"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBound"]
+  },
+  "Models.Nci.Guarantees.CoveringTwoCosts": {
+   "digest": "3316e5210f167499e011334c1b2e192a25a4ae988f7daea6fe61bfbee9d11a64",
+   "definitions": {
+    "Nci.Guarantees.CoveringBoundTwoCosts": "e3624cc65914eca82007e90f81411bffc4d0148a7b2e8bc792a9567827b0add6"
+   },
+   "guarantees": ["Nci.SecurityProofs.CoveringBoundTwoCosts"]
   },
   "Models.Nci.Guarantees.Dampener": {
    "digest": "1cb02704d18e20d80d1350dbe63e4467645568a74b5bd0cfcdee25ed1c7f35e5",
@@ -27728,6 +27962,29 @@
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
    ]
   },
+  "PouwWindow.KnownRows": {
+   "digest": "6e09af9ee9d5df9c59cfcc8ba8b24189e064b7939114302165f511b58996b02f",
+   "definitions": {
+    "PouwWindow.Lanes.admitRow": "7c0f46ec18da29bb5e8a197875cd03013f7acdeeaf565e5f7b0c3d7db666e3a4",
+    "PouwWindow.Lanes.bitsNat": "3f37b5b8a347c9c4593dc6d40de6b6cc5d4a603501e98551b10842c142e43190",
+    "PouwWindow.Lanes.knownRows": "33f21aefeeebf72edfdbe661285561e78fa107926475210c3b1b3c4643b23252",
+    "PouwWindow.Lanes.natBits": "05b534fd921d94fa01ab9c4ea6cbcb1d2fdeac4b1e6dc3365ea6e2b8d5ae2065",
+    "PouwWindow.Lanes.okRow": "12975a62f1bddeb5ce37087127d21d4d97e0b27df1bf074e5b4466098dd7b229",
+    "PouwWindow.Lanes.pubBits": "89f1ec8271c9dd0c3b4a4c00368bd797f3dfdc36a21b06d018abadfb519d68be",
+    "PouwWindow.Lanes.pubRow": "28e0b8ac5c1f0858c63a29c4130c7b1e454834b93bbf6803a5bcd48ceef572b7",
+    "PouwWindow.Lanes.rowWords": "03af71813f1c5ffb09c4e72fc674a39b13a0ac09a1a95e734d19b86f1dccd22b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "PouwWindow.Lanes": {
+   "digest": "f78cf1a2e2a5aec3cfff5df11be81a6c76facfdeaa4dc8ffa37b69a712cb51b6",
+   "definitions": {
+    "PouwWindow.Lanes.digestBits": "99e74d3ebcfd000b39d1ec9d681e52fb1381cabb969c4868aca8ad0e1a592682",
+    "PouwWindow.Lanes.laneBits": "ca208e9d9f414512adc288edd424519846d679dc2fba78e99c283bad8f6f03c4",
+    "PouwWindow.Lanes.positionBits": "af8cfbd1a9d625fff2754f0a5a9f5212afdc545144a977ee84103e0b23b9cca4"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "Proofs.Accounting.TS.Session.Assumptions": {
    "digest": "fe74e5d059f51461779b4947d5cb04940c8d43dea6e10599e8c5a91e0684987b",
    "definitions": {
@@ -27739,7 +27996,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
-    "Accounting.SecurityProofs.TS.SessionSoundAt"
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound"
    ]
   },
   "Proofs.Accounting.TS.Session.Checked.Guarantees": {
@@ -27758,7 +28017,12 @@
     "Accounting.TS.Checked.regRead": "bfa6bfc2e73a1ea7408549dbb9ba43778f697014964c664e052b0ed64bc31f90",
     "Accounting.TS.Checked.rowsReg": "0b5b5bf94c84747485894659a4e17df66ae07167f5410b91818aef3d4e22bd7d"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.CheckedSessionSound", "Accounting.SecurityProofs.TS.HeldSessionSound"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound"
+   ]
   },
   "Proofs.Accounting.TS.Session.Guarantees": {
    "digest": "77be543688b0562198989806be262bf10f658860f7053980127dae93a088ac57",
@@ -27787,7 +28051,11 @@
     "FlockC3.RegLevels.knownColl": "632c5673c3ffa7a6459837cc54d0682cc4a2303b4f90ec254f92dbc7ad1b77bf",
     "FlockC3.RegLevels.openPairAs": "a812c1c25ef92a2d039a0b7747ff327deab0457125b0d8c3d7906c32f0d3dd7e"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound"
+   ]
   },
   "Proofs.Accounting.TS.Session.Held.Layer": {
    "digest": "f2316fc6e290366ac88cb3cf9d33224e37a42feb7e7ed3d7d7621d8dba63e1cd",
@@ -27800,7 +28068,120 @@
     "Accounting.TS.Held.okRow": "bcaa07f7893b924c12f9093ea2887f63ece1313cc97abb7bfa9440b72571d632",
     "Accounting.TS.Held.rsOf": "3b68c108fa7d710116a41621a1f5b353af397424c239f9079754dd83ca86d5b2"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound"
+   ]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Assumptions": {
+   "digest": "6a95c6da929bf1a20eb022927ad0f39f81b2dfb0f04cf5616902fabb0e05ea0e",
+   "definitions": {
+    "Accounting.Assumptions.TS.LeafChecks": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4",
+    "Accounting.Assumptions.TS.LeafReads": "52baeb42c2d6f6fa24a1412fdffc1ebc6d672b514ad38ed7b948723782a40bae"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Decode": {
+   "digest": "ba14d3fdcfbda880f789f22c696e509b2a785ee98f3356ed574fe227929e8018",
+   "definitions": {
+    "Accounting.TS.Lanes.LanePub": "40e2e2146fc0b61f34b15b0e362f40e9bec0b08e235bb61c0160bce0cd38bbe7",
+    "Accounting.TS.Lanes.LanePub.admit": "8d468acdab1356d793df653068e2911c2383ce5d22bcce22a8ff0432697d3a8e",
+    "Accounting.TS.Lanes.LanePub.position": "6dc7e8fd10614e351621179b39afd0631391d798bff3c5b0eccc506402ea317e",
+    "Accounting.TS.Lanes.LanePub.roots": "be2ad3a21d044f3ef499b2bccf509c797b145190f66d18f8cc0a5d0f92c6dd84",
+    "Accounting.TS.Lanes.LanePub.salt": "03a4d2575de91fc3bf2fd3ccf7f14da85535c1d1ef77fe9d261061de7066a994"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
+   "digest": "65c4f09c28a03a2f65379671ac6ae6364530dff2d73e525e6a8b0f8febe70e3c",
+   "definitions": {
+    "Accounting.Guarantees.TS.LeafLanesSound": "c3684a29297b4f84ea567201056a92a5bed1245731e0998fa23bf19c9bc8e5c0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.KnownOf": {
+   "digest": "6fd6fb41274a0ffcb572ff5f2f9f195552b51f9397dae2bb8bbe2b10110f3e7c",
+   "definitions": {
+    "Accounting.TS.Lanes.knownOf": "ab52c9a7bab92a5ba7965f2bb44a279a10a1ab8d1b37ac4114d926cc5b3b61f9"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Layer": {
+   "digest": "50a60edfe344adf6e9be69a25bc5681ff8502122e61892f8be5ad80d39740ddb",
+   "definitions": {
+    "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
+    "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
+    "Accounting.TS.Lanes.CombineView": "93e6651e2d39980dc0663628893db2286fb528736c956a8a5dfbfbde1b44dcf4",
+    "Accounting.TS.Lanes.CombineView.ok": "09563b85a8ebb8b589ed88bdcfa4611925101a3fc941d3f56f7b975b13452217",
+    "Accounting.TS.Lanes.CombineView.parts": "6ab02fe4e95d2d7039a85b877b001fa514e9e0db4368ff7a24a8830cece6ec2d",
+    "Accounting.TS.Lanes.CombineView.receipt": "a4d003105eeb8917e41473007a61d1b320909b127d5cbb6fff968a01d88aab11",
+    "Accounting.TS.Lanes.Known": "9b74cbff5ba713b3865903c462558c861198be5dd8e61a9967900dad294be149",
+    "Accounting.TS.Lanes.KnownHeld": "56677e4ad5fc45c03a82eebf35998581572f4135cec975d595e5c031c0adfac4",
+    "Accounting.TS.Lanes.LaneOk": "5808b5b735e582fa459f6fe616f70525528e86262a901548187b5ff0e1644680",
+    "Accounting.TS.Lanes.LaneView": "4758e78b52cfa9eee788e3c200c66e08313eb0bd92c1bb5cc8db4325acb4b54e",
+    "Accounting.TS.Lanes.LaneView.a": "77d70d58469a226fcd5d4202c4a2a6375ec30a23d85894ddc105fc3d5ef97770",
+    "Accounting.TS.Lanes.LaneView.b": "188219eed4bce9397025462db57c1b49b28e8ded6cd68c31ae9d9cf7637d4bf6",
+    "Accounting.TS.Lanes.LaneView.lane": "658acb07b6ff0c9f313d2228922546f2e422039ea85f532a9ae3ecc91f555f49",
+    "Accounting.TS.Lanes.LaneView.ok": "2341f36d19c6cf6dec9d73d44973f50b06acddfd8d90c733d48fe95789b94bbb",
+    "Accounting.TS.Lanes.LaneView.part": "2f6ceeba5b7a7b2b4c019b73770124e7c6e8de5e68e60d0bf8cff232c4f05621",
+    "Accounting.TS.Lanes.LaneView.pub": "9125f6081a3e2ce15a30e5632db6fb0267da90b6aabdbad7fb92f00ff2a209af",
+    "Accounting.TS.Lanes.LaneView.y": "854566ec0aa9cac811b6728a10bdcec15f2f667e344f6a9b938b88faf2cba03e",
+    "Accounting.TS.Lanes.LaneView.z": "20921b98534b3401f7c8723f3ab5d75f0c649a0eae0bd598d44ae97decef2b18",
+    "Accounting.TS.Lanes.Leaf": "d7cab4fae477b47f986bee1994d53955fd7408034eecab4a4829c4ec51504ff1",
+    "Accounting.TS.Lanes.Leaf.a": "78d29a176ca855054c8261ab23479367d5b6eb5839f1132124456a385f8cacd1",
+    "Accounting.TS.Lanes.Leaf.b": "ea8aaf8edc42a08cba6a8b0aa275618a2b2677ef760870c6f08b2b912c41a34d",
+    "Accounting.TS.Lanes.Leaf.y": "133acf9a8be6b6a565b7dc22b0435b674ebb34129ec169fd30797f8573659f1b",
+    "Accounting.TS.Lanes.Leaf.z": "c1722d2e4644f590628ff8d775a1ff994346be4b59a49ea146b5b63b0e3e95b2",
+    "Accounting.TS.Lanes.LeafColl": "762a0dddbc9f43d2b245c932ff9311c207dac521543fb44728bdc5243ca11dca",
+    "Accounting.TS.Lanes.LeafKnownColl": "662000d3a6e234abb449fafb4d444f7ac7e24f11bf64bfb1055dcf98fd752294",
+    "Accounting.TS.Lanes.PortRow": "bcbbee52ee48532acfe17e361227a5d08596d5ca96680b4e5c05d863817fb6e0",
+    "Accounting.TS.Lanes.Row": "08a18686602fb48225cadf84a1cf8263f339176dfc7652182a73c7b9c98cf6d7",
+    "Accounting.TS.Lanes.Row.codes": "bf093c07eb6704a76bcee5e4e7840cd58a07e9d2e2c7a96d38f8ec0a296bc6db",
+    "Accounting.TS.Lanes.Row.scale": "7dad5dfc6e38ae7fcf1adb72dd9df1aeb448ffb7825eb0e19fb249b4b6e2a717",
+    "Accounting.TS.Lanes.RowsAgree": "46956b947b275cae6eb606882b9f5a8147b8ecdf7219b99745d662b66a461203",
+    "Accounting.TS.Lanes.UnitServed": "b258fa0633246c97ca45d21dc2d740fc0ce162a7391b6668b9e89367ca56cefd",
+    "Accounting.TS.Lanes.colOf": "4fc95a8f39ff64d2cbabaad7ef2aa27a7eb3fba31730f80ca8b9e087c27daa85",
+    "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
+    "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
+    "Accounting.TS.Lanes.laneView": "4359b4bf7a323d5b1db6d8cc4ab9de3b4972887cc8be63ea2b27a362839ac9ee",
+    "Accounting.TS.Lanes.leafLayer": "b71259e3330a7202fd98718aea83dba85013fd0780433035a0664d3f7ab5068e",
+    "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
+    "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
+    "Accounting.TS.Lanes.rsOf": "e68b11949253774a8e49eea6b8665d1c1d1af54554dcc74669df304c3a314291",
+    "Accounting.TS.Lanes.xorAll": "a96359ab1436113e227f53947be6c561c42fe7dba8207ab4d0908ce76934c193"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Tile.Assumptions": {
+   "digest": "e25748d622db2603a44112158e86897111711e197e1dfa5c2dea5460d9cb6786",
+   "definitions": {
+    "Accounting.Assumptions.TS.TileChecks": "4ee126e92aa445a839ff4112ed600367a6c97e4f2871773597a0a2157143d9e5"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Proofs.Accounting.TS.Session.Tile.Guarantees": {
+   "digest": "ecb0213094d72459c7d014ab6acc6e67f95b3e8b32031fa90d3bd6b57926419d",
+   "definitions": {
+    "Accounting.Guarantees.TS.TileSessionSound": "c64e2962ad9ea6f9a2c2e76102901e6549cbc3a0de263c90732036b3143aea6b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Proofs.Accounting.TS.Session.Tile.Layer": {
+   "digest": "0e6446453e4c0e452d28a4715bd1afd7e72e838d40a12fe4d0b17d59f62717e5",
+   "definitions": {
+    "Accounting.TS.Tile.TileOk": "ff944d08030968d87e9cbdac193cb79a81b81ce1eda073a1ddff2bff43a34d30",
+    "Accounting.TS.Tile.TileRel": "974332624e2c08ea376324387a2f3deeea8bfb761225be71b17e46af81ce4fb2",
+    "Accounting.TS.Tile.TileView": "557611812649bf4eecd4692ced429f7f1e770b3eb317aae43abc9d83056373bd",
+    "Accounting.TS.Tile.TileView.a": "11372319f3c31d6c3f652895e93722e2552ff5a1a6a02f241c5d75a52cbc47fa",
+    "Accounting.TS.Tile.TileView.b": "431fedd3638fef8f45e3ab46252475c2ea5f806999ff4884bd18f614142a33c1",
+    "Accounting.TS.Tile.TileView.sa": "c2e44ec3d1f3dd1a69b70fb0b1c7435f6f52ad9aa99d2aafa9a5d9c6647e7f33",
+    "Accounting.TS.Tile.TileView.sb": "622d3726bbb10cdbbd47ed822853296250ea16b4243a5f4f55519ab911fee8ab",
+    "Accounting.TS.Tile.TileView.y": "bb3e2087ff344dd24dc2b48653d23e0190e3f76ad78d12fecc44fa00c0ece4d1",
+    "Accounting.TS.Tile.TileView.z": "bd322207ab93520c46c265e415e7b4ce97a5321abc20185802865252a0d62ba0",
+    "Accounting.TS.Tile.tileLayer": "39508d9a948a1deb411f41a3d6e865cb6dc73b13bf8dcda0f9c3bc05690af82e"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.EndToEnd.Statement": {
    "digest": "ad40a08625b963990b9762baf1aee17069395d082076b64e8ccf81c8897ab308",
@@ -27864,6 +28245,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.decoder_meets_plain",
     "Claims.Flock.decoder_meets_zk",
     "Claims.Sampling.decoder_meets_plain",
@@ -27931,6 +28314,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -27961,6 +28346,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -27991,6 +28378,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28025,6 +28414,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Flock.decoder_meets_plain",
@@ -28111,6 +28502,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28147,6 +28540,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28176,6 +28571,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28205,6 +28602,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28240,6 +28639,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28268,6 +28669,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -28754,6 +29157,7 @@
     "FlockSoundness.Registered.ReadsX.Clash": "8c5ac6cbb1687060392af542dd4ef8bf8af75c0ef59e8f681288394597e5b665"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -29023,7 +29427,12 @@
     "FlockSoundness.Discharge.Recursion.valueSrcC3._sparseCasesOn_2": "b37f27feec417f8a5e3c7126ac59f36349baf5cc66b02c359e2a6f6fec0f3085",
     "FlockSoundness.Discharge.Recursion.valueSrcC3.match_1": "1d242b8326f9bae60389d41b10e20ed8a37dad1ebcd00976f98500c508ac85a6"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound", "Flock.SecurityProofs.RecursiveAuditC3"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
+    "Flock.SecurityProofs.RecursiveAuditC3"
+   ]
   },
   "Proofs.Flock.Recursive.ZkReg.DrawnRefines": {
    "digest": "03dde6640e365e244ae39bfc2f6341c3433ea98fb333c69bf835507fb95c41f9",
@@ -29107,6 +29516,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29160,6 +29571,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29220,6 +29633,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29287,6 +29702,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29454,7 +29871,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29503,6 +29922,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29555,6 +29976,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29959,6 +30382,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -29994,6 +30419,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -30032,6 +30459,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -30091,6 +30520,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -30231,6 +30662,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -30295,6 +30728,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -30469,6 +30904,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -30655,6 +31092,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -30789,6 +31228,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -30906,7 +31347,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -31016,6 +31459,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -31102,6 +31547,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -31293,6 +31740,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31317,6 +31766,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31341,6 +31792,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31366,6 +31819,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31392,6 +31847,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31417,6 +31874,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31441,6 +31900,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31476,6 +31937,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31560,6 +32023,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31604,6 +32069,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31628,6 +32095,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31653,6 +32122,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31678,6 +32149,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31725,6 +32198,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -31828,6 +32303,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -31981,6 +32458,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32019,6 +32498,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32060,6 +32541,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32102,6 +32585,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32129,6 +32614,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32160,6 +32647,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32186,6 +32675,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32234,6 +32725,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32262,6 +32755,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -32289,6 +32784,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32322,6 +32819,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32355,6 +32854,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32404,6 +32905,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32454,6 +32957,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32486,6 +32991,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32600,6 +33107,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32856,7 +33365,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -32953,6 +33464,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33095,6 +33608,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -33138,6 +33653,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -33382,6 +33899,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33641,6 +34160,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33689,6 +34210,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -33709,7 +34232,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -33782,6 +34307,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33825,6 +34352,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33867,6 +34396,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -33914,6 +34445,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34036,6 +34569,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34115,6 +34650,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34161,6 +34698,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34196,6 +34735,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34245,6 +34786,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34338,6 +34881,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34621,6 +35166,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34676,6 +35223,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34764,6 +35313,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34832,6 +35383,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -34878,6 +35431,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -34921,6 +35476,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35285,6 +35842,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35571,6 +36130,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -35604,6 +36165,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35681,6 +36244,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Claims.Sampling.Binding_meets",
     "Claims.Sampling.Binding_meets_one",
     "Flock.SecurityProofs.EndToEnd",
@@ -35710,6 +36275,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35768,6 +36335,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35833,6 +36402,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -35868,6 +36439,7 @@
     "FlockSoundness.Registered.TwoOpenings.pos": "ec7c65be50094128eeb16ef1f5452477f9f5d0b33901dd81c395ff5937d4ed1f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -35893,6 +36465,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEndRegistered",
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
@@ -35945,6 +36519,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -36451,6 +37027,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.HeldSessionSound",
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
+    "Accounting.SecurityProofs.TS.TileSessionSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",

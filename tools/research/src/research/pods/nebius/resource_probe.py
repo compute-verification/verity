@@ -258,7 +258,8 @@ def inode_dirs(state: Path, ws: str, now: float, every_s: float, *, walk: bool) 
     if last is None or age(prev) is None:
         return None
     c, p = _du(cur), _du(prev)
-    leaves = [d for d in c if d != ws and not any(o.startswith(d + "/") for o in c)]
+    ds = sorted((d for d in c if d != ws), key=lambda d: d.split("/"))
+    leaves = [d for d, nxt in zip(ds, ds[1:] + [""]) if not nxt.startswith(d + "/")]
     top = sorted(((c[d] - p.get(d, 0), d) for d in leaves), reverse=True)[:3]
     return {"over_s": round(age(prev) - last), "top": [{"dir": os.path.relpath(d, ws), "gained": n} for n, d in top if n > 0]}
 

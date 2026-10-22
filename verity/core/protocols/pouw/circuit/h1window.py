@@ -218,8 +218,7 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
     call reads, a call of no linear, a linear whose n is not whole blocks of C, a slot that is no power of two of at least
     R, an A block of a K that no call reads, or a unit whose rows aren't R × C rows of K codes and their scale
     (`h1zy.ROW`), whose record isn't z and y (`h1zy.RECORD`: a port carrying z alone leaves y unproved), that returns
-    other than its receipt and ``ok``, whose receipt is no row the Lean verifier's output rows take (`h1zy.row_fits`: the
-    H1 tile's at K = 384 or 896), or whose shared parameters differ by K."""
+    other than its receipt and ``ok``, or whose shared parameters differ by K."""
     linears = tuple((str(name), int(k), int(n)) for name, k, n in linears)
     calls = tuple((str(lin), int(blk)) for lin, blk in calls)
     r, c = (int(x) for x in tile)
@@ -251,11 +250,6 @@ def program(linears: Sequence[tuple[str, int, int]], calls: Sequence[tuple[str, 
                              f"then y (h1zy.RECORD, {48 * r * c} bits): a record of z alone leaves the served y unproved")
         if tuple(name for name, _t in getattr(ret, "fields", ())) != OUTPUTS:
             raise ValueError(f"the tile unit at K = {k} returns {ret}, not {OUTPUTS}")
-        if not Z.row_fits(ret.fields[0][1].leaves):
-            raise ValueError(f"the tile unit at K = {k} returns a {ret.fields[0][1].leaves}-bit receipt, an output row the Lean "
-                             f"verifier refuses: a row's bytes end, with SHA-512's 17 bytes of padding, in its last block "
-                             f"(bytes mod 128 at most 111, Flock.ProvedScope.v2Row), and the H1 tile's receipt, 8 (KS + m) "
-                             f"bytes, doesn't at a K whose KS + m is 14 or 15 mod 16 (384, 416, 896, 928, ...)")
         if shared is not None and tuple(t for _n, t in sig[2:]) != shared:
             raise ValueError(f"the tile unit at K = {k} takes other {SHARED} than at K = {units[0][0]}")
         if not _sinks(t):

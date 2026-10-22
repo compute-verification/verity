@@ -1,13 +1,17 @@
 """`credit.py`'s rules on a served window and its period (RT4-INT-32, -34 and -42; PRF-132): each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
 accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
-period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s. The Lean (`PouwCheck.Credit`) is held to the same cases by `lean/check/tests/test_difftest.py`."""
+period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
+registers are the ones its open root binds, every code and s_w of its B rows. The Lean (`PouwCheck.Credit`) is held to
+the same cases by `lean/check/tests/test_difftest.py`."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import math
 import random
+import struct
 import sys
 from pathlib import Path
 
@@ -17,8 +21,13 @@ import pytest
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits import codec
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
@@ -37,7 +46,7 @@ CREDIT_EXPECT = {
     "stale-root": ("draw", Cr.DRAW_ROOT), "no-bit": ("credit", "manifest row "), "bit-form": ("credit", "manifest row "),
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
-    "served-form": ("manifest", Cr.SERVED_FORM), "rounds-form": ("rounds", "round "), "draw-form": ("draw", Cr.DRAW_FORM),
+    "served-form": ("manifest", Cr.SERVED_FORM), "rounds-form": ("rounds", ""), "draw-form": ("draw", Cr.DRAW_FORM),
     "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
@@ -47,6 +56,10 @@ UNTIED = "Register the A value whose rows each round's root committed"
 NOT_RECEIVED = "the round roots are not the roots the challenger's log shows it received, in order"
 FEWER = "units are fewer than K = "
 NO_K = "commits no draw K (draw_k"
+OTHER_REGISTRATION = "'s domain is not the one the window's registration gives it"
+OTHER_ROOT = "against another root than the one the window registered for"
+OTHER_PERIOD_WEIGHTS = "open signed: a B row's codes or s_w differ from the ones the period registered"
+UNSIGNED = "open signs no weights' root (weights_root, a SHA-512 digest"
 DRAWN_EXPECT = {
     "coin-form": ("draw", Cr.COIN_FORM), "args-form": ("draw", Cr.DRAW_ARGS), "layout-form": ("layout", Cr.LAYOUT_FORM),
     "named-twice": ("layout", "is named twice"), "unknown-linear": ("layout", "which is no linear of the window"),
@@ -72,6 +85,20 @@ WINDOW_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
     "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
+    "other-registration": ("registration", OTHER_REGISTRATION), "a-call-unbound": ("registration", OTHER_REGISTRATION),
+    "proof-other-registration": ("registration", OTHER_ROOT),
+    "entry-root": ("weights", Cr.OTHER_WEIGHTS),
+    "proof-other-circuit": ("registration", "was verified against another circuit than the window's"),
+    "proof-no-a": ("registration", "opened no A value …/a/"),
+    "proof-no-b": ("registration", "'s proof opened no weights "),
+    "proof-other-call": ("registration", "opened no A value …/a/"),
+    "proof-unregistered": ("registration", "which the window registers not"),
+    "entry-twice": ("weights", "'s weights twice ("),
+    "entry-form": ("registration", "entry is not one-stage's {value, root, leaves, words, domain}"),
+    "weights-period": ("weights", OTHER_PERIOD_WEIGHTS), "weights-unsigned": ("weights", UNSIGNED),
+    "weights-no-period": ("weights", "the window is in no period of the auditor's ledger"),
+    "weights-requests": ("weights", Cr.OTHER_WEIGHTS), "weights-no-requests": ("weights", Cr.REQUESTS_FORM),
+    "weights-leaves": ("weights", "'s entry is not the registration of K = "),
 }
 PERIOD_EXPECT = {
     "no-close": ("period", "present the ledger after its close"), "incomplete": ("period", "closed incomplete"),
@@ -88,6 +115,10 @@ PERIOD_EXPECT = {
     "alt-layout": ("circuit", "prove the period's declared circuit"),
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
+    "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
+    "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
+    "other-sw": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
+    "zero-codes": ("window", "so the period earns nothing: weights: the window's registered weights' root "),
 }
 A_LINK_EXPECT = {
     "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
@@ -95,6 +126,18 @@ A_LINK_EXPECT = {
     "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain",
     "blocks": "rounds' equal blocks", "log-form": Cr.LOG_FORM, "round-form": "inner root is not",
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
+    "call-other-round": "which only its call's round", "call-past": "and the window has",
+    "call-blocks": "rounds' equal blocks, so the round",
+}
+WEIGHTS_EXPECT = {
+    "other-root": Cr.OTHER_WEIGHTS, "other-requests": Cr.OTHER_WEIGHTS, "other-session": Cr.OTHER_WEIGHTS,
+    "other-window": Cr.OTHER_WEIGHTS, "missing": "the window registers no weights ", "twice": "'s weights twice",
+    "foreign": "b/<K> of a K of its circuit", "other-prefix": "b/<K> of a K of its circuit",
+    "other-leaves": "'s entry is not the registration of K = ", "other-words": "'s entry is not the registration of K = ",
+    "other-domain": "'s entry is not the registration of K = ", "entry-form": "'s entry is not the registration of K = ",
+    "root-form": "'s entry is not the registration of K = ", "window-form": Cr.WINDOW_ROOT_FORM,
+    "requests-form": Cr.REQUESTS_FORM, "session-form": Cr.SESSION_FORM, "circuit-form": Cr.CIRCUIT_FORM,
+    "entries-form": Cr.ENTRIES_FORM,
 }
 
 
@@ -110,6 +153,7 @@ def test_every_mutation_is_aimed():
     assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES)
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
     assert set(A_LINK_EXPECT) == set(cases.A_LINK_NAMES)
+    assert set(WEIGHTS_EXPECT) == set(cases.WEIGHTS_NAMES) - {"layout-form"}
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -206,12 +250,12 @@ def _outcome(name: str, seed: int):
 
 
 def _window(name: str, seed: int):
-    return Cr.window(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
+    return Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
 
 
 def _period(name: str, seed: int):
     d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
-    return Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    return Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
 
 
 def test_a_draw_at_the_record_k():
@@ -259,10 +303,10 @@ def test_the_strata_are_the_compiled_programs():
         assert all(s["floor"] == 1 for s in ss)
 
 
-def _compiled(linears, calls, m) -> bytes:
+def _compiled(linears, calls, m, prefix: str = "") -> bytes:
     """The descriptor bytes of the compiled `h1window.program` over the test tile, as the period's ``circuit`` hashes
     them (`codec.program_digest`'s)."""
-    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, unit=h1.unit))
+    desc = codec.encode_program(h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
@@ -282,6 +326,38 @@ def test_the_layout_is_the_committed_circuits():
         q = h1.HW.query(prog)
         ids = dict(zip(sorted({k for _n, k, _c in linears}), q["params"]["templates"]))
         assert [(ids[int(s["template"][1:])], s["units"]) for s in Cr.strata(lay)[0]] == h1.P.strata(prog, q)
+
+
+@pytest.mark.parametrize("prefix", ["", "h1/w-3/"])
+def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
+    """`credit.registered_file` builds each call's ``--registered`` file from the committed descriptor alone, and it is
+    `h1window.table_reads_file`'s over the compiled Program (its ports `window_ports`', its domains binding the window's
+    open root but the weights'), byte for byte; and `credit.partition_of` is the Program's partition object under
+    `h1window.query`."""
+    window = "ef" * 64
+    for linears, calls, m in COMPILED:
+        raw = _compiled(linears, calls, m, prefix)
+        prog = h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit)
+        digest = h1.P.program_digest(prog)
+        assert digest == hashlib.sha512(raw).hexdigest()
+        lay, _ = Cr.layout_of(raw)
+        shape = Cr.shape_of(raw)
+        assert Cr.partition_of(digest, shape) == {"format": Cr.PARTITION_FORMAT, "program": digest,
+                                                  "query": h1.HW.query(prog)}
+        tp = h1.P.evaluate(prog, h1.HW.query(prog))
+        for call in range(len(calls)):
+            k = dict((name, k) for name, k, _n in linears)[calls[call][0]]
+            vals = (h1.HW.table(prog, "a", call), h1.HW.table(prog, "zy", call), f"{prefix}b/{k}")
+            roots = {v: hashlib.sha512(v.encode()).hexdigest() for v in vals}
+            want = h1.HW.table_reads_file(prog, tp, call, roots, ports=h1.HW.window_ports(prog), window=window)
+            got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in roots.items()}, window)
+            assert refused is None
+            assert json.dumps(got) == json.dumps(want), (linears, calls, m, call)
+            got, refused = Cr.registered_file(digest, lay, shape, call, {**{v: [x] for v, x in roots.items()},
+                                                                          vals[1]: []}, window)
+            assert got is None and refused == ("registration", f"call {call}'s statement reads {vals[1]}, which the "
+                                               "window registers not: register each of a call's tables and its "
+                                               "weights once")
 
 
 def test_an_alternative_layout_with_the_same_descriptor_refuses():
@@ -304,17 +380,94 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
     for seed in SEEDS:
         d = cases.period_instance(random.Random(f"honest/{seed}"))
         d["windows"][0] = {**d["windows"][0], "layout": lay}
-        assert Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
+        assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
         for name, code in (("alt-layout", "circuit"), ("bad-circuit", "window")):
             got, refused = _period(name, seed)
             assert got is None and refused[0] == code, (name, refused)
 
 
 def test_window_and_period_credit_are_the_only_entries():
-    """A caller can't credit a window with a step skipped: the steps `window` composes are internal."""
-    for step in ("credited", "outcome", "a_link"):
+    """A caller can't credit a window with a step skipped: the steps `window` composes are internal, and so are the
+    forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier of record)."""
+    for step in ("credited", "outcome", "a_link", "registration", "verified", "window_outcomes", "period_outcomes"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
-    assert {"window", "period_credit"} <= set(Cr.__all__) and not {"_credited", "_outcome", "_a_link"} & set(Cr.__all__)
+    assert {"window", "period_credit"} <= set(Cr.__all__)
+    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_window_outcomes",
+                "_period_outcomes"} & set(Cr.__all__)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_entries_of_another_registration_refuse(seed):
+    """Entries from another registration: A values registered under another window's open root or another circuit,
+    their trees under those domains, so the round roots commit them (`_a_link` accepts) and the drawn units' proofs
+    opened them at those roots. Their domains are not the ones the window's registration gives them, so the window is
+    refused."""
+    d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
+
+
+def test_mains_call_tables_are_the_windows_own_and_the_weights_held():
+    """The names main's served form registers (`h1window.table`, `h1window.roles`): a call's A table ``a/<K>@<call>`` is
+    an A value of K and that call, its z table ``zy@<call>`` a value of the window's own, and the weights' ``b/<K>`` the
+    only values held across windows."""
+    prog = h1.HW.program(h1.LINEARS, h1.CALLS, 8, h1.TILE, unit=h1.unit, prefix="h1/w-3/")
+    for c, (lin, _blk) in enumerate(h1.CALLS):
+        k = dict((name, k) for name, k, _n in h1.LINEARS)[lin]
+        a, zy = h1.HW.table(prog, "a", c), h1.HW.table(prog, "zy", c)
+        assert Cr.a_value(a) == (str(k), str(c)) and not Cr.is_held(a)
+        assert not Cr.is_a(zy) and not Cr.is_held(zy)
+    for role in h1.HW.roles(k for _n, k, _c in h1.LINEARS):
+        v = "h1/w-3/" + role
+        assert Cr.is_held(v) == role.startswith("b/") and Cr.is_a(v) == role.startswith("a/"), role
+    assert not any(Cr.is_a(v) for v in ("h1/a/x", "h1/a/4096@", "h1/a/@3", "h1/a/4096@3@4", "a/64@-1", 5))
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_honest_window_of_call_tables_credits_its_bits(seed):
+    """Main's served form: each call's A table ``…/a/<K>@<c>`` committed whole under its call's round's root and its z
+    table ``…/zy@<c>``, both under domains that bind the window's open root, and each drawn unit's proof opening its own
+    call's. The window is credited."""
+    d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest", per_call=True)
+    assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_call_table_registered_without_the_window_root_refuses(seed):
+    """A call's A table registered under a domain that binds no window root (main's h1_prove registration, its synthetic
+    window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the drawn units' proofs
+    opened it: its domain is not the one the window's registration gives it, so the window is refused."""
+    d = cases.window_instance(random.Random(f"a-call-unbound/{seed}"), "a-call-unbound")
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_proof_verified_against_another_registration_refuses(seed):
+    """A drawn unit's proof is accepted, of a drawn unit, but its session opened a value against another registration's
+    root: the window, and its period, earn nothing."""
+    d = cases.window_instance(random.Random(f"proof-other-registration/{seed}"), "proof-other-registration")
+    assert Cr._outcome(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+                       {"receipts": d["draw"]["receipts"]}, Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], d["k"],
+                       d["proofs"]) is None
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
+    got, refused = _period("proof-other-registration", seed)
+    assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
+    """An opened B entry whose registered root differs from the one the drawn units' sessions opened is refused before
+    any proof is read: its root no longer folds to the weights' root the window's open root binds (`_weights`). The
+    entries are held to the window's open root and the verified sessions, never taken from the evidence as presented."""
+    d = cases.window_instance(random.Random(f"entry-root/{seed}"), "entry-root")
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
+    assert got is None and refused == ("weights", Cr.OTHER_WEIGHTS)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -326,11 +479,11 @@ def test_a_round_log_the_challenger_never_received_refuses(seed):
     d = cases.window_instance(random.Random(f"never-received/{seed}"), "never-received")
     got, refused = Cr._credited(*cases.credit_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
-    assert Cr._a_link(d["rounds"], d["entries"]) is None
+    assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
     rounds = CC.rounds(d["key"], d["ledger"], d["window"], d["session"], [x["root"] for x in d["rounds"]],
                        [x["coin"] for x in d["rounds"]], rc.lms_verify)
     assert rounds == ("rounds", NOT_RECEIVED)
-    assert Cr.window(*cases.window_args(d)) == (None, rounds)
+    assert Cr._window_outcomes(*cases.window_args(d)) == (None, rounds)
     got, refused = _period("never-received", seed)
     assert got is None and refused[0] == "window" and refused[1].endswith(f"rounds: {NOT_RECEIVED}")
 
@@ -344,15 +497,15 @@ def test_a_refused_outcome_credits_nothing_though_credited_would():
         got, refused = Cr._credited(*cases.credit_args(d))
         assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
         credited += len(got)
-        assert Cr.window(*cases.window_args(d))[0] is None
-        assert Cr.window(*cases.window_args(d))[1][0] == "failed"
+        assert Cr._window_outcomes(*cases.window_args(d))[0] is None
+        assert Cr._window_outcomes(*cases.window_args(d))[1][0] == "failed"
     assert credited
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.window(*cases.window_args(d))
+    got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
 
 
@@ -361,7 +514,7 @@ def test_a_period_counts_only_closed_and_complete(seed):
     """RT4-INT-42: a closed, complete period earns each window's credit, in its close's order; with no close, a window
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert refused is None
     assert got["windows"] == [[i for i, row in enumerate(w["calls"]) if row[Cr.CREDIT]] for w in d["windows"]]
     for name in ("no-close", "incomplete", "missing", "order", "foreign"):
@@ -377,8 +530,8 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     for w in d["windows"]:
         args = (w[k] for k in cases.WINDOW_ARGS[2:-1])
-        assert Cr.window(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+        assert Cr._window_outcomes(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the period earns nothing" in refused[1]
     got, refused = _period("no-circuit", seed)
@@ -397,7 +550,7 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     ε is at most K, and at the next grid point down more than K, and a window whose draw establishes no ε <= 1 reports
     none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
-    got, refused = Cr.period_credit(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     assert refused is None and got["k"] == big_k and got["delta"] == str(Cr.DELTA)
     grid = Fraction(1, 1 << Wd.EPS_BITS)
@@ -548,3 +701,98 @@ def test_cover_is_the_fewest_aligned_subtrees():
             at += 1 << level
         assert at == hi
     assert Cr.cover(0, 8) == [(3, 0)] and Cr.cover(3, 11) == [(0, 3), (2, 1), (1, 4), (0, 10)]
+
+
+def test_a_window_registering_the_weights_its_open_root_binds_is_credited_its_root():
+    for seed in range(20):
+        d = cases.weights_instance(random.Random(f"honest/{seed}"))
+        w, refused = Cr._weights(*(d[k] for k in cases.WEIGHTS_KEYS))
+        held = {e["value"]: bytes.fromhex(e["root"]) for e in d["entries"] if Cr.is_held(e["value"])}
+        assert refused is None and Cr.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
+        assert {v.removeprefix(d["prefix"]) for v in held} == {f"b/{k}" for _n, k, _r in d["layout"]["linears"]}
+
+
+@pytest.mark.parametrize("name", cases.WEIGHTS_NAMES)
+def test_weights_mutation(name):
+    for seed in range(5):
+        d = cases.weights_instance(random.Random(f"{name}/{seed}"), name)
+        got, refused = Cr._weights(*(d[k] for k in cases.WEIGHTS_KEYS))
+        assert got is None, (seed, name)
+        if name == "layout-form":
+            assert refused[0] == "layout", (seed, refused)
+        else:
+            assert refused[0] == "weights" and WEIGHTS_EXPECT[name] in refused[1], (seed, refused)
+
+
+def _b_rows(rng: random.Random, n: int, k: int) -> list[tuple[list[int], float]]:
+    return [([rng.randrange(-128, 128) for _ in range(k)], rng.choice([2.0 ** -9, 0.0123, 3.5])) for _ in range(n)]
+
+
+def _b_row(codes: list[int], sw: float) -> list[int]:
+    """A B row's 16-bit words: its K int8 codes then their f32 scale s_w (`h1zy.ROW`)."""
+    return G.bytes_leaves(bytes(c & 0xFF for c in codes) + struct.pack("<f", sw), 16)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
+    """Two windows of one period whose b/<K> differ, one row's s_w changed or every code zero, each registered as the
+    served path registers it and each window's open root over its own weights' root, so `_weights` alone accepts
+    either: the period's open signed the other's weights' root, so `_window_outcomes` refuses the odd one and the period
+    earns nothing. Its windows on the B rows the period registered are credited."""
+    for name in ("other-sw", "zero-codes"):
+        d = cases.period_instance(random.Random(f"{name}/{seed}"), name)
+        big_k, _ = Cr.committed_k(d["ledger"], d["name"])
+        signed, _ = Cr.committed_weights(d["ledger"], d["name"])
+        folds, refused = set(), []
+        for w in d["windows"]:
+            lay, _ = Cr.layout_of(bytes.fromhex(w["descriptor"]))
+            sid = Ch.audited_session(d["ledger"], w["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
+            got, why = Cr._weights(w["window"], lay, w["entries"], w["rounds"][0]["requests"], sid,
+                                   hashlib.sha512(bytes.fromhex(w["descriptor"])).hexdigest(),
+                                   Cr._prefix(bytes.fromhex(w["descriptor"])))
+            assert why is None, why
+            folds.add(got.hex())
+            refused.append(Cr._window_outcomes(d["key"], d["ledger"], *(w[k] for k in cases.WINDOW_ARGS[2:-1]), big_k,
+                                               rc.lms_verify)[1])
+        assert len(folds) == 2 and signed in folds
+        assert sum(r is not None for r in refused) == 1
+        assert all(r is None or (r[0] == "weights" and OTHER_PERIOD_WEIGHTS in r[1]) for r in refused), refused
+        got, why = _period(name, seed)
+        assert got is None and why[0] == "window" and OTHER_PERIOD_WEIGHTS in why[1]
+
+
+def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
+    """Each K's b/<K>, its linears' B rows (each row its int8 codes then its f32 s_w) committed as the served path
+    registers the weights (`registered.Registered`, the domain that binds no window, salts drawn once), folded by
+    `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
+    code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
+    salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""
+    m = HW.slot(5, h1.TILE)
+    prog = HW.program(h1.LINEARS, h1.CALLS, m, h1.TILE, unit=h1.unit)
+    digest, rng = P.program_digest(prog), random.Random(7)
+    lay = {"calls": [list(x) for x in h1.CALLS], "linears": [list(x) for x in h1.LINEARS], "m": m, "tile": list(h1.TILE)}
+    rows = {k: [r for name, kk, n in h1.LINEARS if kk == k for r in _b_rows(rng, n, k)] for k in (32, 64)}
+
+    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> G.Registered:
+        return G.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
+                                   G.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
+
+    reg = {k: commit(k, b) for k, b in rows.items()}
+    assert [r.leaves for r in reg.values()] == [24, 8] and all(r.window is None for r in reg.values())
+    requests, session = "ab" * 64, "s-1"
+    w = Cr.weights_root({k: r.root for k, r in reg.items()})
+    window = {"root": PS.window_open_root(w, bytes.fromhex(requests), session).hex()}
+    entries = [r.entry() for r in reg.values()]
+    assert Cr._weights(window, lay, entries, requests, session, digest, "") == (w, None)
+    j = rng.randrange(24)
+    codes, sw = rows[32][j]
+    for changed in ((codes, sw * 2), ([codes[0] ^ 1, *codes[1:]], sw)):
+        other = commit(32, rows[32][:j] + [changed] + rows[32][j + 1:])
+        assert other.root != reg[32].root
+        got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session, digest, "")
+        assert got == (None, ("weights", Cr.OTHER_WEIGHTS)), changed
+    for other in (commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
+        w2 = Cr.weights_root({32: other.root, 64: reg[64].root})
+        window2 = {"root": PS.window_open_root(w2, bytes.fromhex(requests), session).hex()}
+        got = Cr._weights(window2, lay, [other.entry(), entries[1]], requests, session, digest, "")
+        assert got == (None, ("weights", Cr.other_weights_entry("b/32", 32, 24))), other.leaves

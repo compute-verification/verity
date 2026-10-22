@@ -223,6 +223,12 @@ def f128_bytes(v: int) -> bytes:
     return struct.pack("<QQ", v & MASK64, v >> 64)
 
 
+def record_bytes(record: dict) -> str:
+    """The coin server's record as ``public.json`` holds it: ``json.dumps(…, indent=1)`` with its rounds first, the
+    format Lean's total reader reads (`Flock.RecRecord.readRecord`, which `recordW` writes)."""
+    return json.dumps({"rounds": record["rounds"], **{k: v for k, v in record.items() if k != "rounds"}}, indent=1)
+
+
 def f128_hex(v: int) -> str:
     """The record's form: hi then lo, each 16 hex digits (``f128_hex`` in lib.rs)."""
     return f"{v >> 64:016x}{v & MASK64:016x}"
@@ -1036,7 +1042,7 @@ class Proxy:
         (sess / "session.json").write_text(json.dumps(self.session_record(), indent=1))
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
-        (out / "public.json").write_text(json.dumps(self.coins.record(), indent=1))
+        (out / "public.json").write_text(record_bytes(self.coins.record()))
         if self.commitments:
             (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         if self.registered:
@@ -1117,7 +1123,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
             if proxy.stopped is not None:
                 d.mkdir(parents=True, exist_ok=True)
-                (d / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
+                (d / "public.json").write_text(record_bytes(proxy.coins.record()))
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)

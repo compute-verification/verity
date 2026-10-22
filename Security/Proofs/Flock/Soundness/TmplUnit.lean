@@ -28,6 +28,7 @@ theorem foldSplit_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rh
     of P[s]! = of P'[s]! := by
   have htree := posMap_tree t lays hpos hroot
   rw [foldSplit_refVal hS hlay hcall hroot hins hal hr1 hr2 hs, foldRef_tree hP' hs]
+  clear hpos hroot
   have hk : (posMap t lays).getD t.constPos 0 = posOf t lays ((t.defs.getD t.root default).cols - 1) := by
     have h1 := htree
     rw [TreeAt] at h1

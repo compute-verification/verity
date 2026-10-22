@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publish the auditor host's ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
+# Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
 #   benchmarks/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: research@204.12.178.84 (vy-challenger-1)
@@ -11,10 +11,13 @@
 # head` by infra; a ledger that isn't the last put one with entries appended (a fork, a cut or an edit: RT4-INT-27) is refused,
 # exit 4, and nothing is put until infra looks. Each session with an end entry is put once, `--kind challenger-session/v1 --ref
 # ledger=art:...`, its tree the session's request.json and out/. What was put is kept in $VY_CHALLENGER_STATE (default
-# ~/.local/state/vy-challenger: ledger.jsonl, ledger.sha512, ledger.art, sessions), so a rerun puts only what is new; an
+# ~/.local/state/vy-challenger: ledger.jsonl, ledger.sha512, ledger.art, sessions, and pins.* as ledger.*), so a rerun puts only what is new; an
 # artifact's id is its manifest's hash, so two publishers putting the same ledger get the same art. With --every, each pass is
 # its own run of this script, started SECONDS after the last one ended; a failed pass is printed and tried again at the next. A
-# verifier reads the ledger's art, checks it (auditor.verify_ledger) and takes a window's one session from it.
+# verifier reads the ledger's art, checks it (auditor.verify_ledger) and takes a window's one session from it. The pins log
+# (the gate's `pins`) is put first, the same way (`--kind challenger-pins/v1`, label `challenger-pins head`, a log that isn't
+# the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
+# The model registry (the gate's `models`) follows it the same way (`--kind challenger-models/v1`, `challenger-models head`).
 set -euo pipefail
 if [ "${1:-}" = --every ]; then
   every=$2
@@ -35,6 +38,29 @@ W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 gate() { "${SSH[@]}" "$DEST" "${GATE[@]}" "$@" < /dev/null; }  # ssh would eat the session loop's stdin
 put() { local a; a=$(research data put "$@" --preserve); echo "art:${a#art:}"; }
+
+# an append-only log the gate reads with verb $1, put as challenger-$2/v1 and labelled challenger-$2 head each time it grew
+log() {
+  local verb=$1 name=$2 digest art
+  gate "$verb" > "$W/$name.jsonl" 2> /dev/null && [ -s "$W/$name.jsonl" ] || return 0
+  digest=$(sha512sum "$W/$name.jsonl" | cut -d' ' -f1)
+  [ "$digest" != "$(cat "$ST/$name.sha512" 2> /dev/null)" ] || return 0
+  if [ -e "$ST/$name.jsonl" ] && ! cmp -s -n "$(stat -c %s "$ST/$name.jsonl")" "$ST/$name.jsonl" "$W/$name.jsonl"; then
+    echo "$(date -u +%FT%TZ) refused: the host's $name log ($digest) doesn't extend the last published head" \
+      "$(cat "$ST/$name.art" 2> /dev/null) (a cut or an edit): nothing put; infra must look" >&2
+    exit 4
+  fi
+  art=$(put --kind "challenger-$name/v1" --file "$W/$name.jsonl" \
+    --meta "{\"host\": \"vy-challenger-1\", \"lines\": $(wc -l < "$W/$name.jsonl"), \"sha512\": \"$digest\"}")
+  research data label "$art" "challenger-$name" head --by infra --off-vocab > /dev/null
+  cp "$W/$name.jsonl" "$ST/$name.jsonl.tmp"
+  mv "$ST/$name.jsonl.tmp" "$ST/$name.jsonl"
+  echo "$art" > "$ST/$name.art"
+  echo "$digest" > "$ST/$name.sha512"
+  echo "$(date -u +%FT%TZ) $name: $art ($digest)"
+}
+log pins pins
+log models models
 
 gate ledger > "$W/windows.jsonl"
 digest=$(sha512sum "$W/windows.jsonl" | cut -d' ' -f1)

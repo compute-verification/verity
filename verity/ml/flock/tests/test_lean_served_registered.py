@@ -4,7 +4,7 @@ loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
-on it and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
+on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
 a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
 reach."""
@@ -82,6 +82,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     ok = _verify(fx, sr.write(tmp_path / "registered.json"))
     assert ok["accepted"] is True, ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
+    assert ok["program_sha512"] == sr.partition["program"]
     moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
     bad = _verify(fx, moved.write(tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
