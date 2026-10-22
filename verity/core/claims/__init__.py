@@ -457,6 +457,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "circuit makes of that unit holds (the Σ check and the dequant check). Nothing in Lean derives a C-Flock "
           "circuit from a declared one or checks one against the other, and circuit-check binds the Definition to its "
           "Boolean lowering, not to the declared circuit", "TS ok realizes", "conjectured"),
+    Entry("accounting-ts-tile-checks", "assumption",
+          "A PouwH1TileZy_v1 session's circuit computes its Definition at its decoded registered ports: on any wire "
+          "assignment the key program's evaluation agrees with at a unit, whose ok wires carry the ok row (the word "
+          "1), every cell of the unit's decoded view has z = A·Bᵀ and y = dq(z). It holds of the circuit only if "
+          "every input its ok reads is a registered port, which flock-verify's complete check establishes",
+          "TS tile checks", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
