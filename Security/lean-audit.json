@@ -136,7 +136,7 @@
   },
   "Accounting.Assumptions.TS.OkRealizes": {
    "owner": "@proofs",
-   "digest": "9a25bc98c7ef4860b0f53e3961752c5337a47469a510630993d7cc4ae85581fb"
+   "digest": "cc6d01be681b6e4bf86d2c53281709bcfb8504333440f80361022759ace4d81e"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
@@ -20404,6 +20404,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
+    "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndRegistered",
@@ -27728,9 +27729,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.SessionSoundAt"]
   },
   "Proofs.Accounting.TS.Session.Held.Assumptions": {
-   "digest": "fb3325f8aea4378e341630c7962c0d95092c59b5b35f0dbb264b932d5a9d19a7",
+   "digest": "d2074c36c330dee2aaf8801a3908933ac43e09830cbbb9fad28d4b3b697066d1",
    "definitions": {
-    "Accounting.Assumptions.TS.OkRealizes": "9a25bc98c7ef4860b0f53e3961752c5337a47469a510630993d7cc4ae85581fb"
+    "Accounting.Assumptions.TS.OkRealizes": "cc6d01be681b6e4bf86d2c53281709bcfb8504333440f80361022759ace4d81e"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
@@ -27750,15 +27751,15 @@
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Held.Layer": {
-   "digest": "c75727f10a4a4d4bfe3047b3b4afda40958ae23bad2fe4babd7db5d94d79a78e",
+   "digest": "f2316fc6e290366ac88cb3cf9d33224e37a42feb7e7ed3d7d7621d8dba63e1cd",
    "definitions": {
     "Accounting.TS.Held.HeldRel": "703c9700dd4b0fb57061122724559b6eb0f109bb34c337ce152c207e14fd64da",
-    "Accounting.TS.Held.OkColl": "4c17c1b87fc7e205a6bfbe0f45d4b1c103a59d986cafd9683b67b1e1063e8517",
-    "Accounting.TS.Held.OkVal": "caf2b267c2c8020e112e1dab659888a157904cc9ebf714489374b74e5bc7548b",
-    "Accounting.TS.Held.OkWire": "5376a67c91cba35a776bf7cada5dc8d42ea485f3c5aa35eed4547915912bc49e",
+    "Accounting.TS.Held.OkColl": "7164ae320d956591ffebfaafa629297a5fb4ba6049ba8b36888811904d0b7161",
+    "Accounting.TS.Held.OkVal": "ca148dc205773f2687fa4af88568112dce11d6d5eca45ca11f336082953bff19",
+    "Accounting.TS.Held.OkWire": "00c60679178ea9d2a130db934d1f064d8f6ca990249a96be1e73631d4791340b",
     "Accounting.TS.Held.heldLayer": "cd49292ab430c207548f608262480bcef45db0a7758fb5c0d7e6a118bfbfebb1",
     "Accounting.TS.Held.okRow": "bcaa07f7893b924c12f9093ea2887f63ece1313cc97abb7bfa9440b72571d632",
-    "Accounting.TS.Held.rsOf": "41cd8c4733e43109a11c68ca1849066f0703e3cc1add9a17edc7f06203006222"
+    "Accounting.TS.Held.rsOf": "3b68c108fa7d710116a41621a1f5b353af397424c239f9079754dd83ca86d5b2"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
