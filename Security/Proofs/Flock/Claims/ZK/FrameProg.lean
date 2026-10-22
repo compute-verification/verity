@@ -453,6 +453,88 @@ theorem progOf_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin
     rw [Nat.sub_zero] at hp
     rw [map_range_congr fun j hj => hw _ (by omega)]
 
+/-- **The loop's frame state after the decoded coins `cs`**, where `x` sets up a session and the placeholder is
+`(c, t, dom, xs, hi)`: the located rep's after its released rounds. -/
+theorem progOf_at (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1) {c : Cfg}
+    {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
+    (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
+      .ok (c, t, dom, xs, hi)) :
+    progOf x cs =
+      repState c t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
+        ((Array.range ((roundsOf spec sts).getD ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 - 1) 0)).map
+          fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 -
+            (roundsOf spec sts).getD ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 - 1) 0 + j + 1))
+        ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
+          fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
+        (fun j => loopNr x (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1))
+        (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 := by
+  unfold progOf
+  rw [hx, hq]
+  simp only [hph]
+
+theorem forall₂_getD {α β : Type} {R : α → β → Prop} {d : α} {d' : β} :
+    ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → ∀ {i : ℕ}, i < l.length → R (l.getD i d) (l'.getD i d')
+  | _, _, .cons hab _, 0, _ => by simpa only [List.getD_cons_zero] using hab
+  | _, _, .cons _ hl, i + 1, hi => by
+    simp only [List.getD_cons_succ]
+    exact forall₂_getD hl (by simp only [List.length_cons] at hi; omega)
+
+theorem roundsAt_getD {rs rs' : Array (ByteArray × ℕ)} (h : Sched.RoundsAt rs rs') {i : ℕ} (hi : i < rs.size) :
+    Sched.RoundAt (rs.getD i (.empty, 0)) (rs'.getD i (.empty, 0)) := by
+  have e : ∀ a : Array (ByteArray × ℕ), a.getD i (.empty, 0) = a.toList.getD i (.empty, 0) := fun a => by
+    rw [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
+  rw [e, e]
+  exact forall₂_getD h (by rw [Array.length_toList]; exact hi)
+
+theorem roundsAt_size {rs rs' : Array (ByteArray × ℕ)} (h : Sched.RoundsAt rs rs') : rs.size = rs'.size := by
+  have := List.Forall₂.length_eq h
+  rwa [Array.length_toList, Array.length_toList] at this
+
+/-- **The loop's frame state one scheduled round on, within a rep stream, is the deployed check's** but for `stopped`:
+where the round after the decoded coins `cs ++ [d]` is the same rep stream's as the round after `cs`, round `j + 1` of
+it, the schedule so far at its own table (`rsched`) and the placeholder's (`sched'`, on the same coins) are of one shape
+(`RoundsAt`) and hold that round, the frame takes the last coins of `cs` at the state `m` outside the inner proof, and the
+deployed frame's check at an alike configuration of a device round against the rep's round `j + 1` releases a round,
+the loop's state after `cs ++ [d]` is that check's, but for `stopped`. `hI`: the placeholder round's frames enter no
+inner proof. -/
+theorem progOf_check_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
+    {spec : SessionSpec} {sts : Array Stmt} {q : ℕ} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
+    (hq : cs.length = q + 1)
+    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1)
+    {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray}
+    (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
+      .ok (c', t, dom, xs, hi))
+    (hc : CfgAlike c c') {j : ℕ} (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1)
+    {rsched sched' : Array (ByteArray × ℕ)} (hrs : Sched.RoundsAt rsched sched')
+    (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
+      ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched')
+    (hlt : j + 1 < rsched.size) {m : Masker} (ha : (progOf x cs).answer c (wordsAt x cs q) = .ok m)
+    (hin : m.inner ≠ some INNER_ROUNDS)
+    (hI : ∀ (fs : List Frame) (k : UInt8), (sched'.getD (j + 1) (.empty, 0)).1 =
+        ByteArray.mk (encs fs ++ (Frame.sq k (rsched.getD (j + 1) (.empty, 0)).2).enc).toArray →
+      ∀ q, fs.foldlM (stepAt c') (m, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none)
+    {st : Bool} {v out : ByteArray} {s : Masker} {why : Option String}
+    (h : check c { m with stopped := st } v (rsched.getD (j + 1) (.empty, 0)).1 (rsched.getD (j + 1) (.empty, 0)).2 =
+      .ok (out, s, why)) :
+    progOf x (cs ++ [d]) = { s with stopped := (progOf x (cs ++ [d])).stopped } := by
+  have hle := locate_snd_le (roundsOf spec sts) 0 q
+  rw [progOf_at x cs hx hq hph, hj] at ha
+  rw [progOf_snoc x cs d hx hq hk, hph]
+  dsimp only
+  rw [hj]
+  obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
+  obtain ⟨sched, hs⟩ := schedSoFar_pop_ok hs'
+  have hg : ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)).getD j #[] = wordsAt x cs q := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simp), Option.getD_some, Array.getElem_map,
+      Array.getElem_range]
+    congr 1
+    omega
+  rw [answer_congr _ _ hc.lay hc.order, ← hg] at ha
+  exact repState_check_step hc t _ dom xs hi _ _ _ _ j hal hs hs' (by simp) (by rw [← roundsAt_size hrs]; exact hlt)
+    (roundsAt_getD hrs hlt) ha hin hI h
+
 end Loop
 
 end Claims.ZKServer

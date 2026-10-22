@@ -1556,6 +1556,62 @@ theorem schedSoFar_pop_lt (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (do
   subst e
   omega
 
+theorem schedSoFar_ok_rounds {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {s : Array (ByteArray × ℕ)}
+    (h : schedSoFar t rep dom xs hi cr = .ok s) :
+    ∃ alg, _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg := by
+  unfold schedSoFar at h
+  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  | error e => rw [hal] at h; cases h
+  | ok alg => exact ⟨alg, rfl⟩
+
+/-- **The schedule on fewer coins is not refused** where the schedule on one more round's is not: a refused opening
+stays refused. -/
+theorem schedSoFar_push_ok (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
+    {s : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi (cr.push a) = .ok s) :
+    ∃ s0, schedSoFar t rep dom xs hi cr = .ok s0 := by
+  unfold schedSoFar at h ⊢
+  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  | error e => rw [hal] at h; cases h
+  | ok alg =>
+    rw [hal] at h
+    simp only [bind, Except.bind] at h ⊢
+    by_cases hlt : cr.size < alg.size
+    · simp only [hlt, ↓reduceIte, pure, Except.pure]
+      exact ⟨alg, rfl⟩
+    · have hlt' : ¬ (cr.push a).size < alg.size := by rw [Array.size_push]; omega
+      simp only [hlt, ↓reduceIte]
+      simp only [hlt', ↓reduceIte] at h
+      have e1 : (cr.push a).extract 0 alg.size = cr.extract 0 alg.size := by
+        rw [Array.extract_push, if_pos (by omega)]
+      have e2 : ((cr.push a).extract alg.size (cr.push a).size).toList =
+          (cr.extract alg.size cr.size).toList ++ [a] := by
+        rw [Array.size_push, Array.extract_push, if_neg (by omega), if_pos (by omega), Array.toList_push]
+      rw [e1, e2, feed_append] at h
+      revert h
+      generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+        (cr.extract alg.size cr.size).toList #[] = P
+      obtain ⟨S, rs⟩ := P
+      intro h
+      cases S with
+      | ask c n k => exact ⟨_, rfl⟩
+      | done _ => exact ⟨_, rfl⟩
+      | fail e => cases h
+
+theorem schedSoFar_pop_ok {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {s : Array (ByteArray × ℕ)}
+    (h : schedSoFar t rep dom xs hi cr = .ok s) : ∃ s0, schedSoFar t rep dom xs hi cr.pop = .ok s0 := by
+  by_cases h0 : cr.size = 0
+  · have e : cr.pop = cr := by
+      rw [Array.eq_empty_of_size_eq_zero h0]
+      rfl
+    rw [e]
+    exact ⟨s, h⟩
+  · rw [Array.eq_push_pop_back!_of_size_ne_zero h0] at h
+    exact schedSoFar_push_ok t rep dom xs hi cr.pop cr.back! h
+
 end Loop
 
 end Claims.ZKServer
