@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.FrameOwn
 import Proofs.Flock.Claims.ZK.FramePass
 import Proofs.Flock.Claims.ZK.FrameLoop
+import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
@@ -171,7 +172,7 @@ theorem AllZero.append {a b : Array F128} (ha : AllZero a) (hb : AllZero b) : Al
   · exact ha x hx
   · exact hb x hx
 
-theorem zeros_get! (N i : ℕ) : (Loop.zeros N).get! i = 0 := by
+theorem loopZeros_get! (N i : ℕ) : (Loop.zeros N).get! i = 0 := by
   rw [FlockSoundness.Discharge.ZkView.get!_eq]
   by_cases hi : i < N
   · rw [getElem!_pos _ i (by simpa [Loop.zeros] using hi)]
@@ -181,7 +182,7 @@ theorem zeros_get! (N i : ℕ) : (Loop.zeros N).get! i = 0 := by
 
 theorem u64OfLE_zeros (N o : ℕ) : _root_.Flock.u64OfLE (Loop.zeros N) o = 0 := by
   rw [FlockSoundness.Discharge.ZkView.u64OfLE_eq]
-  simp only [zeros_get!]
+  simp only [loopZeros_get!]
   decide
 
 theorem words_zeros (N o n : ℕ) : AllZero (words (Loop.zeros N) o n) := fun x hx => by
@@ -345,5 +346,116 @@ theorem roundFree_sq {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : Byte
            rw [hj] at e
            obtain rfl := Option.some.inj e
            exact hio)
+
+/-! ## The placeholder takes its own round where the deployed frame took one of its shape -/
+
+open _root_.Flock.Firewall.Frame (isLabel)
+
+theorem relM_ok_left {α β : Type} {f : α → β} {y : V α} {a : α} (h : RelM f (.ok a) y) :
+    ∃ b, y = .ok b ∧ f a = f b := by
+  cases y with
+  | ok b => exact ⟨b, rfl, h⟩
+  | error e => exact (h : False).elim
+
+theorem midFrame_forall₂ {fs fs' : List Frame} (hA : List.Forall₂ Alike fs fs') :
+    (∀ f ∈ fs, midFrame f) → ∀ f ∈ fs', midFrame f := by
+  induction hA with
+  | nil => exact fun _ f hf => by cases hf
+  | cons ha _ ih =>
+    intro hm g hg
+    rcases List.mem_cons.mp hg with rfl | hg
+    · exact Sched.midFrame_alike ha (hm _ List.mem_cons_self)
+    · exact ih (fun x hx => hm x (List.mem_cons_of_mem _ hx)) g hg
+
+/-- The firewall's own rounds at two configurations of one row size are of one shape, whatever `final_c'`, `τ` and the
+coins. -/
+theorem ownFrames_alike {c c' : Cfg} (hH : c.rowH.size = c'.rowH.size) (hM : c.rowMu.size = c'.rowMu.size)
+    (s s' : Masker) {w w' t t' : ByteArray} (ht : t.size = t'.size) :
+    ∀ k, List.Forall₂ Alike (ownFrames c s w t k) (ownFrames c' s' w' t' k)
+  | 0 => .cons (show Alike (.label _) (.label _) from rfl) (.cons True.intro .nil)
+  | 1 => .cons (show List.length _ = List.length _ by simp) .nil
+  | 2 => .cons ht .nil
+  | k + 3 => .cons (show List.length _ = List.length _ by simp [hH, hM]) .nil
+
+theorem ownFrames_notInner (c : Cfg) (s : Masker) (w t : ByteArray) :
+    ∀ {k : ℕ}, 0 < k → ∀ f ∈ ownFrames c s w t k, f ≠ .label _root_.Flock.Zk.LABEL_INNER.toUTF8
+  | 0, h, _, _ => (Nat.lt_irrefl 0 h).elim
+  | 1, _, f, hf => by rw [List.mem_singleton.mp hf]; nofun
+  | 2, _, f, hf => by rw [List.mem_singleton.mp hf]; nofun
+  | _ + 3, _, f, hf => by rw [List.mem_singleton.mp hf]; nofun
+
+theorem isLabel_inner : isLabel _root_.Flock.Zk.LABEL_INNER.toUTF8 _root_.Flock.Zk.LABEL_INNER = true := by
+  unfold isLabel
+  exact beq_self_eq_true _
+
+/-- The inner proof's label starts its count. -/
+theorem label_inner_zero (c : Cfg) (s : Masker) {q : Masker × ByteArray}
+    (h : s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 = .ok q) : q.1.inner = some 0 := by
+  have key : (s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8).map (fun q => q.1.inner) =
+      (s.label c _root_.Flock.Zk.LABEL_INNER.toUTF8).map (fun _ => some 0) := by
+    unfold Masker.label
+    cases hm : c.mask <;>
+    simp only [isLabel_inner, ↓reduceIte, apply_ite (Except.map _), exMap_bind, exMap_pure, Sched.exMap_throw,
+      Sched.throw_bindV]
+  rw [h] at key
+  exact Except.ok.inj key
+
+/-- The frame's steps over the firewall's own round 0 start the inner proof's count. -/
+theorem foldlM_own0_inner (c : Cfg) (s₀ : Masker) (w t : ByteArray) (r q : Masker × ByteArray × Array ℕ × ℕ)
+    (h : (ownFrames c s₀ w t 0).foldlM (stepAt c) r = .ok q) : q.1.inner = some 0 := by
+  simp only [ownFrames, List.foldlM_cons, List.foldlM_nil] at h
+  obtain ⟨a, ha, h⟩ := bindV_ok h
+  obtain ⟨b, hb, h⟩ := bindV_ok h
+  obtain rfl : b = q := Except.ok.inj h
+  rw [Sched.stepAt_inner c a b _ (by nofun) hb]
+  simp only [stepAt] at ha
+  cases hl : r.1.label c _root_.Flock.Zk.LABEL_INNER.toUTF8 with
+  | error e => rw [hl] at ha; cases ha
+  | ok l =>
+    rw [hl] at ha
+    cases ha
+    exact label_inner_zero c r.1 hl
+
+/-- The frame's steps over the firewall's own rounds past the first leave the inner proof's count as it was. -/
+theorem foldlM_own_inner (c : Cfg) (s₀ : Masker) (w t : ByteArray) {i : ℕ} (hi : 0 < i)
+    (r q : Masker × ByteArray × Array ℕ × ℕ) (h : (ownFrames c s₀ w t i).foldlM (stepAt c) r = .ok q) :
+    q.1.inner = r.1.inner :=
+  Sched.foldlM_stepAt_inner c _ r q (ownFrames_notInner c s₀ w t hi) h
+
+/-- **The placeholder takes its own round where the deployed frame took a round of its shape**: at zero pads
+(`ZeroCfg`), from the deployed state but for `stopped`, the placeholder's own round `i` (`ownRound` at zero `final_c'`
+and `τ`) passes `roundFree` and leaves the deployed state but for `stopped`, where the placeholder's frames reach the
+inner proof's round `i` (`hI`). -/
+theorem roundFree_own_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (s s₀ : Masker) (b : Bool) {i n : ℕ}
+    {k : UInt8} (hi : i < 4) (hs : s.inner ≠ some INNER_ROUNDS) (hsq : ownSq n i = .sq k n)
+    (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {fs : List Frame}
+    (hm : ∀ f ∈ fs, midFrame f) (hA : List.Forall₂ Alike fs (ownFrames c' s₀ (Loop.zeros 16) (Loop.zeros 64) i))
+    (hI : ∀ q, (ownFrames c' s₀ (Loop.zeros 16) (Loop.zeros 64) i).foldlM (stepAt c')
+      ({ s with stopped := b }, ByteArray.empty, #[], 0) = .ok q → q.1.inner = some i)
+    {q : ByteArray × Masker × Array ℕ}
+    (h : roundFree c s (ByteArray.mk (encs fs ++ (Frame.sq k n).enc).toArray) n = .ok q) :
+    ∃ q', roundFree c' { s with stopped := b } (ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n i) n = .ok q' ∧
+      unstop q.2.1 = unstop q'.2.1 := by
+  have hz16 : (Loop.zeros 16).size = 16 := by simp [Loop.zeros, ByteArray.size]
+  have hz64 : (Loop.zeros 64).size = 64 := by simp [Loop.zeros, ByteArray.size]
+  have hX : ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n i = ByteArray.mk (encs (ownFrames c' s₀
+      (Loop.zeros 16) (Loop.zeros 64) i) ++ (Frame.sq k n).enc).toArray := by
+    rw [← hsq, ← ownRound_encs hz16 hz64 hi, Array.toArray_toList]
+  have hm' := midFrame_forall₂ hA hm
+  rw [roundFree_encs c s fs k n hs hm hk h0 hn] at h
+  obtain ⟨r, hr, h⟩ := bindV_ok h
+  have hR := foldlM_stepAt_alike hc fs _ hA (s, ByteArray.empty, #[], 0)
+    ({ s with stopped := b }, ByteArray.empty, #[], 0) rfl
+  rw [hr] at hR
+  obtain ⟨r', hr', he⟩ := relM_ok_left hR
+  obtain rfl := exMap_ok_eq h
+  have hin := hI r' hr'
+  rw [hX, roundFree_encs c' { s with stopped := b } _ k n hs hm' hk h0 hn, hr']
+  simp only [bind, Except.bind, hin]
+  rw [← hX, innerOwn_zero hz r'.1 s₀ hz16 hz64 n hi]
+  refine ⟨_, rfl, ?_⟩
+  have hu : unstop r.1 = unstop r'.1 := congrArg Prod.fst he
+  rw [← hin]
+  exact congrArg (fun x : Masker => { x with owed := some n }) hu
 
 end Claims.ZKServer
