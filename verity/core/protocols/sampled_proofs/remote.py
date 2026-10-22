@@ -439,6 +439,15 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
     return [line for line in text.split("\n") if line]
 
 
+def main_lines(path: str | os.PathLike) -> list[str]:
+    """The verifier's copy of main's first-parent history at `path`, one commit a line (the auditor's own ``git rev-list
+    --first-parent origin/main``), without their newlines; a missing or unreadable file raises `CoinError`."""
+    text = _read(Path(path), "copy of main's history")
+    if text is None:
+        raise CoinError(f"{Ch.NO_MAIN} (none at {path})")
+    return [line for line in text.split("\n") if line]
+
+
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
@@ -446,7 +455,8 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
     the one session it opens for the window, under the challenger key the window's deployment pins, `key`
     (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
     session's directory the coin commitment the challenger signed and the roots its signed release log shows it received
-    (`challenger.session_named`).  Each fails closed, raising `CoinError`."""
+    (`challenger.session_named`).  Each fails closed, raising `CoinError`.  It checks no pin: a path that credits the
+    session also reads it through `challenger.pinned_session`."""
     d = Path(directory)
     ledger = Ch.ledger_head([ledger_lines(p) for p in heads], key, verify)
     audited = Ch.audited_session(ledger, window, key, verify)
@@ -462,4 +472,4 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
            "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
