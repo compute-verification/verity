@@ -129,7 +129,7 @@ end
 theorem of_eqAt (r : Array F128) (lo : ℕ) (n u : ℕ) (hu : u < 2 ^ n) :
     of (Tmpl.eqAt r lo n u) = FlockLevel3.eqAt (fun j : Fin n => of (r.getD (lo + j.val) 0)) u := by
   unfold Tmpl.eqAt
-  simp only [show ¬ 2 ^ n ≤ u from Nat.not_le.mpr hu, if_false]
+  simp only [show ¬ 2 ^ n ≤ u from Nat.not_le.mpr hu, ↓reduceIte]
   clear hu
   induction n with
   | zero => simp [FlockLevel3.eqAt, ← one_eq]
