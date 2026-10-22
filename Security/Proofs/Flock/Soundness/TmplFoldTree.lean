@@ -115,16 +115,25 @@ theorem place_sum (FA FB : ℕ → ℕ → GF128) (defs : Array Def) (k : ℕ) :
     | some df =>
       simp only [hd] at h
       obtain ⟨acc1, h1, h2⟩ := except_bind_ok h
-      obtain ⟨hok1, hs1⟩ := foldlM_sum (accSum FA FB) AccOk _
-        (fun r => rowShare FA FB (o + r.1) (r.2.1.map (df.ref o inp k)) (r.2.2.map (df.ref o inp k)))
+      obtain ⟨hok1, hs1⟩ := foldlM_sum (accSum FA FB) AccOk
+        (fun (acc : Acc) (r : ℕ × Array ℕ × Array ℕ) =>
+          write acc (o + r.1) (canon (r.2.1.map (df.ref o inp k))) (canon (r.2.2.map (df.ref o inp k))))
+        (fun (r : ℕ × Array ℕ × Array ℕ) =>
+          rowShare FA FB (o + r.1) (r.2.1.map (df.ref o inp k)) (r.2.2.map (df.ref o inp k)))
         (fun a _ b hab ha => by
           obtain ⟨hb, hs⟩ := write_sum FA FB ha hab
           exact ⟨hb, by rw [hs, rowShare_canon]⟩) _ acc acc1 h1 hok
-      obtain ⟨hok2, hs2⟩ := foldlM_sum (accSum FA FB) AccOk _
-        (fun c => ((List.range c.count).map fun j =>
+      obtain ⟨hok2, hs2⟩ := foldlM_sum (accSum FA FB) AccOk
+        (fun (acc : Acc) (c : Flock.Tmpl.Call) => (List.range c.count).foldlM (fun acc j =>
+          place defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j) acc) acc)
+        (fun (c : Flock.Tmpl.Call) => ((List.range c.count).map fun j =>
           placeSum FA FB defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j)).sum)
-        (fun a _ b hab ha => foldlM_sum (accSum FA FB) AccOk _ _
-          (fun a' _ b' hab' ha' => place_sum FA FB defs k fuel _ _ _ a' b' hab' ha') _ a b hab ha)
+        (fun a c b hab ha => foldlM_sum (accSum FA FB) AccOk
+          (fun (acc : Acc) (j : ℕ) =>
+            place defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j) acc)
+          (fun (j : ℕ) =>
+            placeSum FA FB defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j))
+          (fun a' j b' hab' ha' => place_sum FA FB defs k fuel _ _ _ a' b' hab' ha') _ a b hab ha)
         _ acc1 acc' h2 hok1
       refine ⟨hok2, ?_⟩
       rw [hs2, hs1]
