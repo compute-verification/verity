@@ -97,6 +97,7 @@ import Proofs.Flock.Claims.ZK.FrameOwn
 import Proofs.Flock.Claims.ZK.FramePass
 import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.FrameSched
+import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -704,7 +705,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
   monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
   opening at two tables of one shape whatever its salts for levels ≥ 1 (`openStep_alike`), and so a rep's scheduled
-  rounds so far (`schedSoFar_alike`).
+  rounds so far (`schedSoFar_alike`), which only grow with one more round's coins (`schedSoFar_snoc`).
+* `FrameProg`: toward `ProgChecks` at `ofLoop`: where the deployed frame's check of a device round releases a round, the
+  placeholder's check of its alike scheduled round against itself releases one from the same state, its state the same
+  but for `stopped` (`check_alike_self`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
