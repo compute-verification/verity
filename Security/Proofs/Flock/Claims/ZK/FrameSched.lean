@@ -1364,8 +1364,9 @@ theorem flatMap_range_take {α : Type} (f : ℕ → List α) (hf : ∀ k, (f k).
     ((List.range n).flatMap f).take (2 * i + 1) = (List.range i).flatMap f ++ (f i).take 1 := by
   obtain ⟨d, rfl⟩ : ∃ d, n = (i + 1) + d := ⟨n - (i + 1), by omega⟩
   rw [List.range_add, List.flatMap_append, List.range_succ, List.flatMap_append, List.flatMap_singleton,
-    List.append_assoc, List.take_append_of_le_length (by rw [List.length_append, flatMap_range_length f hf, hf]; omega)]
-  rw [← flatMap_range_length f hf i, List.take_length_add_append]
+    List.take_append_of_le_length (by rw [List.length_append, flatMap_range_length f hf, hf]; omega)]
+  rw [show 2 * i + 1 = ((List.range i).flatMap f).length + 1 by rw [flatMap_range_length f hf]]
+  exact List.take_length_add_append 1
 
 theorem flatMap_range_congr {α : Type} {f g : ℕ → List α} {i : ℕ} (h : ∀ k, k < i → f k = g k) :
     (List.range i).flatMap f = (List.range i).flatMap g :=
