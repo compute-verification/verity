@@ -17,6 +17,7 @@ import Models.Nci.Guarantees.Training
 import Models.Nci.Guarantees.Packed
 import Models.Nci.Guarantees.PackedTraining
 import Models.Nci.Guarantees.Activations
+import Models.Nci.Guarantees.Covering
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions
