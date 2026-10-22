@@ -529,4 +529,60 @@ theorem roundFree_inner_some {c : Cfg} {s : Masker} {xb : ByteArray} {n j : ℕ}
                 exact (Sched.absorb_inner c _ _ ha).trans hy)
            · cases hr)
 
+/-- A squeeze the frame took ends the round's frames in the count it asked for, of a kind it squeezes. -/
+theorem sqOk_frames {c : Cfg} {xb : ByteArray} {n : ℕ} {r : ByteArray × Masker × Array ℕ} {fs : List Frame}
+    {k : UInt8} {m : ℕ} (hx : xb.data.toList = encs fs ++ (Frame.sq k m).enc) (hm : m < 2 ^ 64) (h : SqOk c xb n r) :
+    m = n ∧ (k = 2 ∨ (k = 1 ∧ n = 1)) ∧ ¬ (n = 0 ∧ k = 2) ∧ n < 2 ^ 64 := by
+  have hl : (Frame.sq k m).enc.length = 16 := by rw [Frame.enc_length]; rfl
+  have hsz : xb.size = (encs fs).length + 16 := by
+    rw [← hl, ← List.length_append, ← hx, Array.length_toList]
+    rfl
+  have e : xb = ByteArray.mk xb.data.toList.toArray := by rw [Array.toArray_toList]
+  have hd : xb.data.toList.drop (encs fs).length = (Frame.sq k m).enc ++ [] := by
+    rw [hx, List.drop_left, List.append_nil]
+  obtain ⟨-, hkind, hlen⟩ := header_at xb.data.toList _ _ [] hd hm
+  rw [← e] at hkind hlen
+  simp only [Frame.kind, Frame.len] at hkind hlen
+  obtain ⟨-, -, h3, h4, h5, -⟩ := h
+  have hp : xb.size - 16 = (encs fs).length := by omega
+  rw [hp] at h3 h4 h5
+  rw [hlen] at h3 h4
+  rw [hkind] at h4 h5
+  have h3' : m = n := h3
+  subst h3'
+  refine ⟨rfl, by simpa using h5, fun ⟨h0, hk⟩ => ?_, hm⟩
+  subst h0 hk
+  simp at h4
+
+theorem ownSq_sq {n : ℕ} (hn : n < 2 ^ 64) : ∀ i, ∃ k m, ownSq n i = .sq k m ∧ m < 2 ^ 64
+  | 0 => ⟨1, 1, rfl, by norm_num⟩
+  | 1 => ⟨2, n, rfl, hn⟩
+  | 2 => ⟨1, 1, rfl, by norm_num⟩
+  | _ + 3 => ⟨2, n, rfl, hn⟩
+
+/-- **Inside the inner proof the frame takes only the firewall's own round**: at the inner proof's round `i`, a round
+`roundFree` takes is `ownRound`'s frames at the state it leaves, at some `final_c'` and `τ`, and squeezes as the
+firewall's own round does. -/
+theorem roundFree_own_frames {c : Cfg} {s : Masker} {xb : ByteArray} {n i : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (hi : i < 4) (hj : s.inner = some i) (h : roundFree c s xb n = .ok q) :
+    ∃ w t, w.size = 16 ∧ t.size = 64 ∧ xb.data.toList = encs (ownFrames c q.2.1 w t i) ++ (ownSq n i).enc ∧
+      ∃ k, ownSq n i = .sq k n ∧ (k = 2 ∨ (k = 1 ∧ n = 1)) ∧ ¬ (n = 0 ∧ k = 2) ∧ n < 2 ^ 64 := by
+  have hs : s.inner ≠ some INNER_ROUNDS := by
+    rw [hj]
+    intro e
+    have : i = INNER_ROUNDS := Option.some.inj e
+    rw [this] at hi
+    exact absurd hi (by decide)
+  have hq := roundFree_sq hs h
+  have hin := roundFree_inner_some hs hj h
+  obtain ⟨-, w, t, hw, ht, hx⟩ := innerOwn_inv (hq.2.2.2.2.2 i hin)
+  have hX := ownRound_encs (c := c) (s := q.2.1) (n := n) hw ht hi
+  rw [← hx] at hX
+  have hn : n < 2 ^ 64 := by rw [← hq.2.2.1]; exact UInt64.toNat_lt _
+  obtain ⟨k, m, hkm, hm⟩ := ownSq_sq hn i
+  have hX' := hX
+  rw [hkm] at hX'
+  obtain ⟨rfl, hk, h0, hn'⟩ := sqOk_frames hX' hm hq
+  exact ⟨w, t, hw, ht, hX, k, hkm, hk, h0, hn'⟩
+
 end Claims.ZKServer
