@@ -722,7 +722,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`ligeritoPZk_ot`).
 * `FramePlan`: a rep's schedule so far squeezes a prefix of the algebraic phase's counts, then the opening's
   (`sched_prefix`): the PIOP on the algebraic phase's coins asks for nothing (`piop_na`), the opening asks for the ring
-  switch's and Ligerito's (`openStep_sp`), and fed coins, the rounds sent are a prefix of the asks (`feed_prefix`).
+  switch's and Ligerito's (`openStep_sp`), and fed coins, the rounds sent are a prefix of the asks (`feed_prefix`). So at
+  the placeholder at a link of `spec.points` points, each scheduled round squeezes the plan's count (`plan_sched`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.

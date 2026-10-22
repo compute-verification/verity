@@ -15,6 +15,9 @@ that schedule's counts are a prefix of the plan's.
   Ligerito's (`openList`).
 * `feed_prefix`: fed coins, a step program's rounds and its next ask are a prefix of its asks.
 * `sched_prefix`: the schedule so far squeezes a prefix of `replayCoins` without its zeros, then `openList`.
+* `plan_sched`: at the placeholder at a link of `spec.points` points, each round of the schedule so far squeezes the
+  plan's count for it (`repPlan_list`: the plan is those asks, then the inner proof's; `sched_facts`: every `--zk`
+  schedule has a lane round and counts within a squeeze's, by `decide +kernel`).
 -/
 
 namespace Claims.ZKServer.Count
@@ -222,5 +225,142 @@ theorem sched_prefix (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
         simp only [pend, List.append_nil, Array.toList_append, List.map_append] at hsp ⊢
         rw [hc]; exact (List.prefix_append_right_inj _).2 hsp
       | fail e => cases h
+
+theorem tabOfLevel0_ok {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
+    {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
+    t.st = st ∧ ∃ tp, _root_.Flock.Zk.schedule st.m = .ok (t.sch, tp) := by
+  unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  · rw [hs] at h; cases h
+  · rw [hs] at h
+    simp only at h
+    split at h
+    · cases h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨rfl, tPad, rfl⟩
+
+/-- **The placeholder's table** is the statement's, at its `--zk` schedule, and its extra claims are at the link's
+points. -/
+theorem placeholder_tab {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {k : ℕ} {link : Array F128}
+    {c' : _root_.Flock.Firewall.Frame.Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} (h : Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
+    t.st = _root_.Flock.Setup.ofCircuit sts[k / 2]! ∧
+      (∃ tp, _root_.Flock.Zk.schedule sts[k / 2]!.m = .ok (t.sch, tp)) ∧
+      xs = _root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! link) := by
+  have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
+    intro α β x f b hb
+    cases x with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  unfold Loop.placeholder at h
+  obtain ⟨⟨lay, mask⟩, -, h⟩ := bok h
+  obtain ⟨⟨sch, tPad⟩, -, h⟩ := bok h
+  obtain ⟨l0, -, h⟩ := bok h
+  obtain ⟨t0, ht0, h⟩ := bok h
+  cases h
+  exact ⟨(tabOfLevel0_ok ht0).1, (tabOfLevel0_ok ht0).2, rfl⟩
+
+theorem extras_size (st : _root_.Flock.Stmt) (pts : Array (Array F128)) :
+    (_root_.Flock.Firewall.Drive.extras st pts).size = st.regions.size * pts.size := by
+  unfold _root_.Flock.Firewall.Drive.extras
+  rw [← Array.length_toList, Array.toList_flatMap]
+  simp only [Array.toList_map, List.length_flatMap, List.length_map, Array.length_toList, List.map_const',
+    List.sum_replicate, smul_eq_mul]
+
+theorem linkPoints_size (st : _root_.Flock.Stmt) (c : Array F128) :
+    (_root_.Flock.Firewall.Drive.linkPoints st c).size = c.size / st.mPts := by
+  simp [_root_.Flock.Firewall.Drive.linkPoints]
+
+/-- A `--zk` schedule's facts the opening's asks read: a lane round before the pair, and its counts within a squeeze's. -/
+def schedOk (m : ℕ) : Bool :=
+  match _root_.Flock.Zk.schedule m with
+  | .ok (sch, _) => decide (1 ≤ sch.k0) && decide (sch.n < 2 ^ 62) &&
+      sch.levels.all (fun lv => decide (lv.q < 2 ^ 63)) && decide ((default : _root_.Flock.Level).q < 2 ^ 63)
+  | .error _ => true
+
+/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
+theorem schedOk_lt : ∀ m, m < 36 → schedOk m = true := by decide +kernel
+
+theorem sched_facts {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+    m < 36 ∧ 1 ≤ sch.k0 ∧ sch.n < 2 ^ 62 ∧ ∀ i, (sch.levels.getD i default).q < 2 ^ 63 := by
+  have hm : m < 36 := by
+    by_contra hc
+    obtain ⟨e, he⟩ := Loop.schedule_ge (m := m) (by omega)
+    rw [he] at h; cases h
+  have hok := schedOk_lt m hm
+  unfold schedOk at hok
+  rw [h] at hok
+  simp only [Bool.and_eq_true, decide_eq_true_eq, Array.all_eq_true] at hok
+  obtain ⟨⟨⟨hk, hn⟩, hl⟩, hd⟩ := hok
+  refine ⟨hm, hk, hn, fun i => ?_⟩
+  rw [Array.getD_eq_getD_getElem?]
+  rcases hi : sch.levels[i]? with _ | lv
+  · exact hd
+  · obtain ⟨hi', rfl⟩ := Array.getElem?_eq_some_iff.1 hi
+    exact hl i hi'
+
+theorem seven_bne : ((7 : ℕ) != 0) = true := rfl
+
+theorem flatten_seven (n : ℕ) : (List.replicate n [7]).flatten = List.replicate n 7 := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [List.replicate_succ, List.flatten_cons, ih]; rfl
+
+/-- **A rep's plan**, as a list: the algebraic phase's counts, the opening's, then the inner proof's. -/
+theorem repPlan_list {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
+    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) :
+    (_root_.Flock.Firewall.Session.repPlan spec st).toList =
+      (_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0) ++
+        openList (2 + spec.points * st.regions.size) sch ++
+        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0) := by
+  simp only [_root_.Flock.Firewall.Session.repPlan, Loop.repCoins_ok h, Except.toOption, Option.getD_some,
+    Array.toList_filter, Array.toList_append, List.filter_append, Array.toList_replicate, List.filter_replicate,
+    openList, flatten_seven, List.append_assoc, seven_bne, ↓reduceIte, filter_cons_ne, List.filter_nil,
+    List.append_nil]
+
+theorem getD_of_prefix {P : Array ℕ} {sched : Array (ByteArray × ℕ)} {i : ℕ}
+    (h : sched.toList.map Prod.snd <+: P.toList) (hi : i < sched.size) :
+    P.getD i 0 = (sched.getD i (.empty, 0)).2 := by
+  have hl : i < (sched.toList.map Prod.snd).length := by simpa using hi
+  have hPl : i < P.size := by
+    have := h.length_le
+    simp only [List.length_map, Array.length_toList] at this
+    omega
+  have e := h.getElem hl
+  simp only [List.getElem_map, Array.getElem_toList] at e
+  simp only [Array.getD, hi, hPl, dite_true]
+  exact e.symm
+
+/-- **The plan's count is the schedule's**: at a placeholder at the link points of `spec.points` points, each round of
+the rep's schedule so far squeezes the plan's count for it. -/
+theorem plan_sched (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) (k i : ℕ) (link : Array F128)
+    (c' : _root_.Flock.Firewall.Frame.Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ))
+    (hph : Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi))
+    (hs : Loop.schedSoFar t (k % 2) dom xs hi cr = .ok sched) (hlt : i < sched.size)
+    (hpts : link.size / sts[k / 2]!.mPts = spec.points) (hdom : dom.size < 2 ^ 64)
+    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hx : spec.points * sts[k / 2]!.regions.size + 2 < 2 ^ 64) :
+    (_root_.Flock.Firewall.Session.repPlan spec sts[k / 2]!).getD i 0 = (sched.getD i (.empty, 0)).2 := by
+  obtain ⟨hts, ⟨tp, hsch⟩, hxs⟩ := placeholder_tab hph
+  have hxn : xs.size = spec.points * sts[k / 2]!.regions.size := by
+    rw [hxs, extras_size, linkPoints_size, hpts, Nat.mul_comm]
+  obtain ⟨hm, hk, hn, hq⟩ := sched_facts hsch
+  have hdg : t.st.digest.size < 2 ^ 64 := by
+    rw [hts]
+    simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
+    omega
+  have hpre := sched_prefix t (k % 2) dom xs hi cr sched hs hdom hdg hcn (by rw [hts]; exact Nat.lt_trans hm (by decide))
+    (by omega) hk hn hq
+  rw [hts, hxn] at hpre
+  refine getD_of_prefix (hpre.trans ?_) hlt
+  rw [repPlan_list hsch, Nat.add_comm]
+  exact List.prefix_append _ _
 
 end Claims.ZKServer.Count
