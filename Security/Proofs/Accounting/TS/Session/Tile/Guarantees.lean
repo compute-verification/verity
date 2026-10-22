@@ -13,8 +13,9 @@ statement names what the Definition reading takes:
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   as in `Accounting.Guarantees.TS.HeldSessionSound`, not a premise;
 * (b) every drawn unit's decoded view meets the Definition's checks (`TileOk`), under the named premise
-  `Accounting.Assumptions.TS.TileChecks`, at sessions whose every circuit port is a port of `own`, what flock-verify's
-  complete check establishes (`Flock.Registered.checkComplete_ok`).
+  `Accounting.Assumptions.TS.TileChecks`. That every circuit port is a port of `own` is not a hypothesis:
+  `tileLayer`'s acceptance includes flock-verify's complete check (`Flock.Registered.checkComplete`), from which
+  `checkComplete_ok` reads it.
 
 The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `TileRel` on every path,
 so the tile layer's unsound event is inside the checked layer's. It sits in the proofs package because the sessions do
@@ -29,10 +30,10 @@ open scoped ENNReal
 
 /-- **A tile unit's proof layer, with its Definition's checks, is sound at `δ` through its C-Flock sessions, fully
 checked.** `CheckedSessionSound`'s window and premises, at the tile layer `tileLayer sess out ok known dq dec right`
-(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
-opening the committed rows at the registered reads; its relation `TileRel`), and in addition at every session: every
-port of its circuit is a port of `own` (what `Flock.Registered.checkComplete` establishes, `checkComplete_ok`), the
-known content names the port `ok` with rows each the word `1` (`okRow`), and its circuit computes `PouwH1TileZy_v1`'s
+(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i` and
+under its complete check, `Flock.Registered.checkComplete`: every port of the circuit is a port of `own`; opening the
+committed rows at the registered reads; its relation `TileRel`), and in addition at every session: the known content
+names the port `ok` with rows each the word `1` (`okRow`), and its circuit computes `PouwH1TileZy_v1`'s
 Definition at the decode `dec x w i` (`Accounting.Assumptions.TS.TileChecks`). Then the layer accepts only where
 flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `TileRel` on the path
 with probability at most `δ`: outside `δ` the rows are one assignment the circuit's evaluation agrees with on every
@@ -52,7 +53,6 @@ def TileSessionSound : Prop :=
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →
-    (∀ x w i, ∀ p ∈ (sess x w i).c.ports, ∃ r ∈ (sess x w i).own, r.name = p.name) →
     (∀ x w i, ∃ ks, (ok, ks) ∈ known x w i ∧ ∀ r ∈ ks, r.1 = okRow) →
     (∀ x w i, Accounting.Assumptions.TS.TileChecks dq (sess x w i) ok (dec x w i)) →
     (∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
