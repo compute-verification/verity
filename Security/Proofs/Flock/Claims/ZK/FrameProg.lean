@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.ZK.FramePlan
+import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.FrameState
 
@@ -1365,8 +1365,9 @@ end InPlan
 
 open Loop in
 /-- **`ProgChecks` at the loop's own frames**, from what a round reads beyond the loop's own definitions. At a scheduled
-round (`hS`): the rep's own table is of the placeholder's shape, at the bounds `schedSoFar_alike` reads. There the
-plan's coin counts (`repPlan`, which the loop requests, `loopNr_succ`; the round is within the plan,
+round, the rep's own table, where `real` answers the loop's own (`hR`, `Count.RealTabs`), is of the placeholder's shape
+(`Count.real_tabAlike`) and within the bounds `schedSoFar_alike` reads (`Count.real_bounds`; the placeholder's domain and
+extra claims within a `u64`'s count, `hS`). There the plan's coin counts (`repPlan`, which the loop requests, `loopNr_succ`; the round is within the plan,
 `loop_round_in_plan`) are the placeholder's schedule's (`Count.plan_sched`), where each table's link points are the
 session's (`hP`: its `m_pts` the session's, nonzero, and the link within `Frames.COIN_MAX`); the loop's state there is
 outside the inner proof (`repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
@@ -1379,20 +1380,14 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit)
-    (hS : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-      (h : List (Msg × Msg)) (m : Masker) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ) (c' : Cfg)
-      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-      (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
-      FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
-      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) →
-      placeholder spec sts k (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi) →
-      real x w ρ k = .ok (tr, hr) →
-      schedSoFar tr (k % 2) dom xs hr ((Array.range (j + 1)).map
-        fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
-      j + 1 < rsched.size → (ofLoop T L₀ real).answered x ρ h = .ok m →
-      Sched.TabAlike tr t ∧ dom.size < 2 ^ 64 ∧ tr.st.digest.size < 2 ^ 64 ∧ tr.st.m < 2 ^ 64 ∧
-        xs.size + 2 < 2 ^ 64 ∧ tr.sch.n + 1 < 2 ^ 64 ∧ (∀ i, (tr.sch.levels.getD i default).q < 2 ^ 64) ∧
-        2 * tr.tPad < 2 ^ 64 ∧ (∀ i, 64 * 2 ^ (tr.sch.levels.getD i default).d < 2 ^ 64))
+    (hS : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) (c' : Cfg)
+      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      link.size ≤ _root_.Flock.Firewall.Frames.COIN_MAX → placeholder spec sts k link = .ok (c', t, dom, xs, hi) →
+      dom.size < 2 ^ 64 ∧ xs.size + 2 < 2 ^ 64)
+    (hR : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+      (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
     (hP : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
       sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧ spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX)
@@ -1436,9 +1431,7 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       (by rw [hk1, hj, ← hdm, ← hxe]; exact hrs))).elim
   | ok rsched =>
   by_cases hlt : j + 1 < rsched.size
-  · obtain ⟨hT, hdom, hdg, hm, hxs, hn, hlq, hp, hd⟩ :=
-      hS ρ (e0 :: h1) m s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq2 hki hph hr0 hrs hlt hA
-    have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ (e0 :: h1) hA hx hq2 hki
+  · have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ (e0 :: h1) hA hx hq2 hki
     have hk : k < spec.repStreams.size := by
       have := locate_lt (roundsOf spec sts) 0 q hqs
       rw [hki] at this
@@ -1448,6 +1441,9 @@ theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
       cases h1 with
       | nil => simp at hq
       | cons p h2 => simp [wordsAt, FlockDeploy.Coin.vals]
+    obtain ⟨hdom, hxs⟩ := hS s0 spec sts k _ c' t dom xs hi hx hk (by rw [hls]; exact Nat.min_le_right _ _) hph
+    have hT := Count.real_tabAlike (hR ρ s0 spec sts hx) hph hr0
+    obtain ⟨hdg, hm, hn, hlq, hp, hd⟩ := Count.real_bounds hph hT
     obtain ⟨hmp, hmp0, hpc⟩ := hP s0 spec sts k hx hk
     have hl0 : loopNr x 0 = spec.points * spec.mPts := by
       show (reqOf x 0).2 = _

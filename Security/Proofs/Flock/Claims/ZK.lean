@@ -102,6 +102,7 @@ import Proofs.Flock.Claims.ZK.FrameCount
 import Proofs.Flock.Claims.ZK.FrameAsks
 import Proofs.Flock.Claims.ZK.FramePlan
 import Proofs.Flock.Claims.ZK.FrameLinks
+import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -727,6 +728,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the placeholder at a link of `spec.points` points, each scheduled round squeezes the plan's count (`plan_sched`).
 * `FrameLinks`: at a `Live` statement every rep stream's table has the session's link points, nonzero and within
   `Frames.COIN_MAX` at its two points (`Masked.live_links`): `ofLoop_progChecks_of`'s `hP`.
+* `FrameReal`: where `real` answers the session loop's own tables (`RealTabs`: `tabOfLevel0` of a level 0 `ofDraws`
+  drew), the rep's own table is of the placeholder's shape (`real_tabAlike`) and within the bounds `schedSoFar_alike`
+  reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
