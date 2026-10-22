@@ -4882,14 +4882,18 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
     let honest_ok = honest["accepted"] == true && count(&h, "proof") == 2 && h.last().map(kind).as_deref() == Some("finish") && dev > 2;
     let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
     let ks: Vec<usize> = if !honest_ok { vec![] } else if mode == "tree" { vec![0, dev / 2] } else { vec![2, dev / 2, dev - 1] };
-    let reason = if mode == "tree" { "FIREWALL-REFUSED: " } else { "FIREWALL-REFUSED: the device failed: " };
+    // a tree one leaf larger is the Lean frame's stop alone (the opening round it holds differs); every other cut Rust's
     let cuts: Vec<Value> = ks.iter().map(|&k| {
         let v = run(Some((k, mode)));
         let s = seen(&v);
         let stopped = v["prover_stopped"].as_str().unwrap_or("");
+        let why = v["why"].as_str().unwrap_or("");
         let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
-        let ok = v["accepted"] == false && stopped.starts_with(reason) && first_miss.is_none();
-        json!({"k": k, "ok": ok, "accepted": v["accepted"], "prover_stopped": stopped.chars().take(160).collect::<String>(), "error": v["error"],
+        let refused = if mode == "tree" { stopped.is_empty() && why.contains("PROVER-STOPPED: the Lean frame stopped table 0 rep ") }
+                      else { stopped.starts_with("FIREWALL-REFUSED: the device failed: ") };
+        let ok = v["accepted"] == false && refused && first_miss.is_none();
+        json!({"k": k, "ok": ok, "accepted": v["accepted"], "prover_stopped": stopped.chars().take(160).collect::<String>(),
+               "why": why.chars().take(160).collect::<String>(), "error": v["error"],
                "rounds": count(&s, "round"), "round_bytes": round_bytes(&s), "public_bytes": public_bytes(&s), "proofs": count(&s, "proof"),
                "requests": s.len(), "last": s.last(), "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "cut": s.get(i)}))})
     }).collect();
