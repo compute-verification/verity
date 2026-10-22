@@ -1,5 +1,6 @@
 import Proofs.Accounting.TS.Session.Lanes.Guarantees
 import Proofs.Accounting.TS.CheckedSound
+import Proofs.Accounting.TS.HeldSound
 import Proofs.Pouw.RelativeSecurity
 import Proofs.Flock.VBridge.Family.Registrants
 
@@ -12,9 +13,11 @@ statements each hold at their committed rows is served right (`unitServed_of`): 
 lane's `LaneOk` and the combine's `CombineOk` at the one leaf and partials record, wherever the sessions' registrants'
 rows agree. They agree unless two registrants' records clash (`rowsAgree_or_leafColl`, from
 `FlockVBridge.Family.registrants_eq_or_collides`: two openings of one root at one position are one row's bytes or a
-SHA-512 collision), and a clash meets the relation (`LeafColl`). `LeafChecks` reads every port row; under
-flock-verify's complete check (`Flock.Registered.checkComplete`) the registered reads the checked layer opens are
-exactly those (`RowsSession.rowsReg_eq_portRead`), and each of them opens at its registered root
+SHA-512 collision), and a clash meets the relation (`LeafColl`). `LeafReads` may take the known rows as holding: they
+do unless a session's known-content tie collides (`knownHeld_or_coll`, from flock-verify's known-content check), which
+meets the relation too (`LeafKnownColl`). `LeafChecks` reads every port row; under flock-verify's complete check
+(`Flock.Registered.checkComplete`, part of the leaf layer's acceptance) the registered reads the checked layer opens
+are exactly those (`RowsSession.rowsReg_eq_portRead`), and each of them opens at its registered root
 (`RowsSession.portRow_opens`; `Flock.Registered.complete_opens` at the verifier). An unsound proof of the leaf layer is
 then, at one of its 33 sessions, an unsound proof of the checked layer (`CheckedSessionSound`'s `SoundAt δ`) or an
 accepted outcome that doesn't draw every unit, which under `kd = n` has probability `0` in every session's game
@@ -116,6 +119,46 @@ theorem rowsAgree_or_leafColl (sess : Option (Fin 32) → RowsSession) : RowsAgr
     · exact absurd ⟨k, k', u, u', p, p', hp, hp', Or.inl hc⟩ h
     · exact absurd ⟨k, k', u, u', p, p', hp, hp', Or.inr hc⟩ h
 
+/-- **The known-content tie at any known port** (`Accounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
+any row): where flock-verify's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
+unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is the bytes of the
+known row at its position, unless the tie collides (`OkColl` at `nm`). -/
+theorem tie_known (s : RowsSession) {known : Known} {nm : String} {ks : Array (Array ℕ × ByteArray)}
+    (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (nm, ks) ∈ known)
+    (hS : ∀ u, s.ServedRegistered u) (hcol : ¬ Accounting.TS.Held.OkColl s nm ks) {u : Fin s.n} {p : s.vb.Pos}
+    (hr : (s.rdU u).isRead p) (hn : ((s.rdU u).port p).name = nm) :
+    (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList := by
+  obtain ⟨reg, hf, hck⟩ := FlockC3.RegLevels.checkKnownAll_ok hk hm
+  obtain ⟨q, hpq, hex⟩ := ((hS u).1 _).1 hr
+  have hport : (s.rdU u).port p = s.ownPort q := by
+    rw [hpq]; exact ((hS u).2 q hex).1
+  have hqn : s.c.ports[q].name = nm := by
+    obtain ⟨pt, hpt, hpn⟩ := hex
+    have e := Accounting.TS.Held.find_name_eq (l := s.own.toList) (Array.mem_toList_iff.2 hpt) hpn
+    rw [← hn, hport]
+    exact e.symm
+  have hreg : s.ownPort q = reg := by
+    show (s.own.toList.find? (·.name == s.c.ports[q].name)).getD default = reg
+    rw [hqn, hf]
+    rfl
+  have ho := (s.rdU u).committed _ hr
+  rw [hport, hreg] at ho
+  obtain ⟨-, hb | ⟨a, b, hc, hab, hh⟩⟩ := FlockC3.RegLevels.knownColl_spec
+    (r := (rsOf s).enc p ((s.rdU u).wv p)) (y := (s.rdU u).ws p) hck ho
+  · exact hb
+  · exact (hcol ⟨u, p, hr, hn, a, b, by rw [hport, hreg]; exact hc, hab, hh⟩).elim
+
+/-- **A leaf's sessions' known rows hold, or a known-content tie collides**: at sessions whose known-content checks
+passed and whose served roots are registered (`tie_known` at each). -/
+theorem knownHeld_or_coll (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 32) → Known)
+    (hk : ∀ k, Flock.Registered.checkKnownAll (sess k).own (known k) = .ok ())
+    (hS : ∀ k u, (sess k).ServedRegistered u) :
+    (∀ k, KnownHeld (sess k) (known k)) ∨ LeafKnownColl sess known := by
+  by_cases h : LeafKnownColl sess known
+  · exact Or.inr h
+  · exact Or.inl fun k nm ks hm u p hr hn =>
+      tie_known (sess k) (hk k) hm (hS k) (fun hc => h ⟨k, nm, ks, hm, hc⟩) hr hn
+
 /-- **A leaf whose 33 statements hold at their committed rows is served right**: where each session's committed rows
 are the port rows of a wire assignment its evaluation agrees with at every unit, `LeafChecks` and the sessions'
 decodes (`LeafReads` at one path where the rows agree) give every lane's `LaneOk` and the combine's `CombineOk` at the
@@ -157,7 +200,7 @@ end Accounting.TS.Lanes
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`). -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw Pub sess out ok dq part decL decC pub parts receipt leaf right δ hCR hLaw hk hN hS hok hcomp hδ
+  intro Ω _ S nπ K nw Pub sess out known ok dq part decL decC pub parts receipt leaf right δ hCR hLaw hk hN hS hok hδ
     hδ0 hC hSh
   have hSound : ∀ k, (checkedLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
       (fun _ _ => True)).SoundAt δ := fun k =>
@@ -169,7 +212,7 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
     (hLaw k w i fun s o => o.2.1 ≠ Finset.univ).trans (avg_le _ le_rfl fun x => le_of_eq
       ((congrArg ENNReal.toReal (RowsSession.prob_undrawn (sess x w i k) (hk x w i k))).trans ENNReal.toReal_zero))
   intro w i
-  have hIn : ∀ x, (leafLayer sess out dq part pub receipt leaf right).Unsound x w i →
+  have hIn : ∀ x, (leafLayer sess out known dq part pub receipt leaf right).Unsound x w i →
       ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
         (checkedLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok (fun _ _ => True)).Unsound x w i ∨
         (out x w i k).2.1 ≠ Finset.univ := by
@@ -178,17 +221,20 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
     push Not at hno
     apply hrel
     rcases rowsAgree_or_leafColl (sess x w i) with hA | hc
-    · obtain ⟨hL, hCb⟩ := hSh x w i hA
+    · rcases knownHeld_or_coll (sess x w i) (known x w i) (fun k => (hacc k).2.1) (hS x w i) with hK | hK
+      swap
+      · exact Or.inr (Or.inr hK)
+      obtain ⟨hL, hCb⟩ := hSh x w i hA hK
       refine Or.inl (unitServed_of (hC x w i) hL hCb fun k => ?_)
       obtain ⟨hk1, hk2⟩ := hno k (Finset.mem_univ _)
       have hR : CheckedRel (sess x w i k) (out x w i k) ok (openedReg (sess x w i k)) := by
         by_contra hR
-        exact hk1 ⟨hacc k, hR⟩
+        exact hk1 ⟨(hacc k).1, hR⟩
       obtain ⟨-, vals, hv, he⟩ := hR
-      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hcomp x w i k) vals),
+      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2 vals),
         fun u => he u (by rw [hk2]; exact Finset.mem_univ u)⟩
-    · exact Or.inr hc
-  calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out dq part pub receipt leaf right).Unsound x w i)
+    · exact Or.inr (Or.inl hc)
+  calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out known dq part pub receipt leaf right).Unsound x w i)
       ≤ Pouw.RelativeSecurity.prob (fun x => ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
           (checkedLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok (fun _ _ => True)).Unsound x w i ∨
           (out x w i k).2.1 ≠ Finset.univ) := Pouw.RelativeSecurity.prob_mono hIn

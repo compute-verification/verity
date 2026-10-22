@@ -11,8 +11,8 @@ the combine's):
   Definition at its port rows, so on every wire assignment its evaluation agrees with at every unit, the decoded `ok`
   word reads `1` only where `LaneOk` (or `CombineOk`) holds of the decoded inputs. It reads every port row
   (`portRead`), registered or not, so it is a fact of the circuits alone; that every port they read is registered and
-  opens at its registered root is proved from flock-verify's complete check (`RowsSession.rowsReg_eq_portRead`,
-  `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed;
+  opens at its registered root is proved from flock-verify's complete check, part of `leafLayer`'s acceptance
+  (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed;
 * `LeafReads` (the decodes and the verifier's registrations; owner @proofs): where the 33 sessions' registrants'
   rows agree at every root and position two of them read (`Accounting.TS.Lanes.RowsAgree`), their committed rows,
   read through the decodes, are one leaf, one partials record and one receipt, with lane `l`'s index `l` and every
@@ -43,16 +43,16 @@ At the combine's session `sess none`, whose circuit is `PouwH1Combine_v1{TILE}`'
 
 It reads every port row, registered or not, and asks nothing of `own`: that every port the decodes read (`ok`'s cone,
 the A and B rows, admit bits, record, partials row, salt, position, roots and lane index) is a port of `own` that
-opens at its registered root is `LeafLanesSound`'s complete check (`Flock.Registered.checkComplete`), from which
-`RowsSession.rowsReg_eq_portRead` proves the registered reads are the port rows. What stays assumed is that the circuit
-file a session's flock-verify reads computes its Definition, read through the decodes: the Lean has no lowering of a
-Definition to a circuit, and the session's relation (`CheckedRel`) is that circuit's own evaluation. The circuit's input
-wires follow `PouwWindow.Lanes.wireOf?`'s map (#3180, `class_statement.unit_lowering`'s order: the input rows one after
-another, wire `w` the port, row bit and field `wireOf?` gives), which makes the port rows `decL` and `decC` read the
-Definition's inputs; that the circuit file lays its inputs out so is part of this premise until TMPL1's templated read.
-`dq` is the Program's dequant on words (`PouwZyDequant_v2`'s word view) and `part` the honest lane partial
-(`h1zy.lane_partial`'s u32 words, #3095's order: sets `T_0..T_{KS-1}`, `O′`, `D_1..D_{m-1}`, words `2s` the set's
-y-XOR and `2s + 1` its z-XOR). -/
+opens at its registered root is flock-verify's complete check (`Flock.Registered.checkComplete`, part of `leafLayer`'s
+acceptance), from which `RowsSession.rowsReg_eq_portRead` proves the registered reads are the port rows. What stays
+assumed is that the circuit file a session's flock-verify reads computes its Definition, read through the decodes: the
+Lean has no lowering of a Definition to a circuit, and the session's relation (`CheckedRel`) is that circuit's own
+evaluation. The circuit's input wires follow `PouwWindow.Lanes.wireOf?`'s map (#3180,
+`class_statement.unit_lowering`'s order: the input rows one after another, wire `w` the port, row bit and field
+`wireOf?` gives), which makes the port rows `decL` and `decC` read the Definition's inputs; that the circuit file lays
+its inputs out so is part of this premise until TMPL1's templated read. `dq` is the Program's dequant on words
+(`PouwZyDequant_v2`'s word view) and `part` the honest lane partial (`h1zy.lane_partial`'s u32 words, #3095's order:
+sets `T_0..T_{KS-1}`, `O′`, `D_1..D_{m-1}`, words `2s` the set's y-XOR and `2s + 1` its z-XOR). -/
 def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (sess : Option (Fin 32) → RowsSession)
@@ -70,7 +70,8 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
 /-- `accounting-ts-leaf-reads` (the decodes and the verifier's registrations; owner @proofs). **Where a leaf's 33
 sessions' registrants' rows agree, the decodes read one leaf, one partials record and one receipt**: on every path, at
 proof `i` of round `w`, if the registrants' rows of the 33 sessions agree wherever two of them read one root at one
-position (`RowsAgree`), then lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's
+position (`RowsAgree`), and at each session the registrants' rows at the ports its known content `known x w i k`
+names are the known rows (`KnownHeld`), then lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's
 commit-time openings `RowsSession.wo`), read through `decL`, are `laneView`: the leaf's A rows at its row slots and B
 rows at its column slots, the leaf's record, row `l` of the partials, the path's public inputs (admit, salt, position,
 roots), the index `l` and `ok = 1`; and the combine's, read through `decC`, are the 32 partials rows, the receipt and
@@ -83,22 +84,26 @@ the openings the verifiers of record report, with no collision escape; the proof
 the decodes and of the registered files the verifier hands the 33 sessions:
 * every session registers each shared value at one port, the same in all 33 (one root, domain, leaf count and schema):
   the leaf's A, B and z/y tables at the registration's roots (`ServedRegistered`), and the partials at the post-draw
-  record's root, the one each session opened them against (#3131's `SampledProofs.Produced.opened`, `P-opened`), and
-  every port of each circuit is registered (#3131's `Flock.Registered.checkComplete`);
+  record's root, the one each session opened them against (#3131's `SampledProofs.Produced.opened`, `P-opened`). That
+  every port of each circuit is registered is no longer asked: `leafLayer`'s acceptance includes flock-verify's
+  complete check (#3131's `Flock.Registered.checkComplete`);
 * `decL` and `decC` read each value's rows by that port and the row's position, lane `l`'s A row at row slot `s` at
   row `rowOf l s`, its B row at column slot `t` at row `colOf l t` and its partials row at row `l`, so rows that agree
   decode to one leaf and one partials record;
-* the verifier registers each lane's salt, position, roots, admit bits and index `l` (distinct `l = 0..31`), and every
-  statement's `ok` row, at their known content, as ports of `own` (#3131's `SampledProofs.Produced.known`, #3142's
-  `Flock.Registered.checkKnownAll`), so that their registrants' rows are that content. -/
+* the known content the verifier hands each session (`known x w i k`) is each lane's salt, position, roots, admit bits
+  and index `l` (distinct `l = 0..31`), and every statement's `ok` row, at the ports the decodes read them from
+  (#3131's `SampledProofs.Produced.known`). That the registrants' rows at those ports are that content is no longer
+  asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it from flock-verify's known-content check
+  (`Flock.Registered.checkKnownAll`) unless the known-content tie collides (`LeafKnownColl`). -/
 def LeafReads {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
+    (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
     (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K) :
     Prop :=
-  ∀ x w i, RowsAgree (sess x w i) →
+  ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
     (∀ l, decL (sess x w i (some l)) (openedReg (sess x w i (some l))) =
       laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
     decC (sess x w i none) (openedReg (sess x w i none)) = ⟨parts x w i, receipt x w i, true⟩
