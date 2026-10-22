@@ -29,7 +29,7 @@ reads the flat unit (``--unroll``: the template's own unroll, for a structural t
 checks, under each layout's map, that the columns are distinct and every row reads only earlier columns (its own self
 row for an input, and the constant, excepted). Option (iv) is ``interleaved`` with fallback ``interleave``, lenient
 (``strict`` false) and strict. ``--modes`` picks layouts by name, ``today``, ``pow2``, ``interleaved/contiguous``,
-``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv`` and ``iv/strict``. ``--digest`` adds each map's digest,
+``interleaved/pow2``, ``interleaved/contiguous/strict``, ``iv``, ``iv/strict`` and ``iv/hybrid``. ``--digest`` adds each map's digest,
 which `flock-tmpl layout` (`Flock.TmplLayout`) prints for its own.
 """
 from __future__ import annotations
@@ -84,14 +84,23 @@ def _slot_log(useful: int) -> int:
     return max(7, (useful - 1).bit_length())
 
 
-def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = False) -> tuple[np.ndarray, dict]:
+def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = False,
+           hybrid: bool = False) -> tuple[np.ndarray, dict]:
     """The map from the unit's columns to the layout's, and the layout's statistics. ``strict``: each interleaved region
     and each single copy starts at a multiple of its Definition's size rounded up to a power of two (times 2^m), so the
-    region's high bits are the Definition's own columns plus an aligned offset and its fold is computed once."""
+    region's high bits are the Definition's own columns plus an aligned offset and its fold is computed once. ``hybrid``:
+    strict for a Definition the call tree reaches on more than one path (a run counted once), lenient for the rest, which
+    are folded once anyway; ``summary`` is then what a fold that summarizes each Definition once per lane scale reads."""
     defs = t.defs
     ins_g, outs_g = _groups(t.groups)
     in_end = (ins_g[-1][0] + ins_g[-1][1]) * WORD if ins_g else 0
     out_rng = [(c * WORD, (c + w) * WORD) for c, w, _ in outs_g]
+    paths = [0] * len(defs)
+    paths[t.root] = 1
+    for d in range(len(defs) - 1, -1, -1):
+        for c in defs[d].calls:
+            paths[c.e] += paths[d]
+    whole = [strict or (hybrid and paths[e] > 1) for e in range(len(defs))]
     urows = [0] * len(defs)
     maps: list[np.ndarray] = [np.zeros(0, np.int64)] * len(defs)
     size, align = [0] * len(defs), [1] * len(defs)
@@ -140,12 +149,12 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
             elif mode == "today":
                 kind, S, nb = "contig", size[e], pos
             elif c.count == 1:
-                a = _pow2(size[e]) if strict else align[e]
+                a = _pow2(size[e]) if whole[e] else align[e]
                 kind, S, nb = "contig", size[e], _up(pos, a)
                 al = max(al, a)
             elif mode == "interleaved" and (fallback == "interleave" or not _chained(c, Le, D, alias[d])):
                 M = 1 << _log(c.count)
-                a = M * (_pow2(size[e]) if strict else align[e])
+                a = M * (_pow2(size[e]) if whole[e] else align[e])
                 kind, S, nb = "lanes", M, _up(pos, a)
                 al = max(al, a)
                 st["lanes_runs"] += 1
@@ -193,6 +202,14 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
            "slot_log": _slot_log(n), "slack": round(1 - n / (1 << _slot_log(n)), 4), "rows_unrolled": urows[t.root],
            "rows_rounding": rnd[t.root], "rows_alignment": gap[t.root], **st,
            "template_refs": sum(own), "call_paths": {"calls": walk_n[t.root], "refs": walk_r[t.root]}}
+    if strict or hybrid:
+        scales: list[set[int]] = [set() for _ in defs]
+        scales[t.root] = {1}
+        for d in range(len(defs) - 1, -1, -1):
+            for c, kind, M in kinds[d]:
+                scales[c.e] |= {s * M for s in scales[d]}
+        out["summary"] = {"whole_defs": sum(whole), "contexts": sum(len(s) for s in scales),
+                          "refs": sum(own[e] * len(scales[e]) for e in range(len(defs)))}
     if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
@@ -437,7 +454,7 @@ def digest(phi: np.ndarray) -> str:
 MODES = {"today": ("today", None, False), "pow2": ("pow2", None, False),
          "interleaved/contiguous": ("interleaved", "contiguous", False), "interleaved/pow2": ("interleaved", "pow2", False),
          "interleaved/contiguous/strict": ("interleaved", "contiguous", True), "iv": ("interleaved", "interleave", False),
-         "iv/strict": ("interleaved", "interleave", True)}
+         "iv/strict": ("interleaved", "interleave", True), "iv/hybrid": ("interleaved", "interleave", False)}
 
 
 def main(argv: list[str]) -> int:
@@ -460,7 +477,8 @@ def main(argv: list[str]) -> int:
     for name in a.modes.split(","):
         mode, fb, strict = MODES[name]
         t1 = time.time()
-        phi, r = layout(t, mode, fb or "contiguous", strict)
+        phi, r = layout(t, mode, fb or "contiguous", strict, hybrid=name.endswith("/hybrid"))
+        r["hybrid"] = name.endswith("/hybrid")
         if mode == "today":
             r["identity"] = bool((phi == np.arange(len(phi))).all())
             ok &= r["identity"]
