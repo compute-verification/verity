@@ -61,7 +61,7 @@ theorem rowWords_testBit (bs : List Bool) {t : ℕ} (ht : t < bs.length) :
     unfold rowWords
     rw [getElem!_pos _ _ (by simpa using hw)]
     simp
-  rw [e, bitsNat_testBit, List.getElem?_take, if_pos (Nat.mod_lt _ (by norm_num)), List.getElem?_drop,
+  rw [e, bitsNat_testBit, List.getElem?_take, ite_eq_left (Nat.mod_lt _ (by norm_num)), List.getElem?_drop,
     Nat.div_add_mod]
 
 theorem length_natBits (n x : ℕ) : (natBits n x).length = n := by simp [natBits]
@@ -119,6 +119,8 @@ theorem ok_of_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c
   have h := portBit_known hN hK hu hS hcomp hP.1 hP.2.1 (ks := #[(okRow, salt)]) (by rw [hq]; exact hm) hr
   rw [hq, hP.2.2] at h
   rw [h]
+  show some (((rowWords [true])[0 / 16]!).testBit (0 % 16)) = _
+  rw [rowWords_testBit [true] (by simp)]
   rfl
 
 /-- **Lane `l`'s known fields hold at the opened rows**: where its known rows hold at `knownOf P salts (some l)`
@@ -155,8 +157,8 @@ theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports
     rw [ha, hPa.2.2] at h
     rw [h, fieldBit_admit, Nat.zero_add]
     show some (((rowWords (List.ofFn P.admit))[i.val / 16]!).testBit (i.val % 16)) = _
-    rw [rowWords_testBit _ (by simp)]
-    simp
+    rw [rowWords_testBit _ (by simp), List.getElem?_eq_getElem (by simp), List.getElem_ofFn]
+    rfl
   · rw [fieldBit_salt]
     exact hpub (by simp [digestBits]) fun i hi => pubBits_salt _ _ _ _ hi
   · rw [fieldBit_position]
