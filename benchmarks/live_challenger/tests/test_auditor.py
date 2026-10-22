@@ -38,7 +38,8 @@ FAMILIES = [["positions", 2], ["replay", 1]]
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-    return A.Host(root=tmp_path / "var", peers=tmp_path / "peers")
+    (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
+    return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
 
 @pytest.fixture
@@ -232,6 +233,49 @@ def test_a_session_whose_pin_moved_after_its_admission_does_not_run(host, signer
     assert A.pinned_commit(Path("/opt/vy-challenger") / PIN) == PIN
 
 
+def test_each_open_seals_the_pins_log_so_the_verifiers_pinned_session_takes_the_session(host, signer):
+    session = json.loads(open_window(host, signer)[1])["session"]
+    pins = A.read_pins(host.pins)
+    body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
+    assert body["pins"] == C.pins_seal(pins) == {"lines": 1, "sha512": C.log_digest(pins)}
+    assert C.pins_reason(session, body, pins) is None
+    A.record_pin(host.pins, "e" * 40, "e" * 40, T1, seal=lambda p: None)
+    assert C.pins_reason(session, body, A.read_pins(host.pins)) is None
+    assert "doesn't record as a commit of main's history" in C.pins_reason(session, {**body, "pinned": "e" * 40},
+                                                                            A.read_pins(host.pins))
+
+
+@pytest.mark.parametrize("log, why", [
+    ("", "records no pin, so no session here would count"),
+    (C.pin_line("e" * 40, "e" * 40, "2026-10-20T09:00:00Z") + "\n", "doesn't record as a commit of main's history"),
+    ('{"commit": "' + PIN + '"}\n', "pins log line 0 is malformed"),
+])
+def test_a_reserve_or_an_open_is_refused_unless_the_pins_log_records_this_trees_pin(host, signer, log, why):
+    good = host.pins.read_text()
+    host.pins.write_text(log)
+    rc, out = call(host, signer, RESERVE)
+    assert rc == 3 and why in json.loads(out)["refused"] and A.read_ledger(host.ledger) == []
+    host.pins.write_text(good)
+    session = reserve(host, signer, token="cd34")
+    host.pins.write_text(log)
+    rc, out = call(host, signer, ["open", "--session", session, "--root", COMMIT])
+    assert rc == 3 and why in json.loads(out)["refused"] and len(A.read_ledger(host.ledger)) == 1
+    assert not (host.sessions / session / "secret").exists()
+
+
+def test_a_pin_is_logged_append_only_in_the_verifiers_form_or_refused(tmp_path):
+    log, sealed = tmp_path / "pins.jsonl", []
+    assert A.record_pin(log, PIN, "d" * 40, T0, seal=sealed.append) == C.pin_line(PIN, "d" * 40, "2026-10-20T09:30:00Z")
+    A.record_pin(log, "e" * 40, "f" * 40, T1, seal=sealed.append)
+    assert A.read_pins(log) == [C.pin_line(PIN, "d" * 40, "2026-10-20T09:30:00Z"),
+                                C.pin_line("e" * 40, "f" * 40, "2026-10-20T09:40:00Z")]
+    assert sealed == [log, log] and log.stat().st_mode & 0o777 == 0o644
+    for commit, main in ((PIN.upper(), "d" * 40), (PIN, "d" * 39), (PIN + "\n", "d" * 40), ("", "")):
+        with pytest.raises(A.Refused, match="pin"):
+            A.record_pin(log, commit, main, T1, seal=sealed.append)
+    assert len(A.read_pins(log)) == 2 and len(sealed) == 2
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--commit", COMMIT], "unrecognized arguments: --commit"),
     (["--peer", "vy-challenger-1"], "--peer"),
@@ -313,6 +357,7 @@ def test_the_gate_takes_its_request_from_ssh_with_the_keys_lane_as_its_prover_an
         assert {f"{session}/request.json", f"{session}/{A.OPEN_REQUEST}"} <= set(names) and f"{session}/secret" not in names
         assert all(SECRET.hex().encode() not in tar.extractfile(m).read() for m in tar.getmembers() if m.isfile())
     assert ssh(host, signer, "ledger") == (0, host.ledger.read_bytes())
+    assert ssh(host, signer, "pins") == (0, host.pins.read_bytes()) and ssh(host, signer, "pins", "kernels")[0] == 0
     assert json.loads(ssh(host, signer, f"status {doc['session']}")[1])["open"] == e
 
     for argv in (["--ssh", "open --session 'ab"], ["--ssh", "x" * 8193], ["--ssh", "bash -c id"], ["--ssh", ""],
@@ -342,7 +387,7 @@ def test_the_reference_check_refuses_an_edited_cut_reordered_or_doubled_ledger(h
     A.append(host, "open", "s20261020T093000Z-ef56", lambda ls: first, I, sign)
     with pytest.raises(ValueError, match="a second open"):
         A.verify_ledger(A.read_ledger(host.ledger), I, verify)
-    other = A.Host(root=tmp_path / "other", peers=host.peers)
+    other = A.Host(root=tmp_path / "other", peers=host.peers, pins=host.pins)
     other.root.mkdir()
     A.append(other, "end", "s20261020T093000Z-0000", lambda ls: {}, I, sign)
     with pytest.raises(ValueError, match="no open"):

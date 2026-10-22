@@ -13,8 +13,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
   is an input, so the unit's outputs are the receipt and one bit.
 * **Templates.** K's template takes the tile's parameters with its A and B rows named for their K, ``a_k<K>`` and
   ``b_k<K>`` (`template_params`): `registered.reads` keys a unit's rows by its template's parameter names, so a mixed-K
-  window registers in one read, A row i of K's units under ``a_k<K>[i]``, each port with its own width and domain, and
-  that row's circuit port is ``a_k<K>_<i>`` (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
+  window registers in one read, A row i of K's units under ``a_k<K>[i]`` (a lone row, R or C = 1, under the parameter's
+  name, `row_key`), each port with its own width and domain, and that row's circuit port is ``a_k<K>_<i>``
+  (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
 * **Fixed slots.** The layout is protocol structure, so no token count becomes public. For each K the window's A rows are
@@ -270,16 +271,22 @@ def query(program: Program) -> dict[str, Any]:
     return P.template_instances_query([t for _k, t in program.fn.bindings["TILES"]])
 
 
+def row_key(name: str, rows: int, i: int) -> str:
+    """`registered.reads`' key of row ``i`` of a unit's parameter ``name`` of ``rows`` rows: ``name[i]``, or ``name`` for
+    a lone row (R or C = 1), which `registered.reads` reads as the whole parameter."""
+    return name if rows == 1 else f"{name}[{i}]"
+
+
 def window_ports(program: Program) -> dict[str, str]:
     """The circuit port of each A and B row a unit of the window ``program`` reads, by `unit_reads`' and `registered.reads`'
-    keys, every K's in one statement: K's template's A row i (``a_k<K>[i]``) is port ``a_k<K>_<i>`` and its B row j
-    (``b_k<K>[j]``) ``b_k<K>_<j>``; a lone row, which `registered.reads` keys by the parameter's name (``a_k<K>`` when R = 1,
-    ``b_k<K>`` when C = 1), is row 0's. The separator keeps each K's ports its own: without it ``a_k32[20]`` and
-    ``a_k322[0]`` would share ``a_k3220``, and `registered.reads_file` would merge two reads into one port."""
+    keys (`row_key`), every K's in one statement: K's template's A row i (``a_k<K>[i]``) is port ``a_k<K>_<i>`` and its B
+    row j (``b_k<K>[j]``) ``b_k<K>_<j>``; a lone row (``a_k<K>`` when R = 1, ``b_k<K>`` when C = 1) is row 0's. The
+    separator keeps each K's ports its own: without it ``a_k32[20]`` and ``a_k322[0]`` would share ``a_k3220``, and
+    `registered.reads_file` would merge two reads into one port."""
     out: dict[str, str] = {}
     for _k, t in program.fn.bindings["TILES"]:
         for name, rows in t.signature()[0][:2]:
-            out |= {name: f"{name}_0"} if rows.n == 1 else {f"{name}[{i}]": f"{name}_{i}" for i in range(rows.n)}
+            out |= {row_key(name, rows.n, i): f"{name}_{i}" for i in range(rows.n)}
     return out
 
 
@@ -309,14 +316,14 @@ def _inputs(program: Program) -> dict[int, str]:
 
 def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     """The rows unit ``u`` of the window's Program reads (``tp`` its template partition, `P.evaluate`'s): for each of its
-    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, ``zy``, ``salt``, ``position``, ``roots``;
-    `registered.reads`' keys), the window's parameter and the row of it, one whole row of its elements; and for each of its
-    outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the window's. From the unit's call alone, so a
-    unit costs its parameters at any K."""
+    template's parameters, by row (``a_k<K>[i]``, ``b_k<K>[j]``, a lone row by its parameter's name, ``zy``, ``salt``,
+    ``position``, ``roots``; `registered.reads`' keys, `row_key`), the window's parameter and the row of it, one whole row
+    of its elements; and for each of its outputs (``receipt``, ``ok``, after the Program's prefix), row ``u`` of the
+    window's. From the unit's call alone, so a unit costs its parameters at any K."""
     k, _m = tp.locate(u)
     (inputs, params), node, out = _scan(program), program.root.body.nodes[k], {}
     for pi, ((name, t), arg) in enumerate(zip(node.fn.signature()[0], node.args)):
-        rows = [(f"{name}[{i}]", arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
+        rows = [(row_key(name, t.n, i), arg[i]) for i in range(t.n)] if pi < 2 else [(name, arg)]
         for key, coll in rows:
             rs = runs(coll.refs)
             if len(rs) != 1 or rs[0][0] != "n" or rs[0][1] not in inputs:
