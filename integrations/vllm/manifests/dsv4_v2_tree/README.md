@@ -213,7 +213,17 @@ Then:
    so the row's tree moves: every Program is re-derived and re-pinned (CPU gates, steps 1 to 3), and the old row dirs and Match
    are moved aside.
    1. The trace: `trace_compare.sh` r20261021-185325-449a on vy-nebius-cpu-3 (`SKIP_AOT1=1`, `SKIP_AOT2=1`, `BUDGET_GB=250`,
-      `WORKERS=8`), unseeded, since every derive reads the q norm.
+      `WORKERS=8`), unseeded, since every derive reads the q norm. Every rank is EQUAL, and the digests only moved.
+   2. The re-pin: 084632a6bd re-pins all 24 Program digests from that trace (`pinned_from` art:4d1d79ce…), and it is the row's
+      tree from then on.
+   3. The Build of record: `build_record.sh` r20261021-220215-01f9 on vy-nebius-cpu-3 (30 min; `BUILD_RUN`
+      r20261021-220241-5347, art:ff43e935d9bee5b6…), copied to vy-glm53-eu.
+   4. Window A: r20261021-230238-321a on vy-glm53-eu (vllm.match r20261021-230259-06c2). Capture and control ended rc 0,
+      `gpu_memory_utilization` 0.92 read back on all 8 ranks, and every rank wrote its align schedule.
+   5. The CPU phase: `match_cpu.sh` r20261022-004505-9c70 on vy-glm53-eu (`FOLD_RANK_WORKERS=8`, `--mem-gb 200`). On
+      vy-nebius-cpu-3, memory admission refused it (r20261022-000910-b0be: 31 GB free beside B8 stochastic's r20261021-231741-4076), so
+      the Match's CPU phase, the Commit, the replay and the publish all run on eu, which holds the legs, the Build and a
+      verified checkpoint, with no row dir copied.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
@@ -246,14 +256,15 @@ holds its share of the checkpoint, opened against the committed weights root, be
 weights (r20261019-123645-e69d). DeepSeek-V4-Pro B1's is far smaller. Attempt 3's re-judge (r20261021-171352-1d9c,
 r20261021-171402-5673: two jobs of 4 ranks at `--mem-gb 150` on vy-glm53-eu, 24 workers) peaked at 115–119 GiB a rank
 (`sampled_replay_p0_rank<r>.json`'s `peak_rss_bytes`), and took 707–788 s a rank for 29,146 picks. A job replays its ranks in
-turn, so on vy-nebius-cpu-3 (497 GB, /user.slice) three jobs at `--mem-gb 150` (`RANKS=0,1,2`, `3,4,5`, `6,7`) replay the 8
-ranks in about 40 min, and the job without `RANKS` then publishes.
+turn, so four jobs at `--mem-gb 150` (`RANKS=0,1`, `2,3`, `4,5`, `6,7`) replay the 8 ranks in about 30 min, and the job
+without `RANKS` then publishes.
 
-The replay host is vy-nebius-cpu-3, which holds the Build of record and runs the Match's CPU phase, so the row dir has both.
-It also needs the checkpoint staged and verified at `REPLAY_CK`, `/workspace/cp/dsv4-ckpt`: `stage_ckpt.sh` with
-`PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's venv), 864.7 GB in about 18 min, with 865 GB free
-(r20261021-185650-5dea). Another host needs the Build of record copied in (`copy_rowdir.sh vy-nebius-cpu-3 HOST
-<the Build's out/>rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files.
+The replay host is vy-glm53-eu, right after the Commit, from the row dir the Match and the Commit wrote there. Its
+`REPLAY_CK`, `/workspace/cp/dsv4-ckpt`, links the checkpoint that attempt 3's re-judge read. Another host needs the
+checkpoint staged and verified there: `stage_ckpt.sh` with `PY=/workspace/cp/circuits/venv312/bin/python` (a CPU node's
+venv), 864.7 GB in about 18 min on vy-nebius-cpu-3 (r20261021-185650-5dea). It also needs the Build of record copied in
+(`copy_rowdir.sh SRC HOST <the Build's out/>rowdir.sha256 /workspace/cp/circuits/dsv4-v2/rows`) and the Match's files
+(`match_cpu.sh`'s `match_cpu.sha256`). The Commit's bundles come from the store.
 
 GPU time (wall of the GPU job, all 8 GPUs):
 
