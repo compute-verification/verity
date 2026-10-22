@@ -623,8 +623,7 @@ theorem progOf_owed (x : Msg) (cs : List FlockDeploy.Coin) (ho : (progOf x cs).o
           obtain ⟨c, t, dom, xs, hi⟩ := r
           rw [progOf_at x cs hx hq hph, hl]
           exact repState_zero_owed _ _ _ _ _ _ _ _ _
-      · exact ⟨s0, spec, sts, q, k, j, by first | exact hx | rfl, by first | exact hq | rfl,
-          by first | exact hl | rfl⟩
+      · exact ⟨s0, spec, sts, q, k, j, rfl, rfl, hl⟩
 
 end Loop
 
