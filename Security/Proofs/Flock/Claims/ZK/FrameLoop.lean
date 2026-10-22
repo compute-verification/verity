@@ -16,8 +16,9 @@ placeholder draws, and the release whose transport state it is (`note:20261022T0
 * `Loop.repState`, `Loop.progOf`: `Frame.run` over the drive's requests (`Drive.reqs`, the deployed schedule) with the
   scheduled rounds themselves in the device's place, up to the round's rep's last released round, at the coins the
   history opened.
-* `LeanRelease.ofLoop`: `LeanRelease.loop` with that state, each round's rep its rep stream (`Loop.repOf`) started as the
-  loop starts it (`Drive.start`).
+* `Loop.schedOf`: the round in a scheduled round's place, the loop's own on the rep's table and salts (`Frames.placeOf`).
+* `LeanRelease.ofLoop`: `LeanRelease.loop` with that state and those rounds, each round's rep its rep stream
+  (`Loop.repOf`) started as the loop starts it (`Drive.start`).
 * `ofLoop_progReads`: so `ProgReads` holds by definition, at `Loop.progOf`, with no salt. What `ProgReads` took as given is
   now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
   round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
@@ -116,6 +117,27 @@ noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
     | .error _ => {}
   | _, _ => {}
 
+/-- **The scheduled round in the device's place after the decoded coins `cs`** at `x`, on the rep's own table and salts
+for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
+salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. None past the rep's
+schedule (the inner proof's rounds, whose round the firewall sends itself), where the schedule is refused, or where `x`
+sets up no session. -/
+noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) :
+    Option ByteArray :=
+  match FlockDeploy.setupOf true x, cs.length with
+  | some (_, spec, sts), q + 1 =>
+    let ki := ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q
+    let st := sts[ki.1 / 2]!
+    let cr := (Array.range ki.2).map fun j => wordsAt x cs (q - ki.2 + j + 1)
+    match real ki.1 with
+    | .ok (t, hi) =>
+      match schedSoFar t (ki.1 % 2) (spec.domain (spec.tables[ki.1 / 2]!) (ki.1 % 2)).toUTF8
+          (_root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st (wordsAt x cs 0))) hi cr with
+      | .ok sched => sched[ki.2]?.map (·.1)
+      | .error _ => none
+    | .error _ => none
+  | _, _ => none
+
 /-- Round `j`'s rep at `x`: rep round `j - 2`'s stream (`CoinLayer.locate`), past `Hello` and the link. -/
 noncomputable def repOf (x : Msg) (j : ℕ) : ℕ :=
   match FlockDeploy.setupOf true x with
@@ -132,34 +154,49 @@ end Loop
 
 namespace LeanRelease
 
-/-- `L₀` with the loop's own frames: its transport's state is `Loop.progOf` of the decoded coins, and each round's rep is
-its rep stream, started as the loop starts it. -/
+/-- `L₀` with the loop's own frames: its transport's state is `Loop.progOf` of the decoded coins, each round's rep is
+its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
+(`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
+proof's rounds, `L₀`'s. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
-      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)) :
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      ℕ → V (Tab × Array ByteArray)) :
     LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
   { L₀ with
     rep := Loop.repOf
     lay := fun x k => ((Loop.startOf x k).toOption.map (·.1)).getD default
     slot := fun x k => (Loop.startOf x k).toOption.map (·.2)
-    prog := fun x h => Loop.progOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) }
+    prog := fun x h => Loop.progOf x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2)
+    scheduled := fun x w ρ h vals =>
+      match Loop.schedOf (real x w ρ) x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) with
+      | some r => r.data.toList
+      | none => L₀.scheduled x w ρ h vals }
 
 /-- **The release at the session loop's own frames**: `loop`'s, at `withFrames`. -/
 noncomputable def ofLoop (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
-      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)) :
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      ℕ → V (Tab × Array ByteArray)) :
     LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand) :=
-  loop Loop.loopNr T (withFrames T L₀)
+  loop Loop.loopNr T (withFrames T L₀ real)
 
 /-- **The loop's frame state reads the history only through the decoded coins**, at `Loop.progOf`: by definition, on
 every history past `Hello`, and with no salt. -/
 theorem ofLoop_progReads (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
     (x : Msg) :
-    ProgReads (ZKMal.CoinLayer.session Loop.loopNr T) (ofLoop T L₀) Loop.progOf x :=
+    ProgReads (ZKMal.CoinLayer.session Loop.loopNr T) (ofLoop T L₀ real) Loop.progOf x :=
   fun _ _ _ _ _ _ => rfl
 
 end LeanRelease
