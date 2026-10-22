@@ -83,8 +83,10 @@ _REAL = {"suite": TG.suite, "catalog": TG.catalog}
 
 
 def _from_records(cache: Path) -> Catalog | None:
-    """The catalog from the bindings' records (`units.plan`), each suite target made along the path its record lists and held
-    to its record's descriptor, as `cli._planned` holds the targets it makes; None when no record counts or one is stale."""
+    """The catalog from the bindings' records (`units.plan`), each suite target made along the path its record lists; None when
+    no record counts or one is stale.  A target is taken as its record describes it, as `cli._planned` takes a target whose
+    result it reuses: holding each one to its descriptor (`cache.descriptor`, as `cli._planned` does for one it checks) walks
+    all it reaches, which over the suite took longer than making it (past 15 minutes, against 426 s, r20261022-005352-48a5)."""
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
@@ -102,9 +104,6 @@ def _from_records(cache: Path) -> Catalog | None:
                 return UN._materialize(plan.entries, plan.objects, fid, via=d.via.get(fid))
 
             suite = {fid: make(fid) for fid in d.ids}
-            for fid, fn in suite.items():
-                if CC.descriptor(fn) != d.nodes[fid]["d"]:
-                    raise UN.Stale(f"{fid}: its descriptor is not the one its binding's record holds")
         except UN.Stale:
             TG.BINDINGS.clear()
             return None
