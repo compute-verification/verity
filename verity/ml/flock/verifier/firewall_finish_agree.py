@@ -15,7 +15,7 @@ OS). Then one `flock-firewall finish FINISH_ARG...` process (the session's state
 its `session.json`, ...) gets every table's request, answered with the root of record. Each rep's request with its passed
 values moved (`table{T}-rep{R}.vals` says where they sit), in a process of its own after its table and its salts
 (`salts T R`), must stop `finish` with no file: a constraint fails on the rep's pads (`stopped`). Every round in a
-device round's place is the session loop's own (`Flock.Firewall.Frames`, on `Drive.schedule`), so there is no schedule of
+device round's place is the session loop's own (`Flock.Firewall.Frames`, on `Skeleton.rounds` and `Drive.openStep`), so there is no schedule of
 the prover's to hold to it. Writes DIR/result.json; exits 1 on any disagreement.
 """
 from __future__ import annotations

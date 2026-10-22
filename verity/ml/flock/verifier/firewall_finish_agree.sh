@@ -7,7 +7,7 @@
 # passing. Run from the source tree's root:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_finish_agree.sh
-# Every round in a device round's place is the loop's own (`Flock.Firewall.Frames`, on `Flock.Firewall.Drive.schedule`).
+# Every round in a device round's place is the loop's own (`Flock.Firewall.Frames`: `Skeleton.rounds`, then `Drive.openStep`).
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
 # configs (FF_CONFIG, default hidden:256: a hiding tile, whose rows are a form the soundness proof covers, where a plain
 # tile's are refused) over FF_N instances (default 1), all drawn, or h1:K, the H1 tile unit at contraction K with one
