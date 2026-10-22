@@ -35,6 +35,7 @@ the same session, reserved before it opened (opened after the session's open roo
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import re
@@ -260,13 +261,13 @@ def outcome(case: dict) -> dict | None:
 
 
 def window(case: dict) -> dict:
-    got, refused = Cr.window(*credit_cases.window_args(case))
+    got, refused = Cr._window_outcomes(*credit_cases.window_args(case))
     _counted(refused, "window")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
 
 def period(case: dict) -> dict:
-    got, refused = Cr.period_credit(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
+    got, refused = Cr._period_outcomes(*(case[k] for k in credit_cases.PERIOD_KEYS), rounds_cases.lms_verify)
     _counted(refused, "period")
     return {"credited": got} if refused is None else {"refused": list(refused)}
 
@@ -283,6 +284,17 @@ def weights(case: dict) -> dict:
     return {"weights": got.hex()} if refused is None else {"refused": list(refused)}
 
 
+def registered_file(case: dict) -> dict:
+    raw = bytes.fromhex(case["descriptor"])
+    lay, refused = Cr.layout_of(raw)
+    if refused is None:
+        program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+        got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"])
+    _counted(refused, "registered-file")
+    return {"refused": list(refused)} if refused is not None else {"file": got,
+                                                                   "partition": Cr.partition_of(program, shape)}
+
+
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:
     return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
                   inputs=st.builds(instance, st.randoms(use_true_random=False),
@@ -296,6 +308,8 @@ WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WIND
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
 A_LINK = _port("a-link", a_link, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES)
 WEIGHTS = _port("weights", weights, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)
+REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registered_file_instance,
+                        credit_cases.REGISTERED_FILE_NAMES)
 
 
 def test_credit(pass_server):
@@ -310,9 +324,11 @@ def test_credit(pass_server):
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
-                             (WEIGHTS, 300))}
+                             (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
+                                  (REGISTERED_FILE, credit_cases.registered_file_instance,
+                                   credit_cases.REGISTERED_FILE_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
@@ -324,7 +340,7 @@ def test_credit(pass_server):
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
-            "a-link accept", "weights accept"} <= set(CREDITED)
+            "a-link accept", "weights accept", "registered-file accept"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
@@ -371,7 +387,9 @@ def test_credit(pass_server):
                  "window weights: the window's round# request table's root is not",
                  "window weights: the window's registered weights are not the ones its open root binds",
                  "window weights: registered weights ", "period weights: period ",
-                 "so the period earns nothing: weights: the window's registered weights' root"):
+                 "so the period earns nothing: weights: the window's registered weights' root",
+                 "registered-file registration: call #'s statement reads ", "which the window registers not: register",
+                 "which the window registers twice: register"):
         assert any(part in k for k in CREDITED), part
 
 

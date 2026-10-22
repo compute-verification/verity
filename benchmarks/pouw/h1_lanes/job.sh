@@ -9,7 +9,7 @@
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each drawing its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads
 #   5. run.py summarize: out/summary.json
-# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448: the least both statements' rows fit)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
+# env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  HZ_CACHE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0

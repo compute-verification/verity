@@ -7,7 +7,7 @@ file's META as `UnitStager` writes it, as #3131's h1_lanes stages them).
 
 The drawn inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
 32-wide step, lane indices in and out of range, paths that are and aren't a statement's and wires in, between and past
-the ports. The fixed ones are the served 32 × 32 leaf at K = 448 (the least K `h1zy.proved_k` takes), 4096 and 14336
+the ports. The fixed ones are the served 32 × 32 leaf at K = 448 (h1_lanes' default), 4096 and 14336
 (Llama-8B's), and the sidecar's 8 × 16 leaf at K = 64 (`h1zy.circuit-check.py`), every lane and the combine, over both H1
 tiles; the lowered ones are the combine at the sidecar's leaf, at 8 × 16 and the served leaf at K = 448, the sidecar's
 lane (whose 8-bit admit row C-Flock refuses), and with `VERITY_POUW_WINDOW_LOWERED_LANES` a 16 × 16 lane at K = 64 and a
@@ -294,15 +294,16 @@ def test_the_leaves(r: int, c: int, k: int, server) -> None:
 @pytest.mark.parametrize("r,c,k", SERVED, ids=lambda v: str(v))
 def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None:
     """At the served leaf every input row of the 33 statements, in Lean's layout, is whole 16-bit words (C-Flock's
-    `unit_lowering`) and a row the Lean verifier's v2 rule takes (`h1zy.row_fits`), and the combine has one row past one
-    SHA-512 block (C-Flock's), so a proof can take every statement."""
+    `unit_lowering`; the Lean verifier's v2 rule takes a row of any length, #3148), and the combine has a row that
+    compresses before its last SHA-512 block, at least 112 bytes (C-Flock's, `h1zy.LEAST_K`), so a proof can take every
+    statement."""
     lanes = H.Layout(r, c, k).lanes
     for ln in [*range(lanes), None]:
         x = {"r": r, "c": c, "k": k, "lane": ln}
         got = json.loads(D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)[1])
         rows = [p for p in got if not p["output"]]
-        assert all(p["bits"] % 16 == 0 and Z.row_fits(p["bits"]) for p in rows), [p["name"] for p in rows]
-        assert ln is not None or max(2 * p["words"] for p in rows) >= 128
+        assert all(p["bits"] % 16 == 0 for p in rows), [p["name"] for p in rows]
+        assert ln is not None or max(2 * p["words"] for p in rows) + 17 > 128
 
 
 def _lowered_wires(x: dict, server) -> None:

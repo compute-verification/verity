@@ -706,6 +706,152 @@ def otherRegistration (v : String) : String :=
   "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its " ++
   "session for): the entry is another registration's, another window's or another circuit's"
 
+/-- How deep `leavesOf` reads a type: deeper than Python's recursion limit reads. -/
+def TYPE_DEPTH : Nat := 1000
+
+/-- `credit._leaves`: a descriptor type's leaves, `["Value", w]` one, `["Array", n, t]` n of t's, a `["Tuple", [t, ...]]`
+or `["Record", [[name, t], ...]]` its fields'; zero for any other form, or past `fuel` levels. -/
+def leavesOf : Nat → Json → Nat
+  | 0, _ => 0
+  | fuel + 1, .arr a => match a.toList with
+    | .str "Value" :: _ => 1
+    | [.str "Array", n, t] => match nat? n with
+      | some n => n * leavesOf fuel t
+      | none => 0
+    | [.str "Tuple", .arr fs] => fs.foldl (fun s x => s + leavesOf fuel x) 0
+    | [.str "Record", .arr fs] => fs.foldl (fun s x => match x with
+      | .arr p => (match p.toList with
+        | [_, t] => s + leavesOf fuel t
+        | _ => s)
+      | _ => s) 0
+    | _ => 0
+  | _ + 1, _ => 0
+
+/-- K's template, as a statement over its units reads it: its id and the 16-bit words of its A row, its B row and its
+z/y record. -/
+structure Tile where
+  fn : String
+  a : Nat
+  b : Nat
+  zy : Nat
+
+/-- `credit.shape_of`: of a descriptor `layoutOf` accepted, its parameters' prefix (`PREFIX`) and each K's `Tile`
+(`TILES`, by ascending K), the widths `h1window.table_reads_file` reads. Its cost is the descriptor's bytes. -/
+structure Shape where
+  pre : String
+  tiles : List (Nat × Tile)
+
+def shapeOf (descriptor : ByteArray) : Shape := Id.run do
+  let some d := (String.fromUTF8? descriptor).bind loads? | return ⟨"", []⟩
+  let .str fn := get d "program_fn" | return ⟨"", []⟩
+  let vals := (Flock.Program.recordPairs fn).toList.filterMap fun (k, s) => (loads? s).map (k, ·)
+  let pre := ((vals.lookup "PREFIX").bind str?).getD ""
+  let elem := fun (t : Json) => (match t with
+    | .arr q => q.getD 2 .null
+    | _ => .null)
+  let tiles : List (Nat × Tile) := match vals.lookup "TILES" with
+    | some (.arr ts) => ts.toList.filterMap fun (t : Json) => (match t with
+      | .arr p => (match p.toList with
+        | [k, f] => do
+          let k ← nat? k
+          let fid ← str? (get f "fn")
+          let .arr ps := get (get (get (get d "definitions") fid) "body") "params" | none
+          let ty := fun (i : Nat) => (match ps[i]? with
+            | some (.arr q) => q.getD 1 .null
+            | _ => .null)
+          pure (k, { fn := fid, a := leavesOf TYPE_DEPTH (elem (ty 0)) / 16, b := leavesOf TYPE_DEPTH (elem (ty 1)) / 16,
+                     zy := leavesOf TYPE_DEPTH (ty 2) / 16 })
+        | _ => none)
+      | _ => none)
+    | _ => []
+  return ⟨pre, tiles⟩
+
+def PARTITION_FORMAT : String := "verity/partition/v1"
+def QUERY_NAME : String := "Q_template_instances"
+def QUERY_VERSION : Nat := 0
+
+/-- `credit.partition_of`: the partition object of the window whose circuit's descriptor has SHA-512 `program` and whose
+`shapeOf` is `shape`: every instance of each K's template one unit, its templates by ascending K. -/
+def partitionOf (program : String) (shape : Shape) : Json :=
+  Json.mkObj [("format", Json.str PARTITION_FORMAT), ("program", Json.str program),
+    ("query", Json.mkObj [("name", Json.str QUERY_NAME), ("version", Lean.toJson QUERY_VERSION),
+      ("params", Json.mkObj [("templates",
+        Json.arr ((shape.tiles.mergeSort (·.1 ≤ ·.1)).map (Json.str ·.2.fn)).toArray)])])]
+
+/-- `registered.READS`: a `--registered` file's format. -/
+def READS : String := "verity/registered-reads/v0"
+def SCHEMA_KEY : String := "row_schema"
+
+/-- `credit.registered_file`: the verifier's `--registered` file of call `call`'s statement in the window `layout`
+(one `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shapeOf` `shape`), else the refusal
+(`registration`: the window registers no root, or two, for a value the statement reads). It is
+`h1window.table_reads_file`'s, from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads its A row i
+(port `a_k<K>_<i>`) at row R·ti + i of the call's A table `<prefix>a/<K>@<call>` (M rows), its B row j (`b_k<K>_<j>`) at
+row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
+t of the call's z table `<prefix>zy@<call>`; every other unit reads none of them. Each value is a row/v2 value of 16-bit
+leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the window's open root `window`
+but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its cost is the window's units,
+once a port: the reads file's form. -/
+def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String) :
+    R Json := do
+  let num := fun j => (nat? j).getD 0
+  let (r, c) := (match get layout "tile" with
+    | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
+    | _ => (1, 1))
+  let m := num (get layout "m")
+  let rows := fun (j : Json) => (match j with
+    | .arr a => a.toList.filterMap fun (x : Json) => (match x with
+      | .arr b => some b.toList
+      | _ => none)
+    | _ => ([] : List (List Json)))
+  let lins : List (String × Nat × Nat) := (rows (get layout "linears")).filterMap fun (x : List Json) => (match x with
+    | [.str s, k, n] => some (s, num k, num n)
+    | _ => none)
+  let calls : List (List Json) := rows (get layout "calls")
+  let lin : String := (match calls[call]? with
+    | some (Json.str s :: _) => s
+    | _ => "")
+  let kn : Nat × Nat := ((lins.find? (·.1 == lin)).map (·.2)).getD (0, 0)
+  let (k, n) := kn
+  let tile : Tile := (shape.tiles.lookup k).getD { fn := "", a := 0, b := 0, zy := 0 }
+  let b0 : Nat := ((lins.takeWhile (·.1 != lin)).filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0
+  let sizes := (callWork layout).map (·.1)
+  let u0 := (sizes.take call).foldl (· + ·) 0
+  let size := sizes.getD call 0
+  let per := n / c
+  let a := s!"{shape.pre}a/{k}@{call}"
+  let zy := s!"{shape.pre}zy@{call}"
+  let bv := s!"{shape.pre}b/{k}"
+  let shapes : List (String × Nat × Nat) :=
+    [(a, m, tile.a), (zy, size, tile.zy), (bv, (lins.filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0, tile.b)]
+  let mut root : List (String × String) := []
+  for (v, _) in shapes do
+    let got : List Json := (match get roots v with
+      | .arr xs => xs.toList
+      | _ => [])
+    match got with
+    | [.str x] => root := root ++ [(v, x)]
+    | _ => throw ("registration", s!"call {call}'s statement reads {v}, which the window registers " ++
+        s!"{if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
+  let population := sizes.foldl (· + ·) 0
+  let ports : List (String × String × (Nat → Nat)) :=
+    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => r * (t / per) + i)) ++
+    (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
+    [("zy", zy, fun t => t)]
+  let mut out : List (String × Json) := []
+  for (port, v, row) in ports do
+    let reads := (List.range population).map fun u =>
+      if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
+    let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
+    let (leaves, words) := lw
+    let d ← (SampledProofs.Registered.domainAt program v words leaves 16
+      (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
+    out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
+      ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
+      ("domain", Json.str (Flock.hexOf d)), (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2),
+      ("reads", Json.arr reads.toArray)])]
+  pure (Json.mkObj [("format", Json.str READS), ("ports", Json.mkObj out)])
+
 def registrationRefuse {α : Type} (why : String) : R α := throw ("registration", why)
 
 /-- `_registration`'s `held`: the refusal of the registered value `v`'s entry `e`, none when it is one-stage's form and
