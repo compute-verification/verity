@@ -110,6 +110,7 @@ theorem fold_eq_foldRef {t : Tmpl} {lays : Array Lay} {alpha : F128} {lw rho r P
     (hpos : ∀ d < t.defs.size, DefPos t lays d) (hroot : t.root < t.defs.size) {s : ℕ} (hs : s < 64) :
     of P[s]! = of P'[s]! := by
   have htree := posMap_tree t lays hpos hroot
+  clear hpos hroot
   rw [fold_refVal hP hlay hins hf1 hf2 hs, foldRef_tree hP' hs]
   have hk : (posMap t lays).getD t.constPos 0 = posOf t lays ((t.defs.getD t.root default).cols - 1) := by
     have h1 := htree
