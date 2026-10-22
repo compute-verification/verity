@@ -14,7 +14,8 @@ def _pouw_roots() -> list[Any]:
     cells), its 32 record cells picked over the index, that check, the admit gate and the equality of its partials row (8
     words at KS = 2), and ok 0 where the index's 14 high bits are not all 0;
     and `PouwH1Combine_v1` at that leaf, its 4 rows XORed and held to the receipt. Both are bound as Definitions, since
-    `h1zy.combine` stages the combine only at K >= 384 (`h1zy.LEAST_K`). None where
+    `h1zy.lane` and `h1zy.combine` stage only a leaf whose R is a multiple of 16, and the combine only at K >= 384
+    (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
     `PouwAndBit` and `PouwMuxBit` are catalog roots (static-free)."""
     from verity.ml.circuits.defs import bind

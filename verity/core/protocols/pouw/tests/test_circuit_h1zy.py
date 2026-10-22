@@ -343,12 +343,32 @@ def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compr
     assert [8 * H.Layout(4, 8, k).sets for k in (352, 384, 416, 448, 896, 928)] == [104, 112, 120, 128, 240, 248]
     assert Z.LEAST_K == 384
     for k in (64, 352, 384, 416, 896, 928, 4096):
-        assert Z.lane(_tile(r=8, c=16, k=k)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=8, c=16, k=k))
+        assert Z.lane(_tile(r=16, c=16, k=k)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=16, c=16, k=k))
     for k in (384, 416, 448, 896, 928, 4096):
-        assert Z.combine(_tile(r=8, c=16, k=k)) == bind(Z.PouwH1Combine, TILE=_tile(r=8, c=16, k=k))
+        assert Z.combine(_tile(r=16, c=16, k=k)) == bind(Z.PouwH1Combine, TILE=_tile(r=16, c=16, k=k))
     for k in (64, 352):
         with pytest.raises(ValueError, match=f"K = {k}: the combine reads only .* K = 384 is the least"):
-            Z.combine(_tile(r=8, c=16, k=k))
+            Z.combine(_tile(r=16, c=16, k=k))
+
+
+def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole_16_bit_words():
+    """A lane reads the leaf's R admit bits as one row, and C-Flock lowers only a row of whole 16-bit words
+    (`class_statement.unit_lowering`), so `lane` and `combine` refuse a leaf of R = 4 or 8, whose lanes the Definitions
+    bind, and take R = 16 and the served 32. Both refuse K = 0, which the Definitions bind too and `leaf_lanes` refuses."""
+    for r, c in ((4, 16), (8, 8), (8, 16)):
+        t = _tile(r=r, c=c, k=384)
+        bind(Z.PouwH1LaneZy, TILE=t).signature()
+        for stage in (Z.lane, Z.combine):
+            with pytest.raises(ValueError, match=f"R = {r}: a lane reads the leaf's R admit bits as one row"):
+                stage(t)
+    for r, c in ((16, 8), (16, 16), (32, 32)):
+        t = _tile(r=r, c=c, k=384)
+        assert Z.lane(t) == bind(Z.PouwH1LaneZy, TILE=t) and Z.combine(t) == bind(Z.PouwH1Combine, TILE=t)
+    t = _tile(r=32, c=32, k=0)
+    bind(Z.PouwH1LaneZy, TILE=t).signature()
+    for stage in (Z.lane, Z.combine):
+        with pytest.raises(ValueError, match="K = 0: a leaf's lanes and combine are staged only at a positive K"):
+            stage(t)
 
 
 def _word_bits(words):

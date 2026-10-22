@@ -49,7 +49,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
   input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and C-Flock
   proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
-  (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any K.
+  (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a
+  leaf whose R is a multiple of 16, since a lane reads the R admit bits as one row of whole 16-bit words.
   `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
   by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
   row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
@@ -409,23 +410,39 @@ PouwH1Combine = CompositeDefinition(
         "receipt's.")
 
 
-#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any K
+#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any positive K
 LEAST_K = 384
+
+
+def _leaf(tile: Any) -> int:
+    """``tile``'s K, if its leaf's lanes and combine are staged; else ValueError. A leaf has a positive K (`leaf_lanes`'
+    word order), and a lane reads its R admit bits as one row, which C-Flock takes only as whole 16-bit words
+    (`class_statement.unit_lowering`), so its R is a multiple of 16 (the served leaf's is 32)."""
+    a = tile.signature()[0][0][1]
+    r, k = int(a.n), int(a.elem.n)
+    if k < 1:
+        raise ValueError(f"K = {k}: a leaf's lanes and combine are staged only at a positive K")
+    if r % 16:
+        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and C-Flock takes only a row of whole "
+                         f"16-bit words (class_statement.unit_lowering): a leaf's lanes and combine are staged only at an R "
+                         f"that is a multiple of 16, as the served 32 × 32 leaf's is")
+    return k
 
 
 def lane(tile: Any) -> Any:
     """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s): the lane a prover
-    stages."""
+    stages, at any K and R `_leaf` takes."""
+    _leaf(tile)
     return bind(PouwH1LaneZy, TILE=tile)
 
 
 def combine(tile: Any) -> Any:
-    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at a K of at least `LEAST_K`: the combine reads only the partials
-    and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that compresses before its last
-    block (``no row has a compression before its last block``, `verity_flock.circuit`'s and `Flock.HmRow`'s), a row of at
-    least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
-    k = tile.signature()[0][0][1].elem.n
-    n = 8 * H.Layout(4, 8, int(k)).sets
+    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
+    reads only the partials and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that
+    compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
+    `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
+    k = _leaf(tile)
+    n = 8 * H.Layout(4, 8, k).sets
     if n + 17 <= 128:
         raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
                          f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
