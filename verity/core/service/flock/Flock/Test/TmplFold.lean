@@ -2,11 +2,12 @@
 `Tmpl.fold` against the lincheck's unit fold: on `Flock.Test.Tmpl`'s unit and variants (one copy, copies in lanes that
 reach 64 and past, a run of 3 in 4 lanes, a lane binding its caller's input, the constant bound), laid out by
 `Tmpl.layoutM` under each `Mode`, the fold from the description equals `foldRef`, the sum over the unrolled rows at their
-positions, and that equals `Stmt.project (Stmt.baseOf α (Stmt.tensor lw ρ) A B none sl) (eqTable r)` on `A` and `B` built
-at the positions (`posMap`) by `Sparse.ofRows`, the matrices a flat unit's slot would hold, and so does `foldSplit`, on
-these and on units whose pair or quad the call tree reaches on two paths, where it folds tables.
+positions, and that equals `Stmt.project (Stmt.baseOf α (Stmt.tensor lw ρ) A B none sl) (eqTable r)` on `A` and `B` of the
+net committed at the layout's positions (`Tmpl.unrollAt`), the matrices a flat unit's slot would hold, and so does
+`foldSplit`, on these and on units whose pair or quad the call tree reaches on two paths, where it folds tables.
 -/
 import Flock.TmplSplit
+import Flock.NetAt
 import Flock.Statement
 import Flock.Test.TmplLayout
 
@@ -31,15 +32,9 @@ def three (lines : Array String) (mode : _root_.Flock.Tmpl.Mode := .lenient) :
   let alpha := f 7
   let (p, _) ← _root_.Flock.Tmpl.fold t lays alpha lw rho r
   let q ← _root_.Flock.Tmpl.foldRef t lays alpha lw rho r
-  let acc ← t.rows
-  let π := _root_.Flock.Tmpl.posMap t lays
-  let at_ := fun (rows : Array (Array Nat)) => Id.run do
-    let mut out := Array.replicate size #[]
-    for x in [0:rows.size] do out := out.set! (π.getD x 0) ((rows.getD x #[]).map (π.getD · 0))
-    return out
-  let a ← Sparse.ofRows (at_ acc.ra) (2 ^ sl)
-  let b ← Sparse.ofRows (at_ acc.rb) (2 ^ sl)
-  let base := Stmt.baseOf alpha (Stmt.tensor lw rho) a b none sl
+  let n ← _root_.Flock.Tmpl.unrollAt t lays
+  if n.useful != size || n.unitLog != sl then throw "the committed net is not the layout's size"
+  let base := Stmt.baseOf alpha (Stmt.tensor lw rho) n.a n.b none sl
   let (s, _, tables, _) ← _root_.Flock.Tmpl.foldSplit t lays alpha lw rho r
   return (p, q, Stmt.project base (eqTable r), s, tables)
 
