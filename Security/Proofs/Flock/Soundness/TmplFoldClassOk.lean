@@ -79,67 +79,10 @@ theorem readAt_exp (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (d β h : ℕ) (a
   unfold readAt readExp
   rw [Nat.mul_add, Nat.add_assoc]
 
-/-- An explicit class's own rows: the rows loop of `foldDef` adds each row's value over the class copies. -/
-theorem foldDef_exp_rows {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64) {fuel d β h : ℕ}
-    {as : Array ℕ} {o : Out} (hd : foldDef t lays pt (fuel + 1) d β h as = .ok o) (h6 : ¬ 6 ≤ β)
-    (ip : ℕ → List ℕ) :
-    Shape (t.defs.getD d default).ins as.size o ∧
-      expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) o =
-        ((t.defs.getD d default).rows.toList.map fun r => ∑ k ∈ Finset.range as.size,
-          rowVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)))
-            (readExp t lays pt d β h as ip k) r).sum + 0 := by
-  rw [foldDef] at hd
-  simp only [h6, decide_false, ↓reduceIte] at hd
-  obtain ⟨oR, hR, hd⟩ := except_bind_ok hd
-  have key := forIn_array_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
-    (Shape (t.defs.getD d default).ins as.size) (fun r => ∑ k ∈ Finset.range as.size,
-      rowVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)))
-        (readExp t lays pt d β h as ip k) r) hR (shape_init _ _) ?_
-  · obtain ⟨hq, hsum⟩ := key
-    rw [expVal_init, zero_add] at hsum
-    sorry
-  · intro ⟨x, ra, rb⟩ _ b r hr hq
-    dsimp only at hr
-    obtain ⟨b1, hk, hr⟩ := except_bind_ok hr
-    cases hr
-    have key := forIn_range_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
-      (Shape (t.defs.getD d default).ins as.size) (fun k =>
-        rowVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x)))
-          (readExp t lays pt d β h as ip k) (x, ra, rb)) hk hq ?_
-    · obtain ⟨hq1, hs1⟩ := key
-      exact ⟨_, rfl, hq1, hs1⟩
-    intro k hk' b r hr hq
-    obtain ⟨b2, hc, hr⟩ := except_bind_ok hr
-    cases hr
-    have key := forIn_list_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
-      (Shape (t.defs.getD d default).ins as.size)
-      (grpVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x)))
-        (readExp t lays pt d β h as ip k)) _ hc hq ?_
-    · obtain ⟨hq2, hs2⟩ := key
-      exact ⟨_, rfl, hq2, hs2⟩
-    intro cc _ b r hr hq
-    obtain ⟨b3, hv, hr⟩ := except_bind_ok hr
-    cases hr
-    have key := forIn_array_sum (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
-      (Shape (t.defs.getD d default).ins as.size)
-      (fun v => of (cc.2 * pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x))) *
-        Gs pt s (readExp t lays pt d β h as ip k v)) hv hq ?_
-    · obtain ⟨hq3, hs3⟩ := key
-      exact ⟨_, rfl, hq3, hs3⟩
-    intro v _ b r hr hq
-    cases hr
-    refine ⟨_, rfl, ?_⟩
-    refine (ref_exp pt hs hk' _ _ _
-      (of (cc.2 * pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x))) *
-        Gs pt s (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v))) hq
-      (fun _ => own_exp pt hs _ _ _ hq)).imp id (fun e => e.trans ?_)
-    unfold readExp
-    split_ifs <;> rfl
-
 /-! ## A copy's inputs, bound -/
 
 theorem bound_map (c : Flock.Tmpl.Call) (g : ℕ → ℕ) (j : ℕ) : c.bound g j = (c.bound id j).map g := by
-  simp [Flock.Tmpl.Call.bound, List.map_flatMap]
+  simp [Flock.Tmpl.Call.bound, List.map_flatMap, Function.comp_def]
 
 theorem zipIdx_sum (F : ℕ → ℕ → GF128) : ∀ (L : List ℕ) (n : ℕ),
     ((L.zipIdx n).map fun x => F x.1 x.2).sum = ∑ t ∈ Finset.range L.length, F (L.getD t 0) (n + t)
@@ -171,10 +114,18 @@ theorem bind_exp (pt : FoldPt) {s ins nk cols : ℕ} (hs : s < 64) (ip : ℕ →
           (L.map fun x => ∑ k ∈ Finset.range nk, of (val x.2 k) * Gs pt s
             (if x.1 < cols then q k x.1 else if x.1 < cols + ins then (ip k).getD (x.1 - cols) pt.qc else pt.qc)).sum := by
   intro L o hsh
-  refine foldl_sum _ _ _ L o hsh fun x _ b hb => ?_
+  refine foldl_sum (expVal s ins nk (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (Shape ins nk)
+    (fun x => ∑ k ∈ Finset.range nk, of (val x.2 k) * Gs pt s
+      (if x.1 < cols then q k x.1 else if x.1 < cols + ins then (ip k).getD (x.1 - cols) pt.qc else pt.qc))
+    (f := fun o x => (List.range nk).foldl (fun o k =>
+        o.ref pt false cols ins x.1 k (val x.2 k) fun y o =>
+          { p := addAt o.p (q k y) (val x.2 k * pt.g (q k y)), s := o.s, c := o.c, u := o.u, work := o.work }) o)
+    L o hsh fun x _ b hb => ?_
   have key := foldl_sum (expVal s ins nk (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (Shape ins nk)
     (fun k => of (val x.2 k) * Gs pt s
       (if x.1 < cols then q k x.1 else if x.1 < cols + ins then (ip k).getD (x.1 - cols) pt.qc else pt.qc))
+    (f := fun o k => o.ref pt false cols ins x.1 k (val x.2 k) fun y o =>
+      { p := addAt o.p (q k y) (val x.2 k * pt.g (q k y)), s := o.s, c := o.c, u := o.u, work := o.work })
     (List.range nk) b hb ?_
   · rw [list_range_sum] at key
     exact key
@@ -219,5 +170,165 @@ structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
     ((lays.getD d default).places.getD i default).cs = 1 ∧
       2 ^ ((lays.getD d default).places.getD i default).ms.log2 = ((lays.getD d default).places.getD i default).ms ∧
       ((t.defs.getD d default).calls.getD i default).count ≤ ((lays.getD d default).places.getD i default).ms
+
+/-! ## What a class's fold means -/
+
+/-- An explicit class `(d, β, h, as)`: with copy `k`'s inputs at `ip k`, its `expVal` is its copies' `refVal`s. -/
+def ExpOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β h : ℕ) (as : Array ℕ) (o : Out) : Prop :=
+  Shape (t.defs.getD d default).ins as.size o ∧ ∀ ip : ℕ → List ℕ,
+    expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) o =
+      ∑ k ∈ Finset.range as.size, refVal t lays pt s fuel d (as.getD k 0 + 2 ^ β * h) (2 ^ β) (ip k)
+
+/-- A summed class `(d, β, h)`: no `p`, and for every low part `a`, its `sumVal` times `E(a)` is the copy's `refVal`. -/
+def SumOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d β h : ℕ) (o : Out) : Prop :=
+  Shape (t.defs.getD d default).ins 1 o ∧ PZero o ∧ ∀ a < 2 ^ β, ∀ ip : List ℕ,
+    of (eLow pt β a) * sumVal (t.defs.getD d default).ins (gLow pt s β a) (Gs pt s pt.qc)
+      (fun t' => Gs pt s (ip.getD t' pt.qc)) o = refVal t lays pt s fuel d (a + 2 ^ β * h) (2 ^ β) ip
+
+/-- Every class's fold at depth `fuel` means what it should, while its lane bits fit the point. -/
+def ClassOk (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel : ℕ) : Prop :=
+  ∀ d β h (as : Array ℕ) (o : Out), foldDef t lays pt fuel d β h as = .ok o →
+    β + lanes t lays fuel d ≤ 6 + pt.rho.size → β + lanes t lays fuel d ≤ 6 + pt.r.size →
+    (¬ 6 ≤ β → (∀ k < as.size, as.getD k 0 < 2 ^ β) → ExpOk t lays pt s fuel d β h as o) ∧
+      (6 ≤ β → SumOk t lays pt s fuel d β h o)
+
+/-- **An explicit class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
+theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64) (hlay : LayOk t lays) {fuel : ℕ}
+    (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
+    (hd : foldDef t lays pt (fuel + 1) d β h as = .ok o)
+    (hf1 : β + lanes t lays (fuel + 1) d ≤ 6 + pt.rho.size) (hf2 : β + lanes t lays (fuel + 1) d ≤ 6 + pt.r.size)
+    (h6 : ¬ 6 ≤ β) (has : ∀ k < as.size, as.getD k 0 < 2 ^ β) : ExpOk t lays pt s (fuel + 1) d β h as o := by
+  have key : ∀ ip : ℕ → List ℕ, Shape (t.defs.getD d default).ins as.size o ∧
+      expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) o =
+        ∑ k ∈ Finset.range as.size, refVal t lays pt s (fuel + 1) d (as.getD k 0 + 2 ^ β * h) (2 ^ β) (ip k) := by
+    intro ip
+    rw [foldDef] at hd
+    simp only [h6, decide_false, Bool.false_and, Bool.false_eq_true, ↓reduceIte] at hd
+    obtain ⟨oR, hR, hd⟩ := except_bind_ok hd
+    have keyR := forIn_array_sum
+      (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+      (Shape (t.defs.getD d default).ins as.size) (fun r => ∑ k ∈ Finset.range as.size,
+        rowVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)))
+          (readExp t lays pt d β h as ip k) r) hR (shape_init _ _) ?_
+    · obtain ⟨hqR, hsR⟩ := keyR
+      rw [expVal_init, zero_add] at hsR
+      obtain ⟨oC, hC, hd⟩ := except_bind_ok hd
+      cases pure_ok hd
+      have keyC := forIn_range_sum
+        (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+        (Shape (t.defs.getD d default).ins as.size) (fun i => ∑ k ∈ Finset.range as.size,
+          ∑ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count,
+            refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
+              (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
+                j * ((lays.getD d default).places.getD i default).cs))
+              (2 ^ β * ((lays.getD d default).places.getD i default).ms)
+              (((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip k) j)) hC hqR ?_
+      · obtain ⟨hqC, hsC⟩ := keyC
+        refine ⟨hqC, ?_⟩
+        rw [hsC, hsR]
+        simp only [refVal, readAt_exp]
+        rw [Finset.sum_add_distrib]
+        congr 1
+        · rw [list_sum_comm]
+          refine Finset.sum_congr rfl fun k _ => ?_
+          simp only [Nat.mul_add, Nat.add_assoc]
+        · exact Finset.sum_comm
+      intro i hi b r hr hq
+      by_cases hm : ((lays.getD d default).places.getD i default).ms = 1
+      · have hm' : (((lays.getD d default).places.getD i default).ms == 1) = true := by simp [hm]
+        rw [if_pos hm'] at hr
+        obtain ⟨bJ, hJ, hr⟩ := except_bind_ok hr
+        cases hr
+        have keyJ := forIn_range_sum
+          (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+          (Shape (t.defs.getD d default).ins as.size) (fun j => ∑ k ∈ Finset.range as.size,
+            refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
+              (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
+                j * ((lays.getD d default).places.getD i default).cs))
+              (2 ^ β * ((lays.getD d default).places.getD i default).ms)
+              (((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip k) j)) hJ hq ?_
+        · obtain ⟨hq1, hs1⟩ := keyJ
+          exact ⟨_, rfl, hq1, by rw [hs1, Finset.sum_comm]⟩
+        intro j _ b r hr hq
+        obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
+        cases hr
+        refine ⟨_, rfl, ?_⟩
+        have hl := lanes_call t lays fuel d i hi
+        rw [if_pos hm, zero_add] at hl
+        obtain ⟨hchS, hchV⟩ := (ih _ β _ as ch hch (by omega) (by omega)).1 h6 has
+        refine (bind_exp pt hs ip
+          (fun k y => as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y))
+          (fun t' k => (ch.u.getD t' #[]).getD k 0)
+          (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ ?_).imp id (fun e => e.trans ?_)
+        · exact (add_exp hs (fun _ _ => 0) 1 1 hq hchS.1).1
+        refine (congrArg (· + _) (add_exp hs (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) 1 1 hq hchS.1).2).trans ?_
+        rw [add_assoc]
+        congr 1
+        have eR : ∀ k, refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
+            (as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
+              j * ((lays.getD d default).places.getD i default).cs))
+            (2 ^ β * ((lays.getD d default).places.getD i default).ms)
+            (((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip k) j) =
+          refVal t lays pt s fuel ((t.defs.getD d default).calls.getD i default).def_
+            (as.getD k 0 + 2 ^ β * (h + ((lays.getD d default).places.getD i default).nb +
+              j * ((lays.getD d default).places.getD i default).cs)) (2 ^ β)
+            (((t.defs.getD d default).calls.getD i default).bound (readExp t lays pt d β h as ip k) j) := by
+          intro k
+          rw [hm, Nat.mul_one, show as.getD k 0 + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb +
+              j * ((lays.getD d default).places.getD i default).cs) = as.getD k 0 + 2 ^ β * (h + ((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs) by ring]
+        refine Eq.trans ?_ ((Finset.sum_congr rfl fun k _ => eR k).trans
+          (hchV fun k => ((t.defs.getD d default).calls.getD i default).bound
+            (readExp t lays pt d β h as ip k) j).symm).symm
+        unfold expVal
+        congr 1
+        refine (zipIdx_sum (fun v t' => ∑ k ∈ Finset.range as.size, of ((ch.u.getD t' #[]).getD k 0) *
+            Gs pt s (readExp t lays pt d β h as ip k v)) _ 0).trans ?_
+        rw [hlay.bound d i j hi]
+        refine Finset.sum_congr rfl fun t' ht' => ?_
+        rw [zero_add]
+        refine Finset.sum_congr rfl fun k _ => ?_
+        rw [getD_bound _ _ _ _ _ (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht')]
+      · sorry
+    · intro ⟨x, ra, rb⟩ _ b r hr hq
+      dsimp only at hr
+      obtain ⟨b1, hk, hr⟩ := except_bind_ok hr
+      cases hr
+      have key := forIn_range_sum
+        (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+        (Shape (t.defs.getD d default).ins as.size) (fun k =>
+          rowVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x)))
+            (readExp t lays pt d β h as ip k) (x, ra, rb)) hk hq ?_
+      · obtain ⟨hq1, hs1⟩ := key
+        exact ⟨_, rfl, hq1, hs1⟩
+      intro k hk' b r hr hq
+      obtain ⟨b2, hc, hr⟩ := except_bind_ok hr
+      cases hr
+      have key := forIn_list_sum
+        (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+        (Shape (t.defs.getD d default).ins as.size)
+        (grpVal pt s (pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x)))
+          (readExp t lays pt d β h as ip k)) _ hc hq ?_
+      · obtain ⟨hq2, hs2⟩ := key
+        exact ⟨_, rfl, hq2, hs2⟩
+      intro cc _ b r hr hq
+      obtain ⟨b3, hv, hr⟩ := except_bind_ok hr
+      cases hr
+      have key := forIn_array_sum
+        (expVal s (t.defs.getD d default).ins as.size (fun t' k => Gs pt s ((ip k).getD t' pt.qc)))
+        (Shape (t.defs.getD d default).ins as.size)
+        (fun v => of (cc.2 * pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x))) *
+          Gs pt s (readExp t lays pt d β h as ip k v)) hv hq ?_
+      · obtain ⟨hq3, hs3⟩ := key
+        exact ⟨_, rfl, hq3, hs3⟩
+      intro v _ b r hr hq
+      cases hr
+      refine ⟨_, rfl, ?_⟩
+      refine (ref_exp pt hs hk' _ _ _
+        (of (cc.2 * pt.e (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d x))) *
+          Gs pt s (as.getD k 0 + 2 ^ β * (h + Flock.Tmpl.posIn t lays (t.defs.size + 1) d v))) hq
+        (fun _ => own_exp pt hs _ _ _ hq)).imp id (fun e => e.trans ?_)
+      unfold readExp
+      split_ifs <;> rfl
+  exact ⟨(key fun _ => []).1, fun ip => (key ip).2⟩
 
 end FlockSoundness.TmplFold
