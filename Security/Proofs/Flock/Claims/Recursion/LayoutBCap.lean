@@ -290,11 +290,12 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
 
 /-! ## `KSLin2` at `layoutBCap` -/
 
-/-- **`KSLin2` at the deployment, at `layoutBCap`, with `HeldB` restated**: `ksLin2_deployed_plain_closed` at the layout
-with round 0 at RecCap, where per form `HeldB` comes from `heldB_layoutBCap`. What stays per form is the schedule
-(`SchedMatches`), RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the tops (`TopsHeld`, false at every
-`topsAt` that holds no such round: `not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, open), and `VstarShowsB`,
-`PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBCap`, with `HeldB` restated**:
+`ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap, where at the dense form `HeldB` comes from
+`heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
+ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
+`not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, open), and `VstarShowsB`, `PartChecksB`,
+`PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -306,7 +307,7 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
     (∃ decC : Msg → Msg → Coin,
       (∀ decI, Claims.Recursion.VStar.RunPairs FlockDeploy.sha512 D
         (Claims.Recursion.Inner.ofFlock Bd.deploy decI) decC) ∧
-      ∀ shape ∈ [Claims.Recursion.Form.Dense, Claims.Recursion.Form.Holo, Claims.Recursion.Form.Sparse],
+      ∀ shape ∈ [Claims.Recursion.Form.Dense],
         SchedMatches shape ∧ CapPorts shape ∧ RowsCover shape ∧ TopsHeld topsAt shape ∧ FinPieces fin shape ∧
         ∃ (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
           (cmt : Msg → ℕ → Msg → Msg),
@@ -320,8 +321,8 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    Claims.Recursion.KSLin2 FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep := by
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hP hRT hRL hRP
   refine ksLin2_deployed_plain_closed b L wE join final w ?_ hRT hRL hRP
   obtain ⟨decC, hRun, hS⟩ := hP
