@@ -312,6 +312,351 @@ theorem ringSwitchP_sim (sv sv' : ℕ → Array F128) (claims : Array _root_.Flo
     subst h
     exact sim_pure rfl
 
+/-! ## The Ligerito prover's state -/
+
+open _root_.Flock.Firewall.Finish (LigState LP liftT sendMsg powP challengeP oodIntroP queryP foldK splitK embedF
+  roundPoly liftU addScaled maskMsg dotK ligeritoPZk repOpening Commit flat)
+
+/-- **Two Ligerito states of one shape**: tables of one size, and the same weight (the basis and the coins'). -/
+def LigAlike (s s' : LigState) : Prop := s.tab.size = s'.tab.size ∧ s.w = s'.w
+
+variable (L) in
+/-- **Two Ligerito programs alike**: from states of one shape, results related by `S` at states of one shape. -/
+def SimL {α β : Type} (S : α → β → Prop) (p : LP M α) (q : LP M β) : Prop :=
+  ∀ s s', LigAlike s s' → Sim L (fun x y => S x.1 y.1 ∧ LigAlike x.2 y.2) (p.run s) (q.run s')
+
+theorem simL_pure {α β : Type} {S : α → β → Prop} {a : α} {b : β} (h : S a b) :
+    SimL L S (pure a : LP M α) (pure b : LP M β) :=
+  fun _ _ hs => sim_pure ⟨h, hs⟩
+
+theorem simL_bind {α β γ δ : Type} {S : α → β → Prop} {T : γ → δ → Prop} {p : LP M α} {q : LP M β}
+    {f : α → LP M γ} {g : β → LP M δ} (h : SimL L S p q) (hfg : ∀ a b, S a b → SimL L T (f a) (g b)) :
+    SimL L T (p >>= f) (q >>= g) :=
+  fun s s' hs => sim_bind (h s s' hs) fun x y hxy => hfg x.1 y.1 hxy.1 x.2 y.2 hxy.2
+
+theorem simL_liftT {α β : Type} {S : α → β → Prop} {m : TMW M α} {m' : TMW M β} (h : Sim L S m m') :
+    SimL L S (liftT m : LP M α) (liftT m') :=
+  fun _ _ hs => sim_bind h fun _ _ hab => sim_pure ⟨hab, hs⟩
+
+theorem simL_get : SimL L LigAlike (get : LP M LigState) get :=
+  fun _ _ hs => sim_pure ⟨hs, hs⟩
+
+theorem simL_set {a b : LigState} (h : LigAlike a b) : SimL L (· = ·) (set a : LP M PUnit) (set b) :=
+  fun _ _ _ => sim_pure ⟨rfl, h⟩
+
+theorem simL_modify {F F' : LigState → LigState} (h : ∀ s s', LigAlike s s' → LigAlike (F s) (F' s')) :
+    SimL L (· = ·) (modify F : LP M PUnit) (modify F') :=
+  fun s s' hs => sim_pure ⟨rfl, h s s' hs⟩
+
+theorem simL_throw {α β : Type} {S : α → β → Prop} (e e' : String) :
+    SimL L S (throw e : LP M α) (throw e' : LP M β) :=
+  fun s s' _ => by
+    show Sim L _ ((throw e : TMW M α) >>= fun a => pure (a, s)) ((throw e' : TMW M β) >>= fun a => pure (a, s'))
+    exact sim_bind (L := L) (S := fun _ _ => False) (sim_throw e e') fun _ _ h => h.elim
+
+theorem simL_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c] {p p' : LP M α} {q q' : LP M β}
+    (h1 : c → SimL L S p q) (h2 : ¬ c → SimL L S p' q') :
+    SimL L S (if c then p else p') (if c then q else q') := by
+  by_cases hc : c
+  · rw [if_pos hc, if_pos hc]; exact h1 hc
+  · rw [if_neg hc, if_neg hc]; exact h2 hc
+
+theorem simL_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → LP M (ForInStep σ)) (body' : ℕ → τ → LP M (ForInStep τ))
+    (I : ℕ → σ → τ → Prop)
+    (hb : ∀ i < n, ∀ u u', I i u u' →
+      SimL L (fun r r' => ∃ v v', r = .yield v ∧ r' = .yield v' ∧ I (i + 1) v v') (body i u) (body' i u'))
+    {u : σ} {u' : τ} (h₀ : I 0 u u') : SimL L (I n) (forIn [:n] u body) (forIn [:n] u' body') := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  suffices key : ∀ k a (u : σ) (u' : τ), a + k = n → I a u u' →
+      SimL L (I n) (forIn (List.range' a k) u body) (forIn (List.range' a k) u' body') from
+    key n 0 u u' (by omega) h₀
+  intro k
+  induction k with
+  | zero =>
+    intro a u u' ha hI
+    have e : a = n := by omega
+    exact simL_pure (e ▸ hI)
+  | succ k ih =>
+    intro a u u' ha hI
+    rw [List.range'_succ, List.forIn_cons, List.forIn_cons]
+    refine simL_bind (hb a (by omega) u u' hI) fun r r' hr => ?_
+    obtain ⟨v, v', rfl, rfl, hv⟩ := hr
+    exact ih (a + 1) v v' (by omega) hv
+
+/-- **A loop over two lists of one length**, its steps alike from any two elements. -/
+theorem simL_forIn_list {α β σ τ : Type} (body : α → σ → LP M (ForInStep σ)) (body' : β → τ → LP M (ForInStep τ))
+    (I : σ → τ → Prop)
+    (hb : ∀ x y u u', I u u' →
+      SimL L (fun r r' => ∃ v v', r = .yield v ∧ r' = .yield v' ∧ I v v') (body x u) (body' y u')) :
+    ∀ (xs : List α) (ys : List β) (u : σ) (u' : τ), xs.length = ys.length → I u u' →
+      SimL L I (forIn xs u body) (forIn ys u' body')
+  | [], [], _, _, _, h => simL_pure h
+  | [], _ :: _, _, _, h, _ => by simp at h
+  | _ :: _, [], _, _, h, _ => by simp at h
+  | x :: xs, y :: ys, u, u', h, hI => by
+    rw [List.forIn_cons, List.forIn_cons]
+    refine simL_bind (hb x y u u' hI) fun r r' hr => ?_
+    obtain ⟨v, v', rfl, rfl, hv⟩ := hr
+    exact simL_forIn_list body body' I hb xs ys v v' (by simpa using h) hv
+
+/-- **A loop over two arrays of one size**, its steps alike from any two elements. -/
+theorem simL_forIn_array {α β σ τ : Type} (body : α → σ → LP M (ForInStep σ)) (body' : β → τ → LP M (ForInStep τ))
+    (I : σ → τ → Prop)
+    (hb : ∀ x y u u', I u u' →
+      SimL L (fun r r' => ∃ v v', r = .yield v ∧ r' = .yield v' ∧ I v v') (body x u) (body' y u'))
+    (xs : Array α) (ys : Array β) {u : σ} {u' : τ} (h : xs.size = ys.size) (hI : I u u') :
+    SimL L I (forIn xs u body) (forIn ys u' body') := by
+  rw [← Array.forIn_toList, ← Array.forIn_toList]
+  exact simL_forIn_list body body' I hb _ _ u u' (by simpa using h) hI
+
+theorem sim_lift {α β : Type} {S : α → β → Prop} {x : M α} {y : M β} (h : L.R S x y) :
+    Sim L S (StateT.lift x : TMW M α) (StateT.lift y) :=
+  fun _ _ ht => L.bind h fun _ _ hab => L.pure ⟨hab, ht⟩
+
+theorem splitK_size (f : Array F256) : (splitK f).size = 2 * f.size := by
+  unfold splitK
+  rw [← Array.foldl_toList]
+  suffices h : ∀ (l : List F256) (acc : Array F128),
+      (l.foldl (fun acc v => (acc.push v.c0).push v.c1) acc).size = acc.size + 2 * l.length by
+    simpa using h f.toList #[]
+  intro l
+  induction l with
+  | nil => intro acc; simp
+  | cons a l ih => intro acc; simp only [List.foldl_cons, ih, Array.size_push, List.length_cons]; ring
+
+theorem foldK_size (r : F256) (a : Array F256) : (foldK r a).size = a.size / 2 := by
+  simp [foldK]
+
+/-! ## The Ligerito prover's steps -/
+
+theorem sendMsg_sim (m m' : F256 × F256) : SimL L (· = ·) (sendMsg m : LP M Unit) (sendMsg m') := by
+  unfold sendMsg
+  refine simL_bind (simL_modify fun s s' h => h) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT (sim_absorbK _ _)) fun _ _ _ => ?_
+  exact simL_liftT (sim_absorbK _ _)
+
+theorem powP_sim (nonce nonce' : ℕ → ℕ → UInt64) (kind : ℕ) :
+    SimL L (· = ·) (powP nonce kind : LP M Unit) (powP nonce' kind) := by
+  unfold powP
+  refine simL_bind simL_get fun st st' h => ?_
+  refine simL_bind (simL_set ?_) fun _ _ _ => ?_
+  · rcases kind with _ | _ | kind <;> exact h
+  exact simL_liftT (sim_pow _ _)
+
+theorem challengeP_sim (split : Bool) : SimL L (· = ·) (challengeP io split : LP M F256) (challengeP io split) := by
+  unfold challengeP
+  refine simL_bind (simL_liftT sim_sampleKP) fun r r' h => ?_
+  subst h
+  refine simL_bind (simL_modify fun s s' h => ⟨by simp only [foldK_size, h.1], by rw [h.2]⟩) fun _ _ _ => ?_
+  have tail : SimL L (· = ·)
+      (do let st ← get; sendMsg (roundPoly st.tab st.w); pure r : LP M F256)
+      (do let st ← get; sendMsg (roundPoly st.tab st.w); pure r) :=
+    simL_bind simL_get fun _ _ _ => simL_bind (sendMsg_sim _ _) fun _ _ _ => simL_pure rfl
+  cases split <;> simp only [Bool.false_eq_true, ↓reduceIte]
+  · exact tail
+  · exact simL_bind (simL_modify fun s s' h => ⟨by simp only [embedF, Array.size_map, splitK_size, h.1], by rw [h.2]⟩)
+      fun _ _ _ => tail
+
+theorem oodIntroP_sim (nonce nonce' : ℕ → ℕ → UInt64) (g g' : Array F128) (dim : ℕ) (hd : dim < 2 ^ 64) :
+    SimL L (· = ·) (oodIntroP io nonce g dim : LP M Unit) (oodIntroP io nonce' g' dim) := by
+  unfold oodIntroP
+  refine simL_bind (simL_liftT (sim_sampleVecP dim hd)) fun z z' h => ?_
+  subst h
+  refine simL_bind (simL_modify fun s s' h => h) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT (sim_absorbF _ _)) fun _ _ _ => ?_
+  refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+  refine simL_bind (powP_sim nonce nonce' 2) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT sim_sampleP) fun b b' h => ?_
+  subst h
+  exact simL_modify fun s s' h => ⟨h.1, by rw [h.2]⟩
+
+theorem log2_succ_lt (q : ℕ) (hq : q < 2 ^ 64) : Nat.log2 (q - 1) + 1 < 2 ^ 64 := by
+  rcases Nat.eq_zero_or_pos (q - 1) with h0 | h0
+  · rw [h0, Nat.log2_zero]; decide
+  · have h := (Nat.log2_lt h0.ne').2 (show q - 1 < 2 ^ 64 by omega)
+    have : Nat.log2 (q - 1) + 1 ≤ 65 := by omega
+    exact lt_of_le_of_lt this (by decide)
+
+theorem queryP_sim (nonce nonce' : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level)
+    (cm cm' : _root_.Flock.Firewall.Finish.Commit) (hq : lv.q < 2 ^ 64) :
+    SimL L (fun r r' => r.2 = r'.2) (queryP io nonce ms lv cm : LP M _) (queryP io nonce' ms lv cm') := by
+  unfold queryP
+  refine simL_bind (powP_sim _ _ 0) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT (sim_sampleVecP lv.q hq)) fun c c' h => ?_
+  subst h
+  refine simL_bind (powP_sim _ _ 1) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT (sim_sampleVecP _ (log2_succ_lt lv.q hq))) fun a a' h => ?_
+  subst h
+  exact simL_pure rfl
+
+/-! ## The masked Ligerito and the opening -/
+
+/-- **Two commitments of one shape**: flattened caps of one size, a `u64` length. -/
+def CapAlike (cm cm' : Commit) : Prop := (flat cm.cap).size = (flat cm'.cap).size ∧ (flat cm.cap).size < 2 ^ 64
+
+theorem sim_run {α β : Type} {S : α → β → Prop} {p : LP M α} {q : LP M β} {s s' : LigState} (h : SimL L S p q)
+    (hs : LigAlike s s') : Sim L (fun x y => S x.1 y.1 ∧ LigAlike x.2 y.2) (p.run s) (q.run s') :=
+  h s s' hs
+
+theorem splitK_size' (f : Array F256) :
+    (f.foldl (fun acc v => (acc.push v.c0).push v.c1) #[]).size = 2 * f.size :=
+  splitK_size f
+
+/-- **The masked Ligerito at two tables of one size and two level-0 commitments of one shape**, every other input
+the prover's own or of one size, with `commit` taking tables of one size to commitments of one shape: alike runs. -/
+theorem ligeritoPZk_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
+    (hcom : ∀ lv (g g' : Array F128) s s', g.size = g'.size → L.R CapAlike (commit lv g s) (commit lv g' s'))
+    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T T' : F128) (cm0 cm0' : Commit)
+    (t t' b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
+    (extra extra' lanePad lanePad' : ℕ → ℕ → F128) (salt salt' : ℕ → ℕ → ByteArray)
+    (nonce nonce' : ℕ → ℕ → UInt64) (hcm : CapAlike cm0 cm0') (ht : t.size = t'.size) (hn : sch.n + 1 < 2 ^ 64)
+    (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 64) (hp : 2 * tPad < 2 ^ 64) :
+    Sim L (fun _ _ => True) (ligeritoPZk io commit ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce)
+      (ligeritoPZk io commit ms sch T' cm0' t' b lay h rep tPad extra' lanePad' salt' nonce') := by
+  unfold ligeritoPZk
+  dsimp only
+  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
+  refine sim_bind (sim_absorbBytes hcm.1 hcm.2) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_run (S := fun _ _ => True) ?_ ⟨by simp [embedF, ht], rfl⟩) fun r r' _ => ?_
+  rotate_left
+  · obtain ⟨⟨_, _, _, _, _, _, _, _, _⟩, _⟩ := r
+    obtain ⟨⟨_, _, _, _, _, _, _, _, _⟩, _⟩ := r'
+    exact sim_pure trivial
+  refine simL_bind (simL_liftT (sim_sampleVecP _ (by omega))) fun z z' hz => ?_
+  subst hz
+  refine simL_bind (simL_modify fun s s' h => h) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT (sim_absorbF _ _)) fun _ _ _ => ?_
+  refine simL_bind (powP_sim nonce nonce' 2) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT sim_sampleP) fun b0 b0' hb => ?_
+  subst hb
+  refine simL_bind (simL_modify fun s s' h => ⟨h.1, by rw [h.2]⟩) fun _ _ _ => ?_
+  refine simL_bind simL_get fun _ _ _ => ?_
+  refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+  refine simL_bind (simL_forIn _ _ _ (fun _ u u' => u.1 = u'.1 ∧ u.2.1 = u'.2.1) (fun j _ u u' hu => ?_)
+    ⟨rfl, rfl⟩) fun u u' hu => ?_
+  · obtain ⟨ic, rh, zl⟩ := u
+    obtain ⟨ic', rh', zl'⟩ := u'
+    obtain ⟨rfl, rfl⟩ := hu
+    refine simL_bind (simL_liftT sim_sampleKP) fun r r' hr => ?_
+    subst hr
+    refine simL_bind (simL_modify fun s s' h => ⟨by simp only [foldK_size, h.1], by rw [h.2]⟩) fun _ _ _ => ?_
+    refine simL_ite _ (fun _ => ?_) (fun _ => ?_)
+    · refine simL_bind simL_get fun st st' hst => ?_
+      refine simL_bind (simL_liftT (sim_absorbK _ _)) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT (sim_absorbK _ _)) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT sim_sampleKP) fun a a' ha => ?_
+      subst ha
+      refine simL_bind (simL_liftT sim_sampleKP) fun c c' hc => ?_
+      subst hc
+      refine simL_ite _ (fun _ => ?_) (fun _ => ?_)
+      · exact simL_bind (L := L) (S := fun _ _ => False) (simL_throw _ _) fun _ _ h => h.elim
+      refine simL_bind (simL_liftT (sim_label _ (by decide))) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT (sim_absorbK _ _)) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT (sim_absorbSlice ?_ ?_)) fun _ _ _ => ?_
+      · rw [splitK_size', splitK_size']; simp only [Array.size_map, Array.size_range]
+      · rw [splitK_size']; simpa only [Array.size_map, Array.size_range] using hp
+      refine simL_bind (simL_modify fun s s' h =>
+        ⟨by simp only [embedF, Array.size_map, splitK_size, Array.size_range, hst.1], by rw [h.2]⟩) fun _ _ _ => ?_
+      refine simL_bind simL_get fun _ _ _ => ?_
+      refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+      exact simL_pure ⟨_, _, rfl, rfl, rfl, rfl⟩
+    · refine simL_bind simL_get fun _ _ _ => ?_
+      refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+      exact simL_pure ⟨_, _, rfl, rfl, rfl, rfl⟩
+  obtain ⟨ic, rh, zl⟩ := u
+  obtain ⟨ic', rh', zl'⟩ := u'
+  obtain ⟨rfl, rfl⟩ := hu
+  refine simL_bind simL_get fun s1 s1' hs1 => ?_
+  refine simL_bind (simL_liftT (sim_lift (hcom _ _ _ _ _ (by simp only [Array.size_map, hs1.1]))))
+    fun cm1 cm1' hcm1 => ?_
+  refine simL_bind (simL_liftT (sim_absorbBytes hcm1.1 hcm1.2)) fun _ _ _ => ?_
+  refine simL_bind (oodIntroP_sim nonce nonce' _ _ _ (by omega)) fun _ _ _ => ?_
+  refine simL_bind (oodIntroP_sim nonce nonce' _ _ _ (by omega)) fun _ _ _ => ?_
+  refine simL_bind (queryP_sim nonce nonce' ms _ cm0 cm0' (hq 0)) fun q q' hqq => ?_
+  obtain ⟨op0, v0⟩ := q
+  obtain ⟨op0', v0'⟩ := q'
+  obtain rfl : v0 = v0' := hqq
+  refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+  refine simL_bind (powP_sim nonce nonce' 2) fun _ _ _ => ?_
+  refine simL_bind (simL_liftT sim_sampleP) fun bq bq' hb => ?_
+  subst hb
+  refine simL_bind (simL_modify fun s s' h => ⟨h.1, by rw [h.2]⟩) fun _ _ _ => ?_
+  refine simL_bind (simL_forIn _ _ _ (fun _ u u' => u.1 = u'.1 ∧ u.1 < 2 ^ 64 ∧ CapAlike u.2.1 u'.2.1)
+    (fun i _ u u' hu => ?_) ⟨rfl, by omega, hcm1⟩) fun u u' _ => ?_
+  · obtain ⟨sd, pc, caps, rps, fin⟩ := u
+    obtain ⟨sd', pc', caps', rps', fin'⟩ := u'
+    obtain ⟨rfl, hsd, hpc⟩ := hu
+    refine simL_bind (simL_forIn 4 _ _ (fun _ f f' => f.size = f'.size) (fun j _ f f' hf => ?_) rfl)
+      fun f f' hf => ?_
+    · refine simL_ite _ (fun _ => ?_) (fun _ => ?_)
+      · refine simL_bind (simL_liftT sim_sampleKP) fun r r' hr => ?_
+        subst hr
+        refine simL_bind (simL_modify fun s s' h => ⟨by simp only [foldK_size, h.1], by rw [h.2]⟩)
+          fun _ _ _ => ?_
+        refine simL_bind simL_get fun d d' hd => ?_
+        refine simL_bind (simL_modify fun s s' h =>
+          ⟨by simp only [embedF, Array.size_map, splitK_size, h.1], by rw [h.2]⟩) fun _ _ _ => ?_
+        refine simL_bind simL_get fun _ _ _ => ?_
+        refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+        exact simL_pure ⟨_, _, rfl, rfl, hd.1⟩
+      · refine simL_bind (challengeP_sim false) fun _ _ _ => ?_
+        exact simL_pure ⟨_, _, rfl, rfl, hf⟩
+    refine simL_ite _ (fun _ => ?_) (fun _ => ?_)
+    · refine simL_bind (simL_liftT (sim_lift (hcom _ _ _ _ _ (by simp only [splitK_size, hf]))))
+        fun cmN cmN' hN => ?_
+      refine simL_bind (simL_liftT (sim_absorbBytes hN.1 hN.2)) fun _ _ _ => ?_
+      refine simL_bind (oodIntroP_sim nonce nonce' _ _ _ (by omega)) fun _ _ _ => ?_
+      refine simL_bind (oodIntroP_sim nonce nonce' _ _ _ (by omega)) fun _ _ _ => ?_
+      refine simL_bind (queryP_sim nonce nonce' ms _ pc pc' (hq _)) fun q q' hqq => ?_
+      obtain ⟨op, v⟩ := q
+      obtain ⟨op', v'⟩ := q'
+      obtain rfl : v = v' := hqq
+      refine simL_bind (sendMsg_sim _ _) fun _ _ _ => ?_
+      refine simL_bind (powP_sim nonce nonce' 2) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT sim_sampleP) fun bb bb' hb => ?_
+      subst hb
+      refine simL_bind (simL_modify fun s s' h => ⟨h.1, by rw [h.2]⟩) fun _ _ _ => ?_
+      exact simL_pure ⟨_, _, rfl, rfl, rfl, by omega, hN⟩
+    · refine simL_bind (simL_forIn_array _ _ (fun _ _ => True) (fun _ _ _ _ _ => ?_) _ _ ?_ trivial)
+        fun _ _ _ => ?_
+      · refine simL_bind (simL_liftT (sim_absorbF _ _)) fun _ _ _ => ?_
+        exact simL_pure ⟨_, _, rfl, rfl, trivial⟩
+      · rw [splitK_size', splitK_size', hf]
+      refine simL_bind (queryP_sim nonce nonce' ms _ pc pc' (hq _)) fun q q' _ => ?_
+      obtain ⟨op, v⟩ := q
+      obtain ⟨op', v'⟩ := q'
+      refine simL_bind (powP_sim nonce nonce' 2) fun _ _ _ => ?_
+      refine simL_bind (simL_liftT sim_sampleP) fun _ _ _ => ?_
+      exact simL_pure ⟨_, _, rfl, rfl, rfl, hsd, hpc⟩
+  obtain ⟨_, _, _, _, _⟩ := u
+  obtain ⟨_, _, _, _, _⟩ := u'
+  exact simL_pure trivial
+
+/-- **A rep's opening at two tables of one size and two level-0 commitments of one shape**: alike runs. -/
+theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → ByteArray) → M Commit)
+    (hcom : ∀ lv (g g' : Array F128) s s', g.size = g'.size → L.R CapAlike (commit lv g s) (commit lv g' s'))
+    (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ)
+    (g g' : Array F128) (cm0 cm0' : Commit) (claims : Array _root_.Flock.Claim) (h : Array F128)
+    (extra extra' lanePad lanePad' : ℕ → ℕ → F128) (salt salt' : ℕ → ℕ → ByteArray) (hcm : CapAlike cm0 cm0')
+    (hg : g.size = g'.size) (hc : claims.size < 2 ^ 64) (hn : sch.n + 1 < 2 ^ 64)
+    (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 64) (hp : 2 * tPad < 2 ^ 64) :
+    Sim L (fun _ _ => True) (repOpening io commit st sch lay tPad rep g cm0 claims h extra lanePad salt)
+      (repOpening io commit st sch lay tPad rep g' cm0' claims h extra' lanePad' salt') := by
+  unfold repOpening
+  refine sim_bind (ringSwitchP_sim _ _ claims (fun _ => by simp [_root_.Flock.Firewall.Finish.switchVec])
+    (fun _ => by simp [_root_.Flock.Firewall.Finish.switchVec]) hc) fun r r' hr => ?_
+  obtain ⟨ss, T, sws⟩ := r
+  obtain ⟨ss', T', sws'⟩ := r'
+  obtain rfl : sws = sws' := hr
+  refine sim_bind (ligeritoPZk_sim commit hcom _ sch T T' cm0 cm0' g g' _ lay h rep tPad extra extra' lanePad lanePad'
+    salt salt' _ _ hcm hg hn hq hp) fun r r' _ => ?_
+  obtain ⟨_, _, _⟩ := r
+  obtain ⟨_, _, _⟩ := r'
+  exact sim_pure trivial
+
 end Sched
 
 end Claims.ZKServer
