@@ -1,0 +1,185 @@
+"""The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
+the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
+section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
+
+`tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
+``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
+toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
+The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
+derives from the flat statement. Until the templated statement's proof lands it is outside the verifier's ``Tags.all``, and
+the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+from test_class_statement_unit_stager import _toy
+from verity_flock import circuit as FC
+from verity_flock import class_statement as CS
+from verity_flock import tmpl as T
+
+LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+MODE = "iv/hybrid/4"
+
+#: ``Flock.Test.Tmpl``'s unit: two copies of a pair (each two copies of a two-input AND and their sum) at 128, bound to input
+#: bits that step by one, its outputs at 256 and 257 and a row at 300
+HEADER = "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 2 1 1 2"
+AND2 = ["DEF 1 2 1 0", "0 1 2 1 1"]
+PAIR = ["DEF 3 2 1 1", "2 2 1 0 1 5", "CALL 0 2 0 1 1 2 3 0 1 0"]
+ROWS = ["0 1 0 1 0", "1 1 1 1 1", "2 1 2 1 2", "256 1 130 1 399", "257 1 133 1 399", "300 3 0 1 0 1 400"]
+
+
+def _tmpl(*calls: str, rows: list[str] = ROWS) -> T.Tmpl:
+    return T.parse("\n".join([HEADER, *AND2, *PAIR, f"DEF 400 0 {len(rows)} {len(calls)}", *rows, *calls]) + "\n")
+
+
+def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
+    lays = T.layout(t, mode)
+    at = T.pos_of(t, lays)
+    return lays[t.root].size, [at(x) for x in range(t.defs[t.root].cols)]
+
+
+def _sections(text: str) -> dict[str, list[str]]:
+    lines, out, at = text.split("\n"), {}, 2
+    while at < len(lines) and lines[at]:
+        _c, name, n = lines[at].split(" ")
+        out[name] = lines[at + 1:at + 1 + int(n)]
+        at += 1 + int(n)
+    return out
+
+
+@pytest.mark.parametrize("mode", ["iv", "iv/strict", "iv/hybrid", MODE])
+def test_layout_places_each_column_where_the_lean_layout_does(mode):
+    """``Flock.Test.TmplLayout``'s vectors under every mode: the pair's two copies take two lanes at 128 (columns 128 to 133
+    at 128, 130, 132, 129, 131, 133), the pair is laid out as 3 columns aligned to 2, one copy keeps its columns, two pairs
+    at 250 push the output group to 384 and the constant to 527; and the two layouts it refuses, by name."""
+    moved = {129: 130, 130: 132, 131: 129, 132: 131}
+    t = _tmpl("CALL 1 2 128 3 1 2 0 1 1 0")
+    assert _map(t, mode) == (400, [moved.get(x, x) for x in range(400)])
+    assert (T.layout(t, mode)[1].size, T.layout(t, mode)[1].align) == (3, 2)
+    assert _map(_tmpl("CALL 1 1 128 3 1 2 0 1 1 0"), mode) == (400, list(range(400)))
+    size, at = _map(_tmpl("CALL 1 2 250 3 1 2 0 1 1 0"), mode)
+    assert (size, at[256], at[399]) == (528, 384, 527)
+    with pytest.raises(ValueError, match="output group at word 2 does not keep its columns at a multiple of its width"):
+        T.layout(_tmpl("CALL 1 2 253 3 1 2 0 1 1 0", rows=[ROWS[i] for i in (0, 1, 2, 5)]), mode)
+    with pytest.raises(ValueError, match="a call in the input rows or an output group to a definition laid out apart"):
+        T.layout(_tmpl("CALL 1 1 0 3 1 1 399 0 2 0", rows=ROWS[3:]), mode)
+
+
+def test_a_definition_two_call_paths_reach_is_placed_at_its_modes_alignment():
+    """The pair called again, once, at 141: two call paths reach it, so strict, and hybrid at T = 0, place its copy at its size's
+    power of two (144), lenient and hybrid at T >= 1 at its own alignment (142); the root's size is 528 in each."""
+    t = _tmpl("CALL 1 2 128 3 1 2 0 1 1 0", "CALL 1 1 141 3 1 2 0 1 1 0")
+    for mode, nb in (("iv", 142), ("iv/strict", 144), ("iv/hybrid", 144), ("iv/hybrid/1", 142), (MODE, 142)):
+        size, at = _map(t, mode)
+        assert size == 528 and at[141:144] == [nb, nb + 1, nb + 2], mode
+
+
+def test_a_layout_mode_is_one_the_verifier_reads():
+    assert [T.mode_of(m) for m in ("iv", "iv/strict", "iv/hybrid", MODE)] == [("lenient", 0), ("strict", 0), ("hybrid", 0), ("hybrid", 4)]
+    for bad in ("iv/hybrid/", "iv/hybrid/x", "interleaved", "iv/strict/4"):
+        with pytest.raises(ValueError, match="is not a layout mode"):
+            T.mode_of(bad)
+
+
+@pytest.mark.slow
+def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(monkeypatch):
+    """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
+    ``statement``, ``template`` (the unit's template, which `tmpl.unroll` takes to the flat file's unit section line for line)
+    and ``layout``; its sections the flat file's but the unit's; its unit range's slot the laid-out unit's (a layout one
+    column past the flat unit's slot moves ``unit_log`` and the range to the next); and a unit class's ``definition`` is
+    refused."""
+    args, _rows, _kw = _toy(0)
+    flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)
+    assert tm.text.split("\n", 1)[0] == f"{FC.TMPL_FORMAT} {args[1]}" and flat.text.split("\n", 1)[0] == f"{FC.FORMAT} {args[1]}"
+    assert (tm.meta["format"], tm.meta["statement"], tm.meta["layout"]) == (FC.TMPL_FORMAT, FC.TMPL_STATEMENT, MODE)
+    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement", "template"]
+    sections = _sections(flat.text)
+    assert _sections(tm.text) == {k: v for k, v in sections.items() if k != "unit"}
+    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    assert T.flat_lines(T.unroll(t)) == sections["unit"]
+    size = T.layout(t, MODE)[t.root].size
+    unit = [r for r in tm.meta["ranges"] if r["net"] == "unit"]
+    assert tm.meta["unit_log"] == FC._slot_log(size) and [r["slot_log"] for r in unit] == [FC._slot_log(size)]
+    assert tm.class_sha512 == FC.class_digest(tm.text) != flat.class_sha512
+
+    layout = T.layout
+    past = 1 << FC._slot_log(size)
+
+    def wider(t, mode):
+        lays = layout(t, mode)
+        return [*lays[:t.root], dataclasses.replace(lays[t.root], size=past + 1), *lays[t.root + 1:]]
+
+    monkeypatch.setattr(T, "layout", wider)
+    moved = CS.UnitStager(*args, layout=MODE).meta
+    assert moved["unit_log"] == FC._slot_log(size) + 1
+    assert [r["slot_log"] for r in moved["ranges"] if r["net"] == "unit"] == [FC._slot_log(size) + 1]
+    monkeypatch.setattr(T, "layout", layout)
+    with pytest.raises(ValueError, match="a unit class \\(META definition\\) has no templated statement"):
+        FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
+
+
+def _verifier() -> Path:
+    if b := os.environ.get("FLOCK_VERIFY_TMPL"):
+        return Path(b)
+    if shutil.which("lake") is None:
+        pytest.skip("no Lean toolchain")
+    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    return BIN
+
+
+@pytest.fixture(scope="module")
+def verifier() -> Path:
+    b = _verifier()
+    p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
+                       capture_output=True, text=True)
+    if "unknown statement" in p.stderr:
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (outside Tags.all until its proof lands; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+    return b
+
+
+def _statement(b: Path, st, rows, out: Path, statement: str, flags: list[str], indices=None) -> dict:
+    st.stage(rows, out, b"k" * 32, **({"indices": indices} if indices is not None else {}))
+    p = subprocess.run([str(b), "statement", "--statement", statement, "--circuit", str(out / "circuit.txt"), "--public",
+                        str(out / "pub.bin"), *flags], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    return json.loads(p.stdout.strip().splitlines()[-1])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("bound", [False, True], ids=["unbound", "bound"])
+def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp_path):
+    """The Lean verifier's statement of the toy, templated and flat, unbound and bound to a template query's partition (its
+    units derived from the verifier's own copy of the Program): the templated statement is the templated tags', its class
+    `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
+    partition and partition check the flat statement's."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
+
+    args, rows, _kw = _toy(0)
+    flags, kw, indices = [], {}, None
+    if bound:
+        from test_class_statement_unit_stager import TOY
+
+        program = P.mixed_population_program([(TOY, 3), (TOY, 5)])
+        part = P.partition(program, P.template_instances_query([TOY]))
+        (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
+        (tmp_path / "partition.json").write_text(json.dumps(part))
+        flags = ["--program", str(tmp_path / "program.json"), "--partition", str(tmp_path / "partition.json")]
+        kw, indices = {"bind": {"partition": P.digest(part), "program": part["program"]}}, range(3, 8)
+    flat, tm = CS.UnitStager(*args, **kw), CS.UnitStager(*args, layout=MODE, **kw)
+    a = _statement(verifier, flat, rows, tmp_path / "flat", FC.STATEMENT, flags, indices)
+    b = _statement(verifier, tm, rows, tmp_path / "tmpl", FC.TMPL_STATEMENT, flags, indices)
+    assert b["statement"] == FC.TMPL_STATEMENT and a["statement"] == FC.STATEMENT
+    assert b["class_sha512"] == tm.class_sha512 and a["class_sha512"] == flat.class_sha512
+    assert b["circuit_sha512"] == tm.pin
+    same = ("m", "regions", "delta", "partition", "partition_check", "program_sha512")
+    assert {k: b[k] for k in same} == {k: a[k] for k in same}
+    if bound:
+        assert b["partition_check"] == a["partition_check"] is not None
