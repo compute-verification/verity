@@ -17,7 +17,8 @@ reads (`eraseZ`):
   and its switched vectors `switchVec g` at the claims, and where the rank check, which the firewall leaves to the
   frame, passes (`ringSwitchCut_congr`, `rankCheck_pass_go`).
 * **Ligerito** and **the inner proof**: the session's hybrids, `FlockComplete.LigLock.ligeritoCut_alike` at `LigHyp`
-  and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the firewall's run.
+  and `FlockComplete.SimInner.innerCut_alike` at `InnerSrc`, at the firewall's run. Its inner proof stops on a failing
+  batched constraint, so where it returns, that constraint held (`innerP_batched`).
 * **`repCut_fw`**: where the firewall's rep returns, the rep from the source, at level 0's commitment erased, returns the
   same transcript and log, and a proof equal to the firewall's up to `eraseZ`.
 -/
@@ -93,6 +94,42 @@ theorem get_run_go (t : Transcript) (l : Array Claims.Msg) :
 
 theorem throw_run_go {α : Type} (e : String) (t : Transcript) (l : Array Claims.Msg) :
     ((throw e : TMW PS α).run t).go l = (.error e, l) := rfl
+
+/-- **Where the inner proof returns at `asksCut`, its batched constraint held** on the pads, at the coins of the rounds
+it drew from: `innerP` stops on a batched constraint that fails. -/
+theorem innerP_batched {coin : ℕ → ℕ → F128} {n : ℕ} {hs : Hashes PS} {lay : Zk.PadLayout}
+    {p : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {finalC : F128} {cons : Array (String × Zk.Lin)}
+    {t t' : Transcript} {l l' : Array Claims.Msg} {i : Zk.InnerProof}
+    (h : ((FlockComplete.innerP (FlockComplete.asksCut coin n) hs lay p ic finalC cons).run t).go l =
+      (.ok (i, t'), l')) :
+    ((FlockComplete.Replay.InZ.lin lay p cons (FlockComplete.SimInner.cutCoins coin l.size)).c +
+      _root_.Flock.dot (FlockComplete.Replay.InZ.lin lay p cons (FlockComplete.SimInner.cutCoins coin l.size)).a
+        p.h).isZero = true := by
+  unfold FlockComplete.innerP at h
+  try dsimp only at h
+  obtain ⟨_, t₁, l₁, h₁, h⟩ := run_bind_ok h
+  obtain rfl := FlockComplete.SimInner.liftTM_ok_log h₁
+  obtain ⟨_, t₂, l₂, h₂, h⟩ := run_bind_ok h
+  obtain rfl := FlockComplete.SimInner.liftTM_ok_log h₂
+  obtain ⟨eps, t₃, l₃, h₃, h⟩ := run_bind_ok h
+  obtain ⟨-, rfl, rfl, rfl⟩ :=
+    FlockComplete.SimInner.ite_ok ((FlockComplete.SimInner.sampleCut_go coin n t₂ l).symm.trans h₃)
+  try dsimp only at h
+  obtain ⟨_, t₄, l₄, h₄, h⟩ := run_bind_ok h
+  obtain rfl := FlockComplete.SimInner.liftTM_ok_log h₄
+  obtain ⟨gs, t₅, l₅, h₅, h⟩ := run_bind_ok h
+  obtain ⟨-, rfl, rfl, rfl⟩ := FlockComplete.SimInner.ite_ok
+    ((FlockComplete.SimInner.sampleVecCut_go coin n (by simp [Zk.triple]) t₄ _).symm.trans h₅)
+  try dsimp only at h
+  simp only [Array.size_push] at h
+  simp only [FlockComplete.Replay.InZ.lin, FlockComplete.Replay.InZ.all, FlockComplete.Replay.InZ.rho,
+    FlockComplete.Replay.InZ.sigma, FlockComplete.SimInner.cutCoins]
+  by_contra hz
+  rw [Bool.not_eq_true] at hz
+  simp only [hz, Bool.not_false, eq_self_iff_true, ↓reduceIte] at h
+  all_goals first
+    | (rw [throw_run_go] at h; cases h)
+    | (obtain ⟨_, _, _, h', _⟩ := run_bind_ok h; rw [throw_run_go] at h'; cases h')
 
 theorem go_liftV' {α : Type} (v : V α) (l : Array Claims.Msg) : (monadLift v : PS α).go l = (v, l) := by
   cases v <;> rfl
@@ -206,7 +243,8 @@ commitment erased, the same transcript and log and a proof `p'` with `eraseZ p' 
 masked values `vals + h` below `zp 64`, the PIOP's (`hmk`, where the fold's `kLog` is the setup's: the firewall's
 passed values are those `zp 64` words); at the firewall's zerocheck and lincheck, a passing rank check and its switched
 vectors (`hpiop`); at its PIOP, level 0's opening (`hlig`, `LigHyp`), whose masked values from `zp 64` to `h_ab` are
-the firewall's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`). -/
+the firewall's own; and at its Ligerito and constraints, the inner proof's (`hinner`, `InnerSrc`), where the batched
+constraint held, as the firewall's own inner proof checks (`innerP_batched`). -/
 theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
@@ -242,6 +280,14 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
           { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp, ringSwitches := ss,
             ligerito := lg } ic.root).run (Transcript.init t₄.rounds dom) = .ok (rp, tt) →
       Zk.ligeritoConstraints (Zk.PadLayout.new st.m st.kLog sch.k0) rec lg zl = .ok lgc →
+      ((FlockComplete.Replay.InZ.lin (Zk.PadLayout.new st.m st.kLog sch.k0) pads
+          (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
+            ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)
+          (FlockComplete.SimInner.cutCoins coin l₄.size)).c +
+        _root_.Flock.dot (FlockComplete.Replay.InZ.lin (Zk.PadLayout.new st.m st.kLog sch.k0) pads
+          (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
+            ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)
+          (FlockComplete.SimInner.cutCoins coin l₄.size)).a pads.h).isZero = true →
       FlockComplete.SimInner.InnerSrc coin n Sha512.hash (Zk.PadLayout.new st.m st.kLog sch.k0) pads
         (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
           ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) src l₄.size)
@@ -309,7 +355,7 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
       .ok lgc := by
     rw [ligeritoConstraints_eraseL']
     exact hlgc
-  have hsrc := hinner zp lp ss T sws t₃ l₃ lg zl rec t₄ l₄ rp tt lgc hP h₄ hrp hlgc
+  have hsrc := hinner zp lp ss T sws t₃ l₃ lg zl rec t₄ l₄ rp tt lgc hP h₄ hrp hlgc (innerP_batched h₈)
   have hI := FlockComplete.SimInner.innerCut_alike (f := fun i => (pure (FlockComplete.eraseIP i) : TMW PS _))
     (ic := ic) (finalC := zp.finalC) (t := t₄)
     (fun i i' e => by simp only [e]) hsrc

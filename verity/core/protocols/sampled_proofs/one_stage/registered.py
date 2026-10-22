@@ -99,6 +99,8 @@ ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
 WIDTH_KEY = "word_bits"
 #: the domain binding's key a per-window value adds: the window's open root
 WINDOW_KEY = "window"
+#: the domain binding's key a produced value adds: the digest of the registration whose draw it follows (`produced`)
+PRODUCED_KEY = "produced"
 SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
 WINDOW_SALT = "verity/one-stage/window-salt/v1"
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
@@ -140,11 +142,18 @@ def window_root(window: str | None) -> str | None:
 
 
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int = WORD_BITS,
-           window: str | None = None) -> CommitmentDomain:
-    """`window`: the window's open root, for a per-window value (none for a value held across windows)."""
+           window: str | None = None, produced: str | None = None) -> CommitmentDomain:
+    """`window`: the window's open root, for a per-window value (none for a value held across windows). `produced`: the
+    registration's digest, for a value produced after its draw (`one_stage.produced`), which binds it in the window's
+    place."""
+    if window is not None and produced is not None:
+        raise ValueError("a produced value's domain binds its registration, which binds the window: not both")
+    if produced is not None and not (isinstance(produced, str) and len(produced) == 128 and _HEX.fullmatch(produced)):
+        raise ValueError(f"a registration digest is lowercase hex of 64 bytes, not {produced!r}")
     binding = identity_digest(REGISTERED_DOMAIN, {"program": program, "value": value, "schema": SCHEMA, "words": int(words),
                                                   "leaves": int(leaves), **width_entry(word_bits),
-                                                  **({} if window_root(window) is None else {WINDOW_KEY: window})})
+                                                  **({} if window_root(window) is None else {WINDOW_KEY: window}),
+                                                  **({} if produced is None else {PRODUCED_KEY: produced})})
     return CommitmentDomain(bytes.fromhex(binding), OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
 
 
@@ -234,13 +243,16 @@ class Registered:
     levels: tuple[tuple[bytes, ...], ...]
     schema: str = SCHEMA
     window: str | None = None
+    produced: str | None = None
 
     @classmethod
     def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None,
-               word_bits: int = WORD_BITS, schema: str = SCHEMA, window: str | None = None) -> "Registered":
+               word_bits: int = WORD_BITS, schema: str = SCHEMA, window: str | None = None,
+               produced: str | None = None) -> "Registered":
         """`salts`: one per row, drawn once (default: fresh from the operating system) and never used for any other row.
         `word_bits`: every leaf's width (the verifier's `width` of the parameter). `schema`: the row format of the port
-        that reads it (`SCHEMAS`). `window`: the window's open root, for a per-window value (`domain`)."""
+        that reads it (`SCHEMAS`). `window`: the window's open root, for a per-window value; `produced`: the registration's
+        digest, for a value produced after its draw (`domain`)."""
         rows = tuple(tuple(int(w) for w in r) for r in rows)
         words = len(rows[0]) if rows else 0
         if not rows or not words or any(len(r) != words for r in rows):
@@ -251,9 +263,9 @@ class Registered:
         if len(set(salts)) != len(salts):
             raise ValueError("a salt is never reused: equal salts on two rows reveal the XOR of their digests")
         bcs = tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits, schema), s) for r, s in zip(rows, salts))
-        dom = domain(program, value, words, len(rows), word_bits, window)
+        dom = domain(program, value, words, len(rows), word_bits, window, produced)
         return cls(program, value, words, int(word_bits), rows, salts, bcs,
-                   tree_levels(dom, [leaf(dom, i, bc, schema) for i, bc in enumerate(bcs)]), schema, window)
+                   tree_levels(dom, [leaf(dom, i, bc, schema) for i, bc in enumerate(bcs)]), schema, window, produced)
 
     @property
     def leaves(self) -> int:
@@ -265,7 +277,7 @@ class Registered:
 
     @property
     def domain(self) -> CommitmentDomain:
-        return domain(self.program, self.value, self.words, self.leaves, self.word_bits, self.window)
+        return domain(self.program, self.value, self.words, self.leaves, self.word_bits, self.window, self.produced)
 
     def entry(self) -> dict[str, Any]:
         """What the registration names: `{"value", "root", "leaves", "words", "domain"}`, and `"word_bits"` when it is not
@@ -566,7 +578,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
            "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",

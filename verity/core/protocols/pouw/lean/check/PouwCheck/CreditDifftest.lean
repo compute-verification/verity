@@ -8,14 +8,14 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
 
 * `credit` (`key`, `ledger`, `window`, `session` as `rounds` reads them, `salt` the window's Program salt as hex, `calls`
   the manifest's rows, `served` the served trees' digest or null, `rounds` the round log, `draw` the window's draw, each
-  as `credit.credited` takes it): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
+  as `credit._credited` takes it, `Credit.Internal.credited`): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `drawn` (`coin`, `stream`, `registration`, `receipt`, `layout`, as `credit.drawn` takes them): `{"drawn": [units]}`,
   or `{"refused": [code, why]}`.
-* `outcome` (`drawn`'s and `proofs`, as `credit.outcome` takes them) and `a-link` (`rounds`, `entries`, as
-  `credit.a_link` takes them): null, or `{"refused": [code, why]}`.
-* `window` (`credit`'s, `layout` and `proofs`, as `credit.window` takes them): `{"credited": [indices]}`, and `period`
-  (`key`, `ledger`, `name`, `windows`, as `credit.period_credit` takes them, each window's evidence `window`'s and its
-  `descriptor` in hex): `{"credited": [[indices], …]}`; or
+* `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries` and
+  `calls`, the window's call count, as `credit._a_link` takes them), `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
+* `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs` and `k`, as `credit.window` takes them): `{"credited": [indices]}`,
+  and `period` (`key`, `ledger`, `name`, `windows`, as `credit.period_credit` takes them, each window's evidence
+  `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
 -/
 
@@ -26,7 +26,7 @@ open Lean (Json ToJson toJson)
 def creditOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
-    (Credit.credited (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
+    (Credit.Internal.credited (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
       (← f "served") (← f "rounds") (← f "draw"))
 
 def drawnOf (j : Json) : Except String Json := do
@@ -37,14 +37,14 @@ def drawnOf (j : Json) : Except String Json := do
 def outcomeOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun _ => Json.null)
-    (Credit.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
+    (Credit.Internal.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
       (← f "proofs"))
 
 def windowOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
     (Credit.window (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "salt") (← f "calls")
-      (← f "served") (← f "rounds") (← f "draw") (← f "layout") (← f "proofs") (← f "k"))
+      (← f "served") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries") (← f "proofs") (← f "k"))
 
 def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -53,7 +53,8 @@ def periodOf (j : Json) : Except String Json := do
 
 def aLinkOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun _ => Json.null)
-    (Credit.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries"))
+    (Credit.Internal.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries")
+      ((PouwCheck.nat? (← PouwCheck.Difftest.get j "calls")).getD 0))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),

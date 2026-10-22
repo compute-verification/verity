@@ -7,7 +7,8 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
     python -I local_gate.py DIR wait SESSION   # blocks until the session's unit has exited; its `run` answer
 
 ``init`` unpacks infra's tree (``git archive SHA verity benchmarks/live_challenger``) as ``DIR/tree/SHA``, so
-`auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`) and its LMS key at ``--params``
+`auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`, its pins log recording SHA as
+its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py draws its coins from
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
@@ -49,7 +50,7 @@ def _auditor(d: Path, cfg: dict):
 
 
 def _host(A, d: Path, cfg: dict):
-    return A.Host(root=d / "host", peers=d / "host" / "peers", name=cfg["name"])
+    return A.Host(root=d / "host", peers=d / "host" / "peers", name=cfg["name"], pins=d / "host" / "pins.jsonl")
 
 
 def _params(cfg: dict):
@@ -126,6 +127,7 @@ def init(d: Path, argv: list[str]) -> int:
     A = _auditor(d, cfg)
     from verity.ml.crypto import lms
     host = _host(A, d, cfg)
+    A.record_pin(host.pins, a.commit, a.commit, _now(), seal=lambda p: None)
     key, state = A.load_key(host, _params(cfg), 4)
     state.close()
     public = lms.public_key(key)

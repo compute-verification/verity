@@ -239,11 +239,15 @@ class TcpFrame:
     ("rep " + "ab" * 64 + " 0 0", "err a rep for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
     ("rep " + "ab" * 64 + " 0 2", "err rep 2: a table has reps 0 and 1"),
     ("rep x 0", "err a request `rep x 0`"),
+    ("place " + "ab" * 64 + " 0 0", "err a place for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
+    ("vals " + "ab" * 64 + " 0 1", "err a vals for a session the loop is not serving (coin tree root " + "ab" * 64 + ")"),
+    ("places " + "ab" * 64 + " 0 0", "err a request `{line}`"),
+    ("vals x 0", "err a request `vals x 0`"),
 ])
 def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
     """The loop drives the reps' frames itself: a frame starts on its frames port only as `rep SESSION TABLE REP`, for a
     session it is serving, at the statement's start. A start the prover brings (`flock-firewall frame`'s layout line) is
-    refused, as is a rep of a session the loop isn't serving."""
+    refused, as is a rep of a session the loop isn't serving, and so is a rep's place or values (`place`, `vals`)."""
     _, lp = loop
     f = TcpFrame(lp)
     assert f.ask(line) == why.format(line=line)
@@ -266,6 +270,16 @@ def test_each_reps_frame_draws_its_own(zk):
     c.close()
     c = TcpFrame(S.lp)
     assert c.ask(f"rep {name} 9 0") == "err table 9 of the session's 1"
+    c.close()
+    c = TcpFrame(S.lp)
+    assert c.ask(f"vals {name} 0 1") == ("ok 0", b"")
+    c.close()
+    c = TcpFrame(S.lp)
+    got = c.ask(f"place {name} 0 0")
+    assert got.startswith("err a place of ") and got.endswith(" before the session's Commit"), got
+    c.close()
+    c = TcpFrame(S.lp)
+    assert c.ask(f"place {name} 0 7") == "err a place of table 0 rep 7, whose frame the loop has not started"
     c.close()
     a.close()
     b.close()

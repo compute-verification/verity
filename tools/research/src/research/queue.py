@@ -1368,13 +1368,17 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
+#: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
+#: a directory, of the prefix): they take about 20 s and 40 s, and 21-22 Oct's train breakers #3013, #3111, #3130 and #3151
+#: each failed one of them, costing its train its hour-long check
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
-PREFLIGHT_UNCOLLECTED = {"tools/verity/circuit_check": "its collection builds every target: over 10 min and 10 GB (18 Oct)"}
+PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
-#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct)
-PREFLIGHT_BUDGET_S = 60.0
+#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct); `PREFLIGHT_LINTS` add up to a minute
+PREFLIGHT_BUDGET_S = 120.0
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM (ci, 18 Oct)
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
@@ -1589,7 +1593,8 @@ def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | Remote
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
-    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
+    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
+    reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
@@ -1774,6 +1779,12 @@ class Preflight:
         for d, files in PREFLIGHT_TESTS:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
                 got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
+        lints = [(path, reach) for path, reach in PREFLIGHT_LINTS if want(f"tests:{path}") and (wt / path).exists()]
+        changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints else []
+        for path, reach in lints:
+            if any(f.startswith(r) or f"/{r}" in f for f in changed for r in reach):
+                d, _, rest = path.rpartition("tests/")
+                got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
         names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
         res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
         notes += res.notes

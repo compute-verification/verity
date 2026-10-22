@@ -1,11 +1,14 @@
 import Std.Data.HashMap
+import Flock.Program
 import PouwCommit.Frame
 import PouwCheck.Json
 import PouwCheck.Pass
+import PouwCheck.Rounds
 import PouwWindow.Draw
 import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
+import SampledProofs.Registered
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
@@ -13,7 +16,13 @@ import SampledProofs.PyJson
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
 
-* `credited` is `credit.credited`: each manifest row (the window's calls, in order) carries its call's verdict as
+**`window` and `periodCredit` are the only entries.** On one window's evidence and one round log, `window` runs every
+step and credits only when all of them accept; `periodCredit` runs it on each window of a closed, complete period. The
+steps are `Internal` (`credit.py`'s underscored ones), which only the difftest reaches, so no caller credits a window with
+a step skipped: `Internal.credited` returns the credit bits whatever the proofs' outcome, and `Internal.aLink` trusts the
+round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the ones the challenger received.
+
+* `Internal.credited` is `credit._credited`: each manifest row (the window's calls, in order) carries its call's verdict as
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
   `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
@@ -22,14 +31,31 @@ it, string for string:
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
   open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
   over the window's credited work at `DELTA` (`PouwWindow.epsAt` at the window's inputs), which `periodCredit` reports.
-* `outcome` is `credit.outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept, else the
-  whole window is refused (no partial credit). `window` is `credit.window`: `credited`, then `outcome` under the served
-  window's arguments (the stream its root, the registration its draw root, the receipt `{"receipts": …}`).
+* `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
+  SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
+  template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
+  instances of K's template in order. Never a layout the window's evidence hands in.
+* `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
+  else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
+  on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
+  its descriptor, then `Internal.outcome`'s rule under the served window's arguments (the stream its root, the
+  registration its draw root, the receipt `{"receipts": …}`) and `Internal.registration`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
   the period's committed circuit (`creditedSession`) and credited.
-* `aLink` is `credit.a_link`: each registered A value (`…/a/<K>`) is the frame-v3 SHA-512 tree over the aligned subtrees
-  each round's root commits (`roundRoot`), round s's tiling the value's rows `[s·L/S, (s+1)·L/S)`.
+* `Internal.aLink` is `credit._a_link`: each registered A value (`aValue?`) is the frame-v3 SHA-512 tree over the
+  aligned subtrees each round's root commits (`roundRoot`). Of S rounds, round s's tile a window's `…/a/<K>` of L rows
+  over `[s·L/S, (s+1)·L/S)`, and a call's A table `…/a/<K>@<c>` (`h1window.table`) is committed whole by its call's
+  round, `c / (C/S)` of the window's C calls, and listed by no other.
+* `Internal.registration` is `credit._registration`: each drawn unit's proof outcome is the verifier of record's
+  verdict for its session (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against, and the
+  session's registered finding, each registered port's value and the root its reads were opened against). The entries
+  are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
+  committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`), the window's open root
+  (`SampledProofs.Registered.domainAt`, PRF-127); each proof was verified against that descriptor, opened only values
+  the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
+  its own call's `…/a/<K>@<call>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
+  proof opened, under this window's registration.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -78,21 +104,26 @@ def DRAW_ARGS : String :=
   "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
   "printable ASCII strings"
 def WINDOW_KEYS : List String :=
-  ["calls", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
-def PERIOD_KEYS : List String :=
-  ["calls", "descriptor", "draw", "layout", "proofs", "rounds", "salt", "served", "session", "window"]
+  ["calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window"]
+def PERIOD_KEYS : List String := WINDOW_KEYS
 def WINDOWS_FORM : String :=
   "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate PERIOD_KEYS ++ "}, " ++
   "in its close's order"
 def DESCRIPTOR_HEX : String :=
   "the window's descriptor is not the bytes of the circuit its proofs were verified against in lowercase hex (its " ++
   "canonical JSON without annotations, the bytes program_digest hashes)"
-def PROOFS_FORM : String := "the drawn units' proof outcomes are not a list of {unit, verdict}, verdict accept or reject"
+/-- A drawn unit's proof outcome: the verifier of record's verdict for the session that proved it. -/
+def PROOF_KEYS : List String := ["program", "registered", "unit", "verdict"]
+def PROOFS_FORM : String :=
+  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
+  "record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
+  "descriptor it verified the session against, and registered its finding, each registered port's {value, root}, " ++
+  "port and value printable ASCII and root a SHA-512 digest"
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
 def NO_A : String :=
-  "the window registers no A value (…/a/<K>), so nothing ties its units' A rows to the round roots: register the " ++
-  "window's A values"
+  "the window registers no A value (…/a/<K>, or a call's …/a/<K>@<call>), so nothing ties its units' A rows to " ++
+  "the round roots: register the window's A values"
 
 def noBit (i : Nat) : String :=
   s!"manifest row {i} has no credit bit: the serving process commits each call's verdict as `{CREDIT}` (true or " ++
@@ -142,8 +173,9 @@ def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) 
   | none => h
   | some s => Flock.Sha512.hash (h ++ s)
 
-/-- `credit.credited`: the credited calls' indices, else the refusal. -/
-def credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
+/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
+until every other step accepts. -/
+def Internal.credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let (c, received) ← (trustedSessionOf ledger window k session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
@@ -262,6 +294,141 @@ def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Str
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
+def SCHEMA : String := "verity-ir/descriptor/v1"
+def WINDOW_FN : String := "PouwH1Window_v3"
+def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
+def TILE_FN : String := "PouwH1WindowTile_v1"
+def SHARED : List String := ["zy", "salt", "position", "roots"]
+def DESCRIPTOR_FORM : String :=
+  "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
+  "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
+def NOT_WINDOW : String :=
+  "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
+  "CALLS=…,M=…,PREFIX=…}, each binding canonical JSON, its TILES [[K, {\"fn\": template}], ...] by ascending K and " ++
+  "its PREFIX a string (h1window.program's Program)"
+def BODY : String :=
+  "the window's circuit's units are not its record's tiles: its root's nodes other than its inputs are not, in " ++
+  "order, each of its CALLS' (M/R)·(n/C) instances of K's template, each node a call of it or a batch of at least " ++
+  "one (h1window.program's body)"
+
+def noTemplate (k : Nat) : String :=
+  s!"the window's template at K = {k} is not h1window's: a composite {TILE_FN} bound to its UNIT and K = {k}, " ++
+  s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows, then " ++
+  ", ".intercalate SHARED ++ ", at the same R × C at every K"
+
+/-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
+Python's `canonical_json`), so every reading of it is the same. -/
+def loads? (text : String) : Option Json :=
+  match Json.parse text with
+  | .ok j => match SampledProofs.PyJson.canonical j with
+    | .ok s => if s == text then some j else none
+    | .error _ => none
+  | .error _ => none
+
+/-- `credit._tile`: the R × C of K = `k`'s template `dj` (its definition, under the id `tid`), or none when it is not
+`h1window.template`'s. -/
+def tileOf (dj : Json) (tid : String) (k : Nat) : Option (Nat × Nat) := do
+  guard (isObj dj && get dj "form" == Json.str "composite" && get dj "id" == Json.str TILE_FN)
+  let b := get dj "bindings"
+  let body := get dj "body"
+  guard (keys b == some ["K", "UNIT"] && nat? (get b "K") == some k && isObj body)
+  let .ok u := SampledProofs.PyJson.canonical (get b "UNIT") | none
+  guard (tid == s!"{TILE_FN}\{UNIT={u},K={k}}")
+  let .arr ps := get body "params" | none
+  let ps ← ps.toList.mapM fun (p : Json) => (match p with
+    | .arr a => (match a.toList with
+      | [n, t] => some (n, t)
+      | _ => none)
+    | _ => none)
+  guard (ps.map (·.1) == ([s!"a_k{k}", s!"b_k{k}"] ++ SHARED).map Json.str)
+  let rows ← (ps.take 2).mapM fun ((_, t) : Json × Json) => (match t with
+    | .arr a => (match a.toList with
+      | [.str "Array", n, _] => (nat? n).filter (1 ≤ ·)
+      | _ => none)
+    | _ => none)
+  match rows with
+  | [r, c] => some (r, c)
+  | _ => none
+
+/-- `credit._runs`: `(template, count)` pairs with adjacent ones of one template merged. -/
+def runs (xs : List (String × Nat)) : List (String × Nat) :=
+  (xs.foldl (fun acc (t, n) => match acc with
+    | (u, m) :: rest => if u == t then (t, m + n) :: rest else (t, n) :: acc
+    | [] => [(t, n)]) []).reverse
+
+/-- `credit.layout_of`: the layout (`{calls, linears, m, tile}`, `strata`'s) of the H1 window whose circuit's
+descriptor is `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's `circuit` is the
+SHA-512 of), else the refusal (`layout`). The calls, linears and slot are its program function's record (`WINDOW_FN`'s
+`CALLS`, `LINEARS` and `M`), each K's template (`TILES`) is `h1window.template`'s, whose A and B rows give R and C, and
+the root's nodes other than inputs are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a
+call one instance and a batch its members, as the template query counts units. Its cost is the descriptor's bytes,
+never the gates its nodes unroll to. -/
+def layoutOf (descriptor : ByteArray) : R Json := do
+  let some d := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
+  let defs := get d "definitions"
+  let (.str schema, .arr cs, .str fn, .str root) := (get d "schema", get d "callees", get d "program_fn", get d "root")
+    | layoutRefuse DESCRIPTOR_FORM
+  let some callees := cs.toList.mapM str? | layoutRefuse DESCRIPTOR_FORM
+  unless schema == SCHEMA && isObj defs do layoutRefuse DESCRIPTOR_FORM
+  let callees := callees.toArray
+  let pairs := if fn.startsWith (WINDOW_FN ++ "{") then Flock.Program.recordPairs fn else #[]
+  unless pairs.toList.map (·.1) == RECORD do layoutRefuse NOT_WINDOW
+  let some vals := pairs.toList.mapM (fun (_, s) => loads? s) | layoutRefuse NOT_WINDOW
+  let [tiles, linears, calls, m, prefix_] := vals | layoutRefuse NOT_WINDOW
+  let some ts := (match tiles with
+      | .arr a => a.toList.mapM fun (t : Json) => (match t with
+        | .arr p => (match p.toList with
+          | [k, f] => do
+            let k ← (nat? k).filter (1 ≤ ·)
+            guard (keys f == some ["fn"])
+            pure (k, ← str? (get f "fn"))
+          | _ => none)
+        | _ => none)
+      | _ => none) | layoutRefuse NOT_WINDOW
+  unless !ts.isEmpty && (str? prefix_).isSome && (ts.zip ts.tail).all (fun (a, b) => a.1 < b.1) do
+    layoutRefuse NOT_WINDOW
+  let mut rc : Option (Nat × Nat) := none
+  for (k, tid) in ts do
+    let some got := tileOf (get defs tid) tid k | layoutRefuse (noTemplate k)
+    if rc.any (· != got) then layoutRefuse (noTemplate k)
+    rc := some got
+  let some (r, c) := rc | layoutRefuse NOT_WINDOW
+  let layout := Json.mkObj [("calls", calls), ("linears", linears), ("m", m),
+    ("tile", Json.arr #[Lean.toJson r, Lean.toJson c])]
+  discard <| strata layout
+  let rows := fun (j : Json) => (match j with
+    | .arr a => a.toList.filterMap fun (x : Json) => (match x with
+      | .arr b => some b.toList
+      | _ => none)
+    | _ => ([] : List (List Json)))
+  let lins : List (String × Nat × Nat) := (rows linears).filterMap fun (x : List Json) => (match x with
+    | [.str s, k, n] => do pure (s, ← nat? k, ← nat? n)
+    | _ => none)
+  let tks := ts.map (·.1)
+  let lks := (lins.map (·.2.1)).eraseDups.mergeSort (· ≤ ·)
+  unless tks == lks do
+    layoutRefuse (s!"the window's TILES are at K = {listStr tks}, not at its linears' K = {listStr lks}: h1window " ++
+      "binds one template per K its linears have")
+  let mv := (nat? m).getD 0
+  let want := runs <| (rows calls).filterMap fun (x : List Json) => (match x with
+    | [.str lin, _] => (lins.find? (·.1 == lin)).bind fun (_, k, n) =>
+        (ts.find? (·.1 == k)).map fun (_, tid) => (tid, (mv / r) * (n / c))
+    | _ => none)
+  let rootDef := get defs root
+  let .arr nodes := (if get rootDef "form" == Json.str "composite" then get (get rootDef "body") "nodes" else .null)
+    | layoutRefuse BODY
+  let mut got : Array (String × Nat) := #[]
+  for x in nodes do
+    let some f := (if isObj x then nat? (get x "fn") else none) | layoutRefuse BODY
+    let some t := callees[f]? | layoutRefuse BODY
+    if Flock.Program.isInputId t then continue
+    let n := if get x "form" == Json.str "call" then some 1
+      else if get x "form" == Json.str "batch" then nat? (get x "n") else none
+    let some n := n.filter (1 ≤ ·) | layoutRefuse BODY
+    got := got.push (t, n)
+  unless runs got.toList == want do layoutRefuse BODY
+  pure layout
+
 /-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
 `strata` accepted. -/
 def callWork (layout : Json) : List (Nat × Nat) := Id.run do
@@ -304,6 +471,17 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
+/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
+registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
+def finding? (x : Json) : Option (List (String × String × String)) :=
+  if isObj x then (fields x).mapM fun (port, e) =>
+    match keys e, get e "value", get e "root" with
+    | some ["root", "value"], .str v, .str r =>
+      if _root_.PouwCheck.plain port && _root_.PouwCheck.plain v && (digest? (.str r)).isSome then some (port, v, r)
+      else none
+    | _, _, _ => none
+  else none
+
 /-- `credit._proved`: none when every unit of `drawn` has exactly one outcome and it is an accept, and no other unit
 has one; else the refusal (`outcome`, `missing` or `failed`). -/
 def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
@@ -311,7 +489,8 @@ def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
   let .arr ps := proofs | throw ("outcome", PROOFS_FORM)
   let mut seen : Std.HashMap Nat String := {}
   for p in ps.toList do
-    let some (u, v) := (if keys p == some ["unit", "verdict"] then
+    let some (u, v) := (if keys p == some PROOF_KEYS && (digest? (get p "program")).isSome
+          && (finding? (get p "registered")).isSome then
         match nat? (get p "unit"), get p "verdict" with
         | some u, .str v => if VERDICTS.contains v then some (u, v) else none
         | _, _ => none
@@ -338,25 +517,304 @@ def drawn (coin stream registration receipt layout k : Json) : R (Array Nat) := 
   let some c := digest? coin | throw ("draw", COIN_FORM)
   drawnOf c stream registration receipt ss k
 
-/-- `credit.outcome`: none when every unit the draw coin draws from the window (`drawn`) has exactly one outcome and it
-is an accept, and no other unit has one; else the refusal. -/
-def outcome (coin stream registration receipt layout k proofs : Json) : R Unit := do
+/-- `credit._outcome`: none when every unit the draw coin draws from the window (`drawn`) has exactly one outcome and
+it is an accept, and no other unit has one; else the refusal. `window`'s rule on the draw coin it read. -/
+def Internal.outcome (coin stream registration receipt layout k proofs : Json) : R Unit := do
   proved (← drawn coin stream registration receipt layout k) proofs
 
-/-- `credit.window`: a served H1 window's credited calls (`credited`), its manifest one row per call of `layout`, and
-`outcome` of the draw coin `credited` read at its period's committed K `k`, the stream the window's root, the
-registration its draw root and the receipt `{"receipts": …}`, its last round's receipts; else the refusal. -/
-def window (key ledger window session salt calls served rounds draw layout proofs k : Json) : R (List Nat) := do
-  let got ← credited key ledger window session salt calls served rounds draw
+/-- An A value's segments by name, each `(level, index, root)` in row order. -/
+abbrev Segments := List (String × List (Nat × Nat × ByteArray))
+
+/-- `credit.round_root`: the root the challenger receives for round `r`, over the serving process's own round root and,
+for each A value by name, its segments. -/
+def roundRoot (r : Nat) (inner : ByteArray) (segs : Segments) : ByteArray :=
+  tagged ROUND_TAG ([.int r, .bytes inner] ++ (segs.mergeSort fun a b => a.1 ≤ b.1).flatMap fun (v, ss) =>
+    ss.flatMap fun (l, i, h) => [.str v, .int l, .int i, .bytes h])
+
+def segment? (s : Json) : Option (Nat × Nat × ByteArray) :=
+  match s with
+  | .arr a => match a.toList with
+    | [l, i, h] => do
+      let l ← nat? l
+      let i ← nat? i
+      if l < LEVELS then (l, i, ·) <$> digest? h else none
+    | _ => none
+  | _ => none
+
+/-- `credit._segments`. -/
+def segments? (a : Json) : Option Segments :=
+  if isObj a then (fields a).mapM fun (v, ss) => match ss with
+    | .arr ss => (v, ·) <$> ss.toList.mapM segment?
+    | _ => none
+  else none
+
+def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
+
+/-- `credit.a_value`: a registered A value's contraction and call, as their digits: a name whose last two parts are `a`
+and either a contraction (`…/a/<K>`, the window's A rows of K), its call none, or a contraction and a call
+(`…/a/<K>@<call>`, that call's A table). -/
+def aValue? : Json → Option (String × Option String)
+  | .str v => match (v.splitOn "/").reverse with
+    | last :: "a" :: _ => match last.splitOn "@" with
+      | [k] => if digits k then some (k, none) else none
+      | [k, c] => if digits k && digits c then some (k, some c) else none
+      | _ => none
+    | _ => none
+  | _ => none
+
+/-- `credit.is_a`: `…/a/<K>` or a call's `…/a/<K>@<call>` (`aValue?`). -/
+def isA (v : Json) : Bool := (aValue? v).isSome
+
+/-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`); every other value a window registers
+is its own. -/
+def isHeld : Json → Bool
+  | .str v => match (v.splitOn "/").reverse with
+    | k :: "b" :: _ => digits k
+    | _ => false
+  | _ => false
+
+/-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
+def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
+  | 0, index => match have_.get? (0, index) with
+    | some h => some h
+    | none => if index ≥ d.count then some (d.pad index) else none
+  | l + 1, index => match have_.get? (l + 1, index) with
+    | some h => some h
+    | none => do
+      let left ← treeAt d have_ l (2 * index)
+      let right ← treeAt d have_ l (2 * index + 1)
+      pure (d.node l index left right)
+
+/-- `credit.tree_root`. -/
+def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Option ByteArray :=
+  treeAt ⟨.sha512, count, domain⟩ have_ (PouwCommit.depth count) 0
+
+def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
+
+/-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
+refusal. Of S rounds, round s's segments of a window's A value `…/a/<K>` of L rows tile its rows `[s·L/S, (s+1)·L/S)`;
+a call's A table `…/a/<K>@<c>` is committed whole by its call's round, the window's `calls` calls being the rounds'
+equal blocks, so round `c / (calls/S)`'s segments tile all its rows and no other round lists it. A step of `window`,
+which first holds the round roots to the ones the challenger received (`roundsCheck`). -/
+def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
+  let some xs := (match rounds with
+      | .arr a => if a.isEmpty then none else some a.toList
+      | _ => none) | aLinkRefuse LOG_FORM
+  let mut segs : List Segments := []
+  for (x, r) in xs.zipIdx do
+    let (some root, some inner) := (if isObj x then (digest? (get x "root"), digest? (get x "inner"))
+        else (none, none)) | aLinkRefuse s!"round {r}'s root or inner root is not a SHA-512 digest"
+    let some p := segments? (get x "a")
+      | aLinkRefuse (s!"round {r}'s A segments are not an object from each A value to its [level, index, root] " ++
+          s!"subtrees, each level below {LEVELS}")
+    unless roundRoot r inner p == root do
+      aLinkRefuse (s!"round {r}'s root is not over its inner root and its A segments: the serving process commits " ++
+        "each round's segments of every registered A value under that round's root (`credit.round_root`), before " ++
+        "that round's coin")
+    segs := segs ++ [p]
+  let .arr es := entries | aLinkRefuse ENTRIES_FORM
+  unless es.all isObj do aLinkRefuse ENTRIES_FORM
+  let a := es.toList.filterMap fun e => if isA (get e "value") then (·, e) <$> str? (get e "value") else none
+  if a.isEmpty then aLinkRefuse NO_A
+  let mut names : List String := []
+  for (v, _) in a do
+    if names.contains v then aLinkRefuse s!"the window registers A value {v} twice"
+    names := names ++ [v]
+  for (p, r) in segs.zipIdx do
+    for (v, _) in p do
+      unless names.contains v do
+        aLinkRefuse s!"round {r} lists segments of {v}, which is no registered A value of the window"
+  let steps := xs.length
+  for (v, e) in a do
+    let (some root, some domain, some count) := (digest? (get e "root"), digest? (get e "domain"), nat? (get e "leaves"))
+      | aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
+          "verifier hashes its pads)")
+    unless 1 ≤ count && count ≤ MAX_ROWS do
+      aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
+        "verifier hashes its pads)")
+    let (per, own) ← (match (aValue? (.str v)).bind (·.2) with
+      | none => do
+        if count % steps != 0 then
+          aLinkRefuse s!"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
+        pure (count / steps, none)
+      | some c => do
+        let c := c.toNat!
+        if c ≥ calls then
+          aLinkRefuse s!"registered A value {v} is call {c}'s A table, and the window has {calls} calls"
+        if calls % steps != 0 then
+          aLinkRefuse (s!"the window's {calls} calls are not its {steps} rounds' equal blocks, so the round whose " ++
+            s!"root commits call {c}'s A table {v} is not fixed")
+        pure (count, some (c, c / (calls / steps))))
+    let mut have_ : Std.HashMap (Nat × Nat) ByteArray := {}
+    for (p, r) in segs.zipIdx do
+      if let some (c, o) := own then
+        if r != o then
+          unless ((p.lookup v).getD []).isEmpty do
+            aLinkRefuse (s!"round {r} lists segments of {v}, call {c}'s A table, which only its call's round {o} " ++
+              "commits")
+          continue
+      let (start, stop) := if own.isSome then (0, count) else (r * per, (r + 1) * per)
+      let untiled := s!"round {r}'s segments of {v} don't tile its rows [{start}, {stop}) in order, each an aligned " ++
+        "subtree: the serving process lists each round's rows of every A value as aligned subtrees (`credit.cover`)"
+      let mut pos := start
+      for (level, index, h) in (p.lookup v).getD [] do
+        if index <<< level != pos || pos + 2 ^ level > stop then aLinkRefuse untiled
+        have_ := have_.insert (level, index) h
+        pos := pos + 2 ^ level
+      if pos != stop then aLinkRefuse untiled
+    unless treeRoot domain count have_ == some root do
+      aLinkRefuse (s!"registered A value {v}'s root is not the tree over the segments the round roots commit: its " ++
+        "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
+        "rows each round's root committed")
+
+/-- `credit._entry`: a registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with
+`word_bits` only when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows and words from 1
+to `MAX_ROWS`. -/
+def entryOk (e : Json) : Bool :=
+  let rows := fun (k : String) => (nat? (get e k)).any fun n => 1 ≤ n && n ≤ MAX_ROWS
+  let shape := match keys e with
+    | some ["domain", "leaves", "root", "value", "words"] => true
+    | some ["domain", "leaves", "root", "value", "word_bits", "words"] => nat? (get e "word_bits") == some 32
+    | _ => false
+  shape && ((str? (get e "value")).any _root_.PouwCheck.plain) && (digest? (get e "root")).isSome
+    && (str? (get e "domain")).isSome && rows "leaves" && rows "words"
+
+/-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
+holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
+(`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
+every other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds
+the window's open root (PRF-127). -/
+def domainOf (program window : String) (e : Json) : R String := do
+  let v := (str? (get e "value")).getD ""
+  let d ← (SampledProofs.Registered.domainAt program v ((nat? (get e "words")).getD 0) ((nat? (get e "leaves")).getD 0)
+    ((nat? (get e "word_bits")).getD 16) (if isHeld (.str v) then none else some window)).mapError
+    fun why => ("registration", why)
+  pure (Flock.hexOf d)
+
+def otherRegistration (v : String) : String :=
+  s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
+  s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
+  "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its " ++
+  "session for): the entry is another registration's, another window's or another circuit's"
+
+def registrationRefuse {α : Type} (why : String) : R α := throw ("registration", why)
+
+/-- `_registration`'s `held`: the refusal of the registered value `v`'s entry `e`, none when it is one-stage's form and
+its domain is `domainOf`'s. -/
+def held (program window v : String) (e : Json) : R (Option String) := do
+  unless entryOk e do
+    return some (s!"registered value {v}'s entry is not one-stage's \{value, root, leaves, words, domain} (with " ++
+      s!"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
+  pure (if str? (get e "domain") == some (← domainOf program window e) then none else some (otherRegistration v))
+
+/-- `_registration`'s call pointer: from call `c`, the last call whose first unit (`starts`, each call's in order) is at
+most `u`. Over units in ascending order its steps total the calls, never the units. -/
+def callAt (starts : Array Nat) (u c : Nat) : Nat := go starts.size c
+where
+  go : Nat → Nat → Nat
+    | 0, c => c
+    | n + 1, c => if c + 1 < starts.size && starts.getD (c + 1) 0 ≤ u then go n (c + 1) else c
+
+/-- `credit._registration`: none when the window's registered `entries` are its own registration's and each drawn unit's
+proof (`proofs`, one accepted outcome a unit, as `proved` holds them) is a session verified against it, else the
+refusal (`registration`). Each A value's domain, and each other value's a proof opened, is `domainOf` the window's open
+root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every registered port
+its session opened (its `registered` finding) is of a value the window registers once, at that value's registered
+root; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's in `ss`) or its own call's
+A table `…/a/<K>@<call>` (the call `layout`'s units place it in, `callAt`). A step of `window`, after `Internal.aLink`
+has held each A value's root to the segments the round roots commit. -/
+def Internal.registration (window program : String) (entries proofs : Json) (ss : Array Flock.Draw.WorkStratum)
+    (layout : Json) : R Unit := do
+  let es := match entries with
+    | .arr a => a.toList
+    | _ => []
+  for e in es do
+    if isA (get e "value") then
+      if let some why ← held program window ((str? (get e "value")).getD "") e then registrationRefuse why
+  let names := es.map fun e => str? (get e "value")
+  let ps := (match proofs with
+    | .arr a => a.toList
+    | _ => []).filterMap fun p => (fun u f => (u, get p "program", f)) <$> nat? (get p "unit") <*> finding? (get p "registered")
+  let mut checked : List String := []
+  let starts := ((callWork layout).foldl (fun (xs, at_) (size, _) => (xs.push at_, at_ + size)) (#[], 0)).1
+  let mut c := 0
+  for (u, prog, f) in ps.mergeSort fun a b => a.1 ≤ b.1 do
+    let k := ((ss.find? fun s => s.units.any fun (lo, hi) => lo ≤ u && u < hi).map
+      fun s => String.ofList (s.template.toList.drop 1)).getD ""
+    c := callAt starts u c
+    unless str? prog == some program do
+      registrationRefuse (s!"drawn unit {u}'s proof was verified against another circuit than the window's (its " ++
+        "program is not the SHA-512 of the descriptor whose layout the window was drawn over): verify every drawn " ++
+        "unit's session against the window's committed circuit")
+    let mut opened := false
+    for (port, v, root) in f do
+      let n := names.count (some v)
+      if n != 1 then
+        registrationRefuse (s!"drawn unit {u}'s proof opened port {port} against {v}, which the window registers " ++
+          s!"{if n > 1 then "twice" else "not"}: its session was verified against another registration than the " ++
+          "window's")
+      let e := (es.find? fun e => str? (get e "value") == some v).getD .null
+      if !checked.contains v && !isA (.str v) then
+        if let some why ← held program window v e then registrationRefuse why
+      checked := v :: checked
+      unless str? (get e "root") == some root do
+        registrationRefuse (s!"drawn unit {u}'s proof opened port {port}'s rows of {v} against another root than the " ++
+          s!"one the window registered for {v}: its session was verified against another registration, or the " ++
+          "window's entry is not the root its sessions opened")
+      opened := opened || (match aValue? (.str v) with
+        | some (k', c') => k' == k && (c'.all (· == toString c))
+        | none => false)
+    unless opened do
+      registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of the " ++
+        "window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's " ++
+        "session with the window's A value registered")
+
+/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
+def isHexBytes (s : String) : Bool :=
+  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
+/-- `credit._window`: `window`'s credited calls and the layout it read from the descriptor. -/
+def windowLayout (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+    R (List Nat × Json) := do
+  let got ← Internal.credited key ledger window session salt calls served rounds draw
+  let log := match rounds with
+    | .arr xs => xs
+    | _ => #[]
+  roundsCheck key ledger window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
+  Internal.aLink rounds entries (match calls with
+    | .arr a => a.size
+    | _ => 0)
+  let some d := (match descriptor with
+      | .str s => if isHexBytes s then hex? (.str s) else none
+      | _ => none) | layoutRefuse DESCRIPTOR_HEX
+  let layout ← layoutOf d
   let ss ← strata layout
   let (.arr rows, .arr lcalls) := (calls, get layout "calls") | layoutRefuse LAYOUT_FORM
   unless rows.size == lcalls.size do
-    throw ("manifest", s!"the manifest's {rows.size} rows are not the layout's {lcalls.size} calls: each call of the " ++
-      "window's Program is one manifest row, in order")
+    throw ("manifest", s!"the manifest's {rows.size} rows are not the circuit's {lcalls.size} calls: each call of " ++
+      "the window's Program is one manifest row, in order")
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
-  pure got
+  Internal.registration ((str? (get window "root")).getD "") (Flock.hexOf (Flock.Sha512.hash d)) entries proofs ss
+    layout
+  pure (got, layout)
+
+/-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
+every step over the same evidence and the one round log `rounds`: `Internal.credited` (the credit bits fixed before the
+draw coin), `roundsCheck` (the log's roots the ones the challenger received, each round's coin opened once after its
+root), `Internal.aLink` (each A value among the registered `entries` the tree over the segments those roots commit),
+the layout of its circuit (`layoutOf` of `descriptor`, the bytes in hex of the circuit its proofs were verified
+against) with its manifest one row per call of it, and `Internal.outcome`'s rule on the draw coin `credited` read at its
+period's committed K `k`, the stream the window's root, the registration its draw root and the receipt
+`{"receipts": …}`, its last round's receipts, each of `proofs` the verifier of record's verdict for a drawn unit's
+session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's own registration's, under its open root
+and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
+values at their registered roots, its K's A value among them). `periodCredit` ties `descriptor` to the circuit the
+window's period committed. -/
+def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+    R (List Nat) :=
+  (·.1) <$> windowLayout key ledger window session salt calls served rounds draw descriptor entries proofs k
 
 /-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
 its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
@@ -406,10 +864,6 @@ def period (key ledger name roots : Json) : R Unit := do
       throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
         "present the period's windows in the order its close lists them")
 
-/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
-def isHexBytes (s : String) : Bool :=
-  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
-
 /-- `credit.committed_k`: the K period `name`'s open committed (`K_FIELD`, a positive integer at most `MAX_K`) in the
 auditor's ledger, one `period` has trusted; else the refusal (`budget`). -/
 def committedK (ledger : Json) (name : String) : R Nat := do
@@ -458,119 +912,11 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
     discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
-    let got ← (window key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served") (f "rounds") (f "draw")
-      (f "layout") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
+    let (got, layout) ← (windowLayout key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served")
+      (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
         ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
     out := out ++ [got]
-    eps := eps ++ [established (f "layout") got bigK]
+    eps := eps ++ [established layout got bigK]
   pure ⟨out, bigK, DELTA, eps⟩
-
-/-- An A value's segments by name, each `(level, index, root)` in row order. -/
-abbrev Segments := List (String × List (Nat × Nat × ByteArray))
-
-/-- `credit.round_root`: the root the challenger receives for round `r`, over the serving process's own round root and,
-for each A value by name, its segments. -/
-def roundRoot (r : Nat) (inner : ByteArray) (segs : Segments) : ByteArray :=
-  tagged ROUND_TAG ([.int r, .bytes inner] ++ (segs.mergeSort fun a b => a.1 ≤ b.1).flatMap fun (v, ss) =>
-    ss.flatMap fun (l, i, h) => [.str v, .int l, .int i, .bytes h])
-
-def segment? (s : Json) : Option (Nat × Nat × ByteArray) :=
-  match s with
-  | .arr a => match a.toList with
-    | [l, i, h] => do
-      let l ← nat? l
-      let i ← nat? i
-      if l < LEVELS then (l, i, ·) <$> digest? h else none
-    | _ => none
-  | _ => none
-
-/-- `credit._segments`. -/
-def segments? (a : Json) : Option Segments :=
-  if isObj a then (fields a).mapM fun (v, ss) => match ss with
-    | .arr ss => (v, ·) <$> ss.toList.mapM segment?
-    | _ => none
-  else none
-
-/-- `credit.is_a`: a name whose last two parts are `a` and a contraction (`…/a/<K>`). -/
-def isA : Json → Bool
-  | .str v => match (v.splitOn "/").reverse with
-    | k :: "a" :: _ => !k.isEmpty && k.all Char.isDigit
-    | _ => false
-  | _ => false
-
-/-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
-def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
-  | 0, index => match have_.get? (0, index) with
-    | some h => some h
-    | none => if index ≥ d.count then some (d.pad index) else none
-  | l + 1, index => match have_.get? (l + 1, index) with
-    | some h => some h
-    | none => do
-      let left ← treeAt d have_ l (2 * index)
-      let right ← treeAt d have_ l (2 * index + 1)
-      pure (d.node l index left right)
-
-/-- `credit.tree_root`. -/
-def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Option ByteArray :=
-  treeAt ⟨.sha512, count, domain⟩ have_ (PouwCommit.depth count) 0
-
-def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
-
-/-- `credit.a_link`: none when every registered A value is the tree over the segments the round log commits, else the
-refusal. -/
-def aLink (rounds entries : Json) : R Unit := do
-  let some xs := (match rounds with
-      | .arr a => if a.isEmpty then none else some a.toList
-      | _ => none) | aLinkRefuse LOG_FORM
-  let mut segs : List Segments := []
-  for (x, r) in xs.zipIdx do
-    let (some root, some inner) := (if isObj x then (digest? (get x "root"), digest? (get x "inner"))
-        else (none, none)) | aLinkRefuse s!"round {r}'s root or inner root is not a SHA-512 digest"
-    let some p := segments? (get x "a")
-      | aLinkRefuse (s!"round {r}'s A segments are not an object from each A value to its [level, index, root] " ++
-          s!"subtrees, each level below {LEVELS}")
-    unless roundRoot r inner p == root do
-      aLinkRefuse (s!"round {r}'s root is not over its inner root and its A segments: the serving process commits " ++
-        "each round's segments of every registered A value under that round's root (`credit.round_root`), before " ++
-        "that round's coin")
-    segs := segs ++ [p]
-  let .arr es := entries | aLinkRefuse ENTRIES_FORM
-  unless es.all isObj do aLinkRefuse ENTRIES_FORM
-  let a := es.toList.filterMap fun e => if isA (get e "value") then (·, e) <$> str? (get e "value") else none
-  if a.isEmpty then aLinkRefuse NO_A
-  let mut names : List String := []
-  for (v, _) in a do
-    if names.contains v then aLinkRefuse s!"the window registers A value {v} twice"
-    names := names ++ [v]
-  for (p, r) in segs.zipIdx do
-    for (v, _) in p do
-      unless names.contains v do
-        aLinkRefuse s!"round {r} lists segments of {v}, which is no registered A value of the window"
-  let steps := xs.length
-  for (v, e) in a do
-    let (some root, some domain, some count) := (digest? (get e "root"), digest? (get e "domain"), nat? (get e "leaves"))
-      | aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
-          "verifier hashes its pads)")
-    unless 1 ≤ count && count ≤ MAX_ROWS do
-      aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
-        "verifier hashes its pads)")
-    if count % steps != 0 then
-      aLinkRefuse s!"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
-    let per := count / steps
-    let mut have_ : Std.HashMap (Nat × Nat) ByteArray := {}
-    for (p, r) in segs.zipIdx do
-      let stop := (r + 1) * per
-      let untiled := s!"round {r}'s segments of {v} don't tile its rows [{r * per}, {stop}) in order, each an aligned " ++
-        "subtree: the serving process lists each round's rows of every A value as aligned subtrees (`credit.cover`)"
-      let mut pos := r * per
-      for (level, index, h) in (p.lookup v).getD [] do
-        if index <<< level != pos || pos + 2 ^ level > stop then aLinkRefuse untiled
-        have_ := have_.insert (level, index) h
-        pos := pos + 2 ^ level
-      if pos != stop then aLinkRefuse untiled
-    unless treeRoot domain count have_ == some root do
-      aLinkRefuse (s!"registered A value {v}'s root is not the tree over the segments the round roots commit: its " ++
-        "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
-        "rows each round's root committed")
 
 end PouwCheck.Credit
