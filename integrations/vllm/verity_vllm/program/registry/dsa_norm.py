@@ -38,10 +38,13 @@ at the H200's specialisation (pointers and strides divisible by 16; the PTX at Q
 8 warp sums butterflied 4, 2, 1 (a halving tree), `cvt.rn.f32.u32` of SIZE and `div.full.f32`, `add.f32 eps, mean`,
 `rsqrt.approx.ftz.f32`, `mul.f32 r, x`, `mul.f32 (.), w`, `cvt.rn.bf16x2.f32`; at BLOCK 1024 the same on 128 threads, at BLOCK 512
 and 256 on 128 threads `v2.b32` and `b32` loads of 4 and 2 elements and the same chain, at BLOCK 4096 a thread's two runs 2048 apart,
-each under its own predicate; `launch_pdl` adds `griddepcontrol` only).  At BLOCK 128 on 4 warps a thread holds one element and the
-first butterfly level is contracted, as above, so BLOCK is at least two elements a thread.  A thread wholly past N sums +0
-(`fma(+0, +0, +0 * +0)`), so the body takes its lane as the constant; a masked element of a live thread stays in its chain.
-`DsaRMSNorm_v1{N, EPS}` is `TritonBlockRMSNorm_v1{N, N, 4, EPS}`.
+each under its own predicate; `launch_pdl` adds `griddepcontrol` only).  ptxas contracts `div.full`'s last multiply into that
+`add.f32` (no `.rn`, so it may): the SASS is `MUFU.RCP` of the scaled SIZE, then `FFMA rcp, scaled sum, eps`, then `MUFU.RSQ`, so the
+operand of rsqrt is `fma(DivFullScaleA(sum, N), DivFullRcp(N), eps)`, rounded once.  At a power-of-two N the product is exact and
+the two roundings are that value; at DeepSeek-V4's q (N = 1536) they are not, and the H200's committed rows are the fma's.  At BLOCK
+128 on 4 warps a thread holds one element and the first butterfly level is contracted, as above, so BLOCK is at least two elements a
+thread.  A thread wholly past N sums +0 (`fma(+0, +0, +0 * +0)`), so the body takes its lane as the constant; a masked element of a
+live thread stays in its chain.  `DsaRMSNorm_v1{N, EPS}` computes `TritonBlockRMSNorm_v1{N, N, 4, EPS}`'s words, its N a power of two.
 """
 from __future__ import annotations
 
@@ -59,8 +62,9 @@ from verity_vllm.program.registry.prims import BF16
 THREADS, WARP = 128, 32
 _CONF = ("model-untested: read from the Triton kernel and its PTX at the commits the module docstring pins; "
          "tests/properties/glm53_fused_rmsnorm_capture_gpu.py is its hardware check")
-_BLOCK_CONF = ("model-untested: read from vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel and the cc 9.0 PTX Triton 3.7.1 compiles from it "
-               "(the module docstring); no hardware capture yet")
+_BLOCK_CONF = ("model-untested: read from vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel and the cc 9.0 PTX and SASS Triton 3.7.1 compiles "
+               "from it (the module docstring); the q rows (N 1536) Commit r20261021-092814-0b1c committed on cc 9.0 are its words "
+               "(tests/properties/test_dsv4_q_norm_commit.py), with no probe launch yet")
 
 
 def check_eps(name: str, EPS: float) -> None:
@@ -91,9 +95,11 @@ def layout(N: int, threads: int = THREADS) -> list[list[int]]:
     return [[(k // V) * threads * V + V * t + k % V for k in range(E)] for t in range(threads)]
 
 
-def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: int | None = None) -> Coll:
+def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: int | None = None, *,
+             fused_eps: bool = False) -> Coll:
     """`DsaRMSNorm`'s body over ``o``'s steps (the module docstring's sequence), each output word a Call of ``to_bf16``; on ``threads``
-    over a ``block`` (default N) whose elements from N are +0."""
+    over a ``block`` (default N) whose elements from N are +0; ``fused_eps`` takes rsqrt of `fma(scale_a(sum), rcp(N), eps)` (the
+    SASS) rather than of `eps + mul(scale_a(sum), rcp(N))` (the PTX)."""
     if block is None:
         check_statics(S.N, S.EPS)
     xf = [o.cvt(x[i]) for i in range(S.N)]
@@ -119,8 +125,11 @@ def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: 
         return None if a is None and b is None else o.add(zero() if a is None else a, zero() if b is None else b)
     total = D.halving_tree([D.halving_tree(lanes[WARP * g:WARP * g + WARP], add) for g in range(threads // WARP)], add)
     n = o.word(D.f32_bits(S.N))
-    mean = o.mul(o.scale_a(total, n), o.rcp(n))
-    r = o.rsqrt(o.add(o.word(D.f32_bits(S.EPS)), mean))
+    if fused_eps:
+        r = o.rsqrt(o.fma(o.scale_a(total, n), o.rcp(n), o.word(D.f32_bits(S.EPS))))
+    else:
+        mean = o.mul(o.scale_a(total, n), o.rcp(n))
+        r = o.rsqrt(o.add(o.word(D.f32_bits(S.EPS)), mean))
     y = [o.B.call(to_bf16, o.mul(o.mul(r, xf[i]), o.cvt(w[i]))) for i in range(S.N)]
     return Coll(Array(S.N, t), concat([v.refs for v in y]))
 
@@ -135,9 +144,9 @@ def DsaRMSNorm(B, S, x, w):
 
 
 def block_rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16) -> Coll:
-    """`TritonBlockRMSNorm`'s body: `rms_norm` on 32 WARPS threads over BLOCK."""
+    """`TritonBlockRMSNorm`'s body: `rms_norm` on 32 WARPS threads over BLOCK, eps fused into the mean."""
     check_block(S.N, S.BLOCK, S.WARPS, S.EPS)
-    return rms_norm(o, S, x, w, to_bf16, t, threads=WARP * S.WARPS, block=S.BLOCK)
+    return rms_norm(o, S, x, w, to_bf16, t, threads=WARP * S.WARPS, block=S.BLOCK, fused_eps=True)
 
 
 @composite("TritonBlockRMSNorm", 1, ["N", "BLOCK", "WARPS", "EPS"],
@@ -145,7 +154,8 @@ def block_rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16) -> Coll:
 def TritonBlockRMSNorm(B, S, x, w):
     """One row of a Triton `tl.sum` RMSNorm over a masked block (the module docstring has the PTX): N live bf16 elements of a BLOCK on
     32 WARPS threads, each thread's FMA chain over its `layout` registers (a masked one +0), each warp's butterfly, the warp sums'
-    halving tree; `r = rsqrt.approx.ftz(eps + div.full(sum, N))`; `y = bf16(r * x * f32(w))`, the products in that order."""
+    halving tree; `r = rsqrt.approx.ftz(fma(DivFullScaleA(sum, N), DivFullRcp(N), eps))`, ptxas's contraction of `eps + div.full(sum,
+    N)`; `y = bf16(r * x * f32(w))`, the products in that order."""
     return block_rms_norm(D.word_ops(B), S, x, w, P.F2fpBf16)
 
 

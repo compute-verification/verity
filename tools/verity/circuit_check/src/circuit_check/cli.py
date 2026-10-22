@@ -4,6 +4,8 @@
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served row's request Program
     circuit-check --all                                             every registered Definition and template (the suite's set)
+    circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
+    circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
@@ -20,9 +22,11 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import ambient as AM
 from . import cache as CC
 from . import checks as CK
 from . import sidecars as SC
+from . import structural as ST
 from . import targets as TG
 from . import units as UN
 
@@ -684,6 +688,56 @@ def auto_jobs(root: Path = Path("/")) -> int:
     return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
 
 
+def structural(target: str, path: Path, *, exhaustive_bits: int = ST.EXHAUSTIVE_BITS, vectors: int = ST.VECTORS,
+               seed: int = CK.Options.seed) -> dict:
+    """``--structural PATH TARGET``'s report: the template at ``path`` held to the Definition ``target`` names
+    (`structural.check_file`), its one target of kind ``structural``."""
+    r = _one("structural", target, lambda: ST.check_file(TG.definition(target), path, exhaustive_bits=exhaustive_bits,
+                                                         vectors=vectors, seed=seed))
+    opts = {"structural": str(path), "exhaustive_bits": exhaustive_bits, "vectors": vectors, "seed": seed}
+    return {"schema": CK.SCHEMA, "options": opts, "summary": CK.summarize([r]), "targets": [r]}
+
+
+def _structural_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
+    if a.all or len(a.targets) != 1:
+        ap.error("--structural holds one template to one Definition: give one target")
+    rep = structural(a.targets[0], a.structural, exhaustive_bits=a.exhaustive_bits, vectors=a.structural_vectors, seed=a.seed)
+    (t,) = rep["targets"]
+    for name in rep["summary"]["failure_names"]:
+        print(f"FAIL {name}")
+    for w in t["warnings"]:
+        print(f"warn {w['name']}")
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    rec = t.get("structural") or {}
+    print(f"circuit-check: {a.structural} as {a.targets[0]}: {rec.get('verdict', 'not checked')}"
+          + (f" ({rec['why_not_syntactic']})" if rec.get("why_not_syntactic") else "") + (f", report {a.out}" if a.out else ""))
+    return 1 if t["failures"] or (a.fail_on_warnings and t["warnings"]) else 0
+
+
+def ambient(targets: list[str]) -> dict:
+    """``--ambient TARGET..``'s report: each target's flat lowerings in a plain and a perturbed interpreter
+    (`ambient.check`), each a target of kind ``ambient``."""
+    rs = [{**r, "kind": "ambient", "target": t} for t, r in zip(targets, AM.check(targets))]
+    opts = {"ambient": {"plain": AM.PLAIN, "perturbed": AM.PERTURBED}}
+    return {"schema": CK.SCHEMA, "options": opts, "summary": CK.summarize(rs), "targets": rs}
+
+
+def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
+    if a.all or not a.targets:
+        ap.error("--ambient lowers the targets it is given: name one or more Definitions")
+    rep = ambient(a.targets)
+    for name in rep["summary"]["failure_names"]:
+        print(f"FAIL {name}")
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    for t in rep["targets"]:
+        rec = t["ambient"]
+        print(f"circuit-check: {t['target']}: {rec['verdict']} over {rec['lowerings']} lowerings"
+              + (f", sha256 {rec['sha256']}" if "sha256" in rec else ""))
+    return 1 if any(t["failures"] for t in rep["targets"]) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
@@ -712,7 +766,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("-q", "--quiet", action="store_true")
+    ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl",
+                    help="hold this flock-ir-tmpl template to the one target's flat lowering instead of running the property "
+                         "checks (circuit_check.structural): accepted by construction, else on every input, else on random ones")
+    ap.add_argument("--exhaustive-bits", type=int, default=ST.EXHAUSTIVE_BITS,
+                    help="with --structural: evaluate on every input when the template has at most this many input bits")
+    ap.add_argument("--structural-vectors", type=int, default=ST.VECTORS,
+                    help="with --structural: the random inputs evaluated past --exhaustive-bits (with --seed)")
+    ap.add_argument("--ambient", action="store_true",
+                    help="lower each target in a plain and a perturbed interpreter instead of running the property checks "
+                         "(circuit_check.ambient): one text, and no read of the environment, a clock or an unseeded draw")
     a = ap.parse_args(argv)
+    if a.structural and a.ambient:
+        ap.error("--structural and --ambient are two modes: give one")
+    if a.structural:
+        return _structural_main(a, ap)
+    if a.ambient:
+        return _ambient_main(a, ap)
     if a.cache and not a.update_pins:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
         prebuild = ("from circuit_check import targets; targets.load_registries()\n"

@@ -20,7 +20,9 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
+  "Flock.Test.RegKnown",
   "Flock.Test.RegRows",
+  "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
   "Flock.Test.Wires",
@@ -32,6 +34,7 @@
   "Flock.Test.TmplFold",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
+  "Flock.Test.FrameStep",
   "VStar"
  ],
  "exempt": {

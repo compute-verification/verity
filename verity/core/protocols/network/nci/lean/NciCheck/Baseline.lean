@@ -5,22 +5,26 @@ import NciCheck.Desc
 
 `NciCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
-`Nci.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered before the run's
-commitment. An output of an earlier run, certified or not, is never θ (Daniel, 21 Oct: registration happens at the start
-of a deployment and essentially never changes). `evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first,
-unchanged, then each θ entry's provenance against what the proof service holds.
+`Nci.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
+deployment. An output of an earlier run, certified or not, is never θ (Daniel, 21 Oct: registration happens at the start
+of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
+record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
+later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
+`evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
+against what the proof service holds.
 
 ## The instance and the trusted input
 
 The instance is `NciCheck.Desc`'s with one more field:
 * `provenance`: one object per θ entry, in θ's order, each `{"kind": "registered", "registration": D, "value": V,
-  "root": R}`: registered public data, the value `V` that the registration record with digest `D` registers (its
-  `registered` list, `verity/registration/v2`) under the root `R`. There is no other kind.
+  "root": R}`: registered public data, the value `V` that the registration record with digest `D`, the log's first,
+  registers (its `registered` list, `verity/registration/v2`) under the root `R`. There is no other kind.
 
 The trusted input, beside the instance, is what the service holds, never the prover's word: an object of exactly
-* `log`: the prover's registration records, oldest first, as the service's R6 keeps them (each record's `previous` the
-  digest of the one before, `null` for the first; the digest `SHA-512(format || 0 || canon(record))`, `digest`);
-* `run`: the digest of the run under check's own record, so "earlier" is a position in the log, not a clock;
+* `log`: the deployment's registration records, oldest first, as the service's R6 keeps them (each record's `previous`
+  the digest of the one before, `null` for the first, which opens the deployment; the digest
+  `SHA-512(format || 0 || canon(record))`, `digest`);
+* `run`: the digest of the run under check's own record, the log's first for the deployment's first run;
 * `params`: the verifier's own copy of its program function's parameters, `[[name, type], ...]` as a body's params are
   written. The descriptor names no parameters (`verity/ml/circuits/PROTOCOL.md` §5.1: the root starts with each
   parameter's input nodes, in parameter order), so these say which parameter each θ node holds a part of: they must
@@ -45,7 +49,9 @@ statements (`NciCheck.Properties`) stand as they are:
   digest of no record of the log, or `params` not distinct names of types;
 * then θ entry by entry:
   - `theta-record-unknown`: `D` is the digest of no record of the log;
-  - `theta-not-earlier`: `D` is the run's own record or one after it;
+  - `theta-not-at-deployment-start`: `D` is a record of the log other than its first. It replaces the rule that `D`
+    precede the run's own record: the first record is at or before every run's own, the first run's being that record
+    itself, so this one code is the whole timing rule;
   - `theta-root`: `D` registers no value `V` whose root is `R` (its last entry for `V`, as Python's dict reads it);
   - `theta-unbound`: the run's record is not this program's (its `program` is not `Prog.sha512`), `params` don't lower
     onto the root's input nodes, or the run's record has no `registered` entry for `p` whose root is `R`;
@@ -234,8 +240,8 @@ input `T`, the program's digest `program`, each root node's parameter `own` and 
 def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
     (p : Prov) : Except String Unit := do
   let some d := T.digests.findIdx? (· == p.registration) | throw "theta-record-unknown"
-  if d ≥ T.run then throw "theta-not-earlier"
-  let some e := lastWith T.log[d]! "registered" "value" p.value | throw "theta-root"
+  if d != 0 then throw "theta-not-at-deployment-start"
+  let some e := lastWith T.log[0]! "registered" "value" p.value | throw "theta-root"
   if getD e "root" != Json.str p.root then throw "theta-root"
   let run := T.log[T.run]!
   if getD run "program" != Json.str program then throw "theta-unbound"
@@ -284,10 +290,10 @@ def evaluateUnrolled (j tr : Json) : Except String Json := do
 def fixOf : String → Option String
   | "theta-provenance" => some ("give `provenance`, one entry per theta entry in theta's order: {kind: registered, " ++
       "registration, value, root}; theta holds registered public data only, never an earlier run's output")
-  | "trusted" => some ("the trusted input is the service's: {log: the prover's registration records in R6's chain, " ++
-      "run: the run's own record's digest, params: [[name, type], ...]}")
+  | "trusted" => some ("the trusted input is the service's: {log: the deployment's registration records in R6's " ++
+      "chain, run: the run's own record's digest, params: [[name, type], ...]}")
   | "theta-record-unknown" => some "cite a record of the prover's registration log by its digest"
-  | "theta-not-earlier" => some "cite a record registered before the run's own"
+  | "theta-not-at-deployment-start" => some "cite the registration log's first record"
   | "theta-root" => some "cite the root the record registers for that value"
   | "theta-unbound" => some ("register the theta node's parameter in the run's own record under the cited root (R7: " ++
       "a value keeps its root)")
