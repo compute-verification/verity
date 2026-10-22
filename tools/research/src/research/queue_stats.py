@@ -27,7 +27,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+#: a tick's start, before its lines (drive's loop on an agent VM)
 TICK_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$")
+#: a tick's end, after its lines (drive.sh on the control pod, since 20 Oct): its landings take this time
+TICK_END_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=")
 RID = r"r\d{8}-\d{6}-[0-9a-f]{4}"
 CHECKING_RE = re.compile(rf"^research queue drive: checking ([0-9a-f]{{12}}) \(([^)]*)\): ({RID})")
 LANDED_RE = re.compile(rf"^research queue drive: landed ((?:#\d+ ?)+) on `main` at ([0-9a-f]{{12}}) \(check ({RID})\)")
@@ -58,15 +61,23 @@ class Landing:
 
 
 def parse(log: str) -> tuple[list[Launch], list[Landing]]:
-    """Drive's launches and landings, each at its time: a launch at its run id's, a landing at its tick's."""
-    tick, launches, landings = None, [], []
+    """Drive's launches and landings, each at its time: a launch at its run id's, a landing at its tick's (the start line before
+    it, or on the control pod the end line after it; a landing whose tick hasn't ended yet isn't counted)."""
+    tick, launches, landings, pending = None, [], [], []
     for line in log.splitlines():
         if m := TICK_RE.match(line):
             tick = ts(m[1])
+        elif m := TICK_END_RE.match(line):
+            landings += [Landing(ts(m[1]), *rest) for rest in pending]
+            tick, pending = None, []
         elif m := CHECKING_RE.match(line):
             launches.append(Launch(rid_time(m[3]), m[1], frozenset(int(x) for x in re.findall(r"#(\d+)", m[2]))))
-        elif tick and (m := LANDED_RE.match(line)):
-            landings.append(Landing(tick, [int(x) for x in re.findall(r"#(\d+)", m[1])], m[2], m[3]))
+        elif m := LANDED_RE.match(line):
+            rest = ([int(x) for x in re.findall(r"#(\d+)", m[1])], m[2], m[3])
+            if tick:
+                landings.append(Landing(tick, *rest))
+            else:
+                pending.append(rest)
     return launches, landings
 
 
