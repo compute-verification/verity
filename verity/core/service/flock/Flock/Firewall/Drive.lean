@@ -7,8 +7,8 @@ A firewalled rep's frame (`Frame.step`, folded by `Frame.run`) takes one schedul
   (`maskSlot`), which `flock-circuit` sends as `{"layout", "mask"}` (`Frame.start`).
 * `extras`: the extra claims' coordinates at the session's link points (`linkPoints`, the `Commit`'s coins), which the
   opening takes (`Stmt.regionPoint` past its six skip coordinates, `flock-circuit`'s `extra_points(..)[6..]`).
-* `schedule`: the scheduled rounds, the algebraic phase's (`Skeleton.rounds`) and then the opening's (`opening`, the
-  Lean finish's `Finish.openLive` recorded on the stream's coins), each the round in whose place a device round leaves.
+* `schedule`: the scheduled rounds, the algebraic phase's (`Skeleton.rounds`) and then the opening's (`opening`:
+  `openStep`, the rep's opening a round at a time, fed the stream's coins), each the round in whose place a device round leaves.
 * `reqs`: the frame's requests, **the one schedule**: rep 1's earlier rep's algebraic-phase coins (`prior`), each
   scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the firewall's
   own) with its coins, then `finish`. At the scheduled rounds themselves in the device's place (`reqsAt`) they are a
@@ -55,39 +55,94 @@ def extras (st : Stmt) (pts : Array (Array F128)) : Array (Array F128) :=
 
 /-! ## The scheduled rounds -/
 
-/-- The rounds recorded so far, each its framed bytes and coin count, and the rounds of coins taken. -/
-abbrev RecM := StateT (Array (ByteArray × Nat) × Nat) V
+/-- **A program that asks for coins as it goes**: it ended (`done`), stopped (`fail`), or sends a round, its framed
+bytes `c` squeezing `n` coins, and goes on as `k` of the coins answered to it. -/
+inductive Step (α : Type) where
+  | done (a : α)
+  | fail (e : String)
+  | ask (c : ByteArray) (n : Nat) (k : Array F128 → Step α)
 
-/-- **The recording `Asks`** on the stream's coins `coins`: round `k` answered by `coins[k]`, which must hold the round's
-coin count (its squeeze header's last eight bytes); each round from `keep` on is kept with its count. -/
-def recAsks (coins : Array (Array F128)) (keep : Nat) : Asks RecM where
+namespace Step
+
+/-- `s`, then `f` of what it ends with. -/
+def bind {α β : Type} : Step α → (α → Step β) → Step β
+  | .done a, f => f a
+  | .fail e, _ => .fail e
+  | .ask c n k, f => .ask c n fun cs => (k cs).bind f
+
+/-- `s`, and `h` of why it stopped where it does. -/
+def tryCatch {α : Type} : Step α → (String → Step α) → Step α
+  | .done a, _ => .done a
+  | .fail e, h => h e
+  | .ask c n k, h => .ask c n fun cs => (k cs).tryCatch h
+
+instance instMonad : Monad Step where
+  pure := .done
+  bind := bind
+
+instance instMonadExceptOfString : MonadExceptOf String Step where
+  throw := .fail
+  tryCatch := tryCatch
+
+instance instMonadLiftTV : MonadLiftT V Step where
+  monadLift
+    | .ok a => .done a
+    | .error e => .fail e
+
+/-- **`s` fed the coins `cs`**, each answering its next round: what it goes on as, and the rounds it sent, each its bytes
+and coin count. -/
+def feed {α : Type} : Step α → List (Array F128) → Array (ByteArray × Nat) → Step α × Array (ByteArray × Nat)
+  | .ask c n k, cs :: rest, rs => feed (k cs) rest (rs.push (c, n))
+  | s, _, rs => (s, rs)
+
+end Step
+
+/-- A rep's opening as it runs: the rounds of coins it took. -/
+abbrev OpenM := StateT (Array (Array F128)) Step
+
+/-- **The opening's `Asks`** (`Finish.liveAsks`, its channel a `Step.ask`): round `k` answered by `coins[k]` where the
+algebraic phase's coins have it, else, when `live`, by the coins the round is asked for; each must hold the round's
+coin count (its squeeze header's last eight bytes). -/
+def stepAsks (coins : Array (Array F128)) (live : Bool) : Asks OpenM where
   link _ _ := throw "drive: a link message inside a rep"
   round c := do
-    let (rs, k) ← get
-    let some cs := coins[k]? | throw s!"drive: round {k} past the stream's {coins.size} rounds of coins"
+    let got ← get
+    let k := got.size
     let n := (u64OfLE c (c.size - 8)).toNat
+    let cs ← match coins[k]?, live with
+      | some cs, _ => pure cs
+      | none, false => throw s!"drive: round {k} past the algebraic phase's {coins.size} rounds of coins"
+      | none, true => StateT.lift (Step.ask c n .done)
     if cs.size != n then throw s!"drive: round {k} squeezes {n} coins where the stream answered {cs.size}"
-    set (if k < keep then rs else rs.push (c, n), k + 1)
+    set (got.push cs)
     return fun i => cs[i]!
 
-/-- **A rep's opening's scheduled rounds**, `Finish.openLive`'s recorded on the stream's coins: its PIOP at zero values
-on the algebraic phase's `nAlg` rounds of coins, every one of which it must take, then its opening on `abcClaims ++` the
-extra claims at `xs`, every value and pad zero, levels ≥ 1 under `hiSalts`, each round answered by the stream's next
-coins. -/
-def opening (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hiSalts : Array ByteArray)
-    (coins : Array (Array F128)) (nAlg : Nat) : V (Array (ByteArray × Nat)) := do
+/-- **A rep's opening, round by round** (`Finish.openLive` with no channel): its PIOP at zero values on the algebraic
+phase's rounds of coins `coins`, every one of which it must take, then its opening on `abcClaims ++` the extra claims at
+`xs`, every value and pad zero, levels ≥ 1 under `hiSalts`, each round asked for its coins (`Step.ask`). The session
+loop runs it a round at a time on the coins it opens (`Frames`); `opening` runs it on a stream's. -/
+def openStep (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hiSalts : Array ByteArray)
+    (coins : Array (Array F128)) : Step Unit :=
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
-  let commit : Level → Array F128 → (Nat → ByteArray) → RecM Commit := fun lv g salt => pure (commitFw lv g salt)
+  let commit : Level → Array F128 → (Nat → ByteArray) → OpenM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (hiSalts.getD (l - 1) ByteArray.empty)
-  let io := recAsks coins nAlg
-  let prog : TMW RecM Unit := do
-    let (_, _, claims) ← repPiop io t.st lay (flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0
-    let (_, k) ← getThe (Array (ByteArray × Nat) × Nat)
-    if k != nAlg then throw s!"drive: the rep's PIOP took {k} of the algebraic phase's {nAlg} rounds of coins"
-    let _ ← repOpening io commit t.st t.sch lay t.tPad rep t.g t.cm0 claims (Array.replicate lay.len 0) t.extra
-      t.lanePad salt
-  let (_, rs, _) ← (prog.run' (Transcript.init #[] dom)).run (#[], 0)
-  return rs
+  let prog : TMW OpenM Unit := do
+    let (_, _, claims) ← repPiop (stepAsks coins false) t.st lay (flat t.cm0.cap) ByteArray.empty (claimsOf xs)
+      fun _ => 0
+    let k := (← getThe (Array (Array F128))).size
+    if k != coins.size then throw s!"drive: the rep's PIOP took {k} of its {coins.size} rounds of coins"
+    let _ ← repOpening (stepAsks coins true) commit t.st t.sch lay t.tPad rep t.g t.cm0 claims
+      (Array.replicate lay.len 0) t.extra t.lanePad salt
+  ((prog.run' (Transcript.init #[] dom)).run' #[])
+
+/-- **A rep's opening's scheduled rounds** on the stream's coins `coins`: `openStep` on the algebraic phase's `nAlg`
+rounds of them, fed the rest until it ends. -/
+def opening (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (hiSalts : Array ByteArray)
+    (coins : Array (Array F128)) (nAlg : Nat) : V (Array (ByteArray × Nat)) :=
+  match (openStep t rep dom xs hiSalts (coins.extract 0 nAlg)).feed (coins.extract nAlg coins.size).toList #[] with
+  | (.done _, rs) => .ok rs
+  | (.fail e, _) => .error e
+  | (.ask .., rs) => .error s!"drive: the opening's round {nAlg + rs.size} past the stream's {coins.size} rounds of coins"
 
 /-- **A rep's scheduled rounds** on the table `t`, as rep `rep` of a stream whose transcript starts at `dom`: the
 algebraic phase's (`Skeleton.rounds`, on level 0's cap), then the opening's (`opening`), on the stream's coins. -/
