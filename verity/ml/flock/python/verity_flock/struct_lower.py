@@ -10,7 +10,9 @@ the set of distinct caller bits (the callee's inputs, numbered in the caller's c
 of consecutive references) it sums plus its constant, so the
 constant folding and the free XORs the unrolled lowering does across a call boundary are kept. A form over more than
 ``support`` bits is committed by the callee (one row, ``A = form, B = 1``); a returned bit is a constant, or a form over
-the callee's inputs and its own columns, committed by the callee past ``support`` too. Primitive gates are lowered by
+the callee's inputs and its own columns, committed by the callee past ``support`` too, and (``gather``) whenever it
+reads two bits one of which is its own column; a returned column nothing else in the callee reads is laid out last, in
+return order, so a caller binds a copy's returns as one run. Primitive gates are lowered by
 :data:`ir_lower.PIECES` and a Boolean Definition by its builder, as :func:`ir_lower.lower_gates` lowers them; the members
 of a batched primitive node are calls too. So a Definition's template rows are its own gates, never its callees', and
 consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line.
@@ -26,7 +28,8 @@ returns that no caller reads (a callee is lowered without its callers' liveness)
 template's rows unrolled (``tmpl.unroll``) and :func:`evaluate` evaluates them, which :func:`check` holds to the unrolled
 lowering's evaluation on random inputs.
 
-    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--first-appearance] [--out UNIT.tmpl] [--flat | --check]
+    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--first-appearance] [--scattered-returns]
+    [--out UNIT.tmpl] [--flat | --check]
 
 the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
 through the calls, and the template's size) and writes the template; ``--flat`` counts the unrolled lowering instead, and
@@ -120,9 +123,10 @@ def _pattern(words: list[list[L]], fold: bool = True, order=None) -> tuple[tuple
 
 class _Lowerer:
     def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES,
-                 column_order: bool = True):
+                 column_order: bool = True, gather: bool = True):
         self.circuit = circuit
         self.in_column_order = column_order
+        self.gather = gather
         self.support = support
         self.fold_cap, self.fold_gates = fold_cap, fold_gates
         self.folded: dict[str, int] = {}
@@ -239,7 +243,7 @@ class _Lowerer:
                 if b.is_const():
                     rets.append(("c", b.c))
                     continue
-                if len(b.s) > self.support:
+                if len(b.s) > self.support or (self.gather and len(b.s) > 1 and any(C.kind[v] != "arg" for v in b.s)):
                     b = C.commit([b])[0]
                 rets.append(("f", b.c, b.s))
                 C.used.append(L(b.s, 0))
@@ -249,6 +253,25 @@ class _Lowerer:
         self.order.append(sp)
         return sp
 
+    @staticmethod
+    def _returned_last(C: Circuit, live, rets: list) -> list[int]:
+        """The returned own columns nothing else in the specialization reads, in return order: placed last, so a caller
+        binds a copy's returns as one run."""
+        read: set[int] = set()
+        for v in live:
+            if C.kind[v] == "and":
+                a, b = C.data[v]
+                read |= a.s | b.s
+        for blk in C.blocks:
+            read.update(x for x in blk.labels if x >= 0)
+        out: dict[int, None] = {}
+        for t in rets:
+            if t[0] == "f" and len(t[2]) == 1:
+                (v,) = t[2]
+                if C.kind[v] == "and" and v not in read:
+                    out.setdefault(v)
+        return list(out)
+
     def _finish(self, C: Circuit, key: tuple, ins: int, rets: list) -> Spec:
         """Lay out a lowered specialization: its live ANDs and its copies in creation order, then its rows and its copies'
         runs in template references."""
@@ -257,18 +280,23 @@ class _Lowerer:
         sp = Spec(key, ins)
         col: dict[int, int] = {}
         blocks = [b for b in C.blocks if self.specs[b.key].cols]
+        last = self._returned_last(C, live, rets) if self.gather else []
+        at_end = set(last)
         bi, n = 0, int(getattr(C, "zero", False))
         for v in range(len(C.kind)):
             while bi < len(blocks) and blocks[bi].pos <= v:
                 blocks[bi].base = n
                 n += self.specs[blocks[bi].key].cols
                 bi += 1
-            if C.kind[v] == "and" and v in live:
+            if C.kind[v] == "and" and v in live and v not in at_end:
                 col[v] = n
                 n += 1
         for b in blocks[bi:]:
             b.base = n
             n += self.specs[b.key].cols
+        for v in last:
+            col[v] = n
+            n += 1
         sp.cols = n
         for v in range(len(C.kind)):
             if C.kind[v] == "call":
@@ -350,12 +378,12 @@ def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) ->
 
 
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
-          fold_gates: int = FOLD_GATES, column_order: bool = True) -> tuple[T.Tmpl, _Lowerer, Spec]:
+          fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True) -> tuple[T.Tmpl, _Lowerer, Spec]:
     """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
     output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order)
+    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
@@ -500,6 +528,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--support", type=int, default=SUPPORT)
     ap.add_argument("--fold-cap", type=int, default=FOLD_CAP)
     ap.add_argument("--first-appearance", action="store_true", help="number a callee's inputs as its arguments name them")
+    ap.add_argument("--scattered-returns", action="store_true", help="return forms over a callee's columns where they lie")
     ap.add_argument("--out")
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--check", action="store_true")
@@ -513,15 +542,18 @@ def main(argv: list[str]) -> int:
     if a.flat:
         out = flat(shape.unit())
     elif a.check:
-        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance)}
+        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance,
+                             gather=not a.scattered_returns)}
     else:
-        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance)
+        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance,
+                           gather=not a.scattered_returns)
         size = None
         if a.out:
             text = T.write(t)
             Path(a.out).write_text(text)
             size = len(text)
-        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance}
+        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance,
+                                               "gather": not a.scattered_returns}
     out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
