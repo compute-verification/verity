@@ -20,21 +20,40 @@ words at K = 4096. The combine checks that the rows' XOR, word by word, is the l
 
 **The statements and their reads** (`statements`, `reads`): each a C-Flock statement of one unit, its ports these:
 
-* lane l: ``a0`` .. ``a3`` the leaf's A rows at its row slots, ``b0`` .. ``b7`` its B rows at its column slots, ``admit``
-  (the leaf's R admit bits) and ``zy`` (its z/y record), ``partials`` (row l), and a public row ``pub`` of the leaf's
-  salt, position and roots and the lane index (`PUBLIC`), whose content the verifier computes; its output ``o0`` is ok.
+* lane l: ``a0`` .. ``a3`` the leaf's A rows at its row slots, ``b0`` .. ``b7`` its B rows at its column slots, ``zy``
+  (its z/y record) and ``partials`` (row l); ``admit`` (the leaf's R admit bits) and a row ``pub`` of the leaf's salt,
+  position and roots and the lane index l (`PUBLIC`, l a 16-bit word); its output ``o0`` is ok.
 * the combine: ``p0`` .. ``p31`` (rows 0 .. 31 of ``partials``) and ``receipt`` (the leaf's); its output ``o0`` is ok.
 
-Each read is a registered port (`registered_file`) at the row the verifier states here, so a partial swapped between rows
-opens at no read's position, and one from another leaf's tree opens under no root the produced record names. STAND-IN: the
-rows of ``a``, ``b``, ``admit``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served window
-they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
+Every port of every statement, its output row included, is a port of the verifier's own registered reads (`own`,
+`registered_file`), never a row the public file states: a port the verifier doesn't register is free in the relation it
+checks. The file says so (``complete``), and the Lean verifier then refuses a statement any port of whose circuit, an
+input its ok's cone reads (the lane index's ``pub`` among them) or an output row, is not one of the file's ports
+(Flock's `Registered.checkComplete`, `checkComplete_ok`).
+
+* **The reads** (`reads`) open the registration's and the produced record's roots at the rows the verifier states here, so
+  a partial swapped between rows opens at no read's position, and one from another leaf's tree opens under no root the
+  produced record names. Every session's opened rows are the one opening the record keeps (`produced.shared`).
+* **The known ports** (`known`): ``pub``, ``admit`` and ``o0`` the verifier registers at their known content
+  (`produced.known_port`): lane l's ``pub`` row (value ``pub<l>``) holds index l, so a lane whose index isn't the
+  verifier's l opens no root; every statement's ``o0`` (value ``ok<i>``, i its place in `statements`) is the row 1.
+* **Their rows** (`known_rows`, the served path's one producer of them): lane l's ``pub`` (`pub_words`: the unit's salt,
+  position and roots as its seed reads them, `seeds.leaves` and `seeds.position_leaves`, 100 words, then l as the 101st),
+  ``admit`` (the leaf's R admit bits, `bits_words`) and ``o0`` (`OK_ROW`); the salts they're committed under are the
+  caller's. Read least significant bit first, as `Accounting.TS.Lanes.decLane` reads a field, the salt is its 16
+  big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. Lean's
+  is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
+  `known_rows` (`benchmarks/pouw/h1_lanes/run.py`), a wrapper over it.
+
+STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
+window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -42,6 +61,13 @@ PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
 #: the lane statement's public row's fields, in order
 PUBLIC = ("salt", "position", "roots", "lane")
+#: their bits: a digest, a u64, two digests and the lane index's u16 word
+PUBLIC_BITS = (512, 64, 1024, 16)
+PUB, OK = "pub", "o0"
+#: every statement's ``o0`` row: ok = 1
+OK_ROW = (1,)
+#: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
+COMPLETE = "complete"
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, COMBINE = "lane", "combine"
 
@@ -112,42 +138,107 @@ def reads(r: int, c: int, kind: str, ln: int | None = None) -> dict[str, tuple[s
     if kind == LANE:
         out = {f"a{s}": (A, i) for s, i in enumerate(lane_rows(r, c, int(ln)))}
         out.update({f"b{t}": (B, j) for t, j in enumerate(lane_cols(r, c, int(ln)))})
-        return {**out, ADMIT: (ADMIT, 0), ZY: (ZY, 0), PARTIALS: (PARTIALS, int(ln))}
+        return {**out, ZY: (ZY, 0), PARTIALS: (PARTIALS, int(ln))}
     if kind == COMBINE and ln is None:
         return {**{f"p{x}": (PARTIALS, x) for x in range(lanes(r, c))}, RECEIPT: (RECEIPT, 0)}
     raise ValueError(f"a leaf's statement is a lane with its index or the combine, not {(kind, ln)!r}")
 
 
+def known(r: int, c: int, kind: str, ln: int | None = None) -> dict[str, str]:
+    """A statement's ports the verifier registers at known content, each its value: lane l's ``pub`` (``pub<l>``) and
+    ``admit``, and every statement's ``o0`` (``ok<i>``, i its place in `statements`)."""
+    reads(r, c, kind, ln)
+    i = statements(r, c).index((kind, None if ln is None else int(ln)))
+    return {PUB: f"pub{int(ln)}", ADMIT: ADMIT, OK: f"ok{i}"} if kind == LANE else {OK: f"ok{i}"}
+
+
+def own(r: int, c: int, kind: str, ln: int | None = None) -> set[str]:
+    """Every port the verifier registers for a statement: its `reads` and its `known` ports."""
+    return set(reads(r, c, kind, ln)) | set(known(r, c, kind, ln))
+
+
+def bits_words(bits: Sequence[int]) -> list[int]:
+    """A row's u16 words from its bits: bit t is bit t mod 16 of word t // 16, the last word's missing bits 0."""
+    b = [int(x) for x in bits]
+    if any(x not in (0, 1) for x in b):
+        raise ValueError("a row's bits are 0 or 1")
+    return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
+
+
+def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> list[int]:
+    """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
+    (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
+    ln as the 101st."""
+    if len(salt) != 64 or len(roots) != 2 or any(len(x) != 64 for x in roots):
+        raise ValueError("the salt and the two roots are 64-byte digests")
+    if not 0 <= int(ln) < 1 << 16:
+        raise ValueError(f"the lane index is a u16 word, not {ln!r}")
+    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    assert len(bits) == sum(PUBLIC_BITS[:-1])
+    return bits_words(bits) + [int(ln)]
+
+
+def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, admit: Sequence[int] | None = None,
+               salt: bytes | None = None, position: int | None = None,
+               roots: Sequence[bytes] | None = None) -> dict[str, tuple[str, list[int]]]:
+    """A statement's `known` ports' rows, each ``(value, words)``: lane l's ``pub`` (`pub_words` of the unit's ``salt``,
+    ``position`` and ``roots``) and ``admit`` (`bits_words` of the leaf's ``admit`` bits, its R), and every statement's
+    ``o0`` (`OK_ROW`), the combine's one known port. Lean's is `PouwWindow.knownRows`, with its arguments in this order."""
+    vals = known(r, c, kind, ln)
+    out = {OK: (vals[OK], list(OK_ROW))}
+    if kind == LANE:
+        if salt is None or position is None or roots is None or admit is None:
+            raise ValueError("a lane's known rows are of the leaf's admit bits and the unit's salt, position and roots")
+        out[PUB] = (vals[PUB], pub_words(salt, position, roots, int(ln)))
+        out[ADMIT] = (vals[ADMIT], bits_words(admit))
+    return out
+
+
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
-                    roots: Mapping[str, str], schemas: Mapping[str, str] | None = None) -> dict[str, Any]:
+                    roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
+                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` file of one statement (one unit) from its `reads`: each port's value's entry
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
-    registration's, or the accepted produced record's)."""
+    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``complete``:
+    the ports are every port of the statement (`own`), which the verifier then holds the circuit to
+    (`Registered.checkComplete`)."""
     out = {}
     for port, (value, row) in ports.items():
         if value not in entries or value not in roots:
             raise ValueError(f"port {port!r} reads {value!r}, whose entry and root the verifier does not hold")
         out[port] = PR.port(value, entries[value], roots[value], [row], (schemas or {}).get(value, G.SCHEMA))
-    return {"format": G.READS, "ports": out}
+    if set(out) & set(known_ports or {}):
+        raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
+    return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
 
 
 __all__ = [
     "ADMIT",
     "COMBINE",
+    "COMPLETE",
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
+    "OK",
+    "OK_ROW",
     "PARTIALS",
+    "PUB",
     "PUBLIC",
+    "PUBLIC_BITS",
     "RECEIPT",
     "ZY",
     "A",
     "B",
+    "bits_words",
     "key_block",
+    "known",
+    "known_rows",
     "lane_cols",
     "lane_rows",
     "lanes",
     "n_digits",
+    "own",
+    "pub_words",
     "reads",
     "registered_file",
     "statements",
