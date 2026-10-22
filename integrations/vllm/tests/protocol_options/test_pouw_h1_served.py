@@ -303,3 +303,16 @@ def test_register_writes_each_calls_file(tmp_path):
         "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
     from verity.ml.circuits.codec import canonical_json
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
+
+
+def test_the_declared_program_is_the_served_windows_before_it_serves():
+    """`declared` from the window's public shapes, modules, rows and steps alone is the Program its first call declared,
+    under the window's prefix; with none it names no window, so two windows' served Programs differ and their declared
+    one doesn't."""
+    run, _ws, _got = _window(W1)
+    other, _ws, _got = _window(W2, seed=1)
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit())
+    assert P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, SV.prefix(W1), _unit())) == \
+        run.served.program_digest != other.served.program_digest
+    assert P.program_digest(decl) == P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit()))
+    assert decl.fn.bindings["CALLS"] == tuple(run.served.calls) and decl.fn.bindings["LINEARS"] == tuple(run.served.linears)

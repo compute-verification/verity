@@ -32,12 +32,15 @@ an `act` value, a run input under the root of the round that admits it, committe
   before that round's coin (RT4-INT-22).
 * **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales), its served
   y and, when the run has it, its exact z are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
-  so the step digest, and with it round s's root, commits them before round s's coin. Round s + 1's root also commits
-  round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the manifest, the last
-  round's receipts and every round's root and coin, so the draw follows every round coin by hash.
+  so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
+  table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
+  root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
+  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
+  manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **Not yet.** The A table is the run's own: ROOTS1 (it equals the Commit's AROW root of the linear's input) is the
-  Commit's and circuits' check. The round root has no admit root (H1 has no admit unit yet), no producer hands the run a
-  receipt root yet, and no unit reads the round coins yet.
+  Commit's and circuits' check, and nothing yet ties it to the window Program's ``a/<K>`` tree (`pouw_h1_served`), which
+  is committed at the close, under the draw's root and after every round coin. The round root has no admit root (H1 has
+  no admit unit yet), no producer hands the run a receipt root yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -147,6 +150,40 @@ def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes
     """Step s's calls: SHA-512 over their manifest rows (`pouw_h1.H1Run.manifest`), in order, with what each call's listeners
     bound (root(A) among it, once AROW binds it)."""
     return tagged(STEP_TAG, salt, s, *(json.dumps(row, sort_keys=True) for row in rows))
+
+
+def _root64(h: Any) -> bool:
+    try:
+        return isinstance(h, str) and len(bytes.fromhex(h)) == 64
+    except ValueError:
+        return False
+
+
+def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
+    """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
+    and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
+    has no call, a call whose row carries no A table root (``tables``' ``a``, 64 bytes), or a step whose rows aren't the
+    ones its round's ``calls`` digest is over (`step_digest`); None when each call's A table is under its own round's
+    root, and so recorded before that round's coin."""
+    steps: dict[Any, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        steps.setdefault(row.get("step"), []).append(row)
+    logged = [x.get("round") for x in log]
+    for s, got in steps.items():
+        if s not in logged:
+            return (f"call {got[0].get('index')} is at step {s}, which no round of the log closes, so its A table is under "
+                    "no round root")
+    for x in log:
+        r, got = x.get("round"), steps.get(x.get("round"), [])
+        if not got:
+            return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
+        bare = next((m for m in got if not _root64((m.get("tables") or {}).get("a"))), None)
+        if bare is not None:
+            return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
+                    "leaves that no round root commits")
+        if step_digest(salt, r, got).hex() != x.get("calls"):
+            return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
+    return None
 
 
 def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes) -> bytes:
@@ -332,4 +369,4 @@ __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPT
            "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "UNENTERED", "batch_order", "draw_root",
            "late_admission", "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding",
            "round_root", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest"]
+           "sort_batch_req_ids", "step_digest", "tables_reason"]
