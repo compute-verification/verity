@@ -106,6 +106,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
     size, align = [0] * len(defs), [1] * len(defs)
     rnd, gap = [0] * len(defs), [0] * len(defs)  # rows each definition adds: copies rounded up, alignment gaps
     kinds: list[list[tuple]] = [[] for _ in defs]  # per def: (call, kind, 2^m)
+    gaps: list[dict[int, int]] = [{} for _ in defs]  # per def: the alignment gap before each callee's placements
     alias = _aliases(t) if mode == "interleaved" else [{} for _ in defs]
     st = {"runs": 0, "fixed_runs": 0, "lanes_runs": 0, "chained_runs": 0, "rows_lanes": 0, "rows_chained": 0,
           "pow2_runs": 0, "rows_pow2": 0}
@@ -177,6 +178,7 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                     kind = "chained"
                     st["chained_runs"] += 1
                     st["rows_chained"] += c.count * urows[e]
+            gaps[d][e] = gaps[d].get(e, 0) + nb - pos
             j = np.arange(c.count, dtype=np.int64)[:, None]
             cols = c.base + j * Le + np.arange(Le, dtype=np.int64)[None, :]
             if kind == "lanes":
@@ -213,6 +215,18 @@ def layout(t: T.Tmpl, mode: str, fallback: str = "contiguous", strict: bool = Fa
                           "refs": sum(own[e] * ctx[e] for e in range(len(defs))),
                           "pairs": sum(ctx[d] * sum(c.count * defs[c.e].ins for c in D.calls) for d, D in enumerate(defs)),
                           "pairs_runs": sum(ctx[d] * sum(defs[c.e].ins for c in D.calls) for d, D in enumerate(defs))}
+        inst = [0] * len(defs)
+        inst[t.root] = 1
+        for d in range(len(defs) - 1, -1, -1):
+            for c in defs[d].calls:
+                inst[c.e] += inst[d] * c.count
+        pad = [0] * len(defs)
+        for d in range(len(defs)):
+            for e, g in gaps[d].items():
+                pad[e] += inst[d] * g
+        top = sorted(range(len(defs)), key=lambda e: -pad[e])[:8]
+        out["summary"]["gaps_by_def"] = [{"def": e, "rows": pad[e], "size": size[e], "pow2": _pow2(size[e]), "whole": whole[e],
+                                          "paths": paths[e], "instances": inst[e]} for e in top if pad[e]]
     if mode != "today":
         out |= _bindings(defs, maps, size, kinds, urows)
     if mode == "interleaved":
