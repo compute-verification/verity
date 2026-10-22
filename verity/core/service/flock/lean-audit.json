@@ -20,6 +20,7 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
+  "Flock.Test.RegComplete",
   "Flock.Test.RegKnown",
   "Flock.Test.RegRows",
   "Flock.Test.SpillRows",
@@ -31,6 +32,8 @@
   "Flock.Test.Tmpl",
   "Flock.TmplOrder",
   "Flock.Test.TmplLayout",
+  "Flock.Test.TmplFold",
+  "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "VStar"

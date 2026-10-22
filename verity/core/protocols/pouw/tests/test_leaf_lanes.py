@@ -80,7 +80,7 @@ def test_the_statement_set_and_its_reads():
     sts = LL.statements(32, 32)
     assert sts == [("lane", ln) for ln in range(32)] + [("combine", None)]
     r7 = LL.reads(32, 32, "lane", 7)
-    assert r7[LL.PARTIALS] == ("partials", 7) and r7["admit"] == ("admit", 0) and r7["zy"] == ("zy", 0)
+    assert r7[LL.PARTIALS] == ("partials", 7) and r7["zy"] == ("zy", 0) and "admit" not in r7
     assert [r7[f"a{s}"][1] for s in range(4)] == [1, 9, 17, 25]
     assert [r7[f"b{t}"][1] for t in range(8)] == [6, 7, 14, 15, 22, 23, 30, 31]
     rc = LL.reads(32, 32, "combine")
@@ -110,6 +110,45 @@ def test_every_statements_partials_are_registered_reads_and_an_unregistered_row_
     assert not opens(mine, 3, 2), "another row of the tree at row 3"
     assert not opens(resalted, 3, 3), "row 3's words committed outside the registered tree"
     assert not opens(elsewhere, 3, 3), "row 3 of a tree under another registration"
+
+
+def test_every_port_of_every_statement_is_the_verifiers_own():
+    """A port the verifier doesn't register is free in the checked relation, so each statement's every port, its output
+    row included, is a read or a known port of ``own``, never one the public file states; lane l's ``pub`` and every
+    statement's ``o0`` are values of its own."""
+    lane = {*(f"a{s}" for s in range(4)), *(f"b{t}" for t in range(8)), "admit", "zy", "partials", "pub", "o0"}
+    combine = {*(f"p{x}" for x in range(32)), "receipt", "o0"}
+    oks = []
+    for i, (kind, ln) in enumerate(LL.statements(32, 32)):
+        assert LL.own(32, 32, kind, ln) == (lane if kind == LL.LANE else combine)
+        k = LL.known(32, 32, kind, ln)
+        assert not set(k) & set(LL.reads(32, 32, kind, ln)) and k[LL.OK] == f"ok{i}"
+        assert kind == LL.COMBINE or (k[LL.PUB], k[LL.ADMIT]) == (f"pub{ln}", LL.ADMIT)
+        oks.append(k[LL.OK])
+    assert len(set(oks)) == 33
+
+
+def test_a_known_port_opens_only_its_content():
+    """The verifier's ``pub`` of lane 3 (`produced.known_port`) opens the row with index 3 under its salt, and neither the
+    row with index 4 nor index 3's row under another salt."""
+    reg, pd, salt = "ab" * 64, "12" * 64, bytes(range(192))
+    port, (_, bc) = PR.known_port(pd, "pub3", [7, 3], salt, reg)
+    dom = PR.domain(pd, "pub3", 2, 1, 16, reg)
+    root = bytes.fromhex(port["root"])
+
+    def opens(row, s):
+        t = PR.commit(pd, "pub3", [row], reg, [s], schema=G.SCHEMA_V2)
+        return G.verify_read(dom, root, 0, t.bcs[0], t.path(0), G.SCHEMA_V2)
+
+    assert opens([7, 3], salt) and PR.commit(pd, "pub3", [[7, 3]], reg, [salt], schema=G.SCHEMA_V2).bcs[0].hex() == bc
+    assert not opens([7, 4], salt), "a lane whose index isn't the verifier's"
+    assert not opens([7, 3], bytes(192)), "the verifier's content under another salt"
+    f = LL.registered_file({}, {}, {}, known_ports={LL.PUB: port})
+    assert f["ports"] == {LL.PUB: port} and port["reads"] == [0]
+    assert f[LL.COMPLETE] is True, "the verifier holds the circuit's every port to the file's (Registered.checkComplete)"
+    assert LL.COMPLETE not in LL.registered_file({}, {}, {}, known_ports={LL.PUB: port}, complete=False)
+    with pytest.raises(ValueError, match="both reads and known"):
+        LL.registered_file({LL.PUB: ("x", 0)}, {"x": port}, {"x": port["root"]}, known_ports={LL.PUB: port})
 
 
 def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root():

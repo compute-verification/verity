@@ -99,9 +99,8 @@ SEL_SEGS = ((1, 0, 0), (1, A0, 1), (1, B0, 1))
 
 
 def _segs(segs) -> tuple:
-    """One-level ``(len, at, step)`` segments in the installed format: ``flock-ir-tmpl/v2`` gives each its ``reps`` and
-    ``rstride`` too."""
-    return segs if TM.FORMAT == "flock-ir-tmpl/v1" else tuple(s + (1, 0) for s in segs)
+    """One-level ``(len, at, step)`` segments as ``flock-ir-tmpl/v2`` writes them: one rep, no rstride."""
+    return tuple(s + (1, 0) for s in segs)
 
 
 def _select(mux: TM.Def | None = None, *, count: int = 16, segs=SEL_SEGS, base: int = W, extra=()) -> TM.Tmpl:

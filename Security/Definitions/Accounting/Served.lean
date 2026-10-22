@@ -172,9 +172,12 @@ is that realization's to prove, at the premises `Accounting.Guarantees.TS.Sessio
 (`Proofs.Accounting.TS.Session.Assumptions`):
 * `pf.accepted` holds of a proof only where its unit's check words are `1`: flock-verify `--zk --registered` reads the
   `ok` row at its known content (`AcceptedLive`);
-* `pf.rel` is the unit's Definition with its check words fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`), so the relation
-  of an accepted proof holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each
-  committed value's derivation (`ProofLayer.Pins`; `ServedChecksHold` at the session's value layer);
+* `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each committed value's
+  derivation (`ProofLayer.Pins`; `ServedChecksHold` at the session's value layer). The unit's Definition with its check
+  words fixed to `1` (`PouwH1TileZy_v1` with `ok = 1`) is `Accounting.Guarantees.TS.TileSessionSound`'s relation
+  (`TileRel`), under its premise `Accounting.Assumptions.TS.TileChecks`. `CheckedSessionSound`'s relation (`CheckedRel`)
+  is only that the opened rows are an assignment the circuit's evaluation agrees with, which says nothing of the
+  product or `dq`;
 * `pf.opened` holds the leaves of the round's record tables, the records committed under its root before σ_w;
 * `ServedRootsLinked`'s `rows` read the unit's `zy` and A ports at its round root's tables, which
   `Flock.SecurityProofs.ServedRowsLinked` gives at the drawn units under `RowsSession.ServedRegistered` and a circuit

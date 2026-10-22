@@ -335,25 +335,40 @@ def test_a_lane_or_combine_of_a_leaf_of_one_lane_or_no_whole_index_bits_is_refus
             bind(d, TILE=tile()).signature()
 
 
-def test_a_lane_and_combine_are_staged_only_at_a_k_whose_rows_a_proof_takes():
-    """A partial and the receipt are 8 (KS + m) bytes, and the Lean verifier's rows (`Flock.ProvedScope.v2Row`) end, with
-    SHA-512's 17 bytes of padding, in their last block, so their bytes mod 128 are at most 111; C-Flock needs one of the
-    combine's rows past one block. K = 448 (128 bytes) is the least K that fits (K = 384's rows are 112 bytes), K = 896's
-    240 bytes don't, and the served 4096 and 14336 do. A row is whole 16-bit words, so 881 bits are 112 bytes."""
-    assert [Z.row_fits(8 * n) for n in (0, 110, 112, 126, 128, 238, 240, 1040)] == [True, True, False, False, True, True,
-                                                                                    False, True]
-    assert Z.row_fits(1) and not Z.row_fits(881)
-    fits = [k for k in range(32, 16385, 32) if 8 * H.Layout(4, 8, k).sets >= 128
-            and Z.row_fits(64 * H.Layout(4, 8, k).sets)]
-    assert fits[0] == Z.LEAST_K == 448 and {4096, 14336} <= set(fits) and not {896, 928, 1408} & set(fits)
-    for k in (64, 384, 416, 896, 928):
-        with pytest.raises(ValueError, match="K = 448 is the least"):
-            Z.proved_k(k)
-        for f in (Z.lane, Z.combine):
-            with pytest.raises(ValueError, match=f"K = {k}: a lane's partial and the receipt are"):
-                f(_tile(r=8, c=16, k=k))
-    assert [Z.proved_k(k) for k in (448, 480, 4096, 14336)] == [448, 480, 4096, 14336]
-    assert Z.lane(_tile(r=8, c=16, k=448)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=8, c=16, k=448))
+def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compress_before_their_last_block():
+    """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length (#3148), so K = 384,
+    416, 896 and 928, whose rows' padding spills into another block, are staged. The combine reads only those rows, and
+    C-Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
+    112 bytes or more: K = 384 is the least, and K = 352's 104-byte rows are refused. A lane has such rows at every K."""
+    assert [8 * H.Layout(4, 8, k).sets for k in (352, 384, 416, 448, 896, 928)] == [104, 112, 120, 128, 240, 248]
+    assert Z.LEAST_K == 384
+    for k in (64, 352, 384, 416, 896, 928, 4096):
+        assert Z.lane(_tile(r=16, c=16, k=k)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=16, c=16, k=k))
+    for k in (384, 416, 448, 896, 928, 4096):
+        assert Z.combine(_tile(r=16, c=16, k=k)) == bind(Z.PouwH1Combine, TILE=_tile(r=16, c=16, k=k))
+    for k in (64, 352):
+        with pytest.raises(ValueError, match=f"K = {k}: the combine reads only .* K = 384 is the least"):
+            Z.combine(_tile(r=16, c=16, k=k))
+
+
+def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole_16_bit_words():
+    """A lane reads the leaf's R admit bits as one row, and C-Flock lowers only a row of whole 16-bit words
+    (`class_statement.unit_lowering`), so `lane` and `combine` refuse a leaf of R = 4 or 8, whose lanes the Definitions
+    bind, and take R = 16 and the served 32. Both refuse K = 0, which the Definitions bind too and `leaf_lanes` refuses."""
+    for r, c in ((4, 16), (8, 8), (8, 16)):
+        t = _tile(r=r, c=c, k=384)
+        bind(Z.PouwH1LaneZy, TILE=t).signature()
+        for stage in (Z.lane, Z.combine):
+            with pytest.raises(ValueError, match=f"R = {r}: a lane reads the leaf's R admit bits as one row"):
+                stage(t)
+    for r, c in ((16, 8), (16, 16), (32, 32)):
+        t = _tile(r=r, c=c, k=384)
+        assert Z.lane(t) == bind(Z.PouwH1LaneZy, TILE=t) and Z.combine(t) == bind(Z.PouwH1Combine, TILE=t)
+    t = _tile(r=32, c=32, k=0)
+    bind(Z.PouwH1LaneZy, TILE=t).signature()
+    for stage in (Z.lane, Z.combine):
+        with pytest.raises(ValueError, match="K = 0: a leaf's lanes and combine are staged only at a positive K"):
+            stage(t)
 
 
 def _word_bits(words):
