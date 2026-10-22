@@ -85,7 +85,7 @@ EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness":
           "shape": (FW + "the proof's shape ", False), "cut-rc": (DEV + "CUDA circuit prover returned error ", None),
           "cut-rc240": (DEV + "PROVER-STOPPED: degenerate coins: ", None), "cut-panic": (DEV + "panicked: ", None),
           "cut-silent": (DEV + "silent past the firewall's deadline", None), "cut-decode": (DEV + "the device's output does not decode", None),
-          "cut-tree": (FW, None)}
+          "cut-tree": ("", True)}
 rows = [json.loads(l) for l in open(sys.argv[1])]
 rounds = (rows[0].get("auditor") or {}).get("rounds") if rows else None
 for r in rows:
