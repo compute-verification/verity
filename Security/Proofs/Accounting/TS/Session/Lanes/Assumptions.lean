@@ -59,7 +59,8 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
 /-- `accounting-ts-leaf-reads` (the decodes and the verifier's registrations; owner @proofs). **Where a leaf's 33
 sessions' registrants' rows agree, the decodes read one leaf, one partials record and one receipt**: on every path, at
 proof `i` of round `w`, if the registrants' rows of the 33 sessions agree wherever two of them read one root at one
-position (`RowsAgree`), then lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's
+position (`RowsAgree`), and at each session the registrants' rows at the ports its known content `known x w i k`
+names are the known rows (`KnownHeld`), then lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's
 commit-time openings `RowsSession.wo`), read through `decL`, are `laneView`: the leaf's A rows at its row slots and B
 rows at its column slots, the leaf's record, row `l` of the partials, the path's public inputs (admit, salt, position,
 roots), the index `l` and `ok = 1`; and the combine's, read through `decC`, are the 32 partials rows, the receipt and
@@ -77,17 +78,20 @@ the decodes and of the registered files the verifier hands the 33 sessions:
 * `decL` and `decC` read each value's rows by that port and the row's position, lane `l`'s A row at row slot `s` at
   row `rowOf l s`, its B row at column slot `t` at row `colOf l t` and its partials row at row `l`, so rows that agree
   decode to one leaf and one partials record;
-* the verifier registers each lane's salt, position, roots, admit bits and index `l` (distinct `l = 0..31`), and every
-  statement's `ok` row, at their known content, as ports of `own` (#3131's `SampledProofs.Produced.known`, #3142's
-  `Flock.Registered.checkKnownAll`), so that their registrants' rows are that content. -/
+* the known content the verifier hands each session (`known x w i k`) is each lane's salt, position, roots, admit bits
+  and index `l` (distinct `l = 0..31`), and every statement's `ok` row, at the ports the decodes read them from
+  (#3131's `SampledProofs.Produced.known`). That the registrants' rows at those ports are that content is no longer
+  asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it from flock-verify's known-content check
+  (`Flock.Registered.checkKnownAll`) unless the known-content tie collides (`LeafKnownColl`). -/
 def LeafReads {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
+    (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
     (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K) :
     Prop :=
-  ∀ x w i, RowsAgree (sess x w i) →
+  ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
     (∀ l, decL (sess x w i (some l)) (openedReg (sess x w i (some l))) =
       laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
     decC (sess x w i none) (openedReg (sess x w i none)) = ⟨parts x w i, receipt x w i, true⟩
