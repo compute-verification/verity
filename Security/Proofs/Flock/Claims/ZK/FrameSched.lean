@@ -215,19 +215,48 @@ theorem sim_sampleKP : Sim L (· = ·) (sampleKP io) (sampleKP io) :=
 
 /-! ## The algebraic phase -/
 
-/-- **The masked zerocheck at two caps of one size** returns the same proof and leaves alike transcripts. -/
-theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
-    (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64)
-    (hm : m < 2 ^ 64) :
-    Sim L (· = ·) (zerocheckFw io m digest cap root lay mk) (zerocheckFw io m digest cap' root lay mk) := by
-  unfold zerocheckFw
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
-  refine sim_bind (sim_absorbBytes rfl hd) fun _ _ _ => ?_
-  refine sim_bind (sim_absorbBytes hc hcn) fun _ _ _ => ?_
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
-  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
-  refine sim_bind (sim_absorbBytes rfl hr) fun _ _ _ => ?_
-  refine sim_bind (sim_sampleVecP 6 (by decide)) fun _ _ _ => ?_
+/-- **The masked zerocheck after its first round** (`zerocheckFw` from `rOuter`'s squeeze on), which reads neither
+the digest, the cap nor the pads' root. -/
+def zcRest (io : Asks M) (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
+    TMW M (_root_.Flock.ZerocheckProof × _root_.Flock.ZcOut) := do
+  let rOuter ← sampleVecP io (m - 13)
+  let r := _root_.Flock.pinned ++ rOuter
+  let r1ab' := (Array.range 64).map fun i => mk (lay.r1ab i)
+  let r1c' := (Array.range 64).map fun i => mk (lay.r1c i)
+  liftTM (absorbSlice r1ab')
+  liftTM (absorbSlice r1c')
+  let z ← sampleP io
+  let mut rounds : Array (F128 × F128) := #[]
+  let mut rho : Array F128 := #[]
+  for i in [0:m - 6] do
+    let g1' := mk (lay.ml i 0)
+    let ginf' := mk (lay.ml i 1)
+    liftTM (absorbF g1')
+    liftTM (absorbF ginf')
+    let rr ← sampleP io
+    rho := rho.push rr
+    rounds := rounds.push (g1', ginf')
+  liftTM (absorbF (mk lay.fa))
+  liftTM (absorbF (mk lay.fb))
+  return (⟨r1ab', r1c', rounds, mk lay.fa, mk lay.fb, mk lay.fc⟩, { z, rho, rRest := r, vA := 0, vB := 0, vC := 0 })
+
+theorem zerocheckFw_split (io : Asks M) (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
+    (mk : ℕ → F128) :
+    zerocheckFw io m digest cap root lay mk = (do
+      liftTM (label "flock-r1cs-v0")
+      liftTM (absorbBytes digest)
+      liftTM (absorbBytes cap)
+      liftTM (label "flock-zerocheck-v0")
+      liftTM (label _root_.Flock.Zk.LABEL_PADS)
+      liftTM (absorbBytes root)
+      let _ ← sampleVecP io 6
+      zcRest io m lay mk) :=
+  rfl
+
+/-- The masked zerocheck after its first round returns the same proof from alike transcripts. -/
+theorem zcRest_sim (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (hm : m < 2 ^ 64) :
+    Sim L (· = ·) (zcRest io m lay mk) (zcRest io m lay mk) := by
+  unfold zcRest
   refine sim_bind (sim_sampleVecP (m - 13) (by omega)) fun rO rO' h => ?_
   subst h
   refine sim_bind (sim_absorbSlice rfl (by simp)) fun _ _ _ => ?_
@@ -245,6 +274,21 @@ theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _roo
     refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
     refine sim_bind (sim_absorbF _ _) fun _ _ _ => ?_
     exact sim_pure rfl
+
+/-- **The masked zerocheck at two caps of one size** returns the same proof and leaves alike transcripts. -/
+theorem zerocheckFw_sim (m : ℕ) (digest cap cap' root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
+    (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64)
+    (hm : m < 2 ^ 64) :
+    Sim L (· = ·) (zerocheckFw io m digest cap root lay mk) (zerocheckFw io m digest cap' root lay mk) := by
+  rw [zerocheckFw_split, zerocheckFw_split]
+  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_absorbBytes rfl hd) fun _ _ _ => ?_
+  refine sim_bind (sim_absorbBytes hc hcn) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_label _ (by decide)) fun _ _ _ => ?_
+  refine sim_bind (sim_absorbBytes rfl hr) fun _ _ _ => ?_
+  refine sim_bind (sim_sampleVecP 6 (by decide)) fun _ _ _ => ?_
+  exact zcRest_sim m lay mk hm
 
 /-- **The masked lincheck from one coin state** returns the same proof and leaves alike transcripts. -/
 theorem lincheckFw_sim (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128)
@@ -928,6 +972,251 @@ theorem openStep_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (do
     (fun lv g salt => pure (_root_.Flock.Firewall.Finish.commitFw lv g salt)) st sch
     (fun i g g' s s' _ => orel_pure (commitFw_capAlike _ g g' s s' (hd i))) _ tPad rep g g' cm0 cm0' r.2.2 _ extra
     extra' lanePad lanePad' _ _ hcm hg hc hn hq hp) fun _ _ _ => sim_pure trivial
+
+/-! ## The algebraic phase's schedule -/
+
+/-- **Two `V` results alike**: both refused, or both values, related by `S`. -/
+def RelV {α β : Type} (S : α → β → Prop) : V α → V β → Prop
+  | .ok a, .ok b => S a b
+  | .error _, .error _ => True
+  | _, _ => False
+
+theorem relV_bind {α β γ δ : Type} {S : α → β → Prop} {T : γ → δ → Prop} {x : V α} {y : V β} {f : α → V γ}
+    {g : β → V δ} (h : RelV S x y) (hfg : ∀ a b, S a b → RelV T (f a) (g b)) : RelV T (x >>= f) (y >>= g) := by
+  cases x <;> cases y
+  · exact True.intro
+  · exact (h : False).elim
+  · exact (h : False).elim
+  · exact hfg _ _ h
+
+theorem relV_mono {α β : Type} {S T : α → β → Prop} {x : V α} {y : V β} (h : RelV S x y)
+    (hST : ∀ a b, S a b → T a b) : RelV T x y := by
+  cases x <;> cases y
+  · exact True.intro
+  · exact (h : False).elim
+  · exact (h : False).elim
+  · exact hST _ _ h
+
+theorem stateT_bind_apply {σ α β : Type} (x : StateT σ V α) (f : α → StateT σ V β) (s : σ) :
+    (x >>= f) s = x s >>= fun p => f p.1 p.2 :=
+  rfl
+
+theorem tmw_bind_apply {σ α β : Type} (x : TMW (StateT σ V) α) (f : α → TMW (StateT σ V) β) (t : Transcript)
+    (s : σ) : (x >>= f) t s = x t s >>= fun p => f p.1.1 p.1.2 p.2 :=
+  rfl
+
+theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Transcript) (s : σ) :
+    (x.run' t).run s = x t s >>= fun p => pure (p.1.1, p.2) :=
+  rfl
+
+section Skel
+
+open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
+
+/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins drawn, rounds of one shape. -/
+def RecP (h h' : ByteArray × ℕ) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
+  s.2 = s'.2 ∧ RoundsAt s.1 s'.1 ∧ s.1[0]? = some h ∧ s'.1[0]? = some h'
+
+/-- Two recording programs alike from recordings pinned at `h` and `h'`. -/
+def RecR (h h' : ByteArray × ℕ) {α β : Type} (S : α → β → Prop) (x : RecM α) (y : RecM β) : Prop :=
+  ∀ s s', RecP h h' s s' → RelV (fun a b => S a.1 b.1 ∧ RecP h h' a.2 b.2) (x s) (y s')
+
+theorem getElem?_push_zero {α : Type} {a : Array α} {x y : α} (h : a[0]? = some y) : (a.push x)[0]? = some y := by
+  obtain ⟨hs, _⟩ := Array.getElem?_eq_some_iff.1 h
+  rw [Array.getElem?_push, if_neg (Nat.ne_of_lt hs)]
+  exact h
+
+/-- **The recording's lift**, from recordings pinned at their first rounds `h` and `h'`. -/
+def recLift (h h' : ByteArray × ℕ) : Lift (M := RecM) recAsks where
+  R := RecR h h'
+  pure hab := fun _ _ hs => And.intro hab hs
+  bind hxy hfg := fun s s' hs => by
+    rw [stateT_bind_apply, stateT_bind_apply]
+    exact relV_bind (hxy s s' hs) fun a b hab => hfg a.1 b.1 hab.1 a.2 b.2 hab.2
+  throw _ _ := fun _ _ _ => True.intro
+  liftOk hab := fun _ _ hs => And.intro hab hs
+  round := by
+    intro c c' hc
+    obtain ⟨n, hn, hn', hr⟩ := roundAt_of_alike hc
+    rintro ⟨rs, k⟩ ⟨rs', k'⟩ ⟨hk, hR, h0, h0'⟩
+    dsimp only at hk
+    subst hk
+    unfold recAsks
+    dsimp only
+    rw [hn, hn']
+    refine And.intro rfl (And.intro rfl (And.intro ?_ (And.intro (getElem?_push_zero h0) (getElem?_push_zero h0'))))
+    unfold RoundsAt
+    rw [Array.toList_push, Array.toList_push]
+    exact forall₂_push hR hr
+
+/-- What the masked zerocheck frames before its first squeeze, up to its label, at `dom`, `digest` and `cap`. -/
+def zcPre (digest cap dom : ByteArray) : ByteArray :=
+  (Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
+    _root_.Flock.Transcript.padded "flock-r1cs-v0".toUTF8 ++ header 5 0 digest.size ++
+    _root_.Flock.Transcript.padded digest ++ header 5 0 cap.size ++ _root_.Flock.Transcript.padded cap ++
+    header 2 0 "flock-zerocheck-v0".toUTF8.size ++ _root_.Flock.Transcript.padded "flock-zerocheck-v0".toUTF8
+
+/-- What the masked zerocheck frames before its first squeeze, the pads' label and root `root` included. -/
+def zcPend (digest cap root dom : ByteArray) : ByteArray :=
+  zcPre digest cap dom ++ header 2 0 _root_.Flock.Zk.LABEL_PADS.toUTF8.size ++
+    _root_.Flock.Transcript.padded _root_.Flock.Zk.LABEL_PADS.toUTF8 ++ header 5 0 root.size ++
+    _root_.Flock.Transcript.padded root
+
+/-- The transcript after the masked zerocheck's first round `c`, the recording's coins. -/
+def skelT8 (c : ByteArray) : Transcript :=
+  { rounds := (#[] : Array _root_.Flock.Round).push
+      ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.Firewall.Skeleton.coin (0 + i + 1), some c⟩,
+    k := 0 + 1, pending := ByteArray.empty }
+
+/-- The recording after the masked zerocheck's first round `c`. -/
+def skelS1 (c : ByteArray) : Array (ByteArray × ℕ) × ℕ :=
+  ((#[] : Array (ByteArray × ℕ)).push (c, (_root_.Flock.u64OfLE c (c.size - 8)).toNat),
+    0 + (_root_.Flock.u64OfLE c (c.size - 8)).toNat)
+
+/-- **The recorded zerocheck up to its first round**, from a rep's start: the rest at that round recorded. -/
+theorem zerocheckFw_head (m : ℕ) (digest cap root dom : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
+    (mk : ℕ → F128) :
+    zerocheckFw recAsks m digest cap root lay mk (Transcript.init #[] dom) (#[], 0) =
+      zcRest recAsks m lay mk (skelT8 (zcPend digest cap root dom ++ header 4 2 6))
+        (skelS1 (zcPend digest cap root dom ++ header 4 2 6)) := by
+  rw [zerocheckFw_split]
+  rfl
+
+theorem pendAlike_label {p p' : ByteArray} (h : PendAlike p p') (l : String) (hl : l.toUTF8.size < 2 ^ 64) :
+    PendAlike (p ++ header 2 0 l.toUTF8.size ++ _root_.Flock.Transcript.padded l.toUTF8)
+      (p' ++ header 2 0 l.toUTF8.size ++ _root_.Flock.Transcript.padded l.toUTF8) :=
+  pendAlike_snoc h (FlockSoundness.Refine.label_enc _ l) (FlockSoundness.Refine.label_enc _ l) rfl hl
+
+theorem pendAlike_bytes {p p' b b' : ByteArray} (h : PendAlike p p') (hb : b.size = b'.size)
+    (hn : b.size < 2 ^ 64) :
+    PendAlike (p ++ header 5 0 b.size ++ _root_.Flock.Transcript.padded b)
+      (p' ++ header 5 0 b'.size ++ _root_.Flock.Transcript.padded b') :=
+  pendAlike_snoc h (FlockSoundness.Refine.absorbBytes_enc _ b) (FlockSoundness.Refine.absorbBytes_enc _ b') hb hn
+
+theorem zcPre_alike (digest cap cap' dom : ByteArray) (hc : cap.size = cap'.size) (hd : digest.size < 2 ^ 64)
+    (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) : PendAlike (zcPre digest cap dom) (zcPre digest cap' dom) :=
+  pendAlike_label (pendAlike_bytes (pendAlike_bytes (pendAlike_label (trAlike_init dom hdom) _ (by decide)) rfl hd)
+    hc hcn) _ (by decide)
+
+theorem zcPend_alike (digest cap cap' root dom : ByteArray) (hc : cap.size = cap'.size)
+    (hd : digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) :
+    PendAlike (zcPend digest cap root dom) (zcPend digest cap' root dom) :=
+  pendAlike_bytes (pendAlike_label (zcPre_alike digest cap cap' dom hc hd hcn hdom) _ (by decide)) rfl hr
+
+theorem head_eq (st : _root_.Flock.Setup) (cap dom : ByteArray) :
+    _root_.Flock.Firewall.Skeleton.head st cap dom = zcPre st.digest cap dom := by
+  simp only [_root_.Flock.Firewall.Skeleton.head, zcPre, _root_.Flock.Firewall.Frame.labelFrame,
+    _root_.Flock.Firewall.Frame.bytesFrame, _root_.Flock.Firewall.Frame.LABEL_ZC, ByteArray.append_assoc]
+
+theorem zcPend_eq (digest cap root dom : ByteArray) :
+    zcPend digest cap root dom = zcPre digest cap dom ++ padsFrames root := by
+  simp only [zcPend, padsFrames, _root_.Flock.Firewall.Frame.labelFrame, _root_.Flock.Firewall.Frame.bytesFrame,
+    ByteArray.append_assoc]
+
+theorem forall₂_set0 {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} {a : α} {b : β}
+    (h : List.Forall₂ R l l') (hab : R a b) : List.Forall₂ R (l.set 0 a) (l'.set 0 b) := by
+  cases h with
+  | nil => exact .nil
+  | cons _ ht => exact .cons hab ht
+
+/-- **The recorded PIOP at two caps of one size**, from a rep's start: recordings of one shape, pinned at their first
+rounds. -/
+theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap cap' root dom : ByteArray)
+    (hc : cap.size = cap'.size) (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hr : root.size < 2 ^ 64)
+    (hdom : dom.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
+    RelV (fun a b => RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
+        (zcPend st.digest cap' root dom ++ header 4 2 6, 6) a.2 b.2)
+      (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
+        (Transcript.init #[] dom) |>.run (#[], 0))
+      (((repPiop recAsks st lay cap' root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
+        (Transcript.init #[] dom) |>.run (#[], 0)) := by
+  have hcnt : ∀ c, (_root_.Flock.u64OfLE (zcPend st.digest c root dom ++ header 4 2 6)
+      ((zcPend st.digest c root dom ++ header 4 2 6).size - 8)).toNat = 6 :=
+    fun c => count_header _ 2 6 (by decide)
+  have hpin : RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
+      (zcPend st.digest cap' root dom ++ header 4 2 6, 6)
+      (skelS1 (zcPend st.digest cap root dom ++ header 4 2 6))
+      (skelS1 (zcPend st.digest cap' root dom ++ header 4 2 6)) := by
+    unfold RecP skelS1
+    dsimp only
+    rw [hcnt, hcnt]
+    exact ⟨rfl, List.Forall₂.cons ⟨rfl, _, _, 2, zcPend_alike st.digest cap cap' root dom hc hd hcn hr hdom, rfl, rfl,
+      .inl rfl, show (6 : ℕ) ≠ 0 by decide, show (6 : ℕ) < 2 ^ 64 by decide⟩ List.Forall₂.nil, rfl, rfl⟩
+  rw [tmw_run'_run, tmw_run'_run]
+  refine relV_bind (S := fun a b => RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
+    (zcPend st.digest cap' root dom ++ header 4 2 6, 6) a.2 b.2) ?_ fun a b h => by exact h
+  rw [tmw_bind_apply, tmw_bind_apply]
+  refine relV_bind (S := fun a b => RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
+    (zcPend st.digest cap' root dom ++ header 4 2 6, 6) a.2 b.2) ?_ fun a b h => by exact h
+  unfold repPiop
+  rw [tmw_bind_apply, tmw_bind_apply, zerocheckFw_head, zerocheckFw_head]
+  refine relV_bind (zcRest_sim (L := recLift _ _) st.m lay _ hm (skelT8 _) (skelT8 _) pendAlike_empty _ _ hpin) fun a b hab => ?_
+  obtain ⟨⟨x, t1⟩, s1⟩ := a
+  obtain ⟨⟨y, t1'⟩, s1'⟩ := b
+  obtain ⟨⟨hxy, ht⟩, hs⟩ := hab
+  dsimp only at hxy ht hs
+  subst hxy
+  obtain ⟨zp, zc⟩ := x
+  dsimp only
+  exact relV_mono (sim_bind (L := recLift (zcPend st.digest cap root dom ++ header 4 2 6, 6)
+      (zcPend st.digest cap' root dom ++ header 4 2 6, 6)) (S := (· = ·)) (T := (· = ·))
+    (lincheckFw_sim st.fold lay (fun _ => 0) zc) (fun u v h => by subst h; exact sim_pure rfl)
+    t1 t1' ht s1 s1' hs) fun _ _ h => h.2
+
+/-- **The algebraic phase's scheduled rounds at two level-0 caps of one size** are rounds of one shape, or both
+refused. -/
+theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteArray) (hc : cap.size = cap'.size)
+    (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
+    RelV RoundsAt (_root_.Flock.Firewall.Skeleton.rounds st k0 cap dom)
+      (_root_.Flock.Firewall.Skeleton.rounds st k0 cap' dom) := by
+  unfold _root_.Flock.Firewall.Skeleton.rounds
+  dsimp only
+  refine relV_bind (skel_run st _ cap cap' _ dom hc hd hcn
+    (show (Array.replicate 64 (0 : UInt8)).size < 2 ^ 64 by simp) hdom hm) fun a b hab => ?_
+  obtain ⟨_, rs, k⟩ := a
+  obtain ⟨_, rs', k'⟩ := b
+  obtain ⟨_, hR, h0, h0'⟩ := hab
+  dsimp only at hR h0 h0'
+  dsimp only
+  rw [h0, h0']
+  dsimp only
+  have key : ∀ c, zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6 =
+      _root_.Flock.Firewall.Skeleton.head st c dom ++ (padsFrames (ByteArray.mk (Array.replicate 64 0)) ++
+        header 4 2 6) := fun c => by
+    rw [zcPend_eq, head_eq, ByteArray.append_assoc]
+  have e1 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract 0
+      (_root_.Flock.Firewall.Skeleton.head st c dom).size = _root_.Flock.Firewall.Skeleton.head st c dom := fun c => by
+    rw [key]
+    exact ByteArray.extract_append_eq_left rfl
+  have e2 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract
+      (_root_.Flock.Firewall.Skeleton.head st c dom).size ((_root_.Flock.Firewall.Skeleton.head st c dom).size +
+        (padsFrames (ByteArray.mk (Array.replicate 64 0))).size) =
+      padsFrames (ByteArray.mk (Array.replicate 64 0)) := fun c => by
+    have := @ByteArray.extract_append_size_add (_root_.Flock.Firewall.Skeleton.head st c dom)
+      (padsFrames (ByteArray.mk (Array.replicate 64 0)) ++ header 4 2 6) 0
+      (padsFrames (ByteArray.mk (Array.replicate 64 0))).size
+    simp only [Nat.add_zero] at this
+    rw [key, this]
+    exact ByteArray.extract_append_eq_left rfl
+  have e3 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract
+      ((_root_.Flock.Firewall.Skeleton.head st c dom).size +
+        (padsFrames (ByteArray.mk (Array.replicate 64 0))).size)
+      (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).size = header 4 2 6 :=
+    fun c => by
+      rw [key, ← ByteArray.append_assoc]
+      exact ByteArray.extract_append_eq_right ByteArray.size_append.symm ByteArray.size_append
+  simp only [e1, e2, e3, bne_self_eq_false, Bool.false_eq_true, or_self, ↓reduceIte]
+  have hpre : PendAlike (_root_.Flock.Firewall.Skeleton.head st cap dom)
+      (_root_.Flock.Firewall.Skeleton.head st cap' dom) := by
+    rw [head_eq, head_eq]
+    exact zcPre_alike st.digest cap cap' dom hc hd hcn hdom
+  show RoundsAt _ _
+  unfold RoundsAt
+  simp only [Array.set!_eq_setIfInBounds, Array.toList_setIfInBounds]
+  exact forall₂_set0 hR ⟨rfl, _, _, 2, hpre, rfl, rfl, .inl rfl, show (6 : ℕ) ≠ 0 by decide,
+    show (6 : ℕ) < 2 ^ 64 by decide⟩
+
+end Skel
 
 end Sched
 
