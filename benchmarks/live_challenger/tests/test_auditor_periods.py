@@ -30,7 +30,8 @@ CIRCUIT = "9f" * 64
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-    return A.Host(root=tmp_path / "var", peers=tmp_path / "peers")
+    (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
+    return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
 
 @pytest.fixture
@@ -443,7 +444,7 @@ def test_the_check_refuses_an_open_after_its_periods_close_and_a_reserve_past_th
     with pytest.raises(ValueError, match="opened after its period p1 closed"):
         checked(host)
 
-    other = A.Host(root=host.root.parent / "other", peers=host.peers)
+    other = A.Host(root=host.root.parent / "other", peers=host.peers, pins=host.pins)
     other.root.mkdir()
     ok(ssh(other, signer, f"period-open --name p1 --cap 1 --circuit {CIRCUIT}", "hash"))
     forge(other, signer, "reserve", S1, reserve_body())
