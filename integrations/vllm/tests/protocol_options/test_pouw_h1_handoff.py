@@ -104,7 +104,7 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     the session closed and each call's A table under its round's root."""
     from tests.protocol_options import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
-    run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64)
+    run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64)), retain_steps=6), n=64)
     HO.suspend(run, tmp_path / "state")
     fd = os.dup(run.rounds.challenger._wire.sock.fileno())
     run.rounds.challenger._wire.sock.close()

@@ -180,8 +180,8 @@ class Settings:
     #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
     #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
     gate: Any = None
-    #: H1's served trees (`pouw_h1_served.Served`): the window's A codes and B rows committed as the window Program's
-    #: registered values at its close, which `calls_root` binds
+    #: H1's served trees (`pouw_h1_served.Served`): each call's A and z/y tables and the weights' B committed as the
+    #: window Program's registered values as the calls are recorded, under their rounds' roots
     served: Any = None
 
     @classmethod
