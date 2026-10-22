@@ -15,8 +15,8 @@ ports are `P`'s, the lane's index and `ok = 1`: the fields of `LaneHolds` that t
   field's, at its first bit in `lanePorts` (`fieldBit_salt` …, by evaluation);
 * `laneKnownHolds`, `combKnownOk`: through `holds_known` and `portBit_known` at each port.
 
-Each port is taken as the known row's (`KnownPort`: a `sha512/row/v2` port without segments, read at the value's one
-row, 0) and each of its bits as read (`RowBitRead`, which `rowBitRead_of_col` gives from the circuit's rows).
+Each port is taken as a known value's row (`KnownPort`: a `sha512/row/v2` port without segments; a one-row value is read
+at row 0, `known_readAt_zero`) and each of its bits as read (`RowBitRead`, which `rowBitRead_of_col` gives from the circuit's rows).
 -/
 
 namespace Accounting.TS.Lanes
@@ -32,6 +32,22 @@ structure LaneKnownHolds (T : Tile) (rd : String → ℕ → Option Bool) (P : L
   roots : Holds (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits) P.roots
   lane : Holds (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits l.val
   ok : rd "o0" 0 = some true
+
+/-- **`LaneHolds` is its registered fields and its known ones**: the A and B rows, the record and the partials row,
+with `LaneKnownHolds`. -/
+theorem LaneKnownHolds.laneHolds {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {L : Leaf K} {P : LanePub}
+    {p : Fin nw → BitVec 32} {l : Fin 32} (hk : LaneKnownHolds T rd P l)
+    (ha : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
+      (encS 8 ((laneA L l s).codes k)))
+    (haS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat)
+    (hb : ∀ (t : Fin 8) (k : Fin K), Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].codes" + 8 * k.val) 8
+      (encS 8 ((laneB L l t).codes k)))
+    (hbS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat)
+    (hz : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j)))
+    (hy : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat)
+    (hp : ∀ w : Fin nw, Holds (rd "partials") (fieldBit (lanePorts T 0) "partials" + 32 * w.val) 32 (p w).toNat) :
+    LaneHolds K nw T rd L P p l :=
+  ⟨ha, haS, hb, hbS, hz, hy, hp, hk.admit, hk.salt, hk.position, hk.roots, hk.lane, hk.ok⟩
 
 theorem fieldBit_admit (T : Tile) : fieldBit (lanePorts T 0) "admit" = 0 := rfl
 theorem fieldBit_salt (T : Tile) : fieldBit (lanePorts T 0) "salt" = 0 := rfl
@@ -102,10 +118,9 @@ theorem pubBits_lane (s p r l : ℕ) {i : ℕ} (h : i < laneBits) : (pubBits s p
   unfold pubBits
   rw [getElem?_append_at (by simp only [List.length_append, length_natBits, digestBits, positionBits]), natBits_get h]
 
-/-- **Port `q` holds a known value's one row**: a `sha512/row/v2` port without segments, unit `u`'s registrant reading
-it at row 0. -/
-def KnownPort (s : RowsSession) (u : Fin s.n) (q : Fin s.c.ports.size) : Prop :=
-  s.c.ports[q.val]!.segs = none ∧ s.c.ports[q.val]!.v2 = true ∧ (s.rdU u).readAt (Sum.inl (u, q)) = 0
+/-- **Port `q` is a known value's row**: a `sha512/row/v2` port without segments. -/
+def KnownPort (s : RowsSession) (q : Fin s.c.ports.size) : Prop :=
+  s.c.ports[q.val]!.segs = none ∧ s.c.ports[q.val]!.v2 = true
 
 variable {s : RowsSession}
 
@@ -113,11 +128,11 @@ variable {s : RowsSession}
 theorem ok_of_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     {known : Known} (hK : KnownHeld s known) {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {q : Fin s.c.ports.size}
-    (hq : s.c.ports[q].name = "o0") (hP : KnownPort s u q) {salt : ByteArray}
+    (hq : s.c.ports[q].name = "o0") (hP : KnownPort s q) {salt : ByteArray}
     (hm : ("o0", #[(okRow, salt)]) ∈ known) (hr : RowBitRead s u q 0) :
     portBit s (openedReg s) "o0" 0 = some true := by
-  have h := portBit_known hN hK hu hS hcomp hP.1 hP.2.1 (ks := #[(okRow, salt)]) (by rw [hq]; exact hm) hr
-  rw [hq, hP.2.2] at h
+  have h := portBit_known hN hK hu hS hcomp hP.1 hP.2 (ks := #[(okRow, salt)]) (by rw [hq]; exact hm) hr
+  rw [hq, known_readAt_zero hK hS hcomp (r := (okRow, salt)) (by rw [hq]; exact hm)] at h
   rw [h]
   show some (((rowWords [true])[0 / 16]!).testBit (0 % 16)) = _
   rw [rowWords_testBit [true] (by simp)]
@@ -132,7 +147,7 @@ theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports
     {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())
     {qa qp qo : Fin s.c.ports.size} (ha : s.c.ports[qa].name = "admit") (hp : s.c.ports[qp].name = "pub")
-    (ho : s.c.ports[qo].name = "o0") (hPa : KnownPort s u qa) (hPp : KnownPort s u qp) (hPo : KnownPort s u qo)
+    (ho : s.c.ports[qo].name = "o0") (hPa : KnownPort s qa) (hPp : KnownPort s qp) (hPo : KnownPort s qo)
     (hra : ∀ k < 32, RowBitRead s u qa k) (hrp : ∀ k < 1616, RowBitRead s u qp k) (hro : RowBitRead s u qo 0) :
     LaneKnownHolds T (portBit s (openedReg s)) P l := by
   have hma : (s.c.ports[qa].name, #[(admitRow (List.ofFn P.admit), salts "admit")]) ∈ knownOf P salts (some l) := by
@@ -144,17 +159,17 @@ theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports
       (∀ i < n, (pubBits P.salt P.position P.roots l.val)[lo + i]? = some (x.testBit i)) →
       Holds (portBit s (openedReg s) "pub") lo n x := by
     intro lo n x hn hx
-    have h := holds_known hN hK hu hS hcomp hPp.1 hPp.2.1 hmp (lo := lo) (n := n) (x := x)
+    have h := holds_known hN hK hu hS hcomp hPp.1 hPp.2 hmp (lo := lo) (n := n) (x := x)
       (fun i hi => hrp _ (by omega)) (fun i hi => by
-        rw [hPp.2.2]
+        rw [known_readAt_zero hK hS hcomp hmp]
         show ((rowWords (pubBits P.salt P.position P.roots l.val))[(lo + i) / 16]!).testBit ((lo + i) % 16) = _
         rw [rowWords_testBit _ (by rw [length_pubBits]; omega), hx i hi]
         rfl)
     rwa [hp] at h
   refine ⟨fun i => ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · have h := portBit_known hN hK hu hS hcomp hPa.1 hPa.2.1 hma
+  · have h := portBit_known hN hK hu hS hcomp hPa.1 hPa.2 hma
       (hra (fieldBit (lanePorts T 0) "admit" + i.val) (by rw [fieldBit_admit, Nat.zero_add]; exact i.isLt))
-    rw [ha, hPa.2.2] at h
+    rw [ha, known_readAt_zero hK hS hcomp hma] at h
     rw [h, fieldBit_admit, Nat.zero_add]
     show some (((rowWords (List.ofFn P.admit))[i.val / 16]!).testBit (i.val % 16)) = _
     rw [rowWords_testBit _ (by simp), List.getElem?_eq_getElem (by simp), List.getElem_ofFn]
@@ -174,7 +189,7 @@ row whose bit 0 is read. -/
 theorem combKnownOk (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
     {P : LanePub} {salts : String → ByteArray} (hK : KnownHeld s (knownOf P salts none)) {u : Fin s.n}
     (hu : u.val = 0) (hS : s.ServedRegistered u) (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())
-    {qo : Fin s.c.ports.size} (ho : s.c.ports[qo].name = "o0") (hPo : KnownPort s u qo) (hro : RowBitRead s u qo 0) :
+    {qo : Fin s.c.ports.size} (ho : s.c.ports[qo].name = "o0") (hPo : KnownPort s qo) (hro : RowBitRead s u qo 0) :
     portBit s (openedReg s) "o0" 0 = some true :=
   ok_of_known hN hK hu hS hcomp ho hPo (salt := salts "o0") (by simp [knownOf, knownRows]) hro
 
