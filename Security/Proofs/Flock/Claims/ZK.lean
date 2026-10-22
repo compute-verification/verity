@@ -114,6 +114,7 @@ import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FinishSwFrame
 import Proofs.Flock.Claims.ZK.FinishSwLig
+import Proofs.Flock.Claims.ZK.FinishSwLigE
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -571,6 +572,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`LigLock.l0Clear`: the out-of-domain value, each lane message's words, the pair's sums' words) gives `LigHyp`'s
   masked fields (**`LigLock.ligHyp_of_l0`**), so at `valsFw` with `l0Clear` as level 0's part and the request's pads,
   `LigHyp` holds at the switched source's `y₁'`, `ȳ` and salts (**`Masked.swSrcE_ligHyp_frame`**).
+* `FinishSwLigE`: those at the coins. The switched view moves only pads, masked values and `Y₁`, so its `y₁'`, `ȳ` and
+  levels ≥ 1 are the honest view's (`Table.swPre_y1`, `swPre_ybar`, `swPre_lig`), and so are the switched source's
+  (`Masked.swSrcE_restart`); the honest source's are the session's at the coins (`ligY1E`, `ligYbarE`, `ligSaltE`). So
+  at the deployed rep's coins, packed table, basis and the tape's extra lanes, lane paddings and salts, `LigHyp` holds at
+  the switched source with `l0Clear` as level 0's part and the request's pads (**`Masked.swSrcE_ligHyp_E`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
