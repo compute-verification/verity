@@ -33,7 +33,8 @@ lowering's evaluation on random inputs.
     [--out UNIT.tmpl] [--flat | --check]
 
 the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
-through the calls, and the template's size) and writes the template; ``--flat`` counts the unrolled lowering instead, and
+through the calls, and the template's size) and writes the template, with each Definition's name in
+``UNIT.tmpl.names.json``; ``--flat`` counts the unrolled lowering instead, and
 ``--check`` runs :func:`check`.
 """
 from __future__ import annotations
@@ -558,6 +559,7 @@ def main(argv: list[str]) -> int:
             text = T.write(t)
             Path(a.out).write_text(text)
             size = len(text)
+            Path(a.out + ".names.json").write_text(json.dumps([s.key[0] for s in lw.order] + ["(unit)"]))
         out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance,
                                                "gather": not a.scattered_returns}
     out |= {"k": shape.k, "tile": [shape.r, shape.c], "lane": a.lane, "seconds": round(time.time() - t0, 1),
