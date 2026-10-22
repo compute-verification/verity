@@ -3,8 +3,6 @@ kernels (`rows`) and the twins — against the reference by core `verity.ml.circ
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
 
-import zlib
-
 import numpy as np
 import pytest
 
@@ -25,14 +23,7 @@ def test_every_row_family_and_twin_is_registered_with_core():
 
 @pytest.mark.parametrize("key,kernel", PAIRS, ids=[f"{k}-{kern}" for k, kern in PAIRS])
 def test_kernel_matches_the_reference(key, kernel):
-    reg = next(r for r in KR.registered() if (r.key, r.kernel) == (key, kernel))
-    targets = reg.check_targets(np.random.default_rng(zlib.crc32(f"{key}/{kernel}".encode())))
-    assert targets, f"{key}: no check specialisations"
-    for t in targets:
-        assert KR.covers(t, kernel) is None, (t.id, KR.covers(t, kernel))
-        sc = self_check(t, kernel=kernel, n=N, seed=0)
-        assert sc.ok, str(sc)
-        assert sc.declined < sc.n, f"{t.id}: {kernel} declined all {sc.n} instances"
+    assert KR.check(key, kernel, n=N) == []
 
 
 def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):

@@ -65,7 +65,9 @@ class H1R:
         ks = k // 32
         return ks + self.lib.h1r_n_digits(ks)
 
-    def plan(self, calls: list[Call]) -> Plan:
+    def plan(self, calls: list[Call], seeds: torch.Tensor | None = None, out: torch.Tensor | None = None) -> Plan:
+        """The calls' table, and its seed and receipt buffers: `seeds` and `out` when given (another plan's of the same
+        calls' shapes, so several tables share them), else its own."""
         dev = calls[0].a.device
         tab = (_Call * len(calls))()
         seed0 = out0 = 0
@@ -86,8 +88,12 @@ class H1R:
             out0 += units * w
         table = torch.frombuffer(bytearray(bytes(tab)), dtype=torch.uint8).to(dev)
         ks = (C.c_int * len(calls))(*[c.a.shape[1] for c in calls])
-        return Plan(calls, table, ks, max(o[1] for o in offs), torch.empty(seed0 * 16, dtype=torch.int64, device=dev),
-                    torch.empty(out0, dtype=torch.int32, device=dev), offs)
+        if (seeds is not None and seeds.numel() != seed0 * 16) or (out is not None and out.numel() != out0):
+            raise ValueError(f"shared buffers of {seeds.numel() if seeds is not None else None} seed words and "
+                             f"{out.numel() if out is not None else None} receipt words, not {seed0 * 16} and {out0}")
+        return Plan(calls, table, ks, max(o[1] for o in offs),
+                    torch.empty(seed0 * 16, dtype=torch.int64, device=dev) if seeds is None else seeds,
+                    torch.empty(out0, dtype=torch.int32, device=dev) if out is None else out, offs)
 
     def launch(self, plan: Plan, salt: torch.Tensor, nowrite: bool = False, version: int = 2,
                step_base: torch.Tensor | None = None) -> None:

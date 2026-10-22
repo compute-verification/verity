@@ -382,6 +382,18 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
         deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
 
 
+def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
+    """A node added to deploy.toml before its VM is registered (vy-auditor-1, 21 Oct) failed every relay drift with Refused."""
+    from research import remote
+
+    def unknown(name, project):
+        raise remote.Refused(f"machine {name!r} is not in machines.toml")
+    monkeypatch.setattr(remote, "resolve_machine", unknown)
+    assert deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"],
+                       repo=world["repo"]) == 1
+    assert "is not in machines.toml" in json.loads(capsys.readouterr().out)["n"]["error"]
+
+
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
     """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
     repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"

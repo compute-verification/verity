@@ -808,11 +808,16 @@ class Queue:
             self.save_state(state)
         return members, entries
 
-    def eject(self, pr: int, reason: str, by: str) -> PR:
+    def eject(self, pr: int, reason: str, by: str, sha: str | None = None) -> PR:
+        """Withdraw ``pr``'s mark and keep it off the queue's branch; with ``sha``, only while that is still its head (CI-134: an
+        eject that waited for drive's tick withdrew the mark of a head its owner had pushed meanwhile, 18 and 21 Oct)."""
         self._clone()
         prs = {p.number: p for p in self.github.open_prs()}
         if pr not in prs:
             raise QueueError(f"#{pr} isn't an open PR")
+        if sha and not prs[pr].head.startswith(sha):
+            raise QueueError(f"#{pr} is at {prs[pr].head[:12]} now, not {sha[:12]}: its owner pushed since, so nothing is ejected; "
+                             f"the new head is checked on its own")
         state = self.load_state()
         state["ejected"][str(pr)] = {"head": prs[pr].head, "why": reason, "by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         if self.store is not None and not self.shadow:
@@ -1363,13 +1368,17 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
+#: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
+#: a directory, of the prefix): they take about 20 s and 40 s, and 21-22 Oct's train breakers #3013, #3111, #3130 and #3151
+#: each failed one of them, costing its train its hour-long check
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
-PREFLIGHT_UNCOLLECTED = {"tools/verity/circuit_check": "its collection builds every target: over 10 min and 10 GB (18 Oct)"}
+PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
-#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct)
-PREFLIGHT_BUDGET_S = 60.0
+#: collection but circuit-check's took 18 s on 4 workers of a 4-core VM (18 Oct); `PREFLIGHT_LINTS` add up to a minute
+PREFLIGHT_BUDGET_S = 120.0
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM (ci, 18 Oct)
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
@@ -1439,6 +1448,17 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 
 
 @contextlib.contextmanager
+def worktrees_locked(repo: Path):
+    """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
+    and train.sh never add, remove or prune a worktree beside another (21 Oct: two touched-suites worktrees failed with "Could
+    not write new index file")."""
+    common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    with open(common / "train.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+@contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
     """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
     whatever happens; one a dead process left is swept first."""
@@ -1448,16 +1468,18 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
         pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
         if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
             shutil.rmtree(d, ignore_errors=True)
-    _git(repo, "worktree", "prune", check=False)
     tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
     wt = tmp / "tree"
     try:
-        _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "prune", check=False)
+            _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
         yield wt
     finally:
-        _git(repo, "worktree", "remove", "--force", str(wt), check=False)
-        shutil.rmtree(tmp, ignore_errors=True)
-        _git(repo, "worktree", "prune", check=False)
+        with worktrees_locked(repo):
+            _git(repo, "worktree", "remove", "--force", str(wt), check=False)
+            shutil.rmtree(tmp, ignore_errors=True)
+            _git(repo, "worktree", "prune", check=False)
 
 
 @dataclass
@@ -1571,7 +1593,8 @@ def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | Remote
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
-    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
+    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
+    reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
@@ -1756,6 +1779,12 @@ class Preflight:
         for d, files in PREFLIGHT_TESTS:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
                 got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
+        lints = [(path, reach) for path, reach in PREFLIGHT_LINTS if want(f"tests:{path}") and (wt / path).exists()]
+        changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints else []
+        for path, reach in lints:
+            if any(f.startswith(r) or f"/{r}" in f for f in changed for r in reach):
+                d, _, rest = path.rpartition("tests/")
+                got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
         names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
         res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
         notes += res.notes
@@ -2030,7 +2059,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
-                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely)")
+                                  "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
+                                  "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
+                                  "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
@@ -2159,7 +2190,7 @@ def main(argv: list[str]) -> int:
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by), a.reason, a.by)
+        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         q.sync()
         return told
     except QueueError as e:

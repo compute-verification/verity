@@ -160,10 +160,12 @@ fn v1_row(p: &Port) -> bool {
     !p.v2 && p.segs.is_none() && p.bits == 16 * p.words && p.comps > 0
 }
 
-/// `ProvedScope.v2Row`: an unsegmented `sha512/row/v2` row of `16 · words` bits, its bytes filling its compressions' blocks
-/// and ending, with SHA-512's 17 bytes of padding, in its hm96 slot's block.
+/// `ProvedScope.v2Row`: an unsegmented `sha512/row/v2` row of `16 · words` bits, its bytes and SHA-512's 17 bytes of padding
+/// filling its compressions' blocks and ending in its hm96 slot's block (the last compression's block may hold the bytes'
+/// end and the padding's start).
 fn v2_row(p: &Port) -> bool {
-    p.v2 && p.segs.is_none() && p.bits == 16 * p.words && WORD * p.comps <= 2 * p.words && 2 * p.words + 17 <= WORD * (p.comps + 1)
+    p.v2 && p.segs.is_none() && p.bits == 16 * p.words && WORD * p.comps <= 2 * p.words + 16 &&
+        2 * p.words + 17 <= WORD * (p.comps + 1)
 }
 
 /// `ProvedScope.segRow`: a `sha512/row-seg/v1` row segmented as [`seg_shape`] cuts its bits, of `16 · words` bits, its
@@ -313,16 +315,38 @@ mod tests {
         assert!(v1_row(&port(64, 1, 1024, false, None)));
         assert!(!v1_row(&port(64, 0, 1024, false, None)));
         assert!(!v1_row(&port(64, 1, 1024, true, None)));
-        // a v2 row of 64 or 100 words ends, padded, in its slot's block; at 120 its last 112 bytes leave no room for the padding
+        // a v2 row of 64 or 100 words ends, padded, in its slot's block
         assert!(v2_row(&port(64, 1, 1024, true, None)));
         assert!(v2_row(&port(100, 1, 1600, true, None)));
         // 32 words' 64 bytes and the padding fit the slot's block alone
         assert!(v2_row(&port(32, 0, 512, true, None)));
+        // at 120 words its last 112 bytes leave no room for the padding: its second compression holds them and the
+        // padding's start, its slot's block the rest
         assert!(!v2_row(&port(120, 1, 1920, true, None)));
+        assert!(v2_row(&port(120, 2, 1920, true, None)));
+        assert!(!v2_row(&port(120, 3, 1920, true, None)));
         assert!(!v2_row(&port(32, 1, 512, true, None)));
         assert!(!v2_row(&port(64, 1, 1000, true, None)));
         assert!(!v2_row(&port(64, 1, 1024, true, Some(vec![(1024, 1)]))));
         assert!(!v2_row(&port(64, 1, 1024, false, None)));
+    }
+
+    #[test]
+    fn v2_rows_are_the_parsers() {
+        // Lean's Flock/Test/SpillRows.lean, case for case: a row of w leaves is in scope at the compressions the parser
+        // derives from its length, input or output row, and at one more or one fewer not
+        let serial = |w: usize| (2 * w + 17 + 127) / 128 - 1;
+        for w in 0..=2048 {
+            assert!(v2_row(&port(w, serial(w), 16 * w, true, None)), "{w}");
+            assert!(!v2_row(&port(w, serial(w) + 1, 16 * w, true, None)), "{w}");
+            assert!(serial(w) == 0 || !v2_row(&port(w, serial(w) - 1, 16 * w, true, None)), "{w}");
+        }
+        assert!(serial(56) == 1 && v2_row(&port(56, 1, 896, true, None)) && !v2_row(&port(56, 0, 896, true, None)));
+        let row = |w: usize, n: usize| port(w, n, 16 * w, true, None);
+        assert!(bit_rows(&[row(56, 1), row(1, 0)], &[1]));
+        assert!(bit_rows(&[row(1, 0), row(56, 1)], &[1]));
+        assert!(bit_rows(&[row(120, 2), row(248, 4)], &[1]));
+        assert!(!bit_rows(&[row(1, 0), row(56, 2)], &[1]));
     }
 
     #[test]
@@ -334,6 +358,10 @@ mod tests {
         assert_eq!(rows_why(&v2, &[1], true), None);
         assert_eq!(rows_why(&v2, &[1], false), Some("a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"));
         assert!(rows_why(&v2, &[2], true).unwrap().starts_with("rows that are neither"));
+        // a row's padding may spill into its slot's block, an input row's or an output row's
+        let spill = port(120, 2, 1920, true, None);
+        assert_eq!(rows_why(&[spill.clone(), port(1, 0, 16, true, None)], &[1], true), None);
+        assert_eq!(rows_why(&[port(1, 0, 16, true, None), spill], &[1], true), None);
     }
 
     fn seg(bits: usize, comps: usize) -> Port {

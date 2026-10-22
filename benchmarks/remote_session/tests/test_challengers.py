@@ -3,12 +3,17 @@ requests go to `auditor.gate` as the lane key's forced command would pass them, 
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
 held to the ledger; a challenger key other than the pinned one, a reserve outside the audit's period, a second session
-for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves."""
+for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves. The
+verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
+complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
+its verifier, it and its period closed complete, the Lean accepted it, and the host's pins log its open sealed records
+its pin as a commit of main's (RT4-INT-40)."""
 from __future__ import annotations
 
 import hashlib
 import itertools
 import json
+import re
 import shlex
 import sys
 import threading
@@ -24,10 +29,14 @@ sys.path.insert(0, str(LIVE))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
+import auditor_line as al  # noqa: E402
 import challengers  # noqa: E402
+import verifier  # noqa: E402
+import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
+from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import CoinError  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -36,6 +45,8 @@ PIN = "c" * 40
 LANE = "memory-accounting"
 SECRET = bytes(range(32))
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
+#: the host's pins log: an earlier pin, then the tree it runs (`PIN`), each a commit of main's
+PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 
 
 class Host:
@@ -45,7 +56,8 @@ class Host:
     def __init__(self, root: Path) -> None:
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
-        self.host = A.Host(root=root / "var", peers=root / "peers")
+        (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
+        self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
         public = (self.host.key / "public").read_bytes()
         self.pin = hashlib.sha512(public).hexdigest()
@@ -94,12 +106,29 @@ class Host:
         return challengers.Gate(out, call or self.call, "vy-nebius-1", pin or self.pin, period, address=self.address,
                                 pause=self.pause, polls=3)
 
-    def period(self, name: str = "p-1") -> None:
-        rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", CIRCUIT])
+    def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
+        rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", circuit])
         assert rc == 0, out
 
     def ledger(self) -> list[dict]:
         return A.entries(A.read_ledger(self.host.ledger))
+
+    @staticmethod
+    def seal(monkeypatch, pins: list[str] | None) -> None:
+        """Each open from here on seals the pins log `pins` (`challenger.pins_seal`) in place of the host's own log,
+        which `auditor.admit` seals; `pins` None: the open seals no log, as on every gate before RT4-INT-40's."""
+        append = A.append
+
+        def resealed(body: dict) -> dict:
+            body = {k: v for k, v in body.items() if k != "pins"}
+            return body if pins is None else {**body, "pins": pins_seal(pins)}
+
+        def sealed(host, kind, session, body_of, I, sign):
+            if kind == "open":
+                return append(host, kind, session, lambda lines: resealed(body_of(lines)), I, sign)
+            return append(host, kind, session, body_of, I, sign)
+
+        monkeypatch.setattr(A, "append", sealed)
 
 
 @pytest.fixture
@@ -182,3 +211,158 @@ def test_a_challenger_whose_commitment_isnt_the_opens_is_refused_before_its_firs
 
 def test_the_gates_ports_are_the_hosts():
     assert challengers.GATE_PORTS == A.PORTS
+
+
+@pytest.mark.parametrize("kind", ["gate", "serve"])
+def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
+    """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
+    gate's sessions (`challengers.Gate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
+    The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
+    family. The honest session's
+    challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
+    openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
+    coins unreleased and is not, and the period's close lists the two so."""
+    if kind == "gate":
+        host.period()
+        source = host.gate(tmp_path / "out")
+    else:
+        python = tmp_path / "python"
+        python.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} "
+                          f"{shlex.quote(str(LIVE / 'tests' / 'stub_serve.py'))} \"$@\" --keygen-workers 1\n")
+        python.chmod(0o755)
+        (tmp_path / "served").mkdir()
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
+    pace = verifier.pace_of("1:4:160:2", 1.0)
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+                                        defer_openings=False)
+    w = honest["windows"]
+    end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
+    assert honest["accepted"] and honest["challenger"]["reason"] is None
+    assert end["released"] == {coins.CHALLENGE: w, coins.OPENINGS: w} and end["complete"] is True
+    assert not dropper["accepted"] and dropper["failure"]["failure"] == "receipt"
+    assert dropper["challenger"]["reason"] is None
+    assert dropped["released"][coins.OPENINGS] < w and dropped["complete"] is False
+    if kind == "gate":
+        reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
+        assert reserves == [[[coins.CHALLENGE, w], [coins.OPENINGS, w]]] * 2
+        rc, out = host.call(["period-close", "--name", "p-1"])
+        assert rc == 0, out
+        close = json.loads(out)["body"]
+        assert [x["complete"] for x in close["windows"]] == [True, False] and close["complete"] is False
+
+
+def gate_run(host: Host, out: Path, plan: str, defer_openings: bool) -> tuple[list[dict], dict, bytes]:
+    """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them: the
+    sessions, their registration and that descriptor."""
+    desc = al.descriptor("ab" * 20)
+    host.period(circuit=hashlib.sha512(desc).hexdigest())
+    got = {}
+    pace = verifier.pace_of("1:4:160:2", 1.0)
+    sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")), challenger=host.gate(out / "challenger"),
+                               verdict="python", defer_openings=defer_openings,
+                               then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    return sessions, got["reg"], desc
+
+
+def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
+             pins: list[str] | None = PINS) -> dict:
+    (out / "verifier.json").write_text(json.dumps(
+        {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]}))
+    return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
+                      pins=pins)
+
+
+@pytest.mark.parametrize("defer_openings", [True, False])
+def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_and_pinned(host, tmp_path,
+                                                                                                 monkeypatch,
+                                                                                                 defer_openings):
+    """`auditor_line`'s line of record over a gate run of an honest session and a 1/16 dropper, in a period that
+    committed the descriptor of the verifier that ran them, on a host whose opens seal its pins log, which records the
+    host's tree as a commit of main's. When the prover defers each window's openings, the dropper's are all asked, so
+    both windows and the period close complete: the honest session, once its verdict is the Lean's, is the line, and
+    the dropper, which the Lean refused, earns none. When it doesn't, the dropper's window and so the period close
+    incomplete, and the line credits zero. A python verdict, a period not yet closed, a verifier the period didn't
+    commit and no pins log each credit nothing, with the reason."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest,skip:0.0625", defer_openings)
+    assert [s["accepted"] for s in sessions] == [True, False]
+
+    def line(verdict: str = "python", d: bytes = desc, pins: list[str] | None = PINS) -> dict:
+        return analysed(out, host, sessions, reg, d, verdict=verdict, pins=pins)
+
+    def zero(doc: dict) -> dict:
+        return {k: [why.split(":")[0] for why in v] for k, v in doc["credit"]["zero"].items()}
+
+    doc = line("lean")
+    assert zero(doc)[0] == ["not complete"]
+    assert "period p-1 hasn't closed" in doc["sessions"][0]["credit"]["complete"]["reason"]
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    assert json.loads(closed)["body"]["complete"] is defer_openings
+    doc = line("lean")
+    honest, dropper = doc["sessions"]
+    assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
+    assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
+    for s in (honest, dropper):
+        assert s["credit"]["pinned"] == {"commit": PIN, "seal": pins_seal(PINS), "ok": True, "reason": None}
+    assert doc["pins"] == pins_seal(PINS)
+    t = honest["T"]
+    if defer_openings:
+        assert honest["credit"]["ok"] and zero(doc) == {1: ["not accepted"]}
+        assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t]["4.4e+09"] == {
+            "k": 0, **{x: honest["shares_auditor_clock"]["4.4e+09"][x] for x in ("time", "snapshot")}}
+        assert doc["credit"]["summary"].startswith("the line credits session(s) 0; session(s) 1 earn none")
+        shares = " / ".join(f"{honest['shares_auditor_clock'][b]['time']:.4%}" for b in ("4.4e+09", "5.4e+10"))
+        assert f"| 0 | {t} | yes | yes | yes | yes | credited: {shares} |" in al.table(doc).splitlines()
+    else:
+        assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
+        assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
+        assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
+                            r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
+                            r"incomplete\)", dropper["credit"]["complete"]["reason"])
+        assert doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0} and doc["line"][t]["credited_sessions"] == []
+        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted "
+                                                   "and pinned; session 0: not complete: period p-1 closed incomplete")
+    assert doc["measured"][t]["auditor"]["4.4e+09"]["k"] == 0
+    unlogged = line("lean", pins=None)
+    assert unlogged["sessions"][0]["credit"]["pinned"]["reason"] == NO_PINS and unlogged["pins"] is None
+    assert zero(unlogged)[0][-1] == "not pinned" and not unlogged["credit"]["credited_sessions"]
+    assert zero(line("python"))[0][-1] == "not accepted"
+    other = line("lean", al.descriptor("cd" * 20))
+    assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
+    assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
+    with pytest.raises(SystemExit, match="--commit"):
+        al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
+
+
+@pytest.mark.parametrize("sealed", [PINS[:1], None], ids=["unpinned", "unsealed"])
+def test_a_session_whose_pin_the_hosts_pins_log_doesnt_record_as_mains_earns_no_credit(host, tmp_path, monkeypatch,
+                                                                                        sealed):
+    """An honest session, credited, complete and accepted by the Lean, on a host whose tree (`PIN`) its pins log
+    doesn't record as main's when the session opens: the log the open sealed holds only an earlier pin, and the pin
+    appended after the open doesn't count; or, as on every gate up to now, the open seals no log at all. The line
+    credits zero, and the session's `pinned` check names the fix."""
+    host.seal(monkeypatch, sealed)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+    later = PINS[:1] + [pin_line(PIN, "f" * 40, "2026-10-21T02:00:00Z")]
+    doc = analysed(out, host, sessions, reg, desc, pins=later)
+    (s,) = doc["sessions"]
+    sid = s["challenger_session"]
+    why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's history: "
+           "repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window there"
+           if sealed is not None else
+           f"the auditor's ledger's open of session {sid} seals no pins log (pins: {{lines, sha512}}): open the window "
+           "on a host whose gate seals its pins log in each open")
+    assert all(s["credit"][c]["ok"] for c in ("credited", "complete", "accepted")) and s["of_record"]
+    assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
+                                     "reason": why}
+    assert s["credit"]["zero"] == [f"not pinned: {why}"] and not s["credit"]["ok"]
+    t = s["T"]
+    assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0}
+    assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted and "
+                                        f"pinned; session 0: not pinned: {why}")
+    assert f"| 0 | {t} | yes | yes | yes | no: {why} | zero |" in al.table(doc).splitlines()

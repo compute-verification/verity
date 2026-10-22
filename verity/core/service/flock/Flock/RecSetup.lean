@@ -27,8 +27,9 @@ def metaBound (m : Json) : V (Option String × Option RecVStar.StackedShape) := 
 
 /-- The inner transcript `t` (`rec/inner-transcript/v1`) held against the inner session's record `record`, the circuit
 registration `r` (`verity/registration/v2`) if the verifier holds one, and what the inner circuit's META binds (`bound`,
-`metaBound`): `RecVStar.innerCommits` on the files as read. At candidate 3's inner shape (`inner` naming a RecSparse
-shape) it needs the registration, which binds R before the coins. -/
+`metaBound`): `RecVStar.innerCommits` on the files as read, and at the verifier's inner shape `inner` the transcript on
+its schedule (`RecVStar.checkSchedule`). At candidate 3's inner shape (`inner` naming a RecSparse shape) it needs the
+registration, which binds R before the coins. -/
 def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String))
     (bound : V (Option String × Option RecVStar.StackedShape)) (record : String) : V RecVStar.InnerCommits := do
   let rj ← match ← r with
@@ -42,7 +43,10 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
       | .error e => throw s!"rec inner registration: not JSON: {e}"
   let (bound, shape) ← bound
   match Json.parse (← t) with
-  | .ok j => RecVStar.innerCommits j record rj bound shape
+  | .ok j =>
+    let cs ← RecVStar.innerCommits j record rj bound shape
+    if let some i := inner then RecVStar.checkSchedule i j
+    pure cs
   | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
 /-- Candidate 3's check 5 inputs: the verifier's RecSparse shape (`rec-inner --sparse`) and R's, its own inner shape's
@@ -68,10 +72,33 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
   if boundKey (← bound) ≠ boundKey b then
     throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
 
+/-- **The inner statement is set up as its files set it up**: how Flock's plain verifier is told to set the inner
+statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a
+`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) on the coin server's coins
+(`--rec-inner-statement-coins os`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
+proves every one of `st`'s units in order, so its `m` and regions are `st`'s. A session without `form` is refused. -/
+def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
+  let some fm := form
+    | throw ("rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, " ++
+        "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
+  if fm.statement != Tags.circuitPlainLeaves.name then
+    throw s!"rec-inner: the inner statement is a {fm.statement} statement, not {Tags.circuitPlainLeaves.name}, as its files set it up"
+  if !fm.os then
+    throw "rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its files set it up"
+  if !fm.tables.isEmpty then
+    throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
+  let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
+  let some t := String.fromUTF8? b | throw "rec-inner: the inner statement's draw: not UTF-8"
+  let d ← (Json.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
+  let D ← Draw.UnitDraw.ofJson d
+  if D.proved != Array.range st.n then
+    throw s!"rec-inner: the inner statement's draw proves {D.proved.size} units, not every one of its files' {st.n} in order"
+
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's. -/
+list and the rep schedule the shape fixes are the inner session's; and the inner statement is set up as its files set
+it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"
@@ -80,6 +107,7 @@ def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : 
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}, claims {i.claims}) " ++
       s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
       "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
+  checkForm f.form st
 
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
 range on the inner statement (`RecCoins.checkAtC3`, which refuses a session without the files), the inner shape the

@@ -347,7 +347,10 @@ def ssh_runner(project: str = PROJECT) -> Runner:
     from research import remote
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
-        t = remote.ssh_host_target(remote.resolve_machine(node, project))
+        try:
+            t = remote.ssh_host_target(remote.resolve_machine(node, project))
+        except remote.Refused as e:
+            raise RuntimeError(f"{node}: {e}") from None
         return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=t["user"]), argv, stdin=stdin, timeout=300)
     return run
 

@@ -312,8 +312,9 @@ def closureInput (args : List String) : IO (Except String (Option (Std.HashMap N
 registered root, leaf count, row width and domain, and the position each unit reads), a path, or with `--archive` its
 SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`RecVStar.checkRows`), a file of the same
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
-would keep one of them. Beside the ports, whether the file names every port of the statement (`Registered.completeOf`,
-`Registered.checkComplete`). -/
+would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
+the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
+statement (`Registered.completeOf`, `Registered.checkComplete`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Bool))) := do
   let some f := argOf args flag | return .ok none
@@ -329,7 +330,9 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
         return .error s!"{ctx}: an object of the file names the key {k} twice, which a JSON parser would read as once: each port, and each key of a port, once"
       | .ok j, none =>
         let r : V (Option (Array Registered.Port × Bool)) := do
-          pure (some (← Registered.ofJson j, ← Registered.completeOf j))
+          let own ← Registered.ofJson j
+          Registered.checkKnownAll own (← Registered.knownOf j)
+          pure (some (own, ← Registered.completeOf j))
         return r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}"
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
@@ -426,7 +429,8 @@ def innerMetaRegistration (args : List String) :
 
 /-- `--rec-inner-transcript F`: the coin server's record of V*'s inner session (`rec/inner-transcript/v1`), with the inner
 session's record `record` (`--rec-inner-session`) that its coins must match: each rep's `c_k`, and with candidate 3's
-streams every stream's `c_k` and tops (`RecVStar.innerCommits`). `--rec-inner-registration F`: the circuit registration
+streams every stream's `c_k` and tops (`RecVStar.innerCommits`), and at the verifier's inner shape `inner` the record on
+its schedule (`RecVStar.checkSchedule`). `--rec-inner-registration F`: the circuit registration
 (`verity/registration/v2`, written at staging, `inner_registered.REGISTRATION`) that the inner circuit's META binds
 (`--rec-inner-circuit`, whose META the verifier read as `bound`, `innerMetaRegistration`), whose entry `stacked` is R's
 registered top (`RecVStar.registration`), which a session with R's stream, and every session at candidate 3's inner
@@ -513,8 +517,8 @@ def recCoinsCmd (args : List String) : IO UInt32 := do
 session's transcript (`RecVStar.innerCommits`), as one `RECTRANSCRIPT` line: each rep's message rounds, and each stream's
 message rounds and its tops' node counts by level; the circuit table's tops and the link points, the record's held to the
 coin server's (`RecVStar.innerLink`); with `--rec-inner`, that the verifier's inner shape covers it
-(`RecVStar.checkCovers`) and puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`), as `verify`
-checks them; exit 1 when the transcript is refused. -/
+(`RecVStar.checkCovers`), puts the circuit table's tops at its schedule's (`RecVStar.checkLinkRounds`) and holds the
+record to its schedule (`RecVStar.checkSchedule`), as `verify` checks them; exit 1 when the transcript is refused. -/
 def recTranscriptOfSession (args : List String) (bound : Except String (Option String × Option RecVStar.StackedShape))
     (inner : Option RecVStar.Inner) : IO (Except String (Option RecVStar.InnerCommits)) := do
   let some dir := argOf args "--rec-inner-session"
@@ -529,6 +533,24 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
   let record ← try pure (← IO.FS.readFile (dir ++ "/session.json"))
     catch e => return .error s!"rec inner session: {e}"
   recLinkInput args (some record)
+
+/-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
+`Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
+commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
+to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+def recRecordCmd (args : List String) : IO UInt32 := do
+  let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
+  let bs := (← IO.FS.readBinFile f).data.toList
+  let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the coin server's record format"; return 1
+  let hex := fun (b : List UInt8) =>
+    Lean.Json.str ((RecRecord.hexW b).foldl (fun s c => s.push (Char.ofNat c.toNat)) "")
+  let arr := fun {α : Type} (f : α → Lean.Json) (l : List α) => Lean.Json.arr (l.map f).toArray
+  let js := xs.map fun r => Lean.Json.mkObj [("stream", .str ((String.fromUTF8? ⟨r.stream.toArray⟩).getD "")),
+    ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
+    ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
+  let writes := (RecRecord.recordW xs []).isPrefixOf bs
+  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  return 0
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
   let some _ := argOf args "--rec-inner-session"
@@ -548,6 +570,10 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
         if let .error e := RecVStar.checkLinkRounds i lk then IO.eprintln e; return 1
     | .ok none => pure ()
     | .error e => IO.eprintln e; return 1
+    if let (some i, some f) := (inner, argOf args "--rec-inner-transcript") then
+      match Lean.Json.parse (← IO.FS.readFile f) with
+      | .ok j => if let .error e := RecVStar.checkSchedule i j then IO.eprintln e; return 1
+      | .error e => IO.eprintln s!"rec inner transcript: not JSON: {e}"; return 1
     let n := fun (xs : Array (Nat × ByteArray)) => Lean.toJson xs.size
     IO.println s!"RECTRANSCRIPT {(Lean.Json.mkObj [("reps", .arr (ic.reps.map n)),
       ("streams", .arr (ic.streams.map fun s => Lean.Json.mkObj [("stream", .str s.name), ("commits", n s.commits),
@@ -669,7 +695,11 @@ shape's schedule's (`RecVStar.checkLinkRounds`). Each level's cap statement (`re
 `rec-cap/n<N>-l<l>` at a later level) reads `rec-top-L<l>` at every node in order and V*'s zero rows (`RecCoins.checkCap`),
 and needs the inner transcript, whose `root_B` or both reps' level-`l` tops its rows are. At candidate 3's inner shape (`--rec-inner` naming a RecSparse shape) every session
 needs the inner statement's files, on which its setup first checks check 5's sparse refusals (`RecCoins.checkAtC3`), and
-the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`).
+the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). Where the verifier holds the inner
+statement's files and its inner shape, its setup holds the shape to the files' numbers and how the inner statement was
+proved to how its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`): `--rec-inner-statement
+verity/flock-circuit+plain-leaves`, `--rec-inner-statement-coins os`, no `--rec-inner-tables`, and a `--rec-inner-draw`
+of every unit in order.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
@@ -686,7 +716,7 @@ deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1),
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
 refused where the other is pinned. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
@@ -872,7 +902,7 @@ RecSparse shape), every statement needs the inner statement's files, whose spars
 (`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F | --rec-inner-coins F]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F]] [--coins seed|os]"; return 2
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
   let stmtTags := tags
@@ -1418,6 +1448,7 @@ def main (args : List String) : IO UInt32 := do
   | "rec-coins" :: rest => recCoinsCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | "rec-transcript" :: rest => recTranscriptCmd rest
+  | "rec-record" :: rest => recRecordCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path
   | "region-words" :: rest => regionWordsCmd rest

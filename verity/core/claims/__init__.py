@@ -292,7 +292,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false). "
           "sm_120's measured headline takes it at q = q_T = 9/8, ClassPSlots' slots once writers create at most 15 "
           "incidences, a cap nothing proves: its 0.591% rests on that. At A6's ½ floor, which Lean proves from A6 "
-          "(SheetScalarRouteHalf), the same bound is 7.791% (10.24% on VF3r-16; r20261019-172339-a93b)",
+          "(SheetScalarRouteHalf), the same bound is 7.791% (10.24% on VF3r-16; r20261019-172339-a93b). The H200's "
+          "twin headline on DC-90-ri (Sm90MeasuredI3Headline) takes it at q = q_T = 3/5, beside the proved ½ floor "
+          "(Sm90MeasuredHeadline), not in its place: ClassPSlots counts a slot a word but takes a writer's slot as "
+          "writing nothing else, which a 64-bit head writing two words a lane (IMAD.WIDE, DFMA) breaks. Both are "
+          "over 1%. Cite it with its premise: DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; "
+          "credit against the built ♭, the cheater priced at every known fold, counted ones included",
           "SCALAR-ROUTE", "conjectured"),
     Entry("accounting-ts-side-units", "assumption",
           "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),
@@ -448,6 +453,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "partials) at one port, the decodes read rows by port and position, and the verifier registers each "
           "lane's salt, position, roots, admit bits, index and every ok row at their known content",
           "TS leaf reads", "standard"),
+    Entry("accounting-ts-ok-realizes", "assumption",
+          "The checked unit's C-Flock circuit is its declared unit's: on any wire assignment the key program's "
+          "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
+          "circuit makes of that unit holds (the Σ check and the dequant check). Nothing in Lean derives a C-Flock "
+          "circuit from a declared one or checks one against the other, and circuit-check binds the Definition to its "
+          "Boolean lowering, not to the declared circuit", "TS ok realizes", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
