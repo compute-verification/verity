@@ -26,6 +26,7 @@ import Proofs.Nci.Remote
 import Proofs.Nci.Verdict
 import Proofs.Nci.Activations
 import Proofs.Nci.Covering
+import Proofs.Nci.CoveringWitness
 
 /-!
 # Proofs of NCI's guarantees
