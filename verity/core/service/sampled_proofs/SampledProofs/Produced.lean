@@ -23,6 +23,7 @@ the one root the record names. They are never outputs. H1's drawn leaf is proved
 The verifier's own entries and every read are the protocol's, in Python (`produced.entry`, `pouw.leaf_lanes.reads`);
 Flock's `--registered` opens them (`Flock.Registered`).
 -/
+import Flock.Registered
 import SampledProofs.Registered
 
 namespace SampledProofs.Produced
@@ -50,6 +51,19 @@ def openingRow? : Json → Option (Int × String)
   | .arr #[p, .str bc] => (int? p).map (·, bc)
   | _ => none
 
+/-- `produced.domain(program, value, words, leaves, word_bits, registration).domain_id`. -/
+def domain (program value : String) (words leaves wordBits : Nat) (registration : String) : V ByteArray := do
+  if !hex64 registration then throw "a registration digest is lowercase hex of 64 bytes"
+  Registered.domainBound program value words leaves wordBits PRODUCED_KEY registration
+
+/-- The verifier's own entry for one produced value (`produced.entries`). -/
+structure Mine where
+  value : String
+  leaves : Nat
+  words : Nat
+  wordBits : Nat
+  domain : String
+
 /-- `produced._openings_ok`: `{value: [[position, b ‖ c] ...]}`, positions natural and distinct within a value and every
 `b ‖ c` hex, and each of `mine`'s values with one opening at each of its rows, in order. -/
 def openingsOk (ops : Json) (mine : Array Mine) : Bool :=
@@ -66,19 +80,6 @@ def openingsOk (ops : Json) (mine : Array Mine) : Bool :=
           rs.size == m.leaves && rs.map (fun r => (openingRow? r).map (·.1)) == (Array.range m.leaves).map fun i => some (i : Int)
         | _ => false
   | _ => false
-
-/-- `produced.domain(program, value, words, leaves, word_bits, registration).domain_id`. -/
-def domain (program value : String) (words leaves wordBits : Nat) (registration : String) : V ByteArray := do
-  if !hex64 registration then throw "a registration digest is lowercase hex of 64 bytes"
-  Registered.domainBound program value words leaves wordBits PRODUCED_KEY registration
-
-/-- The verifier's own entry for one produced value (`produced.entries`). -/
-structure Mine where
-  value : String
-  leaves : Nat
-  words : Nat
-  wordBits : Nat
-  domain : String
 
 /-- `produced.check`'s codes, empty when the record holds; `mine` sorted by value. -/
 def check (rec : Json) (registration draw : String) (mine : Array Mine) : Array String := Id.run do
