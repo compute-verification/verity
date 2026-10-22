@@ -3,7 +3,9 @@ requests go to `auditor.gate` as the lane key's forced command would pass them, 
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
 held to the ledger; a challenger key other than the pinned one, a reserve outside the audit's period, a second session
-for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves."""
+for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves. The
+verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
+complete and a dropper doesn't."""
 from __future__ import annotations
 
 import hashlib
@@ -25,7 +27,9 @@ sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidt
 
 import auditor as A  # noqa: E402
 import challengers  # noqa: E402
+import verifier  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
+from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import CoinError  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -182,3 +186,41 @@ def test_a_challenger_whose_commitment_isnt_the_opens_is_refused_before_its_firs
 
 def test_the_gates_ports_are_the_hosts():
     assert challengers.GATE_PORTS == A.PORTS
+
+
+@pytest.mark.parametrize("kind", ["gate", "serve"])
+def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
+    """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
+    gate's sessions (`challengers.Gate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
+    The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
+    family. The honest session's
+    challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
+    openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
+    coins unreleased and is not, and the period's close lists the two so."""
+    if kind == "gate":
+        host.period()
+        source = host.gate(tmp_path / "out")
+    else:
+        python = tmp_path / "python"
+        python.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} "
+                          f"{shlex.quote(str(LIVE / 'tests' / 'stub_serve.py'))} \"$@\" --keygen-workers 1\n")
+        python.chmod(0o755)
+        (tmp_path / "served").mkdir()
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
+    pace = verifier.pace_of("1:4:160:2", 1.0)
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+                                        defer_openings=False)
+    w = honest["windows"]
+    end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
+    assert honest["accepted"] and honest["challenger"]["reason"] is None
+    assert end["released"] == {coins.CHALLENGE: w, coins.OPENINGS: w} and end["complete"] is True
+    assert not dropper["accepted"] and dropper["failure"]["failure"] == "receipt"
+    assert dropper["challenger"]["reason"] is None
+    assert dropped["released"][coins.OPENINGS] < w and dropped["complete"] is False
+    if kind == "gate":
+        reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
+        assert reserves == [[[coins.CHALLENGE, w], [coins.OPENINGS, w]]] * 2
+        rc, out = host.call(["period-close", "--name", "p-1"])
+        assert rc == 0, out
+        close = json.loads(out)["body"]
+        assert [x["complete"] for x in close["windows"]] == [True, False] and close["complete"] is False

@@ -767,8 +767,11 @@ def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     (tmp_path / "empty").write_bytes(b"")
+    draw = _write(tmp_path / "draw.json", {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
-             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-session", str(PLAIN / "session"),
+             "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-statement",
+             "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(draw),
+             "--rec-inner-session", str(PLAIN / "session"),
              *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
     inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
     if cmd == "statement":

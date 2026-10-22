@@ -18,7 +18,10 @@
 
 `finish` reads back what the challenger signed and holds the session's coins to it (`audit.Session.released_reason`):
 the same commitment, each coin opened after the root the session recorded and in order, σ_0 after the session's window
-root R, each window's openings coin after its last root. Its `reason` is None when they hold."""
+root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
+session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
+every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
+that ran to its end is complete and one cut short is not."""
 from __future__ import annotations
 
 import hashlib
@@ -73,7 +76,7 @@ class Local:
     def finish(self, s: audit.Session) -> dict:
         c = s.coins
         return {"challenger": self.kind, "commitment": c.commitment.root.hex(),
-                "reason": s.released_reason(c.commitment, {label: c.afters(label) for label in coins.LABELS})}
+                "reason": s.released_reason(c.commitment, {label: c.afters(label) for label, _ in c.commitment.families})}
 
 
 class Serve:
@@ -126,8 +129,9 @@ class Serve:
             signed, received, _ = Ch.session_of(key, files["record"], files["log"], files["close"], lms_verify)
         except (Ch.CoinError, OSError, ValueError) as e:
             return {**doc, "reason": f"the challenger's session is not readable or not signed: {e}"}
-        return {**doc, "key_sha512": hashlib.sha512(key.public).hexdigest(),
-                "released": {label: len(received.get(label, ())) for label in coins.LABELS},
+        released = {label: len(received.get(label, ())) for label, _ in signed.families}
+        return {**doc, "key_sha512": hashlib.sha512(key.public).hexdigest(), "released": released,
+                "complete": all(released[label] == n for label, n in signed.families),
                 "reason": s.released_reason(signed, received)}
 
 

@@ -116,6 +116,35 @@ def test_the_worktree_is_removed_when_the_launch_raises(world):
     assert _no_worktree_left(world, world.dev)
 
 
+def test_the_worktree_is_added_and_removed_under_train_shs_lock_and_used_outside_it(world, monkeypatch):
+    """Drive launches its trains at once (`LAUNCH_JOBS`), and train.sh adds its worktrees in the same clone: a prune beside an add
+    left two touched-suites worktrees without their index (21 Oct, "Could not write new index file").  Every `git worktree` here
+    holds train.sh's lock (`<git common dir>/train.lock`), and the launch itself, minutes long, runs without it."""
+    import fcntl
+
+    lock = Path(_git(world.dev, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "train.lock"
+
+    def held() -> bool:
+        with open(lock, "w") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            return False
+
+    seen, git = [], Q._git
+    monkeypatch.setattr(Q, "_git", lambda repo, *a, **k: (seen.append((a[1], held())) if a[:1] == ("worktree",) else None)
+                        or git(repo, *a, **k))
+    launched = []
+    launch = FakeLaunch()
+    plain = launch.__call__
+    commit = world.change({"a.txt": "1\n"})
+    Q.touched_suites(world.dev, commit, f"{commit}~1", Q.RemoteSuites(
+        launch=lambda argv, cwd, env: launched.append(held()) or plain(argv, cwd, env)))
+    assert [w for w, _ in seen] == ["prune", "add", "remove", "prune"] and all(h for _, h in seen) and launched == [False]
+    assert _no_worktree_left(world, world.dev)
+
+
 def test_a_commit_the_repo_lacks_launches_nothing(world):
     """A worktree that can't be made is a note, not a crash of drive's tick."""
     launch = FakeLaunch()
