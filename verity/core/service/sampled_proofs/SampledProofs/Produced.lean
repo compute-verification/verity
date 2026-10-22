@@ -77,7 +77,8 @@ def openingsOk (ops : Json) (mine : Array Mine) : Bool :=
         | _ => false) &&
       mine.all fun m => match vs.find? (·.1 == m.value) with
         | some (_, .arr rs) =>
-          rs.size == m.leaves && rs.map (fun r => (openingRow? r).map (·.1)) == (Array.range m.leaves).map fun i => some (i : Int)
+          rs.size == m.leaves &&
+            rs.map (fun r => (openingRow? r).map (·.1)) == (Array.range m.leaves).map fun (i : Nat) => some (i : Int)
         | _ => false
   | _ => false
 
