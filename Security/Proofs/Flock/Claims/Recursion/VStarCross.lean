@@ -19,8 +19,8 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   (`run_inner`), which `FlockDeploy.decCoin` reads back.
 * **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
   read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the coin
-  server's transcript of an accepted run's inner rounds back to them (`ReadsBack`, which `b.tr x` injective gives at its
-  left inverse, `readsBack_invTr`) and the layout spans no more than the inner rounds.
+  server's transcript of an accepted run's inner rounds back to their prover messages and the values their coins drew
+  (`ReadsBack`), and the layout spans no more than the inner rounds.
   `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
   coins.
@@ -121,37 +121,35 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
 
 /-! ## The staged statements show the run -/
 
-/-- **A reader of the coin server's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say. -/
-abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Out))
+/-- **A reader of the coin server's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
+each as the prover's message and the coin values the round drew. -/
+abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock.F128))
+
+/-- **The values `vs` are the coin `c`'s first ones**: what a round that drew `vs.size` values shows of its coin. The
+coin server's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
+def Drawn (c : Coin) (vs : Array Flock.F128) : Prop := vs = c.vals vs.size
 
 /-- **The reader reads the coin server's transcript back at an accepted run** (a named premise): at each compiled
 statement of the shape, on every accepted run of `V IV b.st`, `untr` reads `b.tr x` of the run's inner rounds back to
-those rounds. It asks nothing at a list of rounds no accepted run sends (`readsBack_invTr`: `b.tr x` injective gives
-it at `invTr b`). -/
+those rounds' prover messages, each with values its round's coin drew (`Drawn`). It asks nothing at a list of rounds
+no accepted run sends, and nothing of a coin past what its round drew. -/
 def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
     (untr : TrReader) : Prop :=
   ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
     (r : Fin ((V IV b.st).k x) → Coin), (run H P (V IV b.st) x ω r).out = .acc →
-      untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) =
-        some ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))
-
-/-- **The left inverse of the coin server's transcript**, as a reader. -/
-noncomputable def invTr (b : Brings) : TrReader := fun x t => some (Function.invFun (b.tr x) t)
-
-/-- **Where `b.tr x` is injective, its left inverse reads it back**, at every run. -/
-theorem readsBack_invTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
-    (shape : Claims.Recursion.Form → Prop)
-    (htr : ∀ x st, parse x = some st → shape st.form → Function.Injective (b.tr x)) :
-    ReadsBack H IV b shape (invTr b) :=
-  fun x st hst hf _ _ _ _ _ => congrArg some (Function.leftInverse_invFun (htr x st hst hf) _)
+      ∃ ps, untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) = some ps ∧
+        ps.map Prod.fst = ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map Prod.fst ∧
+        ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
 
 /-- **The rounds a V\* statement's transcript shows**: its transcript, read by `untr`. -/
-def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Out)) :=
+def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Array Flock.F128)) :=
   ((decodeRec xO).bind RecRaw.transcript).bind (untr x)
 
-/-- **The coins a V\* statement shows**: its transcript's rounds are each answered by the coin's bytes. -/
+/-- **The coins a V\* statement shows**: at each round its transcript shows, the values that round drew are the coin's
+first ones (`Drawn`). It shows nothing of a coin past them, so a part's check at the coins it shows (`PartChecksB`)
+holds at every coin with those values. -/
 def showsTr (untr : TrReader) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
-  ∃ ps, shownOf untr x xO = some ps ∧ ∀ i < ps.length, (ps.getD i ([], .rej)).2 = .msg (c i).bytes
+  ∃ ps, shownOf untr x xO = some ps ∧ ∀ i < ps.length, Drawn (c i) (ps.getD i ([], #[])).2
 
 /-- **The commit string a V\* statement shows at inner round `i`**: its transcript's prover message there. -/
 def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
@@ -160,8 +158,8 @@ def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
 /-- **`Staged` at `deployRec`**, at every shape: each V* statement of an accepted run is part `s`'s staged one at the
 run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the coin
 server's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
-those rounds are answered by the run's coins (`run_inner`) and their prover messages are the run's commit strings, at
-each round the layout spans, which are inner rounds. -/
+each round shows values its coin drew, and the rounds' prover messages are the run's commit strings, at each round the
+layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (untr : TrReader) (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBack H I.V b shape untr)
@@ -170,14 +168,13 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
   intro x st hst hf Ω P ω r hacc s hs
   have hL := hL x st hst hf
   change (run H P (V I.V b.st) x ω r).out = .acc at hacc
-  have hrb := hrb x st hst hf Ω P ω r hacc
+  obtain ⟨ps, hps, hfst, hdrawn⟩ := hrb x st hst hf Ω P ω r hacc
   change s < nS x at hs
   have hne := staged_ne_nil H I.V b.st x P ω r hacc hs
   obtain ⟨hnum, -⟩ := run_round H I.V b.st x P ω r hacc hs rfl rfl
   obtain ⟨xr, p, -, -, hd⟩ := staged_decode hne
   have hK := run_acc_length H I.V b.st x P ω r hacc
   have hm := roundsMargin_V H I.V b.st x P ω r hacc
-  obtain ⟨xr', hx⟩ := run_acc_readX H I.V b.st x P ω r hacc
   have hv : (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
       staged b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
     show (vstar b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
@@ -192,28 +189,21 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
     · intro i h₁ h₂
       simp only [List.getElem_dropLast, List.getElem_take]
   have hshown : shownOf untr x (staged b.st x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s) =
-      some ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x))) := by
+      some ps := by
     unfold shownOf
     rw [hd, Option.bind_some]
     show Option.bind
       (some (b.tr x ((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)).dropLast)) (untr x) = _
     rw [Option.bind_some, hdl]
-    exact hrb
+    exact hps
   rw [hv]
-  refine ⟨⟨_, hshown, fun i hi => ?_⟩, fun i hi => ?_⟩
-  · have hi' : i < I.V.k (xIOf x) := by
-      simp only [List.length_take] at hi
-      omega
-    obtain ⟨a, ha⟩ := run_inner H I.V b.st x P ω r hx (i := i) (by simp only [kS]; omega) (by omega)
-    rw [List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hi', ha]
-    rfl
-  · have hi' : i < I.V.k (xIOf x) := lt_of_lt_of_le hi hL
-    unfold cmtTr
-    rw [hshown]
-    show ((((run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x))).map Prod.fst).getD i []) =
-      (((run H P (V I.V b.st) x ω r).msgs.map Prod.fst).getD i [])
-    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
-      List.getElem?_take_of_lt hi']
+  refine ⟨⟨_, hshown, hdrawn⟩, fun i hi => ?_⟩
+  have hi' : i < I.V.k (xIOf x) := lt_of_lt_of_le hi hL
+  unfold cmtTr
+  rw [hshown]
+  show ((ps.map Prod.fst).getD i []) = (((run H P (V I.V b.st) x ω r).msgs.map Prod.fst).getD i [])
+  rw [hfst, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
+    List.getElem?_take_of_lt hi']
 
 /-! ## Each inner round before the last is public, fixed or held -/
 
