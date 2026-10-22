@@ -645,4 +645,72 @@ theorem check_own_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (hH : c
     obtain ⟨fr, hfr⟩ := Sched.roundFree_round (check_some h)
     exact key true r fr hfr
 
+theorem labelInner_size : _root_.Flock.Zk.LABEL_INNER.toUTF8.size < 2 ^ 64 := by decide
+
+theorem ownFrames0_mid (c : Cfg) (s : Masker) (w t : ByteArray) : ∀ f ∈ ownFrames c s w t 0, midFrame f := by
+  intro f hf
+  simp only [ownFrames, List.mem_cons, List.not_mem_nil, or_false] at hf
+  rcases hf with rfl | rfl
+  · exact labelInner_size
+  · trivial
+
+open _root_.Flock.Firewall.Frame (check) in
+/-- **At the inner proof's label the placeholder takes its own round where the deployed frame's check released one**,
+where the scheduled round in its place is the firewall's own round 0 at some `final_c'` (`r`): whether the device's
+round passed or `r` stood in, the placeholder's own round 0 at zero pads, from the deployed state but for `stopped`,
+leaves the deployed state but for `stopped`. -/
+theorem check_own0_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (m s₀ : Masker) (st : Bool) {n : ℕ}
+    (hj : m.inner = none) {w : ByteArray} (hw : w.size = 16) {v r out : ByteArray} {s' : Masker}
+    {why : Option String}
+    (hr : r.data.toList =
+      (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList)
+    (h : check c { m with stopped := st } v r n = .ok (out, s', why)) :
+    ∃ q', roundFree c' m (ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n 0) n = .ok q' ∧
+      unstop s' = unstop q'.2.1 := by
+  have hz64 : (Loop.zeros 64).size = 64 := by simp [Loop.zeros, ByteArray.size]
+  have hR : r = ByteArray.mk (encs (ownFrames c m w (Loop.zeros 64) 0) ++ (Frame.sq 1 1).enc).toArray := by
+    have e := ownRound_encs (c := c) (s := m) (n := n) hw hz64 (k := 0) (by norm_num)
+    simp only [ownRound, ownSq] at e
+    rw [← e, ← hr, Array.toArray_toList]
+  have hfs : List.Forall₂ Alike (ownFrames c m w (Loop.zeros 64) 0)
+      (ownFrames c' s₀ (Loop.zeros 16) (Loop.zeros 64) 0) :=
+    .cons (show Alike (.label _) (.label _) from rfl) (.cons True.intro .nil)
+  have hs : ∀ b : Bool, ({ m with stopped := b } : Masker).inner ≠ some INNER_ROUNDS := fun b => by
+    show m.inner ≠ _
+    rw [hj]
+    nofun
+  have hn1 : ∀ (b : Bool) (q : ByteArray × Masker × Array ℕ), roundFree c { m with stopped := b } r n = .ok q →
+      n = 1 := fun b q hq =>
+    (sqOk_frames (xb := r) (by rw [hR]) (by norm_num) (roundFree_sq (hs b) hq)).1.symm
+  have key : ∀ (b : Bool) (fs : List Frame) (fr : Array ℕ), (∀ f ∈ fs, midFrame f) →
+      List.Forall₂ Alike fs (ownFrames c' s₀ (Loop.zeros 16) (Loop.zeros 64) 0) → n = 1 →
+      roundFree c { m with stopped := b } (ByteArray.mk (encs fs ++ (Frame.sq 1 1).enc).toArray) n =
+        .ok (out, s', fr) →
+      ∃ q', roundFree c' m (ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n 0) n = .ok q' ∧
+        unstop s' = unstop q'.2.1 := by
+    intro b fs fr hm hA hn hf
+    subst hn
+    obtain ⟨q', hq', hu⟩ := roundFree_own_ok hc hz { m with stopped := b } s₀ m.stopped (i := 0) (by norm_num)
+      (hs b) rfl (.inr ⟨rfl, rfl⟩) (by decide) (by norm_num) hm hA
+      (fun q hq => foldlM_own0_inner c' s₀ _ _ _ q hq) hf
+    rw [Sched.with_stopped_self m rfl] at hq'
+    exact ⟨q', hq', hu⟩
+  cases why with
+  | none =>
+    have hp := check_none_passes h
+    obtain ⟨q0, hq0, -⟩ := passes_none hp
+    have h1 := hn1 st q0 hq0
+    subst h1
+    rw [hR] at hp
+    obtain ⟨fs', hA', hm', rfl⟩ := passes_frames c { m with stopped := st } _ 1 1 (hs st) (ownFrames0_mid c m w _)
+      (.inr ⟨rfl, rfl⟩) (by decide) (by norm_num) v hp
+    obtain ⟨fr, hfr⟩ := Sched.roundFree_round (check_none h)
+    exact key st fs' fr hm' (Sched.forall₂_alike_trans (Sched.forall₂_alike_symm hA') hfs) rfl hfr
+  | some _ =>
+    obtain ⟨fr, hfr⟩ := Sched.roundFree_round (check_some h)
+    have h1 := hn1 true _ hfr
+    subst h1
+    rw [hR] at hfr
+    exact key true _ fr (ownFrames0_mid c m w _) hfs rfl hfr
+
 end Claims.ZKServer
