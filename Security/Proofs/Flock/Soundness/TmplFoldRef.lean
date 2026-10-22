@@ -198,9 +198,6 @@ theorem tensor_get (lw rho : Array F128) (hlw : lw.size = 64) {p : ℕ} (hp : p 
   simp only [Stmt.tensor, Array.getElem_ofFn, hlw]
   rw [of_mul, of_mul, eqTail_halves rho _ hq]
   congr 1
-  rw [getElem!_pos lw _ (by rw [hlw]; omega), Array.getD_eq_getD_getElem?,
-    Array.getElem?_eq_getElem (by rw [hlw]; omega)]
-  rfl
 
 theorem sparse_ofRows_dims {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m) :
     m.rows = rows.size ∧ m.width = width := by
