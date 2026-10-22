@@ -536,8 +536,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.Firewall.Finish.innerProg_run`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
   below `zp 64` (the PIOP's) are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the
-  session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
-  firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
+  session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`, the latter given the batched constraint, which held
+  wherever the firewall's own inner proof returned: `Flock.Firewall.Finish.innerP_batched`), `FlockComplete.repCut` at
+  level 0's commitment erased returns the firewall's transcript and log, and its proof up to `eraseZ`
+  (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
   leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
@@ -582,8 +584,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `h_tx`, `h_ty` against the exposed pads; `Table.innerMsg_padShift`) and `Y₂`, and where the rows hold `Y₁`, so the
   switched source's `ρ_in`, `σ_in` and `Y` are the honest source's (`Masked.swSrcE_inner`, `Masked.swSrcE_y`). The
   request's pads are the tape's wherever the tape's pads are its draws' (`Masked.pads_frame_eq`), so at the inner
-  proof's slot `InnerSrc` holds at the switched source and the request's pads, given the batched constraint and `τ`'s
-  commitment there (**`Masked.swSrcE_innerSrc_frame`**).
+  proof's slot `InnerSrc` holds at the switched source and the request's pads, given the batched constraint
+  (`hinner`'s own premise) and `τ`'s commitment there (**`Masked.swSrcE_innerSrc_frame`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.

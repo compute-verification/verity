@@ -17,7 +17,8 @@ pads are the request's draws, which are the tape's wherever the tape's pads of t
   where table `j`'s rows hold at its base.
 * `Masked.pads_frame_eq`: the firewall's pads (`Finish.padsOf` of the request's draws) are the honest pads.
 * **`Masked.swSrcE_innerSrc_frame`**: `InnerSrc` at the switched source at the firewall's pads and the deployed rep's
-  coins, at the inner proof's slot, from the batched constraint and `τ`'s commitment.
+  coins, at the inner proof's slot, from the batched constraint (which `repCut_fw` hands `hinner`: the firewall's own
+  inner proof checked it, `innerP_batched`) and `τ`'s commitment.
 -/
 
 set_option synthInstance.maxSize 100000
