@@ -383,7 +383,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     if why is None:
         program = hashlib.sha512(descriptor).hexdigest()
         proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
-        why = CR._proved(sorted(drawn), proofs) or CR._registration(window_root, program, entries, ss, layout, proofs)
+        why = CR._proved(sorted(drawn), proofs) or CR._registration(
+            window_root, program, CR._prefix(descriptor), entries, ss, layout, proofs)
     return None if why is None else list(why)
 
 
