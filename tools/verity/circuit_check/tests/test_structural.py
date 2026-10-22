@@ -44,28 +44,31 @@ def _codes(r: dict) -> list[str]:
 
 # --- the canonical gates ---------------------------------------------------------------------------------------------
 
-def _x(*nodes: int, c: int = 0) -> tuple:
-    return frozenset(nodes), c
-
-
 def test_an_and_is_one_node_whichever_way_round_and_through_whichever_pair_it_is_written():
-    K_ = ST.Canon(3)
-    x, y, z = _x(0), _x(1), _x(2)
+    K_ = ST.Canon(3, b"key")
+    x, y, z = K_.inputs
     xy = K_.AND(x, y)
     assert K_.AND(y, x) == xy
-    assert K_.AND(x, _x(0, 1)) == (x[0] ^ xy[0], 0)                 # x (x + y) = x + xy
-    assert K_.AND(_x(0, 1), y) == (y[0] ^ xy[0], 0)                 # (x + y) y = y + xy
-    assert K_.AND(_x(0, c=1), _x(1, c=1)) == (xy[0] ^ {0, 1}, 1)    # (x + 1)(y + 1) = xy + x + y + 1
+    assert K_.AND(x, x ^ y) == x ^ xy                    # x (x + y) = x + xy
+    assert K_.AND(x ^ y, y) == y ^ xy                    # (x + y) y = y + xy
+    assert K_.AND(x ^ 1, y ^ 1) == xy ^ x ^ y ^ 1        # (x + 1)(y + 1) = xy + x + y + 1
     assert K_.AND(x, z) != xy and K_.next == 5
 
 
 def test_constants_and_repeats_fold():
-    K_ = ST.Canon(2)
-    x = _x(0)
-    assert K_.AND(x, (frozenset(), 1)) == x and K_.AND((frozenset(), 1), x) == x
+    K_ = ST.Canon(2, b"key")
+    x, _y = K_.inputs
+    assert K_.AND(x, 1) == x and K_.AND(1, x) == x
     assert K_.AND(x, ST.ZERO) == ST.ZERO
-    assert K_.AND(x, x) == x and K_.AND(x, _x(0, c=1)) == ST.ZERO
+    assert K_.AND(x, x) == x and K_.AND(x, x ^ 1) == ST.ZERO
     assert K_.next == 2
+
+
+def test_a_verdict_does_not_depend_on_the_labels_key_which_the_report_records():
+    tm = _emitted(SB.E4m3ToF32)
+    a, b = (ST.check(SB.E4m3ToF32, tm, key=k)["structural"] for k in (b"one", b"two"))
+    assert a["verdict"] == b["verdict"] == "syntactic" and a["canonical_nodes"] == b["canonical_nodes"]
+    assert (a["labels"], b["labels"]) == ({"hash": "sha512", "key": b"one".hex()}, {"hash": "sha512", "key": b"two".hex()})
 
 
 # --- accepted --------------------------------------------------------------------------------------------------------
@@ -116,7 +119,7 @@ def test_other_gates_computing_the_same_bits_pass_on_every_input_when_the_inputs
     v, r = _verdict(MAJ, _unit([1, 1, 1], [1], [(W, (0,), (1,)), (W + 1, (2,), (0, 1)), (2 * W, (W, W + 1), (K,))]))
     assert (v, r["failures"], r["warnings"]) == ("exhaustive", [], [])
     assert r["structural"]["semantic"] == {"inputs": 3, "exhaustive": True, "vectors": 8, "mismatched_output_bits": 0}
-    assert "differs in" in r["structural"]["why_not_syntactic"]
+    assert "other forms" in r["structural"]["why_not_syntactic"]
 
 
 def test_other_gates_on_many_inputs_pass_on_random_ones_with_a_warning():

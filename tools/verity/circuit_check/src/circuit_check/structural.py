@@ -12,6 +12,11 @@ template adds past a call's support), constants folded or carried as inputs, dea
 AND's operands, each of which leaves every bit's value as it was: so it proves, by construction, that the template computes
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
+A form is held as its fingerprint, the XOR of its nodes' labels, node i's label being SHA-512(key ‖ i) for a key drawn for
+the check (and recorded in its report), since a unit's accumulator bits are forms of thousands of nodes. Two distinct forms
+share a fingerprint with probability 2^-512, so among the M forms a check builds it identifies two that differ with
+probability at most M² / 2^513, SHA-512 taken as a random function; short of that the table is the exact one.
+
 **Semantic.** When the forms differ (a builder that chose a different structure for a constant it was given as an input, say),
 the report says which output bits differ and both are evaluated, bit-sliced: on every input when the template has at most
 `EXHAUSTIVE_BITS` input bits, else on ``vectors`` random inputs, which miss a difference on a fraction ε of the inputs with
@@ -25,6 +30,8 @@ table, which rows carry as more than gates.
 """
 from __future__ import annotations
 
+import hashlib
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -36,64 +43,52 @@ from . import checks as CK
 EXHAUSTIVE_BITS = 16
 VECTORS = 4096
 WORD = 128
-EMPTY: frozenset = frozenset()
-ZERO = (EMPTY, 0)
+ZERO = 0
 
 
 class Canon:
-    """The canonical gates both sides are read into. Nodes ``0 .. inputs - 1`` are the inputs; each AND node gets the next
-    id. A bit is ``(nodes, c)``: the XOR of those nodes and the constant ``c``."""
+    """The canonical gates both sides are read into. A bit is one int, its form's fingerprint shifted up one and its
+    constant in bit 0. Nodes ``0 .. inputs - 1`` are the inputs (`inputs`, their bits); each AND node takes the next."""
 
-    def __init__(self, inputs: int) -> None:
-        self.next = inputs
-        self.ids: dict[frozenset, int] = {}
+    def __init__(self, inputs: int, key: bytes) -> None:
+        self.key = key
+        self.next = 0
+        self.inputs = [self._node() for _ in range(inputs)]
         self.ands: dict[tuple[int, int], int] = {}
 
-    def _id(self, f: frozenset) -> int:
-        i = self.ids.get(f)
-        if i is None:
-            i = self.ids[f] = len(self.ids)
-        return i
+    def _node(self) -> int:
+        h = hashlib.sha512(self.key + self.next.to_bytes(8, "little")).digest()
+        self.next += 1
+        return int.from_bytes(h, "little") << 1
 
-    def AND(self, a: tuple, b: tuple) -> tuple:
+    def AND(self, a: int, b: int) -> int:
         """``a · b``: (f + x)(g + y) = fg + y f + x g + x y, with fg the node of the two smallest of f, g and f + g (by
-        their ids), since f (f + g) = f + fg."""
-        (f, x), (g, y) = a, b
+        their fingerprints), since f (f + g) = f + fg."""
+        x, y = a & 1, b & 1
+        f, g = a ^ x, b ^ y
         if not f:
             return b if x else ZERO
         if not g:
             return a if y else ZERO
         if f == g:
-            return (f, x) if x == y else ZERO
-        h = f ^ g
-        i, j, k = self._id(f), self._id(g), self._id(h)
-        key = tuple(sorted((i, j, k))[:2])
-        n = self.ands.get(key)
+            return a if x == y else ZERO
+        lo, mid, top = sorted((f, g, f ^ g))
+        n = self.ands.get((lo, mid))
         if n is None:
-            n = self.ands[key] = self.next
-            self.next += 1
-        top = max(i, j, k)
-        fg = frozenset((n,))
-        if top == i:
-            fg ^= g
-        elif top == j:
-            fg ^= f
+            n = self.ands[lo, mid] = self._node()
+        fg = n ^ (g if top == f else f if top == g else 0)
         if y:
             fg ^= f
         if x:
             fg ^= g
-        return fg, x & y
+        return fg | (x & y)
 
 
-def _xor(bits: Sequence[tuple]) -> tuple:
-    if len(bits) == 1:
-        return bits[0]
-    acc: set = set()
-    c = 0
-    for s, x in bits:
-        acc.symmetric_difference_update(s)
-        c ^= x
-    return frozenset(acc), c
+def _xor(bits) -> int:
+    acc = 0
+    for v in bits:
+        acc ^= v
+    return acc
 
 
 class Refused(ValueError):
@@ -178,14 +173,14 @@ def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
     late = np.flatnonzero((flat.refs >= at) & ~free[flat.refs] & ~free[at])
     if len(late):
         raise Refused("order", f"row {at[late[0]]} reads column {flat.refs[late[0]]}, at or past its own")
-    val: dict[int, tuple] = {k: (EMPTY, 1), **{c: (frozenset((i,)), 0) for c, i in node.items()}}
+    val: dict[int, int] = {k: 1, **{c: K.inputs[i] for c, i in node.items()}}
     ands = copies = 0
     live = _live(n, flat.row, roots + pad, set(val))
     for c in live:
         if c in val:
             continue
         a, b = flat.row(c)
-        val[c] = K.AND(_xor([val[r] for r in a]) if a else ZERO, _xor([val[r] for r in b]) if b else ZERO)
+        val[c] = K.AND(_xor(val[r] for r in a), _xor(val[r] for r in b))
         copy = (k,) in (a, b)
         copies += copy
         ands += bool(a and b) and not copy
@@ -221,17 +216,17 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
     if C.asserts or C.lookups:
         raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions and {len(C.lookups)} table reads, "
                                      "which a template's rows do not carry as gates")
-    val: dict[int, tuple] = {}
+    val: dict[int, int] = {}
     i = 0
     for w in ins:
         for b in w:
             (v,) = tuple(b.s)
-            val[v] = (frozenset((i,)), 0)
+            val[v] = K.inputs[i]
             i += 1
     live = sorted(C.live())
 
-    def ev(f) -> tuple:
-        return _xor([val[v] for v in f.s] + [(EMPTY, f.c)])
+    def ev(f) -> int:
+        return _xor(val[v] for v in f.s) ^ f.c
 
     ands = 0
     for v in live:
@@ -283,18 +278,20 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
 
 
 def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
-          seed: int = CK.Options.seed, label: str | None = None) -> dict:
+          seed: int = CK.Options.seed, key: bytes | None = None, label: str | None = None) -> dict:
     """``tmpl`` (a `verity_flock.tmpl.Tmpl`, or its text) held to ``target``'s flat lowering: a result as `checks.check_definition` gives
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
-    ``refused``), the counts on both sides, and why the forms differ when they do."""
+    ``refused``), the counts on both sides, the labels' key (fresh unless ``key`` is given), and why the forms differ when
+    they do."""
     from verity_flock import tmpl as TM
 
     from verity.ml.circuits.evaluation.reference import resolve
 
     t = resolve(target)
     name = label or t.id
+    key = os.urandom(32) if key is None else key
     F = CK.Findings()
-    rec: dict[str, Any] = {"definition": t.id}
+    rec: dict[str, Any] = {"definition": t.id, "labels": {"hash": "sha512", "key": key.hex()}}
     try:
         if not isinstance(tmpl, TM.Tmpl):
             try:
@@ -308,7 +305,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
         except (AssertionError, IndexError, ValueError) as e:
             raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
         C, ins, words = _lowered(t)
-        K = Canon(sum(map(len, ins)))
+        K = Canon(sum(map(len, ins)), key)
         mine, rec["template"] = template_bits(flat, K)
         widths = rec["template"].pop("input_widths")
         if widths != [len(w) for w in ins]:
@@ -327,9 +324,8 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
         return {"failures": F.failures, "warnings": F.warnings, "structural": rec}
     rec["differing_output_bits"] = len(differ)
     d = differ[0]
-    rec["why_not_syntactic"] = (f"{len(differ)} of {len(mine)} output bits are other forms (the first, bit {d}, differs in "
-                                f"{len(mine[d][0] ^ theirs[d][0])} of its nodes): not one circuit up to the rewrites the "
-                                f"forms absorb")
+    rec["why_not_syntactic"] = (f"{len(differ)} of {len(mine)} output bits are other forms (the first is bit {d}): not one "
+                                f"circuit up to the rewrites the forms absorb")
     n = sum(map(len, ins))
     exhaustive = n <= exhaustive_bits
     T = 1 << n if exhaustive else vectors
