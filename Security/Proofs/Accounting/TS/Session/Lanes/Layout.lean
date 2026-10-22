@@ -28,7 +28,8 @@ open PouwWindow.Lanes
 def servedTile (K : ℕ) : Tile := ⟨32, 32, K⟩
 
 /-- The served leaf has 32 lanes. -/
-theorem servedTile_lanes (K : ℕ) : (servedTile K).lanes = 32 := rfl
+theorem servedTile_lanes (K : ℕ) : (servedTile K).lanes = 32 := by
+  simp [servedTile, Tile.lanes, Tile.g, Tile.q]
 
 /-- The layout's row of lane `l` at row slot `s` is this layer's. -/
 theorem servedTile_rowOf (K : ℕ) (l : Fin 32) (s : Fin 4) : (servedTile K).rowOf l.val s.val = (rowOf l s).val := by
@@ -45,7 +46,9 @@ theorem lanePorts_a (K : ℕ) (l : Fin 32) (s : Fin 4) :
   unfold lanePorts
   apply List.mem_append_left
   apply List.mem_append_left
-  exact List.mem_map.2 ⟨s.val, List.mem_range.2 s.isLt, rfl⟩
+  refine List.mem_map.2 ⟨s.val, List.mem_range.2 s.isLt, ?_⟩
+  try dsimp only
+  rw [servedTile_rowOf] <;> rfl
 
 /-- Lane `l`'s port `b<t>` is opened at row `colOf l t` of the registered `b`, and holds its B row's codes and scale. -/
 theorem lanePorts_b (K : ℕ) (l : Fin 32) (t : Fin 8) :
@@ -54,7 +57,9 @@ theorem lanePorts_b (K : ℕ) (l : Fin 32) (t : Fin 8) :
   unfold lanePorts
   apply List.mem_append_left
   apply List.mem_append_right
-  exact List.mem_map.2 ⟨t.val, List.mem_range.2 t.isLt, rfl⟩
+  refine List.mem_map.2 ⟨t.val, List.mem_range.2 t.isLt, ?_⟩
+  try dsimp only
+  rw [servedTile_colOf] <;> rfl
 
 /-- Lane `l`'s last five ports: the admit bits and its public inputs at known content, the leaf's record at `zy`'s
 row, its partials row at row `l` of `partials`, and its `ok` at `ok<l>`. -/
@@ -75,7 +80,7 @@ theorem combinePorts_p (K : ℕ) (x : Fin 32) :
       Port) ∈ combinePorts (servedTile K) := by
   unfold combinePorts
   apply List.mem_append_left
-  exact List.mem_map.2 ⟨x.val, List.mem_range.2 x.isLt, rfl⟩
+  exact List.mem_map.2 ⟨x.val, List.mem_range.2 (by rw [servedTile_lanes]; exact x.isLt), rfl⟩
 
 /-- The combine's last two ports: the leaf's receipt at `receipt`'s row, and its `ok` at `ok32`. -/
 theorem combinePorts_tail (K : ℕ) :
@@ -83,6 +88,7 @@ theorem combinePorts_tail (K : ℕ) :
       List Port), p ∈ combinePorts (servedTile K) := by
   intro p hp
   unfold combinePorts
+  rw [servedTile_lanes]
   exact List.mem_append_right _ hp
 
 end Accounting.TS.Lanes
