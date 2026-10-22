@@ -7,7 +7,7 @@ first coin.
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--lane LANE] | period-close --name P
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
-    vy-challenger-gate model-key --model M --circuit SHA512
+    vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate status SESSION | ledger | pins | models | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -80,10 +80,11 @@ first coin.
 
 - **The model registry** (`/var/lib/vy-challenger/models.jsonl`, auditor's, `chattr +a`; `models.py`) is one line a
   registration, vy-admin's `model-register` run as `auditor`. It refuses a checkpoint whose
-  files aren't the pinned `checkpoints-int8.json` role's, reads the window's linears from the circuit's descriptor,
-  commits each K's b/<K> under a fresh salt key it keeps (`weights.weights_roots`), and appends the roots and their
-  fold. `model-key` gives a lane the key (the openings of public weights), and `models` reads the registry, which
-  `publish.sh` publishes as `challenger-models/v1`.
+  files aren't the pinned `checkpoints-int8.json` role's, or that root or auditor alone can't write, or whose digest
+  isn't core's pin (`verity/core/protocols/pouw/models.json`), and a descriptor whose linears aren't the model's decoder
+  layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
+  (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
+  public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
 `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
@@ -458,6 +459,8 @@ def parse_model(verb: str, argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
     p.add_argument("--model", required=True)
     p.add_argument("--circuit", required=True)
+    if verb == "model-key":
+        p.add_argument("--weights-root", dest="weights_root", default=None)
     if verb == "model-register":
         p.add_argument("--descriptor", required=True)
         p.add_argument("--checkpoint", required=True)
@@ -475,11 +478,12 @@ def parse_model(verb: str, argv: list[str]) -> argparse.Namespace:
 
 
 def gate_model_key(argv: list[str], host: Host) -> dict:
-    """The salt key of the newest registration of `--model` under `--circuit`, the prover's openings of its b/<K>."""
+    """The salt key of `--model`'s registration under `--circuit` whose root is `--weights-root` (the period's signed one;
+    the newest when not given): the prover's openings of its b/<K>."""
     M = registry()
     a = parse_model("model-key", argv)
     try:
-        e = M.resolve(M.read(host.models), a.circuit, a.model, None)
+        e = M.resolve(M.read(host.models), a.circuit, a.model, a.weights_root and weights_root_of(a.weights_root))
     except M.Refused as x:
         raise Refused(str(x)) from None
     key = M.key_path(host.root, e).read_bytes()
@@ -706,7 +710,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "| period-close --name P "
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
-         "| model-key --model M --circuit SHA512 (a lane's own gate key, or vy-admin) "
+         "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
          "| status SESSION | ledger | pins | models | pubkey | fetch SESSION")
 
 

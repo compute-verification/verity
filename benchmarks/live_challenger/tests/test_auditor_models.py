@@ -30,16 +30,19 @@ H1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H1)
 
 ROLE = "TINY_INT8"
-QKV, DOWN = "model.layers.0.self_attn.qkv_proj", "model.layers.0.mlp.down_proj"
-LINEARS = ((QKV, 32, 16), (DOWN, 64, 8))
-CALLS = ((QKV, 0), (DOWN, 0))
-PARTS = {"model.layers.0.self_attn.q_proj": (8, 32), "model.layers.0.self_attn.k_proj": (4, 32),
-         "model.layers.0.self_attn.v_proj": (4, 32), "model.layers.0.mlp.down_proj": (8, 64)}
+L0 = "model.layers.0."
+QKV, O, GU, DOWN = (L0 + m for m in M.DECODER)
+LINEARS = ((QKV, 32, 48), (O, 32, 32), (GU, 32, 128), (DOWN, 64, 32))
+CALLS = tuple((name, 0) for name, _k, _n in LINEARS)
+PARTS = {L0 + "self_attn.q_proj": (32, 32), L0 + "self_attn.k_proj": (8, 32), L0 + "self_attn.v_proj": (8, 32),
+         L0 + "self_attn.o_proj": (32, 32), L0 + "mlp.gate_proj": (64, 32), L0 + "mlp.up_proj": (64, 32),
+         L0 + "mlp.down_proj": (32, 64)}
 KEY = bytes(range(32))
 
 
-def descriptor(prefix: str = "h1/") -> bytes:
-    desc = codec.encode_program(H1.HW.program(LINEARS, CALLS, 8, H1.TILE, prefix=prefix, unit=H1.unit))
+def descriptor(prefix: str = "h1/", linears=LINEARS) -> bytes:
+    calls = tuple((name, 0) for name, _k, _n in linears)
+    desc = codec.encode_program(H1.HW.program(linears, calls, 8, H1.TILE, prefix=prefix, unit=H1.unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
@@ -64,30 +67,36 @@ def model(tmp_path):
         ts[f"{name}.weight"] = rng.integers(-127, 128, (n, k), dtype=np.int8)
         ts[f"{name}.weight_scale"] = rng.uniform(1e-3, 1, (n, 1)).astype("<f4")
     ck, tree = tmp_path / "ckpt", tmp_path / "tree"
-    ck.mkdir()
+    ck.mkdir(mode=0o755)
     names = sorted(ts)
-    safetensors(ck / "model-00001-of-00002.safetensors", {n: ts[n] for n in names[:4]})
-    safetensors(ck / "model-00002-of-00002.safetensors", {n: ts[n] for n in names[4:]})
-    (ck / "config.json").write_text("{}")
+    safetensors(ck / "model-00001-of-00002.safetensors", {n: ts[n] for n in names[:6]})
+    safetensors(ck / "model-00002-of-00002.safetensors", {n: ts[n] for n in names[6:]})
+    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 1}))
+    for p in ck.iterdir():
+        p.chmod(0o644)
     files = {p.name: {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "size": p.stat().st_size,
                       "digest_source": "recipe"} for p in sorted(ck.iterdir())}
     (tree / M.MANIFEST).parent.mkdir(parents=True)
     (tree / M.MANIFEST).write_text(json.dumps({"checkpoints": [
         {"role": ROLE, "repo": "verity-int8/Tiny", "revision": "ab" * 20, "files": files,
          "recipe": {"id": "verity-int8-channel127/v1"}}]}))
+    pin = M.checkpoint_sha512({p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in ck.iterdir()})
+    (tree / M.PINS).parent.mkdir(parents=True)
+    (tree / M.PINS).write_text(json.dumps({ROLE: {"checkpoint_sha512": pin}}))
     d = descriptor()
     (tmp_path / "desc.json").write_bytes(d)
     return {"ckpt": ck, "tree": tree, "tensors": ts, "descriptor": d, "circuit": hashlib.sha512(d).hexdigest(),
-            "desc_path": tmp_path / "desc.json"}
+            "desc_path": tmp_path / "desc.json", "pin": pin}
 
 
 def expected_roots(ts, circuit, key=KEY):
     def fused(parts):
-        w = np.concatenate([ts[f"{p}.weight"] for p in parts])
-        s = np.concatenate([ts[f"{p}.weight_scale"] for p in parts]).reshape(-1)
+        w = np.concatenate([ts[f"{L0}{p}.weight"] for p in parts])
+        s = np.concatenate([ts[f"{L0}{p}.weight_scale"] for p in parts]).reshape(-1)
         return [w[j].tobytes() + s[j].tobytes() for j in range(len(w))]
-    rows = [fused([f"model.layers.0.self_attn.{x}_proj" for x in "qkv"]), fused([DOWN])]
-    return Wt.weights_roots(circuit, "h1/", [(16, 32), (8, 64)], lambda w: rows[w], key)
+    rows = [fused(["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"]), fused(["self_attn.o_proj"]),
+            fused(["mlp.gate_proj", "mlp.up_proj"]), fused(["mlp.down_proj"])]
+    return Wt.weights_roots(circuit, "h1/", [(n, k) for _name, k, n in LINEARS], lambda w: rows[w], key)
 
 
 def test_a_registration_commits_the_pinned_checkpoints_rows_for_the_descriptors_linears(model):
@@ -99,8 +108,9 @@ def test_a_registration_commits_the_pinned_checkpoints_rows_for_the_descriptors_
     assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
     assert line["weights_root"] == Wt.weights_root(roots).hex()
     assert line["prefix"] == CR.shape_of(model["descriptor"])["prefix"] == "h1/" and line["model"] == ROLE and line["circuit"] == model["circuit"]
-    assert line["entries"] == [Wt.entry(model["circuit"], "h1/", 32, 16, roots[32]),
-                               Wt.entry(model["circuit"], "h1/", 64, 8, roots[64])]
+    assert line["entries"] == [Wt.entry(model["circuit"], "h1/", 32, 208, roots[32]),
+                               Wt.entry(model["circuit"], "h1/", 64, 32, roots[64])]
+    assert line["checkpoint_sha512"] == model["pin"]
     assert line["key_sha512"] == hashlib.sha512(KEY).hexdigest()
     assert set(line["checkpoint"]) == {p.name for p in model["ckpt"].iterdir()}
 
@@ -121,13 +131,67 @@ def test_a_registration_refuses_a_checkpoint_or_descriptor_that_isnt_the_pinned_
         M.register(model["tree"], ROLE, model["circuit"], other, model["ckpt"], KEY, pinned=PIN, now="t")
 
 
-def test_a_linear_the_checkpoint_lacks_or_shapes_otherwise_is_refused(model, monkeypatch):
-    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [("model.layers.0.self_attn.o_proj", 32, 16)]))
-    with pytest.raises(M.Refused, match="no tensor"):
-        M.register(model["tree"], ROLE, model["circuit"], model["descriptor"], model["ckpt"], KEY, pinned=PIN, now="t")
-    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [(QKV, 32, 24)]))
-    with pytest.raises(M.Refused, match="gave 16 rows"):
-        M.register(model["tree"], ROLE, model["circuit"], model["descriptor"], model["ckpt"], KEY, pinned=PIN, now="t")
+def reg(model, descriptor=None, circuit=None):
+    d = descriptor or model["descriptor"]
+    return M.register(model["tree"], ROLE, circuit or hashlib.sha512(d).hexdigest(), d, model["ckpt"], KEY, pinned=PIN,
+                      now="t")
+
+
+def test_a_checkpoint_that_isnt_core_s_pin_or_that_another_user_can_write_is_refused(model):
+    """The registration signs only the checkpoint credit's pin names, from files nothing but root and auditor could
+    change between their hash and their read."""
+    pins = model["tree"] / M.PINS
+    pins.write_text(json.dumps({ROLE: {"checkpoint_sha512": "0" * 128}}))
+    with pytest.raises(M.Refused, match="is not .*'s pin"):
+        reg(model)
+    pins.write_text("{}")
+    with pytest.raises(M.Refused, match="pins no checkpoint_sha512"):
+        reg(model)
+    pins.write_text(json.dumps({ROLE: {"checkpoint_sha512": model["pin"]}}))
+    shard = model["ckpt"] / "model-00001-of-00002.safetensors"
+    shard.chmod(0o664)
+    with pytest.raises(M.Refused, match="only root or auditor"):
+        reg(model)
+    shard.chmod(0o644)
+    link = model["ckpt"] / "config.json"
+    real = model["ckpt"].parent / "config.json"
+    link.rename(real)
+    link.symlink_to(real)
+    with pytest.raises(M.Refused, match="no symlink"):
+        reg(model)
+
+
+def test_a_shard_outside_the_pin_never_shadows_a_pinned_tensor(model):
+    """An extra safetensors file in DIR is never opened, and a tensor in two pinned shards is refused."""
+    extra = {f"{L0}self_attn.q_proj.weight": np.zeros((32, 32), np.int8)}
+    safetensors(model["ckpt"] / "zz.safetensors", extra)
+    roots = expected_roots(model["tensors"], model["circuit"])
+    assert reg(model)["weights_root"] == Wt.weights_root(roots).hex()
+    with pytest.raises(M.Refused, match="is in both"):
+        M.Checkpoint(model["ckpt"], ["model-00001-of-00002.safetensors", "zz.safetensors",
+                                     "model-00002-of-00002.safetensors"])
+
+
+@pytest.mark.parametrize("linears", [
+    (LINEARS[1], LINEARS[0], LINEARS[2], LINEARS[3]),
+    LINEARS[:3],
+    LINEARS + (("model.layers.1.self_attn.qkv_proj", 32, 48),),
+    (("model.layers.0.self_attn.kqv_proj", 32, 48),) + LINEARS[1:],
+])
+def test_a_descriptor_whose_linears_arent_the_models_decoder_layers_in_order_is_refused(model, linears):
+    """A descriptor that permutes, drops, adds or renames a linear would sign the pinned checkpoint's root for a function
+    the model doesn't compute."""
+    with pytest.raises(M.Refused, match="decoder layers"):
+        reg(model, descriptor(linears=linears))
+
+
+def test_a_linear_the_checkpoint_shapes_otherwise_is_refused(model, monkeypatch):
+    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [(QKV, 32, 40), *LINEARS[1:]]))
+    with pytest.raises(M.Refused, match="gave 48 rows"):
+        reg(model)
+    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [(QKV, 64, 48), *LINEARS[1:]]))
+    with pytest.raises(M.Refused, match="not n × 64"):
+        reg(model)
 
 
 def register_hooks(host, signer, model, **kw):
@@ -158,6 +222,9 @@ def test_vy_admin_registers_and_a_period_open_signs_the_registered_root_and_mode
 
     key = ok(ssh(host, signer, f"model-key --model {ROLE} --circuit {c}", "hash"))
     assert key["key"] == KEY.hex() and key["weights_root"] == reg["weights_root"]
+    assert ok(ssh(host, signer, f"model-key --model {ROLE} --circuit {c} --weights-root {reg['weights_root']}",
+                  "hash"))["key"] == KEY.hex()
+    refused(ssh(host, signer, f"model-key --model {ROLE} --circuit {c} --weights-root {'5e' * 64}", "hash"), "no entry")
     rc, out = A.gate(["--ssh", f"model-key --model {ROLE} --circuit {c}"], host)
     refused((rc, json.loads(out)), "reads only")
 

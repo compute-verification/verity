@@ -4,23 +4,33 @@ its own salts, so a period's weights' root is never the prover's choice.
 - **A registration** (`register`, vy-admin's `vy-challenger-gate model-register`, run as `auditor`) takes a model's int8
   checkpoint role (`--model`, a role of `checkpoints-int8.json` in the pinned tree, `MANIFEST`), the period's declared
   circuit (`--circuit`, the SHA-512 of the window Program's descriptor, `--descriptor FILE`, which it must hash to) and the
-  checkpoint's snapshot directory (`--checkpoint DIR`). It refuses unless every file the manifest lists has its pinned
-  sha256 (`check_files`); reads the window's linears and prefix from the descriptor (`credit.layout_of`, `shape_of`);
-  draws a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the checkpoint's int8 codes and s_w
-  (`weights.weights_roots`, vLLM's fused ``qkv_proj`` and ``gate_up_proj`` their parts' rows in turn, `FUSED`); keeps
-  the key (`key_path`, auditor's, 0600); and appends one line to the registry (`Host.models`, append-only, root's seal):
-  ``{model, circuit, prefix, checkpoint: {file: SHA-512}, checkpoint_sha512, roots: {K: root}, entries, weights_root,
-  key_sha512, pinned, registered_utc}``.
+  checkpoint's directory (`--checkpoint DIR`). It refuses unless:
+  - DIR and every file the manifest lists are regular, not symlinks, and writable by no one but root and `auditor`
+    (`check_owned`), so nothing changes them between the hash and the read;
+  - each of those files has its pinned size and sha256 (`check_files`), and the SHA-512 of their `{file: SHA-512}` map
+    (`checkpoint_sha512`) is the role's pin in core's `PINS` (`verity/core/protocols/pouw/models.json`,
+    ``{role: {"checkpoint_sha512": hex}}``), which credit holds each open's ``model`` to;
+  - the descriptor's linears are exactly the model's decoder linears, ``qkv_proj``, ``o_proj``, ``gate_up_proj`` and
+    ``down_proj`` of each of config.json's ``num_hidden_layers`` in turn (`DECODER`, `check_linears`), so the root it
+    signs is the function the model computes.
+  It then draws a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the int8 codes and s_w of the pinned
+  shards alone, a tensor in two shards refused (`Checkpoint`), vLLM's fused ``qkv_proj`` and ``gate_up_proj`` their
+  parts' rows in turn (`FUSED`, `weights.weights_roots`); keeps the key (`key_path`, auditor's, 0600); and appends one
+  line to the registry (`Host.models`, append-only, root's seal): ``{model, circuit, prefix, checkpoint: {file:
+  SHA-512}, checkpoint_sha512, source, roots: {K: root}, entries, weights_root, key_sha512, pinned, registered_utc}``.
 - **A period-open** with ``--model M`` (or ``--weights-root W``) signs the registry entry's ``weights_root`` and
   ``model: {name, checkpoint_sha512}`` for its circuit (`resolve`), and refuses a model or a root the registry has no
   entry of for that circuit: no period's weights' root is the prover's.
-- **The openings** are the salt key: a lane's gate key reads it with `model-key --model M --circuit C`. The weights are
-  public; the key salts only their b/<K> rows (`weights.B_NONCE`).
+- **The openings** are the salt key: a lane's gate key reads it with `model-key --model M --circuit C [--weights-root W]`,
+  W the period's signed root when the model was registered more than once. The weights are public; the key salts only
+  their b/<K> rows (`weights.B_NONCE`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 import struct
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -32,8 +42,11 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.ml.circuits.codec import canonical_json
 
 MANIFEST = Path("integrations/vllm/manifests/checkpoints-int8.json")
+PINS = Path("verity/core/protocols/pouw/models.json")
 #: vLLM's merged modules at TP = 1: a fused linear's rows are its parts' rows in turn, its scales the same
 FUSED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
+#: a decoder layer's int8 linears in vLLM's module order, the window's linear order
+DECODER = ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj", "mlp.down_proj")
 CHUNK = 1 << 24
 
 
@@ -51,6 +64,31 @@ def manifest_entry(tree: Path, role: str) -> dict:
     if len(found) != 1:
         raise Refused(f"--model {role!r}: one role of {MANIFEST} ({sorted(e.get('role') for e in doc.get('checkpoints', []))})")
     return found[0]
+
+
+def pinned_checkpoint(tree: Path, role: str) -> str:
+    """Core's pin of `role`'s `checkpoint_sha512` (`PINS` in the pinned tree), or Refused."""
+    try:
+        pin = json.loads((tree / PINS).read_text())[role]["checkpoint_sha512"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise Refused(f"{PINS} in the pinned tree pins no checkpoint_sha512 of {role}: credit refuses a model it doesn't "
+                      "pin, so register only a pinned one") from None
+    return pin
+
+
+def check_owned(directory: Path, names: list[str]) -> None:
+    """Refused unless `directory` and each of `names` in it are a directory and regular files, no symlink, owned by root or
+    this user and writable by no one else: a file the auditor hashes is the one it then reads."""
+    me = os.geteuid()
+    for p in [directory, *(directory / n for n in names)]:
+        try:
+            st = os.lstat(p)
+        except OSError:
+            raise Refused(f"{p}: missing") from None
+        kind = stat.S_ISDIR if p == directory else stat.S_ISREG
+        if not kind(st.st_mode) or st.st_uid not in (0, me) or st.st_mode & 0o022:
+            raise Refused(f"{p}: not a {'directory' if p == directory else 'regular file'} that only root or auditor can "
+                          "write (no symlink): copy the checkpoint into a directory auditor owns, mode 0755/0644")
 
 
 def _digests(path: Path) -> tuple[str, str]:
@@ -77,22 +115,31 @@ def check_files(directory: Path, entry: dict) -> dict[str, str]:
     return out
 
 
+def checkpoint_sha512(files: dict[str, str]) -> str:
+    """A checkpoint's digest: SHA-512 of the canonical JSON of its ``{file: SHA-512 hex}``."""
+    return hashlib.sha512(canonical_json(files)).hexdigest()
+
+
 class Checkpoint:
-    """A safetensors snapshot's tensors, read in place (`np.memmap`)."""
+    """The tensors of a checkpoint's pinned safetensors shards (`files`), read in place (`np.memmap`); Refused when a
+    tensor is in two of them."""
 
     DTYPES = {"I8": np.int8, "F32": np.dtype("<f4")}
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, files: list[str]):
         self.dir = directory
-        files = sorted(directory.glob("*.safetensors"))
         self.where: dict[str, tuple[Path, dict, int]] = {}
-        for f in files:
+        for name in sorted(f for f in files if f.endswith(".safetensors")):
+            f = directory / name
             with open(f, "rb") as fh:
                 (n,) = struct.unpack("<Q", fh.read(8))
                 header = json.loads(fh.read(n))
-            for name, t in header.items():
-                if name != "__metadata__":
-                    self.where[name] = (f, t, 8 + n)
+            for t, meta in header.items():
+                if t == "__metadata__":
+                    continue
+                if t in self.where:
+                    raise Refused(f"tensor {t} is in both {self.where[t][0].name} and {name}")
+                self.where[t] = (f, meta, 8 + n)
 
     def tensor(self, name: str) -> np.ndarray:
         if name not in self.where:
@@ -135,14 +182,39 @@ def layout(descriptor: bytes, circuit: str) -> tuple[str, list[tuple[str, int, i
     return CR.shape_of(descriptor)["prefix"], [(str(a), int(k), int(n)) for a, k, n in lay["linears"]]
 
 
+def check_linears(linears: list[tuple[str, int, int]], config: dict) -> None:
+    """Refused unless the window's linears are `DECODER` of each of the model's ``num_hidden_layers`` in turn, no other."""
+    layers = config.get("num_hidden_layers")
+    if type(layers) is not int or layers < 1:
+        raise Refused("the checkpoint's config.json names no num_hidden_layers")
+    want = [f"model.layers.{i}.{m}" for i in range(layers) for m in DECODER]
+    got = [name for name, _k, _n in linears]
+    if got != want:
+        at = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+        raise Refused(f"the descriptor's linears are not the model's {layers} decoder layers' {', '.join(DECODER)} in "
+                      f"turn: linear {at} is {got[at] if at < len(got) else 'missing'}, not "
+                      f"{want[at] if at < len(want) else 'past the last'}")
+
+
 def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint: Path, key: bytes, *, pinned: str,
              now: str, log: Callable[[str], None] = lambda s: None) -> dict:
     """The registry line of `role`'s weights under `circuit`, committed with salt key `key`; or Refused."""
     entry = manifest_entry(tree, role)
+    pin = pinned_checkpoint(tree, role)
     prefix, linears = layout(descriptor, circuit)
-    log(f"checking {len(entry['files'])} files of {entry['repo']}@{entry['revision'][:10]} in {checkpoint}")
+    names = sorted(entry["files"])
+    check_owned(checkpoint, names)
+    log(f"checking {len(names)} files of {entry['repo']}@{entry['revision'][:10]} in {checkpoint}")
     files = check_files(checkpoint, entry)
-    ckpt = Checkpoint(checkpoint)
+    digest = checkpoint_sha512(files)
+    if digest != pin:
+        raise Refused(f"the checkpoint's SHA-512 {digest[:16]}... is not {PINS}'s pin {pin[:16]}... of {role}")
+    try:
+        config = json.loads((checkpoint / "config.json").read_text())
+    except (OSError, ValueError):
+        raise Refused("the checkpoint has no readable config.json") from None
+    check_linears(linears, config)
+    ckpt = Checkpoint(checkpoint, names)
     shapes = [(n, k) for _name, k, n in linears]
     try:
         roots = Wt.weights_roots(circuit, prefix, shapes, lambda w: rows_of(ckpt, linears[w][0], linears[w][1]), key,
@@ -150,8 +222,7 @@ def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint:
     except ValueError as e:
         raise Refused(f"the checkpoint's rows are not the window's linears: {e}") from None
     leaves = {k: sum(n for n, kw in shapes if kw == k) for k in roots}
-    return {"model": role, "circuit": circuit, "prefix": prefix, "checkpoint": files,
-            "checkpoint_sha512": hashlib.sha512(canonical_json(files)).hexdigest(),
+    return {"model": role, "circuit": circuit, "prefix": prefix, "checkpoint": files, "checkpoint_sha512": digest,
             "source": {"repo": entry["repo"], "revision": entry["revision"], "recipe": entry.get("recipe")},
             "roots": {str(k): roots[k].hex() for k in sorted(roots)},
             "entries": [Wt.entry(circuit, prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
@@ -167,8 +238,8 @@ def read(path: Path) -> list[dict]:
 
 
 def resolve(lines: list[dict], circuit: str, model: str | None, weights_root: str | None) -> dict | None:
-    """The registry entry a period-open's ``--model`` and ``--weights-root`` name for its circuit (the newest of that
-    model), None when it names neither; Refused when the registry has none, or the two disagree."""
+    """The registry entry a period-open's ``--model`` and ``--weights-root`` name for its circuit (with the model alone,
+    its newest), None when it names neither; Refused when the registry has none, or the two disagree."""
     if model is None and weights_root is None:
         return None
     mine = [e for e in lines if e["circuit"] == circuit and (model is None or e["model"] == model)
