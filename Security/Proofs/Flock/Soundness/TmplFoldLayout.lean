@@ -1,12 +1,14 @@
 import Proofs.Flock.Soundness.TmplFoldPos
 import Proofs.Flock.Soundness.TmplLayOk
+import Proofs.Flock.Soundness.TmplWf
 
 /-!
 # The template fold is its reference on `layoutM`'s layouts (PRF-133, part 3, stage 2)
 
-`fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`). What remains is
-what `parse` checks of the template, each call's binding of its callee's inputs among them, and the column and call counts
-below `2^64` that `locate`'s halving assumes.
+`fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`), and then
+(`fold_eq_foldRef_wf`) with the template's discharged by `Tmpl.wellFormed`, which `parse` checks: each call's binding of
+its callee's inputs, its callee earlier and its copies inside the caller, the root's facts, and the column and call counts
+below `2^64` that `locate`'s halving assumes. What remains is the lane count against the transcript's `rho` and `r`.
 -/
 
 open Flock Flock.Tmpl FlockLevel3 GF128
@@ -31,5 +33,13 @@ theorem fold_eq_foldRef_layout {t : Tmpl} {mode : Mode} {lays : Array Lay} {alph
     {s : ℕ} (hs : s < 64) : of P[s]! = of P'[s]! :=
   fold_eq_foldRef hP hP' ⟨hbound, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (hcall d hd i hi).2⟩ hins hcols
     hfit hf1 hf2 (layouts_defPos (layoutM_layouts hL) hcall hsmall) hroot hs
+
+theorem fold_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128}
+    {w : ℕ} (hwf : t.wellFormed = true) (hL : layoutM t mode = .ok lays)
+    (hP : fold t lays alpha lw rho r = .ok (P, w)) (hP' : foldRef t lays alpha lw rho r = .ok P')
+    (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)
+    {s : ℕ} (hs : s < 64) : of P[s]! = of P'[s]! :=
+  fold_eq_foldRef_layout hL hP hP' (fun d i j hi => wf_bound hwf d i j hi) (wf_call hwf) (wf_small hwf)
+    (wf_tmpl hwf).1 (wf_tmpl hwf).2.1 (wf_tmpl hwf).2.2.1 (wf_fit hwf) hf1 hf2 hs
 
 end FlockSoundness.TmplFold

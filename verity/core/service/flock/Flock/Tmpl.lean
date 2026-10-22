@@ -127,6 +127,20 @@ def Tmpl.ordered (t : Tmpl) : Bool :=
       (t.defs.getD d default).fits t.defs && (!F.getD d false || (t.defs.getD d default).ordered F)) &&
     t.rootOrdered F
 
+/-- Definition `d`'s rows at its columns, its calls to earlier Definitions with their copies side by side inside its
+columns and its segments binding their callee's inputs, its columns and calls fewer than `2^64` (`locate` halves
+64 times). -/
+def Def.wellFormed (defs : Array Def) (d : Nat) (df : Def) : Bool :=
+  df.cols < 2 ^ 64 && df.calls.size < 2 ^ 64 && df.rows.toList.all (fun r => r.1 < df.cols) &&
+    df.calls.toList.all fun c => c.def_ < d && c.base + c.count * (defs.getD c.def_ default).cols ≤ df.cols &&
+      c.segs.foldl (fun n s => n + s.reps * s.len) 0 == (defs.getD c.def_ default).ins
+
+/-- **What the template fold's proof reads of a template** (`FlockSoundness.TmplFold.fold_eq_foldRef_wf`), checked on
+the description: every Definition well formed, and the root a Definition with no inputs and a constant. -/
+def Tmpl.wellFormed (t : Tmpl) : Bool :=
+  t.root < t.defs.size && (t.defs.getD t.root default).ins == 0 && 0 < (t.defs.getD t.root default).cols &&
+    (List.range t.defs.size).all fun d => (t.defs.getD d default).wellFormed t.defs d
+
 private def num (h : Array String) (i : Nat) (what : String) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
@@ -212,6 +226,7 @@ def parse (lines : Array String) : V Tmpl := do
   let t : Tmpl := { name, root, inGroups, outGroups, defs, leaves }
   if !t.ordered then
     throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
+  if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
 
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
