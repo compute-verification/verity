@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FrameTape
+import Flock.Firewall.Finish
 
 /-!
 # `hmk` at the firewall's own request
