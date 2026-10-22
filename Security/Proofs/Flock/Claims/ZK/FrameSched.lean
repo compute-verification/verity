@@ -749,20 +749,24 @@ theorem layer_mem (d : ℕ) (lf : ℕ → ByteArray) (hl : ∀ q, (lf q).size = 
     exact _root_.Flock.Sha512.hash_size _
 
 /-- **A level's commitment has a cap of one shape** whatever its table and salts: `2^cap` digests. -/
-theorem commitFw_capAlike (lv : _root_.Flock.Level) (g g' : Array F128) (s s' : ℕ → ByteArray)
+theorem commitRows_capAlike (lv : _root_.Flock.Level) (rows rows' : Array (Array F128)) (s s' : ℕ → ByteArray)
     (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
-    CapAlike (_root_.Flock.Firewall.Finish.commitFw lv g s) (_root_.Flock.Firewall.Finish.commitFw lv g' s') := by
-  have key : ∀ (g : Array F128) (s : ℕ → ByteArray),
-      (flat (_root_.Flock.Firewall.Finish.commitFw lv g s).cap).size = 64 * (2 ^ lv.d / 2 ^ (lv.d - lv.cap)) := by
-    intro g s
-    unfold _root_.Flock.Firewall.Finish.commitFw
+    CapAlike (_root_.Flock.Firewall.Finish.commitRows lv rows s) (_root_.Flock.Firewall.Finish.commitRows lv rows' s') := by
+  have key : ∀ (rows : Array (Array F128)) (s : ℕ → ByteArray),
+      (flat (_root_.Flock.Firewall.Finish.commitRows lv rows s).cap).size = 64 * (2 ^ lv.d / 2 ^ (lv.d - lv.cap)) := by
+    intro rows s
     rw [(_root_.Flock.Firewall.Finish.commitRows_tree lv _ s).2,
       flat_size _ (layer_mem _ (fun q => _root_.Flock.MerkleScheme.hm96Sha512.leaf
-        (_root_.Flock.Firewall.Finish.rowsOf lv g)[q]! (_root_.Flock.Firewall.Finish.fitBytes 192 (s q)))
+        rows[q]! (_root_.Flock.Firewall.Finish.fitBytes 192 (s q)))
         (fun _ => _root_.Flock.Hm96.Default512.leaf_size _ _) _), layer_size]
   refine ⟨by rw [key, key], ?_⟩
   rw [key]
   exact lt_of_le_of_lt (Nat.mul_le_mul_left 64 (Nat.div_le_self _ _)) hd
+
+theorem commitFw_capAlike (lv : _root_.Flock.Level) (g g' : Array F128) (s s' : ℕ → ByteArray)
+    (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
+    CapAlike (_root_.Flock.Firewall.Finish.commitFw lv g s) (_root_.Flock.Firewall.Finish.commitFw lv g' s') :=
+  commitRows_capAlike lv _ _ s s' hd
 
 /-! ## Rounds of one shape, with their coin counts -/
 
@@ -1217,6 +1221,50 @@ theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteAr
     show (6 : ℕ) < 2 ^ 64 by decide⟩
 
 end Skel
+
+theorem relV_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c] {x x' : V α} {y y' : V β}
+    (h1 : c → RelV S x y) (h2 : ¬ c → RelV S x' y') : RelV S (if c then x else x') (if c then y else y') := by
+  by_cases hc : c
+  · rw [if_pos hc, if_pos hc]; exact h1 hc
+  · rw [if_neg hc, if_neg hc]; exact h2 hc
+
+theorem relV_refl {α : Type} (x : V α) : RelV (· = ·) x x := by
+  cases x
+  · exact True.intro
+  · exact (rfl : _ = _)
+
+/-- **Two tables of one shape**: the same statement, schedule and `t_pad`, packed tables of one size and level-0
+commitments of one shape. -/
+def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
+  t.st = t'.st ∧ t.sch = t'.sch ∧ t.tPad = t'.tPad ∧ t.g.size = t'.g.size ∧ CapAlike t.cm0 t'.cm0
+
+/-- **Two level 0s the loop draws at one `m`**, of packed tables of one size, give tables of one shape, or are both
+refused. -/
+theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
+    {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l)
+    (h' : _root_.Flock.Firewall.Level0.ofDraws m g' d' = .ok l') (hg : g.size = g'.size)
+    (hd : 64 * 2 ^ l.lv.d < 2 ^ 64) :
+    RelV TabAlike (_root_.Flock.Firewall.Finish.tabOfLevel0 st l) (_root_.Flock.Firewall.Finish.tabOfLevel0 st l') := by
+  obtain ⟨hm, hgl, ⟨s, hs, hlv⟩, -, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h
+  obtain ⟨hm', hgl', ⟨s', hs', hlv'⟩, -, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h'
+  rw [hs] at hs'
+  obtain ⟨rfl, htp⟩ := Prod.mk.inj (Except.ok.inj hs')
+  have hll : l'.lv = l.lv := by rw [hlv, hlv']
+  have hcap : CapAlike (_root_.Flock.Firewall.Finish.commitOf l) (_root_.Flock.Firewall.Finish.commitOf l') := by
+    rw [_root_.Flock.Firewall.Finish.commitOf_eq h, _root_.Flock.Firewall.Finish.commitOf_eq h']
+    unfold _root_.Flock.Firewall.Finish.commit0
+    rw [hll]
+    exact commitRows_capAlike _ _ _ _ _ hd
+  unfold _root_.Flock.Firewall.Finish.tabOfLevel0
+  rw [hm, hm', ← htp]
+  dsimp only
+  refine relV_ite _ (fun _ => True.intro) fun _ => ?_
+  refine relV_ite _ (fun _ => True.intro) fun _ => ?_
+  refine relV_bind (relV_refl _) fun p p' hp => ?_
+  subst hp
+  refine relV_ite _ (fun _ => True.intro) fun _ => ?_
+  show TabAlike _ _
+  exact ⟨rfl, rfl, rfl, by rw [hgl, hgl']; exact hg, hcap⟩
 
 theorem forall₂_append {α β : Type} {R : α → β → Prop} {l₁ l₂ : List α} {l₁' l₂' : List β}
     (h₁ : List.Forall₂ R l₁ l₁') (h₂ : List.Forall₂ R l₂ l₂') : List.Forall₂ R (l₁ ++ l₂) (l₁' ++ l₂') := by
