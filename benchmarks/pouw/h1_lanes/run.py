@@ -1,6 +1,6 @@
-"""run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448, the least whose partial row both compresses
-before its last SHA-512 block, which C-Flock's circuit needs of a combine row, and ends in its last block with SHA-512's
-padding, which the Lean verifier's v2 rows need) proved as its 32 lanes and its combine (PRF-134, option A:
+"""run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
+the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
+proved as its 32 lanes and its combine (PRF-134, option A:
 `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
@@ -420,10 +420,6 @@ def prepare(args) -> None:
     ctx = Ctx(work, args.name, args.k, args.position)
     t = tile(args.k)
     ctx.wp = 2 * LL.words(args.k)
-    if 2 * ctx.wp < 128 or 2 * ctx.wp % 128 > 111:
-        raise SystemExit(f"K={args.k}: a partial row is {2 * ctx.wp} bytes, but C-Flock needs one of the combine's rows to "
-                         f"compress before its last block (at least 128 bytes) and the Lean verifier's v2 row ends, with "
-                         f"SHA-512's 17 bytes of padding, in its last block (bytes mod 128 at most 111): K = 448 is the least")
     ctx.lane, ctx.combine = bound("H1LanesLaneStatement", lane_word(Z.lane(t))), bound("H1LanesCombineStatement", Z.combine(t))
     ctx.reg = ctx.lane
     ctx.prog = P.program_digest(ctx.reg.program)

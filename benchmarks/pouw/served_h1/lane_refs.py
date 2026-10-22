@@ -4,8 +4,8 @@ cpu's chain split by lane, the gpu's `kh_lanes`) are the rows `h1zy.PouwH1LaneZy
 SERVE-REG's lane (`h1zy.PouwH1LaneZy_v1`) checks a leaf's committed partials row lane by lane: the row is the lane's
 chain words ANDed with the OR of the leaf's R admit bits, so a dead leaf's row is zero.  Its references on words are
 `h1tile.lane_partials(a, b, salt, position, roots, gated=admit)`, the leaf's 32 lanes, and `h1zy.lane_partial(a, b,
-admit, salt, position, roots, lane, tile)`, one lane from its 4 A rows and 8 B rows by slot.  The references take any K;
-`h1zy.lane` and `combine` stage the Definitions only at a K `h1zy.proved_k` takes (K >= 448).
+admit, salt, position, roots, lane, tile)`, one lane from its 4 A rows and 8 B rows by slot.  The references and
+`h1zy.lane` take any K; `h1zy.combine` stages the combine only at K >= 384 (`h1zy.LEAST_K`).
 
 A served step's admit bits are its slots < m, so a leaf's OR is 32 · row block < m, partials.py's live rule.  At
 m = 32 r + j (0 < j < 8) a leaf of row block r is live with only its rows 0 .. j - 1 admitted, and a lane g >= j (rows
