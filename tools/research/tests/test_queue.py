@@ -875,6 +875,8 @@ PREFLIGHT_FILES = {
     "tests/test_doc_paths.py": _invariant("BROKEN_DOC_PATH", 1),
     "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
+    "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
+    "integrations/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
                                    "    print('pkg/pins.json is stale (pkg/Main.lean): run `python3 regen.py`', file=sys.stderr)\n"
@@ -966,6 +968,13 @@ PREFLIGHT_REFUSALS = {
                          "`pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7'"),
     "stale lock": ({"LOCK_STALE.txt": ""}, "`uv sync --locked` on the merged tree: error: The lockfile at `uv.lock` needs to be "
                    "updated"),
+    # 22 Oct's #3151 (time.perf_counter in a test fixture) and #3130 (numpy's rng in vllm, P3) each cost a train its check
+    "wall-clock lint": ({"pkg/tests/test_slow.py": "def test_slow():\n    pass\n", "WALL_CLOCK": ""},
+                        "the invariant tests in tests/test_no_wall_clock.py fail on the merged tree: FAILED "
+                        "tests/test_no_wall_clock.py::test_wall_clock_absent"),
+    "vllm lint": ({"integrations/vllm/verity_vllm/kernels.py": "", "VLLM_LINT": ""},
+                  "the invariant tests in integrations/vllm/tests/lint fail on the merged tree: FAILED "
+                  "tests/lint/test_p03_one_evaluator.py::test_vllm_lint_absent"),
 }
 
 
@@ -982,6 +991,17 @@ def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_
     assert says in err, err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [next(ln for ln in err.splitlines() if says in ln)]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
+    """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
+    stand-in without touching integrations/vllm is marked, and the train's check runs the lint."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    world.gh.put(2, h2 := world.change({"pkg/notes.txt": "x\n", "VLLM_LINT": ""}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
 def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):

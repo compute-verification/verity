@@ -65,6 +65,64 @@ structure Tmpl where
 
 def FORMAT : String := "flock-ir-tmpl/v1"
 
+/-! ## Row order, checked on the description
+
+`Net.checkOrder` walks the unrolled rows; `ordered` checks the same order per Definition, in O(description), and
+`Flock.TmplOrder.rows_ordered` proves it gives the order `checkOrder` checks. A Definition's row reads only its inputs, the
+constant and its own earlier columns. A segment binds, for every copy, only the caller's inputs and constant, or only its
+own columns, all before that copy's first column: a segment that straddles the two is refused. A reference is linear in
+the copy index, so copy 0 and the last copy bound every copy. In the root, a row or copy in the input rows is not checked
+(`checkOrder` skips those rows), and an input column read elsewhere is a port bit, so not padding. -/
+
+/-- The unit's input rows end here. -/
+def Tmpl.inCols (t : Tmpl) : Nat := ((t.inGroups.back?.map fun g => g.col + g.words).getD 0) * WORD
+
+/-- Columns `[lo, hi)` are port bits of one input group. -/
+def Tmpl.portSpan (t : Tmpl) (lo hi : Nat) : Bool :=
+  t.inGroups.toList.any fun g => g.col * WORD ≤ lo && hi ≤ g.col * WORD + g.bits.foldl (· + ·) 0
+
+/-- Past every reference segment `s` binds over `count` copies. -/
+def Seg.hi (s : Seg) (count : Nat) : Nat := s.at_ + (count - 1) * s.step + s.len
+
+/-- Segment `s` of a call (`count` copies at `base + j · stride`) in a Definition of `cols` columns binds, for every copy,
+only references past its own columns, or only its own columns, each before that copy's first. -/
+def Seg.ordered (cols base stride count : Nat) (s : Seg) : Bool :=
+  s.len == 0 || cols ≤ s.at_ ||
+    (s.hi count ≤ cols && s.at_ + s.len ≤ base && s.hi count ≤ base + (count - 1) * stride)
+
+/-- Definition `df`'s rows and copies sit inside its columns. -/
+def Def.fits (defs : Array Def) (df : Def) : Bool :=
+  df.rows.toList.all (fun r => r.1 < df.cols) &&
+    df.calls.toList.all fun c => c.base + (c.count - 1) * c.stride + (defs.getD c.def_ default).cols ≤ df.cols
+
+/-- Definition `df` placed anywhere past the input rows writes rows that read earlier columns (`F`: the Definitions that
+are). -/
+def Def.ordered (F : Array Bool) (df : Def) : Bool :=
+  df.rows.toList.all (fun r => (r.2.1.toList ++ r.2.2.toList).all fun v => df.cols ≤ v || v < r.1) &&
+    df.calls.toList.all fun c => F.getD c.def_ false && c.segs.toList.all (Seg.ordered df.cols c.base c.stride c.count)
+
+/-- Which Definitions are ordered, each from the earlier ones. -/
+def flags (defs : Array Def) : Array Bool := defs.foldl (fun F df => F.push (df.ordered F)) #[]
+
+/-- The root's rows past the input rows read earlier columns, port bits if input columns; each call is in the input rows,
+or past them, of an ordered Definition, bound to the constant (its last column) or ordered segments. -/
+def Tmpl.rootOrdered (t : Tmpl) (F : Array Bool) : Bool :=
+  let df := t.defs.getD t.root default
+  df.rows.toList.all (fun r => decide (r.1 < t.inCols) || (r.2.1.toList ++ r.2.2.toList).all fun v =>
+      df.cols ≤ v + 1 || (v < r.1 && (t.inCols ≤ v || t.portSpan v (v + 1)))) &&
+    df.calls.toList.all fun c =>
+      decide (c.base + (c.count - 1) * c.stride + (t.defs.getD c.def_ default).cols ≤ t.inCols) ||
+        (t.inCols ≤ c.base && F.getD c.def_ false && c.segs.toList.all fun s =>
+          (s.len == 1 && s.at_ + 1 == df.cols && s.hi c.count ≤ df.cols) ||
+            (Seg.ordered df.cols c.base c.stride c.count s && (t.inCols ≤ s.at_ || t.portSpan s.at_ (s.hi c.count))))
+
+/-- **The unrolled rows are in order**, checked on the description (`Flock.TmplOrder.rows_ordered`). -/
+def Tmpl.ordered (t : Tmpl) : Bool :=
+  let F := flags t.defs
+  (List.range t.defs.size).all (fun d =>
+      (t.defs.getD d default).fits t.defs && (!F.getD d false || (t.defs.getD d default).ordered F)) &&
+    t.rootOrdered F
+
 private def num (h : Array String) (i : Nat) (what : String) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
@@ -146,20 +204,19 @@ def parse (lines : Array String) : V Tmpl := do
   if root ≥ defs.size then throw s!"{FORMAT}: the root names no definition"
   if (defs.getD root default).ins != 0 || (defs.getD root default).cols == 0 then
     throw s!"{FORMAT}: the root has inputs, or no constant"
-  return { name, root, inGroups, outGroups, defs, leaves }
+  let t : Tmpl := { name, root, inGroups, outGroups, defs, leaves }
+  if !t.ordered then
+    throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
+  return t
+
+/-- A sorted list with each run of equal columns cut to its length mod 2. -/
+def dropPairs : List Nat → List Nat
+  | [] => []
+  | [a] => [a]
+  | a :: b :: rest => if a == b then dropPairs rest else a :: dropPairs (b :: rest)
 
 /-- A row as `flock-ir-unit/v2` writes it: a sum over GF(2), its columns ascending, each named an odd number of times. -/
-def canon (xs : Array Nat) : Array Nat := Id.run do
-  let s := xs.qsort (· < ·)
-  let mut out := #[]
-  let mut i := 0
-  while i < s.size do
-    let c := s[i]!
-    let mut j := i + 1
-    while j < s.size && s[j]! == c do j := j + 1
-    if (j - i) % 2 == 1 then out := out.push c
-    i := j
-  return out
+def canon (xs : Array Nat) : Array Nat := (dropPairs xs.toList.mergeSort).toArray
 
 /-- The unrolled rows so far: each column's A and B, and whether it was written. -/
 structure Acc where
@@ -167,38 +224,46 @@ structure Acc where
   rb : Array (Array Nat)
   set : Array Bool
 
-private def write (acc : Acc) (c : Nat) (a b : Array Nat) : V Acc := do
+/-- No column written yet. -/
+def Acc.empty (cols : Nat) : Acc :=
+  { ra := Array.replicate cols #[], rb := Array.replicate cols #[], set := Array.replicate cols false }
+
+def write (acc : Acc) (c : Nat) (a b : Array Nat) : V Acc :=
   if acc.set.getD c true then throw s!"{FORMAT}: column {c} is written twice, or past the unit"
-  return { ra := acc.ra.set! c a, rb := acc.rb.set! c b, set := acc.set.set! c true }
+  else pure { ra := acc.ra.set! c a, rb := acc.rb.set! c b, set := acc.set.set! c true }
+
+/-- Definition `df`'s reference `x` in its copy at global offset `o`, its inputs bound to `inp`, the unit's constant `k`. -/
+def Def.ref (df : Def) (o : Nat) (inp : List Nat) (k x : Nat) : Nat :=
+  if x < df.cols then o + x else if x < df.cols + df.ins then inp.getD (x - df.cols) k else k
+
+/-- Copy `j`'s inputs: each segment's references `at + j · step + t`, through the caller's references `g`. -/
+def Call.bound (c : Call) (g : Nat → Nat) (j : Nat) : List Nat :=
+  c.segs.toList.flatMap fun s => (List.range s.len).map fun t => g (s.at_ + j * s.step + t)
 
 /-- Write Definition `d`'s copy at global offset `o`, its inputs bound to the global columns `inp`, the unit's constant
 `k`. `fuel` bounds the call depth; a callee is an earlier definition, so `defs.size` is enough. -/
-def place (defs : Array Def) (k : Nat) : Nat → Nat → Nat → Array Nat → Acc → V Acc
+def place (defs : Array Def) (k : Nat) : Nat → Nat → Nat → List Nat → Acc → V Acc
   | 0, _, _, _, _ => throw s!"{FORMAT}: calls nest deeper than the definitions"
-  | fuel + 1, d, o, inp, acc0 => do
+  | fuel + 1, d, o, inp, acc => do
     let some df := defs[d]? | throw s!"{FORMAT}: no definition {d}"
-    let g := fun x => if x < df.cols then o + x else if x < df.cols + df.ins then inp.getD (x - df.cols) k else k
-    let mut acc := acc0
-    for (col, a, b) in df.rows do
-      acc ← write acc (o + col) (canon (a.map g)) (canon (b.map g))
-    for c in df.calls do
-      for j in [0:c.count] do
-        let mut bound := #[]
-        for s in c.segs do
-          for t in [0:s.len] do
-            bound := bound.push (g (s.at_ + j * s.step + t))
-        acc ← place defs k fuel c.def_ (o + c.base + j * c.stride) bound acc
-    return acc
+    let acc ← df.rows.toList.foldlM (fun acc r =>
+      write acc (o + r.1) (canon (r.2.1.map (df.ref o inp k))) (canon (r.2.2.map (df.ref o inp k)))) acc
+    df.calls.toList.foldlM (fun acc c => (List.range c.count).foldlM (fun acc j =>
+      place defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j) acc) acc) acc
 
-/-- **The flat net a templated unit stands for**: the root's copy at offset 0, its last column the unit's constant, then
-`Net.ofRows` with the checks `Net.parse` runs on a flat unit. -/
+/-- The unit's last column, its constant. -/
+def Tmpl.constPos (t : Tmpl) : Nat := (t.defs.getD t.root default).cols - 1
+
+/-- **The unrolled rows**: the root's copy at offset 0, then the constant's row `[const]·[const]`. -/
+def Tmpl.rows (t : Tmpl) : V Acc := do
+  let acc ← place t.defs t.constPos (t.defs.size + 1) t.root 0 [] (Acc.empty (t.defs.getD t.root default).cols)
+  write acc t.constPos #[t.constPos] #[t.constPos]
+
+/-- **The flat net a templated unit stands for**: its rows (`rows`), then `Net.ofRows` with the checks `Net.parse` runs on
+a flat unit. -/
 def unroll (t : Tmpl) : V Net := do
-  let cols := (t.defs.getD t.root default).cols
-  let k := cols - 1
-  let acc0 : Acc := { ra := Array.replicate cols #[], rb := Array.replicate cols #[], set := Array.replicate cols false }
-  let acc ← place t.defs k (t.defs.size + 1) t.root 0 #[] acc0
-  let acc ← write acc k #[k] #[k]
-  Net.ofRows t.name cols k t.inGroups t.outGroups acc.ra acc.rb
+  let acc ← t.rows
+  Net.ofRows t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb
 
 /-- The unrolled net's `flock-ir-unit/v2` header line. -/
 def headerLine (n : Net) : String :=

@@ -299,9 +299,9 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with `HeldB` restated**:
 `ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap and each tops round at its level's caps, where at
 the dense form `HeldB` comes from `heldB_layoutBTops`. What stays at the dense form is the schedule (`SchedMatches`),
-RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the last round's pieces (`FinPieces`, open), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts.
-`ksLin2_deployed_cap`'s `TopsHeld` is not among them. -/
+RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the last round's pieces (`FinPieces`, which holds at
+`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the
+readers' three facts. `ksLin2_deployed_cap`'s `TopsHeld` is not among them. -/
 theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     let L := layoutBTops fin
