@@ -271,7 +271,7 @@ def period(case: dict) -> dict:
 
 
 def a_link(case: dict) -> dict | None:
-    refused = Cr._a_link(case["rounds"], case["entries"])
+    refused = Cr._a_link(case["rounds"], case["entries"], case["calls"])
     _counted(refused, "a-link")
     return None if refused is None else {"refused": list(refused)}
 
@@ -341,11 +341,11 @@ def test_credit(pass_server):
                  "window a-link: the window registers no A value",
                  "so the period earns nothing: rounds: the round roots are not",
                  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
-                 "window registration: registered value h#/w#/a/#'s domain is not the one the window's registration",
+                 "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
                  "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",
                  "window registration: drawn unit #'s proof was verified against another circuit",
-                 "opened no A value …/a/# of the window", "which the window registers not",
+                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
                  "so the period earns nothing: registration: drawn unit #"):
         assert any(part in k for k in CREDITED), part

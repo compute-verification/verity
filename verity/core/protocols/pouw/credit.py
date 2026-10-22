@@ -47,23 +47,27 @@ each coin.
   `period_credit` each window must also prove the circuit the period's open committed (`challenger.credited_session`:
   the SHA-512 of the descriptor its proofs were verified against, the same bytes `layout_of` reads its layout from)
   and is drawn at the period's K, and a refused window refuses its period.
-* **The A rows are the round roots'** (`_a_link`): each registered A value of the window (a value named ``…/a/<K>``,
-  `h1window.roles`, among the window's registered ``entries``) over L rows and S steps is the tree whose rows
-  ``[s·L/S, (s+1)·L/S)`` round s's root commits as aligned subtrees. Each round's ``a`` lists, for every A value, its
-  ``[level, index, root]`` subtrees in row order, and the root the challenger received for round s is `round_root` of
-  the serving process's own round root (``inner``) and those segments. The verifier recomputes each value's root from
-  the segments and its domain's pads. So the rows a unit reads are the ones fixed before each round's coin. The z and y
-  records are not yet bound to the round roots.
+* **The A rows are the round roots'** (`_a_link`): each registered A value of the window, among its registered
+  ``entries``, is a tree whose rows the round roots commit as aligned subtrees. A window's ``…/a/<K>``
+  (`h1window.roles`) over L rows and S steps has rows ``[s·L/S, (s+1)·L/S)`` under round s's root. A call's A table
+  ``…/a/<K>@<c>`` (`h1window.table`, the M rows of its A block, which `h1window.table_reads` opens the call's units at)
+  is committed whole by its call's round, ``c // (C/S)`` of the window's C calls, and listed by no other round. Each
+  round's ``a`` lists, for every A value it commits, its ``[level, index, root]`` subtrees in row order, and the root the
+  challenger received for round s is `round_root` of the serving process's own round root (``inner``) and those
+  segments. The verifier recomputes each value's root from the segments and its domain's pads. So the rows a unit reads
+  are the ones fixed before its round's coin. The z and y records are not yet bound to the round roots.
 * **The proofs are the window's registration's** (`_registration`): each drawn unit's proof outcome is the verifier of
   record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
   (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
-  other value's a proof opened, is `domain_of` the window's open root (``window.root``, the root the auditor's ledger
-  opens its session for, which a per-window value's domain binds since PRF-127) and the committed descriptor's SHA-512.
-  Each proof was verified against that descriptor, opened only values the window registers once, each at its registered
-  root, and opened its unit's K's A value. So the A rows `_a_link` ties to the round roots are the ones each drawn
-  unit's proof opened, under this window's registration: entries of another window or circuit, a proof verified
-  against another registration, and an entry whose root is not the one its sessions opened are refused.
+  other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
+  ``…/b/<K>`` (held across windows, `is_held`), the window's open root (``window.root``, the root the auditor's ledger
+  opens its session for, which a per-window value's domain binds since PRF-127). Each proof was verified against that
+  descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
+  value, the window's ``…/a/<K>`` or its own call's ``…/a/<K>@<call>``. So the A rows `_a_link` ties to the round roots
+  are the ones each drawn unit's proof opened, under this window's registration: entries of another window or circuit,
+  a proof verified against another registration, and an entry whose root is not the one its sessions opened are
+  refused.
 
 `calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
@@ -96,6 +100,7 @@ LEVELS = 64
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[0-9]+")
+_A = re.compile(r"([0-9]+)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
@@ -161,8 +166,8 @@ PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, regi
                "{value, root}, port and value printable ASCII and root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
-NO_A = ("the window registers no A value (…/a/<K>), so nothing ties its units' A rows to the round roots: register the "
-        "window's A values")
+NO_A = ("the window registers no A value (…/a/<K>, or a call's …/a/<K>@<call>), so nothing ties its units' A rows to "
+        "the round roots: register the window's A values")
 
 
 def _digest(x: Any) -> bytes | None:
@@ -634,28 +639,31 @@ def _entry(e: Any) -> bool:
 
 def domain_of(program: str, window: str, e: dict) -> str:
     """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
-    open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): an A value's
-    binds the window's open root, its rows being the window's own (PRF-127); any other value a drawn unit reads, the
-    window's weights, is held across windows and binds none."""
+    open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): the
+    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; every other value's rows are the window's
+    own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the window's open
+    root (PRF-127)."""
     return G.domain(program, e["value"], e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
-                    window if is_a(e["value"]) else None).domain_id.hex()
+                    None if is_held(e["value"]) else window).domain_id.hex()
 
 
 def other_registration(v: str) -> str:
     return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
-            f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for an "
-            "A value, the window's open root, the root the auditor's ledger opened its session for): the entry is another "
-            "registration's, another window's or another circuit's")
+            f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a "
+            "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its "
+            "session for): the entry is another registration's, another window's or another circuit's")
 
 
-def _registration(window: str, program: str, entries: list, ss: list[dict], proofs: list) -> tuple[str, str] | None:
+def _registration(window: str, program: str, entries: list, ss: list[dict], layout: dict, proofs: list
+                  ) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
     (``registration``, and why). Each A value's domain, and each other value's a proof opened, is `domain_of` the window's
     open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
-    value's registered root; and it opened its unit's K's A value (``…/a/<K>``, the unit's stratum `ss`'s). A step of
-    `window`, after `_a_link` has held each A value's root to the segments the round roots commit."""
+    value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
+    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in). A step of `window`, after
+    `_a_link` has held each A value's root to the segments the round roots commit."""
     def held(v: str, e: dict) -> str | None:
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
@@ -669,9 +677,15 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], proo
                 return "registration", why
     names = [e.get("value") for e in entries]
     checked: set[str] = set()
+    starts, at, c = [], 0, 0
+    for size, _work in call_work(layout):
+        starts.append(at)
+        at += size
     for p in sorted(proofs, key=lambda p: p["unit"]):
         u = p["unit"]
         k = next(s["template"][1:] for s in ss if any(lo <= u < hi for lo, hi in s["units"]))
+        while c + 1 < len(starts) and starts[c + 1] <= u:
+            c += 1
         if p["program"] != program:
             return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
                                     "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
@@ -692,11 +706,12 @@ def _registration(window: str, program: str, entries: list, ss: list[dict], proo
                 return "registration", (f"drawn unit {u}'s proof opened port {port}'s rows of {v} against another root "
                                         f"than the one the window registered for {v}: its session was verified against "
                                         "another registration, or the window's entry is not the root its sessions opened")
-            opened = opened or (is_a(v) and v.rsplit("/", 1)[1] == k)
+            got = a_value(v)
+            opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c)))
         if not opened:
-            return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} of the window, so nothing ties the "
-                                    "A rows it proved to the ones the round roots committed: verify each drawn unit's "
-                                    "session with the window's A value registered")
+            return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of "
+                                    "the window, so nothing ties the A rows it proved to the ones the round roots "
+                                    "committed: verify each drawn unit's session with the window's A value registered")
     return None
 
 
@@ -709,7 +724,7 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     why = CC.rounds(key, ledger, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds], verify)
     if why is not None:
         return None, why
-    why = _a_link(rounds, entries)
+    why = _a_link(rounds, entries, len(calls))
     if why is not None:
         return None, why
     if not (type(descriptor) is str and _HEX.fullmatch(descriptor)):
@@ -726,7 +741,8 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     if why is None:
         why = _proved(units, proofs)
     if why is None:
-        why = _registration(window["root"], hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), entries, ss, proofs)
+        why = _registration(window["root"], hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), entries, ss, layout,
+                            proofs)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -929,18 +945,37 @@ def _segments(a: Any) -> dict[str, list[tuple[int, int, bytes]]] | None:
     return out
 
 
-def is_a(value: Any) -> bool:
-    """A registered A value: a name whose last two parts are ``a`` and a contraction (``…/a/<K>``)."""
+def a_value(value: Any) -> tuple[str, str | None] | None:
+    """A registered A value's contraction and call, as their digits: a name whose last two parts are ``a`` and either a
+    contraction (``…/a/<K>``, the window's A rows of K, `h1window.roles`), its call None, or a contraction and a call
+    (``…/a/<K>@<call>``, that call's A table, `h1window.table`); None for any other name."""
     parts = value.split("/") if isinstance(value, str) else []
-    return len(parts) >= 2 and parts[-2] == "a" and bool(_DIGITS.fullmatch(parts[-1]))
+    m = _A.fullmatch(parts[-1]) if len(parts) >= 2 and parts[-2] == "a" else None
+    return None if m is None else (m[1], m[2])
 
 
-def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
+def is_a(value: Any) -> bool:
+    """A registered A value (`a_value`): ``…/a/<K>`` or a call's ``…/a/<K>@<call>``."""
+    return a_value(value) is not None
+
+
+def is_held(value: Any) -> bool:
+    """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
+    (``…/b/<K>``, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
+    among them, is the window's own."""
+    parts = value.split("/") if isinstance(value, str) else []
+    return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
+
+
+def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
     """None when every registered A value among `entries` (the window's registered entries, ``{value, root, leaves,
     domain, …}``) is the tree over the segments the round log `rounds` commits (each round's ``root``, the one the
-    challenger received, over its ``inner`` root and its segments ``a``, `round_root`), round s's segments of a value
-    of L rows tiling its rows ``[s·L/S, (s+1)·L/S)`` of S rounds; else the refusal (``a-link``, and why). A step of
-    `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
+    challenger received, over its ``inner`` root and its segments ``a``, `round_root`); else the refusal (``a-link``,
+    and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
+    ``[s·L/S, (s+1)·L/S)``; a call's A table ``…/a/<K>@<c>`` is committed whole by its call's round, the window's
+    `calls` calls being the rounds' equal blocks, so round ``c // (calls/S)``'s segments tile all its rows and no other
+    round lists it. A step of `window`, which first holds the round roots to the ones the challenger received
+    (`core_check.rounds`)."""
     if not (isinstance(rounds, list) and rounds):
         return "a-link", LOG_FORM
     segs = []
@@ -977,11 +1012,27 @@ def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
         if root is None or domain is None or not _nat(count) or not 1 <= count <= MAX_ROWS:
             return "a-link", (f"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the "
                               "verifier hashes its pads)")
-        if count % steps:
-            return "a-link", f"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
-        per, have = count // steps, {}
+        call = a_value(v)[1]
+        if call is None:
+            if count % steps:
+                return "a-link", f"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
+            per, own = count // steps, None
+        else:
+            if int(call) >= calls:
+                return "a-link", (f"registered A value {v} is call {int(call)}'s A table, and the window has {calls} "
+                                  "calls")
+            if calls % steps:
+                return "a-link", (f"the window's {calls} calls are not its {steps} rounds' equal blocks, so the round "
+                                  f"whose root commits call {int(call)}'s A table {v} is not fixed")
+            per, own = count, int(call) // (calls // steps)
+        have = {}
         for r, p in enumerate(segs):
-            at, end = r * per, (r + 1) * per
+            if own is not None and r != own:
+                if p.get(v):
+                    return "a-link", (f"round {r} lists segments of {v}, call {int(call)}'s A table, which only its "
+                                      f"call's round {own} commits")
+                continue
+            at, end = (r * per, (r + 1) * per) if own is None else (0, count)
             untiled = (f"round {r}'s segments of {v} don't tile its rows [{at}, {end}) in order, each an aligned subtree: "
                        "the serving process lists each round's rows of every A value as aligned subtrees (`credit.cover`)")
             for level, index, h in p.get(v, []):
@@ -1001,5 +1052,5 @@ def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
 __all__ = ["CALLS_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS", "MAX_K",
            "PERIOD_KEYS", "PROOF_KEYS", "RECORD", "ROUND_TAG", "SCHEMA", "TILE_FN", "VERDICTS", "WINDOW_FN",
            "WINDOW_KEYS", "call_work", "calls_root", "committed_k", "cover", "domain_of", "draw_root", "drawn",
-           "established", "is_a", "law",
+           "established", "a_value", "is_a", "is_held", "law",
            "layout_of", "merkle_depth", "period", "period_credit", "round_root", "strata", "tree_root", "window"]
