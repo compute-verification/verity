@@ -344,7 +344,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
   exact swSrcE_innerSrc_rows Lr ρ tz frep x hx w τ c n hnr s spec hs j r (valsFw x c A B) q hq hlayR hz hpads hrows _
     hcons hL₀ fun _ => hbat
 
-set_option smartUnfolding false in
 /-- The worker's view's `ŝ` is `ν + maskHom` at the tape's mask, at any clear values. -/
 theorem swViewE_sHat (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
