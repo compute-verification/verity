@@ -93,6 +93,7 @@ import Proofs.Flock.Claims.ZK.FramePhase
 import Proofs.Flock.Claims.ZK.FrameState
 import Proofs.Flock.Claims.ZK.FrameRun
 import Proofs.Flock.Claims.ZK.FrameShape
+import Proofs.Flock.Claims.ZK.FrameOwn
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -632,7 +633,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   that did not end the rep (`run_append`, `run_snoc`); a round with its scheduled round in its place is `check`
   (`step_sched`), and coins are `Masker.answer` (`step_coins`).
 * `FrameShape`: the frame's round reads a round's shape alone: two rounds whose frames are alike (`Alike`: the same
-  kinds, sizes, labels and lengths) leave the same masker state and the same error (`roundFree_alike`).
+  kinds, sizes, labels and lengths), at configurations alike but for their draws (`CfgAlike`) and states equal but for
+  `stopped`, leave the same state but for `stopped` and the same error (`roundFree_alike`), and where both are taken,
+  inside the inner proof too, the same state (`roundFree_alike_ok`).
+* `FrameOwn`: the frame's check of the inner proof takes the firewall's own rounds (`ownRound`) at every configuration
+  and state (`innerOwn_ownRound`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
