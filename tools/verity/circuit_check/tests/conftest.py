@@ -89,6 +89,9 @@ def _from_records(cache: Path) -> Catalog | None:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
                    | {"CIRCUIT_CHECK_REPORT", "CIRCUIT_CHECK_RECORDS"})
+        # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
+        # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
+        mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
         try:
             plan = UN.plan(cache, cli.REPO)
             if plan is None:
