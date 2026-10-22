@@ -585,4 +585,64 @@ theorem roundFree_own_frames {c : Cfg} {s : Masker} {xb : ByteArray} {n i : ℕ}
   obtain ⟨rfl, hk, h0, hn'⟩ := sqOk_frames hX' hm hq
   exact ⟨w, t, hw, ht, hX, k, hkm, hk, h0, hn'⟩
 
+theorem ownFrames_mid {c : Cfg} (hrow : c.rowH.size < 2 ^ 64) (s : Masker) (w t : ByteArray) (ht : t.size = 64) :
+    ∀ {i : ℕ}, 0 < i → ∀ f ∈ ownFrames c s w t i, midFrame f
+  | 0, h, _, _ => (Nat.lt_irrefl 0 h).elim
+  | 1, _, f, hf => by
+    rw [List.mem_singleton.mp hf]
+    show List.length _ < _
+    simp
+  | 2, _, f, hf => by
+    rw [List.mem_singleton.mp hf]
+    show t.size < _
+    rw [ht]
+    norm_num
+  | _ + 3, _, f, hf => by
+    rw [List.mem_singleton.mp hf]
+    show List.length _ < _
+    simp only [Array.length_toList, Array.size_map, Array.size_zip]
+    exact lt_of_le_of_lt (Nat.min_le_left _ _) hrow
+
+open _root_.Flock.Firewall.Frame (check) in
+/-- **Inside the inner proof the placeholder takes its own round where the deployed frame's check released one**: past
+the inner proof's label, whether the device's round passed or the scheduled round stood in, the placeholder's own round
+at zero pads, from the deployed state but for `stopped`, leaves the deployed state but for `stopped`. -/
+theorem check_own_ok {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (hH : c.rowH.size = c'.rowH.size)
+    (hM : c.rowMu.size = c'.rowMu.size) (hrow : c'.rowH.size < 2 ^ 64) (m s₀ : Masker) (st : Bool) {i n : ℕ}
+    (hi : i < 4) (hi0 : 0 < i) (hj : m.inner = some i) {v r out : ByteArray} {s' : Masker} {why : Option String}
+    (h : check c { m with stopped := st } v r n = .ok (out, s', why)) :
+    ∃ q', roundFree c' m (ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n i) n = .ok q' ∧
+      unstop s' = unstop q'.2.1 := by
+  have hz64 : (Loop.zeros 64).size = 64 := by simp [Loop.zeros, ByteArray.size]
+  have key : ∀ (b : Bool) (xb : ByteArray) (fr : Array ℕ),
+      roundFree c { m with stopped := b } xb n = .ok (out, s', fr) →
+      ∃ q', roundFree c' m (ownRound c' s₀ (Loop.zeros 16) (Loop.zeros 64) n i) n = .ok q' ∧
+        unstop s' = unstop q'.2.1 := by
+    intro b xb fr hf
+    obtain ⟨w, t, -, ht, hX, k, hkm, hk, h0, hn⟩ := roundFree_own_frames (s := { m with stopped := b }) hi hj hf
+    dsimp only at hX
+    have e : xb = ByteArray.mk (encs (ownFrames c s' w t i) ++ (Frame.sq k n).enc).toArray := by
+      rw [← hkm, ← hX, Array.toArray_toList]
+    rw [e] at hf
+    have hA := ownFrames_alike (w := w) (w' := Loop.zeros 16) hH hM s' s₀ (ht.trans hz64.symm) i
+    have hm := midFrame_forall₂ (Sched.forall₂_alike_symm hA) (ownFrames_mid hrow s₀ _ _ hz64 hi0)
+    have hs : ({ m with stopped := b } : Masker).inner ≠ some INNER_ROUNDS := by
+      show m.inner ≠ _
+      rw [hj]
+      intro e'
+      have : i = INNER_ROUNDS := Option.some.inj e'
+      rw [this] at hi
+      exact absurd hi (by decide)
+    obtain ⟨q', hq', hu⟩ := roundFree_own_ok hc hz { m with stopped := b } s₀ m.stopped hi hs hkm hk h0 hn hm hA
+      (fun q hq => by rw [foldlM_own_inner c' s₀ _ _ hi0 _ q hq]; exact hj) hf
+    rw [Sched.with_stopped_self m rfl] at hq'
+    exact ⟨q', hq', hu⟩
+  cases why with
+  | none =>
+    obtain ⟨fr, hfr⟩ := Sched.roundFree_round (check_none h)
+    exact key st v fr hfr
+  | some w =>
+    obtain ⟨fr, hfr⟩ := Sched.roundFree_round (check_some h)
+    exact key true r fr hfr
+
 end Claims.ZKServer
