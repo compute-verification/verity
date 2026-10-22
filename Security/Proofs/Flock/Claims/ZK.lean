@@ -117,6 +117,7 @@ import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Proofs.Flock.Claims.ZK.FinishSwSv
 import Proofs.Flock.Claims.ZK.FinishSwMk
 import Proofs.Flock.Claims.ZK.FinishSwFrame
+import Proofs.Flock.Claims.ZK.FinishSwLig
 import Proofs.Flock.Claims.ZK.FinishRows
 import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.FinishTau
@@ -536,8 +537,8 @@ import Proofs.Flock.Claims.ZK.SessionLean
   its `repCons` used exactly the recorded coins and no constraint failed on the pads (`repFw_parts`), and `innerLive`
   continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.Firewall.Finish.innerProg_run`**).
 * `FinishSrc`: the firewall's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
-  below `h_ab` are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the session's Ligerito
-  and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
+  below `zp 64` (the PIOP's) are `vals + h`, its switched vectors the firewall's at the claims, the rank check passes, and the
+  session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`), `FlockComplete.repCut` at level 0's commitment erased returns the
   firewall's transcript and log, and its proof up to `eraseZ` (**`Flock.Firewall.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
   leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
@@ -561,11 +562,19 @@ import Proofs.Flock.Claims.ZK.SessionLean
   switched vectors `repCut_fw`'s `hpiop` asks of it.
 * `FinishSwMk`: that source's masked values. Where a table's rows hold at its base, rep `r`'s masked value `n` is the
   worker's clear value plus the base's pad, as the firewall's words (**`Masked.swSrcE_masked_of_rowsAt`**); below
-  `h_ab` that pad is the session's pad array's (**`Masked.swSrcE_masked_pad`**). At the workers' values read from arrays
-  by pad index (`Masked.valsOfArr`), that is `repCut_fw`'s `hmk` there (**`Masked.swSrcE_hmk`**).
-* `FinishSwFrame`: that `hmk` at the firewall's own request. Where the arrays are the request's passed values, its draws
-  the release's frame draws on the tape, and the session's tape has the pads of the tape of those draws (`tapeOfDraws`),
-  the masked values below `h_ab` are the request's `vals + padsOf draws` (**`Masked.swSrcE_hmk_frame`**).
+  `h_ab` that pad is the session's pad array's (**`Masked.swSrcE_masked_pad`**). At the firewall's clear values by pad
+  index (`Masked.valsFw`: the passed values below `zp 64`, level 0's opening's from there on), that is `repCut_fw`'s
+  `hmk` below `zp 64` (**`Masked.swSrcE_hmk`**) and the opening's values plus the pads up to `h_ab`
+  (**`Masked.swSrcE_l0`**).
+* `FinishSwFrame`: those at the firewall's own request. Where the passed values are the request's, its draws the
+  release's frame draws on the tape, and the session's tape has the pads of the tape of those draws (`tapeOfDraws`), the
+  session's pads are the request's below `h_ab` (`Masked.pads_frame`), so the masked values below `zp 64` are the
+  request's `vals + padsOf draws` (**`Masked.swSrcE_hmk_frame`**), and up to `h_ab` the opening's values plus those pads
+  (**`Masked.swSrcE_l0_frame`**).
+* `FinishSwLig`: `repCut_fw`'s `hlig` at that source. Level 0's opening's clear value at each pad index from `zp 64`
+  (`LigLock.l0Clear`: the out-of-domain value, each lane message's words, the pair's sums' words) gives `LigHyp`'s
+  masked fields (**`LigLock.ligHyp_of_l0`**), so at `valsFw` with `l0Clear` as level 0's part and the request's pads,
+  `LigHyp` holds at the switched source's `y₁'`, `ȳ` and salts (**`Masked.swSrcE_ligHyp_frame`**).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
