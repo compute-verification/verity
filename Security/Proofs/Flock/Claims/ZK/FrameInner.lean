@@ -248,4 +248,102 @@ theorem innerOwn_zero {c : Cfg} (hz : ZeroCfg c) (s s₀ : Masker) {w t : ByteAr
   rw [ownRound_zero hz s₀ s w t n hk]
   exact innerOwn_ownRound c s w t hw ht n k hk
 
+/-! ## A round the frame takes ends in its squeeze -/
+
+open _root_.Flock (u64OfLE)
+open _root_.Flock.Firewall.Frame (INNER_ROUNDS roundFree)
+
+theorem forIn_ok_inv {τ : Type} (P : τ → Prop) (g : ℕ → τ → V (ForInStep τ))
+    (hg : ∀ i x y, P x → g i x = .ok y → P y.value) :
+    ∀ (l : List ℕ) (x : τ), P x → ∀ y, forIn l x g = .ok y → P y
+  | [], x, hx, y, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact hx
+  | a :: l, x, hx, y, h => by
+    rw [List.forIn_cons] at h
+    cases hga : g a x with
+    | error e => simp only [hga, bind, Except.bind, reduceCtorEq] at h
+    | ok z =>
+      simp only [hga, bind, Except.bind] at h
+      cases z with
+      | done b =>
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact hg a x _ hx hga
+      | yield b => exact forIn_ok_inv P g hg l b (hg a x _ hx hga) y h
+
+/-- What the frame's round leaves where it took a round `xb` of `n` coins: its squeeze is the round's last 16 bytes, a
+header of `n` coins of a kind the frame squeezes, and the inner proof's own round passed where one is open. -/
+def SqOk (c : Cfg) (xb : ByteArray) (n : ℕ) (r : ByteArray × Masker × Array ℕ) : Prop :=
+  16 ≤ xb.size ∧ (xb.get! (xb.size - 16)).toNat = 4 ∧ (u64OfLE xb (xb.size - 16 + 8)).toNat = n ∧
+    ((u64OfLE xb (xb.size - 16 + 8)).toNat == 0 && xb.get! (xb.size - 16 + 1) == 2) = false ∧
+    (xb.get! (xb.size - 16 + 1) == 2 || xb.get! (xb.size - 16 + 1) == 1 && n == 1) = true ∧
+    ∀ k, r.2.1.inner = some k → innerOwn c r.2.1 k xb n = .ok ()
+
+theorem bindV_ok {α β : Type} {m : V α} {f : α → V β} {b : β} (h : (m >>= f) = .ok b) : ∃ a, m = .ok a ∧ f a = .ok b := by
+  cases hm : m with
+  | error e => simp only [hm, bind, Except.bind, reduceCtorEq] at h
+  | ok a => exact ⟨a, rfl, by simpa only [hm, bind, Except.bind] using h⟩
+
+theorem innerOwn_owed (c : Cfg) (s : Masker) (o : Option ℕ) (k : ℕ) (xb : ByteArray) (n : ℕ) :
+    innerOwn c { s with owed := o } k xb n = innerOwn c s k xb n := rfl
+
+theorem sqOk_of {c : Cfg} {xb : ByteArray} {n : ℕ} (p : ℕ) {o : ByteArray} {s : Masker} {fr : Array ℕ}
+    (hp : ¬(p + 16 != xb.size) = true) (h4 : (xb.get! p).toNat = 4) (hl : ¬((u64OfLE xb (p + 8)).toNat != n) = true)
+    (hz : ¬((u64OfLE xb (p + 8)).toNat == 0 && xb.get! (p + 1) == 2) = true)
+    (hk : ¬(!(xb.get! (p + 1) == 2 || xb.get! (p + 1) == 1 && n == 1)) = true)
+    (hi : ∀ k, s.inner = some k → innerOwn c s k xb n = .ok ()) : SqOk c xb n (o, { s with owed := some n }, fr) := by
+  have hp' : p + 16 = xb.size := by simpa using hp
+  unfold SqOk
+  rw [show xb.size - 16 = p by omega]
+  have hk2 : (xb.get! (p + 1) == 2 || xb.get! (p + 1) == 1 && n == 1) = true := by
+    generalize (xb.get! (p + 1) == 2 || xb.get! (p + 1) == 1 && n == 1) = b at hk ⊢
+    cases b <;> simp_all
+  refine ⟨by omega, h4, by simpa using hl, by simpa using hz, hk2, fun k hk' => ?_⟩
+  rw [innerOwn_owed]
+  exact hi k hk'
+
+set_option maxHeartbeats 1000000 in
+/-- **A round the frame takes ends in its squeeze** (`SqOk`): `roundFree`'s loop returns only there. -/
+theorem roundFree_sq {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (hs : s.inner ≠ some INNER_ROUNDS) (h : roundFree c s xb n = .ok q) : SqOk c xb n q := by
+  unfold roundFree at h
+  simp only [show (s.inner == some INNER_ROUNDS) = false from by simpa using hs, Bool.false_eq_true, ↓reduceIte,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨y, hy, hk⟩ := bindV_ok h
+  have hP := forIn_ok_inv (fun x => ∀ r, x.1 = some r → SqOk c xb n r) _ ?hg _ _ (fun r hr => by cases hr) y hy
+  · clear h hy
+    revert hk hP
+    obtain ⟨o, rest⟩ := y
+    cases o with
+    | none => intro hk _; cases hk
+    | some r => intro hk hP; cases hk; exact hP _ rfl
+  · clear h hy hk
+    intro i x z hx hz r hr
+    beta_reduce at hz
+    by_cases h1 : x.2.2.2.2 + 16 > xb.size
+    · rw [ite_cond_eq_true _ _ (eq_true h1)] at hz
+      rw [ite_eq_iff] at hz
+      rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩ <;> obtain ⟨_, h, _⟩ := bindV_ok hz <;> cases h
+    · rw [ite_cond_eq_false _ _ (eq_false h1)] at hz
+      split at hz
+      all_goals
+        repeat' (first
+          | (obtain ⟨_, _, hz⟩ := bindV_ok hz; try beta_reduce at hz)
+          | (rw [ite_eq_iff] at hz; rcases hz with ⟨_, hz⟩ | ⟨_, hz⟩)
+          | (split at hz))
+      all_goals first | (cases hz; cases hr; done) | (cases hz; done) | contradiction | skip
+      all_goals first
+        | (cases hz; cases hr
+           exact sqOk_of x.2.2.2.2 ‹_› ‹_› ‹_› ‹_› ‹_› fun k hk => (‹∀ i, x.2.1.inner = some i → False› k hk).elim)
+        | (rename_i j hj hz0 _ hio
+           rw [hio] at hz0
+           cases hz0; cases hr
+           refine sqOk_of x.2.2.2.2 ‹_› ‹_› ‹_› ‹_› ‹_› fun k hk => ?_
+           have e : x.2.1.inner = some k := hk
+           rw [hj] at e
+           obtain rfl := Option.some.inj e
+           exact hio)
+
 end Claims.ZKServer
