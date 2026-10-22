@@ -21,7 +21,7 @@ statement `x`'s setup (`FlockDeploy.setupOf`), and here the transport's trusts o
   `Loop.count_opened`).
 * `LeanRelease.loop_last`: `Finish` is round `refK x + 1`.
 * `LeanRelease.loop_coinsRead`: the coins a frame takes are the loop's reading of the auditor's last answer
-  (`Frames.feedOf`, which the loop feeds the round's frame, `Frames.take`), the decoded coin's words (`Loop.readCoins`).
+  (`Frames.feedOf`, which the loop feeds the round's frame, `Frames.coins`), the decoded coin's words (`Loop.readCoins`).
 
 **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` at that release, with the transport's other trusts
 (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it

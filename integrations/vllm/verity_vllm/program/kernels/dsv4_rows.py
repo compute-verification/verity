@@ -58,8 +58,8 @@ EVALUATORS = {
                                 "NHP x (DN + DR) bf16, the NoPE e4m3 bytes, the scale bytes and pad, the RoPE bf16",
     "TritonBlockRMSNorm_v1": "verity_vllm.program.kernels.dsa_norm_rows.block_rmsnorm_rows (TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: per "
                              "thread of 32 WARPS an FMA chain over its dsa_norm.layout registers of the BLOCK, the elements from N +0, "
-                             "each warp's xor-butterfly, the warp sums' halving tree, r = RsqrtApprox(eps + DivFullScaleA(sum, N) * "
-                             "DivFullRcp(N)), y = F2fpBf16((r * x) * w)) -> N bf16",
+                             "each warp's xor-butterfly, the warp sums' halving tree, r = RsqrtApprox(fma(DivFullScaleA(sum, N), "
+                             "DivFullRcp(N), eps)), y = F2fpBf16((r * x) * w)) -> N bf16",
     "MoeRouterSqrtSoftplus_v1": "verity_vllm.program.kernels.dsv4_moe_twin.router_twin (MoeRouterSqrtSoftplus_v1{E,SCALE}: "
                                 "Dsv4SqrtSoftplus_v1 per expert, current = score + bias (a NaN -1e30), six slots of the first maximum "
                                 "of current, the lane-0 sum, w * div.full(SCALE, sum > 0 ? sum : 1)) -> six f32 weights, six i32 ids",
@@ -156,16 +156,26 @@ _MOE_PROVENANCE = {
 
 _BLOCK_NORM_PROVENANCE = {
     "property": None,
-    "run": None,
+    "run": "r20261021-092814-0b1c",
     "art": None,
-    "gap": "no hardware capture of vLLM d9105ea80's _fused_q_kv_rmsnorm_kernel yet (registry.dsa_norm: model-untested): the "
-           "reduction tree is read from the cc 9.0 PTX Triton 3.7.1 compiles for it, not pinned on the device",
+    "device": "cc 9.0, the eight devices of the row's attempt-3 Commit (the run above), vLLM d9105ea80, Triton 3.7.1",
+    "captured_utc": "2026-10-21",
+    "cases": "the q norm (N 1536 of a 2048 block on 8 warps, eps 1e-6): 1,230 committed rows (308 distinct) on 8 ranks, read by "
+             "r20261021-180952-300c (out/rows.npz) from the Commit's bundles and the checkpoint's q_norm weights, every committed "
+             "output the Definition's; eps + DivFullScaleA(sum, N) * DivFullRcp(N) in two roundings misses 5 of the 308 by 1-4 "
+             "bf16 words, which tests/properties/fixtures/dsv4_q_norm_commit_20261021.json holds with 4 controls",
+    "sass": "r20261021-181759-65f9: the served kernel's cc 9.0 SASS (Triton 3.7.1, 8 warps at BLOCK 2048) is MUFU.RCP of the scaled "
+            "SIZE, FFMA rcp, scaled sum, eps, then MUFU.RSQ",
+    "gap": "no probe launch of _fused_q_kv_rmsnorm_kernel: the reduction tree is the PTX's, pinned on the device only by committed "
+           "rows; the kv norm (N 512, a power of two, so either epilogue) only by the re-judge's sampled kv rows (306 a rank, all "
+           "equal, r20261021-171352-1d9c and r20261021-171402-5673)",
     "model": "tests/program/test_dsa_norm.py::test_block_definition_matches_the_ptx_model (the Definition against a model of that "
-             "PTX at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
+             "PTX and SASS at the served (N, BLOCK, WARPS) = (1536, 2048, 8) and (512, 2048, 8), and four other blocks)",
     "related": "glm53_fused_rmsnorm_capture (art:e98ef16cd853c142ba5f8fa7f82335e8e26d73fcb7bae2ad3e5d2888d8394e74): the same "
                "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
                "_fused_norm_rope_kernel",
-    "tests": ["tests/program/test_dsa_norm.py (the Definition against the PTX model)",
+    "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed rows)",
+              "tests/program/test_dsa_norm.py (the Definition against the PTX model)",
               "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
               "tests/check/test_sampled_replay_dsv4_rows.py (each row kernel on spec-text statics against its Definition)"],
     "definitions": "verity_vllm/program/registry/dsa_norm.py (the reference; the twin is checked against it, never the other way round)",

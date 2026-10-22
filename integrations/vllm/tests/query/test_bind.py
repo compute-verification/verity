@@ -95,6 +95,30 @@ def test_a_call_boundary_each_request_spells_by_its_own_fx_node_binds_every_requ
                                                             "r2": (f"{ATT}/bmm_1", "out", 0)}
     odd = Binder(rows + [cb("bmm_1405", "r0", 10)], ports=absorb)
     assert odd.bind(9, [f"{ATT}/q_nope_absorb"]) == [(ATT, "q_nope_absorb", 0, "unbound")], "r0 has two, r1 and r2 one: none"
+
+
+def test_each_request_spells_a_call_boundary_in_its_own_program_order_past_a_key_both_requests_spell():
+    """[GLM-5.3 B8 greedy, Commit r20261021-183934-d980] At engine step 9 the layer's own output (`self_attn` `out`, a BatchedGemm_v1
+    Call as the absorb is) is one key that r0 at its step 9 and r1 at its step 0 both spell, at a different place in each one's
+    Program.  Ordered by one request's position for it, r0's absorb `bmm_1404` was paired with r1's `self_attn` output: r1's `bmm` was
+    left unbound and its output bound twice, at 494 identities per rank."""
+    absorb = {"q_nope_absorb": Port(frozenset({"BatchedGemm_v1"}), "out", call_boundary=True)}
+
+    def at9(op: str, rid: str, cid: int, family: str = "call_boundaries") -> dict:
+        return row(op, "out", spec="BatchedGemm_v1{B=8}", family=family, request_id=rid, cid=cid, engine_step=9, element_range=[0, 1])
+
+    r1 = [at9(f"{ATT}/bmm", "r1", 100), at9(ATT, "r1", 265, "instance_outputs")]
+    r0 = [at9(f"{ATT}/bmm_1404", "r0", 88206), at9(ATT, "r0", 88221, "instance_outputs")]
+    absorb_r0, absorb_r1, out = (f"{ATT}/bmm_1404", "out", 0), (f"{ATT}/bmm", "out", 0), (ATT, "out", 0)
+    for rows in (r1 + r0, r0 + r1):
+        b = Binder(rows, ports=absorb)
+        assert b.bind(9, [f"{ATT}/q_nope_absorb", f"{ATT}/out"]) == [(*absorb_r0, "port"), (*out, "label")]
+        assert b.spellings(9, absorb_r0) == {"r0": absorb_r0, "r1": absorb_r1}, "each request's absorb, whichever request's rows come first"
+        cov = coverage_check({"manifest_digest": "d", "identities": rows},
+                             {9: [{"name": f"{ATT}/q_nope_absorb", "numel": 1}, {"name": f"{ATT}/out", "numel": 1}]}, ports=absorb)
+        assert (cov["ok"], cov["missing_n"], cov["duplicate_names_n"]) == (True, 0, 0)
+
+
 def test_labels_declaring_one_port_bind_its_rows_in_commit_order_and_a_lone_call_its_unqualified_module():
     """DeepSeek-V4-Pro's mHC as its manifest of record spells it: layer 1's attention and FFN post_pre are two fused post_pre Calls
     (`<layer>/<fx node>`, contested), layer 0's FFN post_pre the layer's one (`<layer>`); the taps commit residual (port 0) per side."""

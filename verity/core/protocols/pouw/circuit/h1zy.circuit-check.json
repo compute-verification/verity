@@ -3,11 +3,19 @@
   "PouwAndBit_v2": {
    "and": 1
   },
+  "PouwMuxBit_v2": {
+   "and": 1
+  },
   "PouwZyCell_v2": {
    "and": 47
   },
   "PouwZyDequant_v2": {
    "and": 5230
+  }
+ },
+ "pieces": {
+  "PouwMuxBit_v1": {
+   "and": 1
   }
  }
 }

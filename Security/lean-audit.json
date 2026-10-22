@@ -23175,7 +23175,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "d03bdb61d848abc3aa28c2dbe7d5fa9d1efd8501e7fa73e20ccc437d745bb13c",
+   "digest": "6982e8006571b788999d1980ec2ffd7b6d8d7a3fd3e690d923657f439828747b",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -23187,7 +23187,7 @@
     "Flock.RecCoins.COINS_FORMAT": "2aea84e3ed9a04a59c865fd5c5452218dca4f33727bf79789263db6ef2f39117",
     "Flock.RecCoins.DIRS_VALUE": "af3b06a5af2ae4da60b2bcc909650a3eeae7bc0e4cc72824d68f52bb34f11afc",
     "Flock.RecCoins.DIRS_WORDS": "19a333c42469f80f155f94115fff18fe185911d4775d9e5922c2db4e0de6fb64",
-    "Flock.RecCoins.Files": "3dbec4210f80e709a6737ec6482394161588b9eae69133aab7f20d735fded43e",
+    "Flock.RecCoins.Files": "1dbdc4ac53dfb15fedf56313f04b81a642f6e0be7822baaacc7765c8559aea7d",
     "Flock.RecCoins.Files.circuit": "5ede6f36d3bfdca317e4cfcd49b3f0d2c8a5393814ef0e04c676f48d5357d636",
     "Flock.RecCoins.Files.drawnSpec": "52e5b095b44e7e227c23b71a8340d9b836109fab2f493614edf928c5aa2c16ee",
     "Flock.RecCoins.Files.inner": "d7600bc8435fc7885f55a2fb568ae17266bc2768fcd4d6b665395230ff50eb01",
@@ -23211,6 +23211,7 @@
     "Flock.RecCoins.Inner.roundsOf": "792adedcf2a1a6552ddc71dda341d57de348c414be18079aa253e6e77717da8d",
     "Flock.RecCoins.Inner.unit": "76a9c754c100531c309e9aef1991ba15d02d4e6e93662ef6a0d79e0bfb4f88c0",
     "Flock.RecCoins.Inner.unitRange": "4b9e2145d7d9d8d27f15337a000756f97682ca696741d8f59b29d02d32a02ed6",
+    "Flock.RecCoins.InnerForm": "d7266b92739cecb14605e7e6a02a03e5ada61dcb50f9e2a86a43d1d8e92a4546",
     "Flock.RecCoins.OUT_WORDS": "7fda4a430c29c7c5ea119eed1c24916dc8ab7637368f95dbcc2e031c4662dfad",
     "Flock.RecCoins.Opening": "238abbd6057015ed89c352ee4fa8e42f388602f5e1d16135d2156cb5198e173e",
     "Flock.RecCoins.Opening.kappa": "87d3c9331698dd4128bf2a0b86e07c92eabd2f6edcaaeb71592614130db8c17e",
@@ -23694,7 +23695,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "7da1434c2605fc74304865695bd70f44d46da431fa62fe8c07c8af659b4c1567",
+   "digest": "6ba66f2446ae4df71b1c7abeae15973edcc8a4bb80ea44ad4beff12bf832dd2b",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -23754,6 +23755,7 @@
     "Flock.RecVStar.checkCommitRounds": "bfbd3513c814845c7628ba30d1482feb6f8c4ac8647bbf4ebb850a242a84e997",
     "Flock.RecVStar.checkCovers": "23551cb87aa62e9d989db5bcab340308eb18b04fd23d7c8cb3382e173b68da37",
     "Flock.RecVStar.checkFile": "2ef6c095ade95ff21883bc3c9a80656b94fa8eb9812da1d66700d6e88899cb24",
+    "Flock.RecVStar.checkFinished": "b55b5c6e3372d286cec76fda66f165a2ef8ae3bc751298f2b8ae85e04dde754f",
     "Flock.RecVStar.checkInnerShape": "3136487dd37128c918648f6a955888c2830d9edcf89a111eff7612c70379c849",
     "Flock.RecVStar.checkInnerStmt": "977912d3d95bb18977548dc2fcd1ddb004757b32c66a9874d44e0ffabe41d56a",
     "Flock.RecVStar.checkLabel": "e5da7d97f456876deca9dfb7f000b1e0c565c85ea99e2030960d64f58e6cdb9f",
@@ -23788,7 +23790,7 @@
     "Flock.RecVStar.fixedRow": "02f2cfc240d9b9b13aeaa146810be15ecb752dcfc1f6f7c1a5ca22238ec5d8fd",
     "Flock.RecVStar.hRound": "1bffb21737f73986457342254c3c901061baf88ae03f7f8aae80cff39103ec9c",
     "Flock.RecVStar.holoRepRounds": "0d32afb304054645b8160169b3f95d05cc86698696ac0fd0626660b04bccd126",
-    "Flock.RecVStar.innerCommits": "453e8b3bc630e54c70417f195b93c1111e7f5011bb9201512f43328173f8e66e",
+    "Flock.RecVStar.innerCommits": "ab8d1e5dff5144f7108a85ec49c22b14467ad9bd8623e2a354981df86d855694",
     "Flock.RecVStar.innerCommits._sparseCasesOn_9": "571a2d3ba9ffb6ee1d68711c6c9464947802f7f838760cb826d5494742861ee9",
     "Flock.RecVStar.innerMsgRounds": "5fc07845f794a812dc02a198534c09d87615995878f11a4f2dfd7dfb1e51218b",
     "Flock.RecVStar.innerOf._sparseCasesOn_1": "7ec78f8b9517ef96505c012a78e448a8a77680ac7a59c46e4f0ad7a69065cbde",

@@ -382,7 +382,7 @@ def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], po
     path.write_text(json.dumps({
         "kind": "rec/inner-transcript/v1", "hello": {"tables": ["circuit"], "link": {"m": 2, "points": 2}},
         "link": {"roots": {"circuit": _hexes(root)}, "points": [c for p in points for c in p], "y": None},
-        "rounds": rounds}))
+        "rounds": rounds, "end": "finish"}))
     return path
 
 
