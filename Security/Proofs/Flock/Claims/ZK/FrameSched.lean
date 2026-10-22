@@ -1322,4 +1322,81 @@ theorem schedSoFar_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (
 
 end Sched
 
+namespace Loop
+
+/-! ## The loop's bookkeeping -/
+
+/-- **The next rep round, in the same rep stream, is the stream's next round.** -/
+theorem locate_succ : ∀ (rs : List ℕ) (k i : ℕ),
+    (ZKMal.CoinLayer.locate rs k (i + 1)).1 = (ZKMal.CoinLayer.locate rs k i).1 →
+    (ZKMal.CoinLayer.locate rs k (i + 1)).2 = (ZKMal.CoinLayer.locate rs k i).2 + 1
+  | [], _, _, _ => rfl
+  | c :: cs, k, i, h => by
+    by_cases h1 : i + 1 < c
+    · rw [locate_cons_lt h1, locate_cons_lt (Nat.lt_of_succ_lt h1)]
+    · by_cases h0 : i < c
+      · rw [locate_cons_ge h1, locate_cons_lt h0] at h
+        have := locate_fst_ge cs (k + 1) (i + 1 - c)
+        omega
+      · rw [locate_cons_ge h1, locate_cons_ge h0] at h ⊢
+        have e : i + 1 - c = i - c + 1 := by omega
+        rw [e] at h ⊢
+        exact locate_succ cs (k + 1) (i - c) h
+
+theorem locate_snd_le : ∀ (rs : List ℕ) (k i : ℕ), (ZKMal.CoinLayer.locate rs k i).2 ≤ i
+  | [], _, _ => Nat.le_refl _
+  | c :: cs, k, i => by
+    by_cases h : i < c
+    · rw [locate_cons_lt h] <;> exact Nat.le_refl _
+    · rw [locate_cons_ge h]
+      exact Nat.le_trans (locate_snd_le cs (k + 1) (i - c)) (Nat.sub_le _ _)
+
+theorem flatMap_range_length {α : Type} (f : ℕ → List α) (hf : ∀ k, (f k).length = 2) :
+    ∀ i, ((List.range i).flatMap f).length = 2 * i
+  | 0 => rfl
+  | i + 1 => by
+    rw [List.range_succ, List.flatMap_append, List.length_append, flatMap_range_length f hf i, List.flatMap_singleton,
+      hf]
+    omega
+
+/-- The first `2 i + 1` requests of rounds of two requests each: the first `i` rounds' and the first of round `i`'s. -/
+theorem flatMap_range_take {α : Type} (f : ℕ → List α) (hf : ∀ k, (f k).length = 2) {i n : ℕ} (h : i < n) :
+    ((List.range n).flatMap f).take (2 * i + 1) = (List.range i).flatMap f ++ (f i).take 1 := by
+  obtain ⟨d, rfl⟩ : ∃ d, n = (i + 1) + d := ⟨n - (i + 1), by omega⟩
+  rw [List.range_add, List.flatMap_append, List.range_succ, List.flatMap_append, List.flatMap_singleton,
+    List.append_assoc, List.take_append_of_le_length (by rw [List.length_append, flatMap_range_length f hf, hf]; omega)]
+  rw [← flatMap_range_length f hf i, List.take_length_add_append]
+
+theorem flatMap_range_congr {α : Type} {f g : ℕ → List α} {i : ℕ} (h : ∀ k, k < i → f k = g k) :
+    (List.range i).flatMap f = (List.range i).flatMap g :=
+  List.flatMap_congr fun k hk => h k (List.mem_range.1 hk)
+
+/-- **The drive's requests up to round `i`'s**, a scheduled round: the earlier rep's coins, the rounds before it with
+their coins, then round `i` without its coins. -/
+theorem reqs_take (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
+    (coins : Array (Array F128)) {i : ℕ} (hi : i < sched.size) :
+    (_root_.Flock.Firewall.Drive.reqs prior sched own dev coins).take ((if prior.isEmpty then 0 else 1) + 2 * i + 1) =
+      (if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+      (List.range i).flatMap (fun k =>
+        [.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
+          .coins (.ok (coins.getD k #[]))]) ++
+      [.round (sched.getD i (.empty, 0)).2 (dev i) (.sched (sched.getD i (.empty, 0)).1)] := by
+  unfold _root_.Flock.Firewall.Drive.reqs
+  have hl : ∀ k, ([.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
+      .coins (.ok (coins.getD k #[]))] : List _root_.Flock.Firewall.Frame.Req).length = 2 := fun _ => rfl
+  have hr := flatMap_range_take _ hl hi
+  have hlen := flatMap_range_length _ hl sched.size
+  rw [List.append_assoc, List.append_assoc]
+  cases hp : prior.isEmpty
+  · simp only [Bool.false_eq_true, ↓reduceIte]
+    rw [show 1 + 2 * i + 1 = [_root_.Flock.Firewall.Frame.Req.prior prior.size
+        (_root_.Flock.Firewall.Frame.wordBytes prior)].length + (2 * i + 1) by simp; omega,
+      List.take_length_add_append, List.take_append_of_le_length (by omega), hr]
+    rfl
+  · simp only [↓reduceIte, List.nil_append, Nat.zero_add]
+    rw [List.take_append_of_le_length (by omega), hr]
+    rfl
+
+end Loop
+
 end Claims.ZKServer
