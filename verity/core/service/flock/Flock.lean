@@ -48,6 +48,7 @@ import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.Registered
+import Flock.RegKnown
 import Flock.JsonKeys
 import Flock.Keccak
 import Flock.RecCoins
