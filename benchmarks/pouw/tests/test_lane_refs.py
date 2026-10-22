@@ -1,10 +1,12 @@
-"""SERVE-REG's gated lane (cursor/ca-h1-lane-ea24) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
+"""SERVE-REG's gated lane (`h1zy.PouwH1LaneZy_v1`) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
 every leaf's `partials.lane_partials` equals `h1tile.lane_partials(..., gated=admit)` and `h1zy.lane_partial` lane by
 lane, over live and dead leaves and leaves whose admitted rows lie outside some lanes' rows (m = 32 r + j, 0 < j < 8:
 lanes g >= j hold no admitted row and are ungated all the same), and the references' XOR is the served receipt.  A
 mismatch is reported by leaf, lane and word.  `lane_refs.served` (the gate's check under DITHER_LANE_REFS) runs on a
 capture of the gate's shape, checked in place and through a saved capture as after serving.  Where PARTIALS_LIB names an
-h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at m = 2 and 3 (job.sh's partials bench)."""
+h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at m = 2 and 3 (job.sh's partials bench).  The cpu tests'
+K (128 .. 512) are mostly under the 448 `h1zy.proved_k` stages the Definitions at, since the references take any K; the
+gpu test's 512 and 4608 are both staged K."""
 from __future__ import annotations
 
 import json
