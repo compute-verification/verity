@@ -255,6 +255,60 @@ theorem bind_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.
   refine ⟨⟨h1, fun i hi => by rw [h2]; exact hb.2 i hi⟩, ?_⟩
   rw [h3, mul_add, sum_read t lays pt hR h6 hk ha ip]
 
+/-! ## A run of lanes below a summed class -/
+
+theorem eqAt_bits (r : Array F128) {k m u j : ℕ} (hu : u < 2 ^ k) (hj : j < 2 ^ m) :
+    of (Tmpl.eqAt r 0 (k + m) (u + 2 ^ k * j)) = of (Tmpl.eqAt r 0 k u) * of (Tmpl.eqAt r k m j) := by
+  rw [of_eqAt r 0 (k + m) _ (lane_lt hu hj), of_eqAt r 0 k u hu, of_eqAt r k m j hj, FlockLevel3.eqAt_split k m,
+    show (u + 2 ^ k * j) % 2 ^ k = u by rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hu],
+    show (u + 2 ^ k * j) / 2 ^ k = j by rw [Nat.add_mul_div_left _ _ (Nat.two_pow_pos k), Nat.div_eq_of_lt hu, Nat.zero_add]]
+  simp only [Fin.val_castAdd, Fin.val_natAdd, Nat.zero_add]
+
+/-- Lane `j`'s low part `a + 2^β·j` of a run of `2^m` lanes: its `E` factor is `E(a)` times `eq(ρ[β−6 ..], j)`. -/
+theorem eLow_lane (pt : FoldPt) {β m a j : ℕ} (h6 : 6 ≤ β) (ha : a < 2 ^ β) (hj : j < 2 ^ m) :
+    of (eLow pt (β + m) (a + 2 ^ β * j)) = of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) m j) := by
+  unfold eLow
+  rw [split_mod β a j h6, split_div β a j h6, show β + m - 6 = β - 6 + m by omega, of_mul, of_mul,
+    eqAt_bits pt.rho (split_lo β a h6 ha) hj, mul_assoc]
+
+theorem gLow_lane (pt : FoldPt) {s β m a j : ℕ} (h6 : 6 ≤ β) (ha : a < 2 ^ β) (hj : j < 2 ^ m) :
+    gLow pt s (β + m) (a + 2 ^ β * j) = gLow pt s β a * of (Tmpl.eqAt pt.r (β - 6) m j) := by
+  unfold gLow
+  rw [split_mod β a j h6, split_div β a j h6, show β + m - 6 = β - 6 + m by omega,
+    eqAt_bits pt.r (split_lo β a h6 ha) hj]
+  split_ifs <;> ring
+
+theorem prod_lane1 (x : Array F128) (lo m j : ℕ) (hj : j < 2 ^ m) :
+    ∏ b : Fin m, of (if j.testBit b then x.getD (lo + b) 0 else x.getD (lo + b) 0 + 1) = of (Tmpl.eqAt x lo m j) := by
+  rw [of_eqAt x lo m j hj]
+  unfold FlockLevel3.eqAt
+  refine Finset.prod_congr rfl fun b _ => ?_
+  split_ifs
+  · rfl
+  · rw [of_add, ← one_eq, add_comm]
+
+theorem prod_lane2 (x y : Array F128) (lo m j : ℕ) (hj : j < 2 ^ m) :
+    ∏ b : Fin m, of (if j.testBit b then x.getD (lo + b) 0 * y.getD (lo + b) 0
+      else (x.getD (lo + b) 0 + 1) * (y.getD (lo + b) 0 + 1)) = of (Tmpl.eqAt x lo m j) * of (Tmpl.eqAt y lo m j) := by
+  rw [of_eqAt x lo m j hj, of_eqAt y lo m j hj]
+  unfold FlockLevel3.eqAt
+  refine (Finset.prod_congr rfl fun b _ => ?_).trans Finset.prod_mul_distrib
+  beta_reduce
+  split_ifs
+  · rw [of_mul]
+  · rw [of_mul, of_add, of_add, ← one_eq]
+    ring
+
+theorem lane_glue {R : Type} [CommRing R] (eL S gl gc cs cc : R) (E Rr U : ℕ → R) (n : ℕ) :
+    eL * (S + gl * ((∑ j ∈ Finset.range n, E j * Rr j) * cs) + gc * ((∑ j ∈ Finset.range n, E j) * cc)) +
+      ∑ j ∈ Finset.range n, eL * E j * U j =
+    eL * S + ∑ j ∈ Finset.range n, eL * E j * (gl * Rr j * cs + gc * cc + U j) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    simp only [Finset.sum_range_succ]
+    linear_combination ih
+
 /-! ## What a class's fold means -/
 
 /-- An explicit class `(d, β, h, as)`: with copy `k`'s inputs at `ip k`, its `expVal` is its copies' `refVal`s. -/
@@ -551,7 +605,6 @@ theorem exp_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
   exact ⟨(key fun _ => []).1, fun ip => (key ip).2⟩
 
 /-- **A summed class's step**: its fold at `fuel + 1`, from every class's at `fuel`. -/
-set_option maxHeartbeats 1000000 in
 theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays) {fuel : ℕ}
     (ih : ClassOk t lays pt s fuel) {d β h : ℕ} {as : Array ℕ} {o : Out}
@@ -601,8 +654,9 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         obtain ⟨hchS, hchZ, hchV⟩ := (ih _ β _ as ch hch (by omega) (by omega)).2 h6
         obtain ⟨hA1, hA2, hA3⟩ := add_sum (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc)) 1 1 hq.1 hchS.1
         refine (bind_sum t lays pt hR h6 hk2 ha ip (fun t' k => (ch.u.getD t' #[]).getD k 0)
-          (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ ⟨hA1, by rw [hA2]; exact pzero_zipAdd hq.1.1 hchS.1 hq.2 hchZ⟩).imp id
+          (((t.defs.getD d default).calls.getD i default).bound id j).zipIdx _ ?_).imp id
           (fun e => e.trans ?_)
+        · exact ⟨hA1, pzero_zipAdd hq.1.1 hchS.1 hq.2 hchZ⟩
         have hbind : (((((t.defs.getD d default).calls.getD i default).bound id j).zipIdx).map fun x =>
             of (eLow pt β a) * of ((ch.u.getD x.2 #[]).getD 0 0) * Gs pt s ((readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) x.1)).sum =
             of (eLow pt β a) * ∑ t' ∈ Finset.range (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins,
@@ -620,7 +674,58 @@ theorem sum_step {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ} (hs : s <
         rw [← one_eq]
         beta_reduce
         ring
-      · sorry
+      · have hm' : ¬ ((((lays.getD d default).places.getD i default).ms == 1) = true) := by rw [beq_iff_eq]; exact hm
+        rw [if_neg hm'] at hr
+        by_cases hal : ((h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms != 0) = true
+        · rw [if_pos hal] at hr; cases hr
+        rw [if_neg hal] at hr
+        have hal' : (h + ((lays.getD d default).places.getD i default).nb) % ((lays.getD d default).places.getD i default).ms = 0 := by simpa using hal
+        obtain ⟨hcs, hpow, hcnt⟩ := hlay.lanes d i hi hm
+        have hl := lanes_call t lays fuel d i hi
+        rw [if_neg hm] at hl
+        have hB : 2 ^ β * ((lays.getD d default).places.getD i default).ms = 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) := by rw [Nat.pow_add, hpow]
+        have hh : h + ((lays.getD d default).places.getD i default).nb = ((lays.getD d default).places.getD i default).ms * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) := (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hal')).symm
+        have hc' : ((t.defs.getD d default).calls.getD i default).count ≤ 2 ^ ((lays.getD d default).places.getD i default).ms.log2 := hcnt.trans_eq hpow.symm
+        obtain ⟨ch, hch, hr⟩ := except_bind_ok hr
+        obtain ⟨bJ, hJ, hr⟩ := except_bind_ok hr
+        cases hr
+        refine ⟨_, rfl, ?_⟩
+        obtain ⟨hchS, hchZ, hchV⟩ := (ih _ _ _ _ ch hch (by omega) (by omega)).2 (by omega)
+        have hA := add_sum (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc)) (Tmpl.laneSum (fun b bit => if bit then pt.rho.getD (β - 6 + b) 0 * pt.r.getD (β - 6 + b) 0 else (pt.rho.getD (β - 6 + b) 0 + 1) * (pt.r.getD (β - 6 + b) 0 + 1)) ((lays.getD d default).places.getD i default).ms.log2 ((t.defs.getD d default).calls.getD i default).count) (Tmpl.laneSum (fun b bit => if bit then pt.rho.getD (β - 6 + b) 0 else pt.rho.getD (β - 6 + b) 0 + 1) ((lays.getD d default).places.getD i default).ms.log2 ((t.defs.getD d default).calls.getD i default).count) hq.1 hchS.1
+        have hLR : of (Tmpl.laneSum (fun b bit => if bit then pt.rho.getD (β - 6 + b) 0 * pt.r.getD (β - 6 + b) 0 else (pt.rho.getD (β - 6 + b) 0 + 1) * (pt.r.getD (β - 6 + b) 0 + 1)) ((lays.getD d default).places.getD i default).ms.log2 ((t.defs.getD d default).calls.getD i default).count) = ∑ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count, of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j) * of (Tmpl.eqAt pt.r (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j) := by
+          rw [laneSum_eq _ _ _ hc']
+          exact Finset.sum_congr rfl fun j hj => prod_lane2 pt.rho pt.r (β - 6) _ j (lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
+        have hL : of (Tmpl.laneSum (fun b bit => if bit then pt.rho.getD (β - 6 + b) 0 else pt.rho.getD (β - 6 + b) 0 + 1) ((lays.getD d default).places.getD i default).ms.log2 ((t.defs.getD d default).calls.getD i default).count) = ∑ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count, of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j) := by
+          rw [laneSum_eq _ _ _ hc']
+          exact Finset.sum_congr rfl fun j hj => prod_lane1 pt.rho (β - 6) _ j (lt_of_lt_of_le (Finset.mem_range.mp hj) hc')
+        have hE : ∀ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count, ((((t.defs.getD d default).calls.getD i default).bound id j).zipIdx.map fun x => of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j * (ch.u.getD x.2 #[]).getD 0 0) * Gs pt s ((readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) x.1)).sum =
+            of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j) * (∑ t' ∈ Finset.range (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins, of ((ch.u.getD t' #[]).getD 0 0) * Gs pt s ((((t.defs.getD d default).calls.getD i default).bound (readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) j).getD t' pt.qc)) := by
+          intro j _
+          refine (zipIdx_sum (fun v t' => of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j * (ch.u.getD t' #[]).getD 0 0) * Gs pt s ((readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) v)) _ 0).trans ?_
+          rw [hlay.bound d i j hi]
+          refine (Finset.sum_congr rfl fun t' ht' => ?_).trans (Finset.mul_sum _ _ _).symm
+          rw [zero_add, getD_bound ((t.defs.getD d default).calls.getD i default) (readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) j t' pt.qc (by rw [hlay.bound d i j hi]; exact Finset.mem_range.mp ht'), of_mul]
+          ring
+        have keyJ := forIn_range_sum (fun o : Out => of (eLow pt β a) * (sumVal (t.defs.getD d default).ins (gLow pt s β a) (Gs pt s pt.qc) (fun t' => Gs pt s (ip.getD t' pt.qc))) o) (fun o : Out => Shape (t.defs.getD d default).ins 1 o ∧ PZero o)
+          (fun j => ((((t.defs.getD d default).calls.getD i default).bound id j).zipIdx.map fun x => of (eLow pt β a) * of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j * (ch.u.getD x.2 #[]).getD 0 0) * Gs pt s ((readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) x.1)).sum)
+          hJ ⟨hA.1, pzero_zipAdd hq.1.1 hchS.1 hq.2 hchZ⟩ ?_
+        · obtain ⟨hqJ, hsJ⟩ := keyJ
+          refine ⟨hqJ, hsJ.trans ?_⟩
+          refine (congrArg₂ (· + ·) (congrArg (HMul.hMul _) hA.2.2) (Finset.sum_congr rfl hE)).trans ?_
+          rw [hLR, hL]
+          refine (lane_glue _ _ _ _ _ _ (fun j => of (Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j)) (fun j => of (Tmpl.eqAt pt.r (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j))
+            (fun j => (∑ t' ∈ Finset.range (t.defs.getD ((t.defs.getD d default).calls.getD i default).def_ default).ins, of ((ch.u.getD t' #[]).getD 0 0) * Gs pt s ((((t.defs.getD d default).calls.getD i default).bound (readAt t lays pt d (a + 2 ^ β * h) (2 ^ β) ip) j).getD t' pt.qc))) ((t.defs.getD d default).calls.getD i default).count).trans (congrArg (HAdd.hAdd _) (Finset.sum_congr rfl fun j hj => ?_))
+          have hjm : j < 2 ^ ((lays.getD d default).places.getD i default).ms.log2 := lt_of_lt_of_le (Finset.mem_range.mp hj) hc'
+          have e2 : a + 2 ^ β * h + 2 ^ β * (((lays.getD d default).places.getD i default).nb + j * ((lays.getD d default).places.getD i default).cs) = a + 2 ^ β * j + 2 ^ (β + ((lays.getD d default).places.getD i default).ms.log2) * ((h + ((lays.getD d default).places.getD i default).nb) / ((lays.getD d default).places.getD i default).ms) := by
+            rw [hcs, Nat.mul_one, ← hB, Nat.mul_assoc, ← hh]; ring
+          rw [e2, hB, ← hchV _ (lane_lt ha hjm), eLow_lane pt h6 ha hjm, gLow_lane pt h6 ha hjm]
+          unfold sumVal
+          beta_reduce
+          ring
+        intro j _ b r hr hq
+        cases hr
+        refine ⟨_, rfl, ?_⟩
+        exact bind_sum t lays pt hR h6 hk2 ha ip (fun t' _ => Tmpl.eqAt pt.rho (β - 6) ((lays.getD d default).places.getD i default).ms.log2 j * (ch.u.getD t' #[]).getD 0 0) _ _ hq
     · intro ⟨x, ra, rb⟩ _ b r hr hq
       dsimp only at hr
       obtain ⟨b1, hk, hr⟩ := except_bind_ok hr
