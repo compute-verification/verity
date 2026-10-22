@@ -21,6 +21,7 @@
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
   "Flock.Test.RegRows",
+  "Flock.Test.SpillRows",
   "Flock.Test.RecCap",
   "Flock.Test.PlainLeaves",
   "Flock.Test.Wires",
