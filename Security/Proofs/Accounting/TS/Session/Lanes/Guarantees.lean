@@ -1,4 +1,5 @@
 import Proofs.Accounting.TS.Session.Lanes.Assumptions
+import Proofs.Accounting.TS.Session.Lanes.KnownOf
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the statement)
@@ -14,10 +15,12 @@ sessions, and it takes `CheckedSessionSound`'s hypotheses at each of them and tw
 their Definitions at their port rows (`Accounting.Assumptions.TS.LeafChecks`; the complete check makes those the
 registered reads) and, where the sessions' registrants' rows agree, the decodes read one leaf, one partials record and
 the verifier's registrations (`Accounting.Assumptions.TS.LeafReads`, which may take the known rows as holding: the
-proof derives them from flock-verify's known-content check, #3142's tie). The leaf is one unit of the declared
-circuit, and the partials are proof-layer values (RT4-LOGIC-30's ruling). Each proof is then accepted with a leaf that
-fails the unit's checks, and no collision in hand, with probability at most `33 δ`: `δ` a session from
-`CheckedSessionSound`, joined by a union bound.
+proof derives them from flock-verify's known-content check, #3142's tie). The known content each session is handed is
+the path's public inputs' rows (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), so that check binds
+them: lane `l`'s `pub` row its salt, position, roots and index `l`, its `admit` row the admit bits, and every `o0` row
+`ok = 1`. The leaf is one unit of the declared circuit, and the partials are proof-layer values (RT4-LOGIC-30's
+ruling). Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
+probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound.
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
 
@@ -31,11 +34,12 @@ open scoped ENNReal
 `w` on the path `x` is a leaf proved as its lanes' sessions `sess x w i (some l)` and its combine's `sess x w i none`
 (#2909's `RowsSession`), with outcomes `out x w i k`, and the leaf layer
 `leafLayer sess out known dq part pub receipt leaf right` (accepted where flock-verify `--zk --registered` accepts all
-33 sessions, its known-content check at `known x w i k` and its complete check (`Flock.Registered.checkComplete`, run
-when the `--registered` file sets `complete`: every port of the circuit is a port of `own`) included, opening the
-leaf's values `leaf`, its relation the unit's served checks at the path's public inputs `pub` and receipt `receipt`,
-or a clash of two of the sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie,
-`LeafKnownColl`): given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
+33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
+public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
+(`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
+of `own`) included, opening the leaf's values `leaf`, its relation the unit's served checks at the path's public inputs
+`pub` and receipt `receipt`, or a clash of two of the sessions' registrants' records, `LeafColl`, or a collision of a
+session's known-content tie, `LeafKnownColl`): given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
 window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, a circuit that names each port once, every
 unit's served roots registered, a port named `ok` in the circuit and in `own`, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
@@ -47,14 +51,14 @@ wherever, too, the known rows hold (`Accounting.Assumptions.TS.LeafReads`), each
 fails the unit's served checks on the path, and no clash of its sessions' registrants' records or of their
 known-content ties, with probability at most `33 δ`. -/
 def LeafLanesSound : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ} {Pub : Type}
+  ∀ {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
-    (out : ∀ x w i k, (sess x w i k).Out) (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
+    (out : ∀ x w i k, (sess x w i k).Out) (salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray)
     (ok : String) (dq : List ℤ → ℤ)
-    (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
-    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
+    (part : LanePub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
+    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw LanePub)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
-    (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
+    (pub : Paths Ω S → Fin S → Fin nπ → LanePub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
     (∀ x w i k, (sess x w i k).CR) →
@@ -67,7 +71,9 @@ def LeafLanesSound : Prop :=
       ∃ pt ∈ (sess x w i k).own, pt.name = ok) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) decL decC) →
-    Accounting.Assumptions.TS.LeafReads sess known decL decC pub parts receipt leaf →
-    (leafLayer sess out known dq part pub receipt leaf right).SoundAt (33 * δ)
+    Accounting.Assumptions.TS.LeafReads sess (fun x w i k => knownOf (pub x w i) (salts x w i k) k) decL decC pub parts
+      receipt leaf →
+    (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k) dq part pub receipt leaf right).SoundAt
+      (33 * δ)
 
 end Accounting.Guarantees.TS
