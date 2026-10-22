@@ -6,7 +6,9 @@ The integration tree that DeepSeek-V4-Pro's v2 row of record is built, served an
 
 Row: `dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager` (I256/O32, TP8, H200, eager, at its public cap). Its v1
 record art:e81265e7b65773352945b6b85612d6429a0b212353bd18d615281ad0b7940f04 (fold Match r20261019-061046-dad5, Commit
-r20261018-023527-3dc1) predates the padded static circuit and the SHA-512 TP Commit.
+r20261018-023527-3dc1) predates the padded static circuit and the SHA-512 TP Commit. Its v2 record is
+art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090 (outcome PASS, tier heavy, at 943a4cb958: attempt 6,
+"Attempt 6" below).
 
 ## Merged
 
@@ -223,7 +225,18 @@ Then:
    5. The CPU phase: `match_cpu.sh` r20261022-004505-9c70 on vy-glm53-eu (`FOLD_RANK_WORKERS=8`, `--mem-gb 200`). On
       vy-nebius-cpu-3, memory admission refused it (r20261022-000910-b0be: 31 GB free beside B8 stochastic's r20261021-231741-4076), so
       the Match's CPU phase, the Commit, the replay and the publish all run on eu, which holds the legs, the Build and a
-      verified checkpoint, with no row dir copied.
+      verified checkpoint, with no row dir copied. Its Match, vllm.match r20261022-004729-c424, passed: fold, compare and
+      global match on all 8 ranks, the cross-rank leg, and tp2_match's structure, provenance and tokens (capture equal to
+      control, 3,968 collectives, 0 mismatches).
+   6. Window B: the Commit r20261022-014129-efc3 on vy-glm53-eu at 943a4cb958 (3090 s), PENDING by design. The oracle
+      passed 8/8, with 1,952 calls replayed on each rank, 0 `missing` and 0 `routing_differs`. The value check passed 8/8,
+      with 64 openings a rank. cuBLAS and cuBLASLt are 120901 on every rank, one libcublas.so.12.
+   7. The replay: r20261022-024329-24ef, r20261022-024339-82eb, r20261022-024348-ab88 and r20261022-024359-f8c5 on vy-glm53-eu
+      (`RANKS` 0,1 to 6,7). Every rank's 29,146 picks are evaluated and equal, and its boundary linkage passes 32/32, at
+      892–1172 s and a 119–123 GB peak a rank. The Commit is decided PASS on CPU: sampled replay, boundary linkage and C2
+      population.
+   8. The publish: r20261022-032219-57b6, `records publish --tier heavy`, record art:b70ee40e85 (outcome PASS), with the
+      match record art:80b4a5f76f and the commit record art:1048033e0f.
 4. CPU, on the replay host (below): `replay_publish.sh` per `RANKS` job, then one without `RANKS` that publishes, as GLM-5.3's
    rows run it (`../glm_v2_tree/README.md` step 5): `tp-commit-replay` of every rank from the bundles window B preserved, then
    `records publish --tier heavy`. It needs from the GPU legs:
