@@ -1,4 +1,4 @@
-import Proofs.Flock.Level3.Folded
+import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Soundness.ExecParse
 import Flock.TmplFold
