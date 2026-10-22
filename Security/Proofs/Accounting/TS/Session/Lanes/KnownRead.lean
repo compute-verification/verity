@@ -24,7 +24,7 @@ refusal establishes, from the verifier's code:
 
 namespace Accounting.TS.Lanes
 
-open Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (portRowW)
 
 section
@@ -81,14 +81,16 @@ theorem colRead_of_read (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog 
   have hcol : ((FlockSoundness.Rows.ofNet hU).stackCol c.upv hup x).val =
       u * (c.unit.inWords * _root_.Flock.WORD) + y := by
     unfold FlockSoundness.Rows.stackCol
-    rw [dif_pos hxn]
+    rw [dite_eq_left hxn]
     show u * (FlockSoundness.Rows.ofNet hU).nIn + x.val = _
     rw [Layout.ofNet_nIn_eq, hxv]
   unfold ColRead Placed.circuitRows
   refine ⟨⟨u * ((FlockSoundness.Rows.ofNet hU).nComp + 1) + (1 + i.val),
     FlockSoundness.Rows.mul_add_lt hup (by omega)⟩, (FlockSoundness.Rows.ofNet hU).stackCol c.upv hup x, ?_, ?_, ?_⟩
-  · rw [FlockVBridge.stack_a, FlockVBridge.stack_b, ← List.map_append]
-    exact List.mem_map.2 ⟨x, hx, rfl⟩
+  · rw [FlockVBridge.stack_a _ _ hup i, FlockVBridge.stack_b _ _ hup i]
+    rcases List.mem_append.1 hx with h | h
+    · exact List.mem_append_left _ (List.mem_map.2 ⟨x, h, rfl⟩)
+    · exact List.mem_append_right _ (List.mem_map.2 ⟨x, h, rfl⟩)
   · rw [hcol]
     show _ < c.upv * (FlockSoundness.Rows.ofNet hU).nIn
     rw [Layout.ofNet_nIn_eq]
@@ -111,7 +113,6 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
   have h1 := _root_.Flock.Registered.forM_ok h (nm, ks) (Array.mem_toList_iff.2 hm)
   dsimp only at h1
   have h2 := _root_.Flock.Registered.forM_ok h1 q (List.mem_range.2 hq)
-  dsimp only at h2
   rw [if_pos hn] at h2
   split at h2
   · cases h2
@@ -131,10 +132,7 @@ theorem colRead_of_check (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog
     (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String} {ks : Array (Array ℕ × ByteArray)}
     (hm : (nm, ks) ∈ known) {q : Fin c.ports.size} (hq : q.val < _root_.Flock.HmOut.nIn c)
     (hn : c.ports[q].name = nm) {k : ℕ} (hk : k < portRowW c q) : ColRead c hU q k := by
-  have e : c.ports[q.val]! = c.ports[q] := by
-    first
-      | exact getElem!_pos c.ports q.val q.isLt
-      | simp
+  have e : c.ports[q.val]! = c.ports[q] := getElem!_pos c.ports q.val q.isLt
   obtain ⟨u, y, hup, hrd, hs⟩ := read_of_check h hm hq (by rw [e]; exact hn) (by rw [e]; exact hk)
   have hy : y < c.unit.inWords * _root_.Flock.WORD :=
     lt_of_lt_of_le ((FlockC3.Reps.ReadWhole.getD_readIns c.unit y).1 hrd).1 (Nat.min_le_left _ _)
