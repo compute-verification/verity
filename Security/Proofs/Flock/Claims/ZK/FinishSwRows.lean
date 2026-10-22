@@ -67,7 +67,7 @@ theorem fwCons_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : B
       · exact h1
       · exact h2
     · obtain ⟨k', rfl⟩ : ∃ k' : Fin 2, k = 3 + k'.val := ⟨⟨k - 3, by omega⟩, by simp only; omega⟩
-      rw [ZkExec.append_get!_right _ _ (j := k'.val) (by rw [h3]) (by simp)]
+      rw [ZkExec.append_get!_right _ _ (j := k'.val) (by rw [h3]) (by first | exact k'.isLt | (simp; omega))]
       fin_cases k'
       · exact hab
       · exact hc
