@@ -6,7 +6,8 @@ circuit's lowering or digest changes.
 A Definition's argument bit is a constant or a linear form over the caller's committed bits, as the unrolled lowering
 carries it. The callee is lowered once per *pattern* of its arguments: which argument positions name one gate (a caller
 may pass a gate twice, and the callee's body reads that), each constant bit and its value, and each form as
-the set of distinct caller bits (the callee's inputs, numbered by first appearance) it sums plus its constant, so the
+the set of distinct caller bits (the callee's inputs, numbered in the caller's column order, so a call binds a few runs
+of consecutive references) it sums plus its constant, so the
 constant folding and the free XORs the unrolled lowering does across a call boundary are kept. A form over more than
 ``support`` bits is committed by the callee (one row, ``A = form, B = 1``); a returned bit is a constant, or a form over
 the callee's inputs and its own columns, committed by the callee past ``support`` too. Primitive gates are lowered by
@@ -25,7 +26,7 @@ returns that no caller reads (a callee is lowered without its callers' liveness)
 template's rows unrolled (``tmpl.unroll``) and :func:`evaluate` evaluates them, which :func:`check` holds to the unrolled
 lowering's evaluation on random inputs.
 
-    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--out UNIT.tmpl] [--flat | --check]
+    python -m verity_flock.struct_lower K [R C] [--support S] [--fold-cap N] [--first-appearance] [--out UNIT.tmpl] [--flat | --check]
 
 the H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``): prints ``STRUCT {json}`` (the unrolled totals, multiplied
 through the calls, and the template's size) and writes the template; ``--flat`` counts the unrolled lowering instead, and
@@ -82,11 +83,27 @@ class _Block:
     base: int = 0
 
 
-def _pattern(words: list[list[L]], fold: bool = True) -> tuple[tuple, list[int]]:
-    """The argument bits' pattern and the caller bits its inputs stand for, numbered by first appearance; not ``fold``:
-    each constant bit an input of its own, bound to ``ZERO`` or ``ONE_REF``."""
-    labels: dict[int, int] = {}
-    out: list[int] = []
+def _column_order(C: Circuit, v: int) -> tuple:
+    """Where caller bit ``v`` lands among the caller's references (``_Lowerer._finish``'s layout): its own columns in
+    creation order, a copy's columns where the copy was placed, then its inputs."""
+    k = C.kind[v]
+    if k == "arg":
+        return (1, C.data[v], 0, 0)
+    if k == "call":
+        blk, x = C.data[v]
+        return (0, C.blocks[blk].pos, 0, x)
+    return (0, v, 1, 0)
+
+
+def _pattern(words: list[list[L]], fold: bool = True, order=None) -> tuple[tuple, list[int]]:
+    """The argument bits' pattern and the caller bits its inputs stand for: the inputs numbered in the caller's column
+    ``order`` (so a call binds few runs of consecutive references), else by first appearance; not ``fold``: each
+    constant bit an input of its own, after them, bound to ``ZERO`` or ``ONE_REF``."""
+    vs = list(dict.fromkeys(v for w in words for b in w for v in sorted(b.s)))
+    if order is not None:
+        vs.sort(key=order)
+    labels = {v: i for i, v in enumerate(vs)}
+    out: list[int] = list(vs)
     pat = []
     for w in words:
         for b in w:
@@ -97,20 +114,15 @@ def _pattern(words: list[list[L]], fold: bool = True) -> tuple[tuple, list[int]]
                     pat.append(((len(out),), 0))
                     out.append(ONE_REF if b.c else ZERO)
                 continue
-            ls = []
-            for v in sorted(b.s):
-                i = labels.get(v)
-                if i is None:
-                    i = labels[v] = len(out)
-                    out.append(v)
-                ls.append(i)
-            pat.append((tuple(ls), b.c))
+            pat.append((tuple(sorted(labels[v] for v in b.s)), b.c))
     return tuple(pat), out
 
 
 class _Lowerer:
-    def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES):
+    def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES,
+                 column_order: bool = True):
         self.circuit = circuit
+        self.in_column_order = column_order
         self.support = support
         self.fold_cap, self.fold_gates = fold_cap, fold_gates
         self.folded: dict[str, int] = {}
@@ -124,14 +136,15 @@ class _Lowerer:
         first: dict[int, int] = {}
         shape = tuple(first.setdefault(a, len(first)) for a in fc.args)
         words = [wires[a] for a in first]
-        pat, label_vars = _pattern(words)
+        order = partial(_column_order, C) if self.in_column_order else None
+        pat, label_vars = _pattern(words, order=order)
         key = (fc.fn.id, shape, pat)
         sp = self.specs.get(key)
         if sp is None and not fc.is_primitive and fc.fn.gates >= self.fold_gates and any(p[0] == "c" for p in pat):
             if self.folded.get(fc.fn.id, 0) < self.fold_cap:
                 self.folded[fc.fn.id] = self.folded.get(fc.fn.id, 0) + 1
             else:
-                pat, label_vars = _pattern([wires[a] for a in fc.args], fold=False)
+                pat, label_vars = _pattern([wires[a] for a in fc.args], fold=False, order=order)
                 key = (fc.fn.id, None, pat)
                 sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
         sp = sp or self._lower(fc, key, pat, len(label_vars))
@@ -337,12 +350,12 @@ def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) ->
 
 
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
-          fold_gates: int = FOLD_GATES) -> tuple[T.Tmpl, _Lowerer, Spec]:
+          fold_gates: int = FOLD_GATES, column_order: bool = True) -> tuple[T.Tmpl, _Lowerer, Spec]:
     """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
     output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates)
+    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
@@ -442,7 +455,15 @@ def stats(t: T.Tmpl, lw: _Lowerer, top: Spec, text_bytes: int | None = None) -> 
     for k in lw.specs:
         by_fn[k[0]] = by_fn.get(k[0], 0) + 1
     rows = sum(len(d.rows) for d in t.defs)
-    return {"unrolled": tot, "template": {"defs": len(t.defs), "definitions": len(by_fn), "rows": rows,
+    segs: dict[str, list[int]] = {}
+    for d in t.defs:
+        for c in d.calls:
+            s = segs.setdefault(lw.order[c.e].key[0].split("{")[0], [0, 0])
+            s[0] += 1
+            s[1] += len(c.segs)
+    top_segs = sorted(segs.items(), key=lambda kv: -kv[1][1])[:8]
+    return {"segs_by_callee": {f: {"calls": n, "segs": m} for f, (n, m) in top_segs},
+            "unrolled": tot, "template": {"defs": len(t.defs), "definitions": len(by_fn), "rows": rows,
                                           "refs": sum(len(a) + len(b) for d in t.defs for _, a, b in d.rows),
                                           "calls": sum(len(d.calls) for d in t.defs),
                                           "segs": sum(len(c.segs) for d in t.defs for c in d.calls),
@@ -478,6 +499,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("shape", nargs="+", type=int)
     ap.add_argument("--support", type=int, default=SUPPORT)
     ap.add_argument("--fold-cap", type=int, default=FOLD_CAP)
+    ap.add_argument("--first-appearance", action="store_true", help="number a callee's inputs as its arguments name them")
     ap.add_argument("--out")
     ap.add_argument("--flat", action="store_true")
     ap.add_argument("--check", action="store_true")
@@ -491,15 +513,15 @@ def main(argv: list[str]) -> int:
     if a.flat:
         out = flat(shape.unit())
     elif a.check:
-        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap)}
+        out = {"check": check(shape.unit(), a.support, fold_cap=a.fold_cap, column_order=not a.first_appearance)}
     else:
-        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap)
+        t, lw, top = lower(shape.unit(), a.support, f"h1-struct-{shape.k}", a.fold_cap, column_order=not a.first_appearance)
         size = None
         if a.out:
             text = T.write(t)
             Path(a.out).write_text(text)
             size = len(text)
-        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap}
+        out = stats(t, lw, top, size) | {"support": a.support, "fold_cap": a.fold_cap, "column_order": not a.first_appearance}
     out |= {"k": shape.k, "tile": [shape.r, shape.c], "seconds": round(time.time() - t0, 1),
             "maxrss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}
     print("STRUCT " + json.dumps(out), flush=True)
