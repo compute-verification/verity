@@ -26,24 +26,26 @@ machine) has no ledger: its log is read under the key its run wrote (`session_of
 **Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
 (`credit`), and gives any other session zero credit with the reasons:
 
-- *credited*: its window reads through `challenger.credited_session` with the descriptor of the verifier that ran it,
-  `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being `git rev-parse COMMIT:verity/core/protocols/
-  remote_bandwidth` of the run's recorded commit (`--commit`), so it counts only toward a period that committed that
-  verifier (PRF-126);
+- *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
+  descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
+  `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
+  only toward a period that committed that verifier (PRF-126);
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
   to, in every window of the period (PRF-132);
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
-  lines as the gate served them): its open sealed the log as it stood, and one of the sealed lines records the open's
-  `pinned` as a commit of main's history (RT4-INT-40). With no log, no session is pinned.
+  lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
+  --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
+  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on (RT4-INT-40, CMP-74). With no
+  log or no copy of main, no session is pinned or credited.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons. What every accepted paced session measured, credited or not, is `measured`. `--table` writes each session's
 four checks and the line as Markdown.
 
-    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG]] [--ledger HEAD ...]
-        [--ingress B/S ...] [--table FILE]
+    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
+        [--ledger HEAD ...] [--ingress B/S ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -203,15 +205,16 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
-                 period: str, desc: bytes, pins: list[str] | None) -> dict:
+                 period: str, desc: bytes, pins: list[str] | None, main: list[str] | None) -> dict:
     """Whether session `s`, whose window root is R, earns credit: its window credited toward the audit's period for
     the verifier `desc` describes (`credited_session`), its window and its period closed complete, its verdict the
-    Lean's acceptance, and its open's pin one the host's pins log `pins` records as main's (`pinned_session`; None: no
-    log); each check with its reason, and `zero` the reasons it earns none."""
+    Lean's acceptance, and its open's pin one the host's pins log `pins` records on the auditor's first-parent list of
+    main `main` (`pinned_session`; None: no log, or no copy of main); each check with its reason, and `zero` the
+    reasons it earns none."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
     try:
-        got = Ch.credited_session(lines, {"root": R}, key, desc, CH.lms_verify)
+        got = Ch.credited_session(lines, {"root": R}, key, pins, main, desc, CH.lms_verify)
         credited.update(period=got.period, ok=got.period == period, reason=None if got.period == period else (
             f"its window counts toward period {got.period}, not the audit's period {period}"))
     except Ch.CoinError as e:
@@ -251,7 +254,7 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     opened = (((windows.get(R) or {}).get("open") or {}).get("body")) or {}
     pinned: dict = {"commit": opened.get("pinned"), "seal": opened.get("pins")}
     try:
-        Ch.pinned_session(lines, {"root": R}, key, pins, CH.lms_verify)
+        Ch.pinned_session(lines, {"root": R}, key, pins, main, CH.lms_verify)
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
@@ -311,9 +314,10 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS, desc: bytes | None = None,
-            commit: str | None = None, pins: list[str] | None = None) -> dict:
-    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), and
-    `pins` the challenger host's pins log, its lines (None: the gate served none)."""
+            commit: str | None = None, pins: list[str] | None = None, main: list[str] | None = None) -> dict:
+    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
+    the challenger host's pins log, its lines (None: the gate served none), and `main` the auditor's first-parent list
+    of main (None: none given)."""
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
@@ -347,7 +351,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
-            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins)
+            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins,
+                                         main=main)
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
             row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
@@ -461,6 +466,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
     ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
                     "pin: without it no session is pinned (RT4-INT-40)")
+    ap.add_argument("--main", type=Path, metavar="FILE", help="the auditor's own first-parent list of main, a commit a "
+                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned "
+                    "(CMP-74)")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", default=PEER)
@@ -468,8 +476,9 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
+    first_parent = None if a.main is None else remote.main_lines(a.main)
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins)
+                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins, main=first_parent)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
