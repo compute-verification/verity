@@ -24,7 +24,7 @@ level 0's two lane rows are `FinishLane.lanesAt`'s where its Ligerito proof is r
   `coin (l.size + j)`, round `1` with `m − 13` coins.
 * **`lincheckCut_fold`**: a lincheck that returns had its circuit's fold defined at its `α`.
 * **`tauFw`**: where `repFwC` returns, its constraints pass on the pads and are `rowsOf`'s first seven, at coins that
-  are the model's (`hz`, …, `hr'`), masked values that are the view's below `h_ab` (`hmk`), folds that realize the
+  are the model's (`hz`, …, `hr'`), masked values that are the view's below `zp 64` (`hmk`), folds that realize the
   statement (`hfold`), switched vectors that are the view's `ŝ` (`hsw`) and a level 0 read at the view (`hlane`).
 -/
 
@@ -181,7 +181,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
     (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
-    (hmk : ∀ k < (layOf Tz stm).hab, (msgAt v k).val = vals[k]! + pads.h[k]!)
+    (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
     (hz : coin (l.size + 2) 0 = zcF Tz stm c r)
     (hr : pinned ++ (Array.range (st.m - 13)).map (coin (l.size + 1)) = rF Tz stm c r)
     (hρ : rhoF Tz stm c r = FlockComplete.Replay.pushes (fun j => coin (l.size + (3 + j)) 0) (st.m - 6))
@@ -329,7 +329,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
 /-- **The firewall's seven rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no rounds,
 returns, its constraints pass on the pads, and the replay's three, the two ring-switch rows and level 0's two lane rows
 are `rowsOf`'s first seven, constants included, wherever the coins from `l.size` on are the model's (`hz`, …, `hr'`),
-the masked values `vals + h` are the view's below `h_ab` (`hmk`), the fold folds as the model's (`hfold`), the ring
+the masked values `vals + h` are the view's below `zp 64` (`hmk`), the fold folds as the model's (`hfold`), the ring
 switch's vectors at the `ab` and `c` claims are the view's `ŝ` (`hsw`) and the Ligerito run's proof, record and
 messages are read at the view (`hlane`, `LaneAt`). -/
 theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
@@ -340,7 +340,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
     (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
-    (hmk : ∀ k < (layOf Tz stm).hab, (msgAt v k).val = vals[k]! + pads.h[k]!)
+    (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
     (hz : coin (l.size + 2) 0 = zcF Tz stm c r)
     (hr : pinned ++ (Array.range (st.m - 13)).map (coin (l.size + 1)) = rF Tz stm c r)
     (hρ : rhoF Tz stm c r = FlockComplete.Replay.pushes (fun j => coin (l.size + (3 + j)) 0) (st.m - 6))
