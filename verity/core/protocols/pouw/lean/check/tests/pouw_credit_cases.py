@@ -26,7 +26,7 @@ coin the prover chose (``chosen``), and break the forms.
 A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
 as `credit.layout_of` reads it, each call's tiles a call node each or one batch, under a ``PREFIX``), its weights (each
 K's ``<PREFIX>b/<K>``, its linears' B rows under the registered domain of its name and the circuit, binding no window,
-`weights_of`), its open root `salt.window_open_root` of their `credit.weights_root`, round 0's ``requests`` and its
+`weights_of`), its open root `salt.window_open_root` of their `weights.weights_root`, round 0's ``requests`` and its
 session, the auditor's ledger opening it inside a period whose open signs that weights' root (`credit.WEIGHTS_FIELD`)
 and names a model credit pins (`credit.MODEL_FIELD`, `MODEL`),
 a committed K, one call per manifest row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments, as the verifier of
@@ -80,7 +80,7 @@ rounds' equal blocks); its mutations list one in another round (``call-other-rou
 A `weights` case is a window's layout, its circuit (its descriptor's SHA-512 and PREFIX), its registered entries (each
 K's ``<PREFIX>b/<K>`` under its registered domain, among its A values, z tables and names that are no weights: a
 non-canonical K, ``b/032`` or one past Python's ``int`` digit limit), its round-0 request table's root and its session,
-and the window's open root over `credit.weights_root` of the ``…/b/<K>`` roots, that root and the session
+and the window's open root over `weights.weights_root` of the ``…/b/<K>`` roots, that root and the session
 (`salt.window_open_root`). Its mutations register a B value other than the one the open root binds (another code or
 s_w), open the window on another request table's root or session or another root, register a K's B value twice, never,
 of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, a
@@ -101,6 +101,7 @@ import struct
 import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -711,8 +712,8 @@ def weights_of(rng: random.Random, lay: dict, program: str, prefix: str) -> list
 
 
 def fold(weights: list[dict]) -> str:
-    """`credit.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
-    return Cr.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
+    """`weights.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
+    return Wt.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
 
 
 #: the model a period's open names (`credit.MODEL_FIELD`): a role credit pins, at its pinned checkpoint
@@ -754,11 +755,9 @@ def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
 
 
 def b_row_words(codes: bytes, sw: float) -> list[int]:
-    """A B row's u16 words as the prover and the auditor's registry commit them (#3204's
-    ``weights.row_words(weights.row_bytes(codes, s_w))``): its K int8 codes then its f32 s_w's 4 bytes little-endian
-    (`h1zy.ROW`), little-endian in pairs."""
-    row = bytes(codes) + struct.pack("<f", sw)
-    return [row[i] | row[i + 1] << 8 for i in range(0, len(row), 2)]
+    """A B row's u16 words as the prover and the auditor's registry commit them (`weights.row_words` of
+    `weights.row_bytes`): its K int8 codes then its f32 s_w (`h1zy.ROW`), little-endian in pairs."""
+    return Wt.row_words(Wt.row_bytes(bytes(codes), struct.pack("<f", sw)))
 
 
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
@@ -1256,8 +1255,8 @@ A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra"
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
-    return {"value": v, "root": _hex(rng), "leaves": n, "words": Cr.b_words(k),
-            "domain": G.domain(program, v, Cr.b_words(k), n).domain_id.hex()}
+    return {"value": v, "root": _hex(rng), "leaves": n, "words": Wt.b_words(k),
+            "domain": G.domain(program, v, Wt.b_words(k), n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1275,7 +1274,7 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     rng.shuffle(entries)
     requests, session = _hex(rng), rng.choice(["s-1", "a.b_c:d-9", "7"])
     roots = {k: bytes.fromhex(e["root"]) for k, e in zip(sorted(rows), b)}
-    window = {"root": PS.window_open_root(Cr.weights_root(roots), bytes.fromhex(requests), session).hex()}
+    window = {"root": PS.window_open_root(Wt.weights_root(roots), bytes.fromhex(requests), session).hex()}
     e = rng.choice(b)
     k = next(kk for kk in rows if e["value"] == f"{prefix}b/{kk}")
     match name:

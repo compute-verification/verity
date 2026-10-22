@@ -110,6 +110,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.pouw.weights import b_words, weights_root
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -1431,8 +1432,6 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
     return None
 
 
-#: an H1 window's weights' root: each K's registered ``…/b/<K>`` root (`weights_root`)
-WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
 WINDOW_ROOT_FORM = "the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)"
 REQUESTS_FORM = "the window's round-0 request table's root is not a SHA-512 digest (128 lowercase hex)"
 SESSION_FORM = ("the window's session is not the id of the session the auditor's ledger opened for it (1 to 64 of "
@@ -1443,20 +1442,6 @@ OTHER_WEIGHTS = ("the window's registered weights are not the ones its open root
                  "root, its round-0 request table's root and its session are not its open root (salt.window_open_root), "
                  "so a B row, its codes or its s_w, is not the one registered before the window's salt. Register each "
                  "K's B rows once, before the window opens, and open them at that root")
-
-
-def weights_root(roots: dict[int, bytes]) -> bytes:
-    """An H1 window's weights' root, the first part of its open root (`salt.window_open_root`): `tagged` of `WEIGHTS_TAG`
-    and each K's registered ``…/b/<K>`` root, ``K, root`` by ascending K (`roots`, ``{K: root}``). A ``…/b/<K>`` is the
-    B rows of the window Program's linears of that K, linear after linear, each row its K int8 codes then their f32 scale
-    s_w (`h1window`, `h1zy.ROW`), committed under the domain that binds no window (`registered.domain`), so this root
-    fixes every code and every s_w of the window's weights."""
-    return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
-
-
-def b_words(k: int) -> int:
-    """A B row's 16-bit words: its K int8 codes, then the 4 bytes of its f32 s_w (`h1zy.ROW`, `registered.bytes_leaves`)."""
-    return (k + 5) // 2
 
 
 def other_weights_entry(v: str, k: int, n: int) -> str:
@@ -1532,8 +1517,8 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
 
 __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
            "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
-           "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WEIGHTS_TAG", "WINDOW_FN", "WINDOW_KEYS",
-           "b_words", "call_work", "calls_root", "committed_files", "committed_k", "committed_weights", "cover",
+           "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
+           "call_work", "calls_root", "committed_files", "committed_k", "committed_weights", "cover",
            "domain_of", "draw_root", "drawn", "established", "a_value", "is_a", "is_held", "law", "layout_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "round_root", "shape_of",
-           "strata", "tree_root", "weights_root", "window"]
+           "strata", "tree_root", "window"]

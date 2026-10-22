@@ -949,12 +949,12 @@ def OTHER_WEIGHTS : String :=
   "codes or its s_w, is not the one registered before the window's salt. Register each K's B rows once, before the " ++
   "window opens, and open them at that root"
 
-/-- `credit.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
+/-- `weights.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
 def weightsRoot (roots : List (Nat × ByteArray)) : ByteArray := weightsRootAt 64 WEIGHTS_TAG roots
 
 def weightsRefuse {α : Type} (why : String) : R α := throw ("weights", why)
 
-/-- `credit.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
+/-- `weights.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
 def bWords (k : Nat) : Nat := (k + 5) / 2
 
 def otherWeightsEntry (v : String) (k n : Nat) : String :=

@@ -21,6 +21,7 @@ import pytest
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import plan
@@ -726,7 +727,7 @@ def test_a_window_registering_the_weights_its_open_root_binds_is_credited_its_ro
         d = cases.weights_instance(random.Random(f"honest/{seed}"))
         w, refused = Cr._weights(*(d[k] for k in cases.WEIGHTS_KEYS))
         held = {e["value"]: bytes.fromhex(e["root"]) for e in d["entries"] if Cr.is_held(e["value"])}
-        assert refused is None and Cr.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
+        assert refused is None and Wt.weights_root({int(v.split("/")[-1]): h for v, h in held.items()}) == w, refused
         assert {v.removeprefix(d["prefix"]) for v in held} == {f"b/{k}" for _n, k, _r in d["layout"]["linears"]}
 
 
@@ -798,7 +799,7 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     reg = {k: commit(k, b) for k, b in rows.items()}
     assert [r.leaves for r in reg.values()] == [24, 8] and all(r.window is None for r in reg.values())
     requests, session = "ab" * 64, "s-1"
-    w = Cr.weights_root({k: r.root for k, r in reg.items()})
+    w = Wt.weights_root({k: r.root for k, r in reg.items()})
     window = {"root": PS.window_open_root(w, bytes.fromhex(requests), session).hex()}
     entries = [r.entry() for r in reg.values()]
     assert Cr._weights(window, lay, entries, requests, session, digest, "") == (w, None)
@@ -810,7 +811,7 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
         got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.OTHER_WEIGHTS)), changed
     for other in (commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
-        w2 = Cr.weights_root({32: other.root, 64: reg[64].root})
+        w2 = Wt.weights_root({32: other.root, 64: reg[64].root})
         window2 = {"root": PS.window_open_root(w2, bytes.fromhex(requests), session).hex()}
         got = Cr._weights(window2, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.other_weights_entry("b/32", 32, 24))), other.leaves
