@@ -222,7 +222,8 @@ calls on the message the readers take aren't the other part's, so V*'s parts giv
 def ReadersLogColl (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ e ∈ (innerRunAt H IV b.rd x ws cs).vLog, e ∈ callsOf b.rd x ws) ∨
           ∃ u v, Claims.findColl (callsOf b.rd x ws) = some (u, v) ∧ Claims.Collision H u v
@@ -235,7 +236,8 @@ opens. -/
 def ReadersOpenPlayed (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (opening : Claims.Recursion.Opening) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       ∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, ∃ es, es ⊆ callsOf b.rd x ws ∧
         opening.opens (as.getD j []) (((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j []) es
 
@@ -247,7 +249,8 @@ def ReadersAccept (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO
     (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →
     ∀ (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-      cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+      cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+        Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
         (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
           (innerRunAt H IV b.rd x ws cs).out = .acc ∨
             ∃ u v, Claims.findColl (callsOf b.rd x ws) = some (u, v) ∧ Claims.Collision H u v
@@ -280,7 +283,8 @@ theorem callsLogColl (hT : ReadersTrue H I.V b DO) (hL : ReadersLogColl H I.V b 
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   rw [hrun]
-  exact hL x _ _ ws hl hc ho (hT x _ _ ws hl hc (stagedAll_run H I.V b x P ω r hg.1) ho)
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  exact hL x _ _ ws hl hc hsp ho (hT x _ _ ws hl hc hsp ho)
 
 /-- **`CallsOpenPlayed` at `deployRec`** from the readers' facts: the inner view is the inner verifier's run of the
 readers' messages, which plays at most the inner rounds (`run_length_le`). -/
@@ -295,7 +299,7 @@ theorem callsOpenPlayed (opening : Claims.Recursion.Opening) (hO : ReadersOpenPl
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv] at hj ⊢
-  obtain ⟨es, hes, hop⟩ := hO x _ _ ws hl hc ho j hj
+  obtain ⟨es, hes, hop⟩ := hO x _ _ ws hl hc (stagedAll_run H I.V b x P ω r hg.1) ho j hj
   refine ⟨es, hes, ?_⟩
   have hjk : j < I.V.k (xIOf x) :=
     Nat.lt_of_lt_of_le hj (Claims.Recursion.run_length_le H _ I.V (xIOf x) () _)
@@ -318,7 +322,7 @@ theorem vstarAccepts (shape : Claims.Recursion.Form → Prop) (hA : ReadersAccep
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv]
-  exact hA x s hs hf _ _ ws hl hc ho ht
+  exact hA x s hs hf _ _ ws hl hc (stagedAll_run H I.V b x P ω r hacc) ho ht
 
 /-- **`InnerAcceptsColl` at `deployRec`** from the readers' facts and V*'s circuits at the dense, holo and sparse
 shapes, with `refuses`. -/

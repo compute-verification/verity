@@ -200,7 +200,8 @@ run, and `IVStar` checks the openings itself (`Bound.opens`). -/
 def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, j + 1 < IV.k (xIOf x) →
           ((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j [] = as.getD j []) ∨
