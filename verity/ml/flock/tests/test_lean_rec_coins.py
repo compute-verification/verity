@@ -111,7 +111,8 @@ def shape(built, tmp_path_factory) -> Path:
     f = tmp_path_factory.mktemp("rec-inner") / "inner.json"
     f.write_text(p.stdout)
     _form(f.parent)
-    (f.parent / "transcript.json").write_text(RL.record_bytes(json.loads((SET / "inner-honest" / "public.json").read_text())))
+    honest = json.loads((SET / "inner-honest" / "public.json").read_text())
+    (f.parent / "transcript.json").write_text(RL.record_bytes(honest))
     return f
 
 

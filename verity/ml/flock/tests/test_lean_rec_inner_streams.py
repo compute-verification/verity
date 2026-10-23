@@ -593,8 +593,8 @@ def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[st
 
 
 def _own(tmp_path: Path, d: Path) -> Path:
-    """`d`'s coin server's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner shape
-    (`RecSetup.checkReads`): the fixtures' records predate it."""
+    """`d`'s coin server's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner
+    shape (`RecSetup.checkReads`): the fixtures' records predate it."""
     from verity_flock import rec_live as RL
 
     f = tmp_path / f"own-{d.name}.json"

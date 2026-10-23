@@ -409,7 +409,7 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
-        # the gate's record predates `rec_live.record_bytes`, the format the verifier reads it in (`RecSetup.checkReads`)
+        # the gate's record predates `rec_live.record_bytes`, the format the verifier reads (`RecSetup.checkReads`)
         transcript = d / f"transcript-{part}.json"
         transcript.write_text(RL.record_bytes(json.loads((g / "inner" / "s1" / "public.json").read_text())))
         p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
