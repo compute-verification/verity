@@ -321,7 +321,8 @@ def test_credit(pass_server):
     open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
     code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a call's A table or a round's
-    input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, and every other
+    input-ids table other than the served Commit's or a Commit record the draw root doesn't bind, round 0's input-ids
+    table outside round 0's request table or bound to another session, and every other
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
@@ -404,7 +405,9 @@ def test_credit(pass_server):
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
                  "window arow: the window registers no round #'s input-ids table",
                  "window arow: the Commit record registers row-table/#/", "twice, so the Commit's row-table/#/",
-                 "which only round # commits"):
+                 "which only round # commits",
+                 "window arow: round #'s request root (requests, the one the window's open root binds) is not",
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration"):
         assert any(part in k for k in CREDITED), part
 
 

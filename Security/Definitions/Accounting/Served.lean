@@ -138,7 +138,9 @@ statement is over the declared circuit; these are the checks that make its `comm
   call's A table root equal to the Commit's root of its linear's input (ROOTS1, RT4-INT-14), so the A rows a call
   commits are the linear's input as the Commit commits it. Layer 0's input alike: round `r`'s input-ids table (slot
   i's input token id, `ids@<r>`) under round `r`'s root before its coin, its root, domain and leaf count the Commit's
-  `input-ids/<r>`, so the token ids the Commit's first layer reads are the ones fixed under that root; the Commit
+  `input-ids/<r>`, so the token ids the Commit's first layer reads are the ones fixed under that root; round 0's
+  input-ids table also inside round 0's request table, under the window's open root before the salt coin
+  (`credit.requests_root`), its domain binding the window's session in place of that root; the Commit
   record's digest under the manifest's `calls_root`, before the draw coin (`credit._arow`). In `zTree` a unit's record (`PouwH1TileZy_v1`'s `zy`, which
   its proof reads at a committed table, `--registered`) is among them: its call's record table (h1_prove's `zy@<c>`),
   under round `r`'s root before its coin;
