@@ -45,8 +45,8 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
-  `COORDS`), by C-Flock's `UnitStager` on the rows the window lays out (`compose_circuit.py --template`, once per template, every
-  chunk on that circuit), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
+  `COORDS`, or a MoeSum or all-reduce column block, `COLS`), by C-Flock's `UnitStager` on the rows the window lays out
+  (`compose_circuit.py --template`, once per template, every chunk on that circuit), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's

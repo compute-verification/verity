@@ -23,9 +23,9 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
-template's units (``CHUNKED``: a ``ScaledMmS8Coordinate`` or a ``COORDS`` coordinate) are split into consecutive chunks of at most
-its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes it; ``chunk_caps`` writes the
-entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
+template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate or a ``COLS`` column block) are split
+into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
+it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
@@ -62,7 +62,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
                                    a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
-                                   in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row
+                                   in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
+                                   chunked (``chunk_cap``), v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
   ``AllReduceResidualMnnvl_v1{N=w,..}``, ``RmsNormMnnvl_v1{..}``  the parts of every ``AllReduceRmsNormMnnvl_v1`` row (``PARTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
@@ -100,7 +101,7 @@ from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, 
                                                     part, template, unit_templates)
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord")
+CHUNKED = ("s8", "coord", "cols")
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -193,15 +194,20 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (``CHUNKED``) are consecutive chunks of at most its ``caps`` entry, one member each, on its
     `chunk_rows.unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's
-    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` coordinate is one member of word rows."""
+    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS`` template is one member of word rows."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
         layout = template(t).layout
+        if layout == "cols":
+            axis = COLS[spec_base(template(t).word)]
+            n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
+        elif layout in CHUNKED:
+            n = sum(int(x[3]["statics"]["N"]) for x in rs)
         if layout in CHUNKED and (layout == "s8" or caps is not None):
-            n, cap = sum(int(x[3]["statics"]["N"]) for x in rs), (caps or {}).get(t)
+            cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
                 raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
@@ -226,12 +232,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                           tables=(("x", rx), ("w", rw)))
         elif layout in ("coord", "cols", "part"):
             params, ret = template(t).fn.signature()
-            if layout == "coord":
-                n = sum(int(x[3]["statics"]["N"]) for x in rs)
-            elif layout == "cols":
-                axis = COLS[spec_base(template(t).word)]
-                n = sum(int(x[3]["statics"][axis]) // int(spec_statics(template(t).word)[axis]) for x in rs)
-            else:
+            if layout == "part":
                 n = len(rs)
             p = part(template(t).word, r["spec"])
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
@@ -408,6 +409,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
         entries.append([lo, lo + nh, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
                         ",".join(str(d["members"][j][0]) for j in mine), int(d["row"]), int(r["i"])])
         lo += nh
+    if lo - m.base != m.n:
+        raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, `read_all`)")
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
     return data, entries
 
@@ -599,8 +602,8 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
         layout = template(t).layout
         if layout == "s8":
             out += _read_s8(mine, rs, store, weights, arrivals)
-        elif layout == "coord" and mine[0].name:
-            out += CR.split(mine, *_read_coord(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
+        elif layout in CHUNKED and mine[0].name:
+            out += CR.split(mine, *read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
         else:
             out.append(read(mine[0], rs, store, weights, arrivals))
         at += len(mine)
