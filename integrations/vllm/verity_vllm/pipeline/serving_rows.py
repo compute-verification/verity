@@ -52,8 +52,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
                                    row table (one per engine step and op_path), and the ``w`` table its own rows
   ``MoeExpertFp8Gemm(W)_v1{N=1,..}``  every coordinate n of the rows of that Definition at any N (the expert-indexed pair GEMMs,
-                                   ``COORDS``): ``in<g>`` per argument group, the leading ones whole and the last two
-                                   ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert -> ``out.<member>``, the row's output
+                                   and ``FlashInferFp8Linear_v1{K=..,N=1}``, ``COORDS``): ``in<g>`` per argument group, the
+                                   leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert
+                                   (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
                                    word n (`_read_coord`); packed ports, one index entry per row
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
@@ -86,8 +87,9 @@ from verity_vllm.commit import serving_rows as CS
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
 CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
-#: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column), the ``coord`` layout
-COORDS = ("MoeExpertFp8Gemm_v1", "MoeExpertFp8GemmW_v1")
+#: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
+#: word with the row's quantisation of its own), the ``coord`` layout; each family's E and G where its statics have none
+COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128}}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
@@ -570,8 +572,11 @@ def _read_coord(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     """A ``COORDS`` template's units (the ``coord`` layout), row by row, then coordinate: unit (row, n) reads the row's leading
     operands whole and, for its last two, ``w`` ([E][N][K]) and ``ws`` ([E][cdiv(N, G)][K/G]), ``w[:, n, :]`` and
     ``ws[:, n // G, :]`` of every expert, which are the template's ``w`` and ``ws`` at N = 1; its output is the row's output
-    word n.  Every port is its elements' bytes (``Template.packed``).  One index entry per row, the range of its N units.  A
-    weight stack is read once per distinct slice group."""
+    word n.  A family whose statics have no E or G takes ``COORDS``' (FlashInfer's linear: one expert, 128-wide blocks).  Every
+    port is its elements' bytes (``Template.packed``).  One index entry per row, the range of its N units.  A weight stack is
+    read once per distinct slice group."""
+    from verity_vllm.query.program_view import spec_base
+
     tp = template(m.template)
     bits = tp.packed or (16,) * (len(m.rows) + 1)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
@@ -592,7 +597,7 @@ def _read_coord(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     lo = m.base
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
-        S = d["statics"]
+        S = {**COORDS[spec_base(tp.word)], **d["statics"]}
         E, K, N, G = (int(S[k]) for k in ("E", "K", "N", "G"))
         NB, KG = -(-N // G), K // G
         if len(r["args"]) != len(m.rows):
