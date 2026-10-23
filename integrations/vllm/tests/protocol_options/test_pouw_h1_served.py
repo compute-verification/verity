@@ -620,13 +620,15 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
         assert all(G.verify_read(rc.domain, rc.root, t, rc.bcs[t], rc.path(t), SV.V2) for t in range(n))
 
 
-def test_each_calls_public_table_is_the_one_credit_builds_and_a_row_off_opens_none_of_it():
+def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_a_row_off_opens_none_of_them():
     """Each call's ``pub@<c>`` is registered at its step's last call of K, once root(``a/<K>@<s>``) and root(``b/<K>``)
     exist, and is the public table core's `credit.registered_file` builds from the descriptor, the window's entries, its
     open root and its Program salt: the same value, root, rows, words and domain, row t `core_check.public_words` of the
     salt, u0 + t and the call's two roots under `core_check.public_row_salt` of the open root; and the call's
     ``--registered`` file is credit's, the verifier-built ok rows (o1) included, every pub row opening credit's root. A table with one row off, under the
-    same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's."""
+    same salts, has another root, which `credit._verified` refuses a session for, and its row opens none of credit's.
+    At close the window commits its ok rows (`Served.ok`, o1) at credit's root, in no entry: a window whose entries
+    name them is refused."""
     run, _ws, _got = _window(W1, receipts=_Receipts())
     served, pre = run.served, SV.PREFIX
     assert not served.refused and served.tables()[-2 * len(run.calls):-len(run.calls)] == [
@@ -660,6 +662,15 @@ def test_each_calls_public_table_is_the_one_credit_builds_and_a_row_off_opens_no
         off = NR.commit(program, r.value, words, run._key, 0, True, b"".join(r.salts), window=served.root)
         assert off.root.hex() != pub["root"] and off.domain.domain_id == r.domain.domain_id
         assert not G.verify_read(r.domain, bytes.fromhex(pub["root"]), t, off.bcs[t], off.path(t), SV.V2)
+        ok = mine["ports"][CR.OK_PORT]
+        assert (ok["value"], ok["root"], ok["leaves"], ok["domain"]) == (
+            served.ok.value, served.ok.root.hex(), served.ok.leaves, served.ok.domain.domain_id.hex())
+        assert all(G.verify_read(served.ok.domain, bytes.fromhex(ok["root"]), u, served.ok.bcs[u], served.ok.path(u),
+                                 SV.V2) for u in range(u0, u0 + n))
+    assert served.ok.value == pre + "ok" and served.ok.value not in [e["value"] for e in served.entries()]
+    assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
+    assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
+                              served.steps, run._salt.hex())[1][0] == "registration"
 
 
 def test_receipts_off_the_units_receipt_width_are_refused():
