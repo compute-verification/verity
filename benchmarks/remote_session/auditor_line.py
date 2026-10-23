@@ -60,6 +60,7 @@ import argparse
 import copy
 import hashlib
 import json
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -212,6 +213,18 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     return {**out, "ok": why is None, "reason": why}
 
 
+def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
+    """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
+    the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
+    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.Coins.ahead`) after it came
+    back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
+    that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
+    of the pairs. None for a session of fewer than four coins."""
+    h = len(Rv) // 2
+    rates = [((Ra[i + h] - Ra[i]) / (Rv[i + h] - Rv[i]) - 1) * 1e6 for i in range(h) if Rv[i + h] != Rv[i]]
+    return statistics.median(rates) if h >= 2 and rates else None
+
+
 def cross_check(verifier_seen: list[dict], auditor: list[dict]) -> dict:
     """The challenger's clock held to the verifier's stamps: coin intervals, rate and each group's L on both."""
     Rv, Ra = [w["released_ns"] for w in verifier_seen], [w["released_ns"] for w in auditor]
@@ -219,8 +232,7 @@ def cross_check(verifier_seen: list[dict], auditor: list[dict]) -> dict:
     Lv, La = group_l(verifier_seen), group_l(auditor)
     return {"coin_interval_auditor_minus_verifier_ms": q([(Ra[g + 1] - Ra[g]) - (Rv[g + 1] - Rv[g])
                                                           for g in range(n - 1)]),
-            "rate_auditor_over_verifier_minus_1_ppm": ((Ra[-1] - Ra[0]) / (Rv[-1] - Rv[0]) - 1) * 1e6
-            if n > 1 and Rv[-1] != Rv[0] else None,
+            "rate_auditor_over_verifier_minus_1_ppm": clock_rate_ppm(Rv, Ra),
             "L_auditor_ms": q(La), "L_verifier_ms": q(Lv), "L_auditor_minus_verifier_ms": q(
                 [a - v for a, v in zip(La, Lv)])}
 

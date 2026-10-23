@@ -435,3 +435,15 @@ def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_na
         assert str(e.value) == (f"auditor_line: the run's record names {named} (verifier.json's gate sessions, "
                                 f"{request}'s --challenger-peer): pass --peer NAME, the verifier machine's name in the "
                                 "challenger host's /etc/vy/peers")
+
+
+def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
+    to end reads the round trip over the session's span."""
+    ms = 1_000_000
+    Rv = [g * 110 * ms for g in range(96)]
+    Ra = [round(t * (1 + 30e-6)) + 7_000 * ms + (100 * ms if g < 2 else -50 * ms) for g, t in enumerate(Rv)]
+    assert al.clock_rate_ppm(Rv, Ra) == pytest.approx(30, abs=0.01)
+    assert ((Ra[-1] - Ra[0]) / (Rv[-1] - Rv[0]) - 1) * 1e6 < -14_000
+    assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
