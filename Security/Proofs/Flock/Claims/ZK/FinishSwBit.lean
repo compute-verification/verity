@@ -27,8 +27,8 @@ theorem foldl_ite_add (b : ℕ → Bool) (f : ℕ → F128) : ∀ (L : List ℕ)
     rw [foldl_ite_add b f L]
     congr 1
     by_cases hb : b v = true
-    · rw [if_pos hb, if_pos hb]
-    · rw [if_neg hb, if_neg hb, Flock.RecAlgebra.add_zero_f128]
+    · rw [ite_eq_left hb, ite_eq_left hb]
+    · rw [ite_eq_right hb, ite_eq_right hb, Flock.RecAlgebra.add_zero_f128]
 
 /-- **Bit `v` of the packed table's word `y` is the trace's bit `128 y + v`.** -/
 theorem packed_bit (tr : Trace) (m : ℕ) {y v : ℕ} (hy : y < 2 ^ (m - 7)) (hv : v < 128) :
