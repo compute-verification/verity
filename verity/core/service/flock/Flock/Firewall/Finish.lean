@@ -159,15 +159,43 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
 
 namespace Fast
 
+/-- `t.map f` in tasks of `2^12` entries. -/
+def parMap (f : F128 → F128) (t : Array F128) : Array F128 :=
+  let a := t.size / 4096
+  Link.parRange (fun i => f t[i]!) a 4096 ++ (Array.range (t.size - a * 4096)).map fun j => f t[a * 4096 + j]!
+
+theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
+  have hm : t.map f = (Array.range (t.size / 4096 * 4096 + (t.size - t.size / 4096 * 4096))).map fun i => f t[i]! := by
+    rw [Nat.add_sub_cancel' (Nat.div_mul_le_self _ _)]
+    apply Array.ext
+    · simp
+    · intro i h1 h2
+      simp only [Array.getElem_map, Array.getElem_range]
+      rw [getElem!_eq t (by simpa using h1)]
+  rw [hm, Array.range_add, Array.map_append, Array.map_map, parMap, Link.parRange_eq]
+  rfl
+
+/-- `eqTable` with each step's two halves in tasks (`parMap`). Not a `@[csimp]` of `eqTable`, which the verifier's
+compiled path reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
+def eqTablePar (r : Array F128) : Array F128 :=
+  r.foldl (fun t rj => parMap (· * (rj + 1)) t ++ parMap (· * rj) t) #[1]
+
+theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
+  unfold eqTablePar eqTable
+  congr
+  funext t rj
+  rw [parMap_eq, parMap_eq, eqStep]
+
 /-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
 `s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
 def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
-  let eY := eqTable (c.x.extract 1 c.x.size)
+  let eY := eqTablePar (c.x.extract 1 c.x.size)
   let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
   (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
 
 theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
   unfold switchVec switchVecFast
+  rw [eqTablePar_eq]
   apply Array.map_congr_left
   intro v hv
   have hv := Array.mem_range.1 hv
@@ -180,7 +208,7 @@ theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchV
 /-- `basisVals` as compiled code computes it: each claim's `Φ_k(eq(z_k, y))` from its byte tables (`byteTable_sum`), in
 tasks of `2^12` points. -/
 def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
-  let tabs := sws.map fun sw => (sw.gamma, eqTable sw.z, byteTable (eqTable sw.rpp))
+  let tabs := sws.map fun sw => (sw.gamma, eqTablePar sw.z, byteTable (eqTable sw.rpp))
   let k := min l 12
   Link.parRange (fun y => tabs.foldl (fun acc (g, ez, tb) =>
       let v := ez[y]!
@@ -191,7 +219,7 @@ theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = b
   rw [Link.parRange_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
   apply Array.map_congr_left
   intro y _
-  simp only [Array.foldl_map, byteTable_sum]
+  simp only [Array.foldl_map, byteTable_sum, eqTablePar_eq]
 
 end Fast
 
