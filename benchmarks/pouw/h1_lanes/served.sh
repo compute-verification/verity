@@ -19,6 +19,8 @@
 #      or H1S_SMOKE=K: a stand-in window at K (served.py smoke), the harness's own check
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
+#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
+#      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
 set -uo pipefail
 export HZ_CONFIGS=h1-served HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -30,11 +32,20 @@ PAR=${H1L_PAR:-8} LPAR=${H1L_LPAR:-8} K=${H1L_K:-4096} FW=${H1S_FIREWALL:-1}
 WK=$W/work OP=$W/opened.json
 mkdir -p "$OUT/lean" "$WK"
 setup
-if [ "$FW" = 1 ]; then
+if [ "$FW" = 1 ] && [ -n "${H1S_FIREWALL_TGZ:-}" ]; then
+  FD=$HZ_CACHE/firewall-$(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-16)
+  export FC_FIREWALL_LEAN=$FD/.lake/build/bin/flock-firewall
+  log "firewall frame from $H1S_FIREWALL_TGZ ($(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-16)), not this tree's"
+  (exec 8>"$FD.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || { rm -rf "$FD" && mkdir -p "$FD" \
+    && tar -xzf "$H1S_FIREWALL_TGZ" -C "$FD" --strip-components=4 && cd "$FD" && lake build flock-firewall; }) \
+    > "$OUT/build-firewall.log" 2>&1
+elif [ "$FW" = 1 ]; then
   export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
     > "$OUT/build-firewall.log" 2>&1
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame beside $LEAN"; exit 1; }
+fi
+if [ "$FW" = 1 ]; then
+  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame at $FC_FIREWALL_LEAN"; exit 1; }
   sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 
