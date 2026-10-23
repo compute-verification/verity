@@ -1371,7 +1371,7 @@ extra claims within a `u64`'s count, `hS`). There the plan's coin counts (`repPl
 `loop_round_in_plan`) are the placeholder's schedule's (`Count.plan_sched`), where each table's link points are the
 session's (`hP`: its `m_pts` the session's, nonzero, and the link within `Frames.COIN_MAX`); the loop's state there is
 outside the inner proof (`repState_inner`). At the inner proof's rounds, past the rep's schedule (`hO`): `ProgChecks`' own
-conclusion. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or the loop has no round in the
+conclusion, which `FrameInner`'s `ofLoop_progChecks` proves. Everywhere else `ProgChecks` asks nothing (`ofLoop_progChecks_round`), or the loop has no round in the
 device's place (`ofLoop_checkAt_empty`). -/
 theorem ofLoop_progChecks_of (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit

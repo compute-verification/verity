@@ -24,7 +24,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 
 * `Internal.credited` is `credit._credited`: each manifest row (the window's calls, in order) carries its call's verdict as
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
-  `json.dumps(row, sort_keys=True)`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
+  `json.dumps(row, sort_keys=True)`, and the window's Commit record's digest, `commitOf?`), the last round's receipts and every round's root and coin (`drawRoot`) must be the
   one root the challenger's log shows its draw coin followed, read through the session the auditor's signed ledger opens
   for the window (`trustedSessionOf`). So a credit bit changed after the draw coin is refused.
 * `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
@@ -38,29 +38,38 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 * `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
   on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
-  its descriptor, `periodWeights`, then `Internal.outcome`'s rule under the served window's arguments (the stream its
+  its descriptor, `periodWeights`, `Internal.arow`, then `Internal.outcome`'s rule under the served window's arguments (the stream its
   root, the registration its draw root, the receipt `{"receipts": …}`) and `Internal.registration`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window of it proving
   the period's committed circuit (`creditedSession`) and credited.
 * `Internal.aLink` is `credit._a_link`: each registered A value (`aValue?`) is the frame-v3 SHA-512 tree over the
   aligned subtrees each round's root commits (`roundRoot`). Of S rounds, round s's tile a window's `…/a/<K>` of L rows
-  over `[s·L/S, (s+1)·L/S)`, and a call's A table `…/a/<K>@<c>` (`h1window.table`) is committed whole by its call's
-  round, `c / (C/S)` of the window's C calls, and listed by no other.
+  over `[s·L/S, (s+1)·L/S)`, and round s's A table of K `…/a/<K>@<s>` (`h1window.table`) is committed whole by round s
+  and listed by no other; round s's input-ids table `…/ids@<s>` is committed whole by round s.
+* `Internal.arow` is `credit._arow` (ROOTS1): round s's A table of K `…/a/<K>@<s>` holds M rows for each of the round's
+  calls of K (`stepTables`) and has the root, domain and leaf count of the Commit record's `row-table/<s>/k<K>`
+  (`commitRows`), and round s's `…/ids@<s>` those of its `input-ids/<s>` (`commitIds`), so the A rows a call's units
+  read are the served Commit's. Round 0's
+  `…/ids@0` is also inside round 0's request table: round 0's `requests`, which the window's open root binds, is
+  `requestsRoot` of its `request_table` and ids@0's root, so the prompt tokens are fixed before the salt coin.
 * `Internal.registration` is `credit._registration`: each drawn unit's proof outcome is the verifier of record's
   verdict for its session (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against, and the
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
-  committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`), the window's open root
-  (`SampledProofs.Registered.domainAt`, PRF-127); each proof was verified against that descriptor, opened only values
+  committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
+  the window's open root (`SampledProofs.Registered.domainAt`, PRF-127), for `…/ids@0` the window's session; each
+  proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
-  its own call's `…/a/<K>@<call>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
+  its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
   proof opened, under this window's registration.
 * `Internal.weights` is `credit._weights`: each K's `<PREFIX>b/<K>` registered once, all of K's B rows under the
   registered domain of its name and the window's circuit, binding no window, and `weightsRoot` of their
   roots, the window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows,
   codes and s_w, were fixed before its salt. `window` composes it right after `layoutOf` (`periodWeights`), and holds their root to the
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
+  That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
+  `credit.py` reads, embedded here), else the period counts nothing.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -87,13 +96,14 @@ def DRAW_FORM : String := "the window's draw is not an object whose receipts are
 def NO_DRAW : String :=
   "the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its draw root"
 def DRAW_ROOT : String :=
-  "the window's draw root is not over its manifest (each call's credit bit among it), its last round's receipts and " ++
-  "every round's root and coin"
+  "the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its last " ++
+  "round's receipts and every round's root and coin"
 def CHANGED : String :=
-  "the draw root over the manifest (each call's credit bit among it), its last round's receipts and every round's " ++
-  "root and coin is not the one root the challenger's log shows its draw coin followed: a credit bit or a call " ++
-  "changed after the draw coin, or the draw opened after another root. Commit every call's credit bit in its " ++
-  "manifest row before the draw root, and never change it after the draw coin"
+  "the draw root over the manifest (each call's credit bit among it), its Commit record, its last round's " ++
+  "receipts and every round's root and coin is not the one root the challenger's log shows its draw coin " ++
+  "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after " ++
+  "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw " ++
+  "root, and never change them after the draw coin"
 def K_FIELD : String := "draw_k"
 def WEIGHTS_FIELD : String := "weights_root"
 def MAX_K : Nat := 2 ^ 24
@@ -110,7 +120,7 @@ def DRAW_ARGS : String :=
   "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
   "printable ASCII strings"
 def WINDOW_KEYS : List String :=
-  ["calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window"]
+  ["calls", "commit", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window"]
 def PERIOD_KEYS : List String := WINDOW_KEYS
 def WINDOWS_FORM : String :=
   "the period's windows are not a list of each window's evidence {" ++ ", ".intercalate PERIOD_KEYS ++ "}, " ++
@@ -128,8 +138,22 @@ def PROOFS_FORM : String :=
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
 def NO_A : String :=
-  "the window registers no A value (…/a/<K>, or a call's …/a/<K>@<call>), so nothing ties its units' A rows to " ++
+  "the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to " ++
   "the round roots: register the window's A values"
+def COMMIT_TAG : ByteArray := "verity/pouw/h1/commit/v1".toUTF8.push 0
+/-- The served Commit's record: one-stage's registration record with registered values. -/
+def COMMIT_FORMAT : String := "verity/registration/v2"
+def COMMIT_FORM : String :=
+  "the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in canonical " ++
+  "JSON whose registered values are a list of objects: the served Commit runs in the window's engine, and its " ++
+  "record is bound under the window's calls_root before the draw coin"
+
+/-- `credit.commit_rows`: the Commit's name for the A rows (its AROW) of the window's round `s`'s calls of contraction
+`k`, its A table of K `…/a/<K>@<s>`. -/
+def commitRows (s k : Nat) : String := s!"row-table/{s}/k{k}"
+
+/-- `credit.commit_ids`: the Commit's name for its step's input token ids at the window's round `s`. -/
+def commitIds (s : Nat) : String := s!"input-ids/{s}"
 
 def noBit (i : Nat) : String :=
   s!"manifest row {i} has no credit bit: the serving process commits each call's verdict as `{CREDIT}` (true or " ++
@@ -172,16 +196,38 @@ def dumps : Nat → Json → String
     "{" ++ ", ".intercalate ((fields j).map fun (k, v) => SampledProofs.PyJson.str k ++ ": " ++ dumps d v) ++ "}"
 
 /-- `calls_root`: SHA-512 over each row as `json.dumps(row, sort_keys=True)` and a newline, under `CALLS_TAG` and the
-window's Program salt; with the served trees' digest, SHA-512 of that and it. -/
-def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) : ByteArray :=
+window's Program salt; with the served trees' digest, SHA-512 of that and it; with the Commit record's digest, SHA-512
+under `COMMIT_TAG` of that and it. -/
+def callsRoot (salt : ByteArray) (rows : List Json) (served : Option ByteArray) (commit : Option ByteArray := none) :
+    ByteArray :=
   let h := Flock.Sha512.hash (rows.foldl (fun acc r => acc ++ (dumps DEPTH r ++ "\n").toUTF8) (CALLS_TAG ++ salt))
-  match served with
-  | none => h
-  | some s => Flock.Sha512.hash (h ++ s)
+  let d := match served with
+    | none => h
+    | some s => Flock.Sha512.hash (h ++ s)
+  commit.elim d fun c => Flock.Sha512.hash (COMMIT_TAG ++ d ++ c)
+
+/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
+def isHexBytes (s : String) : Bool :=
+  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
+/-- `credit.commit_of`: the digest of the window's Commit record `commit` (the bytes in lowercase hex of its canonical
+JSON, the bytes `registration.digest` hashes under its format) and its registered values; none when it is not one. -/
+def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
+  (str? commit).bind fun s =>
+  if isHexBytes s then
+    (hex? commit).bind fun raw =>
+    (String.fromUTF8? raw).bind fun text =>
+    (Json.parse text).toOption.bind fun j =>
+    (SampledProofs.PyJson.canonical j).toOption.bind fun t =>
+    (Json.getArr? (get j "registered")).toOption.bind fun xs =>
+    if t == text && isObj j && get j "format" == Json.str COMMIT_FORMAT && xs.all isObj then
+      some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ raw), xs)
+    else none
+  else none
 
 /-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
 until every other step accepts. -/
-def Internal.credited (key ledger window session salt calls served rounds draw : Json) : R (List Nat) := do
+def Internal.credited (key ledger window session salt calls served commit rounds draw : Json) : R (List Nat) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let (c, received) ← (trustedSessionOf ledger window k session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
@@ -203,6 +249,7 @@ def Internal.credited (key ledger window session salt calls served rounds draw :
     | j => match digest? j with
       | some b => pure (some b)
       | none => throw ("manifest", SERVED_FORM)
+  let cd ← (commitOf? commit).elim (throw ("commit", COMMIT_FORM)) pure
   let .arr xs := rounds | throw ("rounds", "the round log is not a list")
   let mut parts : List Part := []
   for (x, r) in xs.toList.zipIdx do
@@ -211,7 +258,7 @@ def Internal.credited (key ledger window session salt calls served rounds draw :
     let o ← (LiveOpening.ofJson (get x "coin")).mapError fun e => ("rounds", s!"round {r}'s coin: {e}")
     parts := parts ++ [.bytes root, .bytes o.coin]
   let some receipts := (if isObj draw then digest? (get draw "receipts") else none) | throw ("draw", DRAW_FORM)
-  let root := tagged DRAW_TAG ([.bytes (callsRoot s rows servedB), .bytes receipts] ++ parts)
+  let root := tagged DRAW_TAG ([.bytes (callsRoot s rows servedB (some cd.1)), .bytes receipts] ++ parts)
   unless (str? (get draw "root")) == some (Flock.hexOf root) do throw ("draw", DRAW_ROOT)
   let got := (received.lookup PouwWindow.DRAW).getD []
   if got.isEmpty then throw ("draw", NO_DRAW)
@@ -559,9 +606,9 @@ def canonicalK (k : String) : Bool := !k.isEmpty && k.all Char.isDigit && !k.sta
 
 def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
-/-- `credit.a_value`: a registered A value's contraction and call, as their digits: a name whose last two parts are `a`
-and either a contraction (`…/a/<K>`, the window's A rows of K), its call none, or a contraction and a call
-(`…/a/<K>@<call>`, that call's A table), K a canonical decimal. -/
+/-- `credit.a_value`: a registered A value's contraction and round, as their digits: a name whose last two parts are `a`
+and either a contraction (`…/a/<K>`, the window's A rows of K), its round none, or a contraction and a round
+(`…/a/<K>@<s>`, that round's A table of K), K a canonical decimal. -/
 def aValue? : Json → Option (String × Option String)
   | .str v => match (v.splitOn "/").reverse with
     | last :: "a" :: _ => match last.splitOn "@" with
@@ -571,8 +618,21 @@ def aValue? : Json → Option (String × Option String)
     | _ => none
   | _ => none
 
-/-- `credit.is_a`: `…/a/<K>` or a call's `…/a/<K>@<call>` (`aValue?`). -/
+/-- `credit.is_a`: `…/a/<K>` or a round's `…/a/<K>@<s>` (`aValue?`). -/
 def isA (v : Json) : Bool := (aValue? v).isSome
+
+/-- `credit.ids_step`: an input-ids table's round, a name whose last part is `ids@<s>` (`<prefix>ids@<s>`, slot i's
+input token id at round s, s a canonical decimal). -/
+def idsStep? (v : Json) : Option Nat :=
+  (str? v).bind fun v =>
+  let last := (v.splitOn "/").getLastD ""
+  let s := String.ofList (last.toList.drop 4)
+  if last.startsWith "ids@" && (s == "0" || canonicalK s) then some s.toNat! else none
+
+/-- `credit.is_tied`: a value the round roots commit, an A value (`isA`) or an input-ids table (`idsStep?`). -/
+def isTied (v : Json) : Bool := isA v || (idsStep? v).isSome
+
+def what (v : String) : String := if isA (.str v) then "A value" else "input-ids table"
 
 /-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
 value a window registers is its own. -/
@@ -602,10 +662,10 @@ def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 
 /-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
 refusal. Of S rounds, round s's segments of a window's A value `…/a/<K>` of L rows tile its rows `[s·L/S, (s+1)·L/S)`;
-a call's A table `…/a/<K>@<c>` is committed whole by its call's round, the window's `calls` calls being the rounds'
-equal blocks, so round `c / (calls/S)`'s segments tile all its rows and no other round lists it. A step of `window`,
-which first holds the round roots to the ones the challenger received (`roundsCheck`). -/
-def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
+round s's A table of K `…/a/<K>@<s>` is committed whole by round s, whose segments tile all its rows, and no other
+round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike. A step of
+`window`, which first holds the round roots to the ones the challenger received (`roundsCheck`). -/
+def Internal.aLink (rounds entries : Json) : R Unit := do
   let some xs := (match rounds with
       | .arr a => if a.isEmpty then none else some a.toList
       | _ => none) | aLinkRefuse LOG_FORM
@@ -623,44 +683,45 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
     segs := segs ++ [p]
   let .arr es := entries | aLinkRefuse ENTRIES_FORM
   unless es.all isObj do aLinkRefuse ENTRIES_FORM
-  let a := es.toList.filterMap fun e => if isA (get e "value") then (·, e) <$> str? (get e "value") else none
-  if a.isEmpty then aLinkRefuse NO_A
+  let a := es.toList.filterMap fun e => if isTied (get e "value") then (·, e) <$> str? (get e "value") else none
+  unless a.any (isA <| .str ·.1) do aLinkRefuse NO_A
   let mut names : List String := []
   for (v, _) in a do
-    if names.contains v then aLinkRefuse s!"the window registers A value {v} twice"
+    if names.contains v then aLinkRefuse s!"the window registers {what v} {v} twice"
     names := names ++ [v]
   for (p, r) in segs.zipIdx do
     for (v, _) in p do
       unless names.contains v do
-        aLinkRefuse s!"round {r} lists segments of {v}, which is no registered A value of the window"
+        aLinkRefuse (s!"round {r} lists segments of {v}, which is no registered A value or input-ids table of the " ++
+          "window")
   let steps := xs.length
   for (v, e) in a do
     let (some root, some domain, some count) := (digest? (get e "root"), digest? (get e "domain"), nat? (get e "leaves"))
-      | aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
-          "verifier hashes its pads)")
+      | aLinkRefuse (s!"registered {what v} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} " ++
+          "(the verifier hashes its pads)")
     unless 1 ≤ count && count ≤ MAX_ROWS do
-      aLinkRefuse (s!"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the " ++
-        "verifier hashes its pads)")
-    let (per, own) ← (match (aValue? (.str v)).bind (·.2) with
-      | none => do
+      aLinkRefuse (s!"registered {what v} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} " ++
+        "(the verifier hashes its pads)")
+    let (per, own) ← (match idsStep? (.str v), (aValue? (.str v)).bind (·.2) with
+      | some s, _ => do
+        if s ≥ steps then
+          aLinkRefuse s!"registered input-ids table {v} is round {s}'s, and the window has {steps} rounds"
+        pure (count, some (s!"round {s}'s input-ids table", s))
+      | none, none => do
         if count % steps != 0 then
           aLinkRefuse s!"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
         pure (count / steps, none)
-      | some c => do
-        let c := c.toNat!
-        if c ≥ calls then
-          aLinkRefuse s!"registered A value {v} is call {c}'s A table, and the window has {calls} calls"
-        if calls % steps != 0 then
-          aLinkRefuse (s!"the window's {calls} calls are not its {steps} rounds' equal blocks, so the round whose " ++
-            s!"root commits call {c}'s A table {v} is not fixed")
-        pure (count, some (c, c / (calls / steps))))
+      | none, some s => do
+        let s := s.toNat!
+        if s ≥ steps then
+          aLinkRefuse s!"registered A value {v} is round {s}'s A table, and the window has {steps} rounds"
+        pure (count, some (s!"round {s}'s A table", s)))
     let mut have_ : Std.HashMap (Nat × Nat) ByteArray := {}
     for (p, r) in segs.zipIdx do
-      if let some (c, o) := own then
+      if let some (whose, o) := own then
         if r != o then
           unless ((p.lookup v).getD []).isEmpty do
-            aLinkRefuse (s!"round {r} lists segments of {v}, call {c}'s A table, which only its call's round {o} " ++
-              "commits")
+            aLinkRefuse s!"round {r} lists segments of {v}, {whose}, which only round {o} commits"
           continue
       let (start, stop) := if own.isSome then (0, count) else (r * per, (r + 1) * per)
       let untiled := s!"round {r}'s segments of {v} don't tile its rows [{start}, {stop}) in order, each an aligned " ++
@@ -672,9 +733,9 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) : R Unit := do
         pos := pos + 2 ^ level
       if pos != stop then aLinkRefuse untiled
     unless treeRoot domain count have_ == some root do
-      aLinkRefuse (s!"registered A value {v}'s root is not the tree over the segments the round roots commit: its " ++
-        "rows are not the ones fixed under each round's root before that round's coin. Register the A value whose " ++
-        "rows each round's root committed")
+      aLinkRefuse (s!"registered {what v} {v}'s root is not the tree over the segments the round roots commit: its " ++
+        s!"rows are not the ones fixed under each round's root before that round's coin. Register the {what v} " ++
+        "whose rows each round's root committed")
 
 /-- `credit._entry`: a registered value's entry as one-stage's registration names it (`registered.ENTRY_KEYS`, with
 `word_bits` only when it is not 16): its value printable ASCII, its root a SHA-512 digest, its rows and words from 1
@@ -691,20 +752,26 @@ def entryOk (e : Json) : Bool :=
 /-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
 holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
 (`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
-every other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds
-the window's open root (PRF-127). -/
-def domainOf (program window : String) (e : Json) : R String := do
+round 0's input-ids table (`…/ids@0`, `idsStep?` 0), whose root the window's open root contains (`requestsRoot`,
+`Internal.arow`), binds the window's session `session` in that root's place (`domainBound` at `"session"`); every
+other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds the
+window's open root (PRF-127). -/
+def domainOf (program window session : String) (e : Json) : R String := do
   let v := (str? (get e "value")).getD ""
-  let d ← (SampledProofs.Registered.domainAt program v ((nat? (get e "words")).getD 0) ((nat? (get e "leaves")).getD 0)
-    ((nat? (get e "word_bits")).getD 16) (if isHeld (.str v) then none else some window)).mapError
-    fun why => ("registration", why)
+  let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
+    (nat? (get e "word_bits")).getD 16)
+  let d ← (if idsStep? (.str v) == some 0 then
+      SampledProofs.Registered.domainBound program v words leaves bits "session" session
+    else SampledProofs.Registered.domainAt program v words leaves bits
+      (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
   pure (Flock.hexOf d)
 
 def otherRegistration (v : String) : String :=
   s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
   s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
-  "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its " ++
-  "session for): the entry is another registration's, another window's or another circuit's"
+  "value other than the weights' …/b/<K> and round 0's …/ids@0, the window's open root, the root the " ++
+  "auditor's ledger opened its session for, for …/ids@0 that session): the entry is another registration's, " ++
+  "another window's or another circuit's"
 
 /-- How deep `leavesOf` reads a type: deeper than Python's recursion limit reads. -/
 def TYPE_DEPTH : Nat := 1000
@@ -782,18 +849,53 @@ def partitionOf (program : String) (shape : Shape) : Json :=
 def READS : String := "verity/registered-reads/v0"
 def SCHEMA_KEY : String := "row_schema"
 
+/-- `credit.step_tables`: each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the
+rounds' equal blocks, in order): `(s, K, calls)` for each K round s's calls have, in order of its first call there,
+`calls` the round's calls of K in call order. Round s's A table of K `<prefix>a/<K>@<s>` holds the M rows of each of
+their A blocks, call after call. Empty when `steps` doesn't divide the calls. -/
+def stepTables (layout : Json) (steps : Nat) : List (Nat × Nat × List Nat) := Id.run do
+  let calls : List String := match get layout "calls" with
+    | .arr xs => xs.toList.filterMap fun x => match x with
+      | .arr #[.str lin, _] => some lin
+      | _ => none
+    | _ => []
+  let ks : List (String × Nat) := match get layout "linears" with
+    | .arr xs => xs.toList.filterMap fun x => match x with
+      | .arr #[.str name, k, _] => (name, ·) <$> nat? k
+      | _ => none
+    | _ => []
+  if steps == 0 || calls.length % steps != 0 then return []
+  let per := calls.length / steps
+  let mut out : List (Nat × Nat × List Nat) := []
+  for s in List.range steps do
+    let mut mine : List (Nat × List Nat) := []
+    for c in List.range' (s * per) per do
+      let k := (ks.lookup (calls.getD c "")).getD 0
+      mine := if (mine.lookup k).isSome then mine.map fun (k', cs) => (k', if k' == k then cs ++ [c] else cs)
+        else mine ++ [(k, [c])]
+    out := out ++ mine.map fun (k, cs) => (s, k, cs)
+  return out
+
+/-- `credit.step_row`: call `call`'s round of the layout's `steps`, its round's calls of its K, and its first row in
+its round's A table of K (`stepTables`): `(s, n, M·j)`. -/
+def stepRow (layout : Json) (steps call : Nat) : Nat × Nat × Nat :=
+  match (stepTables layout steps).find? (·.2.2.contains call) with
+  | some (s, _, cs) => (s, cs.length, ((nat? (get layout "m")).getD 0) * cs.idxOf call)
+  | none => (0, 0, 0)
+
 /-- `credit.registered_file`: the verifier's `--registered` file of call `call`'s statement in the window `layout`
-(one `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shapeOf` `shape`), else the refusal
-(`registration`: the window registers no root, or two, for a value the statement reads). It is
-`h1window.table_reads_file`'s, from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads its A row i
-(port `a_k<K>_<i>`) at row R·ti + i of the call's A table `<prefix>a/<K>@<call>` (M rows), its B row j (`b_k<K>_<j>`) at
+(one `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shapeOf` `shape`, its calls `steps` rounds'
+equal blocks), else the refusal (`registration`: the window registers no root, or two, for a value the statement
+reads). It is `h1window.table_reads_file`'s, from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call,
+reads its A row i (port `a_k<K>_<i>`) at row o + R·ti + i of its round s's A table of K `<prefix>a/<K>@<s>` (M rows for
+each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_k<K>_<j>`) at
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
 t of the call's z table `<prefix>zy@<call>`; every other unit reads none of them. Each value is a row/v2 value of 16-bit
 leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the window's open root `window`
 but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its cost is the window's units,
 once a port: the reads file's form. -/
-def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String) :
-    R Json := do
+def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String)
+    (steps : Nat) : R Json := do
   let num := fun j => (nat? j).getD 0
   let (r, c) := (match get layout "tile" with
     | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
@@ -819,11 +921,12 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   let u0 := (sizes.take call).foldl (· + ·) 0
   let size := sizes.getD call 0
   let per := n / c
-  let a := s!"{shape.pre}a/{k}@{call}"
+  let (s, callsK, at_) := stepRow layout steps call
+  let a := s!"{shape.pre}a/{k}@{s}"
   let zy := s!"{shape.pre}zy@{call}"
   let bv := s!"{shape.pre}b/{k}"
   let shapes : List (String × Nat × Nat) :=
-    [(a, m, tile.a), (zy, size, tile.zy), (bv, (lins.filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0, tile.b)]
+    [(a, m * callsK, tile.a), (zy, size, tile.zy), (bv, (lins.filter (·.2.1 == k)).foldl (fun s x => s + x.2.2) 0, tile.b)]
   let mut root : List (String × String) := []
   for (v, _) in shapes do
     let got : List Json := (match get roots v with
@@ -835,7 +938,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
         s!"{if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
   let population := sizes.foldl (· + ·) 0
   let ports : List (String × String × (Nat → Nat)) :=
-    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => r * (t / per) + i)) ++
+    (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
     (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
     [("zy", zy, fun t => t)]
   let mut out : List (String × Json) := []
@@ -856,11 +959,12 @@ def registrationRefuse {α : Type} (why : String) : R α := throw ("registration
 
 /-- `_registration`'s `held`: the refusal of the registered value `v`'s entry `e`, none when it is one-stage's form and
 its domain is `domainOf`'s. -/
-def held (program window v : String) (e : Json) : R (Option String) := do
+def held (program window session v : String) (e : Json) : R (Option String) := do
   unless entryOk e do
     return some (s!"registered value {v}'s entry is not one-stage's \{value, root, leaves, words, domain} (with " ++
       s!"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
-  pure (if str? (get e "domain") == some (← domainOf program window e) then none else some (otherRegistration v))
+  let d ← domainOf program window session e
+  pure (if str? (get e "domain") == some d then none else some (otherRegistration v))
 
 /-- `_registration`'s call pointer: from call `c`, the last call whose first unit (`starts`, each call's in order) is at
 most `u`. Over units in ascending order its steps total the calls, never the units. -/
@@ -872,22 +976,24 @@ where
 
 /-- `credit._registration`: none when the window's registered `entries` are its own registration's and each drawn unit's
 proof (`proofs`, one accepted outcome a unit, as `proved` holds them) is a session verified against it, else the
-refusal (`registration`). Each A value's domain, and each other value's a proof opened, is `domainOf` the window's open
-root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every registered port
-its session opened (its `registered` finding) is of a value the window registers once, at that value's registered
-root; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's in `ss`) or its own call's
-A table `…/a/<K>@<call>` (the call `layout`'s units place it in, `callAt`), and its K's B rows, the window's
-`<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`). A step of `window`, after `Internal.aLink` has held each A value's
-root to the segments the round roots commit and `periodWeights` each `<prefix>b/<K>` to the weights' root its period
-signed. -/
+refusal (`registration`). Each A value's and input-ids table's domain, and each other value's a proof opened, is
+`domainOf` the window's open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof
+was verified against
+`program`; every registered port its session opened (its `registered` finding) is of a value the window registers once,
+at that value's registered root; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
+in `ss`) or its call's round's A table of K `…/a/<K>@<s>` (the call `layout`'s units place it in, `callAt`, s its round
+of `steps`, its calls the rounds' equal blocks), and its K's B
+rows, the window's `<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`). A step of `window`, after `Internal.aLink` has
+held each A value's root to the segments the round roots commit and `periodWeights` each `<prefix>b/<K>` to the
+weights' root its period signed. -/
 def Internal.registration (window program prefix_ : String) (entries proofs : Json) (ss : Array Flock.Draw.WorkStratum)
-    (layout : Json) : R Unit := do
+    (layout : Json) (steps : Nat) (session : String) : R Unit := do
   let es := match entries with
     | .arr a => a.toList
     | _ => []
   for e in es do
-    if isA (get e "value") then
-      if let some why ← held program window ((str? (get e "value")).getD "") e then registrationRefuse why
+    if isTied (get e "value") then
+      if let some why ← held program window session ((str? (get e "value")).getD "") e then registrationRefuse why
   let names := es.map fun e => str? (get e "value")
   let ps := (match proofs with
     | .arr a => a.toList
@@ -895,6 +1001,9 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
   let mut checked : List String := []
   let starts := ((callWork layout).foldl (fun (xs, at_) (size, _) => (xs.push at_, at_ + size)) (#[], 0)).1
   let mut c := 0
+  let per := max 1 ((match get layout "calls" with
+    | .arr a => a.size
+    | _ => 0) / steps)
   for (u, prog, f) in ps.mergeSort fun a b => a.1 ≤ b.1 do
     let k := ((ss.find? fun s => s.units.any fun (lo, hi) => lo ≤ u && u < hi).map
       fun s => String.ofList (s.template.toList.drop 1)).getD ""
@@ -912,25 +1021,106 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
           s!"{if n > 1 then "twice" else "not"}: its session was verified against another registration than the " ++
           "window's")
       let e := (es.find? fun e => str? (get e "value") == some v).getD .null
-      if !checked.contains v && !isA (.str v) then
-        if let some why ← held program window v e then registrationRefuse why
+      if !checked.contains v && !isTied (.str v) then
+        if let some why ← held program window session v e then registrationRefuse why
       checked := v :: checked
       unless str? (get e "root") == some root do
         registrationRefuse (s!"drawn unit {u}'s proof opened port {port}'s rows of {v} against another root than the " ++
           s!"one the window registered for {v}: its session was verified against another registration, or the " ++
           "window's entry is not the root its sessions opened")
       opened := opened || (match aValue? (.str v) with
-        | some (k', c') => k' == k && (c'.all (· == toString c))
+        | some (k', s') => k' == k && (s'.all (· == toString (c / per)))
         | none => false)
       weights := weights || v == s!"{prefix_}b/{k}"
     unless opened do
-      registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of the " ++
-        "window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's " ++
+      registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c / per} (its call's " ++
+        "round's) of the window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's " ++
         "session with the window's A value registered")
     unless weights do
       registrationRefuse (s!"drawn unit {u}'s proof opened no weights {prefix_}b/{k} of the window, so nothing ties " ++
         "the B rows it proved to the ones its period registered: verify each drawn unit's session with the window's " ++
         "weights registered")
+
+def arowRefuse {α : Type} (why : String) : R α := throw ("arow", why)
+
+/-- `credit.REQUESTS_IDS_TAG`: round 0's request root (`requests`, the one the window's open root binds), its request
+table's root with round 0's input-ids table's root inside (`requestsRoot`). -/
+def REQUESTS_IDS_TAG : String := "verity/pouw/h1/requests/ids/v1"
+def IDS_OUTSIDE : String :=
+  "round 0's request root (requests, the one the window's open root binds) is not requests_root of its request " ++
+  "table's root (request_table) and its input-ids table's root, so round 0's input ids are not fixed before the " ++
+  "salt: commit round 0's input-ids table inside round 0's request table, under the window's open root"
+
+/-- `credit.requests_root`: `tagged` of `REQUESTS_IDS_TAG`, round 0's request table's root `table` and its input-ids
+table's root `ids`. So the window's open root contains ids@0's root, and its rows are fixed before the salt coin. -/
+def requestsRoot (table ids : ByteArray) : ByteArray := tagged REQUESTS_IDS_TAG [.bytes table, .bytes ids]
+
+/-- `credit._same`: `c` has the root, domain and leaf count of `e`, an entry `Internal.aLink` accepted. -/
+def same (e c : Json) : Bool :=
+  get c "root" == get e "root" && get c "domain" == get e "domain" && (nat? (get c "leaves")).isSome
+    && nat? (get c "leaves") == nat? (get e "leaves")
+
+/-- `credit._arow`: none when each round's A table of each K and each round's input-ids table among the window's
+registered `entries` is the Commit's value of the same rows among its record's `registered` (`commitOf?`'s): same root,
+domain and leaf count; else the refusal (`arow`). The window's `layout` (`strata`'s) calls are its round log `rounds`'
+S rounds' equal blocks, and round s's `<prefix>a/<K>@<s>` (`prefix_` the descriptor's `PREFIX`, `stepTables`) holds M
+rows for each of the round's calls of K, call after call, and is the Commit's `commitRows` of s and K; round s's
+`<prefix>ids@<s>` is the Commit's `commitIds` of s. The Commit registers each of those values once. So the A rows a
+call's units read are its linear's input as the served Commit commits it, and the input token ids under each round's
+root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root (`requests`,
+the one its open root binds) is `requestsRoot` of its request table's root (`request_table`) and `<prefix>ids@0`'s, so
+round 0's input ids are fixed before the salt coin. A step of `window`, after `Internal.aLink` has held each to the
+segments the round roots commit, `periodWeights` round 0's request root to the open root, and the manifest to the
+layout's calls. Its cost is the calls and the records' entries. -/
+def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Json) (layout : Json) (prefix_ : String) :
+    R Unit := do
+  let steps := rounds.size
+  let calls : Nat := match get layout "calls" with
+    | .arr xs => xs.size
+    | _ => 0
+  if calls % steps != 0 then
+    arowRefuse (s!"the window's {calls} calls are not its {steps} rounds' equal blocks, so no call's round, " ++
+      "and no Commit value of its rows, is fixed")
+  let ours : Std.HashMap String Json := match entries with
+    | .arr es => es.foldl (fun m e => if isTied (get e "value") then (str? (get e "value")).elim m (m.insert · e)
+        else m) {}
+    | _ => {}
+  let theirs : Std.HashMap String (Array Json) := registered.foldl (fun m e =>
+    (str? (get e "value")).elim m fun v => m.insert v ((m.getD v #[]).push e)) {}
+  let m := (nat? (get layout "m")).getD 0
+  let pairs := (stepTables layout steps).map (fun (s, k, cs) =>
+      (s!"{prefix_}a/{k}@{s}", commitRows s k, s!"round {s}'s A table of K = {k}", some (m * cs.length))) ++
+    (List.range steps).map fun s => (s!"{prefix_}ids@{s}", commitIds s, s!"round {s}'s input-ids table", none)
+  for (v, name, whose, rows) in pairs do
+    let some e := ours.get? v
+      | arowRefuse (s!"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the served " ++
+          "window registers each round's A table of each K and its input-ids table")
+    if let some n := rows then
+      unless nat? (get e "leaves") == some n do
+        arowRefuse (s!"{whose} {v} has {(nat? (get e "leaves")).getD 0} rows, not {n}: it holds the M rows of each " ++
+          "of the round's calls of K, call after call, so a call missing from it reads another call's rows (ROOTS1)")
+    let got := theirs.getD name #[]
+    if got.size != 1 then
+      arowRefuse (s!"the Commit record registers {name} {if got.isEmpty then "not" else "twice"}: the served " ++
+        "Commit registers each round's A table of each K as row-table/<round>/k<K> and each round's input-ids " ++
+        "table as input-ids/<round>, once")
+    unless same e got[0]! do
+      arowRefuse (s!"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its rows " ++
+        "are not the ones the served Commit commits (ROOTS1). The Commit registers the window's own table as its " ++
+        "value, with no tree of its own")
+  let want := pairs.map (·.1)
+  let es := match entries with
+    | .arr a => a.toList
+    | _ => []
+  for e in es do
+    if let some v := str? (get e "value") then
+      if (idsStep? (.str v)).isSome && !want.contains v then
+        arowRefuse (s!"the window registers input-ids table {v}, which is not {prefix_}ids@<s> of any of its " ++
+          s!"{steps} rounds: it registers each round's input-ids table once, under its descriptor's PREFIX")
+  let r0 := rounds[0]?.getD .null
+  let (some table, some ids) := (digest? (get r0 "request_table"),
+      (ours.get? s!"{prefix_}ids@0").bind fun e => digest? (get e "root")) | arowRefuse IDS_OUTSIDE
+  unless get r0 "requests" == .str (Flock.hexOf (requestsRoot table ids)) do arowRefuse IDS_OUTSIDE
 
 def WEIGHTS_TAG : String := "verity/pouw/h1/weights/v1"
 def WINDOW_ROOT_FORM : String := "the window is not {root}, its open root a SHA-512 digest (128 lowercase hex)"
@@ -947,12 +1137,12 @@ def OTHER_WEIGHTS : String :=
   "codes or its s_w, is not the one registered before the window's salt. Register each K's B rows once, before the " ++
   "window opens, and open them at that root"
 
-/-- `credit.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
+/-- `weights.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
 def weightsRoot (roots : List (Nat × ByteArray)) : ByteArray := weightsRootAt 64 WEIGHTS_TAG roots
 
 def weightsRefuse {α : Type} (why : String) : R α := throw ("weights", why)
 
-/-- `credit.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
+/-- `weights.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
 def bWords (k : Nat) : Nat := (k + 5) / 2
 
 def otherWeightsEntry (v : String) (k n : Nat) : String :=
@@ -1009,22 +1199,47 @@ def Internal.weights (window layout entries requests session program prefix_ : J
   unless windowOpenRoot w t s == r do weightsRefuse OTHER_WEIGHTS
   pure w
 
-/-- `credit._HEX`: bytes as lowercase hex, at least one. -/
-def isHexBytes (s : String) : Bool :=
-  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
-
 def noWeights (name : String) : String :=
-  s!"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --weights-root): " ++
+  s!"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --model): " ++
   "the period registers each K's B rows before its first window's salt and opens with their root"
 
+def MODEL_FIELD : String := "model"
+def MODEL_FIX : String :=
+  "open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit pins " ++
+  "(models.json)"
+
+/-- `credit.PINNED_MODELS`: each checkpoint role a period's open may name, with its checkpoint's SHA-512, from the same
+`models.json` `credit.py` reads. Credit counts only an int8 role's weights: an open naming another role signs no
+weights' root, so `committedWeights` refuses its period. -/
+def PINNED_MODELS : List (String × String) :=
+  match Json.parse (include_str "../models.json") with
+  | .ok j => (fields j).filterMap fun (r, e) => (str? (get e "checkpoint_sha512")).map (r, ·)
+  | .error _ => []
+
+def noModel (name : String) : String :=
+  s!"period {name}'s open signs a weights' root but no model ({MODEL_FIELD}, \{name, checkpoint_sha512}), so " ++
+  s!"nothing says which checkpoint it is the root of: {MODEL_FIX}"
+
+def unpinnedModel (name model : String) : String :=
+  s!"period {name}'s open names model {model}, which is no checkpoint role credit pins: {MODEL_FIX}"
+
+def otherCheckpoint (name model : String) : String :=
+  s!"period {name}'s open names model {model} with another checkpoint than the one credit pins for it: {MODEL_FIX}"
+
 /-- `credit.committed_weights`: the weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest) in
-the auditor's ledger, one the challenger's checks have trusted; else the refusal (`weights`). -/
+the auditor's ledger, one the challenger's checks have trusted, its open naming the model that root is of
+(`MODEL_FIELD`), a role `PINNED_MODELS` pins with the same checkpoint; else the refusal (`weights`). -/
 def committedWeights (ledger : Json) (name : String) : R String := do
   let .arr lines := ledger | throw ("weights", noWeights name)
   let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some w := body.bind fun b => if (digest? (get b WEIGHTS_FIELD)).isSome then str? (get b WEIGHTS_FIELD) else none
     | throw ("weights", noWeights name)
+  let m := (body.map (get · MODEL_FIELD)).getD .null
+  let some model := (if keys m == some ["checkpoint_sha512", "name"] then str? (get m "name") else none)
+    | throw ("weights", noModel name)
+  let some pin := PINNED_MODELS.lookup model | throw ("weights", unpinnedModel name model)
+  unless get m "checkpoint_sha512" == Json.str pin do throw ("weights", otherCheckpoint name model)
   pure w
 
 /-- `credit._prefix`: the `PREFIX` of the program function's record of a descriptor `layoutOf` accepted. -/
@@ -1032,10 +1247,11 @@ def prefixOf (descriptor : ByteArray) : Json :=
   let fn := (((String.fromUTF8? descriptor).bind loads?).bind fun d => str? (get d "program_fn")).getD ""
   (((Flock.Program.recordPairs fn).toList.lookup "PREFIX").bind loads?).getD .null
 
-/-- `credit._period_weights`: none when the window's registered weights (`Internal.weights`, over round 0's `requests`
-in its round log and the session the auditor's ledger opened for it) fold to the weights' root its period's open signed
-(`committedWeights`); else the refusal (`weights`, `layout` or `coin`). -/
-def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) : R Unit := do
+/-- `credit._period_weights`: the session the auditor's ledger opened for the window when the window's registered
+weights (`Internal.weights`, over round 0's `requests` in its round log and that session) fold to the weights' root its
+period's open signed (`committedWeights`); else the refusal (`weights`, `layout` or `coin`). -/
+def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) :
+    R String := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let a ← (SampledProofs.Challenger.auditedSession ledger window k).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
@@ -1052,34 +1268,34 @@ def periodWeights (key ledger window rounds layout entries : Json) (program : St
     weightsRefuse (s!"the window's registered weights' root {got.take 16}... is not {signed.take 16}..., the one " ++
       s!"period {name}'s open signed: a B row's codes or s_w differ from the ones the period registered before its " ++
       "first window's salt. Open every window of a period on its registered B rows")
+  pure a.session
 
 /-- `credit._window`: `window`'s credited calls and the layout it read from the descriptor. -/
-def windowLayout (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+def windowLayout (key ledger window session salt calls served commit rounds draw descriptor entries proofs k : Json) :
     R (List Nat × Json) := do
-  let got ← Internal.credited key ledger window session salt calls served rounds draw
+  let got ← Internal.credited key ledger window session salt calls served commit rounds draw
   let log := match rounds with
     | .arr xs => xs
     | _ => #[]
   roundsCheck key ledger window session (.arr (log.map (get · "root"))) (.arr (log.map (get · "coin")))
-  Internal.aLink rounds entries (match calls with
-    | .arr a => a.size
-    | _ => 0)
+  Internal.aLink rounds entries
   let some d := (match descriptor with
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let layout ← layoutOf d
   let program := Flock.hexOf (Flock.Sha512.hash d)
-  periodWeights key ledger window rounds layout entries program (prefixOf d)
+  let sid ← periodWeights key ledger window rounds layout entries program (prefixOf d)
   let ss ← strata layout
   let (.arr rows, .arr lcalls) := (calls, get layout "calls") | layoutRefuse LAYOUT_FORM
   unless rows.size == lcalls.size do
     throw ("manifest", s!"the manifest's {rows.size} rows are not the circuit's {lcalls.size} calls: each call of " ++
       "the window's Program is one manifest row, in order")
+  Internal.arow log entries (((commitOf? commit).map (·.2)).getD #[]) layout ((str? (prefixOf d)).getD "")
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
   Internal.registration ((str? (get window "root")).getD "") program ((str? (prefixOf d)).getD "") entries proofs ss
-    layout
+    layout log.size sid
   pure (got, layout)
 
 /-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
@@ -1096,9 +1312,9 @@ session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's 
 and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
 values at their registered roots, its K's A value and its K's `<PREFIX>b/<K>` among them). `periodCredit` ties
 `descriptor` to the circuit the window's period committed. -/
-def window (key ledger window session salt calls served rounds draw descriptor entries proofs k : Json) :
+def window (key ledger window session salt calls served commit rounds draw descriptor entries proofs k : Json) :
     R (List Nat) :=
-  (·.1) <$> windowLayout key ledger window session salt calls served rounds draw descriptor entries proofs k
+  (·.1) <$> windowLayout key ledger window session salt calls served commit rounds draw descriptor entries proofs k
 
 /-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
 its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
@@ -1199,8 +1415,8 @@ def periodCredit (key ledger name windows : Json) : R PeriodCredit := do
     discard <| (SampledProofs.Challenger.creditedSession ledger (f "window") k d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     let (got, layout) ← (windowLayout key ledger (f "window") (f "session") (f "salt") (f "calls") (f "served")
-      (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError fun (c, why) =>
-        ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
+      (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (Lean.toJson bigK)).mapError
+      fun (c, why) => ("window", s!"window {i} of period {nm} is refused, so the period earns nothing: {c}: {why}")
     out := out ++ [got]
     eps := eps ++ [established layout got bigK]
   pure ⟨out, bigK, DELTA, eps⟩

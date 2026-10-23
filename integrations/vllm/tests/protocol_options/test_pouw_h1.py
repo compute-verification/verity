@@ -21,6 +21,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
@@ -177,7 +178,7 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
     run.close()
     c = run.credit()
     served = (3 * 32 + 2 * 40) * K
-    assert c["credited"] == {"rows": 0, "macs": 0}
+    assert c["gate_passed"] == {"rows": 0, "macs": 0}
     assert (c["refused"]["calls"], c["refused"]["rows"], c["refused"]["macs"]) == (2, 5, served)
     assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - served
     assert c["units"] == 6 == run.commits["units"]
@@ -488,8 +489,9 @@ def test_each_admitted_request_is_a_leaf_under_its_rounds_root_recorded_before_i
         assert (row["requests"], row["slots"], row["calls"]) == (table.commitment.root.hex(), slots.commitment.root.hex(),
                                                                  calls.hex())
         assert row["receipts"] == (run.receipts_of(r - 1) if r else RQ.NO_RECEIPTS).hex()
-        assert row["root"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root,
-                                            bytes.fromhex(row["receipts"])).hex()
+        assert row["inner"] == RQ.round_root(SALT, r, calls, table.commitment.root, slots.commitment.root,
+                                             bytes.fromhex(row["receipts"])).hex()
+        assert row["a"] == {} and row["root"] == CR.round_root(r, bytes.fromhex(row["inner"]), {}).hex()
     for e in run.requests:
         assert RQ.request_reason(run.round_log, coins, SALT, 32, e, run.open_request(e.index), run.open_first(e.index),
                                  admission=RQ.PER_ROUND) is None
@@ -509,9 +511,8 @@ def _deferred(run, name=True):
         slots[r] = RQ.slot_table(SALT, r, 32, owners[r], KEY)
         calls = RQ.step_digest(SALT, r, [m for m in manifest if m["step"] == r])
         receipts = bytes.fromhex(run.round_log[r]["receipts"])
-        root = RQ.round_root(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root, receipts)
-        log.append({"round": r, "root": root.hex(), "calls": calls.hex(), "requests": tables[r].commitment.root.hex(),
-                    "slots": slots[r].commitment.root.hex(), "receipts": receipts.hex(), "coin": rounds.record(root).to_json()})
+        row = RQ.round_row(SALT, r, calls, tables[r].commitment.root, slots[r].commitment.root, receipts, {})
+        log.append({**row, "coin": rounds.record(bytes.fromhex(row["root"])).to_json()})
     return (log, rounds.challenger.commitment, late,
             lambda e: _opening(tables[e.round], e.round, [x for x in late if x.round == e.round].index(e)),
             lambda s, p: _opening(slots[s], s, p), lambda e: _opening(slots[e.round], e.round, e.slot))
@@ -559,9 +560,8 @@ def test_a_request_entry_under_the_wrong_round_or_under_none_is_refused():
     assert why(e0, dataclasses.replace(o0, value=o1.value)) == "request 0: the leaf opened under round 0 is not its entry"
     late = dataclasses.replace(e0, round=1)
     table = RQ.request_table(SALT, 1, 32, [late, *run.admitted[1]], KEY)
-    root = RQ.round_root(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root, bytes.fromhex(log[1]["slots"]),
-                         bytes.fromhex(log[1]["receipts"]))
-    moved = [log[0], {**log[1], "requests": table.commitment.root.hex(), "root": root.hex()}, log[2]]
+    moved = [log[0], {**log[1], **RQ.round_row(SALT, 1, bytes.fromhex(log[1]["calls"]), table.commitment.root,
+                                               bytes.fromhex(log[1]["slots"]), bytes.fromhex(log[1]["receipts"]), {})}, log[2]]
     assert why(late, _opening(table, 1, 0), log=moved, first=run.open_slot(1, 0)) == \
         "request 0: round 1's coin: coin was not opened after what the verifier recorded"
     assert why(e0, _opening(table, 1, 0), log=moved) == wrong
@@ -746,7 +746,8 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     root = PS.window_open_root(bytes.fromhex(commitment["weights_root"]), bytes.fromhex(commitment["requests_root"]),
                                  CH.session_id(1))
     assert host.window == {"root": root.hex()} and commitment["rounds"][0]["requests"] == commitment["requests_root"]
-    assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key) is None
+    assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
+                                     pins=[host.ledger.pins_path]) is None
     received = R.released_roots(host.directory / R.RELEASES, coins)
     assert received[Wd.SALT] == (root,)
     assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
@@ -836,13 +837,15 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
     a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))
     honest, _ = _serve_window(_remote())
     assert a.ended() is None
-    assert PHC.trusted_rounds_reason(honest, a.directory, [a.ledger.path], a.window, a.key) is None
+    assert PHC.trusted_rounds_reason(honest, a.directory, [a.ledger.path], a.window, a.key,
+                                     pins=[a.ledger.pins_path]) is None
     weights, requests = bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"])
     other = bytes.fromhex(a.window["root"])
 
     def why(name, seed, opened_on, salt_after):
         commits, host = _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after)
-        return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key)
+        return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
+                                         pins=[host.ledger.pins_path])
     def opens(seed):
         return PS.window_open_root(weights, requests, CH.session_id(seed))
     assert why("own", 2, opens(2), opens(2)) is None
@@ -853,7 +856,8 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
     assert why("seventh", 7, opens(2), opens(2)) == f"the window's salt: {CC.OTHER_WINDOW}"
 
     def relabeled(**kw):
-        return PHC.trusted_rounds_reason({**honest, **kw}, a.directory, [a.ledger.path], a.window, a.key)
+        return PHC.trusted_rounds_reason({**honest, **kw}, a.directory, [a.ledger.path], a.window, a.key,
+                                         pins=[a.ledger.pins_path])
     assert relabeled(requests_root="ee" * 64) == f"the window's salt: {CC.OTHER_WINDOW}"
     assert relabeled(session={**honest["session"], "session": CH.session_id(2)}) == (
         f"the window records session {CH.session_id(2)!r}, not {CH.session_id(0xa)}, the one the auditor's ledger "
@@ -873,7 +877,8 @@ def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path,
                               CH.session_id(2))
     commits, host = _salted(tmp_path, monkeypatch, "unreserved", 2, honest, own, own, reserved=False)
     assert [json.loads(line)["kind"] for line in host.ledger.lines] == ["open", "end"]
-    assert PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key) == (
+    assert PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
+                                     pins=[host.ledger.pins_path]) == (
         f"the window's salt: {CC.NO_RESERVE}")
 
 
@@ -888,36 +893,44 @@ def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     assert auditor.ended() is None
     local, _ = _serve_window(_settings())
     assert local["coin_source"] == "in-process"
-    why = PHC.trusted_rounds_reason(local, auditor.directory, [auditor.ledger.path], CH.WINDOW, auditor.key)
+    why = PHC.trusted_rounds_reason(local, auditor.directory, [auditor.ledger.path], CH.WINDOW, auditor.key,
+                                    pins=[auditor.ledger.pins_path])
     assert why.startswith("the window's round_coins ") and "coins from a challenger the verifier doesn't hold" in why
     prover = _host(tmp_path, monkeypatch, name="prover", seed=2, session=CH.session_id(2))
     honest, _ = _serve_window(_remote())
     assert prover.ended() is None
     ours, w = prover.ledger.path, prover.window
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key) is None
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, auditor.key).startswith(
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) is None
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, auditor.key,
+                                     pins=[prover.ledger.pins_path]).startswith(
         "the challenger's session is not trusted: the auditor's ledger entry 1 is signed under challenger key ")
     forged = CH.Ledger(tmp_path / "forged.jsonl", 2, named=auditor.key)
     forged.open(CH.session_id(2), w)
     forged.end(CH.session_id(2), prover.directory, True)
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [forged.path], w, auditor.key) == (
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [forged.path], w, auditor.key,
+                                     pins=[forged.pins_path]) == (
         "the challenger's session is not trusted: the auditor's ledger is refused: entry 0: its signature doesn't verify "
         "under the challenger key")
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [tmp_path / "none.jsonl"], w, prover.key).startswith(
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [tmp_path / "none.jsonl"], w, prover.key,
+                                     pins=[prover.ledger.pins_path]).startswith(
         f"the challenger's session is not trusted: {LC.NO_AUDIT}")
     cut = tmp_path / "cut.jsonl"
     cut.write_text("".join(ours.read_text().splitlines(keepends=True)[:2]))
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [cut], w, prover.key) == (
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [cut], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == (
         f"the challenger's session is not trusted: the auditor's ledger has no end for session {CH.session_id(2)}: the "
         "session never ended, or the ledger is older than its end")
     (tmp_path / "empty").mkdir()
-    assert PHC.trusted_rounds_reason(honest, tmp_path / "empty", [ours], w, prover.key) == (
+    assert PHC.trusted_rounds_reason(honest, tmp_path / "empty", [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger "
         "sealed at its session's end")
     close = prover.directory / R.CLOSE
     signed = close.read_bytes()
     close.unlink()
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key) == (
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == (
         "the challenger's session is not trusted: the challenger's challenger.json is not the one the auditor's ledger "
         "sealed at its session's end")
     close.write_bytes(signed)
@@ -925,11 +938,14 @@ def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     forged_rounds = [log[0], {**log[1], "root": "ee" * 64, "coin": {**log[1]["coin"], "after": "ee" * 64}}, log[2]]
     coins = prover.challenger.commitment
     assert RQ.rounds_reason(forged_rounds, coins) is None
-    assert PHC.trusted_rounds_reason({**honest, "rounds": forged_rounds}, prover.directory, [ours], w, prover.key) == \
+    assert PHC.trusted_rounds_reason({**honest, "rounds": forged_rounds}, prover.directory, [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == \
         "the window's rounds: the round roots are not the roots the challenger's log shows it received, in order"
-    assert PHC.trusted_rounds_reason({**honest, "rounds": log[:2]}, prover.directory, [ours], w, prover.key) == \
+    assert PHC.trusted_rounds_reason({**honest, "rounds": log[:2]}, prover.directory, [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == \
         "the window's round log has 2 rounds, not its 3 steps"
-    assert PHC.trusted_rounds_reason({**honest, "weights_root": "ee" * 64}, prover.directory, [ours], w, prover.key) == \
+    assert PHC.trusted_rounds_reason({**honest, "weights_root": "ee" * 64}, prover.directory, [ours], w, prover.key,
+                                     pins=[prover.ledger.pins_path]) == \
         f"the window's salt: {CC.OTHER_WINDOW}"
 
 
@@ -947,14 +963,16 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     assert second.ended() is None and first.key == second.key
     w, later = first.window, second.window
     assert w["root"] != later["root"]
-    assert PHC.trusted_rounds_reason(one, first.directory, [ledger.path], w, first.key) is None
-    assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key) is None
-    assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key) == (
+    assert PHC.trusted_rounds_reason(one, first.directory, [ledger.path], w, first.key, pins=[ledger.pins_path]) is None
+    assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key,
+                                     pins=[ledger.pins_path]) is None
+    assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key, pins=[ledger.pins_path]) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger sealed "
         "at its session's end")
     ledger.open("s-3", w)
     for coins, host, window in ((one, first, w), (two, second, later)):
-        assert PHC.trusted_rounds_reason(coins, host.directory, [ledger.path], window, first.key) == (
+        assert PHC.trusted_rounds_reason(coins, host.directory, [ledger.path], window, first.key,
+                                         pins=[ledger.pins_path]) == (
             f"the challenger's session is not trusted: the auditor's ledger is refused: entry 6: a second open for root "
             f"{w['root'][:16]}… or session s-3")
 

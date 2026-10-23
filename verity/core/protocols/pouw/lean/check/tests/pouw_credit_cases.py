@@ -26,8 +26,9 @@ coin the prover chose (``chosen``), and break the forms.
 A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
 as `credit.layout_of` reads it, each call's tiles a call node each or one batch, under a ``PREFIX``), its weights (each
 K's ``<PREFIX>b/<K>``, its linears' B rows under the registered domain of its name and the circuit, binding no window,
-`weights_of`), its open root `salt.window_open_root` of their `credit.weights_root`, round 0's ``requests`` and its
-session, the auditor's ledger opening it inside a period whose open signs that weights' root (`credit.WEIGHTS_FIELD`),
+`weights_of`), its open root `salt.window_open_root` of their `weights.weights_root`, round 0's ``requests`` and its
+session, the auditor's ledger opening it inside a period whose open signs that weights' root (`credit.WEIGHTS_FIELD`)
+and names a model credit pins (`credit.MODEL_FIELD`, `MODEL`),
 a committed K, one call per manifest row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments, as the verifier of
 record gives it for the unit's session (`_window_proofs`: verified against the descriptor, its registered finding its
 tile's A and B ports at its K's values and their registered roots); its mutations add
@@ -43,17 +44,28 @@ window's open root or another circuit, their trees under those domains so `_a_li
 (``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
 the sessions opened, which the weights step refuses before any proof is read) or register it twice, verify one proof
 against another circuit, drop a proof's A ports or every proof's B ports (``proof-no-b``), open an unregistered value,
-and break an opened A entry's form. A window may instead register main's per-call form
-(``per_call``): each call's A table ``…/a/<K>@<c>`` and z/y ``…/zy@<c>`` (`h1window.table`), every value but the
-weights' binding the window's open root, each drawn unit's proof opening its own call's table. Its mutations register a
-call's A table with no window root (``a-call-unbound``) and point a proof at another call's table (``proof-other-call``).
+and break an opened A entry's form. A window registers main's served form: each round's A table of each K
+``…/a/<K>@<s>`` (M rows for each of the round's calls of K, call after call, `credit.step_tables`), each call's z/y
+``…/zy@<c>`` (`h1window.table`) and each round's input-ids table ``…/ids@<s>``, every value but the weights' binding
+the window's open root, each drawn unit's proof opening its own call's round's table. Its mutations register the A
+tables with no window root (``a-call-unbound``) and point a proof at another round's or K's table
+(``proof-other-call``). Its Commit record (`commit_record`, ROOTS1) registers each round's A tables and each ids table
+over its true rows under the Commit's names; its mutations (`AROW_NAMES`, made before the draw) register one A table
+with every row other (``a-zero``), one row other (``a-row-off``) or its calls' rows offset by one call
+(``a-call-off``), one with a call missing that the Commit registers so too (``a-call-missing``), one ids table with a
+row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, present
+another Commit record than the one its draw root
+binds (``commit-unbound``) and break the record's form (``credit-commit-form``). Round 0's ids table ``…/ids@0`` binds
+the window's session, not its open root, which contains it: round 0's ``requests`` is `credit.requests_root` of its
+``request_table`` and ids@0's root. Its mutations (`IDS0_NAMES`, made before the window opens) open the window over the
+bare request table's root or over another ids@0 root, and bind ids@0's domain to another session.
 Its mutations of the weights (`WINDOW_WEIGHTS_NAMES`) sign another weights' root in the period's open, none or a
-malformed one, open the window in no period, change or break round 0's ``requests``, and give a ``b/<K>`` other rows
+malformed one, name no model credit pins in it (``weights-model``), open the window in no period, change or break round 0's ``requests``, and give a ``b/<K>`` other rows
 under the domain of those rows (so `credit._registration` accepts it).
 
 A `period` case is one to three such windows of one circuit in one period of the auditor's ledger (`period-open`
 committing the SHA-512 of the circuit's descriptor, the K every window is drawn at, `credit.K_FIELD`, and the weights'
-root every window opens, `credit.WEIGHTS_FIELD`, each window's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
+root every window opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each window's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
 descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a
 window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
 never opened or no period, forge the ledger, refuse one window, make one window wholly another circuit's (its
@@ -61,7 +73,8 @@ descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone
 of another layout (``alt-layout``), open the period committing no circuit or one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
 units, prove one window's draw at another K (``other-k``), present one window's round log the challenger never received
 (``never-received``), give one window's proof another registration's root (``proof-other-registration``), open the
-period signing no weights' root or a malformed one, give one of two or three windows a ``b/<K>`` with one row's s_w
+period signing no weights' root or a malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare
+weights' root, a malformed one, another checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w
 changed (``other-sw``) or every code zero (``zero-codes``), each registered as the served path registers it
 (`registered_b`) and that window's open root over its own weights' root, and break the forms. Every window of a period
 shares the weights its open signs; the window of another circuit registers them under its own.
@@ -71,14 +84,13 @@ SHA-512 trees (`verity.ml.commitments.merkle.tree_levels`) of `steps` equal bloc
 `credit.cover` segments of every A value under `credit.round_root` of a random inner root. Its mutations register an A
 tree other than the one the rounds committed (RT4-INT-34), rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms. It may also
-register calls' A tables ``…/a/<K>@<c>``, each committed whole by its call's round (``calls`` the window's calls, the
-rounds' equal blocks); its mutations list one in another round (``call-other-round``), name a call past the window's
-(``call-past``), and give a call count the rounds don't divide (``call-blocks``).
+register rounds' A tables ``…/a/<K>@<s>``, each committed whole by its round; its mutations list one in another
+round (``table-other-round``) and name a round past the window's (``table-past``).
 
 A `weights` case is a window's layout, its circuit (its descriptor's SHA-512 and PREFIX), its registered entries (each
 K's ``<PREFIX>b/<K>`` under its registered domain, among its A values, z tables and names that are no weights: a
 non-canonical K, ``b/032`` or one past Python's ``int`` digit limit), its round-0 request table's root and its session,
-and the window's open root over `credit.weights_root` of the ``…/b/<K>`` roots, that root and the session
+and the window's open root over `weights.weights_root` of the ``…/b/<K>`` roots, that root and the session
 (`salt.window_open_root`). Its mutations register a B value other than the one the open root binds (another code or
 s_w), open the window on another request table's root or session or another root, register a K's B value twice, never,
 of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, a
@@ -95,10 +107,12 @@ import itertools
 import json
 import random
 import struct
+from collections.abc import Callable
 
 import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -123,36 +137,94 @@ def _row(rng: random.Random, i: int) -> dict:
 
 
 def _draw_root(d: dict) -> str:
-    salt, served = bytes.fromhex(d["salt"]), d["served"]
-    calls = Cr.calls_root(salt, d["calls"], None if served is None else bytes.fromhex(served))
+    salt, served, commit = bytes.fromhex(d["salt"]), d["served"], Cr.commit_of(d["commit"])[0]
+    calls = Cr.calls_root(salt, d["calls"], None if served is None else bytes.fromhex(served),
+                          None if commit is None else commit[0])
     return Cr.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
 
 
-def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str, other: str | None = None,
-           calls: list[int] | None = None, prefix: str | None = None, weights: list[dict] | None = None
-           ) -> tuple[list[dict], list[dict]]:
+#: each way a window's A tables or input-ids tables are not the served Commit's, made before its draw: one round's A
+#: table of a K every row other (``a-zero``), one row (``a-row-off``) or its calls' rows offset by one call
+#: (``a-call-off``), one missing a call (``a-call-missing``, the Commit's too), one round's ids table one row other
+#: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice
+AROW_NAMES = ["a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "ids-missing", "commit-missing",
+              "commit-twice"]
+#: the `AROW_NAMES` that need a round's A table of two calls or more
+TWO_CALLS = ("a-call-off", "a-call-missing")
+#: each way round 0's input-ids table is not inside round 0's request table under the window's session, made before the
+#: window opens: round 0's request root the bare request table's (``ids0-outside``) or over another ids@0 root
+#: (``ids0-root-off``), and ids@0's domain binding another session (``ids0-other-session``, the Commit registering it so)
+IDS0_NAMES = ["ids0-outside", "ids0-root-off", "ids0-other-session"]
+#: the served Commit's words of a step's input token id (an int32)
+IDS_WORDS = 2
+
+
+def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str | Callable[[str | None], str],
+           other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
+           weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1
+           ) -> tuple[list[dict], list[dict], dict[str, dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
-    window's open root `window`), each value under `prefix` (a random ``h1/w-<i>/`` when None), and its round log over
-    its A values (`_log`), its coins not yet opened. Each K of `ks` registers its B value (``…/b/<K>``, held across
-    windows: `weights`' entry, or one at random 32-bit when None) and either its A value (``…/a/<K>``,
-    `steps` equal blocks of K/2 words, its domain binding the window's open root, its tree under that domain) or, with
-    `calls` (each call's K, in call order, `steps` dividing their count), each call c its tables as main's served form
-    has them (`h1window.table`): its A table ``…/a/<K>@<c>``, committed whole by its call's round, and its z table
-    ``…/zy@<c>``, both binding the window's open root; and at random a z value. ``other`` registers the A values and
-    call tables under another window's open root (``window``), another circuit (``program``) or no window root
-    (``unbound``, main's h1_prove form)."""
+    window's open root `window`, or `window` of round 0's registered input-ids table's root when it is a function, since
+    that root is inside the open root), each value under `prefix` (a random ``h1/w-<i>/`` when None), its round log over
+    its A values and input-ids tables (`_log`), its coins not yet opened, and the entries of its A and ids tables over
+    their true rows by name, the ones the served Commit registers. Each K of `ks` registers its B value
+    (``…/b/<K>``, held across windows: `weights`' entry, or one at random 32-bit when None) and either its A value
+    (``…/a/<K>``, `steps` equal blocks of K/2 words, its domain binding the window's open root, its tree under that
+    domain) or, with `calls` (each call's K, in call order, `steps` dividing their count), the tables main's served form
+    has (`h1window.table`): each round s's A table of each K ``…/a/<K>@<s>``, M = `m` rows for each of the round's calls
+    of K, committed whole by round s, and each call c's z table ``…/zy@<c>``, both binding the window's open root, and
+    each round s its input-ids table
+    ``…/ids@<s>`` of as many slots, committed whole by round s, ids@0's domain binding the window's session `sid` in
+    its open root's place (`credit.domain_of`); and at random a z value. ``other`` registers the A values and call
+    tables under another window's open root and ids@0 under another session (``window``), another circuit
+    (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
+    A table or an ids table over other rows than its true ones, an A table one call short (its true rows too), or no ids
+    table of a round, and ``ids0-other-session`` binds ids@0's domain to another session."""
     prefix = f"h1/w-{rng.randrange(100)}/" if prefix is None else prefix
-    values, entries = {}, []
-    own = window if other is None else _hex(rng) if other == "window" else None if other == "unbound" else window
+    values, entries, true = {}, [], {}
     prog = _hex(rng) if other == "program" else program
+    session = (None if other == "unbound" else f"{sid}-other" if other == "window" or off == "ids0-other-session"
+               else sid)
+    target, own, tables = None, None, []
+    for st in range(steps if calls else 0):
+        mine: dict[int, int] = {}
+        for k in calls[st * (len(calls) // steps):(st + 1) * (len(calls) // steps)]:
+            mine[k] = mine.get(k, 0) + 1
+        tables += [(f"{prefix}a/{k}@{st}", k // 2, n, st) for k, n in mine.items()]
+    if calls and off in ("a-zero", "a-row-off"):
+        target = rng.choice(tables)[0]
+    elif calls and off in TWO_CALLS:
+        target = rng.choice([v for v, _w, n, _s in tables if n > 1])
+    elif calls and off in ("ids-off", "ids-missing"):
+        target = f"{prefix}ids@{rng.randrange(steps)}"
 
     def a(v: str, words: int, leaves: int, rnd: int | None) -> None:
-        dom = G.domain(prog, v, words, leaves, window=own)
-        levels = _tree(rng, leaves, dom)[1]
+        if v == target and off == "ids-missing":
+            return
+        first = Cr.ids_step(v) == 0
+        dom = G.domain(prog, v, words, leaves, window=None if first else own, session=session if first else None)
+        # rows from one short draw: 64 drawn bytes a row made a window's smallest example too large for Hypothesis
+        seed = rng.randbytes(8) + v.encode()
+        rows = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest() for i in range(leaves)]
+        true[v] = {"value": v, "root": tree_levels(dom, rows)[-1][0].hex(), "leaves": leaves, "words": words,
+                   "domain": dom.domain_id.hex()}
+        if v == target and off == "a-zero":
+            rows = [hashlib.sha512(b"zero row" + i.to_bytes(4, "big")).digest() for i in range(leaves)]
+        elif v == target and off == "a-call-off":
+            rows = rows[m:] + rows[:m]
+        elif v == target and off != "a-call-missing":
+            i = rng.randrange(leaves)
+            rows = rows[:i] + [rng.randbytes(64)] + rows[i + 1:]
+        levels = tree_levels(dom, rows)
         values[v] = (leaves, levels, rnd)
-        entries.append({"value": v, "root": levels[-1][0].hex(), "leaves": leaves, "words": words,
-                        "domain": dom.domain_id.hex()})
+        entries.append({**true[v], "root": levels[-1][0].hex()})
 
+    leaves = rng.choice([1, 2, 4, 8])
+    if calls:
+        a(f"{prefix}ids@0", IDS_WORDS, leaves, 0)
+    if callable(window):
+        window = window(next((e["root"] for e in entries if e["value"] == f"{prefix}ids@0"), None))
+    own = window if other is None else _hex(rng) if other == "window" else None if other == "unbound" else window
     for k in ks:
         if calls is None:
             a(f"{prefix}a/{k}", k // 2, steps * rng.choice([1, 2, 3, 4]), None)
@@ -161,42 +233,85 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
                  **({G.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
             entries.append({**b, "domain": Cr.domain_of(program, window, b)})
     entries += [dict(e) for e in weights or ()]
-    leaves = rng.choice([1, 2, 4, 8])
+    for v, words, n, st in tables:
+        a(v, words, (n - (v == target and off == "a-call-missing")) * m, st)
     for c, k in enumerate(calls or []):
-        a(f"{prefix}a/{k}@{c}", k // 2, leaves, c // (len(calls) // steps))
         zy = {"value": f"{prefix}zy@{c}", "root": _hex(rng), "leaves": rng.randint(1, 8), "words": 3}
         entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
+    for s in range(1, steps if calls else 0):
+        a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
     if rng.random() < 0.5:
         entries.append({"value": f"{prefix}z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3,
                         "domain": _hex(rng)})
     rng.shuffle(entries)
-    return entries, _log(steps, values, [_hex(rng) for _ in range(steps)])
+    return entries, _log(steps, values, [_hex(rng) for _ in range(steps)]), true
+
+
+def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: str | None = None) -> str:
+    """The served Commit's record (`credit.COMMIT_FORMAT`) in hex of its canonical JSON: its registered values `true`'s
+    A tables and ids tables (`_a_log`'s) under the Commit's names (`credit.commit_rows` of each A table's round and K,
+    and `credit.commit_ids`), among values of its own; ``commit-missing`` drops one of them and ``commit-twice``
+    registers one twice."""
+    names = {}
+    for v in true:
+        s, a = Cr.ids_step(v), Cr.a_value(v)
+        if s is not None:
+            names[v] = Cr.commit_ids(s)
+        elif a is not None and a[1] is not None:
+            names[v] = Cr.commit_rows(int(a[1]), int(a[0]))
+    reg = [{**e, "value": names[v]} for v, e in sorted(true.items()) if v in names]
+    if reg and off == "commit-missing":
+        del reg[rng.randrange(len(reg))]
+    elif reg and off == "commit-twice":
+        reg.append(dict(rng.choice(reg)))
+    reg += [{"value": f"{name}/{s}", "root": _hex(rng), "leaves": rng.randint(1, 64), "words": rng.choice([1, 8]),
+             "domain": _hex(rng)} for s in range(steps) for name in ("input-embeds", "sampled-ids")
+            if rng.random() < 0.5]
+    rng.shuffle(reg)
+    rec = {"format": Cr.COMMIT_FORMAT, "protocol": "verity/sampled-proofs/one-stage/v1", "program": _hex(rng),
+           "window": {"kind": "served", "steps": steps}, "registered": reg}
+    return Cr._canonical(rec).encode().hex()
 
 
 def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = None, sid: str = "s-1",
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
-                  weights: list[dict] | None = None) -> tuple[dict, rc.Session]:
+                  weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1
+                  ) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None) whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
-    None), `other`, `prefix` and `weights`; with `weights`, its open root is `salt.window_open_root` of their
-    `weights_root` (`fold`), round 0's ``requests`` (its request table's root) and `sid`, else a random one. Each
-    round's root is the one the
+    None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
+    true tables, bound under its draw root, over `rounds` rounds (one to three dividing the calls
+    when None); with `weights`, its open root is `salt.window_open_root` of their
+    `weights_root` (`fold`), round 0's ``requests`` and `sid`, else a random one. Round 0's ``requests`` is
+    `credit.requests_root` of its ``request_table`` (a random root) and its input-ids table's (`IDS0_NAMES` break
+    it), or the bare table's when it registers none. Each round's root is the one the
     challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
     roots, and the log carries their coins as if opened after its own, its draw root over it (the composed check's
     counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
-    rounds = rng.choice([s for s in (1, 2, 3) if calls is None or len(calls) % s == 0])
+    if rounds is None:
+        rounds = rng.choice([s for s in (1, 2, 3) if calls is None or len(calls) % s == 0])
     ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
-    requests = _hex(rng)
-    window = rc._window(rng) if weights is None else {
-        "root": PS.window_open_root(bytes.fromhex(fold(weights)), bytes.fromhex(requests), sid).hex()}
+    table, opened = _hex(rng), {}
+
+    def open_root(ids0: str | None) -> str:
+        if ids0 is not None and off == "ids0-root-off":
+            ids0 = _hex(rng)
+        opened["requests"] = (table if ids0 is None or off == "ids0-outside"
+                              else Cr.requests_root(bytes.fromhex(table), bytes.fromhex(ids0)).hex())
+        opened["window"] = rc._window(rng) if weights is None else {
+            "root": PS.window_open_root(bytes.fromhex(fold(weights)), bytes.fromhex(opened["requests"]), sid).hex()}
+        return opened["window"]["root"]
+
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
-    entries, log = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, window["root"], other, calls,
-                          prefix, weights)
-    log[0]["requests"] = requests
+    entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
+                                calls, prefix, weights, off, sid, m)
+    window = opened["window"]
+    log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
-         "served": rng.choice([None, _hex(rng)]), "draw": {"receipts": _hex(rng)}, "entries": entries}
+         "served": rng.choice([None, _hex(rng)]), "commit": commit_record(rng, true, rounds, off),
+         "draw": {"receipts": _hex(rng)}, "entries": entries}
     received = [bytes.fromhex(x["root"]) for x in log]
     if name == "never-received":
         received = [rng.randbytes(64) for _ in log]
@@ -259,6 +374,14 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             d["salt"] = rng.choice([None, d["salt"][:-2], d["salt"].upper(), 5])
         case "served-form":
             d["served"] = rng.choice(["", "ab", 5, _hex(rng).upper()])
+        case "commit-form":
+            rec, h = json.loads(bytes.fromhex(d["commit"])), d["commit"]
+            d["commit"] = rng.choice([
+                None, 5, "", "zz", h.upper(), h[:-2], b"\xff\xfe".hex(), json.dumps(rec).encode().hex(),
+                *(Cr._canonical(x).encode().hex() for x in (
+                    [rec], {**rec, "format": "verity/registration/v1"}, {k: v for k, v in rec.items() if k != "format"},
+                    {**rec, "registered": {}}, {k: v for k, v in rec.items() if k != "registered"},
+                    {**rec, "registered": rec["registered"] + [5]}))])
         case "rounds-form":
             k = rng.randrange(len(d["rounds"]))
             d["rounds"] = rng.choice([None, "x", d["rounds"][:k] + [5] + d["rounds"][k + 1:],
@@ -284,9 +407,9 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
 
 
 CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "bit-form", "no-z", "index", "row-form",
-                "calls-form", "salt-form", "served-form", "rounds-form", "draw-form", "no-draw", "draw-coin", "key-form",
-                "forged-ledger"]
-CREDIT_KEYS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw")
+                "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "draw-form", "no-draw",
+                "draw-coin", "key-form", "forged-ledger"]
+CREDIT_KEYS = ("key", "ledger", "window", "session", "salt", "calls", "served", "commit", "rounds", "draw")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -590,20 +713,21 @@ def _proofs(rng: random.Random, units: list[int]) -> list[dict]:
 def _window_proofs(rng: random.Random, d: dict, units: list[int]) -> list[dict]:
     """Each of `units`' outcome as the verifier of record gives it for its session, verified against the window's
     descriptor: accepted, its program the descriptor's SHA-512, and its session's registered finding each of its tile's
-    A ports (``a<i>``, up to two) at its K's A value (or its own call's A table, and its ``zy`` port at its call's z
-    table, when the window registers its calls' tables) and each B port (``b<j>``) at its K's B value, each at the root
-    the window's entry registers."""
+    A ports (``a<i>``, up to two) at its K's A value (or its call's round's A table of K, and its ``zy`` port at its
+    call's z table, when the window registers its rounds' tables) and each B port (``b<j>``) at its K's B value, each at
+    the root the window's entry registers."""
     ss, _ = Cr.strata(d["layout"])
     r, c = d["layout"]["tile"]
     program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
     roots = {e["value"]: e["root"] for e in d["entries"]}
     starts = list(itertools.accumulate((size for size, _w in Cr.call_work(d["layout"])), initial=0))
+    per = max(1, len(d["layout"]["calls"]) // len(d["rounds"]))
     out = []
     for u in units:
         k = next(s["template"][1:] for s in ss if any(lo <= u < hi for lo, hi in s["units"]))
         call = next(i for i in range(len(starts) - 1) if starts[i] <= u < starts[i + 1])
         b = next(v for v in roots if v.split("/")[-2:] == ["b", k])
-        a = next((v for v in roots if v.endswith(f"/a/{k}@{call}")), None)
+        a = next((v for v in roots if v.endswith(f"/a/{k}@{call // per}")), None)
         zy = {"zy": {"value": a.rsplit("/", 2)[0] + f"/zy@{call}"}} if a is not None else {}
         a = a or next(v for v in roots if v.endswith(f"/a/{k}"))
         reg = {**{f"a{i}": {"value": a, "root": roots[a]} for i in range(min(r, 2))},
@@ -709,8 +833,41 @@ def weights_of(rng: random.Random, lay: dict, program: str, prefix: str) -> list
 
 
 def fold(weights: list[dict]) -> str:
-    """`credit.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
-    return Cr.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
+    """`weights.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
+    return Wt.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
+
+
+#: the model a period's open names (`credit.MODEL_FIELD`): a role credit pins, at its pinned checkpoint
+MODEL = {"name": min(Cr.PINNED_MODELS), "checkpoint_sha512": Cr.PINNED_MODELS[min(Cr.PINNED_MODELS)]}
+#: each way a period's open names no model credit pins
+MODEL_NAMES = ["no-model", "model-form", "other-checkpoint", "other-model"]
+
+
+def signs(weights: list[dict]) -> dict:
+    """What a period's open signs of its weights: their `fold` and the model they are of (`MODEL`)."""
+    return {Cr.WEIGHTS_FIELD: fold(weights), Cr.MODEL_FIELD: dict(MODEL)}
+
+
+def _unmodel(rng: random.Random, opened: dict, kind: str) -> None:
+    """A period-open's fields `opened` with its model broken as `kind`: none (a bare weights' root, as the gate signed
+    before its model registry), malformed, another checkpoint than the pinned one, or a role credit doesn't pin."""
+    match kind:
+        case "no-model":
+            del opened[Cr.MODEL_FIELD]
+        case "model-form":
+            opened[Cr.MODEL_FIELD] = rng.choice([
+                None, 5, MODEL["name"], opened[Cr.WEIGHTS_FIELD], [dict(MODEL)], {"name": MODEL["name"]},
+                {**MODEL, "extra": 1}, {**MODEL, "name": 5}, {**MODEL, "name": None},
+                {"name": MODEL["name"], "checkpoint": MODEL["checkpoint_sha512"]}])
+        case "other-checkpoint":
+            c = MODEL["checkpoint_sha512"]
+            opened[Cr.MODEL_FIELD] = {**MODEL, "checkpoint_sha512": rng.choice([_hex(rng), c.upper(), c[:-2], None, 5])}
+        case "other-model":
+            opened[Cr.MODEL_FIELD] = {**MODEL, "name": rng.choice([n for n in (
+                "LLAMA31_70B_INT8", "QWEN3_06B_INT8", MODEL["name"].lower(), "", MODEL["name"] + " ")
+                if n not in Cr.PINNED_MODELS])}
+        case _:
+            raise ValueError(kind)
 
 
 def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
@@ -718,10 +875,16 @@ def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
     return [(rng.randbytes(k), rng.choice([2.0 ** -9, 0.0123, 3.5])) for _ in range(n)]
 
 
+def b_row_words(codes: bytes, sw: float) -> list[int]:
+    """A B row's u16 words as the prover and the auditor's registry commit them (`weights.row_words` of
+    `weights.row_bytes`): its K int8 codes then its f32 s_w (`h1zy.ROW`), little-endian in pairs."""
+    return Wt.row_words(Wt.row_bytes(bytes(codes), struct.pack("<f", sw)))
+
+
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    its codes then its s_w, `h1zy.ROW`, salts drawn once, binding no window)."""
-    words = [G.bytes_leaves(codes + struct.pack("<f", sw), 16) for codes, sw in rows]
+    `b_row_words`, salts drawn once, binding no window)."""
+    words = [b_row_words(codes, sw) for codes, sw in rows]
     return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(rows)), schema=G.SCHEMA_V2).entry()
 
 
@@ -735,13 +898,15 @@ def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
 
 
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
-                  lay: dict | None = None, desc: str | None = None, per_call: bool | None = None,
-                  prefix: str | None = None, weights: list[dict] | None = None) -> tuple[dict, rc.Session]:
+                  lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
+                  weights: list[dict] | None = None) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
     drawn at, one call per manifest row, and an accepted proof of each unit its draw coin
-    draws at that K. Its A rows are its calls' A tables, as main's served form registers them (`h1window.table`), when
-    `per_call` (at random when None, always under ``a-call-unbound``), else the window's A values. ``layout`` is the layout, which the verifier
+    draws at that K. Its A rows are its rounds' A tables of each K, as main's served form registers them
+    (`h1window.table`), beside each round's input-ids table, over rounds that call each linear once (one round under
+    `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
+    one of them is not the Commit's. ``layout`` is the layout, which the verifier
     reads from the descriptor. Its values are named `prefix` (a random ``h1/w-<n>/`` when None) and their roles, and so
     are its circuit's parameters (``PREFIX``) when `desc` is None, as a served path names them."""
     lay = layout(rng) if lay is None else lay
@@ -751,28 +916,48 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     weights = weights_of(rng, lay, program, prefix) if weights is None else weights
     other = {"other-registration": rng.choice(["window", "program"]), "a-call-unbound": "unbound"}.get(name)
     k_of = {lin: k for lin, k, _n in lay["linears"]}
-    per_call = name == "a-call-unbound" or (rng.random() < 0.5 if per_call is None else per_call)
+    lins = [lin for lin, _blk in lay["calls"]]
+    once = [s for s in range(1, len(lins) + 1) if len(lins) % s == 0 and all(
+        len(set(lins[i:i + len(lins) // s])) == len(lins) // s for i in range(0, len(lins), len(lins) // s))]
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
-                         calls=[k_of[lin] for lin, _blk in lay["calls"]] if per_call else None, prefix=prefix,
-                         weights=weights)
+                         calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
+                         off=name if name in [*AROW_NAMES, *IDS0_NAMES] else None, m=lay["m"],
+                         rounds=1 if name in TWO_CALLS else rng.choice([s for s in once if s <= 3] or once[:1]))
     d["layout"], d["k"], d["descriptor"], d["weights"] = lay, _k(rng, lay), desc, weights
     d["proofs"] = _window_proofs(rng, d, _served_units(d))
     return d, s
 
 
-def window_instance(rng: random.Random, name: str = "honest", per_call: bool | None = None) -> dict:
-    """One `window` case: an honest window (`per_call` as `honest_window` takes it), then mutation `name`."""
+def window_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `window` case: an honest window, then mutation `name`."""
     credit = name.removeprefix("credit-")
     lay = None
+
+    def call_ks(lay: dict) -> list[int]:
+        ks = {lin: k for lin, k, _n in lay["linears"]}
+        return [ks[lin] for lin, _b in lay["calls"]]
+
     if name == "proof-other-call":
-        while len((lay := layout(rng))["calls"]) < 2:
-            pass
-    d, s = honest_window(rng, credit, lay=lay, per_call=True if lay is not None else per_call)
+        lay = layout(rng)
+        while len(set(call_ks(lay))) < 2:
+            lay = layout(rng)
+    elif name in TWO_CALLS:
+        lay = layout(rng)
+        while len(set(call_ks(lay))) == len(lay["calls"]):
+            lay = layout(rng)
+    d, s = honest_window(rng, credit, lay=lay)
     signed: dict | None = {}
     match name:
         case "honest":
             pass
+        case _ if name in AROW_NAMES or name in IDS0_NAMES:
+            pass
+        case "commit-unbound":
+            rec = json.loads(bytes.fromhex(d["commit"]))
+            rec["registered"].append({"value": "sampled-ids/0", "root": _hex(rng), "leaves": 1, "words": 2,
+                                      "domain": _hex(rng)})
+            d["commit"] = Cr._canonical(rec).encode().hex()
         case "manifest-count":
             lin = d["layout"]["linears"][0][0]
             d["layout"]["calls"].insert(rng.randrange(len(d["layout"]["calls"]) + 1), [lin, 0])
@@ -845,10 +1030,14 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
             e[k] = bad
         case "weights-period":
             e = rng.choice(d["weights"])
-            signed = {Cr.WEIGHTS_FIELD: fold([{**x, "root": _hex(rng)} if x is e else x for x in d["weights"]])}
+            signed = signs([{**x, "root": _hex(rng)} if x is e else x for x in d["weights"]])
         case "weights-unsigned":
             w = fold(d["weights"])
-            signed = rng.choice([{"cap": 4}, {Cr.WEIGHTS_FIELD: rng.choice([None, 5, w.upper(), w[:-2], [w]])}])
+            signed = rng.choice([{"cap": 4}, {**signs(d["weights"]),
+                                              Cr.WEIGHTS_FIELD: rng.choice([None, 5, w.upper(), w[:-2], [w]])}])
+        case "weights-model":
+            signed = signs(d["weights"])
+            _unmodel(rng, signed, rng.choice(MODEL_NAMES))
         case "weights-no-period":
             signed = None
         case "weights-requests":
@@ -868,7 +1057,7 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
             raise ValueError(name)
     if "ledger" not in d:
         if signed == {}:
-            signed = {Cr.WEIGHTS_FIELD: fold(d["weights"])}
+            signed = signs(d["weights"])
         events = rc.ledger_events(rng, d["window"], s, period=signed or {})
         if signed is None:
             events = [x for x in events if not x[0].startswith("period-")]
@@ -877,7 +1066,7 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
 
 
 #: each way a window's registered weights are not the ones its period's open signed and its open root binds
-WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-no-period", "weights-requests",
+WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "weights-no-period", "weights-requests",
                         "weights-no-requests", "weights-leaves"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
@@ -885,11 +1074,12 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
                       "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "k-form", "k-past-units", "never-received",
-                "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES]
+                "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES, *AROW_NAMES, *IDS0_NAMES,
+                "commit-unbound", "credit-commit-form"]
 WINDOW_KEYS = ("key", "ledger", *Cr.PROVED_KEYS, "k")
 #: `credit.window`'s arguments, in order
-WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "rounds", "draw", "descriptor",
-               "entries", "proofs", "k")
+WINDOW_ARGS = ("key", "ledger", "window", "session", "salt", "calls", "served", "commit", "rounds", "draw",
+               "descriptor", "entries", "proofs", "k")
 
 
 def window_args(d: dict) -> tuple:
@@ -901,12 +1091,11 @@ def _evidence(d: dict) -> dict:
     return {k: d[k] for k in Cr.PROVED_KEYS}
 
 
-def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None,
-                    per_call: bool | None = None) -> dict:
+def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
     order, and a window of no period opened after the close; then mutation `name`. The period's open commits
-    `committed_too` too, and its windows register as `honest_window`'s `per_call` has them."""
+    `committed_too` too."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3)
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng)
@@ -929,11 +1118,10 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         weights = [registered_b(program, v, b) if e["value"] == v else e for e in weights]
         odd_weights = [registered_b(program, v, other) if e["value"] == v else e for e in weights]
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
-                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc, per_call=per_call,
+                          leaf=4 * i + 2, lay=lay, desc=odd if i == bad else desc,
                           prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights)
             for i in range(n)]
-    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, per_call=per_call, prefix=prefix,
-                            weights=weights)
+    foreign = honest_window(rng, sid="o-1", leaf=4 * n + 3, lay=lay, desc=desc, prefix=prefix, weights=weights)
     pub = wins[0][1].pub
     descriptor_ = bytes.fromhex(desc)
     least = units_of(lay)
@@ -943,16 +1131,17 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, Cr.WEIGHTS_FIELD: fold(weights),
-                 **(committed_too or {})}
+    committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, **signs(weights), **(committed_too or {})}
     match name:
         case "no-circuit":
-            committed = {Cr.K_FIELD: big_k, Cr.WEIGHTS_FIELD: fold(weights)}
+            committed = {Cr.K_FIELD: big_k, **signs(weights)}
         case "no-weights":
             del committed[Cr.WEIGHTS_FIELD]
         case "weights-form":
             w = committed[Cr.WEIGHTS_FIELD]
             committed[Cr.WEIGHTS_FIELD] = rng.choice([None, 5, w.upper(), w[:-2], [w]])
+        case _ if name in MODEL_NAMES:
+            _unmodel(rng, committed, name)
         case "no-k":
             del committed[Cr.K_FIELD]
         case "k-form":
@@ -983,6 +1172,8 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "bad-circuit" | "never-received" | "other-circuit" | "no-weights" | "weights-form" | "other-sw"
               | "zero-codes"):
+            pass
+        case _ if name in MODEL_NAMES:
             pass
         case "other-k":
             d = wins[i][0]
@@ -1031,26 +1222,28 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
-                "proof-other-registration", "no-weights", "weights-form", "other-sw", "zero-codes"]
+                "proof-other-registration", "no-weights", "weights-form", *MODEL_NAMES, "other-sw", "zero-codes"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 
 def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     """A `registered-file` case: a window's circuit (`descriptor` of a random layout, its parameters named a prefix or
-    none), one of its calls, the window's open root, and the roots the window registers (``{value: [root, ...]}``) for
-    each value a statement of that call reads (`h1window.table`'s A and z tables and the weights' ``b/<K>``), some
-    other calls' among them, as `credit.registered_file` takes them; ``missing`` leaves one of the call's out and
-    ``twice`` registers one twice."""
+    none), one of its calls, the window's open root, its rounds (one to three dividing its calls), and the roots the
+    window registers (``{value: [root, ...]}``) for each value a statement of that call reads (`h1window.table`'s A
+    table of its round and K, its z table and the weights' ``b/<K>``), some other rounds' and K's A tables among them,
+    as `credit.registered_file` takes them; ``missing`` leaves one of the call's out and ``twice`` registers one
+    twice."""
     lay = layout(rng)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
+    steps = rng.choice([s for s in (1, 2, 3) if len(lay["calls"]) % s == 0])
     k_of = {lin: k for lin, k, _n in lay["linears"]}
-    vals = [f"{prefix}a/{k_of[lay['calls'][call][0]]}@{call}", f"{prefix}zy@{call}",
-            f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
+    a = f"{prefix}a/{k_of[lay['calls'][call][0]]}@{Cr.step_row(lay, steps, call)[0]}"
+    vals = [a, f"{prefix}zy@{call}", f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
     roots = {v: [_hex(rng)] for v in vals}
-    for c, (lin, _blk) in enumerate(lay["calls"]):
-        if c != call and rng.random() < 0.5:
-            roots[f"{prefix}a/{k_of[lin]}@{c}"] = [_hex(rng)]
+    for st, k, _cs in Cr.step_tables(lay, steps):
+        if f"{prefix}a/{k}@{st}" != a and rng.random() < 0.5:
+            roots[f"{prefix}a/{k}@{st}"] = [_hex(rng)]
     v = rng.choice(vals)
     match name:
         case "honest":
@@ -1064,7 +1257,8 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[v].append(_hex(rng))
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng)}
+    return {"descriptor": descriptor(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng),
+            "steps": steps}
 
 
 REGISTERED_FILE_NAMES = ["missing", "twice"]
@@ -1080,7 +1274,7 @@ def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -
 
 def _log(steps: int, values: dict, inners: list[str]) -> list[dict]:
     """The round log: each round's root over its inner root and its `cover` segments of every A value, a window's A
-    value's equal blocks round by round and a call's A table whole in its call's round (`values`' third member)."""
+    value's equal blocks round by round and a round's A table whole in its round (`values`' third member)."""
     out = []
     for r in range(steps):
         segs = {}
@@ -1101,12 +1295,13 @@ def _reroot(log: list[dict]) -> list[dict]:
 
 
 def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `a_link` case: a window's registered entries, its round log and its call count, then mutation `name`. Its A
-    values are each K's ``…/a/<K>`` and, at random (always under the ``call-`` mutations), one or two calls' A tables
-    ``…/a/<K>@<c>``, each committed whole by its call's round, the window's calls the rounds' equal blocks."""
-    calling = name.startswith("call-")
-    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "call-other-round", "call-blocks") else [1, 2, 3, 4])
-    calls = steps * rng.randint(1, 3)
+    """One `a_link` case: a window's registered entries and its round log, then mutation `name`. Its A values are each
+    K's ``…/a/<K>`` and, at random (always under the ``table-`` mutations), one or two rounds' A tables
+    ``…/a/<K>@<s>``, each committed whole by its round; and at random (always under the ``ids-`` mutations) some
+    rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round."""
+    calling, tying = name.startswith("table-"), name.startswith("ids-")
+    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round")
+                       else [1, 2, 3, 4])
     window = f"h1/w-{rng.randrange(100)}"
     values, entries = {}, []
 
@@ -1120,15 +1315,19 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     for k in ks:
         a(f"{window}/a/{k}", steps * rng.choice(sizes), None)
     if calling or rng.random() < 0.5:
-        for c in rng.sample(range(calls), rng.randint(1, min(2, calls))):
-            a(f"{window}/a/{rng.choice(ks)}@{c}", rng.choice(sizes), c // (calls // steps))
+        for st, k in rng.sample([(st, k) for st in range(steps) for k in ks], rng.randint(1, min(2, steps * len(ks)))):
+            a(f"{window}/a/{k}@{st}", rng.choice(sizes), st)
+    if tying or rng.random() < 0.5:
+        for s in rng.sample(range(steps), rng.randint(1, steps)):
+            a(f"{window}/ids@{s}", rng.choice(sizes), s)
     entries += [{"value": f"{window}/z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3, "domain": _hex(rng)},
                 {"value": f"{window}/a/x", "root": _hex(rng)}][:rng.randint(0, 2)]
     rng.shuffle(entries)
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
-    a_ = [e for e in entries if Cr.is_a(e["value"])]
-    e = rng.choice([x for x in a_ if (values[x["value"]][2] is not None) == calling] if calling or name == "blocks"
-                   else a_)
+    tied = [e for e in entries if Cr.is_tied(e["value"])]
+    e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+                   else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
+                   if calling or name == "blocks" else tied)
     v = e["value"]
     own = values[v][2]
     r = rng.randrange(steps) if own is None else own
@@ -1185,29 +1384,34 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             log[r]["a"] = rng.choice([{**log[r]["a"], v: bad}, [segs]])
         case "entries-form":
             entries = rng.choice([None, entries + [5], {"0": entries}])
-        case "call-other-round":
+        case "table-other-round":
             log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
             _reroot(log)
-        case "call-past":
+        case "table-past":
             k = Cr.a_value(v)[0]
-            e["value"] = f"{window}/a/{k}@{calls + rng.randrange(3)}"
+            e["value"] = f"{window}/a/{k}@{steps + rng.randrange(3)}"
             log[own]["a"][e["value"]] = log[own]["a"].pop(v)
             _reroot(log)
-        case "call-blocks":
-            calls += rng.randint(1, steps - 1)
+        case "ids-other-round":
+            log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
+            _reroot(log)
+        case "ids-past":
+            e["value"] = f"{window}/ids@{steps + rng.randrange(3)}"
+            log[own]["a"][e["value"]] = log[own]["a"].pop(v)
+            _reroot(log)
         case _:
             raise ValueError(name)
-    return {"rounds": log, "entries": entries, "calls": calls}
+    return {"rounds": log, "entries": entries}
 
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
                 "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
-                "call-other-round", "call-past", "call-blocks"]
+                "table-other-round", "table-past", "ids-other-round", "ids-past"]
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
-    return {"value": v, "root": _hex(rng), "leaves": n, "words": Cr.b_words(k),
-            "domain": G.domain(program, v, Cr.b_words(k), n).domain_id.hex()}
+    return {"value": v, "root": _hex(rng), "leaves": n, "words": Wt.b_words(k),
+            "domain": G.domain(program, v, Wt.b_words(k), n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1225,7 +1429,7 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     rng.shuffle(entries)
     requests, session = _hex(rng), rng.choice(["s-1", "a.b_c:d-9", "7"])
     roots = {k: bytes.fromhex(e["root"]) for k, e in zip(sorted(rows), b)}
-    window = {"root": PS.window_open_root(Cr.weights_root(roots), bytes.fromhex(requests), session).hex()}
+    window = {"root": PS.window_open_root(Wt.weights_root(roots), bytes.fromhex(requests), session).hex()}
     e = rng.choice(b)
     k = next(kk for kk in rows if e["value"] == f"{prefix}b/{kk}")
     match name:

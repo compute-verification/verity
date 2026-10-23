@@ -221,3 +221,27 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     tm = S.lower(t)[0]
     assert any(c.count > 1 for d in tm.defs for c in d.calls)
     assert _verdict(t, tm)[0] == "syntactic"
+
+
+def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template(monkeypatch):
+    """``c-flock:struct_lower`` (`checks.struct_lowering`, under ``Options.struct_max_gates``): a scan's structural template,
+    evaluated from the template, equals the reference on every correspondence vector; a template whose outputs differ is
+    refused by name on every vector."""
+    from circuit_check import checks as CK
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.ml.circuits.ops.boolean import gemm as GB
+
+    t = resolve(bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32))
+    opts = CK.Options(vectors=16, struct_max_gates=1 << 30)
+    F = CK.Findings()
+    _corr, arrays, ref = CK.correspondence(t, opts, F)
+    params, _ = signature_of(t)
+    rec = CK.struct_lowering(t, params, arrays, ref, F)
+    assert (rec["via"], rec["lowered"], rec["ordered"], rec["mismatches"]) == (CK.STRUCT_VIA, True, True, 0)
+    assert rec["compared"] == sum(r is not None for r in ref) > 0 and not F.failures
+    evaluate = TM.evaluate
+    monkeypatch.setattr(TM, "evaluate", lambda *a, **k: ~evaluate(*a, **k))
+    rec = CK.struct_lowering(t, params, arrays, ref, F)
+    assert rec["mismatches"] == rec["compared"]
+    assert [f["code"] for f in F.failures] == ["lowering-mismatch"] and CK.STRUCT_VIA in F.failures[0]["name"]

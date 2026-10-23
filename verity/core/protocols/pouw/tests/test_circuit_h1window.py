@@ -15,10 +15,12 @@ import pytest
 from verity.ml.circuits import ports as PT
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ports import In, Out, Ports
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, coll_concat
 from verity.ml.circuits.types import Array, Record, Value
 
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -156,36 +158,48 @@ def test_a_mixed_k_window_registers_in_one_read_each_k_under_its_own_ports():
 
 
 def test_each_unit_reads_its_a_rows_and_record_at_its_calls_tables():
-    """A unit's A rows and record are committed in its call's tables before its round's coin, so `table_reads` re-bases them
-    there: tile t of call c, on rows R ti .. R ti + R - 1 of its A block, reads A row i at row R ti + i of call c's A table
-    and its record at row t of call c's z table; its B rows and the rest are `unit_reads`'."""
+    """A unit's A rows are committed in its step's A table of its K and its record in its call's z table before its round's
+    coin, so `table_reads` re-bases them there: tile t of call c, the j-th of its step's calls of K, on rows
+    R ti .. R ti + R - 1 of its A block, reads A row i at row M j + R ti + i of ``a/<K>@<s>`` and its record at row t of
+    call c's z table; its B rows and the rest are `unit_reads`'. At each step count that divides the calls."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, prefix="h1/w/", unit=unit)
     tp = P.evaluate(prog, HW.query(prog))
     want, units, k_of = _expected(LINEARS, CALLS, m), HW.call_units(prog), {name: k for name, k, _n in LINEARS}
     assert units == [(0, 4), (4, 2), (6, 2), (8, 4), (12, 2), (14, 2)]
-    for c, (u0, n) in enumerate(units):
-        lin, blk = CALLS[c]
-        k = k_of[lin]
-        assert (HW.table(prog, "a", c), HW.table(prog, "zy", c)) == (f"h1/w/a/{k}@{c}", f"h1/w/zy@{c}")
-        for t in range(n):
-            got, base, (_k, a0, _b) = HW.table_reads(prog, tp, u0 + t), HW.unit_reads(prog, tp, u0 + t), want[u0 + t]
-            assert HW.call_of(prog, u0 + t) == (c, t)
-            assert got == {**base, **{f"a_k{k}[{i}]": (f"h1/w/a/{k}@{c}", a0 - blk * m + i) for i in range(R)},
-                           "zy": (f"h1/w/zy@{c}", t)}
-            assert all(0 <= got[f"a_k{k}[{i}]"][1] < m for i in range(R))
+    for steps in (1, 2, 3, 6):
+        per = len(CALLS) // steps
+        for c, (u0, n) in enumerate(units):
+            lin, blk = CALLS[c]
+            k, s = k_of[lin], c // per
+            mine = [d for d in range(s * per, (s + 1) * per) if k_of[CALLS[d][0]] == k]
+            assert HW.step_of(prog, c, steps) == (s, len(mine), m * mine.index(c))
+            a = f"h1/w/a/{k}@{s}"
+            assert (HW.table(prog, "a", c, steps), HW.table(prog, "zy", c)) == (a, f"h1/w/zy@{c}")
+            for t in range(n):
+                got, base = HW.table_reads(prog, tp, u0 + t, steps), HW.unit_reads(prog, tp, u0 + t)
+                a0 = want[u0 + t][1]
+                assert HW.call_of(prog, u0 + t) == (c, t)
+                assert got == {**base, **{f"a_k{k}[{i}]": (a, m * mine.index(c) + a0 - blk * m + i) for i in range(R)},
+                               "zy": (f"h1/w/zy@{c}", t)}
+                assert all(m * mine.index(c) <= got[f"a_k{k}[{i}]"][1] < m * (mine.index(c) + 1) for i in range(R))
     with pytest.raises(ValueError, match="no unit"):
         HW.call_of(prog, tp.population)
     with pytest.raises(ValueError, match="a call's tables"):
         HW.table(prog, "b", 0)
+    with pytest.raises(ValueError, match="a call's tables"):
+        HW.table(prog, "a", 0)
+    with pytest.raises(ValueError, match="equal blocks"):
+        HW.table(prog, "a", 0, 4)
 
 
 def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_calls():
-    """`table_reads_file` holds a statement to one call's units. With the call's A table, its z table and the weights' b/32
-    committed as ``row/v2`` registered values under their own names, every A row, B row and record a unit of the call reads
-    opens its port's root at its position (`registered.verify_read`, the check ``--registered`` makes of a table row), a
-    unit of another call reads nothing, and another call's A table, of the same rows under the same salts, opens none of
-    them: its leaves are framed under its own name's domain."""
+    """`table_reads_file` holds a statement to one call's units. With step 1's A table of K = 32 (calls 3 and 4, M rows
+    each, call after call), each call's z table and the weights' b/32 committed as ``row/v2`` registered values under
+    their own names, every A row, B row and record a unit of either call reads opens its port's root at its position
+    (`registered.verify_read`, the check ``--registered`` makes of a table row), call 3's A rows in the table's first M
+    and call 4's in its next M, a unit of another call reads nothing, and another step's A table, of the same rows under
+    the same salts, opens none of them: its leaves are framed under its own name's domain."""
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(7)
@@ -194,27 +208,32 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
         return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
                                    schema=G.SCHEMA_V2)
 
-    c, a = 3, HW.table(prog, "a", 3)
-    u0, n = HW.call_units(prog)[c]
-    tabs = {a: commit(a, m, _words(32)), HW.table(prog, "zy", c): commit(HW.table(prog, "zy", c), n, 3 * R * C),
-            "b/32": commit("b/32", 24, _words(32))}
-    twin = G.Registered.commit(digest, HW.table(prog, "a", 0), tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2)
+    a = HW.table(prog, "a", 3, 2)
+    assert a == HW.table(prog, "a", 4, 2) == "a/32@1"
+    tabs = {a: commit(a, 2 * m, _words(32)), "b/32": commit("b/32", 24, _words(32))}
+    twin = G.Registered.commit(digest, HW.table(prog, "a", 0, 2), tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2)
     assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
-    file = HW.table_reads_file(prog, tp, c, {v: r.root.hex() for v, r in tabs.items()}, ports=HW.window_ports(prog))
-    assert file["format"] == G.READS and sorted(file["ports"]) == sorted(
-        [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
-    for port, e in file["ports"].items():
-        reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
-        assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words, dom.domain_id.hex(),
-                                                                             G.SCHEMA_V2), port
-        assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
-        for u in range(u0, u0 + n):
-            p = e["reads"][u]
-            assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
-            if e["value"] == a:
-                assert not G.verify_read(dom, reg.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
+    for c, j in ((3, 0), (4, 1)):
+        u0, n = HW.call_units(prog)[c]
+        zy = HW.table(prog, "zy", c)
+        tabs[zy] = commit(zy, n, 3 * R * C)
+        file = HW.table_reads_file(prog, tp, c, {v: r.root.hex() for v, r in tabs.items()}, ports=HW.window_ports(prog),
+                                   steps=2)
+        assert file["format"] == G.READS and sorted(file["ports"]) == sorted(
+            [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
+        for port, e in file["ports"].items():
+            reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
+            assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words,
+                                                                                 dom.domain_id.hex(), G.SCHEMA_V2), port
+            assert all(r is None for u, r in enumerate(e["reads"]) if not u0 <= u < u0 + n), port
+            for u in range(u0, u0 + n):
+                p = e["reads"][u]
+                assert G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
+                if e["value"] == a:
+                    assert m * j <= p < m * (j + 1), (port, u)
+                    assert not G.verify_read(dom, reg.root, p, twin.bcs[p], twin.path(p), G.SCHEMA_V2), (port, u)
     with pytest.raises(ValueError, match="roots the verifier does not hold"):
-        HW.table_reads_file(prog, tp, c, {"b/32": "00" * 64})
+        HW.table_reads_file(prog, tp, 3, {"b/32": "00" * 64}, steps=2)
 
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
@@ -225,9 +244,9 @@ def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, window = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), "ab" * 64
     c = 3
-    roots = {HW.table(prog, "a", c): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
-    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog))
-    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=window)
+    roots = {HW.table(prog, "a", c, 2): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
+    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), steps=2)
+    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=window, steps=2)
     assert sorted(file["ports"]) == sorted(bare["ports"])
     for port, e in file["ports"].items():
         held = e["value"] == "b/32"
@@ -289,11 +308,11 @@ def test_a_lone_row_is_read_under_its_parameters_name_as_registered_reads_keys_i
     ports = HW.window_ports(prog)
     assert set(ports) == set(got) - {"zy"} and ports[f"{lone}_k32"] == f"{lone}_k32_0"
     c = 3
-    assert set(HW.table_reads(prog, tp, HW.call_units(prog)[c][0])) == set(want[HW.call_units(prog)[c][0]])
-    roots = {HW.table(prog, "a", c): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
-    file = HW.table_reads_file(prog, tp, c, roots, ports=ports)["ports"]
+    assert set(HW.table_reads(prog, tp, HW.call_units(prog)[c][0], 2)) == set(want[HW.call_units(prog)[c][0]])
+    roots = {HW.table(prog, "a", c, 2): "01" * 64, HW.table(prog, "zy", c): "02" * 64, "b/32": "03" * 64}
+    file = HW.table_reads_file(prog, tp, c, roots, ports=ports, steps=2)["ports"]
     assert sorted(file) == sorted([ports[key] for key in got if "_k32" in key] + ["zy"])
-    assert file[f"{lone}_k32_0"]["value"] == (HW.table(prog, "a", c) if lone == "a" else "b/32")
+    assert file[f"{lone}_k32_0"]["value"] == (HW.table(prog, "a", c, 2) if lone == "a" else "b/32")
 
 
 def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_that_window():
@@ -305,17 +324,17 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(11)
     c, w, other = 3, "ab" * 64, "cd" * 64
-    a, zy = HW.table(prog, "a", c), HW.table(prog, "zy", c)
+    a, zy = HW.table(prog, "a", c, 2), HW.table(prog, "zy", c)
     u0, n = HW.call_units(prog)[c]
 
     def commit(value: str, rows: int, words: int, window: str | None) -> G.Registered:
         return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
                                    schema=G.SCHEMA_V2, window=window)
 
-    tabs = {a: commit(a, m, _words(32), w), zy: commit(zy, n, 3 * R * C, w), "b/32": commit("b/32", 24, _words(32), None)}
+    tabs = {a: commit(a, 2 * m, _words(32), w), zy: commit(zy, n, 3 * R * C, w), "b/32": commit("b/32", 24, _words(32), None)}
     roots = {v: r.root.hex() for v, r in tabs.items()}
-    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w)["ports"]
-    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog))["ports"]
+    file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w, steps=2)["ports"]
+    bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), steps=2)["ports"]
     twin = G.Registered.commit(digest, a, tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2, window=other)
     assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
     for port, e in file.items():
@@ -492,3 +511,127 @@ def test_a_window_whose_receipts_padding_spills_into_another_block_is_staged():
     assert [HW.tile_unit(k, TILE).signature()[1].fields[0][1].leaves // 8 for k in ks] == [112, 120, 240, 248]
     prog = HW.program(tuple((f"l{k}", k, C) for k in ks), tuple((f"l{k}", 0) for k in ks), R, TILE)
     assert HW.call_units(prog) == [(0, 1), (1, 1), (2, 1), (3, 1)]
+
+
+#: a leaf of four lanes (G = Q = 2), so a lane's rows and columns are not the leaf's first
+LEAF = (8, 16)
+LEAF_LINEARS = (("q_proj", 32, 32), ("k_proj", 32, 16), ("down_proj", 64, 16))
+
+
+def _leaf_window():
+    return HW.program(LEAF_LINEARS, CALLS, HW.slot(5, LEAF), LEAF, prefix="h1/w/", unit=lambda k: unit(k, LEAF))
+
+
+def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
+    """Each of a drawn leaf's statements reads its value's leaf-local row (`leaf_lanes.reads`) past the leaf's `place` in
+    that value, proofs' ``place`` in `PouwWindow.Lanes.ownOf`: lane l's A row at slot s is the tile's A row
+    ``rowOf l s`` where `table_reads` has it, its B row at slot t the tile's ``colOf l t``, its record the tile's, and its
+    partial row l of the leaf's produced partials; the combine's p<x> row x of them and its receipt row t of the call's
+    receipts. At each step count that divides the calls."""
+    prog = _leaf_window()
+    tp = P.evaluate(prog, HW.query(prog))
+    (r, c), units, k_of = LEAF, HW.call_units(prog), {name: k for name, k, _n in LEAF_LINEARS}
+    for steps in (1, 2, 3, 6):
+        for ci, (u0, n) in enumerate(units):
+            lin = CALLS[ci][0]
+            k = k_of[lin]
+            for t in range(n):
+                u = u0 + t
+                at, tr = HW.place(prog, u, steps), HW.table_reads(prog, tp, u, steps)
+                assert at[LL.ZY] == (f"h1/w/zy@{ci}", t) and at[LL.RECEIPT] == (f"h1/w/receipt@{ci}", t)
+                assert at[LL.PARTIALS] == (LL.PARTIALS, 0) and at[LL.B][0] == f"h1/w/b/{k}"
+                assert at[LL.A] == (tr[f"a_k{k}[0]"][0], tr[f"a_k{k}[0]"][1]) and at[LL.B][1] == tr[f"b_k{k}[0]"][1]
+                for ln in range(LL.lanes(r, c)):
+                    got = HW.leaf_reads(prog, u, LL.LANE, ln, steps=steps)
+                    assert got == {**{f"a{s}": tr[f"a_k{k}[{i}]"] for s, i in enumerate(LL.lane_rows(r, c, ln))},
+                                   **{f"b{q}": tr[f"b_k{k}[{j}]"] for q, j in enumerate(LL.lane_cols(r, c, ln))},
+                                   "zy": (HW.table(prog, "zy", ci), t), "partials": (LL.PARTIALS, ln)}, (steps, u, ln)
+                    assert set(got) | set(LL.known(r, c, LL.LANE, ln)) == LL.own(r, c, LL.LANE, ln)
+                assert HW.leaf_reads(prog, u, LL.COMBINE, steps=steps) == {
+                    **{f"p{x}": (LL.PARTIALS, x) for x in range(LL.lanes(r, c))}, "receipt": (f"h1/w/receipt@{ci}", t)}
+    assert HW.table(prog, HW.RECEIPTS, 4) == "h1/w/receipt@4"
+
+
+def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
+    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), the file says so
+    (``complete``), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
+    the call's A, z and receipt tables bind the window's open root and the weights' b/<K> none, each at its table's rows
+    and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
+    entry. A value whose root the verifier doesn't hold, or a port both read and known, is refused."""
+    prog, window = _leaf_window(), "cd" * 64
+    digest, (r, c), u, steps = P.program_digest(prog), LEAF, 7, 2
+    ci = HW.call_of(prog, u)[0]
+    k = 64
+    at = HW.place(prog, u, steps)
+    roots = {v: f"{i + 1:02x}" * 64 for i, (v, _row) in enumerate(at.values())}
+    partials = {"leaves": LL.lanes(r, c), "words": 4, "word_bits": 16, "domain": "ee" * 64}
+    tile_receipt = dict(dict(prog.fn.bindings["TILES"])[k].signature()[1].fields)["receipt"]
+    for kind, ln in [(LL.LANE, ln) for ln in range(LL.lanes(r, c))] + [(LL.COMBINE, None)]:
+        i = LL.statements(r, c).index((kind, ln))
+        rows = HW.leaf_known_rows(prog, kind, ln, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)))
+        known = {p: {"value": v, "row": w} for p, (v, w) in rows.items()}
+        file = HW.leaf_reads_file(prog, u, kind, ln, roots, partials, known, window=window, steps=steps)
+        ports = file["ports"]
+        assert file["format"] == G.READS and file[LL.COMPLETE] is True and set(ports) == LL.own(r, c, kind, ln)
+        assert known[LL.OK]["value"] == f"ok{i}" and (kind == LL.COMBINE or rows[LL.ADMIT][1] == LL.bits_words([1] * r))
+        for port, (value, row) in HW.leaf_reads(prog, u, kind, ln, steps=steps).items():
+            e = ports[port]
+            assert (e["value"], e["root"], e["reads"], e["row_schema"]) == (value, roots[value], [row], G.SCHEMA_V2)
+            logical = LL.reads(r, c, kind, ln)[port][0]
+            assert e.get(HW.READ_IN_FULL, False) is (logical in HW.FULL), port
+            if value == LL.PARTIALS:
+                assert {x: e[x] for x in partials} == partials
+                continue
+            held = value == f"h1/w/b/{k}"
+            assert e["domain"] == G.domain(digest, value, e["words"], e["leaves"],
+                                           window=None if held else window).domain_id.hex(), port
+            assert e["domain"] == Cr.domain_of(digest, window, e), port
+            if logical == LL.RECEIPT:
+                assert (e["leaves"], e["words"]) == (HW.call_units(prog)[ci][1], tile_receipt.leaves // 16)
+            if logical == LL.A:
+                assert (e["leaves"], e["words"]) == (HW.slot(5, LEAF) * HW.step_of(prog, ci, steps)[1], _words(k))
+    lane = HW.leaf_known_rows(prog, LL.LANE, 0, salt=bytes(64), position=u, roots=(bytes(64), bytes(64)))
+    with pytest.raises(ValueError, match="does not hold"):
+        HW.leaf_reads_file(prog, u, LL.LANE, 0, {LL.PARTIALS: "00" * 64}, partials, {}, steps=steps)
+    with pytest.raises(ValueError, match="both reads and known"):
+        HW.leaf_reads_file(prog, u, LL.LANE, 0, roots, partials, {"zy": lane[LL.OK]}, steps=steps)
+
+
+def test_a_windows_leaves_have_no_lanes_but_over_h1zys_unit():
+    """The lanes and the combine are derived from the window's own template at K, whose unit must be h1zy's zy unit over
+    an H1 tile: a window of another unit, or a K it has no template at, derives none."""
+    prog = _leaf_window()
+    with pytest.raises(ValueError, match="no lanes"):
+        HW.leaf_unit(prog, 32, LL.LANE)
+    with pytest.raises(ValueError, match="no template at K = 48"):
+        HW.leaf_program(prog, 48, LL.COMBINE)
+    with pytest.raises(ValueError, match="a drawn leaf's statement"):
+        HW.leaf_unit(prog, 32, "tile")
+
+
+@pytest.mark.slow
+def test_a_windows_lanes_and_combine_are_derived_from_its_template_one_unit_each():
+    """At the real zy unit (16 × 8, K = 384, the least the combine takes): K's lane and combine are `h1zy.lane` and
+    `h1zy.combine` over the TILE of the window's own template at K, each the one unit of its one-call Program under its
+    instance query, with its ports (the salt a coin, the position a position, ok a sink) and its statement rows
+    `h1zy.statement_rows`'; each Program is its wrapper's over that TILE alone, whatever the window's layout or prefix, so
+    a period has one of each; and the receipts' row is the combine's ``receipt``, 2 (KS + m) u32. What the stand-in can't show is
+    that the wrappers of the real lane and combine are single-unit Programs: the window traces the tile's seed and noise
+    circuits (about 30 s), and each leaf Program's descriptor takes about 6 s."""
+    k, tile = 384, (16, 8)
+    prog = HW.program((("q_proj", k, 16), ("k_proj", k, 8)), (("q_proj", 0), ("k_proj", 0)), 16, tile, prefix="h1/w/")
+    t = dict(prog.fn.bindings["TILES"])[k].bindings["UNIT"].bindings["TILE"]
+    for kind, d in ((LL.LANE, Z.lane(t)), (LL.COMBINE, Z.combine(t))):
+        assert HW.leaf_unit(prog, k, kind).id == d.id
+        p, q = HW.leaf_program(prog, k, kind)
+        assert HW.leaf_program(prog, k, kind)[0] is p
+        assert P.units(p, q) == 1 and q == P.template_instances_query([d])
+        wrap = HW.PouwH1WindowLane if kind == LL.LANE else HW.PouwH1WindowCombine
+        assert p.fn.id == Program(bind(wrap, UNIT=d, K=k)).fn.id
+        assert [n for n, _t in p.fn.signature()[0]] == [n for n, _t in d.signature()[0]]
+        assert PT.declared(p.fn) == PT.declared(d)
+        rows = [port for port, _ps in Z.statement_rows(d)]
+        assert set(rows) | {LL.OK} == LL.own(*tile, kind, 0 if kind == LL.LANE else None)
+    (_rows, words), = [s for v, s in HW._shapes(prog, 0, 1).items() if v == HW.table(prog, HW.RECEIPTS, 0)]
+    assert words == 2 * LL.words(k) == 4 * (k // 32 + LL.n_digits(k // 32))
+    assert 16 * words == sum(dict(Z.combine(t).signature()[0])["receipt"].leaf_widths())

@@ -56,7 +56,11 @@ structure LookupTable where
   loTop : Nat
   deriving Inhabited
 
-/-- An expanded circuit in `flock-ir-unit/v2` form, `2^unitLog` rows (rows past `useful` are empty). -/
+instance instDecidableEqThunk_flock {α : Type} [DecidableEq α] : DecidableEq (Thunk α) := fun x y =>
+  decidable_of_iff (x.get = y.get) ⟨Thunk.ext, fun h => h ▸ rfl⟩
+
+/-- An expanded circuit in `flock-ir-unit/v2` form, `2^unitLog` rows (rows past `useful` are empty). Its A and B are built
+when first read (`Net.a`, `Net.b`): a templated unit's (`Tmpl.unitNet`) are not, on the verifier's path. -/
 structure Net where
   name : String
   useful : Nat
@@ -64,14 +68,20 @@ structure Net where
   inGroups : Array Group
   outGroups : Array Group
   inWords : Nat
-  a : Sparse
-  b : Sparse
+  aT : Thunk Sparse
+  bT : Thunk Sparse
   unitLog : Nat
   /-- a lookup slot: what the fold reads from its table beyond the explicit rows -/
   lookup : Option LookupTable := none
   deriving Inhabited
 
 namespace Net
+
+/-- The net's A. Reducible, as the field it replaced was: `{ n with lookup := l }.a` is `n.a` to `rw` and `simp`. -/
+@[reducible] def a (n : Net) : Sparse := n.aT.get
+
+/-- The net's B. -/
+@[reducible] def b (n : Net) : Sparse := n.bT.get
 
 /-- Topological order: every computed row (after the `inCols` input rows, before the constant) reads, in A and in B, only
 earlier columns that are not input padding (an empty input row: a forced zero), or the constant. With the input rows and
@@ -139,7 +149,7 @@ def ofRows (name : String) (useful constPos : Nat) (inGroups outGroups : Array G
   -- D11: an output group lies inside its unit's slot, so a region at its column (`Circuit.outRegion`) stays in the slot
   if let some g := outGroups.find? (fun g => g.col + g.words > 2 ^ unitLog / WORD) then
     throw s!"flock-ir-unit/v2: output group at word {g.col} ({g.words} words) overruns its unit's {2 ^ unitLog / WORD} words (D11)"
-  return { name, useful, constPos, inGroups, outGroups, inWords, a, b, unitLog }
+  return { name, useful, constPos, inGroups, outGroups, inWords, aT := .pure a, bT := .pure b, unitLog }
 
 /-- A net `ofRows` builds holds exactly the rows it was given: its A and B are theirs at its slot size, and its size,
 constant and port groups are the ones given. And the checks it ran hold: the input rows end before the constant, each is

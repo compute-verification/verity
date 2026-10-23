@@ -272,12 +272,13 @@ only inside a proof (`one_stage.registered`).
   and one whose units it did not derive (`verity/ml/flock/verifier/PROTOCOL.md` §16.10).
 - Served trees (`served.register_served`): a served root is a hiding commitment that binds nothing on its own, so every
   served path registers each tree a proof unit reads as a registered value (`ServedTree`: value, root, leaves, words,
-  `word_bits`, domain, its row format `row_schema`, and for an earlier run's output its `(record digest, port)`), writes the
+  `word_bits`, domain, its row format `row_schema`, for an earlier run's output its `(record digest, port)`, and for an
+  earlier record's registered value it reuses, with no tree of its own, its `(record digest, value)`), writes the
   verifier's `--registered` file from it, and verifies with `flock-verify --zk --registered`: the premise
   `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`. The positions are the path's own public Program
   and `Q_template_instance` query, which the session's `--program` and `--partition` (the returned `partition`) carry;
-  rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output, the
-  earlier port's, and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
+  rows are fixed slots padded with zeros. A tree's domain is its value's registered-value domain or, for an output or a
+  reused value, the earlier port's or entry's (R7 holds the record to it: `registration.check(..., outputs=)`), and `register_served` refuses any other, a value twice, a root that is not 64 bytes of lowercase hex,
   no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
   R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no unit
   reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.

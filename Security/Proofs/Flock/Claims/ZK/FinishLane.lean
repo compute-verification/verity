@@ -10,6 +10,8 @@ opening's `T` (`openT`) and its restart is `T'`, the two rows are `rowsOf`'s row
 * **`laneRunR`**, **`laneRowR`**: `laneRun` and `laneRow` are the executable's lane claim (`ZkExec.Rel2`, the constant
   included).
 * **`lanesR`**: `ligeritoConstraints`' two rows are `limbRows` of `laneRow` (`ofZk`).
+* `LaneAt`: level 0's proof read at the view, `lanesR`'s premises; `LaneCoins`: its record's coins the model's, all
+  `TauLig.lanesA` reads for the rows' coefficients.
 -/
 
 namespace Claims.ZKMal
@@ -250,6 +252,13 @@ theorem lanesAt {nC : ℕ} (sh : Fin nC → Fin 128 → FlockLevel3.GF128) (T' :
     lgc.size = 2 ∧ ∀ k : Fin 2, (Composed.ofZk (lgc[k.val]!).2 : ZkSession.Lin FlockLevel3.GF128 (nE + 4)) =
       ZkSession.limbRows execArith (Composed.laneRow Tz st c r v sh T') k :=
   lanesR Tz st c r v sh T' hlen lg rec zl hL.target hL.ood hL.lane hL.rho hL.oodVal hL.msg hL.e0 hL.e1 hL.tPrime hlgc
+
+/-- **Level 0's record holds the model's coins**: its out-of-domain coin, lane challenges and pair coins, `LaneAt`'s
+coin fields, all `lanesA`'s coefficients read. -/
+structure LaneCoins (rec : _root_.Flock.Zk.L0Rec) : Prop where
+  ood : ∀ i, fOf rec.ood[0]!.1 = fOf (c.rest.ood r i)
+  lane : ∀ j (hj : j < Tz.sch.k0), rec.challenges[j]! = c.rest.lane r ⟨j, hj⟩
+  rho : rec.rho = c.rho r
 
 end Lane
 

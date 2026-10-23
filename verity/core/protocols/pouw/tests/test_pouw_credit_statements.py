@@ -104,7 +104,7 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
         (base / "session").mkdir(parents=True)
         (base / "circuit.txt").write_bytes(circuit(ks[lay["calls"][c][0]]))
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n")
-        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"])
+        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]))
         assert why is None, why
         files = [base.joinpath("circuit.txt").read_bytes(), base.joinpath("pub.bin").read_bytes(), raw,
                  json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
@@ -117,9 +117,9 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
     return out
 
 
-def window(seed: int, tmp: Path, per_call: bool = True) -> tuple[dict, list[dict]]:
-    d = cases.window_instance(random.Random(f"statements/{seed}"), "honest", per_call=per_call)
-    return d, prove(d, d["k"], tmp) if per_call else []
+def window(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
+    d = cases.window_instance(random.Random(f"statements/{seed}"), "honest")
+    return d, prove(d, d["k"], tmp)
 
 
 def credit(d: dict, statements, files=None):
@@ -221,7 +221,8 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     roots = {}
     for e in d["entries"]:
         roots.setdefault(e["value"], []).append(e["root"])
-    reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"])
+    reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"],
+                                len(d["rounds"]))
     files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw, json.dumps(Cr.partition_of(program, shape)).encode(),
              json.dumps(reg).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
@@ -233,18 +234,6 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     assert got is None and refused == ("proof", f"call {s['call']}'s session {s['sessions'][0]} proved unit {other}, "
                                                 f"which is no unit of call {s['call']}: a call's statement proves its "
                                                 "own call's units")
-
-
-@pytest.mark.parametrize("seed", SEEDS)
-def test_a_window_registering_no_call_tables_has_no_statement_to_verify(seed, tmp_path, verifier):
-    """Credit's statements read main's served form, each call's A table ``…/a/<K>@<c>`` and z table ``…/zy@<c>``: a
-    window that registers only its window-wide A values has nothing a call's statement can be verified against."""
-    d, _ = window(seed, tmp_path, per_call=False)
-    sizes = [size for size, _w in Cr.call_work(_layout(d))]
-    u = _units(d, d["k"])[0]
-    c = next(c for c in range(len(sizes)) if sum(sizes[:c]) <= u < sum(sizes[:c + 1]))
-    got, refused = credit(d, [{"call": c, "circuit": "c", "public": "p", "sessions": ["s"]}])
-    assert got is None and refused[0] == "registration" and "which the window registers not" in refused[1], refused
 
 
 def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypatch):
@@ -260,10 +249,10 @@ def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypa
 
 def _period(seed: int, tmp: Path, files: dict | None = "own"):
     rng = random.Random(f"statements-period/{seed}")
-    probe = cases.period_instance(random.Random(f"statements-period/{seed}"), per_call=True)
+    probe = cases.period_instance(random.Random(f"statements-period/{seed}"))
     lay = _layout(probe["windows"][0])
     committed = {} if files is None else {Cr.CIRCUIT_FILES: files_of(lay) if files == "own" else files}
-    d = cases.period_instance(rng, committed_too=committed, per_call=True)
+    d = cases.period_instance(rng, committed_too=committed)
     k, _ = Cr.committed_k(d["ledger"], d["name"])
     windows = []
     for i, w in enumerate(d["windows"]):

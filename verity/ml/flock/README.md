@@ -18,9 +18,13 @@ and what the merge gate runs per family: `../../../archive/README.md`.
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
   - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
-    the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`); `tables.py`
+    the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
+    the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
+    Lean's `Tmpl.layoutM`), which the verifier refuses until its proof lands; `tables.py`
     (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
-    any partition as an M0 statement, and `class_sweep.py`, the backend sweep's work lists; `circuit_bench.py`,
+    any partition as an M0 statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
+    template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
+    backend sweep's work lists; `circuit_bench.py`,
     `flock-circuit`'s sweep.
   - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
     registration.

@@ -48,8 +48,8 @@ def witnessV2Net : Net where
   inGroups := #[(⟨0, 8, #[1024]⟩ : Flock.Group)]
   outGroups := #[(⟨8, 1, #[1]⟩ : Flock.Group)]
   inWords := 8
-  a := witnessV2Rows 0
-  b := witnessV2Rows 1
+  aT := .pure (witnessV2Rows 0)
+  bT := .pure (witnessV2Rows 1)
   unitLog := 11
 
 /-- A `sha512/row/v2` row of 64 u16 words (1,024 bits) in one compression. -/

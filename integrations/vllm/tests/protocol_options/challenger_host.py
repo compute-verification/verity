@@ -4,21 +4,29 @@ pair, the serving side's `RemoteChallenger` on the other; the session's close is
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. #2643's `tests/check/challenger_host.py`,
-over any challenger."""
+`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. Each seals the host's
+pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as the gate does (``pins: {lines, sha512}``),
+and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
+session to it. Each holds a `Registry`, infra's model registry in this process, whose registration a period opened with
+``model`` signs (the gate's ``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``).
+#2643's `tests/check/challenger_host.py`, over any challenger."""
 from __future__ import annotations
 
+import functools
 import hashlib
+import importlib.util
 import itertools
 import json
 import os
 import random
 import socket
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
@@ -26,6 +34,82 @@ from verity.ml.crypto import lms
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
 
 HOST = "vy-challenger-1"
+#: the commit every open here was run from (``pinned``), and the host's pins log recording it as main's
+PINNED = "0" * 40
+PINS = (LC.pin_line(PINNED, PINNED, "2026-10-20T10:00:00Z"),)
+#: the int8 checkpoint role a period's open names with its weights' root (``--model``), one core's credit pins
+MODEL = "LLAMA31_8B_INT8"
+#: the tree infra's model registry reads core's pins in (`models.PINS`)
+TREE = Path(__file__).resolve().parents[4]
+
+
+@functools.cache
+def models():
+    """Infra's model registry, ``benchmarks/live_challenger/models.py``, as a module of its own."""
+    spec = importlib.util.spec_from_file_location("live_challenger_models", TREE / "benchmarks/live_challenger/models.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def linear_rows(codes, scales) -> Iterator[bytes]:
+    """A linear's B rows (`weights.row_bytes`) from its int8 codes ``(n, K)`` and f32 s_w ``(n,)`` or ``(n, 1)``, as
+    `models.rows_of` reads them from a checkpoint."""
+    import numpy as np
+    s = np.asarray(scales, "<f4").reshape(-1)
+    for j, row in enumerate(np.asarray(codes, np.int8)):
+        yield Wt.row_bytes(row.tobytes(), s[j].tobytes())
+
+
+class Registry:
+    """Infra's model registry (`models`: the gate's ``model-register``, ``model-key`` and ``period-open --model``) in this
+    process. `register` commits a model's ``b/<K>`` as `models.register` does: the window Program's linears from its
+    descriptor (`models.layout`), each K's root by core's `weights.weights_roots` under a fresh salt key, and the line
+    appended in `models.register`'s form; `key` is the gate's ``model-key`` answer (`models.resolve`, one registration
+    of the model under the circuit) and `opened` what a period-open signs for its model (`models.opened`), each Refused
+    (`models.Refused`) as the gate refuses. What differs from infra's: the checkpoint is ``rows``, the test's own linears
+    by name, not a pinned checkpoint's files, so its ``checkpoint_sha512`` is core's pin of the role (`models.
+    pinned_checkpoint`), unchecked, and its linears need not be a Llama decoder's."""
+
+    def __init__(self, entropy: Callable[[int], bytes] | None = None) -> None:
+        self.lines: list[dict] = []
+        self._keys: dict[str, bytes] = {}
+        self._entropy = entropy or random.Random("registry").randbytes
+
+    def register(self, model: str, circuit: str, descriptor: bytes, rows: Callable[[str, int], Iterable[bytes]]) -> dict:
+        """The registry's line of `model`'s weights under `circuit` (`descriptor`'s SHA-512), ``rows(name, K)`` each
+        linear's B rows in the window's order."""
+        M = models()
+        pin = M.pinned_checkpoint(TREE, model)
+        prefix, linears = M.layout(descriptor, circuit)
+        key = self._entropy(32)
+        shapes = [(n, k) for _name, k, n in linears]
+        roots = Wt.weights_roots(circuit, prefix, shapes, lambda w: rows(linears[w][0], linears[w][1]), key)
+        leaves = {k: sum(n for n, kw in shapes if kw == k) for k in roots}
+        line = {"model": model, "circuit": circuit, "prefix": prefix, "checkpoint_sha512": pin,
+                "roots": {str(k): roots[k].hex() for k in sorted(roots)},
+                "entries": [Wt.entry(circuit, prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
+                "weights_root": Wt.weights_root(roots).hex(), "key_sha512": hashlib.sha512(key).hexdigest(),
+                "pinned": PINNED, "registered_utc": "2026-10-20T10:30:00Z"}
+        self._keys[line["key_sha512"]] = key
+        self.lines.append(line)
+        return line
+
+    def key(self, model: str, circuit: str, weights_root: str | None = None) -> dict:
+        """The gate's ``model-key --model M --circuit C [--weights-root W]`` answer (`auditor.gate_model_key`'s)."""
+        e = models().resolve(self.lines, circuit, model, weights_root, unique=True)
+        return {"model": e["model"], "circuit": e["circuit"], "weights_root": e["weights_root"],
+                "key": self._keys[e["key_sha512"]].hex(), "key_sha512": e["key_sha512"]}
+
+    def opened(self, circuit: str | None, model: str | None, weights_root: str | None) -> dict:
+        """What a period-open of `circuit` naming `model` (``--model``) or `weights_root` (``--weights-root``) signs."""
+        return models().opened(self.lines, TREE, circuit, model, weights_root)
+
+
+def write_pins(path: Path, pins=PINS) -> Path:
+    """`pins` (the host's pins log, its lines) at `path`, as infra publishes it (the gate's ``pins``)."""
+    path.write_text("".join(line + "\n" for line in pins))
+    return path
 
 
 def entropy(seed: int):
@@ -60,11 +144,16 @@ class Gate:
     returns the gate's open answer (``commitment`` null, as before serve.py has signed its record), `take` the next leaf
     for a session's record, `end` a session's end entry over its ``out/`` as the gate's ``run`` computes it,
     `period_open` and `period_close` a lane's period entries (the close listing its windows' outcomes as the gate
-    counts them), and `lines` is the ledger as infra publishes it. Unlike the gate it appends whatever it is asked, so a
-    test writes the ledgers the verifier must refuse."""
+    counts them), `model_register` and `model_key` the model registry's verbs (`registry`), and `lines` is the ledger as
+    infra publishes it. Unlike the gate it appends whatever it is asked, so a test writes the ledgers the verifier must
+    refuse, except that a period-open naming a model or a weights' root signs what the registry resolves it to, and is
+    refused as the gate refuses it."""
 
-    def __init__(self, private: lms.PrivateKey, key: LC.ChallengerKey, leaf: int = 0) -> None:
+    def __init__(self, private: lms.PrivateKey, key: LC.ChallengerKey, leaf: int = 0,
+                 registry: Registry | None = None) -> None:
         self.private, self.key, self._leaf, self.lines, self._opens = private, key, leaf, [], {}
+        self.registry = registry or Registry()
+        self.pins = list(PINS)
         self._reserves: dict[str, dict] = {}
         self._periods: dict[str, dict] = {}
         self._current: dict[str, str] = {}
@@ -85,18 +174,40 @@ class Gate:
         expires = (datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=minutes)).strftime(
             "%Y-%m-%dT%H:%M:%SZ")
         body = {"by": by, **({"for": for_} if for_ else {}), "peer": "vy-nebius-1", "scheme": scheme, "epoch": epoch,
-                "families": [list(f) for f in families], "minutes": minutes, "pinned": "0" * 40, "key_sha512": self.pin,
+                "families": [list(f) for f in families], "minutes": minutes, "pinned": PINNED, "key_sha512": self.pin,
                 "host": f"{HOST}.{session}", "started_utc": started, "expires_utc": expires, **override}
         e = self.append("reserve", session, body)
         self._reserves[session] = e
         self._join(for_ or by, session)
         return e
 
+    def model_register(self, model: str, circuit: str, descriptor: bytes,
+                       rows: Callable[[str, int], Iterable[bytes]]) -> dict:
+        """vy-admin's ``model-register --model M --circuit C --descriptor FILE``, the checkpoint ``rows`` (`Registry`):
+        the gate's answer."""
+        line = self.registry.register(model, circuit, descriptor, rows)
+        return {k: line[k] for k in ("model", "circuit", "prefix", "checkpoint_sha512", "roots", "weights_root",
+                                     "key_sha512", "registered_utc")}
+
+    def model_key(self, model: str, circuit: str, weights_root: str | None = None) -> dict:
+        """A lane's ``model-key --model M --circuit C [--weights-root W]``: the gate's answer, or ``{refused}``."""
+        try:
+            return self.registry.key(model, circuit, weights_root)
+        except models().Refused as e:
+            return {"refused": str(e)}
+
     def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
-                    circuit: str | None = None, **override) -> dict:
+                    circuit: str | None = None, draw_k: int | None = None, model: str | None = None,
+                    weights_root: str | None = None, **override) -> dict:
+        """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit`` and ``draw_k`` (the
+        proof service's committed draw K, `credit.K_FIELD`) when given, and with ``model`` (``--model``) or
+        ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
+        (`models.Refused`) for a root it has no entry of."""
+        signed = self.registry.opened(circuit, model, weights_root)
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
-                **({"circuit": circuit} if circuit is not None else {}), "pinned": "0" * 40, "key_sha512": self.pin,
-                "opened_utc": "2026-10-20T11:00:00Z", **override}
+                **({"circuit": circuit} if circuit is not None else {}),
+                **({CR.K_FIELD: draw_k} if draw_k is not None else {}), **signed, "pinned": PINNED,
+                "key_sha512": self.pin, "opened_utc": "2026-10-20T11:00:00Z", **override}
         self._periods[name], self._current[lane] = {"lane": lane, "windows": []}, name
         return self.append("period-open", None, body)
 
@@ -141,11 +252,12 @@ class Gate:
         if reserved is not None:
             rb = reserved["body"]
             body = {"window": {"root": root}, "reserve": reserved["seq"], **{k: rb[k] for k in LC.RESERVED if k in rb},
-                    "opened_by": by, "pinned": "0" * 40, "key_sha512": key_sha512 or self.pin, "host": rb["host"],
-                    "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
+                    "opened_by": by, "pinned": PINNED, "pins": LC.pins_seal(self.pins),
+                    "key_sha512": key_sha512 or self.pin, "host": rb["host"], "port": 7811, "secret_sha512": hashlib.sha512(bytes.fromhex(secret)).hexdigest(),
                     "started_utc": rb["started_utc"]}
         else:
-            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": "0" * 40,
+            body = {"window": {"commit": root, "period": "p"} if v1 else {"root": root}, "pinned": PINNED,
+                    "pins": LC.pins_seal(self.pins),
                     "host": f"{HOST}.{session}", "key_sha512": key_sha512 or self.pin,
                     "peer": "vy-nebius-1", "port": 7811, "scheme": scheme, "epoch": epoch,
                     "families": [list(f) for f in families], "minutes": 10, "started_utc": "2026-10-20T11:08:46Z",
@@ -184,22 +296,36 @@ class Gate:
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self) -> PHC.Ledger:
-        return PHC.Ledger.of([self.lines], self.key)
+    def ledger(self, pins=None) -> PHC.Ledger:
+        """The ledger as `pouw_h1_challenger.Ledger` reads it, under the host's pins log `pins` (its lines; by default
+        the gate's own)."""
+        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)])
+
+    def pins_head(self, path: Path) -> Path:
+        """The gate's pins log at `path`, as infra publishes it."""
+        return write_pins(path, self.pins)
 
 
 class Ledger:
     """The auditor's ledger at `path`, its entries signed under key `seed` at the next of `leaves` (shared with the
     challenger's own signatures under that key, of height `H`), naming key `named` in its opens (by default its own);
-    `reserve` reserves a session, whose `open` then binds that reserve (the gate's two-step open)."""
+    `reserve` reserves a session, whose `open` then binds that reserve (the gate's two-step open). Its opens seal the
+    host's pins log `PINS`, which it writes beside `path` (`pins_path`, infra's published ``pins.jsonl``). Its period
+    opens sign the model registry `registry`'s registrations (`Registry.opened`)."""
 
     def __init__(self, path: Path, seed: int, leaves: Iterator[int] | None = None,
-                 named: LC.ChallengerKey | None = None, H: int = 4) -> None:
+                 named: LC.ChallengerKey | None = None, H: int = 4, registry: Registry | None = None) -> None:
         self.path, self.lines = path, []
+        self.registry = registry or Registry()
+        self.pins_path = write_pins(path.parent / f"{path.stem}.pins.jsonl")
         self.private, self.key = challenger_key(seed, H)
         self.leaves = itertools.count() if leaves is None else leaves
         self.key_sha512 = hashlib.sha512((named or self.key).public).hexdigest()
         self._reserves: dict[str, int] = {}
+        self._period: str | None = None
+        self._windows: list[str] = []
+        self._roots: dict[str, str] = {}
+        self._complete: dict[str, bool] = {}
 
     def append(self, kind: str, session: str, body: dict, leaf: int | None = None) -> None:
         q = next(self.leaves) if leaf is None else leaf
@@ -207,20 +333,45 @@ class Ledger:
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
+    def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None, model: str | None = None,
+                    weights_root: str | None = None, circuit_files: dict | None = None, leaf: int | None = None) -> None:
+        """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
+        with ``draw_k`` (`credit.K_FIELD`), ``model`` (the gate's ``--model``: `registry`'s registration's weights' root,
+        signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's), and
+        ``circuit_files`` (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) when given."""
+        signed = self.registry.opened(circuit, model, weights_root)
+        self._period, self._windows = name, []
+        self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
+                                          **({CR.K_FIELD: draw_k} if draw_k is not None else {}), **signed,
+                                          **({"circuit_files": circuit_files} if circuit_files is not None else {}),
+                                          "key_sha512": self.key_sha512}, leaf)
+
+    def period_close(self, name: str, leaf: int | None = None) -> None:
+        """The close of period `name`, listing its windows as core's check counts them."""
+        ws = [{"root": self._roots.get(s), "session": s, "complete": self._complete.get(s, False)} for s in self._windows]
+        self.append("period-close", None, {"period": name, "lane": "vllm", "by": "vllm", "windows": ws,
+                                           "complete": bool(ws) and all(w["complete"] for w in ws)}, leaf)
+        self._period = None
+
     def reserve(self, session: str, leaf: int | None = None) -> None:
         self._reserves[session] = len(self.lines)
+        if self._period is not None:
+            self._windows.append(session)
         self.append("reserve", session, {"by": "vllm", "minutes": 10, "started_utc": "2026-10-20T11:08:00Z",
                                          "expires_utc": "2026-10-20T11:18:00Z", "key_sha512": self.key_sha512}, leaf)
 
     def open(self, session: str, window: dict, leaf: int | None = None) -> None:
         reserved = ({"reserve": self._reserves[session], "minutes": 10, "opened_by": "vllm",
                      "started_utc": "2026-10-20T11:08:46Z"} if session in self._reserves else {})
-        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": "0" * 40,
+        self.append("open", session, {"window": window, "host": f"{HOST}.{session}", "pinned": PINNED,
+                                      "pins": LC.pins_seal(PINS),
                                       "key_sha512": self.key_sha512, "port": 7811, "by": "vllm", **reserved}, leaf)
+        self._roots[session] = window.get("root")
 
     def end(self, session: str, directory: Path, closed: bool) -> None:
         files = {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(directory.iterdir()) if p.is_file()}
         record = json.loads((directory / R.RECORD).read_text())
+        self._complete[session] = closed
         self.append("end", session, {"closed": closed, "files": files, "rc": 0 if closed else 1, "complete": closed,
                                      "record_leaf": int(record["signature"][:8], 16),
                                      "commitment": record["commitment"]["root"],
