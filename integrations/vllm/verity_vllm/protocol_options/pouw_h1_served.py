@@ -591,10 +591,14 @@ class Served:
         A table ``a`` and the weights' ``b`` are: row t unit u0 + t's public row, `core_check.public_words` of the
         window's Program salt, u0 + t and (root(a), root(b)), salted `core_check.public_row_salt` of the open root and
         u0 + t, as credit's `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
-        roots, units, out = (self.registered[a].root, self.registered[b].root), HW.call_units(self.program), {}
+        units, out = HW.call_units(self.program), {}
+        x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
         for c in calls:
             u0, n = units[c]
-            words = np.array([CC.public_words(run._salt, u, roots) for u in range(u0, u0 + n)], np.uint16)
+            rows = np.tile(x, (n, 1))
+            rows[:, len(run._salt):len(run._salt) + 8] = (
+                np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
+            words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
             salts = b"".join(CC.public_row_salt(self.root, u) for u in range(u0, u0 + n))
             v = self.pub_table(c)
             out[v] = self._register(run, v, words, 0, self.root, salts)
