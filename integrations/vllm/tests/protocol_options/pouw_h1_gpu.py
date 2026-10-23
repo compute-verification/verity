@@ -637,7 +637,9 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 
 def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
-    `pouw_h1_served.register`, each call's ``--registered`` file written into ``tdir``."""
+    `pouw_h1_served.register`, the first and last calls' ``--registered`` files written into ``tdir``: a file holds one
+    entry a unit of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M units each call's is
+    hundreds of MB, and the window's 2304 about a TB."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
     held = sum(len(r.bcs) * 128 + 64 * sum(map(len, r.levels)) for r in served.registered.values())
     doc: dict[str, Any] = {"entries": served.entries(), "refused": served.refused[:20], "held_mib": round(held / 2**20, 1),
@@ -646,9 +648,12 @@ def served_check(h1: Any, served: Any, tdir: Path) -> dict[str, Any]:
                            "in_commitment": h1.commits.get("served") == {"entries": served.entries(),
                                                                          "refused": list(served.refused)},
                            "layout": layout_of(served.linears, served.calls, served.m, served.tile)}
+    print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} rows={doc['rows']} "
+          f"held_mib={doc['held_mib']} rss_gib={rss_gib()}", flush=True)
+    calls = sorted({0, len(served.calls) - 1}) if served.calls else []
     try:
-        reg = SV.register(h1, directory=tdir)
-        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "first": SV.file_name(0)}
+        reg = SV.register(h1, calls=calls, directory=tdir)
+        doc["register"] = {"registered": len(reg.registered), "files": len(reg.files), "calls": calls}
     except ValueError as e:
         doc["register"] = {"refused": str(e)[:2000]}
     print(f"[fill] served committed={doc['committed']} values={len(doc['entries'])} register={json.dumps(doc['register'])[:600]}",
