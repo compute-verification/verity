@@ -19,7 +19,8 @@ registration (`--rec-inner-registration`) and how the inner statement is set up 
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
 `--identifier`, in its order: `RecSetup.checkInner`, the session's statement (`Stmt.setupTables`) with each table's
-registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk`,
+registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`,
+`Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
@@ -253,6 +254,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   Registered.checkFull s.base.registered r.draw
   RecSetup.checks s.inner s.commits s.base.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program
     s.base.registered s.part s.bindings s.rows
+  RecSetup.oneFull s.inner sts
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
     (RecSetup.c3 s.inner s.commits))
