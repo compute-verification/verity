@@ -817,12 +817,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     zy = bool(SIDE) and bool(SIDE[0].zy)
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu = {}, {}, {}
+    a_cpu = DO.a_roots_cpu(win, s, range(L), lambda v: g["a"][v].cpu().numpy(), lambda v: g["sa"][v].cpu().numpy())
+    s_cpu, z_cpu = {}, {}
     for w in range(L):
         n, k = win.nk[w]
-        q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()
-        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
-        a_cpu[w] = CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", q, sc).root
         fs = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "schema": CM.SCHEMA}
         sd = CM.domain(fs, len(wrows), "admit")
         s_cpu[w] = CM.levels(sd, [CM.leaf(sd, key, f"s/{s}/{w}", i, x)[0] for i, x in enumerate(wrows)])[-1][0]
