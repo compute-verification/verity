@@ -511,3 +511,11 @@ def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
         assert log["a"] == {v: [[lv, ix, h.hex()] for lv, ix, h in got] for v, got in segs.items()}
         assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
+
+
+def test_hm96_salts_are_hm96_salt_row_by_row():
+    """`hm96_salts`, one ChaCha20 keystream for a table's rows, is `audit.hm96_salt` at each row, past a 64-bit nonce."""
+    key = hashlib.sha512(b"hm96-salts").digest()[:32]
+    for nonce in (0, 5, 2**40 + 7):
+        assert SV.hm96_salts(key, nonce, 70) == [hm96_salt(key, nonce, j) for j in range(70)]
+    assert SV.hm96_salts(key, 3, 0) == []
