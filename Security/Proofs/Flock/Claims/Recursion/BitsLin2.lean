@@ -392,6 +392,10 @@ theorem Ex_charge (F : Finder) (n : ℕ) :
   simp only [Nat.cast_add]
   rw [Ex_add, Ex_const]
 
+theorem ecr_charge_le {H : Msg → Msg} {F : Finder} {n : ℕ} {b : ℝ} (h : ExpectedCR H (F.charge n))
+    (hb : Ex (fun s => (F.cost s : ℝ)) + n ≤ b) : F.Pr H ≤ b / 2 ^ (256 : ℝ) :=
+  ecr_le h (by rw [Ex_charge]; exact hb)
+
 /-- **`KSLin2`'s right side at `M = 2^256` and `R = 2^257` is at most `t·2^{-λ₂}`**, at a compiled record where an
 accepted run shows each V* session accepting, under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and
 `F0I`, each searching the inner setup's calls (`Deploy.withSetup`) and charged their `|S(x_I)|` evaluations
@@ -465,8 +469,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
   · have hP : PrBinner H (D.withSetup H) I DO decO P x ≤ t * (cBe D x + setupLen D x) / 2 ^ (256 : ℝ) := by
       unfold PrBinner
       split_ifs with hk
-      · refine ecr_le (hBI hk) ?_
-        rw [Ex_charge]
+      · refine ecr_charge_le (hBI hk) ?_
         have := Ex_Binner_cost_le H (D.withSetup H) I DO decO x P hk hd
         linarith
       · positivity
@@ -479,8 +482,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
         t * (cBe D x + setupLen D x) / 2 ^ (256 : ℝ) := by
       unfold PrFCI
       split_ifs with hW
-      · refine ecr_le (hFCI _ hW) ?_
-        rw [Ex_charge]
+      · refine ecr_charge_le (hFCI _ hW) ?_
         have := Ex_FCI_cost_le H (D.withSetup H) I DO decO Cp x P _ hW hd
         linarith
       · positivity
@@ -493,8 +495,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       _ ≤ _ := le_two_rpow_of_div ht0 (by positivity)
   · have hP : PrF0I H (D.withSetup H) I DO decO P x (2 ^ 257) ≤
         (((I.k (xI D x) : ℝ) + 1) * (t * cBe D x / 2) + setupLen D x) / 2 ^ (256 : ℝ) := by
-      refine ecr_le (hF0I _) ?_
-      rw [Ex_charge]
+      refine ecr_charge_le (hF0I _) ?_
       have := Ex_F0I_cost_le H (D.withSetup H) I DO decO x P (2 ^ 257) hd
       linarith
     have hk0 : (0 : ℝ) ≤ (I.k (xI D x) : ℝ) + 1 := by positivity
@@ -525,8 +526,7 @@ theorem lin2_bound_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I :
       unfold PrFdev
       split_ifs with hk
       · have := Ex_draws_le H (D.withSetup H) I DO decO x P hd
-        refine ecr_le (hFdev (2 ^ 256) hk) ?_
-        rw [Ex_charge]
+        refine ecr_charge_le (hFdev (2 ^ 256) hk) ?_
         have := Ex_Fdev_cost_le H (D.withSetup H) I DO decO x P (2 ^ 256) hk
         linarith
       · positivity

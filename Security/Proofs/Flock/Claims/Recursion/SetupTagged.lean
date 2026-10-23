@@ -90,6 +90,7 @@ theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧
     show (Claims.toMsg t.toUTF8)[7]? = some 102 from h2]
   simp
 
+set_option linter.unusedTactic false in
 set_option maxHeartbeats 4000000 in
 /-- **A hidden-output setup refuses on an oracle refusing its `σ` input.** -/
 theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
@@ -104,7 +105,7 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [poison, htag, hp, Bool.cond_true] at hx; exact nomatch hx))
+       try (simp only [poison, htag, hp, Bool.cond_true] at hx; cases hx; done))
     | (rw [ite_ok] at hs
        rcases hs with ⟨_, hs⟩ | ⟨_, hs⟩)
     | (split at hs))
