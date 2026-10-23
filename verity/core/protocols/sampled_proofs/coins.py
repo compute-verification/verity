@@ -268,19 +268,23 @@ def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: by
     return None
 
 
-COINS_FORM = ("a draw's coin evidence is {key, ledger, segment, session, window}: the verifier's challenger key, the "
-              "auditor's ledger, the draw's coins (Segment.to_json), the challenger session's files and the window")
+COINS_FORM = ("a draw's coin evidence is {key, ledger, segment, session}: the verifier's challenger key, the auditor's "
+              "ledger, the draw's coins (Segment.to_json) and the challenger session's files")
 
 
-def coins_reason(coins: Any, after: bytes, read: bytes, verify: Verify) -> str | None:
-    """`read_reason` on the evidence of a draw's coins, `{key, ledger, segment, session, window}`: the commitment and
-    the family's roots are those of the one session the auditor's ledger opens for the window under the verifier's
-    challenger key (`trusted_session_of`), never the record's. `service.Stream.outcome` hands the evidence to the Lean
-    verifier of record, whose run refuses a draw it gives a reason for (`Run.run`'s `select`, code `coins`)."""
-    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "segment", "session", "window"]:
+def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Verify) -> str | None:
+    """`read_reason` on the evidence of a draw's coins, `{key, ledger, segment, session}`: the commitment and the
+    family's roots are those of the one session the auditor's ledger opens under the verifier's challenger key for the
+    window whose open root is `window` (`trusted_session_of`), the root the verifier reads from the challenger's signed
+    open of the registration's window (`registration.check`'s `window_root`), never the record's or the evidence's. So
+    a prover picks no window: coins another window's session released after the same commitment are refused, and a
+    prover with sessions in several windows gets one draw, not the best of them. `service.Stream.outcome` hands the
+    evidence to the Lean verifier of record, whose run refuses a draw from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`)."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "segment", "session"]:
         return COINS_FORM
     try:
-        commitment, roots = trusted_session_of(coins["ledger"], coins["window"], ChallengerKey.from_json(coins["key"]),
+        commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, ChallengerKey.from_json(coins["key"]),
                                                coins["session"], verify)
     except CoinError as e:
         return str(e)

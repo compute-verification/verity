@@ -22,7 +22,8 @@ none. A draw's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `S
 a draw's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
-tampered or longer, another commitment, a release log edited, another window, each malformed form. Each piece answers
+tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
+picking the window), each malformed form. Each piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -1465,8 +1466,11 @@ def read(j: Any) -> Any:
 
 
 def draw_coins(j: Any) -> Any:
-    _request(j, ["after", "coins", "read"])
-    return {"reason": T.coins_reason(j["coins"], _hex(j["after"]), _hex(j["read"]), lms_verify)}
+    _request(j, ["after", "coins", "read", "window"])
+    after, bytes_read = _hex(j["after"]), _hex(j["read"])
+    if type(j["window"]) is not str:
+        raise D.Reject("window is not a string")
+    return {"reason": T.coins_reason(j["coins"], j["window"], after, bytes_read, lms_verify)}
 
 
 def _pairs(log: Sequence[dict]) -> list[str]:
@@ -1515,7 +1519,13 @@ class Drawn:
 
     def evidence(self, segment: dict) -> dict:
         return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "segment": segment,
-                "session": self.s.files(), "window": self.ledger.window}
+                "session": self.s.files()}
+
+    def other_window(self, rng: random.Random) -> str:
+        """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
+        others = [b["window"]["root"] for kind, sid, b in self.ledger.events
+                  if kind == "open" and sid != self.s.id and "root" in b["window"]]
+        return rng.choice(others) if others else _window(rng)["root"]
 
 
 #: each a mutation of the draw's segment or bytes, which both pieces refuse
@@ -1581,7 +1591,14 @@ def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, byte
 READ_NAMES = ["honest"] + DRAW_MUTATIONS + ["commitment-form", "request"]
 
 
+def _seeded(rng: random.Random) -> random.Random:
+    """A plain generator seeded from `rng`: a `Drawn` session draws more bytes than Hypothesis's smallest example may
+    hold when its `randoms` record each one."""
+    return random.Random(rng.getrandbits(64))
+
+
 def read_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
     d = Drawn(rng, before=name == "before")
     seg, read_, after = _mutated(rng, d, name)
     roots = d.roots() if name != "honest" or rng.random() < 0.7 else None
@@ -1599,29 +1616,35 @@ def read_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "window", "key-form", "coins-form", "request"]
+DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
+                                                   "coins-form", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
     d = Drawn(rng, before=name == "before")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
-    j = {"after": after.hex(), "coins": coins, "read": read_.hex()}
+    j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}
     match name:
         case "log-tampered":
             log = coins["session"]["log"]
             coins["session"]["log"] = _set(log, rng.randrange(1, len(log)), **{"x": 1})
-        case "window":
-            coins["window"] = _window(rng)
+        case "other-window":
+            j["window"] = d.other_window(rng)
+        case "window-form":
+            j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
         case "key-form":
             coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
         case "coins-form":
-            j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "extra": 1}, None, [coins]])
+            j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
+                                     [coins]])
         case "request":
             if rng.random() < 0.5:
                 del j[rng.choice(sorted(j))]
             else:
-                j[rng.choice(["after", "read"])] = rng.choice(["AB", "0", 5])
+                k = rng.choice(["after", "read", "window"])
+                j[k] = rng.choice(["AB", "0", 5]) if k != "window" else rng.choice([5, None, {"root": j["window"]}])
     return j
 
 

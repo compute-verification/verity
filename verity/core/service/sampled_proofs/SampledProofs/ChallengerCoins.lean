@@ -12,9 +12,12 @@ consecutive, so the prover picked none of them. `readReason` is `read_reason`: t
 that stream, and they read every coin opened.
 
 `coinsReason` is `coins_reason`: the commitment and the roots come from the code that already trusts them,
-`trustedSessionOf` over the evidence `{key, ledger, segment, session, window}` (the verifier's challenger key, the
-auditor's ledger, the segment, the session's files and the window), so the record names neither. `Run.run` refuses a run
-whose coin evidence gives a reason (`select`, code `coins`), its `after` the registration's digest.
+`trustedSessionOf` over the evidence `{key, ledger, segment, session}` (the verifier's challenger key, the auditor's
+ledger, the segment and the session's files) for the window the verifier holds (its open root R, `windowRoot`, which it
+reads from the challenger's signed open of the registration's window, never from the record or the evidence), so the
+record names neither and the prover picks no window: coins a session of another window released after the
+registration's digest are refused. `Run.run` refuses a draw from the challenger whose evidence is missing or gives a
+reason (`select`, code `coins`), its `after` the registration's digest.
 
 The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `challenger_draw_coins`
 (`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises.
@@ -29,7 +32,7 @@ open Flock (V)
 def SEGMENT_FORM : String :=
   "a draw's coins are {after, label, openings, start}: the prover's commitment (64 bytes in lowercase hex), the challenger family, its coins' openings and the first one's index"
 def COINS_FORM : String :=
-  "a draw's coin evidence is {key, ledger, segment, session, window}: the verifier's challenger key, the auditor's ledger, the draw's coins (Segment.to_json), the challenger session's files and the window"
+  "a draw's coin evidence is {key, ledger, segment, session}: the verifier's challenger key, the auditor's ledger, the draw's coins (Segment.to_json) and the challenger session's files"
 
 /-- `challenger_stream` (module docstring): the draw's coins from `segment`, opened after `after`, checked against `c`
 and, with `roots`, against the family's roots the challenger's log shows. -/
@@ -65,12 +68,13 @@ def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (r
     else none
 
 /-- `coins_reason` (module docstring): why `coins`, the evidence of a draw's coins, does not show `read` to be the coins
-the challenger released after `after`; `none` when it does. -/
-def coinsReason (coins : Json) (after read : ByteArray) : Option String :=
-  if keys? coins != some #["key", "ledger", "segment", "session", "window"] then some COINS_FORM else
+the session the auditor's ledger opens for window `window` (its open root) released after `after`; `none` when it
+does. -/
+def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Option String :=
+  if keys? coins != some #["key", "ledger", "segment", "session"] then some COINS_FORM else
   let trusted : V (LiveCommitment × Roots) := do
-    trustedSessionOf (getD coins "ledger") (getD coins "window") (← ChallengerKey.ofJson (getD coins "key"))
-      (getD coins "session")
+    trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
+      (← ChallengerKey.ofJson (getD coins "key")) (getD coins "session")
   match trusted with
   | .error why => some why
   | .ok (c, roots) =>
@@ -108,11 +112,12 @@ def readPiece (j : Json) : V Json := do
   pure <| refusing do
     return reasonJson (readReason (← LiveCommitment.ofJson (getD j "commitment")) (getD j "segment") after read roots)
 
-/-- `{"after", "coins", "read"}` to `coins_reason`'s. -/
+/-- `{"after", "coins", "read", "window"}` to `coins_reason`'s, `window` the window's open root. -/
 def drawCoinsPiece (j : Json) : V Json := do
-  request j #["after", "coins", "read"]
+  request j #["after", "coins", "read", "window"]
   let after ← lowerHex (getD j "after") "after"
   let read ← lowerHex (getD j "read") "read"
-  return reasonJson (coinsReason (getD j "coins") after read)
+  let .str window := getD j "window" | throw "window is not a string"
+  return reasonJson (coinsReason (getD j "coins") window after read)
 
 end SampledProofs.Challenger
