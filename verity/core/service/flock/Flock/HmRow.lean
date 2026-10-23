@@ -1441,9 +1441,9 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   return c
 
 /-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
-its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, unrolled), parsed as the
-file's `unit` circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit
-(`Circuit.tmpl`). A file that carries a unit's rows itself is refused (`Typed.split`). -/
+its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
+net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
+`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). A file that carries a unit's rows itself is refused (`Typed.split`). -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let (_, _, mj) ← Typed.split tags bytes
   let ctx := "templated statement META"

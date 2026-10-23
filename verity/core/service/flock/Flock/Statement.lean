@@ -315,8 +315,9 @@ def partialRanges (st : Stmt) (alpha : F128) (lw rho rr : Array F128) :
     partialRanges st alpha lw rho rr rs bases' (Array.ofFn (n := 64) fun s => out[s.val]! + wt * p[s.val]!)
 
 /-- A templated unit's share of entry `s` before `wt` (`Tmpl.foldUnit`, from the template's description, never the slot's
-`2^sl` base): where the circuit carries a template whose unrolled net is the range's (by pointer, else compared), of the
-slot's size and with no lookup. `none` elsewhere, and where `foldUnit` refuses, and the range is folded as any other. -/
+`2^sl` base): where the circuit carries a template whose committed net (`Tmpl.unitNet`) is the range's (by pointer, else
+compared), of the slot's size and with no lookup. `none` elsewhere, and where `foldUnit` refuses, and the range is folded
+as any other, from the net's rows. -/
 def unitShare (st : Stmt) (alpha : F128) (lw rho rr : Array F128) (r : Range) : Option (Array F128) :=
   match st.c.tmpl, r.kind with
   | some tu, .net i =>
