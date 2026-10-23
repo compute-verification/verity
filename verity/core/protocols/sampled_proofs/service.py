@@ -1582,9 +1582,10 @@ class Stream:
         held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The run takes the
         stream's `coin_source`, so on a stream drawing from the auditor's challenger (`coins.ChallengerCoins`) the
-        Lean's run refuses every draw unless `coins` is its evidence (`coins.coins_reason`'s `{key, ledger, segment,
-        session}`) and the bytes it read are exactly the coins the session the ledger opens for the registration's
-        window (`register`'s `window_root`) released after the registration's digest, each checked against its
+        Lean's run refuses every draw unless `coins` is its evidence (`coins.coins_reason`'s `{key, ledger, main, pins,
+        segment, session}`) and the bytes it read are exactly the coins the session the ledger opens for the
+        registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
+        after the registration's digest, each checked against its
         commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
         `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a draw that read no

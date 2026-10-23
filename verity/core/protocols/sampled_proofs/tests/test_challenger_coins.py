@@ -182,17 +182,19 @@ def test_the_proof_service_draws_from_the_challengers_coins_after_the_receipt():
 
 
 #: The draws `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`).
-COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "other-window"]
+#: `other-window` stays last: a second host serves it.
+COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
 
 
 def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
     the challenger's `coins` and its registration under `window_root`, drawn after the registration's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s: the challenger key, the auditor's
-    ledger, the segment and the session's files): the honest one; a segment that skips a coin opened after the
-    digest, one with a wrong opening, one that adds an earlier registration's coins; no evidence, empty evidence; a
-    registration without its window root; and coins a session of another window released after the same digest. Each
-    session's challenger holds `positions` coins of the draws' family.
+    ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
+    files): the honest one; a segment that skips a coin opened after the digest, one with a wrong opening, one that
+    adds an earlier registration's coins; no evidence, empty evidence; a registration without its window root; a
+    session whose pin isn't on the verifier's copy of main (`pinned_session`); and coins a session of another window
+    released after the same digest. Each session's challenger holds `positions` coins of the draws' family.
     -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
     import test_remote
     from test_service import SESSION, _lean
@@ -228,8 +230,9 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     segments["before"] = {**s, "openings": earlier + s["openings"], "start": s["start"] - len(earlier)}
     out = {}
     for name, (stream, draw, _) in draws.items():
-        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "segment": segments[name],
-                    "session": files[name]}
+        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger,
+                    "main": [] if name == "off-main" else test_remote.MAIN, "pins": test_remote.HOST_PINS,
+                    "segment": segments[name], "session": files[name]}
         evidence = {"missing": None, "empty": {}}.get(name, evidence)
         assert stream.deliver(draw, [SESSION]) is None
         out[name] = (stream, stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence),
