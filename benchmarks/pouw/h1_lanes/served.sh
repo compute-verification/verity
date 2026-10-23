@@ -29,6 +29,10 @@
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
 #      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
+#      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each firewalled session: the session runs
+#      the frame of the last *.tgz by name, so a later frame dropped in mid-share serves the lanes after it. Move a tarball
+#      in whole (mv), never write it in place; one that doesn't build is logged and the previous frame kept. Each session's
+#      frame is in out/TAG/firewall.sha256 and every frame's binary in out/binaries.sha256)
 set -uo pipefail
 export HZ_CONFIGS=h1-served HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -40,13 +44,23 @@ PAR=${H1L_PAR:-8} LPAR=${H1L_LPAR:-8} K=${H1L_K:-4096} FW=${H1S_FIREWALL:-1}
 WK=$W/work OP=$W/opened.json
 mkdir -p "$OUT/lean" "$WK"
 setup
+fw_frame() {   # fw_frame TGZ: the firewall frame built from TGZ, cached by the tarball's hash; its binary's path on stdout
+  local fd
+  fd=$HZ_CACHE/firewall-$(sha256sum "$1" | cut -c1-16)
+  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
+    && tar -xzf "$1" -C "$fd" --strip-components=4 && cd "$fd" && lake build flock-firewall; }) \
+    < /dev/null >> "$OUT/build-firewall.log" 2>&1
+  echo "$fd/.lake/build/bin/flock-firewall"
+}
+fw_last() { ls "${H1S_FIREWALL_TGZ_DIR:?}"/*.tgz 2>/dev/null | LC_ALL=C sort | tail -1; }
+FWDIR=${H1S_FIREWALL_TGZ_DIR:-}
+if [ "$FW" = 1 ] && [ -n "$FWDIR" ] && [ -z "${H1S_FIREWALL_TGZ:-}" ]; then H1S_FIREWALL_TGZ=$(fw_last); fi
+FWTGZ=
 if [ "$FW" = 1 ] && [ -n "${H1S_FIREWALL_TGZ:-}" ]; then
-  FD=$HZ_CACHE/firewall-$(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-16)
-  export FC_FIREWALL_LEAN=$FD/.lake/build/bin/flock-firewall
   log "firewall frame from $H1S_FIREWALL_TGZ ($(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-16)), not this tree's"
-  (exec 8>"$FD.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || { rm -rf "$FD" && mkdir -p "$FD" \
-    && tar -xzf "$H1S_FIREWALL_TGZ" -C "$FD" --strip-components=4 && cd "$FD" && lake build flock-firewall; }) \
-    > "$OUT/build-firewall.log" 2>&1
+  FWTGZ=$(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-64)
+  export FC_FIREWALL_LEAN
+  FC_FIREWALL_LEAN=$(fw_frame "$H1S_FIREWALL_TGZ")
 elif [ "$FW" = 1 ]; then
   export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
@@ -154,6 +168,22 @@ while IFS=$'\t' read -r kind tag D; do
     while [ "$(jobs -rp | wc -l)" -gt 0 ] && [ "$(free_gb)" -lt "$H1L_SESSION_GB" ]; do sleep 15; done
     log "$tag: $(free_gb) GB free in the run's cgroup, $(jobs -rp | wc -l) sessions running"
   fi
+  if [ "$fw" = 1 ] && [ -n "$FWDIR" ]; then
+    t=$(fw_last)
+    if [ -n "$t" ] && h=$(sha256sum "$t" | cut -c1-64) && [ "$h" != "$FWTGZ" ]; then
+      log "$tag: a new firewall frame in $FWDIR, $t (${h:0:16}): building"
+      f=$(fw_frame "$t")
+      if [ -x "$f" ]; then
+        FWTGZ=$h FC_FIREWALL_LEAN=$f
+        log "$tag: firewall frame now from $t (${h:0:16})"
+        sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+      else
+        log "$tag: $t (${h:0:16}) did not build, the frame stays $FC_FIREWALL_LEAN: $(tail -3 "$OUT/build-firewall.log")"
+        FWTGZ=$h
+      fi
+    fi
+  fi
+  [ "$fw" = 1 ] && sha256sum "$FC_FIREWALL_LEAN" > "$OUT/$tag/firewall.sha256"
   log "prove $tag (firewall $fw)"
   ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
     if session "$D" "$OUT/$tag"; then
