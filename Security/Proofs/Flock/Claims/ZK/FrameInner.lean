@@ -19,6 +19,13 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
   shape, from the deployed state but for `stopped`, and leaves the same state but for `stopped`; so where the deployed
   frame's check releases a round past the inner proof's label (`check_own_ok`), and at it where the scheduled round in
   its place is the firewall's own round 0 at some `final_c'` (`check_own0_ok`).
+* `repState_own_inner`, `check_inner_done`, `repState_past`: along the loop's requests the rep's state counts the
+  inner proof's rounds (`run_ownReqs_inner`), the frame's check refuses its round 4, and past its last coins the state
+  owes none. A round the frame refuses leaves the rep owing nothing, so it ends at the next coins.
+* `repState_own_check`, `progOf_own_step`: the loop's frame state one round past the rep's schedule is the deployed
+  check's but for `stopped`; so `ofLoop_progChecks`: `ProgChecks` at `ofLoop`, from `ofLoop_progChecks_of`'s premises
+  but `hO`, the placeholder's pad row within a `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0
+  the firewall's own at some `final_c'` (`hL0`).
 -/
 
 namespace Claims.ZKServer

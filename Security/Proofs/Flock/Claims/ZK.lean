@@ -739,7 +739,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `roundFree_own_frames`), and where the deployed frame's check releases one, the placeholder's own round at zero pads
   (`ZeroCfg`) from the same state but for `stopped` leaves the same state but for `stopped`: past the inner proof's
   label (`check_own_ok`), and at it where the scheduled round in its place is the firewall's own round 0
-  (`check_own0_ok`).
+  (`check_own0_ok`). Along the loop the rep's state counts the inner proof's rounds (`repState_own_inner`), refuses
+  its round 4 (`check_inner_done`) and owes no coins past it (`repState_past`), so the loop's frame state one round
+  past the rep's schedule is the deployed check's but for `stopped` (`progOf_own_step`), and `ProgChecks` holds at
+  `ofLoop` (`ofLoop_progChecks`) from `hS`, `hR`, `hP` and two named premises: the placeholder's pad row within a
+  `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0 the firewall's own (`hL0`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
