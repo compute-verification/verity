@@ -44,8 +44,8 @@
 //
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
-//   kh_units_multi(calls, ncalls, units, M, live, stream)   kh_unit of ncalls calls (UCall) in one launch (h1um), for a
-//              step's units dispatched together, whose warps fill the GPU where one call's leave it idle
+//   kh_units_multi(calls, ncalls, units, M, live, per_sm, stream)   kh_unit of ncalls calls (UCall) in one launch (h1um),
+//              for a step's units dispatched together, whose warps fill the GPU where one call's leave it idle
 //   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
 //   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
 //              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
@@ -958,24 +958,26 @@ struct UCall {
   u32 N, K, u0, md;  // md = n_digits(K / 32), 2 or 3
 };
 
-// every unit of ncalls calls in one launch (calls[ncalls].u0 the total), one warp a unit as h1u; live is every call's
+// every unit of ncalls calls in one launch (calls[ncalls].u0 the total), one warp a unit as h1u, a warp's units strided
+// by the grid's warps (a grid smaller than the units leaves the rest of each SM to other streams); live is every call's
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um(const UCall* __restrict__ calls, u32 ncalls, u32 M,
                                                    const uint8_t* __restrict__ live) {
   __shared__ WarpSmem smem[WARPS];
-  const u32 wp = threadIdx.x >> 5;
-  const u32 gu = blockIdx.x * WARPS + wp;
-  if (gu >= calls[ncalls].u0) return;
-  u32 lo = 0, hi = ncalls;
-  while (hi - lo > 1) {
-    const u32 mid = (lo + hi) >> 1;
-    if (calls[mid].u0 <= gu) lo = mid;
-    else hi = mid;
+  const u32 wp = threadIdx.x >> 5, total = calls[ncalls].u0;
+  for (u32 gu = blockIdx.x * WARPS + wp; gu < total; gu += gridDim.x * WARPS) {
+    u32 lo = 0, hi = ncalls;
+    while (hi - lo > 1) {
+      const u32 mid = (lo + hi) >> 1;
+      if (calls[mid].u0 <= gu) lo = mid;
+      else hi = mid;
+    }
+    const UCall c = calls[lo];
+    if (c.md == 3)
+      h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+    else
+      h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
+    __syncwarp();
   }
-  const UCall c = calls[lo];
-  if (c.md == 3)
-    h1u_unit<3, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
-  else
-    h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, smem[wp]);
 }
 
 #if H1U_KSPLIT
@@ -1939,16 +1941,23 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
 }
 
 // kh_unit's receipts of ncalls calls in one launch: calls a device array of ncalls + 1 UCall (kh_ucall_bytes() each, the
-// last's u0 the units in all, `units`), every call M rows with the same live row blocks
+// last's u0 the units in all, `units`), every call M rows with the same live row blocks; per_sm > 0 runs per_sm CTAs an
+// SM, each warp looping over its units, else one warp a unit
 extern "C" unsigned kh_ucall_bytes() { return sizeof(UCall); }
 
 extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
-                              void* stream) {
+                              unsigned per_sm, void* stream) {
   if (!ncalls || M % 32) return 2;
   if (!units) return 0;
   carve<h1um>();
-  h1um<<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, (cudaStream_t)stream>>>((const UCall*)calls, ncalls, M,
-                                                                            (const uint8_t*)live);
+  unsigned grid = (units + WARPS - 1) / WARPS;
+  if (per_sm) {
+    int dev = 0, sms = 0;
+    if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess)
+      return 3;
+    if (per_sm * (unsigned)sms < grid) grid = per_sm * (unsigned)sms;
+  }
+  h1um<<<grid, 32 * WARPS, 0, (cudaStream_t)stream>>>((const UCall*)calls, ncalls, M, (const uint8_t*)live);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 

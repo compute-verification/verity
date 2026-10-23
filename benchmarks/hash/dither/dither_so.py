@@ -132,6 +132,7 @@ NOISE_J_ENV = "DITHER_SO_NOISE_J"
 # "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
 # no workspace), in place of each call's noise and units launches; the same receipts
 FUSED_ENV = "DITHER_SO_FUSED"
+FUSED_CTAS_ENV = "DITHER_SO_FUSED_CTAS"  # N > 0: that launch on N CTAs an SM, each warp looping over its units
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -777,6 +778,7 @@ class SoSide(DA.Side):
         self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
         self.noise_j = int(os.environ.get(NOISE_J_ENV) or 0)
         self.fused = os.environ.get(FUSED_ENV) == "1"
+        self.fused_ctas = int(os.environ.get(FUSED_CTAS_ENV) or 0)
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
@@ -864,7 +866,7 @@ class SoSide(DA.Side):
         if not hasattr(h, "kh_units_multi"):
             raise RuntimeError(f"${FUSED_ENV}=1: this h1u build has no kh_units_multi")
         vp, u32 = C.c_void_p, C.c_uint
-        h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+        h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, u32, vp]
         h.kh_ucall_bytes.restype = u32
         h.kh_digits.argtypes = [u32]
         rec = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"),
@@ -914,7 +916,7 @@ class SoSide(DA.Side):
             self.seeded.record(st)
         if self.fused:
             rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
-                                             st.cuda_stream)
+                                             self.fused_ctas, st.cuda_stream)
         for w in range(0 if self.fused else L):
             args = self.so_args(w, p, m)
             if self.noise:
@@ -986,7 +988,8 @@ class SoSide(DA.Side):
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "z_tables": {"in_forward": self.zt, "between_steps": self.z_rest.n if self.zt else None},
                 "noise_j_min": self.noise_j,
-                "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None},
+                "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
+                                "ctas_an_sm": self.fused_ctas or None},
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 

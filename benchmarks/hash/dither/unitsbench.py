@@ -65,7 +65,7 @@ class Lib:
         h.kh_ws_bytes.argtypes = [u32, u32, u32]
         self.multi = hasattr(h, "kh_units_multi")
         if self.multi:
-            h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+            h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, u32, vp]
             h.kh_ucall_bytes.restype = u32
             h.kh_digits.argtypes = [u32]
 
@@ -95,9 +95,9 @@ class Multi:
         self.live = entries[0][0].live
         self.tab = torch.from_numpy(t.view(np.uint8).copy()).to("cuda")
 
-    def run(self, units: int | None = None) -> None:
+    def run(self, units: int | None = None, per_sm: int = 0) -> None:
         if rc := self.lib.h.kh_units_multi(self.tab.data_ptr(), self.n, self.units if units is None else units, self.rows,
-                                           self.live.data_ptr(), torch.cuda.current_stream().cuda_stream):
+                                           self.live.data_ptr(), per_sm, torch.cuda.current_stream().cuda_stream):
             raise RuntimeError(f"kh_units_multi rc {rc}")
 
 
@@ -114,6 +114,12 @@ def multi_gate(lib: Lib, cs: list, base_outs: list) -> dict:
     bad = [int((o != b).sum()) for o, b in zip(outs, base_outs)]
     poison = sum(int((o == POISON).sum()) for o in outs)
     got = [o.clone() for o in outs]
+    # a persistent grid (one CTA an SM, every warp looping over its units) writes the same words
+    for o in outs:
+        o.fill_(POISON)
+    mu.run(per_sm=1)
+    torch.cuda.synchronize()
+    bad_loop = [int((o != b).sum()) for o, b in zip(outs, base_outs)]
     for o in outs:
         o.fill_(POISON)
     mu.run(units=0)
@@ -125,9 +131,10 @@ def multi_gate(lib: Lib, cs: list, base_outs: list) -> dict:
     torch.cuda.synchronize()
     s[0, 0] ^= 1
     moved = [(i, u) for i, (o, g) in enumerate(zip(outs, got)) for u in (o != g).any(dim=1).nonzero().flatten().tolist()]
-    r = {"calls": len(cs), "units": mu.units, "bad_words": bad, "poison_left": poison, "control_bad_words": k_bad,
-         "control_refused": k_bad > 0, "fault_moved": moved[:8], "fault_conforming": moved == [(0, 0)]}
-    r["ok"] = sum(bad) == 0 and poison == 0 and k_bad > 0 and r["fault_conforming"]
+    r = {"calls": len(cs), "units": mu.units, "bad_words": bad, "bad_words_one_cta_an_sm": bad_loop, "poison_left": poison,
+         "control_bad_words": k_bad, "control_refused": k_bad > 0, "fault_moved": moved[:8],
+         "fault_conforming": moved == [(0, 0)]}
+    r["ok"] = sum(bad) == 0 and sum(bad_loop) == 0 and poison == 0 and k_bad > 0 and r["fault_conforming"]
     return r
 
 
@@ -242,6 +249,8 @@ def main() -> int:
                     help="also gate kh_units_multi (where a build has it) over one layer's calls against their own "
                          "receipts, and time the step in one launch (step_multi) against the base's noise and units "
                          "call by call (step_noise_units)")
+    ap.add_argument("--multi-ctas", type=lambda s: [int(x) for x in s.split(",") if x], default=[2, 3],
+                    help="with --multi, also time the step's one launch on each of these CTAs an SM (step_multi_cN)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -352,6 +361,8 @@ def main() -> int:
                                   for layer in range(args.layers) for name in ORDER])
             keep.append((mu, outs))
             arms[(nm, "step_multi")] = (lambda mu: lambda i: mu.run())(mu)
+            for c in args.multi_ctas:
+                arms[(nm, f"step_multi_c{c}")] = (lambda mu, c: lambda i: mu.run(per_sm=c))(mu, c)
         if args.multi:
             def step_nu(i, nm=names[0]):
                 for layer in range(args.layers):
@@ -389,9 +400,8 @@ def main() -> int:
         if len(lay) == len(ORDER):
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
-        for arm in ("step", "step_multi", "step_noise_units"):
-            if arm in r:
-                r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
+        for arm in [a for a in r if a == "step" or a.startswith("step_multi") or a == "step_noise_units"]:
+            r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
     b0 = res[names[0]]
     for nm in timed[1:]:
         r = res[nm]
