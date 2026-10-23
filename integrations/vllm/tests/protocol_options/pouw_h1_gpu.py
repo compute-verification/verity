@@ -739,18 +739,38 @@ def core_tie(record: dict[str, Any], program: Any, tdir: Path) -> dict[str, Any]
     return core_verdict(ev)
 
 
+def record_reason(record: dict[str, Any]) -> str | None:
+    """`pouw_h1_challenger.manifest_reason` of a window's record, its Program salt read from in-process coins too: their
+    coin commitment is `coins.CoinCommitment`'s rather than the live challenger's, and their salt coin opens after the
+    weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
+    from verity.core.protocols.pouw.audit import salt_of
+    from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+    from verity_vllm.engine.hooks import patched
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+    c = record["commitment"]
+    if c.get("coin_source") == PH.CHALLENGER:
+        return PHC.manifest_reason(record)
+    try:
+        opening = CoinOpening.from_json(c["salt_opening"])
+        salt = PH.program_salt(salt_of(CoinCommitment.from_json(c["coins"]), opening.coin, opening.after))
+    except (KeyError, TypeError, ValueError) as e:
+        return f"the window's in-process salt can't be derived from its record ({e})"
+    with patched(PHC, "program_salt_of", lambda _c: salt):
+        return PHC.manifest_reason(record)
+
+
 def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
     (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
-    (`pouw_h1_challenger.manifest_reason`), each A table and input-ids table committed whole by its round's root
-    (`credit._a_link`), and each the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
+    the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
     from verity.core.protocols.pouw import credit as CR
-    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
-    out: dict[str, Any] = {"manifest": PHC.manifest_reason({"commitment": c, "calls": ev["calls"]}),
+    out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
                            "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
