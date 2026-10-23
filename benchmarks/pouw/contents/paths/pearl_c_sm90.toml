@@ -1,0 +1,4 @@
+order = 111
+path = "`pearl_c_sm90/`"
+runs_on = "CPU (the Hub)"
+what = "`pearl-c-h100-v1-h3` on sm_90a for GLM-5.3 on the H200: `glm53_scales.py` reads every block scale of the pinned GLM-5.3 checkpoint and whole sampled weights by range requests, and reports whether e4m3 code × 128 × 128 block scale is exact in FP32 and what vLLM's ue8m0 requant changes"
