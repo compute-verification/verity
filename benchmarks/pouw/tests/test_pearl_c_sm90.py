@@ -51,10 +51,10 @@ def const(name: str) -> int:
     return int(re.search(rf"\b{name} = (\d+)", SOURCE).group(1))
 
 
-def gemms() -> list[tuple[str, str, int, int, int]]:
-    """Every GEMM kernel (name, mode, tile rows, tile columns, G)."""
+def gemms(macro: str = "GEMM") -> list[tuple[str, str, int, int, int]]:
+    """Every GEMM kernel (name, mode, tile rows, tile columns, G); with ``GEMM_G`` the grouped calls' (grouped.py)."""
     return [(n, m, int(tm), int(bn), int(g))
-            for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
+            for n, m, tm, bn, g in re.findall(rf"^{macro}\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
 
 
 def tile_smem(tm: int, bn: int) -> int:
@@ -82,9 +82,16 @@ def test_gemms_fit_h100_shared_memory_and_are_the_runners():
             base = name.removesuffix(RUN.tile_suffix(tm, bn))
             assert base in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_pearlc_s"), name
     assert {tile_smem(*t) for t in ((128, 128), (128, 64), (64, 64), (128, 32), (64, 32))} == {197728, 197760, 132224, 164992, 99456}
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar"} == names
+    grouped = {n: (m, tm, bn, g) for n, m, tm, bn, g in gemms("GEMM_G")}
+    assert set(grouped) == {"gemm_pearlc_g_d", "gemm_words_g_d"}
+    for name, spec in grouped.items():                   # each is its ungrouped kernel's mode, tile and gate
+        alone = name.replace("_g_d", "_d")
+        assert spec == next((m, tm, bn, g) for n, m, tm, bn, g in gemms() if n == alone), name
+        assert RUN.gemm_tile(name) == RUN.gemm_tile(alone) and S.WANT[name] == S.WANT[alone], name
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "form_s5_g"} == names | set(grouped)
+    assert S.WANT["form_s5_g"] == S.WANT["form_s5"]
     assert set(RUN.FORM_ALTS) == {"form_s5_scalar"}
-    assert form_kernels() == ["form_s5", "form_s5_scalar"]
+    assert form_kernels() == ["form_s5", "form_s5_scalar", "form_s5_g"]
 
 
 def test_operands_are_in_natural_order():
@@ -251,17 +258,25 @@ def form_kernels() -> list[str]:
     return [n for n in re.findall(KERNEL, SOURCE) if n.startswith("form_")]
 
 
+def grouped_kernels() -> list[str]:
+    """The grouped calls' kernels (grouped.py), which run.py never launches: form_s5_g, the GEMM_G GEMMs and their probes,
+    and PD_GROUPED's pd_commit_g and pd_tiles_g."""
+    names = [n for n, *_ in gemms("GEMM_G")]
+    pd = [f"pd_{kind}_g_{v}" for v in re.findall(r"^PD_GROUPED\((\d+)\)", SOURCE, re.M) for kind in ("commit", "tiles")]
+    return [n for n in re.findall(KERNEL, SOURCE) if n.endswith("_g")] + names + [g + "_smem" for g in names] + pd
+
+
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"} - set(grouped_kernels())
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
 
 def kernel_names() -> list[str]:
-    """Every kernel in the cubin: pearl_c_sm90.cu's and those of the hashing it includes (hash_h3.cuh, hash_fast.cuh and
-    hash_decode.cuh's variants)."""
+    """Every kernel in the cubin: pearl_c_sm90.cu's (the grouped calls' too) and those of the hashing it includes
+    (hash_h3.cuh, hash_fast.cuh and hash_decode.cuh's variants)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
-    return own_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd
+    return own_kernels() + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:

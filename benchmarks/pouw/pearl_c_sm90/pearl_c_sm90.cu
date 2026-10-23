@@ -21,6 +21,20 @@
 #include "../pearl_c_sm120/hash_decode.cuh"
 #include "acc.h"
 
+// the grouped calls' commitment and tile leaves (grouped.py), hash_decode.cuh's bodies unchanged: unit u's launch is the Args at
+// p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch (pd_commit's rows, pd_tiles' tiles)
+#define PD_GROUPED(V)                                                                                                    \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_g_##V(const Args g) {                                    \
+    const Args a = *reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * blockIdx.y);                              \
+    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V>(a);                                                                     \
+  }                                                                                                                      \
+  extern "C" __global__ void __launch_bounds__(32) pd_tiles_g_##V(const Args g) {                                      \
+    const Args a = *reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * blockIdx.y);                              \
+    static_assert((V & PD_GROUP) == 0, "a CTA a tile");                                                                  \
+    if ((int)blockIdx.x < (a.i[0] + 63) / 64 * (a.i[1] / 64)) pd_tiles_t<V>(a);                                          \
+  }
+PD_GROUPED(851)
+
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
 DEV uint16_t f2bf(float f) { return __bfloat16_as_ushort(__float2bfloat16_rn(f)); }
@@ -130,6 +144,9 @@ template <int NA> DEV void acc_fence(float* d) {
 //   CT        stores C~ (FP32)
 //   PEARLC    stores C~, then the peel into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
+// GR (the grouped calls, grouped.py): A's rows are many units' one after another, and p12 holds each 64-row block's expert e
+// (int32); a tile's B and P_B rows are its expert's, rows e N + tn BN of the experts' stacked B side, and its columns' scales
+// cs + e N.  C~, U and y are A's rows by N, as without it.
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
 constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
@@ -155,7 +172,7 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
 }
 
-template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
+template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(const Args& a) {
   using T = Tile<TM, BN>;
   constexpr int NWG = T::NWG, STAGES = T::STAGES, NA = BN / 2;
   constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
@@ -167,6 +184,8 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
   const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
   const int tid = threadIdx.x, wg = tid / 128;
+  const int* ex = reinterpret_cast<const int*>(a.p[12]);
+  const auto b_row = [&](int tm) { return GR ? ex[tm * (TM / 64)] * N : 0; };
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
@@ -186,16 +205,17 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
         int tm, tn;
         raster(t, tiles_m, tiles_n, group, tm, tn);
+        const int br = b_row(tm) + tn * BN;
         for (int kb = 0; kb < KB + PEEL; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
           if (kb < KB) {
             tma_load(st, maps->a, full, kb * BK, tm * TM);
-            tma_load(st + T::A_BYTES, maps->b, full, kb * BK, tn * BN);
+            tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
           } else {
             tma_load(st, maps->pa, full, 0, tm * TM);
-            tma_load(st + T::A_BYTES, maps->pb, full, 0, tn * BN);
+            tma_load(st + T::A_BYTES, maps->pb, full, 0, br);
           }
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
@@ -257,7 +277,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
     float* U = reinterpret_cast<float*>(a.p[3]);
     uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
     const float* rs = reinterpret_cast<const float*>(a.p[7]);
-    const float* cs = reinterpret_cast<const float*>(a.p[8]);
+    const float* cs = reinterpret_cast<const float*>(a.p[8]) + b_row(tm);
     if constexpr (MODE == M_PLAIN) {
       const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
@@ -327,6 +347,12 @@ GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_pearlc_s_d, M_PEARLC_S, 64, 64, 4)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_d, M_CT, 64, 32, 4)
+// the grouped calls' chain and A'F_B (GR), on 64-row tiles: each unit's segment of A is a multiple of 64 rows
+#define GEMM_G(NAME, MODE, TM, BN, G)                                                                                     \
+  extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, true>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = Tile<TM, BN>::SMEM; }
+GEMM_G(gemm_pearlc_g_d, M_PEARLC, 64, 64, 4)
+GEMM_G(gemm_words_g_d, M_CT, 64, 32, 4)
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule on -h3's H_line)
 DEV uint32_t isqrt(uint32_t v) {
@@ -428,14 +454,16 @@ extern "C" __global__ void eprime(const Args a) {
 // E' and the lines are staged in the descriptor's core matrices (`core`); thread x's accumulators are the alpha x of its
 // wgmma positions (qmma's), read as float2 pairs.  The codes are staged at a 144-byte row stride, so a warp's 16-bit stores
 // (8 rows by 4 column pairs) hit distinct banks, and leave as whole 128-byte rows.  MODE 0 is form_s5's cast (two codes per
-// cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.
+// cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.  GR (form_s5_g, the grouped calls): p3
+// holds the experts' F lines one after another (k x 32 each) and p5 each 64-row block's expert, whose lines the block takes.
 constexpr int FORM_ROW = 144;
-template <int MODE> DEV void form_body(const Args& a) {
+template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]);
+  const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
+                     (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
   *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) =
       *reinterpret_cast<const uint4*>(E + (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2));
 #pragma unroll
@@ -485,6 +513,7 @@ template <int MODE> DEV void form_body(const Args& a) {
 }
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) { form_body<0>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) { form_body<1>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_g(const Args a) { form_body<0, true>(a); }
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements
