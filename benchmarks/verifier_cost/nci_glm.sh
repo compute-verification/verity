@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # nci_glm on a CPU node: build `nci-check`, fetch a vLLM Build's workload Programs (every rank's) from the store and run
 # nci_glm.py into $OUT. Run from a clone (the build writes .lake), with a store key (--store-read):
-#   research run --on auto --store-read --cwd clone --cpus 4 --mem-gb 64 --max-min 180 -- \
-#     bash benchmarks/verifier_cost/nci_glm.sh art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35
+#   research run --on auto --store-read --cwd clone --cpus 16 --mem-gb 256 --max-min 240 -- \
+#     bash benchmarks/verifier_cost/nci_glm.sh art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --jobs 8
 # Arguments after ART go to nci_glm.py.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}

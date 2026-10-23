@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -125,6 +126,36 @@ def register(d: dict, theta: list) -> dict:
     return d
 
 
+def check_rank(rdir: Path, wp: dict, exe: Path, gamma: int, num: int, den: int, tmp: str) -> dict:
+    """Rank `rdir`'s workload Program, as built and registered, through `nci-check --policy`."""
+    text = gzip.open(rdir / "build_workload/descriptor.json.gz").read().decode()
+    desc = json.loads(text)
+    theta, owner, inputs = declaration(desc, wp)
+    row = {"rank": int(rdir.name[4:]), "workload_digest": wp["workload_digest"],
+           "descriptor_sha256": hashlib.sha256(text.encode()).hexdigest(), "descriptor_bytes": len(text.encode()),
+           "root_nodes": len(owner), "theta_nodes": len(theta),
+           "ius": max((o for o in owner if o != "input"), default=-1) + 1,
+           "gates": wp["population"]["gates"], "component_gates": wp["population"]["component_gates"],
+           "non_theta_inputs": inputs}
+    for name in ("as_built", "registered"):
+        path = Path(tmp) / f"{rdir.name}-{name}.json"
+        if name == "registered":
+            text = json.dumps(register(desc, theta), separators=(",", ":"))
+        path.write_text(json.dumps({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": [num, den]}))
+        row[name] = timed([str(exe), "--policy", str(path)])
+        path.unlink()
+    v = row["registered"].get("verdict") or {}
+    if v.get("ius"):
+        size, novel = v["ius"][0]
+        row["registered"]["size_matches_build"] = size == row["component_gates"]
+        row["registered"]["novel_over_limit"] = novel * den / (num * size) if size else None
+        row["registered"]["novel_matches_inputs"] = novel == sum(e["bits"] for e in inputs.values())
+    print(json.dumps({"rank": row["rank"], "as_built": row["as_built"].get("verdict", row["as_built"]),
+                      "registered": {k: x for k, x in row["registered"].items() if k != "verdict"} | {"verdict": v}}),
+          flush=True)
+    return row
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--build", type=Path, required=True)
@@ -132,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exe", type=Path, default=EXE)
     ap.add_argument("--K", type=int, default=20_000_000, help="bits an IU may read besides θ (calibrations.json)")
     ap.add_argument("--token-bits", type=int, default=32, help="bits per token position at the limit")
+    ap.add_argument("--jobs", type=int, default=1, help="ranks checked at once")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     ranks = sorted((p for p in (args.build / "build").glob("rank*") if (p / "build_workload").is_dir()),
@@ -144,43 +176,23 @@ def main(argv: list[str] | None = None) -> int:
     params = {"K": args.K, "token_bits": args.token_bits, "positions": P, "node_component_gates": S,
               "gamma": gamma, "alpha": [num, den], "alpha_float": num / den}
     print(json.dumps(params), flush=True)
-    rows = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for rdir, wp in zip(ranks, wps):
-            text = gzip.open(rdir / "build_workload/descriptor.json.gz").read().decode()
-            desc = json.loads(text)
-            theta, owner, inputs = declaration(desc, wp)
-            row = {"rank": int(rdir.name[4:]), "workload_digest": wp["workload_digest"],
-                   "descriptor_sha256": hashlib.sha256(text.encode()).hexdigest(), "descriptor_bytes": len(text.encode()),
-                   "root_nodes": len(owner), "theta_nodes": len(theta), "ius": max((o for o in owner if o != "input"),
-                                                                                   default=-1) + 1,
-                   "gates": wp["population"]["gates"], "component_gates": wp["population"]["component_gates"],
-                   "non_theta_inputs": inputs}
-            for name in ("as_built", "registered"):
-                path = Path(tmp) / f"{rdir.name}-{name}.json"
-                if name == "registered":
-                    text = json.dumps(register(desc, theta), separators=(",", ":"))
-                path.write_text(json.dumps({"program": text, "theta": theta, "owner": owner, "gamma": gamma,
-                                            "alpha": [num, den]}))
-                row[name] = timed([str(args.exe), "--policy", str(path)])
-                path.unlink()
-            del desc, text
-            v = row["registered"].get("verdict") or {}
-            if v.get("ius"):
-                size, novel = v["ius"][0]
-                row["registered"]["size_matches_build"] = size == row["component_gates"]
-                row["registered"]["novel_over_limit"] = novel * den / (num * size) if size else None
-                row["registered"]["novel_matches_inputs"] = novel == sum(e["bits"] for e in inputs.values())
-            rows.append(row)
-            print(json.dumps({"rank": row["rank"], "as_built": row["as_built"].get("verdict", row["as_built"]),
-                              "registered": {k: v for k, v in row["registered"].items() if k != "verdict"}
-                              | {"verdict": v}}), flush=True)
-    prompt = rows[0]["non_theta_inputs"].get("prompt", {}).get("bits", 0)
-    joined = {"note": "derived from the per-rank counts, not checked: no Program joins the ranks",
-              "size": S, "novel_reads": prompt, "limit": num * S // den, "complies": prompt * den <= num * S and S <= gamma}
-    result = {"schema": SCHEMA, "verifier": "nci-check --policy", "build": os.environ.get("NCI_GLM_BUILD"),
-              "params": params, "ranks": rows, "joined": joined}
-    (args.out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
+    rows: list[dict] = []
+
+    def write() -> None:
+        prompt = rows[0]["non_theta_inputs"].get("prompt", {}).get("bits", 0) if rows else None
+        joined = {"note": "derived from the per-rank counts, not checked: no Program joins the ranks",
+                  "size": S, "novel_reads": prompt, "limit": num * S // den,
+                  "complies": prompt is not None and prompt * den <= num * S and S <= gamma}
+        result = {"schema": SCHEMA, "verifier": "nci-check --policy", "build": os.environ.get("NCI_GLM_BUILD"),
+                  "params": params, "ranks": sorted(rows, key=lambda r: r["rank"]), "complete": len(rows) == len(ranks),
+                  "joined": joined}
+        (args.out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
+
+    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(args.jobs) as pool:
+        futures = [pool.submit(check_rank, rdir, wp, args.exe, gamma, num, den, tmp) for rdir, wp in zip(ranks, wps)]
+        for f in as_completed(futures):
+            rows.append(f.result())
+            write()
     bad = [r["rank"] for r in rows for k in ("as_built", "registered") if r[k].get("rc") != 0]
     if bad:
         print("nci-check failed to run on ranks", sorted(set(bad)), file=sys.stderr)

@@ -74,8 +74,8 @@ whole node reading its prompt alone is at the limit, and Γ = ⌊K / α⌋ with 
 collective values) and the node's figure with the peers computed inside it (`joined`, derived and not checked).
 
 ~~~sh
-research run --on auto --store-read --cwd clone --cpus 4 --mem-gb 64 --max-min 180 -- \
-  bash benchmarks/verifier_cost/nci_glm.sh art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35
+research run --on auto --store-read --cwd clone --cpus 16 --mem-gb 256 --max-min 240 -- \
+  bash benchmarks/verifier_cost/nci_glm.sh art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --jobs 8
 ~~~
 
 Apart from `nci_glm`, nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing
