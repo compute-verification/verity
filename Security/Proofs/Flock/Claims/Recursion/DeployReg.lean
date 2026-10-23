@@ -137,7 +137,8 @@ theorem callsLogCollR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.I
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   rw [hrun]
-  exact (hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)).imp_left fun h e he => Or.inl (h e he)
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  exact (hL x _ _ ws hl hc ho (hT x _ _ ws hl hc hsp ho)).imp_left fun h e he => Or.inl (h e he)
 
 /-- **`VStar.CallsOpenPlayed` at `deployRec`** from the readers' facts, with no fixed or public round: the inner view
 is the inner verifier's run of the readers' messages, which plays at most the inner rounds (`run_length_le`). -/
@@ -156,7 +157,8 @@ theorem callsOpenPlayedR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursio
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv] at hj ⊢
-  rcases hO x _ _ ws hl hc ho (hT x _ _ ws hl hc ho) j hj with ⟨es, hes, hop⟩ | hcoll
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  rcases hO x _ _ ws hl hc ho (hT x _ _ ws hl hc hsp ho) j hj with ⟨es, hes, hop⟩ | hcoll
   · refine Or.inl ⟨es, hes, ?_⟩
     have hjk : j < I.V.k (xIOf x) :=
       Nat.lt_of_lt_of_le hj (Claims.Recursion.run_length_le H _ I.V (xIOf x) () _)
