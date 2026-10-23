@@ -744,8 +744,8 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     base, served_eager, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in (base, served_eager, compiled)] == [
         ("stock-fp8", "fp8", None, None),
-        ("stock-fp8@eager", "fp8", "stock-fp8", "eager"),
-        ("stock-fp8@compiled", "fp8", "stock-fp8@eager", "compiled"),
+        ("stock-fp8@eager", "fp8", None, "eager"),
+        ("stock-fp8@compiled", "fp8", None, "compiled"),
     ]
     assert compiled.to_json()["execution"] == "compiled"
     assert resolve_arms("stock-fp8,stock-fp8@compiled")[1].control == "stock-fp8"
@@ -788,11 +788,13 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled.toml").read_text()
     path = tmp_path / "spec.toml"
-    path.write_text(source.replace('control = "stock-fp8@eager"', 'control = "none"'))
+    section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
+    assert section in source
+    path.write_text(source.replace(section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock-fp8@eager"'))
     spec = load_spec(path)
-    assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control is None
-    for old, new, why in (('control = "stock-fp8@eager"', 'precision = "bfloat16"', "takes only its control"),
-                          ('control = "stock-fp8@eager"', 'control = "stock"', "control must be another arm"),
+    assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control == "stock-fp8@eager"
+    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
+                          (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
                           ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
         assert old in source
         path.write_text(source.replace(old, new))

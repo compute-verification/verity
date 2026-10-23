@@ -8,13 +8,21 @@ id = "llama31-8b-fp8-1gpu-compiled"
 # batch invariant (`bi-eager`). `stock-fp8@eager` is the same engine at vLLM's serving defaults, eager and not batch
 # invariant, and `stock-fp8@compiled` at its serving defaults compiled (torch.compile with vLLM's CUDA-graph mode), so
 # the factor splits into batch invariance's cost and compilation's gain.
+#
+# Neither variant is token-controlled: each execution runs other kernels and its greedy tokens differ, with equal KV
+# pools (65536 tokens). Gated at 11b103ff, `@eager` against `stock-fp8` diverged at the first output token (b8: 1 of 8
+# requests, r20261023-193006-847b; b32: 20 of 32, r20261023-193036-5e48) and `@compiled` against `@eager` within three
+# (b8: 1 of 8 at position 0; b32: 19 of 32, first at position 2). Each is timed on its own gated tokens (timed-tokens).
 arms = ["stock-fp8", "stock-fp8@eager", "stock-fp8@compiled"]
 sweep = "quick"
 reps = 3
 eager = true
 
+[arm_settings."stock-fp8@eager"]
+control = "none"
+
 [arm_settings."stock-fp8@compiled"]
-control = "stock-fp8@eager"
+control = "none"
 
 [preset]
 id = "llama31-8b-fp8-1gpu-compiled"
