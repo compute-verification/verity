@@ -5248,6 +5248,9 @@
    "assumptions": [],
    "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
   },
+  "Flock.SecurityProofs.SessionLoopZK": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.SoundAtBridge": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
