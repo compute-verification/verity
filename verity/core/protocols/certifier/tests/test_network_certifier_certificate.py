@@ -13,8 +13,9 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import (
-    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_message, depth,
-    empty, frames_root, open_frame, parameters_digest, real_frames, record_head, verify_frame)
+    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_digest,
+    certificate_message, depth, empty, frames_root, open_frame, parameters_digest, real_frames, record_head,
+    verify_frame)
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper
@@ -227,19 +228,20 @@ def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
         h = RecordHead(**{f: getattr(rec.head, f) for f in RecordHead.__slots__} | {"window": 0}) if head else rec.head
         c = Certificate(**{f: getattr(rec.certificate, f) for f in Certificate.__slots__} | {"window": 0}) if cert \
             else rec.certificate
-        return CertifiedRecord(h, c)
+        return CertifiedRecord(h, rec.salt, c)
 
     assert egress_verdicts([with_window_0(c1), *certified[1:]], key) == ["signature", None, None]
     assert egress_verdicts([with_window_0(c1, cert=False), *certified[1:]], key) == ["signature", None, None]
     # the head still says window 1, so the moved certificate is a second record there
     assert egress_verdicts([with_window_0(c1, head=False), *certified[1:]], key) == ["no-verdict", "duplicate", None]
     relabelled = [CertifiedRecord(
-        RecordHead(**{f: getattr(c.head, f) for f in RecordHead.__slots__} | {"link": "tokens"}),
+        RecordHead(**{f: getattr(c.head, f) for f in RecordHead.__slots__} | {"link": "tokens"}), c.salt,
         Certificate(**{f: getattr(c.certificate, f) for f in Certificate.__slots__} | {"link": "tokens"}))
         for c in certified]
     assert egress_verdicts(relabelled, key, link="tokens") == ["signature"] * 3
-    forged = CertifiedRecord(c0.head, Certificate(**{f: getattr(c0.certificate, f) for f in Certificate.__slots__}
-                                                  | {"signature": bytes(len(c0.certificate.signature))}))
+    zeros = {"signature": bytes(len(c0.certificate.signature))}
+    forged = CertifiedRecord(c0.head, c0.salt,
+                             Certificate(**{f: getattr(c0.certificate, f) for f in Certificate.__slots__} | zeros))
     assert egress_verdicts([forged, *certified[1:]], key) == ["signature", None, None]
     (tmp_path / "stranger").mkdir()
     stranger = signers.signer(tmp_path / "stranger", seed=b"other")
@@ -256,7 +258,7 @@ def test_a_relayed_status_the_certificate_disagrees_with_is_a_signature_violatio
         w.tick()
     faulted = certify_all(Issuer(signer, SESSION), [w.close_window()], INGRESS)[0]
     lying = CertifiedRecord(RecordHead(**{f: getattr(faulted.head, f) for f in RecordHead.__slots__}
-                                       | {"status": COMPLETE}), faulted.certificate)
+                                       | {"status": COMPLETE}), faulted.salt, faulted.certificate)
     key = signer.public_key()
     assert ingress_verdicts([faulted], 1, key) == ["status:dropped"]
     assert ingress_verdicts([lying], 1, key) == ["signature"]
@@ -366,6 +368,32 @@ def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
     assert ingress_verdicts(ingress, 1, key, session=SESSION) == ["signature"]
     assert ingress_verdicts(ingress, 1, key, session=OTHER_SESSION) == [None]
     assert not other[0].verify(key, bytes(31)) and not other[0].verify(key, bytes(33))
+
+
+def test_the_certificate_signs_the_record_digest_salted_by_the_certifier(tmp_path):
+    """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the certifier's own coins,
+    fresh per record: one record certified twice is signed under two digests, neither of them R. The host's check
+    reads the certificate alone; a record handed with another salt, or a salt of another length, is refused."""
+    signer = signers.signer(tmp_path)
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    fixed = certify_all(Issuer(signer, SESSION, coins=lambda n: b"\x07" * n), honest[:1])[0]
+    R = fixed.head.digest()
+    assert fixed.salt == b"\x07" * 64 and certificate_digest(fixed.salt, R) == fixed.certificate.digest
+    assert fixed.certificate.digest == hashlib.sha512(b"verity/net-cert/v1" + b"\x07" * 64 + R).digest() != R
+    assert fixed.verify(signer.public_key(), SESSION)
+    (tmp_path / "default").mkdir()
+    other = signers.signer(tmp_path / "default", seed=b"other")
+    key = other.public_key()
+    twice = certify_all(Issuer(other, SESSION), honest[:1] * 2)
+    assert twice[0].head == twice[1].head and twice[0].salt != twice[1].salt
+    assert twice[0].certificate.digest != twice[1].certificate.digest
+    assert all(c.verify(key, SESSION) and c.certificate.verify(key, SESSION) for c in twice)
+    swapped = CertifiedRecord(twice[0].head, twice[1].salt, twice[0].certificate)
+    assert swapped.certificate.verify(key, SESSION) and not swapped.verify(key, SESSION)
+    with pytest.raises(ValueError, match="64 bytes"):
+        CertifiedRecord(fixed.head, bytes(63), fixed.certificate)
+    with pytest.raises(ValueError, match="63 bytes"):
+        Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).certify(honest[0], EGRESS, P, PARAMS)
 
 
 def test_certificate_message_binds_key_session_link_direction_window_and_digest():

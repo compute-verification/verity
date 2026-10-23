@@ -1,13 +1,14 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
-profile, its counts are the profile's. A Boolean Definition, the gated part of N2's proof unit (`service`'s
-`NetworkLinkWindow` v2), which runs on every link-window; its one output is the ok bit. That unit's Program holds it as
-one gate (`gate`), and N2's verifier of record runs its `reference`, which the tests hold to the circuit.
+profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
+certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v3), which runs on
+every link-window; its one output is the ok bit. That unit's Program holds it as one gate (`gate`), and N2's verifier
+of record runs its `reference`, which the tests hold to the circuit.
 
-    NetworkHeadCheck_v1{L, T, COUNTS}
+    NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
-         grid: Array<80, Byte>, [profile: Array<T, Array<32>>], head: Array<HL, Byte>, salt: Salt,
-         path: Array<2, Digest>) -> Value<1>
+         grid: Array<80, Byte>, [profile: Array<T, Array<32>>], signed: Digest, head: Array<HL, Byte>, salt: Salt,
+         path: Array<2, Digest>, salt_c: Digest) -> Value<1>
         Digest = Array<8, Array<64, Value<1>>> (SHA-512 words, `sha512.words_be`),
         Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, HL = 157 + L + 4T
 
@@ -18,24 +19,33 @@ link's name and its grids are, and so is whether an end has a profile.
 **Public inputs.** `record` is the root of N2's commitment to the link-window, `record_domain` its domain id
 (`LinkWindows.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
-u32 big-endian, then the parameters digest), and `profile` the profile's row for the window: T counts, each u32, least
-significant bit first.
+u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
+significant bit first, and `signed` the digest the end's certificate signs (`certificate_digest`), which hides the
+record digest under the certifier's salt and is all of the head the host's signature check reads.
 
 **Witness.** The head's bytes (`RecordHead.encode`, its frames root included), its leaf's hiding salt and its two
-siblings in N2's tree.
+siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
 digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2), the leaf N3 opens for the same head
 (`N3HidingRead`). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
 its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
-COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). Two fields are free: the deadline byte, which the
-certificate's host-side check reads (`LinkWindows.verify`), and the frames root, which N3's design holds the window's
-frames to on every port-window that recorded frames (a prototype in the clear, not a proof-service unit).
+COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
+digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
+`signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
+which the certificates' host-side check reads (`LinkWindows.verify`), and the frames root, which N3's design holds the
+window's frames to on every port-window that recorded frames (a prototype in the clear, not a proof-service unit).
+
+`salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
+certificate binds the head the check opens, and the head leaf stays the head's bytes alone, the leaf N3 reads.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
-32·T − 1 ANDs (19,199 at T = 600), and two ANDs join the three. The opening is SHA-512 of the head's 157 + L + 4T bytes
+32·T − 1 ANDs (19,199 at T = 600), and three ANDs join the four. The opening is SHA-512 of the head's 157 + L + 4T bytes
 after its row prefix's block, hm96's leaf and two frame-v3 nodes, and it dominates: at L = 9 it is 775,077 ANDs at T = 4
-and 1,876,070 at T = 600, where the fields are 807 (`size` counts each part's ANDs).
+and 1,876,070 at T = 600, where the fields are 807. The signed digest's part (4) is the record digest, SHA-512 of the
+record tag's 70-byte prefix and the head in ⌈(244 + L + 4T) / 128⌉ compressions, then the salted digest's two and an
+equality of 512 bits: at L = 9 it is 290,246 ANDs at T = 4 (five compressions) and 1,333,292 at T = 600 (23), so the
+whole check is 1,066,260 and 3,229,371 (`size` counts each part's ANDs).
 """
 from __future__ import annotations
 
@@ -55,11 +65,13 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import FrameV3Read, root_ref
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.ml.commitments.gates.lms import Sha512Compress
-from verity.ml.commitments.gates.sha512 import midstate, pad_tail, words_be
+from verity.ml.commitments.gates.lms import LmsEqual, Sha512Compress
+from verity.ml.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
+from verity.ml.commitments.identity import tagged_sha512, tagged_sha512_prefix
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
-from verity.core.protocols.certifier.certificate import DIGEST_BYTES, STATUS_CODES
+from verity.core.protocols.certifier.certificate import (CERTIFICATE_TAG, DIGEST_BYTES, RECORD_TAG, STATUS_CODES,
+                                                         certificate_digest)
 from verity.core.protocols.certifier.grid import GridParams
 
 BIT = BL.BIT
@@ -228,6 +240,56 @@ NetworkHidingRead = CompositeDefinition(
         "and domain id domain")
 
 
+# --- the circuit: the certificate's digest ----------------------------------------------------------------------------
+
+def _digest_bytes(d: Coll) -> list[list]:
+    """A Digest's 64 bytes, each 8 bits least significant first, from its SHA-512 words (bytes big-endian)."""
+    bits = _refs(d)
+    return [bits[64 * k + 8 * (7 - i):64 * k + 8 * (8 - i)] for k in range(8) for i in range(8)]
+
+
+def _sha512(B, K: _Consts, message: list[list]) -> Coll:
+    """SHA-512 of a message of bytes (8 bits each), padded, from the IV."""
+    words = _words(message + [K.bits(b, 8) for b in pad_tail(len(message))])
+    out = _coll(DIGEST, [x for v in IV for x in K.bits(v, 64)])
+    for k in range(0, len(words), 16):
+        out = B.call(Sha512Compress, out, _coll(Array(16, WORD), [x for w in words[k:k + 16] for x in w]))
+    return out
+
+
+def _sig_recorddigest(S):
+    return (("head", Array(S.HL, BYTE)),), DIGEST
+
+
+def _body_recorddigest(B, S, head):
+    K = _Consts(B)
+    hb = _refs(head)
+    prefix = [K.bits(b, 8) for b in tagged_sha512_prefix(RECORD_TAG, S.HL)]
+    return _sha512(B, K, prefix + [hb[8 * k:8 * k + 8] for k in range(S.HL)])
+
+
+NetworkRecordDigest = CompositeDefinition(
+    "NetworkRecordDigest", 1, ("HL",), _sig_recorddigest, _body_recorddigest, conformance="exact-model-tested",
+    doc="the record digest of an HL-byte record head (`RecordHead.digest`): tagged_sha512 of the record tag and the "
+        "head")
+
+
+def _sig_signed(S):
+    return (("record", DIGEST), ("salt_c", DIGEST), ("signed", DIGEST)), BIT
+
+
+def _body_signed(B, S, record, salt_c, signed):
+    K = _Consts(B)
+    tag = [K.bits(b, 8) for b in CERTIFICATE_TAG]
+    return B.call(bind(LmsEqual, N=64), _sha512(B, K, tag + _digest_bytes(salt_c) + _digest_bytes(record)), signed)
+
+
+NetworkSignedDigest = CompositeDefinition(
+    "NetworkSignedDigest", 1, (), _sig_signed, _body_signed, conformance="exact-model-tested",
+    doc="1 iff signed is SHA-512(\"verity/net-cert/v1\" ‖ salt_c ‖ record), the digest a network certificate signs "
+        "(`certificate_digest`)")
+
+
 # --- the head check ---------------------------------------------------------------------------------------------------
 
 def _check_statics(S) -> Shape:
@@ -242,7 +304,8 @@ def _params(S) -> list[tuple[str, object]]:
               ("window", Array(64, BIT)), ("grid", Array(GRID_BYTES, BYTE))]
     if S.COUNTS:
         params.append(("profile", Array(S.T, Array(32, BIT))))
-    return params + [("head", Array(sh.HL, BYTE)), ("salt", SALT), ("path", Array(2, DIGEST))]
+    return params + [("signed", DIGEST), ("head", Array(sh.HL, BYTE)), ("salt", SALT), ("path", Array(2, DIGEST)),
+                     ("salt_c", DIGEST)]
 
 
 def _sig_check(S):
@@ -262,14 +325,17 @@ def _body_check(B, S, *args):
     if S.COUNTS:
         oks.append(B.call(bind(NetworkHeadCounts, T=S.T), _coll(Array(S.T, Array(4, BYTE)), hb[8 * sh.CNT:8 * sh.ROOT]),
                           a["profile"]))
+    record = B.call(bind(NetworkRecordDigest, HL=sh.HL), a["head"])
+    oks.append(B.call(NetworkSignedDigest, record, a["salt_c"], a["signed"]))
     bits = concat([o.refs for o in oks])
     return B.call(BL.and_gate(bits.count), Coll(Array(bits.count, BIT), bits))
 
 
 NetworkHeadCheck = CompositeDefinition(
-    "NetworkHeadCheck", 1, ("L", "T", "COUNTS"), _sig_check, _body_check, conformance="exact-model-tested",
+    "NetworkHeadCheck", 2, ("L", "T", "COUNTS"), _sig_check, _body_check, conformance="exact-model-tested",
     doc="1 iff the head opens at leaf 2 + direction of N2's commitment, its fields are the link-window's, complete and "
-        "the declared grid's, and (COUNTS) its counts are the profile's row; its deadline byte and frames root are free")
+        "the declared grid's, (COUNTS) its counts are the profile's row, and its record digest salted by salt_c is the "
+        "signed digest; its deadline byte and frames root are free")
 
 
 def unit(L: int, T: int, counts: bool):
@@ -285,7 +351,7 @@ def _gate_only(fid: str) -> Callable[..., int]:
 @lru_cache(maxsize=None)
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     """`unit(L, T, counts)` as one gate of N2's proof unit (`service.LinkWindows.unit`): its signature, under an id that
-    names it, `Gate[NetworkHeadCheck_v1{L=..,T=..,COUNTS=..}]_v1`. The unit's Program holds the gate rather than the
+    names it, `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}]_v1`. The unit's Program holds the gate rather than the
     Definition's body because the commitment gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`,
     `Sha512Compress`) encode to about 140 MB, and the proof service encodes the Program on every registration."""
     d = unit(L, T, counts)
@@ -299,7 +365,8 @@ def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
 @dataclass(frozen=True)
 class Instance:
     """One head's check: its size class and its arguments as bytes and ints (`profile` None when the end has no
-    profile; `path` the head leaf's two siblings)."""
+    profile; `signed` the certificate's signed digest; `path` the head leaf's two siblings; `salt_c` the certifier's
+    salt for the record)."""
 
     record: bytes
     record_domain: bytes
@@ -308,9 +375,11 @@ class Instance:
     window: int
     grid: bytes
     profile: tuple[int, ...] | None
+    signed: bytes
     head: bytes
     salt: bytes
     path: tuple[bytes, bytes]
+    salt_c: bytes
     T: int
 
     @property
@@ -334,7 +403,8 @@ def hiding_value(row: bytes, salt: bytes) -> bytes:
 
 def reference_parts(inst: Instance) -> dict[str, bool]:
     """Each part's output on the instance, from its arguments as the circuit reads them: the opening
-    (`NetworkHidingRead`), the fields (`NetworkHeadFields`) and the counts (`NetworkHeadCounts`, 1 without a profile)."""
+    (`NetworkHidingRead`), the fields (`NetworkHeadFields`), the counts (`NetworkHeadCounts`, 1 without a profile) and
+    the signed digest (`NetworkRecordDigest`, then `NetworkSignedDigest`)."""
     sh, h = Shape(len(inst.link), inst.T), inst.head
     if len(h) != sh.HL:
         raise ValueError(f"the head is {len(h)} bytes, the unit's {sh.HL}")
@@ -344,11 +414,12 @@ def reference_parts(inst: Instance) -> dict[str, bool]:
     counts = inst.profile is None or h[sh.CNT:sh.ROOT] == b"".join(n.to_bytes(4, "big") for n in inst.profile)
     opens = root_ref(inst.record_domain, SCHEMA, hiding_value(h, inst.salt), HEADS + inst.direction,
                      inst.path) == inst.record
-    return {"opening": bool(opens), "fields": bool(fields), "counts": bool(counts)}
+    signed = certificate_digest(inst.salt_c, tagged_sha512(RECORD_TAG, h))
+    return {"opening": bool(opens), "fields": bool(fields), "counts": bool(counts), "signed": signed == inst.signed}
 
 
 def reference(inst: Instance) -> bool:
-    """`NetworkHeadCheck_v1`'s output on the instance: every part's."""
+    """`NetworkHeadCheck_v2`'s output on the instance: every part's."""
     return all(reference_parts(inst).values())
 
 
@@ -369,8 +440,8 @@ def arguments(inst: Instance) -> list[list[int]]:
     flat = {"record": _digest_bits(inst.record), "record_domain": _digest_bits(inst.record_domain),
             "link": _bytes_bits(inst.link), "direction": [inst.direction], "window": _int_bits(inst.window, 64),
             "grid": _bytes_bits(inst.grid), "profile": [b for n in inst.profile or () for b in _int_bits(n, 32)],
-            "head": _bytes_bits(inst.head), "salt": _digest_bits(inst.salt),
-            "path": [b for s in inst.path for b in _digest_bits(s)]}
+            "signed": _digest_bits(inst.signed), "head": _bytes_bits(inst.head), "salt": _digest_bits(inst.salt),
+            "path": [b for s in inst.path for b in _digest_bits(s)], "salt_c": _digest_bits(inst.salt_c)}
     params, _ = inst.unit.signature()
     out = []
     for name, t in params:
@@ -404,13 +475,15 @@ def ands(fn, memo: dict | None = None) -> int:
     return memo[fn.id]
 
 
-_GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts"}
+_GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts",
+           "NetworkRecordDigest": "signed", "NetworkSignedDigest": "signed"}
 
 
 def size(target, memo: dict | None = None) -> dict:
-    """The head check's ANDs, in total and by part: the opening, the fields, the counts and the rest (the final AND)."""
+    """The head check's ANDs, in total and by part: the opening, the fields, the counts, the signed digest (the record
+    digest and its salted digest) and the rest (the final AND)."""
     memo = {} if memo is None else memo
-    out = dict.fromkeys(("opening", "fields", "counts", "other"), 0)
+    out = dict.fromkeys(("opening", "fields", "counts", "signed", "other"), 0)
     for nd in target.body.nodes:
         out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += _times(nd) * ands(nd.fn, memo)
     out["ands"] = sum(out.values())
@@ -418,5 +491,5 @@ def size(target, memo: dict | None = None) -> dict:
 
 
 __all__ = ["GRID_BYTES", "HEADS", "Instance", "NetworkHeadCheck", "NetworkHeadCounts", "NetworkHeadFields",
-           "NetworkHidingRead", "NetworkRowDigest", "Shape", "ands", "arguments", "evaluate", "gate", "grid_bytes",
-           "reference", "reference_parts", "size", "unit"]
+           "NetworkHidingRead", "NetworkRecordDigest", "NetworkRowDigest", "NetworkSignedDigest", "Shape", "ands",
+           "arguments", "evaluate", "gate", "grid_bytes", "reference", "reference_parts", "size", "unit"]

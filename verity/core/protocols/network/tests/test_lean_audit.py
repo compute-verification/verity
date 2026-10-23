@@ -167,7 +167,7 @@ def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatc
         return dataclasses.replace(r, grid=((bytes([9, 9]), None),) + r.grid[1:]) if w % 3 == 2 else r
 
     def forged(w, e):
-        return CertifiedRecord(e.head, dataclasses.replace(e.certificate, signature=b"")) if w % 3 == 1 else e
+        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w % 3 == 1 else e
 
     accepted = []
     for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 6, other_grid, forged):
@@ -196,7 +196,7 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
         return dataclasses.replace(r, grid=tuple(tuple(row) for row in slots))
 
     def forged(w, e):
-        return CertifiedRecord(e.head, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
+        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
 
     accepted, stood = [], []
     for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 3, content, forged):

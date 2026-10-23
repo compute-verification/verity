@@ -43,7 +43,7 @@ head whose status byte is 0 (complete), and that head opens at leaf 2 + directio
 depth 2), the leaf N2 commits beside each certified record (`service.HEADS`). The head's other fields are N2's to
 check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window),
 and, where the link declares its occupancy profile, that the head's counts are the profile's (N2's head check,
-`head_check.NetworkHeadCheck_v1`, which opens the same leaf).
+`head_check.NetworkHeadCheck_v2`, which opens the same leaf).
 The frames root holds N to the head's Σ n_t (leaf k is frame k for k < Σ n_t and E_0 after), so to the profile's total.
 
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
@@ -1318,8 +1318,8 @@ def _lms_key(H: int, seed: bytes) -> lms.PrivateKey:
 @dataclass
 class Certifier:
     """A stand-in for the network certifier and the firewall: an LMS key of 2^H one-time keys (the deployed N = 64,
-    W = 1) that signs each record head in one certifier session, and N2's commitment to each link-window
-    (`LinkWindows.commit`), its salts drawn from a seed."""
+    W = 1) that signs each record head's salted digest in one certifier session, and N2's commitment to each
+    link-window (`LinkWindows.commit`), its salts and the certifier's drawn from a seed."""
 
     key: lms.PrivateKey
     seed: bytes
@@ -1336,12 +1336,13 @@ class Certifier:
         return CT.LmsKey(self.key.params, lms.public_key(self.key))
 
     def certify(self, head: CT.RecordHead) -> CT.CertifiedRecord:
-        digest, key_id = head.digest(), self.public.key_id
+        salt = hashlib.shake_256(self.seed + b"/salt_c/" + self.used.to_bytes(8, "big")).digest(CT.SALT_BYTES)
+        digest, key_id = CT.certificate_digest(salt, head.digest()), self.public.key_id
         message = CT.certificate_message(key_id, self.session, head.link, head.direction, head.window, digest)
         signature = lms.sign_at(self.key, self.used, message).encode()
         self.used += 1
-        return CT.CertifiedRecord(head, CT.Certificate(key_id, head.link, head.direction, head.window, digest,
-                                                       signature))
+        return CT.CertifiedRecord(head, salt, CT.Certificate(key_id, head.link, head.direction, head.window, digest,
+                                                             signature))
 
     def commit(self, link: str, window: int, heads: Sequence[CT.RecordHead], egress: GridParams, ingress: GridParams,
                sync_set: SyncSet, occupancy: tuple = (None, None)) -> Committed:

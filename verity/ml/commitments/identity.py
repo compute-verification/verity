@@ -110,15 +110,21 @@ def identity_digest(tag: str, manifest: JSONValue) -> Digest:
     return tagged_sha256(tag, canonical_json_bytes(manifest))
 
 
+def tagged_sha512_prefix(tag: str, length: int) -> bytes:
+    """What :func:`tagged_sha512` hashes before a payload of ``length`` bytes: its prefix, the tag and the length."""
+
+    if type(tag) is not str or not tag:
+        raise TypeError("hash tag must be a nonempty string")
+    tag_bytes = tag.encode("utf-8")
+    return _TAGGED_SHA512_PREFIX + len(tag_bytes).to_bytes(4, "big") + tag_bytes + length.to_bytes(8, "big")
+
+
 def tagged_sha512(tag: str, payload: bytes | bytearray | memoryview) -> bytes:
     """:func:`tagged_sha256`'s frame through SHA-512, under its own prefix: 64 bytes.  The identity hash of the SHA-512
     commitment schemes (``frame-v3-sha512``, ``vllm-v1-sha512``, ``hm96-sha512/v1``)."""
 
-    if type(tag) is not str or not tag:
-        raise TypeError("hash tag must be a nonempty string")
-    tag_bytes, payload_bytes = tag.encode("utf-8"), bytes(payload)
-    return hashlib.sha512(_TAGGED_SHA512_PREFIX + len(tag_bytes).to_bytes(4, "big") + tag_bytes
-                          + len(payload_bytes).to_bytes(8, "big") + payload_bytes).digest()
+    payload_bytes = bytes(payload)
+    return hashlib.sha512(tagged_sha512_prefix(tag, len(payload_bytes)) + payload_bytes).digest()
 
 
 def identity_digest_sha512(tag: str, manifest: JSONValue) -> bytes:

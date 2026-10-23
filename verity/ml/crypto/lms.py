@@ -134,7 +134,7 @@ class Signature:
 # --- the messages ------------------------------------------------------------------------------------------------------------
 
 #: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
-#: distinct from the ids of the checks that read it (`verity/network-certificate/v3`, `verity/network-records/v2`).
+#: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`).
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
          "memory-challenger-record": "verity/memory-challenger-record/v1"}
 DIRECTIONS = ("egress", "ingress")
