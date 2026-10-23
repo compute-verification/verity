@@ -956,6 +956,10 @@
    "owner": "@proofs",
    "digest": "cfdcc51712a29f61d501055b6849788cb2e30c68987149be33bbd83e032e5254"
   },
+  "FlockSoundness.Discharge.Recursion.StackedTopAt": {
+   "owner": "@proofs",
+   "digest": "0a0d08c5d2f7d9044fda87519784c5a1b9af90ce006ee1e819c4b816994c8c71"
+  },
   "FlockSoundness.Discharge.Recursion.TagsFound": {
    "owner": "@proofs",
    "digest": "0ee7f4f5a7cb4eb6d7e2721b91f4c60bd200fe89b523bd06fc0727bc26c854f4"
@@ -963,6 +967,10 @@
   "FlockSoundness.Discharge.Recursion.VStarParses": {
    "owner": "@proofs",
    "digest": "85034e289a7faf26740a1fe21bc95a44aad750a4bd49b0a4ad97d4841e41a308"
+  },
+  "FlockSoundness.Discharge.Recursion.VStarParsesScoped": {
+   "owner": "@proofs",
+   "digest": "0e5b91d141c747fccb6c133f76a400987099cadcd4027c488d11afe0713a1165"
   },
   "FlockSoundness.Discharge.ZkExec.AcceptsZK": {
    "owner": "@proofs",
@@ -980,6 +988,17 @@
    "owner": "@proofs",
    "digest": "ed0f0c63bc94a1cfa14945fe0612099ac06c96ea16040e699b06836ba24f57ca"
   },
+  "FlockSoundness.Discharge.ZkLink.LinkCRZC": {
+   "owner": "@proofs",
+   "digest": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282"
+  },
+  "FlockSoundness.Discharge.ZkLink.RowsCRZC": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Discharge.ZkLink.SessCRZ": {
+   "owner": "@proofs",
+   "digest": "6632288d79c2f0850f4647b8d0dc88eccf99768f84bcc3a79803f6e1f3ad3735"
+  },
   "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": {
    "owner": "@proofs",
    "digest": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
@@ -991,6 +1010,10 @@
   "FlockSoundness.Model.Statement.LinkLayout": {
    "owner": "@proofs",
    "digest": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
+  },
+  "FlockSoundness.StrictCR.Finder.CR": {
+   "owner": "@proofs",
+   "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6"
   },
   "FlockVBridge.ColsHold": {
    "owner": "@proofs",
