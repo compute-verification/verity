@@ -7,7 +7,8 @@ One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the
             (`int8_exact_gpu.pin`).
   engine    `build_engine(case=ROLE, target=from_device() + int8_exact "linears")`, which refuses a target mismatch.
   applied   every linear but the routers runs `Int8PlainLinearMethod` and every MoE layer `Int8ExpertsMethod`, each serving
-            calls during generation; the routers are what `kernel_readback.routers` names, and stay bf16.
+            calls during generation, none with a slot routed to no expert (vLLM's profile run routes every slot so); the
+            routers are what `kernel_readback.routers` names, and stay bf16.
   generate  greedy on PROMPTS, batched and one by one.
   experts   the first and last MoE layers' first `--keep-calls` calls per phase keep x, the router's top-k ids and weights, the
             served output and every expert GEMM's call (its bf16 rows, s8 rows, scales, y and the tokens they are).  On the CPU:
@@ -238,6 +239,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                                 and set(lin) == set(linears) and doc["applied"]["router_methods"] == ["UnquantizedLinearMethod"]
                                 and doc["applied"]["dense_methods"] == ["Int8PlainLinearMethod"]
                                 and doc["applied"]["arms"] == [E.ARM] and doc["applied"]["moe_min_calls"] > 0
+                                and doc["applied"]["unrouted_slots_during_generation"] == 0
                                 and doc["applied"]["min_calls_during_generation"] > 0)
     print(f"[moe] applied {json.dumps(doc['applied'])}", flush=True)
     doc["generations"] = {"batched": batched, "solo": solo,
