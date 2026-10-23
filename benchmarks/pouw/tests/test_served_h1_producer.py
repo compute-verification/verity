@@ -158,7 +158,8 @@ def _registered_receipts(run, made_by, c) -> np.ndarray:
 def _held_to_reference(run, codes, weights, made_by, units_of):
     """Every call's ``receipt@<c>`` is `receipt_words` of h1tile's receipts (of ``units_of(call)``) on its padded codes and
     weight, each seeded from its unit's public row as the verifier builds it (`credit.public_table`: the run's salt, its
-    Program position and the registered roots); returns the units checked, live and dead."""
+    Program position and the registered roots), whose table is the ``pub@<c>`` `Served` registered; returns the units
+    checked, live and dead."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -167,8 +168,10 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     for c in run.calls:
         u0, n = HW.call_units(served.program)[c.index]
         roots = (served.registered[served.a_table(c.index)].root, served.registered[pre + f"b/{c.k}"].root)
-        pub = CR.public_table(served.program_digest, HW.table(served.program, HW.PUBS, c.index), run.salt.hex(),
-                              served.root, u0, n, (roots[0].hex(), roots[1].hex()))[0]
+        pv = served.pub_table(c.index)
+        pub, _salts, verifiers = CR.public_table(served.program_digest, pv, run.salt.hex(), served.root, u0, n,
+                                                 (roots[0].hex(), roots[1].hex()))
+        assert served.registered[pv].root == verifiers.root, f"call {c.index}'s {pv} is not the verifier's"
         rows = _registered_receipts(run, made_by, c)
         a = np.zeros((served.m, c.k), np.int8)
         a[:len(codes.get(c.index, ()))] = codes.get(c.index, np.zeros((0, c.k), np.int8))
