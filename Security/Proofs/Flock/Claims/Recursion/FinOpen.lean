@@ -130,7 +130,7 @@ theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × Lis
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`**: `ksLin2_deployed_staged` with
 `FinPieces` from `finPieces_finOpen`. The last round's pieces are every earlier round's openings at the parts that
 commit them, then the element-level last message's at the parts `rest` names. What stays open at the dense form is
-`PartChecksB` and `PartOpensB` at `showsTr`/`cmtTr`, and `DecompB`; then the readers' three facts and `untr` reading the
+`PartChecksB` and `PartOpensB` at `showsTr`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
 coin server's transcript back (`ReadsBack`). This bounds no number by itself: those premises are open. -/
 theorem ksLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -151,12 +151,11 @@ theorem ksLin2_deployed_open (b : Brings)
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hrb hP hRT hRL hRP
+  intro L Bd D bL hrb hP hRT hRL
   exact ksLin2_deployed_staged b (finOpen rest) wE join final w untr hrb
-    (fun shape hsh => ⟨finPieces_finOpen rest shape, hP shape hsh⟩) hRT hRL hRP
+    (fun shape hsh => ⟨finPieces_finOpen rest shape, hP shape hsh⟩) hRT hRL
 
 /-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`**: `bitsLin2_deployed_staged`
 with `FinPieces` from `finPieces_finOpen`. It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision
@@ -181,11 +180,10 @@ theorem bitsLin2_deployed_open (b : Brings)
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hrb hP hRT hRL hRP
+  intro L Bd D bL hrb hP hRT hRL
   exact bitsLin2_deployed_staged b (finOpen rest) wE join final w untr hrb
-    (fun shape hsh => ⟨finPieces_finOpen rest shape, hP shape hsh⟩) hRT hRL hRP
+    (fun shape hsh => ⟨finPieces_finOpen rest shape, hP shape hsh⟩) hRT hRL
 
 end RecDeploy

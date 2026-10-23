@@ -26,8 +26,8 @@ caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep` states it at t
 
 The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
 It bounds a number and establishes no security level: `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`DenseAt`) only follows from premises still open (`PartChecksB`, `PartOpensB`, `DecompB`, the readers'
-three facts and the coin server's transcript reading back, `ReadsBack`; `ksLin2_deployed_open`), Holo statements being
+`DenseAt`) only follows from premises still open (`PartChecksB`, `PartOpensB`, `DecompB` and `ReadersLogColl` at the
+coin server's record, which reads back; `ksLin2_deployed_full`), Holo statements being
 candidate 3's own model, and `BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it
 (`bitsLin2On_of_ksLin2On`). The proved level at the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below
 the 100-bit floor (ASK-73).

@@ -333,7 +333,7 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
         change L.msgAt x s (I.V.k (xIOf x) - 1) = none at hn
         rw [← hil] at hn
         simp [Claims.Recursion.VStarB.LayoutB.held, hn] at hm
-      exact (hrd i (by omega)).trans ((hshs.2 i hi1).symm.trans (hop _ hshs.1 i hi1 m hm).symm)
+      exact (hrd i (by omega)).trans ((hshs.2 i hi1).symm.trans ((hop _ hshs.1 i hi1).1 m hm).symm)
     · obtain ⟨pre, p, post, hl, hp, he⟩ := Claims.Recursion.VStarB.LayoutB.mem_piecesOf hm
       have hne : L.pieceAt x i ≠ [] := by
         rw [hl]
