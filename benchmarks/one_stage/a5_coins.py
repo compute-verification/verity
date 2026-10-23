@@ -75,13 +75,14 @@ def families(ranks: int) -> list[list[Any]]:
 
 
 def on_main(main: list[str]) -> str:
-    """The commit of main's first-parent line `main` (newest first) this tree is built on: its merge base with main's tip, when
-    that is on the line; else this tree's HEAD, whose session `pinned_session` then refuses."""
+    """The commit of main's first-parent line `main` (newest first) this tree is built on: the newest one in its history (a
+    branch that merged another branch's commit before it landed has a merge base with main off the line); else this tree's
+    HEAD, whose session `pinned_session` then refuses."""
     def git(*args: str) -> str:
         return subprocess.run(["git", "-C", str(TREE), *args], capture_output=True, text=True).stdout.strip()
-    base = git("merge-base", "HEAD", main[0]) if main else ""
+    built = set(git("rev-list", "HEAD").split())
     head = git("rev-parse", "HEAD")
-    return base if base in main else head if len(head) == 40 else "0" * 40
+    return next((c for c in main if c in built), head if len(head) == 40 else "0" * 40)
 
 
 def lines(path: Path) -> list[str]:
