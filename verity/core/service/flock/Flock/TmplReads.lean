@@ -452,10 +452,10 @@ theorem calls_wit {defs : Array Def} {k ic fuel n y : Nat} {S : Array (Array Boo
     {o : Nat} {inp : List Nat} {u u' : Acc}
     (h : df.calls.toList.foldlM (fun acc c => (List.range c.count).foldlM (fun acc j =>
       place defs k fuel c.def_ (o + c.base + j * c.stride) (c.bound (df.ref o inp k) j) acc) acc) u = .ok u')
-    (hs : SizeOk n u) (hic : ic ≤ o) (hy : y < o) (hk : y ≠ k)
-    (hc : ∃ c ∈ df.calls.toList, ∃ q j, j < c.count ∧ (S.getD c.def_ #[]).getD q false = true ∧
-      (c.bound (df.ref o inp k) j).getD q k = y) : Wit ic y u' := by
-  obtain ⟨c, hc, q, j, hj, hse, hb⟩ := hc
+    (hs : SizeOk n u) (hk : y ≠ k)
+    (hc : ∃ c ∈ df.calls.toList, ic ≤ o + c.base ∧ y < o + c.base ∧ ∃ q j, j < c.count ∧
+      (S.getD c.def_ #[]).getD q false = true ∧ (c.bound (df.ref o inp k) j).getD q k = y) : Wit ic y u' := by
+  obtain ⟨c, hc, hic, hy, q, j, hj, hse, hb⟩ := hc
   refine foldlM_wit (SizeOk n) (Wit ic y)
     (fun _ _ _ _ hu hw' => foldlM_inv (SizeOk n) (fun _ _ _ _ hw0 hp =>
       place_inv (SizeOk n) (fun hw h => write_size hw h) fuel hp hw0) hu hw')
@@ -496,7 +496,7 @@ theorem def_sure {defs : Array Def} {k ic : Nat} {S : Array (Array Bool)} (hS : 
         rcases hs with hs | hs
         · exact Or.inl (mem_canon_of_count (hrow _ hs))
         · exact Or.inr (mem_canon_of_count (hrow _ hs))
-    · refine calls_wit hS h2 hsz1 hic hlt hne ⟨c, hc, q, j, hj, by simpa using hse, ?_⟩
+    · refine calls_wit hS h2 hsz1 hne ⟨c, hc, by omega, by omega, q, j, hj, by simpa using hse, ?_⟩
       show (segsBound c.segs.toList (df.ref o inp k) j).getD q k = _
       rw [hb, ref_in hv1 hv2, ← hv3]
 
@@ -515,5 +515,89 @@ theorem sures_sound (defs : Array Def) (k ic : Nat) : Sound defs k ic (sures def
       simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, he, ite_false]
     rw [e1] at h
     exact hS.2 e j h
+
+theorem root_ref_out {df : Def} {k hi v y : Nat} (hk : k = df.cols - 1) (hy : y < hi) (hhi : hi ≤ k) (hv : hi ≤ v) :
+    df.ref 0 [] k v ≠ y := by
+  rcases root_ref (df := df) (k := k) (v := v) with ⟨-, e⟩ | e
+  · rw [e]; omega
+  · rw [e]; omega
+
+theorem root_ref_in {df : Def} {k v : Nat} (hk : k = df.cols - 1) (hv : v < k) : df.ref 0 [] k v = v := by
+  unfold Def.ref
+  rw [ite_eq_left (by omega)]
+  omega
+
+/-- **Every column `Tmpl.readsSure` marks is read by a computed row**: it is below the input rows' end and the constant,
+and a row of `Tmpl.rows` from the input rows to the constant reads it, in A or in B. -/
+theorem rows_sure {t : Tmpl} {acc : Acc} (hr : t.rows = .ok acc) {y : Nat} (hy : t.readsSure.getD y false = true) :
+    y < t.inCols ∧ y < t.constPos ∧ ∃ r, t.inCols ≤ r ∧ r < t.constPos ∧
+      (y ∈ (acc.ra.getD r #[]).toList ∨ y ∈ (acc.rb.getD r #[]).toList) := by
+  unfold Tmpl.rows at hr
+  obtain ⟨acc1, h1, h2⟩ := bind_ok hr
+  have hS := sures_sound t.defs t.constPos t.inCols
+  simp only [place] at h1
+  cases hdf : t.defs[t.root]? with
+  | none => simp only [hdf] at h1; cases h1
+  | some df =>
+    simp only [hdf] at h1
+    obtain ⟨-, hdd⟩ := getD_of_some hdf
+    have hk : t.constPos = df.cols - 1 := by unfold Tmpl.constPos; rw [hdd]
+    obtain ⟨acc2, h3, h4⟩ := bind_ok h1
+    rw [hdd] at h3
+    have hsz0 : SizeOk df.cols (Acc.empty df.cols) := by simp [SizeOk, Acc.empty]
+    have hsz2 : SizeOk df.cols acc2 := foldlM_inv (SizeOk df.cols) (fun _ _ _ _ hu hw => write_size hw hu) hsz0 h3
+    have hsz1 : SizeOk df.cols acc1 := keep_size h4 hsz2
+    have hw : y < min t.inCols t.constPos ∧ Wit t.inCols y acc1 := by
+      unfold Tmpl.readsSure at hy
+      dsimp only at hy
+      rw [hdd] at hy
+      rcases foldl_mark (Q := fun c => ∃ q j v, j < c.count ∧
+          ((sures t.defs).getD c.def_ #[]).getD (0 + q) false = true ∧ 0 ≤ v ∧ v < min t.inCols t.constPos ∧
+          y = v - 0 ∧ ∀ (g : Nat → Nat) (d : Nat), (segsBound c.segs.toList g j).getD q d = g v)
+        (fun m c h => segsMarks_mark h) hy with h0 | ⟨c, hc, q, j, v, hj, hse, -, hv2, hv3, hb⟩
+      · rcases rowMarks_mark h0 with h0 | ⟨r, hr, hs⟩
+        · rw [getD_replicate_false] at h0
+          cases h0
+        · obtain ⟨hr, hrc⟩ := List.mem_filter.1 hr
+          simp only [decide_eq_true_eq] at hrc
+          have hlt : y < min t.inCols t.constPos := by
+            rcases hs with hs | hs <;> (obtain ⟨v, -, -, hv, e⟩ := soleIn_some hs; omega)
+          have hrow : ∀ (xs : Array Nat), soleIn 0 (min t.inCols t.constPos) xs = some y →
+              (xs.map (df.ref 0 [] t.constPos)).toList.count y = 1 := fun xs hx =>
+            sole_count hx (fun v hv => root_ref_out hk hlt (Nat.min_le_right _ _) (by omega))
+              (fun v _ h2 h3 => by rw [root_ref_in hk (by omega)]; omega)
+          refine ⟨hlt, keep_wit h4 (foldlM_wit (SizeOk df.cols) (Wit t.inCols y)
+            (fun _ _ _ _ hu hw => write_size hw hu) (fun _ _ _ _ hu hw => write_wit hw hu)
+            ⟨r, hr, fun u u' hu hw => write_new hw hu (by omega) ?_⟩ hsz0 h3)⟩
+          rcases hs with hs | hs
+          · exact Or.inl (mem_canon_of_count (hrow _ hs))
+          · exact Or.inr (mem_canon_of_count (hrow _ hs))
+      · obtain ⟨hc, hcb⟩ := List.mem_filter.1 hc
+        simp only [decide_eq_true_eq] at hcb
+        refine ⟨by omega, calls_wit hS h4 hsz2 (by omega) ⟨c, hc, by omega, by omega, q, j, hj,
+          by simpa using hse, ?_⟩⟩
+        show (segsBound c.segs.toList (df.ref 0 [] t.constPos) j).getD q t.constPos = y
+        rw [hb, root_ref_in hk (by omega)]
+        omega
+    obtain ⟨hlt, r, hr1, hset, hyr⟩ := hw
+    have hwr : acc1.set.getD t.constPos true = false := by
+      unfold write at h2
+      split at h2
+      · cases h2
+      · rename_i h
+        simpa using h
+    have hrK : r ≠ t.constPos := fun e => by
+      subst e
+      rw [(getD_true_of hset).1] at hwr
+      cases hwr
+    have hrc : r < df.cols := hsz1.1 ▸ (getD_true_of hset).2
+    refine ⟨by omega, by omega, r, hr1, by omega, ?_⟩
+    obtain ⟨ea, eb⟩ := write_ok h2 r
+    rcases ea with ea | ⟨e, -⟩
+    · rcases eb with eb | ⟨e, -⟩
+      · rw [ea, eb]
+        exact hyr
+      · exact absurd e hrK
+    · exact absurd e hrK
 
 end Flock.TmplReads
