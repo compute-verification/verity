@@ -385,7 +385,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
     open root but the weights', its A rows in its step's A table of its K), byte for byte, at each step count that
     divides the calls; and `credit.partition_of` is the Program's partition object under
     `h1window.query`."""
-    window = "ef" * 64
+    window, salt = "ef" * 64, "5a" * 64
     for linears, calls, m in COMPILED:
         raw = _compiled(linears, calls, m, prefix)
         prog = h1.HW.program(linears, calls, m, h1.TILE, prefix=prefix, unit=h1.unit)
@@ -402,21 +402,21 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix):
             vals = (h1.HW.table(prog, "a", call, steps), h1.HW.table(prog, "zy", call), f"{prefix}b/{k}")
             roots = {v: hashlib.sha512(v.encode()).hexdigest() for v in vals}
             want = h1.HW.table_reads_file(prog, tp, call, roots, ports=h1.HW.window_ports(prog), window=window,
-                                          steps=steps)
+                                          steps=steps, salt=salt)
             got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in roots.items()}, window,
-                                              steps)
+                                              steps, salt)
             assert refused is None
             assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
             rc = h1.HW.table(prog, h1.HW.RECEIPTS, call)
             receipted = {**roots, rc: hashlib.sha512(rc.encode()).hexdigest()}
             want = h1.HW.table_reads_file(prog, tp, call, receipted, ports=h1.HW.window_ports(prog), window=window,
-                                          steps=steps)
+                                          steps=steps, salt=salt)
             got, refused = Cr.registered_file(digest, lay, shape, call, {v: [x] for v, x in receipted.items()}, window,
-                                              steps)
+                                              steps, salt)
             assert refused is None and Cr.RECEIPT_PORT in got["ports"]
             assert json.dumps(got) == json.dumps(want), (linears, calls, m, steps, call)
             got, refused = Cr.registered_file(digest, lay, shape, call, {**{v: [x] for v, x in roots.items()},
-                                                                          vals[1]: []}, window, steps)
+                                                                          vals[1]: []}, window, steps, salt)
             assert got is None and refused == ("registration", f"call {call}'s statement reads {vals[1]}, which the "
                                                "window registers not: register each of a call's tables and its "
                                                "weights once")

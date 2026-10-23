@@ -290,7 +290,7 @@ def registered_file(case: dict) -> dict:
     if refused is None:
         program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
         got, refused = Cr.registered_file(program, lay, shape, case["call"], case["roots"], case["window"],
-                                          case["steps"])
+                                          case["steps"], case["salt"])
     _counted(refused, "registered-file")
     return {"refused": list(refused)} if refused is not None else {"file": got,
                                                                    "partition": Cr.partition_of(program, shape)}

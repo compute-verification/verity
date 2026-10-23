@@ -104,7 +104,7 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
         (base / "session").mkdir(parents=True)
         (base / "circuit.txt").write_bytes(circuit(ks[lay["calls"][c][0]]))
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n")
-        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]))
+        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]), d["salt"])
         assert why is None, why
         files = [base.joinpath("circuit.txt").read_bytes(), base.joinpath("pub.bin").read_bytes(), raw,
                  json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
@@ -222,7 +222,7 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     for e in d["entries"]:
         roots.setdefault(e["value"], []).append(e["root"])
     reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"],
-                                len(d["rounds"]))
+                                len(d["rounds"]), d["salt"])
     files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw, json.dumps(Cr.partition_of(program, shape)).encode(),
              json.dumps(reg).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
@@ -234,6 +234,97 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     assert got is None and refused == ("proof", f"call {s['call']}'s session {s['sessions'][0]} proved unit {other}, "
                                                 f"which is no unit of call {s['call']}: a call's statement proves its "
                                                 "own call's units")
+
+
+def _files(d: dict, s: dict) -> tuple[str, dict, dict, dict]:
+    """Statement ``s``'s program digest, layout, shape and the ``--registered`` file credit builds for its call."""
+    raw, lay = bytes.fromhex(d["descriptor"]), _layout(d)
+    program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+    roots = {}
+    for e in d["entries"]:
+        roots.setdefault(e["value"], []).append(e["root"])
+    reg, why = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"], len(d["rounds"]), d["salt"])
+    assert why is None, why
+    return program, lay, shape, reg
+
+
+def _seeded(d: dict, s: dict, roots: tuple[str, str]) -> dict:
+    """Statement ``s``'s ``--registered`` file with its public rows the prover's, seeded under ``roots`` in place of its
+    call's own: every other port credit's."""
+    program, lay, shape, reg = _files(d, s)
+    pub = reg["ports"][Cr.PUB_PORT]
+    u0, n = pub["reads"].index(0), pub["leaves"]
+    rows, salts, got = Cr.public_table(program, pub["value"], d["salt"], d["window"]["root"], u0, n, roots)
+    return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
+        "rows": rows, "salts": [x.hex() for x in salts]}}}}
+
+
+def _rebind(d: dict, s: dict, reg: dict) -> None:
+    """Statement ``s``'s session reproved against ``reg`` in place of the file credit builds."""
+    raw = bytes.fromhex(d["descriptor"])
+    program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
+    files = [Path(s["circuit"]).read_bytes(), Path(s["public"]).read_bytes(), raw,
+             json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
+    bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()
+    p = Path(s["sessions"][0]) / "session.json"
+    rec = json.loads(p.read_text())
+    rec["proof"] = hashlib.sha512(bound + json.dumps(rec["unit_draw"]["units"]).encode()).hexdigest()
+    p.write_text(json.dumps(rec))
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_path, verifier):
+    """RCPT: the public row a unit's seed and fold keys are derived from is credit's own. Call c's statement reads it at
+    row t of ``<prefix>pub@<c>``, the window's Program salt, the unit's position u0 + t and the call's roots
+    (root(a/<K>@<s>), root(b/<K>)) as the window's entries register them, at that known content; and a statement whose
+    units were seeded under another call's roots or a made-up root was proved against another file, so its session is
+    rejected and the window refused whole."""
+    d, statements = window(seed, tmp_path)
+    for s in statements:
+        _program, lay, _shape, reg = _files(d, s)
+        c, pub = s["call"], reg["ports"][Cr.PUB_PORT]
+        k = {name: kk for name, kk, _n in lay["linears"]}[lay["calls"][c][0]]
+        a, b = (reg["ports"][f"a_k{k}_0"], reg["ports"][f"b_k{k}_0"])
+        u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
+        assert pub["value"].endswith(f"pub@{c}") and pub["leaves"] == size and pub["words"] == 100
+        assert pub["reads"] == [None] * u0 + list(range(size))
+        assert pub["known"]["rows"] == [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, (
+            bytes.fromhex(a["root"]), bytes.fromhex(b["root"]))) for t in range(size)]
+        assert pub["known"]["salts"] == [Cr.CC.public_row_salt(d["window"]["root"], u0 + t).hex() for t in range(size)]
+    assert credit(d, statements) == (_credited(d), None)
+    s = random.Random(seed).choice(statements)
+    _program, lay, _shape, reg = _files(d, s)
+    own = (next(p for x, p in reg["ports"].items() if x.startswith("a_k"))["root"],
+           next(p for x, p in reg["ports"].items() if x.startswith("b_k"))["root"])
+    others = {e["root"] for e in d["entries"] if Cr.is_a(e["value"])} - {own[0]}
+    for roots in [(r, own[1]) for r in sorted(others)[:1]] + [(own[0], "cd" * 64), ("ab" * 64, own[1])]:
+        _rebind(d, s, _seeded(d, s, roots))
+        got, refused = credit(d, statements)
+        assert got is None and refused[0] == "failed" and refused[1].startswith(f"call {s['call']}'s session "), refused
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_path, verifier):
+    """A verifier finding that a session opened its call's public table at another root than the rows credit built
+    (another call's roots, or made up) refuses the window (``registration``): no entry registers that table, so
+    `_registration` holds it only through `_verified`."""
+    d, statements = window(seed, tmp_path)
+    s = random.Random(seed).choice(statements)
+    _program, _lay, _shape, reg = _files(d, s)
+    pub = reg["ports"][Cr.PUB_PORT]
+
+    def run(proof, **kw):
+        got, why = PF.verify(proof, **kw)
+        return [PF.Finding(f.session, f.accepted, f.why, f.program, {**f.registered, Cr.PUB_PORT: {
+            "value": pub["value"], "root": "ab" * 64}} if kw["registered"] == reg else f.registered, f.units)
+            for f in got or []], why
+
+    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-2]), statements, files_of(_layout(d)), d["k"],
+                             rc.lms_verify, run=run)
+    assert got is None and refused == ("registration", (
+        f"call {s['call']}'s session {s['sessions'][0]} opened a public table at another port, value or root than the "
+        f"verifier's own {pub['value']} at port {Cr.PUB_PORT}: a unit's public row is the window's salt, its position "
+        "and its call's roots, as credit builds them"))
 
 
 def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypatch):
