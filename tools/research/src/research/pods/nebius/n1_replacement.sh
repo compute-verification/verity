@@ -90,6 +90,7 @@ L3  (infra, 5 min a node) install every entry, then prepare the check pod:
 EOF
   for n in $names; do
     echo "    research deploy install $n --by infra --ref $REF --apply"
+    echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
     echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
   done
   echo
