@@ -310,7 +310,7 @@ theorem round_view {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
         y.tops.map List.length = ((rs.getD k default).2.1).toList ∧
         (∀ e (he : e < y.tops.length), ∃ kt top, (lk.tops.getD rep #[])[topsBefore rs k + e]? = some (kt, top) ∧
           y.tops[e] = top.toList.map (·.toList) ∧ ∀ b ∈ top, b.size = 128) ∧
-        ∀ kc kk (c : ByteArray), (RecVStar.commitRounds rs)[kc]? = some k →
+        ∀ (kc kk : ℕ) (c : ByteArray), (RecVStar.commitRounds rs)[kc]? = some k →
           (cs.reps.getD rep #[])[kc]? = some (kk, c) → y.commits = [c.toList] := by
   obtain ⟨i, sh, cs, tt, tr, record, rc, lk, hi, hsh, hcs, hil, hR, hlk, hrd, hshown⟩ := staged_reads_link hS
   obtain ⟨lk', rc', want, hlk', hrd', -, -, -, hw, hrounds, hA0, hA1⟩ := FlockC3.VStarList.checkReads_ok hR
@@ -542,8 +542,8 @@ theorem readSegs_topPiece {w : Claims.Flock.Wit} {c : Circuit} {q rep : ℕ} {to
   unfold Claims.Recursion.VStarB.readSegs
   rw [List.flatMap_map]
   refine flatMap_range_nodes top _ fun t ht => ?_
-  show ([] : Msg) ++ Claims.Recursion.VStarB.readForms w (hmCommit c q (rep * top.size + t)) = _
-  rw [List.nil_append, hb t ht]
+  simp only [List.nil_append]
+  exact hb t ht
 
 theorem rowPiece_mem {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)} (hp : p ∈ rowPiece r j) :
     ∃ h ∈ heldRows r p.1, h.1 = j ∧ ∃ c, r.w.parts[p.1]?.bind partCircuit = some c ∧
