@@ -553,10 +553,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
 
     ``layout`` (a layout mode, `tmpl.mode_of`; TMPL1's is ``iv/hybrid/4``): the templated statement
     (:data:`TMPL_STATEMENT`, PRF-133, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
-    the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit`): META ``template`` its lines and ``layout`` the mode, in place of
-    the ``CIRCUIT unit`` section and the flat META ``template``. The verifier unrolls the template and commits its columns
-    at the layout's positions (`tmpl.layout`), so the unit's range and ``unit_log`` are that net's slot. A unit class's
-    ``definition`` has no templated form."""
+    the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit` of the flat unit, or a structural lowering's own template,
+    `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
+    META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
+    ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
+    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -607,16 +608,24 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             if len(orows) != 1 or p.bits is not None or p.words != orows[0].words or any(a < lohi[1] and lohi[0] < b for a, b in seen):
                 raise ValueError(f"link {x}: a u16 row of the one output row's words, its leaves disjoint from every other link's")
             seen.append(tuple(lohi))
-    useful, template = low.layout.useful, None
+    template = getattr(low, "template", None)
+    if template is not None and layout is None:
+        raise ValueError(f"{low.name}: a unit given as its template has only the templated statement: name its layout")
+    useful = None if template is not None else low.layout.useful
     if layout is not None:
         from . import tmpl as TM
 
         if definition is not None:
             raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: META template is its unit's")
-        template, stats = TM.emit(TM.of_layout(low.layout, low.name))
-        if not stats["order"]["ok"]:
-            raise ValueError(f"{low.name}: the unit's template is not in the order Tmpl.parse checks: {stats['order']}")
+        if template is None:
+            template, stats = TM.emit(TM.of_layout(low.layout, low.name))
+            order = stats["order"]
+        else:
+            order = TM.ordered(template)
+        if not order["ok"]:
+            raise ValueError(f"{low.name}: the unit's template is not in the order Tmpl.parse checks: {order}")
         useful = TM.layout(template, layout)[template.root].size
+        tmpl_text = TM.write(template)
     ul = _slot_log(useful)
     if useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -660,7 +669,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = _ret_ports(tail.stages[-1]) if U.tail_rets else []
     programs = program_digests(sub, statics)
-    unit = _expanded(low.layout, low.name)
+    unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
     unit_sha256 = low.sha256_of(unit)
     stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
@@ -683,7 +692,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             "partition": ({"rule": PARTITION_V1, "digest": partition} if partition else
                           {"rule": PARTITION_RULE, "query": cover["query"], "version": cover["version"], "digest": partition_digest(cover)})}
     if template is not None:
-        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=TM.write(template).splitlines(), layout=layout)
+        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=tmpl_text.splitlines(), layout=layout)
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")

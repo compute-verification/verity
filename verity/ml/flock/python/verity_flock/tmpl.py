@@ -852,6 +852,19 @@ def evaluate(t: Tmpl, inputs: np.ndarray, out_cols=None, budget: int = BUDGET) -
     return got[np.searchsorted(ev.need[t.root], out_cols)]
 
 
+def totals(t: Tmpl) -> dict:
+    """The unrolled unit's rows and their A and B references, counted per Definition and multiplied through its calls:
+    ``unroll``'s rows without the cancellations its ``canon`` makes where two of a row's references bind one column."""
+    tot: list[tuple[int, int, int]] = []
+    for d in t.defs:
+        r, a, b = len(d.rows), sum(len(x[1]) for x in d.rows), sum(len(x[2]) for x in d.rows)
+        for c in d.calls:
+            r, a, b = r + c.count * tot[c.e][0], a + c.count * tot[c.e][1], b + c.count * tot[c.e][2]
+        tot.append((r, a, b))
+    rows, nnz_a, nnz_b = tot[t.root]
+    return {"rows": rows, "nnz_a": nnz_a, "nnz_b": nnz_b}
+
+
 def slice_lanes(bits: np.ndarray) -> np.ndarray:
     """``(n, bits)`` 0/1 per instance as ``(bits, ceil(n / 64))`` uint64 lanes, instance ``i`` bit ``i mod 64`` of word
     ``i // 64``."""
@@ -860,7 +873,7 @@ def slice_lanes(bits: np.ndarray) -> np.ndarray:
     W = -(-n // 64)
     pad = np.zeros((W * 64, bits.shape[1]), np.uint8)
     pad[:n] = bits
-    return np.packbits(pad.T, axis=1, bitorder="little").view("<u8").astype(np.uint64)
+    return np.ascontiguousarray(np.packbits(pad.T, axis=1, bitorder="little")).view("<u8").astype(np.uint64)
 
 
 def unslice_lanes(lanes: np.ndarray, n: int) -> np.ndarray:

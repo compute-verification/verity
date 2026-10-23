@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from verity_flock import circuit as FC
@@ -123,6 +124,28 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     monkeypatch.setattr(T, "layout", layout)
     with pytest.raises(ValueError, match="a unit class \\(META definition\\) has no templated statement"):
         FC.compose(tm.low, tm.sub, port_bits=[b for _r, _s, b, _ps in args[2]], v2_out_rows=(("o0",),), definition="d", layout=MODE)
+
+
+@pytest.mark.slow
+def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_template(tmp_path):
+    """`UnitStager`'s ``structural`` on the toy: META ``template`` is `struct_lower`'s template on the stager's ports (the
+    flat unit never built), ordered, its unit range that template's slot; the outputs a round stages and META ``dummy`` are
+    the flat stager's, from the template (`TmplLowering.evaluate`); META is the emitted templated statement's but for the
+    template, the unit's slot and the pins that read them; and a structural stager without a layout is refused."""
+    args, rows, _kw = _toy(0)
+    flat, tm = CS.UnitStager(*args, layout=MODE), CS.UnitStager(*args, layout=MODE, structural=True)
+    assert tm.low.circuit is None and isinstance(tm.low, CS.TmplLowering)
+    t = T.parse("\n".join(tm.meta["template"]) + "\n")
+    assert T.write(t) == T.write(tm.low.template) and T.ordered(t)["ok"]
+    assert tm.meta["unit_log"] == FC._slot_log(T.layout(t, MODE)[t.root].size)
+    assert tm.meta["dummy"] == flat.meta["dummy"]
+    diff = sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k))
+    assert set(diff) <= {"template", "unit_sha256", "partition", "unit_log", "k_log", "ranges", "vus_per_block"} and "template" in diff
+    a, b = flat.stage(rows, tmp_path / "flat", b"k" * 32), tm.stage(rows, tmp_path / "struct", b"k" * 32)
+    assert all(np.array_equal(a["outs"][o], b["outs"][o]) for o in a["outs"])
+    assert (tmp_path / "struct" / "circuit.txt").read_text() == tm.text
+    with pytest.raises(ValueError, match="a structural unit is written as its template: name its layout"):
+        CS.UnitStager(*args, structural=True)
 
 
 #: the auditor's host runs the lowering on numpy and C-Flock's Python alone

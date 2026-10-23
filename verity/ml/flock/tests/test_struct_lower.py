@@ -52,3 +52,20 @@ def test_calls_past_the_fold_cap_share_one_specialization_with_constants_as_inpu
     assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 2
     _tm, lw, _top = S.lower(CONSTANTS, fold_cap=4, fold_gates=0)
     assert sum(k[0].startswith("BlackwellS8ImmaDot32") for k in lw.specs) == 4
+
+
+def test_a_template_evaluates_to_its_unrolled_rows_outputs():
+    """`tmpl.evaluate`, which never unrolls: on 192 random instances, the scan's output bits are those `evaluate` gives on
+    its unrolled rows, and the same under a budget small enough to split the lanes and step a run's copies in chunks."""
+    import numpy as np
+
+    tm, _lw, _top = S.lower(bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32))
+    flat = T.unroll(tm)
+    nin = sum(hi - lo for lo, hi in T._ports(tm)[1])
+    lanes = np.random.default_rng(1).integers(0, 1 << 64, size=(nin, 3), dtype=np.uint64)
+    outs = np.concatenate([np.arange(lo, hi) for lo, hi in T.out_ports(tm)])
+    want = np.array([[S.evaluate(flat, [int(x) for x in lanes[:, w]], nin)[c] for w in range(3)] for c in outs], np.uint64)
+    assert np.array_equal(T.evaluate(tm, lanes), want)
+    assert np.array_equal(T.evaluate(tm, lanes, budget=1 << 12), want)
+    bits = np.random.default_rng(2).integers(0, 2, size=(130, 7), dtype=np.uint8)
+    assert np.array_equal(T.unslice_lanes(T.slice_lanes(bits), 130), bits)

@@ -421,10 +421,24 @@ def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) ->
     return calls
 
 
+@dataclass(frozen=True)
+class Ports:
+    """A unit's ports, as `class_statement.unit_lowering` lays a Definition on rows: the input ports' widths (one input
+    group), each argument leaf's bits among their concatenated bits; the output ports' widths (one output group), each
+    output bit the returned bit it copies (the returns' leaves concatenated) or None, a zero bit."""
+
+    ins: tuple[int, ...]
+    leaves: tuple[tuple[int, ...], ...]
+    outs: tuple[int, ...]
+    bits: tuple[int | None, ...]
+
+
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
-          fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True) -> tuple[T.Tmpl, _Lowerer, Spec]:
-    """``target`` (a bound composite) as a templated unit: one input group of its argument leaves, its root's copy, one
-    output group of its return leaves, the constant last (``ir_lower.layout``'s order)."""
+          fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True,
+          ports: Ports | None = None) -> tuple[T.Tmpl, _Lowerer, Spec]:
+    """``target`` (a bound composite) as a templated unit: one input group, its root's copy, one output group, the constant
+    last (``ir_lower.layout``'s order). The input group is the argument leaves and the output group one port of the return
+    leaves, or ``ports``' ports."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
     lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather)
@@ -432,10 +446,21 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()
     C.used, C.blocks = set(), []
-    wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
+    if ports is None:
+        wires = {a: C.input(f"in{a}", w) for a, w in zip(args, widths)}
+    else:
+        if len(ports.leaves) != len(args) or [len(x) for x in ports.leaves] != widths:
+            raise ValueError(f"{name}: the ports' leaves are not the arguments' {widths}")
+        bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
+        wires = {a: [bits[i] for i in x] for a, x in zip(args, ports.leaves)}
+        widths = list(ports.ins)
     top = lw.call(C, root, wires)
     sp = lw.specs[top]
     outs = [b for r in root.returns for b in wires[r]]
+    if ports is not None:
+        if len(ports.bits) != sum(ports.outs) or {i for i in ports.bits if i is not None} != set(range(len(outs))):
+            raise ValueError(f"{name}: the output ports do not copy each returned bit")
+        outs = [L(frozenset(), 0) if i is None else outs[i] for i in ports.bits]
     nin = sum(widths)
     in_words = ceil_pow2(max(1, -(-nin // IL.WORD)))
     in_cols = in_words * IL.WORD
@@ -461,7 +486,8 @@ def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FO
     blk = C.blocks[0]
     assert min(blk.labels, default=0) >= 0, "the root's call binds a constant"
     calls = [T.Call(sp.index, 1, base, sp.cols, _segs([ref(v) for v in blk.labels], [0] * len(blk.labels), cols))] if sp.cols else []
-    groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, 1, len(outs))]
+    out_widths = (len(outs),) if ports is None else ports.outs
+    groups = [str(x) for x in (1, 0, in_words, len(widths), *widths, 1, out_word, out_words, len(out_widths), *out_widths)]
     defs = [T.Def(s.cols, s.ins, tuple(s.rows), tuple(s.calls)) for s in lw.order]
     defs.append(T.Def(cols, 0, tuple(rows), tuple(calls)))
     t = T.Tmpl(name, len(defs) - 1, groups, defs)
