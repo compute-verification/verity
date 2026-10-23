@@ -253,6 +253,23 @@ def test_registry_and_domain():
     assert s.first_adds(sh) == 32 * 128 * 256
 
 
+def test_the_census_k_is_in_v1s_domain_only():
+    """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in v1's domain and no other k under
+    1,024 is; v0 and sm_120's record have no census k."""
+    h3 = get("pearl-c-h100-v1-h3")
+    assert h3.census_ks == (256,) and dict(h3.certificate.parameters)["census_ks"] == (256,)
+    h3.check(Matmul(0, Shape(64, 256, 6144), 1))
+    h3.check(Matmul(0, Shape(8192, 256, 6144), 1))
+    for bad in (Shape(64, 128, 6144), Shape(64, 512, 6144), Shape(64, 256, 96)):
+        with pytest.raises(DomainError, match="or k in 256"):
+            h3.check(Matmul(0, bad, 1))
+    for name in ("pearl-c-h100-v0", "pearl-c-sm120-v1"):
+        assert get(name).census_ks == () and dict(get(name).certificate.parameters)["census_ks"] == ()
+        with pytest.raises(DomainError, match="1024 <= k"):
+            get(name).check(Matmul(0, Shape(64, 256, 6144), 1))
+    assert C.PearlC(k_min=32, tile=(16, 16), forming="v1").census_ks == ()
+
+
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
 def test_vectors_are_pinned(case):
     spec = next(c for c in CV.CASES if c[0] == case)

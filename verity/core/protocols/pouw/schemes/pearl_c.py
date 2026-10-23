@@ -450,9 +450,9 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
 
 
 class PearlC:
-    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
-    smaller bounds make a test instance.  ``hashing`` h3 names the scheme ``…-h3``: SHA-512 throughout (the module
-    docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
+    the device record's `census_ks` below it, and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3
+    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
@@ -471,6 +471,8 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
+        #: the ks below k_min the domain takes: the device record's census-passed ks, whose census ran §5's forming (v1)
+        self.census_ks = tuple(k for k in device.census_ks if k < k_min) if forming == "v1" else ()
         #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
@@ -506,16 +508,18 @@ class PearlC:
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),
                         ("forming", forming), ("line_norm_f", self.line_norm), ("device", device.name),
                         ("atom", device.atom.name), ("peel", device.peel.name), ("g", device.g), ("hashing", hashing),
-                        ("prices", prices.device), ("cap", str(device.cap))),
+                        ("prices", prices.device), ("cap", str(device.cap)),
+                        ("census_ks", self.census_ks)),
         )
 
     def check(self, matmul: Matmul) -> None:
         """The domain: whole promotion groups, whole column tiles, and down the rows whole ticket subtiles (whole tiles, for
         a test instance's tile under 16 rows), so the last row tile may be partial (decode's 32 x 64 tile)."""
         s, d, rows = matmul.shape, self.device, min(self.tile[0], P.TILE)
-        if not (self.k_min <= s.k <= d.k_max and s.k % d.window == 0 and s.m % rows == 0 and s.n % self.tile[1] == 0
-                and s.m <= 1 << 24 and s.n <= 1 << 24):
-            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= {d.k_max} with {d.window} | k (whole "
+        if not ((self.k_min <= s.k or s.k in self.census_ks) and s.k <= d.k_max and s.k % d.window == 0 and s.m % rows == 0
+                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and s.n <= 1 << 24):
+            also = f" or k in {', '.join(map(str, self.census_ks))} (the census's)" if self.census_ks else ""
+            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= {d.k_max}{also} with {d.window} | k (whole "
                               f"promotion groups), {rows} | m, {self.tile[1]} | n, m, n <= 2^24")
 
     def check_registration(self, transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:
