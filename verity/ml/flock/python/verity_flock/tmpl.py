@@ -824,6 +824,8 @@ class _Evaluator:
                 js = np.arange(j0, j1, dtype=np.int64)
                 Xe = V[p.at(p0[None, :] + js[:, None] * st[None, :])]  # (copies, ins_e, L)
                 Y = self.run(c.e, Xe.transpose(1, 0, 2).reshape(e.ins, (j1 - j0) * L))
+                if len(want) != len(self.need[c.e]):
+                    Y = Y[np.searchsorted(self.need[c.e], want)]
                 dst = c.base + js[:, None] * c.stride + want[None, :]  # (copies, want)
                 Y = Y.reshape(len(want), j1 - j0, L).transpose(1, 0, 2)
                 at = np.searchsorted(p.keep, dst)

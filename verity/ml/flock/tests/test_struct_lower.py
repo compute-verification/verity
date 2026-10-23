@@ -69,3 +69,20 @@ def test_a_template_evaluates_to_its_unrolled_rows_outputs():
     assert np.array_equal(T.evaluate(tm, lanes, budget=1 << 12), want)
     bits = np.random.default_rng(2).integers(0, 2, size=(130, 7), dtype=np.uint8)
     assert np.array_equal(T.unslice_lanes(T.slice_lanes(bits), 130), bits)
+
+
+def test_a_definition_two_calls_read_different_columns_of_is_evaluated_for_each():
+    """Two calls of one two-column Definition (an AND and an XOR of its inputs), the first read for its AND, the second
+    for its XOR: each call gets the columns it reads, as `evaluate` on the unrolled rows gives them."""
+    import numpy as np
+
+    K = 385
+    rows = [(i, (i,), (i,)) for i in range(4)] + [(256, (128,), (K,)), (257, (131,), (K,))]
+    calls = [T.Call(0, 1, 128, 2, ((2, 0, 0, 1, 0),)), T.Call(0, 1, 130, 2, ((2, 2, 0, 1, 0),))]
+    t = T.Tmpl("t", 1, [str(x) for x in (1, 0, 1, 1, 4, 1, 2, 1, 1, 2)],
+               [T.Def(2, 2, ((0, (2,), (3,)), (1, (2, 3), (4,))), ()), T.Def(K, 0, tuple(rows), tuple(calls))])
+    lanes = np.random.default_rng(3).integers(0, 1 << 64, size=(4, 2), dtype=np.uint64)
+    flat = T.unroll(t)
+    want = [[S.evaluate(flat, [int(x) for x in lanes[:, w]], 4)[c] for w in range(2)] for c in (256, 257)]
+    assert np.array_equal(T.evaluate(t, lanes), np.array(want, np.uint64))
+    assert want[0][0] == int(lanes[0, 0] & lanes[1, 0]) and want[1][0] == int(lanes[2, 0] ^ lanes[3, 0])
