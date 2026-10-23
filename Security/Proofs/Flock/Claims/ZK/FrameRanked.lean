@@ -665,6 +665,125 @@ theorem run_head {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
     obtain ⟨s1, ha, -⟩ := run_coins_cons c _ _ _ h2
     exact absurd ha (answer_owed_none _ rfl)
 
+/-- Round `k`'s count in a rep's requests up to the inner proof (`ownReqs`): a scheduled round's, then the inner
+proof's. -/
+def nnOf (sched own : Array (ByteArray × ℕ)) (k : ℕ) : ℕ :=
+  if k < sched.size then (sched.getD k (.empty, 0)).2 else (own.getD (k - sched.size) (.empty, 0)).2
+
+/-- Round `k` of a rep's requests up to the inner proof (`ownReqs`): a scheduled round, with itself in the device's
+place, then the inner proof's. -/
+def qOf (sched own : Array (ByteArray × ℕ)) (k : ℕ) : _root_.Flock.Firewall.Frame.Req :=
+  if k < sched.size then
+    .round (sched.getD k (.empty, 0)).2 (sched.getD k (.empty, 0)).1 (.sched (sched.getD k (.empty, 0)).1)
+  else .round (own.getD (k - sched.size) (.empty, 0)).2 (own.getD (k - sched.size) (.empty, 0)).1 .own
+
+theorem qOf_round (sched own : Array (ByteArray × ℕ)) (k : ℕ) :
+    ∃ r pl, qOf sched own k = .round (nnOf sched own k) r pl := by
+  by_cases hk : k < sched.size
+  · simp only [qOf, nnOf, hk, ↓reduceIte]
+    exact ⟨_, _, rfl⟩
+  · simp only [qOf, nnOf, hk, ↓reduceIte]
+    exact ⟨_, _, rfl⟩
+
+theorem schedReqs_pairs (P : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128)) :
+    ∀ j, j < sched.size → schedReqs P sched cr j =
+      (if P.isEmpty then [] else [.prior P.size (_root_.Flock.Firewall.Frame.wordBytes P)]) ++
+        (qOf sched own 0 :: pairs (fun k => cr.getD k #[]) (qOf sched own) j)
+  | 0, h => by simp [schedReqs, pairs, qOf, h]
+  | j + 1, h => by
+    rw [schedReqs_succ, schedReqs_pairs P sched own cr j (by omega), pairs_succ]
+    simp [qOf, h]
+
+/-- **A rep's requests up to the inner proof's round `i`** are its first round, then each round's coins and the next. -/
+theorem ownReqs_pairs (P : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128))
+    (hS : 0 < sched.size) : ∀ i, ownReqs P sched own cr i =
+      (if P.isEmpty then [] else [.prior P.size (_root_.Flock.Firewall.Frame.wordBytes P)]) ++
+        (qOf sched own 0 :: pairs (fun k => cr.getD k #[]) (qOf sched own) (sched.size + i))
+  | 0 => by
+    obtain ⟨j, hj⟩ : ∃ j, sched.size = j + 1 := ⟨sched.size - 1, by omega⟩
+    rw [ownReqs_zero P sched own cr hj, schedReqs_pairs P sched own cr j (by omega), hj, Nat.add_zero, pairs_succ]
+    simp [qOf, hj]
+  | i + 1 => by
+    rw [ownReqs_succ, ownReqs_pairs P sched own cr hS i, ← Nat.add_assoc, pairs_succ]
+    have h1 : ¬ (sched.size + i + 1 < sched.size) := by omega
+    have h2 : sched.size + i + 1 - sched.size = i + 1 := by omega
+    simp [qOf, h1, h2]
+
+/-- An earlier rep's coins, past which the rep runs on, are its claim points. -/
+theorem run_prior_eq (c : Cfg) (P : Array F128) (rs : List _root_.Flock.Firewall.Frame.Req)
+    (h2 : (_root_.Flock.Firewall.Frame.run c {} ((if P.isEmpty then [] else
+      [.prior P.size (_root_.Flock.Firewall.Frame.wordBytes P)]) ++ rs)).2 = false) :
+    ∃ p, (P.isEmpty = true → p = #[]) ∧
+      (P.isEmpty = false → claimPoints c.lay
+        (_root_.Flock.Firewall.Frame.words (_root_.Flock.Firewall.Frame.wordBytes P) 0 P.size) = .ok p) ∧
+      _root_.Flock.Firewall.Frame.run c {} ((if P.isEmpty then [] else
+        [.prior P.size (_root_.Flock.Firewall.Frame.wordBytes P)]) ++ rs) =
+        _root_.Flock.Firewall.Frame.run c { m := { prior := p } } rs := by
+  cases hP : P.isEmpty
+  · simp only [hP, Bool.false_eq_true, ↓reduceIte, List.singleton_append] at h2 ⊢
+    rcases hcp : claimPoints c.lay
+        (_root_.Flock.Firewall.Frame.words (_root_.Flock.Firewall.Frame.wordBytes P) 0 P.size) with e | p
+    · exfalso
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hcp,
+        _root_.Flock.Firewall.Frame.Reply.ends] at h2
+      cases h2
+    · refine ⟨p, fun h => h.elim, fun _ => rfl, ?_⟩
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hcp,
+        _root_.Flock.Firewall.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]
+      simp
+  · exact ⟨#[], fun _ => rfl, (fun h => by cases h), by simp⟩
+
+/-- **Past the opening's label the rank check held at the coins answered**: where a rep's requests up to the inner
+proof's round `i` (`ownReqs`) run on, the rounds answered `cr`, into the inner proof, the frame took the opening's
+label: it holds rounds `0 … d − 1`'s coins, each answered the round's count, and the rank check held there after the
+earlier rep's claim points. -/
+theorem ownReqs_rank {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
+    (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
+    (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
+    (h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest,
+      .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6)) (i : ℕ)
+    (h2 : (_root_.Flock.Firewall.Frame.run c {} (ownReqs P sched own cr i)).2 = false)
+    (hin : (_root_.Flock.Firewall.Frame.run c {} (ownReqs P sched own cr i)).1.m.inner.isSome = true) :
+    ∃ p, (P.isEmpty = true → p = #[]) ∧
+      (P.isEmpty = false → claimPoints c.lay
+        (_root_.Flock.Firewall.Frame.words (_root_.Flock.Firewall.Frame.wordBytes P) 0 P.size) = .ok p) ∧
+      RankHeld c (_root_.Flock.Firewall.Frame.run c {} (ownReqs P sched own cr i)).1.m ∧
+      (_root_.Flock.Firewall.Frame.run c {} (ownReqs P sched own cr i)).1.m.prior = p ∧
+      ∃ d ≤ sched.size + i, (_root_.Flock.Firewall.Frame.run c {} (ownReqs P sched own cr i)).1.m.coins.toList =
+          flatR (fun k => cr.getD k #[]) d ∧
+        ∀ k < sched.size + i, (cr.getD k #[]).size = nnOf sched own k ∧ 1 ≤ nnOf sched own k := by
+  have hS : 0 < sched.size := by
+    by_contra hz
+    have e : sched.getD 0 (.empty, 0) = (.empty, 0) := by
+      simp [Array.getD, show sched.size = 0 by omega]
+    rw [e] at h0
+    simp at h0
+  rw [ownReqs_pairs P sched own cr hS i] at h2 hin ⊢
+  obtain ⟨p, hp1, hp2, he⟩ := run_prior_eq c P _ h2
+  rw [he] at h2 hin ⊢
+  have hq0 : qOf sched own 0 = .round 6 (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8,
+      .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)
+      (.sched (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
+        .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)) := by
+    simp only [qOf, hS, ↓reduceIte, h0]
+  rw [hq0] at h2 hin ⊢
+  obtain ⟨hg, hpr, hsz, -, d, hd, hco, -⟩ := run_head hc p hdg hcap hdom (qOf_round sched own)
+    (by simp only [nnOf, hS, ↓reduceIte, h0]) (J := sched.size + i) (by omega) h2
+  have hdone : (_root_.Flock.Firewall.Frame.run c { m := { prior := p } } (.round 6 (ByteArray.mk (encs [.dom dom,
+      .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)
+      (.sched (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
+        .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)) ::
+        pairs (fun k => cr.getD k #[]) (qOf sched own) (sched.size + i))).1.m.done = true := by
+    cases hD : (_root_.Flock.Firewall.Frame.run c { m := { prior := p } } (.round 6 (ByteArray.mk (encs [.dom dom,
+      .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)
+      (.sched (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
+        .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray)) ::
+        pairs (fun k => cr.getD k #[]) (qOf sched own) (sched.size + i))).1.m.done
+    · rw [(hg.1 hD).2.2] at hin
+      cases hin
+    · rfl
+  exact ⟨p, hp1, hp2, (hg.2 hdone).2, hpr, d, hd, hco, hsz⟩
+
 end Ranked
 
 end Claims.ZKServer
