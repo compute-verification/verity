@@ -73,6 +73,24 @@ from verity_vllm.protocol_options import pouw_h1 as PH
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
+
+def hm96_salts(key: bytes, nonce: int, n: int) -> list[bytes]:
+    """`audit.hm96_salt(key, nonce, j)` for j < n: row j's salt is ChaCha20 blocks 3j..3j + 2 of one stream (64-bit counter
+    from 0, 64-bit nonce), so all n come from one keystream, `cryptography`'s when importable; row 0's is checked against
+    `hm96_salt`."""
+    try:
+        import struct
+
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+    except ImportError:
+        return [hm96_salt(key, nonce, j) for j in range(n)]
+    enc = Cipher(algorithms.ChaCha20(key, struct.pack("<QQ", 0, nonce)), mode=None).encryptor()
+    ks = enc.update(bytes(192 * n))
+    out = [ks[192 * j:192 * (j + 1)] for j in range(n)]
+    if n and out[0] != hm96_salt(key, nonce, 0):
+        raise AssertionError("the ChaCha20 keystream is not hm96_salt's")
+    return out
+
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
 #: a statement's ``--registered`` file, one a call
@@ -217,7 +235,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
             at[w], lo = (k, lo), lo + n
         words = np.concatenate(rows)
         reg[k] = G.Registered.commit(circuit, f"{prefix}b/{k}", words.tolist(),
-                                     [hm96_salt(key, B_NONCE + i, j) for j in range(len(words))], schema=V2)
+                                     hm96_salts(key, B_NONCE + i, len(words)), schema=V2)
     return Weights(circuit, reg, at)
 
 
@@ -341,7 +359,7 @@ class Served:
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
         reg = G.Registered.commit(self.program_digest, value, words.tolist(),
-                                  [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window)
+                                  hm96_salts(run._key, first, len(words)), schema=V2, window=window)
         self.registered[value] = reg
         return reg.root.hex()
 
