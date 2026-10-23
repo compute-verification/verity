@@ -132,11 +132,13 @@ def readsOkAt (c : Circuit) (known : Array (String × Array (Array Nat × ByteAr
       else pure ()
 
 /-- The input columns a templated unit's description says a computed row surely reads (`Tmpl.readsSure`), where the
-circuit's unit is its template's net (by pointer, else compared); `none` elsewhere. -/
+circuit's unit is its template's net (by pointer, else compared) of at most `2^32` rows (`ProvedScope`'s bound); `none`
+elsewhere. -/
 def sureReads (c : Circuit) : Option (Array Bool) :=
   match c.tmpl with
   | some tu =>
-    if withPtrEq c.unit tu.net (fun _ => decide (c.unit = tu.net)) (fun h => by simp [h]) then
+    if decide (c.unit.unitLog ≤ 32) &&
+        withPtrEq c.unit tu.net (fun _ => decide (c.unit = tu.net)) (fun h => by simp [h]) then
       some tu.t.readsSure
     else none
   | none => none

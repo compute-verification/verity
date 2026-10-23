@@ -28,8 +28,10 @@ must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmp
 `iv/hybrid/4`), timed one at a time.
 `flock-tmpl stmt CIRCUIT`: a templated statement's circuit read as `HmOut.parseTmpl` reads it, a stage at a time (META's split, its
 template lines, `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, `checkRows`), then what decides
-which of the scope check's walks run (`ProvedScope.wiresFeed`), the unit's rows built (`Tmpl.unitNet`'s, which the
-verifier never reads), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
+which of the scope check's walks run (`ProvedScope.wiresFeed`), the input columns the description surely reads
+(`KnownRead.sureReads`, timed, and whether it dispatched), the unit's rows built (`Tmpl.unitNet`'s, which the verifier
+never reads), the columns they read (`RecResiduals.readIns`), which must include every surely read one (`sure_not_read`
+0, else exit 1), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
