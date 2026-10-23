@@ -64,8 +64,10 @@
    "imports": [
     "Std.Data.HashMap",
     "Flock.Program",
+    "Flock.RegKnown",
     "PouwCommit.Frame",
     "PouwCheck.Json",
+    "PouwCheck.Opening",
     "PouwCheck.Pass",
     "PouwCheck.Rounds",
     "PouwWindow.Draw",

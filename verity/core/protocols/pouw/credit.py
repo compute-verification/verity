@@ -20,6 +20,11 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
   verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
   which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133).
+* **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
+  and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
+  ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
+  own roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window's entries register them, and names at that known
+  content. The window Program's one ``roots`` parameter is the layout's, not what a call's units are seeded under.
 
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
   call rows, in order, ``index`` 0, 1, …) carries its call's verdict as ``credit`` (true or false), and a credited row
@@ -262,6 +267,9 @@ _RECEIPT = re.compile(r"receipt@(0|[1-9][0-9]*)")
 #: a tile unit's receipt, its return's field (`h1window.OUTPUTS`), and the statement's output row of it
 #: (`h1window.STATEMENT_OUT_ROWS`), which reads call c's receipt table when the window registers one
 RECEIPT_FIELD, RECEIPT_PORT = "receipt", "o0"
+_PUB = re.compile(r"pub@(0|[1-9][0-9]*)")
+#: the statement's public row (`h1window.PUB_PORT`), which reads call c's public table, the verifier's own
+PUB_PORT = "pub"
 #: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
 #: input-ids table's root inside (`requests_root`)
 REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
@@ -748,7 +756,7 @@ def partition_of(program: str, shape: dict) -> dict:
                       "params": {"templates": [shape["tiles"][k]["fn"] for k in sorted(shape["tiles"])]}}}
 
 
-def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int
+def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int, salt: str
                     ) -> tuple[dict | None, tuple[str, str] | None]:
     """The verifier's ``--registered`` file (`registered.READS`) of call `call`'s statement in the window `layout` (one
     `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`, its calls `steps` rounds'
@@ -760,11 +768,20 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
     (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
     the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
-    receipts the round roots commit are the ones the units return; every other unit reads none of them. Each value is a
-    row/v2 value of 16-bit leaves
+    receipts the round roots commit are the ones the units return; every other unit reads none of them, and the file
+    lists no unit past the call's last (the verifier reads none past ``reads``). Each value is a row/v2 value of 16-bit
+    leaves
     under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its cost is the window's units, once a port: the reads file's form."""
+    gives it. Its cost is the window's units up to the call's last, once a port: the reads file's form.
+
+    The statement's public row ``pub`` (`PUB_PORT`), each unit's seed's inputs, is the verifier's own: unit u0 + t reads
+    row t of the call's public table ``<prefix>pub@<call>`` (`h1window.public_table`), which the file names at its known
+    content (``known``, `Flock.Registered.checkKnownAll`): the window's Program salt `salt` (hex), the unit's position
+    u0 + t and the call's roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window registers them
+    (`core_check.public_words`), each under `core_check.public_row_salt` of `window` and its position, at the root of
+    their registration. So a unit seeded under another salt, position or roots (another call's, or made up) opens no row
+    of it, and the prover never chooses its own noise or fold keys."""
     (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
     lin = layout["calls"][call][0]
     ks = {name: (k, n) for name, k, n in layout["linears"]}
@@ -792,13 +809,16 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
             return None, ("registration", f"call {call}'s statement reads {v}, which the window registers "
                                           f"{'twice' if roots.get(v) else 'not'}: register each of a call's tables and "
                                           "its weights once")
+    if any(_digest(roots[v][0]) is None for v in (a, b)):
+        return None, ("registration", f"call {call}'s seed reads the roots of {a} and {b}, which are not both SHA-512 "
+                                      "digests (128 lowercase hex): register each table at its tree's root")
     ports: list[tuple[str, str, Any]] = (
         [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
         + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
         + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
     out = {}
     for port, v, row in ports:
-        reads: list[int | None] = [None] * sum(sizes)
+        reads: list[int | None] = [None] * (u0 + size)
         for t in range(size):
             reads[u0 + t] = row(t)
         leaves, words = rows_of[v]
@@ -806,7 +826,24 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
                      "domain": G.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
                      **G.schema_entry(G.SCHEMA_V2), "reads": reads}
+    pv = f"{prefix}pub@{call}"
+    rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]))
+    out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": G.WORD_BITS,
+                     "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                     "reads": [None] * u0 + list(range(size)), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     return {"format": G.READS, "ports": out}, None
+
+
+def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str]
+                 ) -> tuple[list[list[int]], list[bytes], G.Registered]:
+    """`h1window.public_table`: a call's public rows ``value`` over its `n` units from unit `u0`, their salts and their
+    registration, unit u's row the window's Program salt `salt`, its position u and its call's `roots` (each hex,
+    `core_check.public_words`), under `core_check.public_row_salt` of the window's open root `window` and u, registered
+    under the descriptor's SHA-512 `program` binding `window`."""
+    s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
+    rows = [CC.public_words(s, u, rs) for u in range(u0, u0 + n)]
+    salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
+    return rows, salts, G.Registered.commit(program, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
@@ -967,7 +1004,8 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
     open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof was verified against
     `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
-    value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
+    value's registered root, but for its call's public table (`pub_call`), which no entry registers and `_verified`
+    holds to the rows `registered_file` built; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
     or its call's round's A table of K ``…/a/<K>@<s>`` (the call `layout`'s units place it in, s its round of `steps`,
     its calls the rounds' equal blocks), and its K's B rows, the window's ``<prefix>b/<K>`` (`prefix` the descriptor's
     ``PREFIX``). A step of `window`, after `_a_link` has held each
@@ -1001,6 +1039,8 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
                                     "verify every drawn unit's session against the window's committed circuit")
         opened, weights = False, False
         for port, v, root in _finding(p["registered"]):
+            if pub_call(v) is not None:
+                continue
             if names.count(v) != 1:
                 return "registration", (f"drawn unit {u}'s proof opened port {port} against {v}, which the window "
                                         f"registers {'twice' if v in names else 'not'}: its session was verified against "
@@ -1096,14 +1136,16 @@ def no_statement_files(k: Any) -> str:
 
 
 def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
-              steps: int, run: Run) -> tuple[list[dict] | None, tuple[str, str] | None]:
+              steps: int, run: Run, salt: str) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """Each drawn unit's proof outcome (`PROOF_KEYS`) from the verifier of record's own run over the window's
     `statements` (`STATEMENT_KEYS`: one a call with a drawn unit among `units`, its proof files), and None; or None and
     the refusal. Call c's statement is verified by `run` (`proofs.verify`) on its circuit file, which must hash to
     `files`' digest for its K (``k<K>``, the period-open's `CIRCUIT_FILES`, else ``circuit``), against the circuit's
     descriptor `raw`, its partition object (`partition_of`) and the call's ``--registered`` file credit builds itself
-    (`registered_file`, at the roots the window's `entries` register, its open root `window` and its `steps` rounds). A
-    file missing or an
+    (`registered_file`, at the roots the window's `entries` register, its open root `window`, its `steps` rounds and its
+    Program salt `salt`). A session whose finding opened the call's public table at another root than that file's is
+    refused (``registration``): `_registration` holds every other value to the window's entries, and this one, which no
+    entry registers, to the rows credit built. A file missing or an
     answer that is not one verdict a session refuses (``proof``), and so does a verifier that can't run: the window stays
     refused. A session the verifier rejects refuses the window (``failed``: no partial credit, and no retry), and one
     that proved a unit of another call refuses it (``proof``). Each unit an accepted session proved is one outcome:
@@ -1140,7 +1182,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
         k = ks[layout["calls"][c][0]]
         if f"k{k}" not in files:
             return None, ("circuit", no_statement_files(k))
-        reg, why = registered_file(program, layout, shape, c, roots, window, steps)
+        reg, why = registered_file(program, layout, shape, c, roots, window, steps, salt)
         if why is not None:
             return None, why
         try:
@@ -1155,6 +1197,13 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
                 return None, ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record "
                                         f"({f.why}): a failed drawn unit refuses the whole window, not only its call "
                                         "(no partial credit, and no retry)")
+            pub = reg["ports"][PUB_PORT]
+            if any(pub_call(v) is not None and (port, v, root) != (PUB_PORT, pub["value"], pub["root"])
+                   for port, v, root in _finding(f.registered) or ()):
+                return None, ("registration", f"call {c}'s session {f.session} opened a public table at another port, "
+                                              f"value or root than the verifier's own {pub['value']} at port {PUB_PORT}: "
+                                              "a unit's public row is the window's salt, its position and its call's "
+                                              "roots, as credit builds them")
             for u in f.units:
                 if not starts[c] <= u < starts[c] + sizes[c]:
                     return None, ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call "
@@ -1271,13 +1320,13 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     got, why = _window(key, ledger, window, session, salt, calls, served, commit, rounds, draw, descriptor, entries,
-                       _runner(statements, circuit_files, entries, window, run), k, verify)
+                       _runner(statements, circuit_files, entries, window, salt, run), k, verify)
     return (None, why) if got is None else (got[0], None)
 
 
-def _runner(statements: Any, files: Any, entries: Any, window: Any, run: Run) -> Proved:
+def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
     return lambda layout, raw, units, steps: _verified(statements, files, raw, layout, entries, window["root"], units,
-                                                       steps, run)
+                                                       steps, run, salt)
 
 
 def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, commit: Any,
@@ -1472,7 +1521,7 @@ def _period_of(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
-                  else _runner(w["statements"], files, w["entries"], w["window"], run))
+                  else _runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
         got, why = _window(key, ledger, w["window"], w["session"], w["salt"], w["calls"], w["served"], w["commit"],
                            w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, big_k, verify)
         if why is not None:
@@ -1576,6 +1625,14 @@ def receipt_call(value: Any) -> int | None:
     """A receipt table's call: a name whose last part is ``receipt@<c>`` (``<prefix>receipt@<c>``, `h1window.table`'s:
     row t call c's t-th unit's receipt, c a canonical decimal); None for any other name."""
     m = _RECEIPT.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
+    return None if m is None else int(m[1])
+
+
+def pub_call(value: Any) -> int | None:
+    """A public table's call: a name whose last part is ``pub@<c>`` (``<prefix>pub@<c>``, `h1window.table`'s
+    `h1window.PUBS`: row t call c's t-th unit's public row, which `registered_file` builds), c a canonical decimal; None
+    for any other name."""
+    m = _PUB.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
     return None if m is None else int(m[1])
 
 

@@ -24,6 +24,10 @@ the report says which output bits differ and both are evaluated, bit-sliced: on 
 `EXHAUSTIVE_BITS` input bits, else on ``vectors`` random inputs, which miss a difference on a fraction ε of the inputs with
 probability (1 − ε)^vectors. An exhaustive pass is a proof too; a random one is a warning, ``structural/random-only``.
 
+**A unit** (`check_unit`): a template on a unit's u16 row ports, as a structural stager writes it (`class_statement.UnitStager`'s
+``structural``), is held the same way to the flat unit the flat stager lays out on those ports
+(`class_statement.unit_circuit`), so the class a pin names is accepted as its Definition's lowering on its ports.
+
 Refused by name, since neither comparison covers them: a template one of whose rows reads a column at or past its own that
 is no input and not the constant (so some column is not a function of the inputs), whose input columns' rows are not their
 own ``(c)·(c)``, whose port groups overlap, reach the constant or are not the Definition's input leaves and output bits, or
@@ -32,6 +36,7 @@ table, which rows carry as more than gates.
 """
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -278,22 +283,61 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
     it = iter(lanes)
     vals = {nm: [next(it) for _ in bits] for nm, bits in C.inputs.items()}
     outs, _fail = C.evaluate(vals, T)
-    return [x for j in range(len(words)) for x in outs[f"o{j}"]]
+    return [x for nm in C.outputs for x in outs[nm]]
+
+
+def error_bound(rec: dict) -> dict:
+    """The bound on a wrong verdict, over the check's own coins (the labels): ``M`` counts the forms whose equality it tests
+    (each AND's two operands, their sum and its result; the output bits; the empty form), at most 4 · (template live rows +
+    lowering live ANDs) + output bits + 1, and two distinct ones share a fingerprint with probability at most M² / 2^513."""
+    M = 4 * (rec["template"]["live_rows"] + rec["lowering"]["live_ands"]) + rec["lowering"]["output_bits"] + 1
+    return {"M": M, "log2": round(2 * math.log2(M) - 513, 1), "statement": "Pr[wrong verdict] <= M^2 / 2^513"}
 
 
 def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
           seed: int = CK.Options.seed, label: str | None = None) -> dict:
     """``tmpl`` (a `verity_flock.tmpl.Tmpl`, or its text) held to ``target``'s flat lowering: a result as `checks.check_definition` gives
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
-    ``refused``), the counts on both sides, and why the forms differ when they do."""
-    from verity_flock import tmpl as TM
-
+    ``refused``), the counts on both sides, the bound on a wrong verdict (`error_bound`), and why the forms differ when they
+    do."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     t = resolve(target)
-    name = label or t.id
+    return _check(tmpl, lambda: _lowered(t), label or t.id, {"definition": t.id}, ("the Definition's", "input leaves"),
+                  exhaustive_bits, vectors, seed)
+
+
+def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tmpl: Any, *, public: Sequence[str] = (),
+               name: str = "unit", exhaustive_bits: int = EXHAUSTIVE_BITS, vectors: int = VECTORS,
+               seed: int = CK.Options.seed) -> dict:
+    """``tmpl`` held, as `check` holds it to a Definition's lowering, to the flat unit `class_statement.unit_lowering` lays
+    ``definition`` out as on the u16 row ports ``in_rows`` (``public`` its public ports): `class_statement.unit_circuit`
+    on `class_statement.unit_ports`, input ``in{j}`` and output ``out{j}`` the template's ports in order. So a structural
+    stager's unit (`UnitStager`'s ``structural``, `struct_lower` on those ports) is held to the unit the flat stager lays
+    out."""
+    from verity_flock import class_statement as CS
+
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    t = resolve(definition)
+
+    def flat_unit():
+        ports, _out_words, _row_words = CS.unit_ports(t, name, in_rows, public)
+        C = CS.unit_circuit(t, ports)
+        return C, [C.inputs[f"in{j}"] for j in range(len(ports.ins))], [C.outputs[f"out{j}"] for j in range(len(ports.outs))]
+
+    return _check(tmpl, flat_unit, name, {"definition": t.id, "unit": name}, ("the unit's", "input ports"), exhaustive_bits,
+                  vectors, seed)
+
+
+def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], exhaustive_bits: int, vectors: int,
+           seed: int) -> dict:
+    """`check`'s verdict on ``tmpl`` against ``reference()``'s ``(C, input words, output words)``, built once the
+    template's side is read and its unroll dropped; ``theirs`` names the reference's side and its inputs in a refusal."""
+    from verity_flock import tmpl as TM
+
     F = CK.Findings()
-    rec: dict[str, Any] = {"definition": t.id, "labels": {"source": "os.urandom", "bits": 512}}
+    rec = {**rec, "labels": {"source": "os.urandom", "bits": 512}}
     try:
         if not isinstance(tmpl, TM.Tmpl):
             try:
@@ -306,24 +350,27 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
             flat = TM.unroll(tmpl)
         except (AssertionError, IndexError, ValueError) as e:
             raise Refused("malformed", f"its unroll: {type(e).__name__} {e}") from None
-        C, ins, words = _lowered(t)
-        K = Canon(sum(map(len, ins)))
+        K = Canon(sum(map(len, ports(flat.head[4:])[0])))
         mine, rec["template"] = template_bits(flat, K)
+        del flat
         widths = rec["template"].pop("input_widths")
+        C, ins, words = reference()
         if widths != [len(w) for w in ins]:
-            raise Refused("ports", f"input ports of widths {widths}, the Definition's input leaves {[len(w) for w in ins]}")
-        theirs, rec["lowering"] = lowering_bits(C, ins, words, K)
-        if len(mine) != len(theirs):
-            raise Refused("ports", f"{len(mine)} output bits, the Definition's {len(theirs)}")
+            raise Refused("ports", f"input ports of widths {widths}, {theirs[0]} {theirs[1]} {[len(w) for w in ins]}")
+        bits, rec["lowering"] = lowering_bits(C, ins, words, K)
+        if len(mine) != len(bits):
+            raise Refused("ports", f"{len(mine)} output bits, {theirs[0]} {len(bits)}")
     except Refused as e:
         F.fail("structural", e.code, name, str(e))
         rec["verdict"] = "refused"
         return {"failures": F.failures, "warnings": F.warnings, "structural": rec}
     rec["canonical_nodes"] = K.next
-    differ = [j for j, (a, b) in enumerate(zip(mine, theirs)) if a != b]
+    rec["error_bound"] = error_bound(rec)
+    differ = [j for j, (a, b) in enumerate(zip(mine, bits)) if a != b]
     if not differ:
         rec["verdict"] = "syntactic"
         return {"failures": F.failures, "warnings": F.warnings, "structural": rec}
+    flat = TM.unroll(tmpl)
     rec["differing_output_bits"] = len(differ)
     d = differ[0]
     rec["why_not_syntactic"] = (f"{len(differ)} of {len(mine)} output bits are other forms (the first is bit {d}): not one "
@@ -365,6 +412,8 @@ __all__ = [
     "Refused",
     "check",
     "check_file",
+    "check_unit",
+    "error_bound",
     "evaluate_lowering",
     "evaluate_template",
     "lowering_bits",

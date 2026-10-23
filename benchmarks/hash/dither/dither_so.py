@@ -91,6 +91,7 @@ $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's
 from __future__ import annotations
 
 import contextlib
+import ctypes as C
 import dataclasses
 import hashlib
 import os
@@ -107,6 +108,7 @@ import dither_a as DA
 import dither_fused as DF
 import dither_manifest as MF
 import dither_one as DO
+import h1c as H1CM
 from dither_fused import CM, CO, H1R, Call, unwords, words
 from hb_side import auto_j
 
@@ -123,6 +125,19 @@ END_ORDER = ("-we: at the window's end the tail's units after their coins, their
 NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens (RT4-INT-37); rows pending"
 END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
+GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
+PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
+# "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
+# no workspace), in place of each call's noise and units launches; the same receipts
+FUSED_ENV = "DITHER_SO_FUSED"
+# "1": step s's units, when coin s isn't back at the end of step s + D - 2's `after`, dispatched while the host waits on
+# forward s + D - 1, once the coin is back (at the latest just after that forward, before round s + D - 1 takes their
+# receipts), so the host launches forward s + D - 1 without waiting on the coin; the same order (`check`: coin, units,
+# receipts' round)
+COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
+# "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
+# the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
+RDEAD_ENV = "DITHER_SO_RDEAD"
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -178,10 +193,15 @@ class SoWindow(DO.Window):
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
         self.order_why = None
+        self.coin_async = os.environ.get(COIN_ASYNC_ENV) == "1"
+        self.deferred: int | None = None
+        self.deferrals = {"deferred": 0, "in_forward": 0, "after_forward": 0}
+        self.late_waits: list[float] = []
         super().__init__(*args, **kwargs)
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
+        self.ev_fwd = torch.cuda.Event()
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
         self.t_b0 = self.t_after_end = 0.0
 
@@ -227,6 +247,7 @@ class SoWindow(DO.Window):
         self.cap_at: dict[int, str] = {}
         self.rtt_from, self.order_from = 1, 0
         self.zlate = None
+        self.deferred = None
         if self.overlap and DA.SIDE:
             DA.SIDE[0].ov.zlate = None
         self.open = True
@@ -294,6 +315,21 @@ class SoWindow(DO.Window):
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
 
+    def _forward_wait_deferred(self, main: torch.cuda.Stream) -> None:
+        """$DITHER_SO_COIN_ASYNC: while forward s runs, the deferred step's units dispatched once its coin is back."""
+        self.ev_fwd.record(main)
+        j = self.deferred
+        i = self.ix(j)
+        while not self.ev_fwd.query():
+            if self.pipe.opening(i, wait=False) is not None:
+                self.deferred = None
+                self.deferrals["in_forward"] += 1
+                self.stashed.discard(j)
+                self.dispatch_units(j)
+                self.phase("forward_wait")
+                return
+            time.sleep(1e-4)
+
     def end(self) -> dict | None:
         """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
         final round, its coin back, the manifest root, the draw coin after it, the session closed."""
@@ -308,6 +344,7 @@ class SoWindow(DO.Window):
             pending = s1 - 1 - sd.ov.dispatched_upto
             sd.ov.drain()
         else:
+            self.deferred = None
             pending = len(self.stashed)
             for j in sorted(self.stashed):
                 self.stashed.discard(j)
@@ -392,6 +429,7 @@ class SoWindow(DO.Window):
             return None
         if self.window_end and self.s > self.s0:
             return self.end()
+        self.deferred = None
         self.drain()
         self._harvest()
         self.pipe.close()
@@ -477,8 +515,20 @@ class SoWindow(DO.Window):
         d = self.depth - 1
         main = torch.cuda.current_stream()
         self.phase("forward_wait")
+        if self.deferred is not None:
+            self._forward_wait_deferred(main)
         main.synchronize()
         t_fwd = time.perf_counter()
+        t_late = 0.0
+        if self.deferred is not None:
+            self.phase("coin_wait_late")
+            j, self.deferred = self.deferred, None
+            self.deferrals["after_forward"] += 1
+            self.stashed.discard(j)
+            t0 = time.perf_counter()
+            self.dispatch_units(j)
+            t_late = time.perf_counter() - t0
+            self.late_waits.append(1e3 * t_late)
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
         if self.a_once:
             self.phase("a_tables")
@@ -575,15 +625,20 @@ class SoWindow(DO.Window):
         ju = s + 1 - d
         t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
-            self.stashed.discard(ju)
-            t_coin = self.dispatch_units(ju)
-            t_disp = time.perf_counter()
+            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
+                self.deferred = ju
+                self.deferrals["deferred"] += 1
+            else:
+                self.stashed.discard(ju)
+                t_coin = self.dispatch_units(ju)
+                t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
               "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
-              "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd)}
+              "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
+              "coin_late_ms": 1e3 * t_late}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
         self.phases.append({**ph, **self.host_ms()})
@@ -666,6 +721,8 @@ class SoWindow(DO.Window):
         self._order()
         rtt, self.rtts = sorted(self.rtts), []
         waits, self.coin_waits = sorted(self.coin_waits), []
+        late, self.late_waits = sorted(self.late_waits), []
+        deferrals, self.deferrals = self.deferrals, dict.fromkeys(self.deferrals, 0)
         sent = list(pipe.roots)
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
@@ -673,11 +730,14 @@ class SoWindow(DO.Window):
                      else "per call, in the forward", "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
+                     "coin_async": {"on": self.coin_async, **deferrals,
+                                    "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
-                     "window_end": self.end_stats()}
+                     "window_end": self.end_stats(), "serving_stream_priority": torch.cuda.current_stream().priority,
+                     "units_stream_priority": DA.SIDE[0].side.priority if DA.SIDE else None}
         if ov is not None:
             doc["so"]["overlap"] = {"order": OV_ORDER, "ring": ov.R, "rounds_built": ov.sent_upto + 1,
                                     "units_dispatched": ov.dispatched_upto + 1,
@@ -761,9 +821,23 @@ class SoSide(DA.Side):
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
+        self.rdead = os.environ.get(RDEAD_ENV) == "1"
+        if self.rdead:
+            self.r_live, nrb = torch.empty_like(win.live), win.t // 32
+            win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
+                                                      rlive=self.r_live, rbw=t.count // nrb) for t in win.rset.tabs])
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
+        self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
+        self.fused = os.environ.get(FUSED_ENV) == "1"
+        if self.fused:
+            self.mtab, self.m_units = self._multi_tables()
+        self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
+        self.warm: set[int] = set()
+        self.capture_ms: list[float] = []
+        if CONF.get("serve_prio") and pt and not win.overlap:
+            win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
         self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
 
@@ -813,6 +887,37 @@ class SoSide(DA.Side):
         self.ring_base[p].copy_(win.step_base)
         self.ready[p].record()
 
+    def _multi_tables(self) -> tuple[list[torch.Tensor], int]:
+        """$DITHER_SO_FUSED's kh_units_multi tables, one a ring slot: each call's UCall (its slot's A, its B, seeds and
+        receipts as `so_args`), the K = 14336 calls (three digits, the longest units) first so they start first; and the
+        units in all."""
+        win, h = self.win, self.h
+        if not hasattr(h, "kh_units_multi"):
+            raise RuntimeError(f"${FUSED_ENV}=1: this h1u build has no kh_units_multi")
+        vp, u32 = C.c_void_p, C.c_uint
+        h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+        h.kh_ucall_bytes.restype = u32
+        h.kh_digits.argtypes = [u32]
+        rec = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"),
+                        ("u0", "<u4"), ("md", "<u4")])
+        if int(h.kh_ucall_bytes()) != rec.itemsize:
+            raise RuntimeError(f"kh_units_multi's UCall is {int(h.kh_ucall_bytes())} bytes, not {rec.itemsize}")
+        md = [int(h.kh_digits(k)) for _, k in win.nk]
+        order = sorted(range(win.L), key=lambda w: -md[w])
+        tabs = []
+        for p in range(win.depth):
+            t = np.zeros(win.L + 1, dtype=rec)
+            u0 = 0
+            for i, w in enumerate(order):
+                n, k = win.nk[w]
+                t[i] = (self.ring_slot[p][w].data_ptr(), win.wt[w].data_ptr(),
+                        win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], self.stage.data_ptr() + 4 * win.plan.offs[w][0],
+                        n, k, u0, md[w])
+                u0 += (win.t // 32) * (n // 32)
+            t[win.L]["u0"] = u0
+            tabs.append(torch.from_numpy(t.view(np.uint8).copy()).to(win.dev))
+        return tabs, u0
+
     def so_args(self, w: int, p: int, m: int) -> tuple:
         """kh_one's arguments for call w of the step in ring slot p but its stream (as `one_args`)."""
         win = self.win
@@ -826,12 +931,55 @@ class SoSide(DA.Side):
                 self.ys.data_ptr(), None, self.ring_scale[p][w].data_ptr(), win.sw[w].data_ptr(),
                 self.ring_s1[p].data_ptr(), min(m, win.t))
 
+    def _units(self, p: int, m: int) -> int:
+        """The units of the step in ring slot p at m live rows, on the units stream (current): seeds from
+        `ring_salt[p]`, each call's units, the commit and the receipt trees, their roots into `rroots[p]`; the first
+        launch's nonzero return code, else 0.  Every launch reads only ring slot p and buffers fixed at the build, so the same launches
+        replay as one graph (`dispatch`)."""
+        win, st, L = self.win, self.side, self.win.L
+        tab = self.tables[p]
+        rc = win.r.lib.h1r_launch(tab.table.data_ptr(), L, tab.max_units, tab.ks, self.ring_salt[p].data_ptr(),
+                                  self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0,
+                                  st.cuda_stream)
+        if self.noise:
+            self.seeded.record(st)
+        if self.fused:
+            rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
+                                             st.cuda_stream)
+        for w in range(0 if self.fused else L):
+            args = self.so_args(w, p, m)
+            if self.noise:
+                i = w % NA
+                ns = self.nstreams[i]
+                ns.wait_event(self.seeded if w < NA else self.u_done[i])
+                rc = rc or self.h.kh_one_noise(*args, ns.cuda_stream)
+                self.n_done[i].record(ns)
+                st.wait_event(self.n_done[i])
+                rc = rc or self.h.kh_one_units(*args, st.cuda_stream)
+                self.u_done[i].record(st)
+            else:
+                rc = rc or self.h.kh_one(*args, st.cuda_stream)
+        if rc:
+            return rc
+        n = self.stage.numel()
+        DA.dithera_commit[(triton.cdiv(n, 4096),)](self.stage, win.plan.out, self.ring_S[p], n, BLOCK=4096)
+        DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, L, 1 << self.shift,
+                               BLOCK=triton.next_power_of_2(L))
+        if self.rdead:
+            self.r_live.copy_(self.ring_live[p])
+        win.c.build(win.rset, self.ring_stepv[p][0:1])
+        self.rroots[p].copy_(win.rset.roots)
+        return 0
+
     def dispatch(self, j: int, salt: bytes, m: int, g: dict | None) -> None:
-        """Step j's units on the units stream once its ring slot is written: seeds under `salt`, each call's units,
-        the commit and the receipt trees, whose roots go into `rroots` for round j + D - 1 (`udone`); a capture's
-        receipts and roots into `g`."""
+        """Step j's units on the units stream once its ring slot is written (`_units`) under `salt`, whose receipt
+        roots go into `rroots` for round j + D - 1 (`udone`); a capture's receipts and roots into `g`.  Unless
+        DITHER_SO_GRAPH=0, `_units` runs as a CUDA graph of its (ring slot, m), captured at that pair's first step and
+        replayed after, so the host launches one graph a step in place of each call's launches; the first step at each
+        m runs eagerly (Triton's compiles and the units' one-time attributes outside any capture).  A capture's poison
+        and copies stay outside the graph, and `g["units_graph"]` says which way its units ran."""
         win = self.win
-        p, st, L = j % win.depth, self.side, win.L
+        p, st = j % win.depth, self.side
         self.salt_host[p].copy_(torch.from_numpy(words(salt)))
         with torch.cuda.stream(st):
             st.wait_event(self.ready[p])
@@ -839,35 +987,28 @@ class SoSide(DA.Side):
             if g is not None:
                 for x in (self.stage, win.plan.out, win.plan.seeds, win.rset.level):
                     x.view(torch.uint8).fill_(DF.POISON)
-            tab = self.tables[p]
-            rc = win.r.lib.h1r_launch(tab.table.data_ptr(), L, tab.max_units, tab.ks, self.ring_salt[p].data_ptr(),
-                                      self.ring_base[p].data_ptr(), win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0,
-                                      st.cuda_stream)
-            if self.noise:
-                self.seeded.record(st)
-            for w in range(L):
-                args = self.so_args(w, p, m)
-                if self.noise:
-                    i = w % NA
-                    ns = self.nstreams[i]
-                    ns.wait_event(self.seeded if w < NA else self.u_done[i])
-                    rc = rc or self.h.kh_one_noise(*args, ns.cuda_stream)
-                    self.n_done[i].record(ns)
-                    st.wait_event(self.n_done[i])
-                    rc = rc or self.h.kh_one_units(*args, st.cuda_stream)
-                    self.u_done[i].record(st)
-                else:
-                    rc = rc or self.h.kh_one(*args, st.cuda_stream)
-            if rc:
+            graph = self.graph and m in self.warm
+            if graph:
+                cg = self.graphs.get((p, m))
+                if cg is None:
+                    t0 = time.perf_counter()
+                    cg = torch.cuda.CUDAGraph()
+                    cg.capture_begin(capture_error_mode="thread_local")
+                    try:
+                        rc = self._units(p, m)
+                    finally:
+                        cg.capture_end()
+                    if rc:
+                        raise RuntimeError(f"dither-a-so step {j}'s units (graph capture): a launch returned {rc}")
+                    self.graphs[(p, m)] = cg
+                    self.capture_ms.append(round(1e3 * (time.perf_counter() - t0), 3))
+                cg.replay()
+            elif rc := self._units(p, m):
                 raise RuntimeError(f"dither-a-so step {j}'s units: a launch returned {rc}")
-            n = self.stage.numel()
-            DA.dithera_commit[(triton.cdiv(n, 4096),)](self.stage, win.plan.out, self.ring_S[p], n, BLOCK=4096)
-            DA.dithera_fault[(1,)](win.plan.out, self.ring_S[p], self.at, L, 1 << self.shift,
-                                   BLOCK=triton.next_power_of_2(L))
-            win.c.build(win.rset, self.ring_stepv[p][0:1])
-            self.rroots[p].copy_(win.rset.roots)
+            self.warm.add(m)
             if g is not None:
                 g["receipts"], g["r_roots"] = win.plan.out.clone(), win.rset.roots.clone()
+                g["units_graph"] = graph
             self.udone[p].record(st)
         self.dispatched[j] = p
         self.unit_steps += 1
@@ -875,6 +1016,9 @@ class SoSide(DA.Side):
     def info(self) -> dict:
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
+                "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
+                "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None},
+                "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
@@ -1382,8 +1526,9 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
           ov: int = 0, serve_prio: bool = False, window_end: bool = False, spill: str | None = "azy") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
     window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
-    calls this module's Side (before the engine is built).  `serve_prio`: the engine serves on a stream at the A tables'
-    priority, above the trees' and the units' (so the next forward's blocks take the SMs first as theirs retire).
+    calls this module's Side (before the engine is built).  `serve_prio` (or $DITHER_SO_PRIO=1): the engine serves on a
+    stream at the A tables' priority, above the trees' and the units' (so the next forward's blocks take the SMs first as
+    theirs retire); without -ov the admit tables too, since the serving stream waits on them between steps.
     `window_end`: -we, each window ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
     -we "azy", -wea "a")."""
     global CAPTURES
@@ -1393,6 +1538,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
+    serve_prio = serve_prio or os.environ.get(PRIO_ENV) == "1"
     CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end

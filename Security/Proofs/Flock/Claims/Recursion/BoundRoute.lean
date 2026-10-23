@@ -290,7 +290,8 @@ theorem readersRun_played {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursi
   rw [runVstar_staged H I ivScope b P ω r hg.1] at ho
   have hl := runAs_length H I.V b x P ω r hg.1
   have hc : (runCs (I.V.k (xIOf x) + kS x) r).length = _ := (runCs_length I.V b x r).trans hl.symm
-  rcases hRRP x _ _ ws hl hc ho (hT x _ _ ws hl hc ho) with hag | hcoll
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  rcases hRRP x _ _ ws hl hc hsp ho (hT x _ _ ws hl hc hsp ho) with hag | hcoll
   · left
     intro j hj
     have hj' : j < (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).msgs.length := by

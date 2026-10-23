@@ -18,7 +18,12 @@ its cap, committing no cap or circuit or closing with other windows, a record on
 or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
-none. Each piece answers
+none. A draw's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
+a draw's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
+roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
+opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
+tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
+picking the window), each malformed form. Each piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -31,6 +36,7 @@ import json
 import random
 import shutil
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +44,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as T
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.crypto import lms
 
@@ -1444,6 +1450,204 @@ def pinned_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+# ---- a draw's coins -----------------------------------------------------------------------------------------------------
+
+def read(j: Any) -> Any:
+    _request(j, ["after", "commitment", "read", "roots", "segment"])
+    after, bytes_read = _hex(j["after"]), _hex(j["read"])
+    if j["roots"] is None:
+        roots = None
+    elif type(j["roots"]) is list:
+        roots = [_hex(r) for r in j["roots"]]
+    else:
+        raise D.Reject("roots is not a list")
+    return _refusing(lambda: {"reason": T.read_reason(Ch.LiveCommitment.from_json(j["commitment"]), j["segment"], after,
+                                                      bytes_read, roots)})
+
+
+def draw_coins(j: Any) -> Any:
+    _request(j, ["after", "coins", "read", "window"])
+    after, bytes_read = _hex(j["after"]), _hex(j["read"])
+    if type(j["window"]) is not str:
+        raise D.Reject("window is not a string")
+    return {"reason": T.coins_reason(j["coins"], j["window"], after, bytes_read, lms_verify)}
+
+
+def _pairs(log: Sequence[dict]) -> list[str]:
+    """A record's new log entries as the challenger's release log writes them, each root followed by its coin's release
+    (`record_many` records a batch's roots first)."""
+    releases = {e["index"]: e for e in log if e["event"] == "release"}
+    return [canonical_json_text(x) for e in log if e["event"] == "root" for x in (e, releases[e["index"]])]
+
+
+class Drawn:
+    """A draw's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
+    (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
+    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window."""
+
+    def __init__(self, rng: random.Random, before: bool = False) -> None:
+        s = self.s = _ledger_session(rng)
+        s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
+        s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
+        c = s.ch.commitment
+        s.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]
+        clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
+        self.records = {label: Ch.LiveRecord(s.ch, label, clock) for label, _ in c.families}
+        for _ in range(rng.randint(0, 2)):
+            self._step("other", lambda: self.records["other"].record(rng.randbytes(64)))
+        draw = self.records["draw"]
+        self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
+                      for _ in range(rng.randint(1 if before else 0, 2))]
+        self.after = rng.randbytes(64)
+        coins = T.ChallengerCoins(self.records["draw"])
+        self.segment = coins.commit(self.after)
+        self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
+                             for _ in range(rng.choice([1, 1, 2])))
+        for _ in range(rng.randint(0, 2)):
+            self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
+        s.close = s.signed(None)
+        self.ledger = Ledger(rng, s)
+
+    def _step(self, label: str, f):
+        n = len(self.records[label].log)
+        out = f()
+        self.s.lines += _pairs(self.records[label].log[n:])
+        return out
+
+    def roots(self) -> list[str]:
+        return [r.hex() for r in self.records["draw"].roots]
+
+    def evidence(self, segment: dict) -> dict:
+        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "segment": segment,
+                "session": self.s.files()}
+
+    def other_window(self, rng: random.Random) -> str:
+        """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
+        others = [b["window"]["root"] for kind, sid, b in self.ledger.events
+                  if kind == "open" and sid != self.s.id and "root" in b["window"]]
+        return rng.choice(others) if others else _window(rng)["root"]
+
+
+#: each a mutation of the draw's segment or bytes, which both pieces refuse
+DRAW_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
+                  "opening-form"]
+
+
+def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, bytes]:
+    """The segment, the bytes read and the commitment for mutation `name` (or the honest ones)."""
+    seg, read_, after = d.segment.to_json(), d.read, d.after
+    ops = seg["openings"]
+    match name:
+        case "skipped":
+            if rng.random() < 0.5:
+                seg = {**seg, "openings": ops[1:], "start": seg["start"] + 1}
+                read_ = b"".join(o.coin for o in d.segment.openings[1:])
+            else:
+                seg = {**seg, "openings": ops[:-1]}
+                read_ = b"".join(o.coin for o in d.segment.openings[:-1])
+        case "wrong-opening":
+            k = rng.randrange(len(ops))
+            o = dict(ops[k])
+            what = rng.choice(["coin", "salt", "path", "index", "epoch", "label"])
+            if what in ("coin", "salt"):
+                o[what] = _flip(o[what], rng.randrange(64))
+            elif what == "path":
+                o["path"] = [_flip(p) if i == 0 else p for i, p in enumerate(o["path"])] if o["path"] else ["00" * 64]
+            elif what == "label":
+                seg = {**seg, "label": "other"}
+            else:
+                o[what] += rng.choice([1, -1])
+            seg = {**seg, "openings": ops[:k] + [o] + ops[k + 1:]}
+        case "before":
+            early = [o.to_json() for o in d.early]
+            if rng.random() < 0.6:
+                early = [{**o, "after": after.hex()} for o in early]
+            seg = {**seg, "openings": early + ops, "start": seg["start"] - len(early)}
+            read_ = b"".join(o.coin for o in d.early) + d.read
+        case "unread":
+            read_ = read_[:Ch.COIN_BYTES * (len(ops) - 1)]
+        case "read-tampered":
+            if rng.random() < 0.5:
+                b = bytearray(read_)
+                b[rng.randrange(len(b))] ^= 1 << rng.randrange(8)
+                read_ = bytes(b)
+            else:
+                read_ = b"".join(o.coin for o in d.segment.openings) + rng.randbytes(rng.randint(1, 64))
+        case "other-after":
+            after = rng.randbytes(64)
+        case "segment-form":
+            seg = rng.choice([_body(seg, start=DROP), {**seg, "extra": 1},
+                              {**seg, "start": rng.choice([-1, True, "0", None])},
+                              {**seg, "label": rng.choice([None, 5, ["draw"]])},
+                              {**seg, "openings": rng.choice([None, "x", {}])}, [seg], None])
+        case "opening-form":
+            k = rng.randrange(len(ops))
+            bad = rng.choice([_body(ops[k], salt=DROP), {**ops[k], "coin": ops[k]["coin"].upper()},
+                              {**ops[k], "index": str(ops[k]["index"])}, {**ops[k], "path": ["00"]}, None, 5])
+            seg = {**seg, "openings": ops[:k] + [bad] + ops[k + 1:]}
+    return seg, read_, after
+
+
+READ_NAMES = ["honest"] + DRAW_MUTATIONS + ["commitment-form", "request"]
+
+
+def _seeded(rng: random.Random) -> random.Random:
+    """A plain generator seeded from `rng`: a `Drawn` session draws more bytes than Hypothesis's smallest example may
+    hold when its `randoms` record each one."""
+    return random.Random(rng.getrandbits(64))
+
+
+def read_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
+    d = Drawn(rng, before=name == "before")
+    seg, read_, after = _mutated(rng, d, name)
+    roots = d.roots() if name != "honest" or rng.random() < 0.7 else None
+    j = {"after": after.hex(), "commitment": d.s.ch.commitment.to_json(), "read": read_.hex(), "roots": roots,
+         "segment": seg}
+    match name:
+        case "commitment-form":
+            j["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
+        case "request":
+            k = rng.choice(["after", "read", "roots", None])
+            if k is None:
+                del j[rng.choice(sorted(j))]
+            else:
+                j[k] = rng.choice(["AB", "0", 5]) if k != "roots" else rng.choice(["00", 5, {"draw": []}])
+    return j
+
+
+DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
+                                                   "coins-form", "request"]
+
+
+def draw_coins_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
+    d = Drawn(rng, before=name == "before")
+    seg, read_, after = _mutated(rng, d, name)
+    coins = d.evidence(seg)
+    j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}
+    match name:
+        case "log-tampered":
+            log = coins["session"]["log"]
+            coins["session"]["log"] = _set(log, rng.randrange(1, len(log)), **{"x": 1})
+        case "other-window":
+            j["window"] = d.other_window(rng)
+        case "window-form":
+            j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
+        case "key-form":
+            coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "coins-form":
+            j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
+                                     [coins]])
+        case "request":
+            if rng.random() < 0.5:
+                del j[rng.choice(sorted(j))]
+            else:
+                k = rng.choice(["after", "read", "window"])
+                j[k] = rng.choice(["AB", "0", 5]) if k != "window" else rng.choice([5, None, {"root": j["window"]}])
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -1469,6 +1673,9 @@ CREDITED = D.Port(PIECES, "challenger_credited", credited, _cases(credited_case,
                   need_rejects=False, of_record="lean")
 PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_NAMES), package=PACKAGE,
                 need_rejects=False, of_record="lean")
+READ = D.Port(PIECES, "challenger_read", read, _cases(read_case, READ_NAMES), package=PACKAGE, of_record="lean")
+DRAW_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(draw_coins_case, DRAW_COINS_NAMES),
+                    package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -1478,7 +1685,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
-        (PINNED, pinned_case, PINNED_NAMES, 200)]
+        (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
+        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

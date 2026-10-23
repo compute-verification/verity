@@ -938,6 +938,27 @@ def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_ab
     assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
 
 
+def test_a_train_that_lands_a_pr_at_an_older_head_than_its_current_one_tells_its_owner(world, monkeypatch):
+    """23 Oct: #3248 landed at its 06:54Z head while it was marked at c4181b70, as the rule says, and nobody was told; its owner
+    found main without the fix it needed by 12:30Z."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    new = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, new)
+    h.tick()
+    _check(world, monkeypatch, running)
+    assert h.tick().startswith("landed #2")
+    (post,) = [p for p in h.posts if "#1 landed at" in p]
+    assert f"#1 landed at {old[:12]}" in post and f"not at {new[:12]}" in post, post
+    h.tick()
+    assert len([p for p in h.posts if "#1 landed at" in p]) == 1
+
+
 def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
     h = Harness(world, monkeypatch)
     h.d.train_size, h.d.max_running = 1, 2

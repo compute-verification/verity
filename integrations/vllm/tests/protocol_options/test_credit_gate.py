@@ -675,8 +675,8 @@ def _one_row(xq):
 
 
 @pytest.mark.parametrize("arm,ids,want", [
-    (lambda: EditArm(torch.zeros_like), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
-    (lambda: EditArm(_one_row), None, "call 0's A table h1/a/64@0 is not the Commit's row-table/0/q"),
+    (lambda: EditArm(torch.zeros_like), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
+    (lambda: EditArm(_one_row), None, "h1/a/64@0 is not the Commit's row-table/0/k64"),
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
@@ -700,6 +700,25 @@ def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, 
     out = _credit(auditor, _record(run))
     assert out["manifest"] is None and out["window"][0] == "arow" and want in out["window"][1], out
     assert out["credit"] is None
+
+
+@pytest.mark.parametrize("edit", [None, "a-zero"], ids=["honest", "a-all-zero"])
+def test_the_gpu_harness_holds_an_in_process_window_to_cores_roots1_steps(edit):
+    """`pouw_h1_gpu.core_verdict` on a window under in-process coins (the GPU run's local gate), the Commit in its
+    engine: its record is one manifest under calls_root with the Commit's record (`pouw_h1_gpu.record_reason`, its salt
+    from the in-process coin commitment), its A tables under their rounds' roots, and each the Commit's value; with the
+    A codes all zero, core refuses it at ``arow`` alone. A calls_root off the record is refused."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    from tests.protocol_options.test_pouw_h1_served import _unit
+    arm = ZyArm() if edit is None else EditArm(torch.zeros_like)
+    _y, run = _serve(arm, n=64, served=SV.Served(PH.TILE, _unit(), weights=_period_weights(), window=bytes(64)))
+    assert run.commits.get("coin_source") != PH.CHALLENGER and not run.served.refused
+    record = {"commitment": dict(run.commits), "calls": run.manifest()}
+    v = G.core_verdict({**record, "descriptor": _descriptor().hex()})
+    assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 2, v
+    assert v["tied"] if edit is None else (v["arow"][0] == "arow" and "is not the Commit's" in v["arow"][1]), v
+    off = {**record["commitment"], "calls_root": "00" * 64}
+    assert "calls_root is not over" in G.record_reason({**record, "commitment": off})
 
 
 def _bare_table(monkeypatch):
@@ -749,7 +768,7 @@ def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, othe
     assert auditor.ended() is None and not run.served.refused
     c = _record(run)["commitment"]
     why = CR._registration(c["session"]["root"], run.served.program_digest, "h1/", c["served"]["entries"], [],
-                           CR.layout_of(_descriptor())[0], [], auditor.session_id)
+                           CR.layout_of(_descriptor())[0], 1, [], auditor.session_id)
     assert why == (("registration", CR.other_registration("h1/ids@0")) if other else None), why
 
 
@@ -757,7 +776,7 @@ def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor)
     """The same zero A with the serving process's own check (`pouw_h1_commit.roots1`): its calls' credit bits are
     false (`UNTIED`), naming the call."""
     _y, run = _serve(EditArm(torch.zeros_like), remote=True, n=64, served=_served())
-    assert run.details["roots1"]["reason"].startswith("roots1: call 0's A table h1/a/64@0 is not the Commit's")
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0] is not the Commit's")
     assert {v["reason"] for v in run.gated().values() if not v["credit"]} == {CT.UNTIED}
 
 
