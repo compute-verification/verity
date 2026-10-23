@@ -181,8 +181,8 @@ def test_the_proof_service_draws_from_the_challengers_coins_after_the_receipt():
     assert T.read_reason(ch.commitment, segment.to_json(), bytes.fromhex(reg.digest), read, coins.record.roots) is None
 
 
-#: The draws `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`); the last is
-#: served by another window's session.
+#: The draws `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`).
+#: `other-window` stays last: a second host serves it.
 COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
 
 
