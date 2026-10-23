@@ -25,7 +25,8 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
   registration record and produced record alone (`leaf_lanes.verifier_entries`), the public file `h1unit.verifier_pub`'s.
   Each check is the Lean verifier's verdict and `pouw-leaf-own`'s (PoUW's `PouwWindow.Lanes.leafOwn?`): the file, as
-  flock-verify parses it, holds the layout's data ports at the roots of the records the verifier holds (``holds``).
+  flock-verify parses it, holds the layout's data ports at the roots of the records the verifier holds (``holds``), and
+  each of the statement's sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,

@@ -7,6 +7,7 @@ import PouwWindow.Rounds
 import PouwWindow.Lanes
 import PouwWindow.KnownRows
 import PouwWindow.RegFile
+import PouwWindow.FullDraw
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -44,7 +45,9 @@ to Python.
 * a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
   `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
   `r`, `c`, `k`, `lane` or null, `known` an object of ports, `complete`); `leaf_own` (those records, the tile and
-  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses.
+  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
+  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
+  refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -269,6 +272,9 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("leaf_own", fun j => do
     Lanes.leafOwn? (← get j "registration") (← get j "produced") (← get j "file") (← leafTile j) (← leafStmt j)
       Flock.HmRow.ROW_SCHEMA_V2
+    pure (Json.bool true)),
+  ("full_draw", fun j => do
+    Lanes.checkFull (← str j "record")
     pure (Json.bool true)),
   ("lane_ports", fun j => do
     pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),

@@ -1490,6 +1490,7 @@
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
   "PouwWindow.OwnPorts",
+  "PouwWindow.FullDraw",
   "Definitions.Accounting",
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",

@@ -1,4 +1,5 @@
 import PouwWindow.OwnPorts
+import PouwWindow.FullDraw
 import Flock.KnownRead
 import SampledProofs.Produced
 import SampledProofs.Record
@@ -19,7 +20,7 @@ accepted produced record alone:
   `fullValue` (A, B and partials rows) marked `read_in_full`, then the known ports, and `complete`.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) holds `want?`'s ports (`checkOwn`). `leafOwnCmd` runs it on
-  files.
+  files, then holds each of the statement's session records to the full draw (`checkFull`).
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
@@ -123,17 +124,23 @@ private def usage (why : String) : IO UInt32 := do
   IO.eprintln why
   pure 2
 
-/-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)`**: `leafOwn?` on the three files at the
-`R × C` tile of contraction `K`, every value's rows `hm96-sha512/row/v2`. It prints `OWN {"accepted", "why"?}` and
-exits 0 where it accepts, 1 where it refuses and 2 on a usage error. -/
+/-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION...`**: `leafOwn?` on the three
+files at the `R × C` tile of contraction `K`, every value's rows `hm96-sha512/row/v2`, then `checkFull` on each session
+directory's record (`SESSION/session.json`, at least one). It prints `OWN {"accepted", "why"?}` and exits 0 where it
+accepts, 1 where it refuses and 2 on a usage error. -/
 def leafOwnCmd (args : List String) : IO UInt32 := do
-  let [reg, prod, file, r, c, k, stmt] := args
-    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)"
+  let reg :: prod :: file :: r :: c :: k :: stmt :: sess@(_ :: _) := args
+    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION..."
   let (some r, some c, some k) := (r.toNat?, c.toNat?, k.toNat?)
     | usage "R, C and K are natural numbers"
   let some lane := (if stmt == "combine" then some none else stmt.toNat?.map some : Option (Option Nat))
     | usage s!"the statement is a lane's index or combine, not {stmt}"
-  match leafOwn? (← readJson reg) (← readJson prod) (← readJson file) ⟨r, c, k⟩ lane Flock.HmRow.ROW_SCHEMA_V2 with
+  let (reg, prod, file) := (← readJson reg, ← readJson prod, ← readJson file)
+  let records ← sess.mapM fun (d : String) => IO.FS.readFile (System.FilePath.mk d / "session.json")
+  let verdict : Except String Unit := do
+    leafOwn? reg prod file ⟨r, c, k⟩ lane Flock.HmRow.ROW_SCHEMA_V2
+    records.forM checkFull
+  match verdict with
   | .ok () =>
     IO.println s!"OWN {(Json.mkObj [("accepted", Json.bool true)]).compress}"
     return 0
