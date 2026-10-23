@@ -59,7 +59,8 @@ if [ -n "${H1S_SMOKE:-}" ]; then
 elif [ -n "${H1S_OPENED:-}" ]; then
   # an extract's private openings, moved into the scratch: a copy left in the run dir would be uploaded with its record
   install -m 600 "$H1S_OPENED" "$OP" || exit 1
-  case $H1S_OPENED in "$RESEARCH_RUN_DIR"/*) rm -f "$H1S_OPENED" ;; esac
+  case $H1S_OPENED in "$RESEARCH_RUN_DIR"/*) rm -f "$H1S_OPENED" \
+    "${RESEARCH_RUN_DIR%/runs/*}/requests/${RESEARCH_RUN_DIR##*/}/inputs/${H1S_OPENED##*/}" ;; esac
   log "h1-served: the openings of $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['window'][:16], 'unit', d['unit']['unit'], 'K', d['k'])" "$OP")"
 else
   HPP=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/h1_prove
