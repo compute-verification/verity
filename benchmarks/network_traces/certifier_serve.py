@@ -845,12 +845,15 @@ def plan_of(args, url: str, clock=time.monotonic) -> tuple[dict, dict, dict]:
 
 def rehearse(args) -> int:
     from verity.core.protocols.certifier import lean_audit
+    from verity.core.protocols.sampled_proofs.one_stage import verifier
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
-    # built before the first run, so that the check's first verdict doesn't build it while reveals wait
+    # both built before the first run, so that the check's first registration and verdict don't build them while the
+    # reveal deadline runs (on a loaded host a build outlasts window 0's margin)
     if "VERITY_NETWORK_RECORDS_EXE" not in os.environ:
         os.environ["VERITY_NETWORK_RECORDS_EXE"] = str(lean_audit.build())
+    verifier.executable()
     scratch = Path(tempfile.mkdtemp(prefix="certifier-serve-"))
     certifier_dir, challenger_dir = scratch / "certifier", scratch / "challenger"
     for d in (certifier_dir, challenger_dir):
