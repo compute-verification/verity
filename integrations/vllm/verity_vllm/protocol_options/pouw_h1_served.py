@@ -32,6 +32,10 @@
   A tables whole (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
+* **The Commit** (ROOTS1, VLLM-73): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) each
+  call's A table is also built from the rows the Commit acquired (`a_words`, `a_tree`), the Commit's AROW of the call,
+  which is H1's own tree when the rows are the same; each round's root is over the Commit's input ids (`ids`); and the
+  served document carries the Commit's record (`document`), whose digest `served_digest` binds.
 * **Refused** (no table from then on, and `trees` raises the reason): a window with no key of 64 bytes, blocks that aren't
   one per linear, a call off the declared Program's order, a served call with no z/y record, a weight that isn't the
   linear's n × K int8 codes and n scales or that changes, an odd K, what `h1window.program` refuses, and at `close` a
@@ -63,6 +67,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocol_options import pouw_h1 as PH
+from verity_vllm.protocol_options import pouw_h1_commit as CT
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
@@ -243,6 +248,8 @@ class Served:
     calls: list[tuple[str, int]] = field(default_factory=list)
     m: int = 0
     refused: list[str] = field(default_factory=list)
+    #: the Commit's tap in the serving engine (`pouw_h1_commit.CommitTap`): each call's AROW and each round's ids
+    tap: Any = None
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
@@ -290,11 +297,25 @@ class Served:
             self.refused.append("the period's registered weights are under another Program than the window's: register "
                                 "each K's b/<K> under the period's declared Program")
 
+    def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> G.Registered:
+        return G.Registered.commit(self.program_digest, value, words.tolist(),
+                                   [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window)
+
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None) -> str:
-        reg = G.Registered.commit(self.program_digest, value, words.tolist(),
-                                  [hm96_salt(run._key, first, j) for j in range(len(words))], schema=V2, window=window)
-        self.registered[value] = reg
+        reg = self.registered[value] = self._tree(run, value, words, first, window)
         return reg.root.hex()
+
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
+        [m] (`row_words`), then zero codes of scale 0."""
+        full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
+        full[:len(codes)], sc[:len(codes)] = codes, scales
+        return row_words(full, sc)
+
+    def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
+        """The tree of call ``call``'s A table ``a/<K>@<c>`` over ``words`` (`a_words`) as `commit` would register it,
+        under the same domain and salts, unregistered (`pouw_h1_commit.CommitTap.arow`)."""
+        return self._tree(run, HW.table(self.program, "a", call.index), words, nonce(call.index, "a"), self.root)
 
     def _weight(self, call: Any, weight: Any, scale: Any) -> None:
         held = self._weights.get(call.layer)
@@ -326,16 +347,17 @@ class Served:
             self.refused.append(f"call {call.index}: no z/y record (its arm handed over no scaled_mm_zy records)")
         if self.refused:
             return {}
-        codes, scales = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
+        codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
         zv, yv = np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16)
         if call.m:
-            codes[:call.m] = PH.numpy_of(a).reshape(call.m, call.k)
-            scales[:call.m] = PH.numpy_of(s_a).reshape(-1)
+            codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zv, yv = ZR.split(records, call.rows, call.n)
-        out = {}
-        for name, words in (("a", row_words(codes, scales)), ("zy", record_words(zv, yv, self.m, self.tile))):
+        out, a_words = {}, self.a_words(call, codes, scales)
+        for name, words in (("a", a_words), ("zy", record_words(zv, yv, self.m, self.tile))):
             value = HW.table(self.program, name, call.index)
             out[value] = self._register(run, value, words, nonce(call.index, name), self.root)
+        if self.tap is not None:
+            self.tap.arow(run, self, call, HW.table(self.program, "a", call.index), a_words)
         b, ks = self.program.fn.bindings["PREFIX"] + f"b/{call.k}", sorted({k for _n, k in run.shapes_})
         mine = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k]
         if b in self.registered or not all(w in self._weights for w in mine):
@@ -396,12 +418,21 @@ class Served:
         under its parameter's name, `h1window.row_key`)."""
         return HW.window_ports(self.program)
 
+    def ids(self, run: Any, r: int) -> bytes | None:
+        """Round r's ids table's root with the Commit's tap (`pouw_h1_commit.CommitTap.ids`), else None."""
+        return None if self.tap is None else self.tap.ids(run, r)
+
     def entries(self) -> list[dict[str, Any]]:
         return [r.entry() for r in self.registered.values()]
 
+    def document(self) -> dict[str, Any]:
+        """The commitment's ``served``: the trees' entries, what was refused and, with the tap, the Commit's record."""
+        return {"entries": self.entries(), "refused": list(self.refused),
+                **({} if self.tap is None else {"commit": self.tap.record()})}
+
     def digest(self) -> bytes:
-        """SHA-512 over the trees' entries and what was refused, canonical JSON: what `calls_root` binds."""
-        return digest_of(self.entries(), self.refused)
+        """What `calls_root` binds: `served_digest` of `document`."""
+        return served_digest(self.document())
 
     def query(self) -> dict[str, Any]:
         """The window Program's partition query: every tile of each K's template one unit (`h1window.query`)."""
@@ -409,8 +440,14 @@ class Served:
 
 
 def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> bytes:
-    """`Served.digest` of the trees' `entries` and `refused`, as a record carries them (the commitment's ``served``)."""
+    """SHA-512 over the trees' `entries` and `refused`, canonical JSON, as a record carries them."""
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
+
+
+def served_digest(doc: Mapping[str, Any]) -> bytes:
+    """`Served.digest` of a record's served document (the commitment's ``served``, `Served.document`): its trees'
+    `digest_of`, with its Commit record bound to it (`pouw_h1_commit.bind`). KeyError or TypeError on a malformed one."""
+    return CT.bind(digest_of(doc["entries"], doc["refused"]), doc.get("commit"))
 
 
 def _served(run: Any) -> Served:
@@ -475,4 +512,4 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
 
 __all__ = ["B_NONCE", "FILE", "NONCE", "PREFIX", "Registration", "Served", "V2", "Weights", "declared",
            "declared_layout", "descriptor", "digest_of", "file_name", "layout", "nonce", "reads_file", "record_words",
-           "register", "register_weights", "row_words", "trees", "weights_of"]
+           "register", "register_weights", "row_words", "served_digest", "trees", "weights_of"]

@@ -838,7 +838,7 @@ def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
     assert credited(c, rec["calls"])[0] == "missing"
     assert credited(c, rows) == ("draw", CR.DRAW_ROOT)
     salt = PHC.program_salt_of(c)
-    served = SV.digest_of(c["served"]["entries"], c["served"]["refused"])
+    served = SV.served_digest(c["served"])
     root = CR.draw_root(CR.calls_root(salt, rows, served), bytes.fromhex(c["draw"]["receipts"]), c["rounds"])
     assert credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows) == ("draw", CR.CHANGED)
     assert credited(c, [{k: v for k, v in rec["calls"][0].items() if k != CR.CREDIT}]) == ("credit", CR.no_bit(0))

@@ -28,10 +28,15 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its served
   rows and its position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
   rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
-  empty steps' calls too, with no rows. A's slot i is leaf i of the Commit's row table of (step, layer) (circuits' AROW), so
-  a tile's rows are 32 consecutive leaves. What a listener returns (its roots and receipt root, as hex) is recorded with
-  the call (``bound``). `Call.inputs` is `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the
-  table's, and root(B) is the weight's, which compute accounting commits. This module commits neither.
+  empty steps' calls too, with no rows. A's slot i is the call's row i, so a tile's rows are 32 consecutive slots. What a
+  listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
+  `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
+  which compute accounting commits. This module commits neither.
+* **The Commit** (ROOTS1, `pouw_h1_commit`): with the Commit in the serving engine (``served``'s tap), each call's
+  registered A table ``a/<K>@<c>`` is held to the Commit's AROW of its (step, linear), the rows the Commit acquired at
+  the linear's ``Int8RowQuant_v1`` site in H1's table form, and round s's root is over the Commit's input ids of step s
+  (``ids@<s>``), layer 0's input, which are held to the request table's prompts. The Commit's record is under
+  calls_root. A window that fails either tie credits nothing (`pouw_h1_commit.UNTIED`). Core holds neither yet.
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
@@ -86,6 +91,7 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocol_options import credit_gate as CG
+from verity_vllm.protocol_options import pouw_h1_commit as CT
 from verity_vllm.protocol_options import pouw_h1_prover as PV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -226,8 +232,9 @@ def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
 @dataclass(frozen=True)
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
-    served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table is
-    the Commit's row table of (step, layer): leaf i is slot i, served for i < m and empty after."""
+    served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table
+    holds slot i at leaf i, served for i < m and empty after; with the Commit, it is held to the Commit's AROW of (step,
+    layer) (`pouw_h1_commit`)."""
 
     index: int
     step: int
@@ -503,7 +510,8 @@ class H1Run:
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
             row = RQ.round_row(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts,
-                               self.served.segments(self, r) if self.served is not None else {})
+                               self.served.segments(self, r) if self.served is not None else {},
+                               self.served.ids(self, r) if self.served is not None else None)
             coin = self.rounds.record(bytes.fromhex(row["root"])) if self.rounds is not None else None
             self.round_log.append({**row, "coin": coin.to_json() if coin else None})
 
@@ -604,6 +612,8 @@ class H1Run:
         self._close_rounds(self.steps - 1)
         if self.served is not None:
             self.served.close(self)
+            if self.served.tap is not None:
+                self.details["roots1"] = CT.roots1(self)
         unbound = RQ.tables_reason(self.salt, self.round_log, self.manifest())
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
@@ -639,9 +649,12 @@ class H1Run:
 
     def gated(self) -> dict[int, dict[str, Any]]:
         """Each served call's verdict: the credit gate's, refused in a window that served a row it can't name an entry for
-        (`request_gaps`) or whose coins aren't the challenger's (`IN_PROCESS`)."""
+        (`request_gaps`), whose coins aren't the challenger's (`IN_PROCESS`) or, with the Commit, whose A tables or input
+        ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
-        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER)):
+        untied = bool((self.details.get("roots1") or {}).get("reason"))
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
+                        (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
         return out
 
@@ -714,7 +727,7 @@ class H1Run:
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
         if self.served is not None:
-            self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
+            self.commits["served"] = self.served.document()
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
             root = RQ.draw_root(calls_root, receipts, self.round_log)
