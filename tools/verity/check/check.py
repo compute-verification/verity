@@ -19,7 +19,7 @@
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-1, vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
@@ -299,8 +299,9 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
     return out if len(out) > 1 else []
 
 
-#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots
-AUTO = ("vy-nebius-1", "vy-nebius-2")
+#: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
+#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+AUTO = ("vy-nebius-2",)
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
