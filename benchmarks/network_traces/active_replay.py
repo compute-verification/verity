@@ -147,6 +147,7 @@ from verity.core.protocols.certifier.schedule import (
     handing_buckets,
     run_shaper,
 )
+from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -421,20 +422,24 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
 
 
 def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
-                   hold: int | None = None) -> dict[int, int]:
+                   admission: Admission | None = None) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release. With `hold`, the proxy's
-    admission hold (`active.Bucketer`): a request is enqueued only while its last frame would be released before the
-    window's last `hold` buckets."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `admission`, a served
+    link's admission rule (`active.Bucketer(served=…)`): a request is enqueued only while its window, with it, still
+    ends idle (`served.admits`)."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
-    out, queue, k = {}, [], 0
-    for t in range(windows * params.buckets):
+    out, queue, k, counts, T = {}, [], 0, [], params.buckets
+    for t in range(windows * T):
+        if t % T == 0:
+            counts = []
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
-            if hold is not None and (len(queue) + n - 1) // params.allocation >= params.buckets - hold - t % params.buckets:
+            if admission is not None and not admits(counts, len(queue) + n, admission.sync(t // T), admission.profile,
+                                                    admission.allocation, params.allocation, T):
                 break
             queue += [(s, j == n - 1) for j in range(n)]
             k += 1
+        counts.append(min(len(queue), params.allocation))
         for s, last in queue[: params.allocation]:
             if last:
                 out[s] = t * params.bucket_ms // egress_bucket_ms
@@ -1134,11 +1139,12 @@ def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], con
 
 
 def served_args(plan: dict) -> dict:
-    """The proxy's admission hold on a served link (`active.Proxy(hold=…)`), from the plan's `served` (none
-    otherwise)."""
+    """A served link's profile for its proxy (`active.Proxy(served=…)`, which admits requests by the admission rule),
+    from the plan's `served` (none otherwise)."""
     if "served" not in plan:
         return {}
-    return {"hold": plan["served"]["hold"], "request_frames": plan["served"]["request_frames"]}
+    s = plan["served"]
+    return {"served": ServedProfile(s["response_frames"], s["request_frames"], plan["windows"])}
 
 
 def phase_args(plan: dict, start: int, end: int) -> dict:

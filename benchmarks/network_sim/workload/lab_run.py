@@ -87,7 +87,7 @@ from verity.core.protocols.certifier.active import event as canonical_event
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import Direction, parameters_digest, record_head
 from verity.core.protocols.certifier.schedule import ClockSync
-from verity.core.protocols.certifier.served import ServedProfile, derive
+from verity.core.protocols.certifier.served import Admission, ServedProfile, derive
 from verity.core.protocols.certifier.service import LEAVES, LinkWindows
 
 from . import framing as F
@@ -126,15 +126,23 @@ def time_sessions(ctx: Context, lab: L.Lab) -> dict[str, float]:
     return out
 
 
-def model_run(lab: L.Lab, D: int, closed: dict[str, int] | None = None) -> dict[str, list[tuple[float, int]]]:
+def _idle(anchors: list[int], admission: Admission, window: int) -> bool:
+    counts = [0] * WINDOW_BUCKETS
+    for a in anchors:
+        counts[a] += admission.profile.request_frames
+    return derive(counts, admission.sync(window), admission.profile, admission.allocation) is not None
+
+
+def model_run(lab: L.Lab, D: int, admission: dict[str, Admission] | None = None) -> dict[str, list[tuple[float, int]]]:
     """Each block's requests in the model, as (send time in ms, the bucket it is released in) per session: the first ones
     half a bucket after the origin, each released in the bucket after it is sent, and its response at the client
     `FABRIC_MS` after bucket release + D + 1 starts. A request goes as soon as its messages are in and the block's
-    previous one has gone. With `closed`, the buckets at each window's end in which the block's proxy releases no
-    request (its admission hold): one that would be is released at the next window's first bucket."""
+    previous one has gone. With `admission`, each block's proxy admits a request only while its window, with it, still
+    ends idle (`served.admits`): one it doesn't is released at the next window's first bucket."""
     tau, T = BUCKET_MS, WINDOW_BUCKETS
     ready = {m.stream: 0.0 for m in lab.messages.values() if m.src == OUTSIDE}
     sent: dict[str, list[tuple[float, int]]] = {b: [] for b in lab.blocks}
+    anchored: dict[tuple[str, int], list[int]] = defaultdict(list)
     moved = True
     while moved:
         moved = False
@@ -144,8 +152,12 @@ def model_run(lab: L.Lab, D: int, closed: dict[str, int] | None = None) -> dict[
                     break
                 t = max([tau / 2, *(ready[m.stream] + 1 for m in s.inbound), *(x for x, _ in sent[b][-1:])])
                 release = math.ceil(t / tau)
-                if closed and release % T >= T - closed[b]:
+                while admission and not _idle(anchored[b, release // T] + [release % T], admission[b], release // T):
+                    if release % T == 0 and not anchored[b, release // T]:
+                        raise ValueError(f"{b}: a request and its response of {admission[b].profile.response_frames} "
+                                         f"frames don't fit one window of {T} buckets")
                     release += T - release % T
+                anchored[b, release // T].append(release % T)
                 sent[b].append((t, release))
                 ready.update({m.stream: (release + D + 1) * tau + FABRIC_MS for m in s.outbound})
                 moved = True
@@ -154,16 +166,14 @@ def model_run(lab: L.Lab, D: int, closed: dict[str, int] | None = None) -> dict[
     return sent
 
 
-def admission_hold(lab: L.Lab, block: str, setup: ar.Setup) -> int:
-    """The block's admission hold Δ = δ + G + ⌈F/r⌉ (`active.Bucketer(hold=…)`) under the envelope every window
-    declares, G = ⌊(F − 1)·q/p⌋ for ρ = p/q: a request anchored before the window's last Δ buckets has its response's
-    F frames handed by δ + G buckets after its anchor and released within ⌈F/r⌉ more, inside its window."""
-    F, rho = lab.fixlen[block][0], setup.envelope.rho
-    return setup.envelope.delta + (F - 1) * rho.denominator // rho.numerator + -(-F // setup.egress_params.allocation)
+def admissions(lab: L.Lab, setup: ar.Setup) -> dict[str, Admission]:
+    """Each block's admission rule (`served.Admission`) under the envelope every window declares."""
+    return {b: Admission(ServedProfile(*lab.fixlen[b], 1), setup.egress_params.allocation, lambda w: setup.envelope)
+            for b in lab.blocks}
 
 
-def _calibrate(lab: L.Lab, D: int, name: str, closed: dict[str, int] | None) -> tuple[list, dict, ar.Setup]:
-    sent = model_run(lab, D, closed)
+def _calibrate(lab: L.Lab, D: int, name: str, admission: dict[str, Admission] | None) -> tuple[dict, dict, ar.Setup]:
+    sent = model_run(lab, D, admission)
     configs = []
     for b in lab.blocks:
         frames, arrival = [], []
@@ -180,26 +190,22 @@ def _calibrate(lab: L.Lab, D: int, name: str, closed: dict[str, int] | None) -> 
 
 def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[str, dict]]:
     """The calibration report on the modeled run, one configuration per block, and each block's plan for the proxy and
-    the audit. Each block's link is served (`plan["served"]`): its proxy holds requests (`admission_hold`), which moves
-    the model's releases, so the calibration is repeated on the held model until every block's hold is the one its
-    calibration gives. Then each window of the held model must derive (`served.derive` on its anchors under the
-    envelope), or no honest run of the Program is accepted by N2."""
-    T, closed = WINDOW_BUCKETS, None
+    the audit. Each block's link is served (`plan["served"]`): its proxy admits requests by the admission rule
+    (`admissions`), which moves the model's releases, so the calibration is repeated on the admitted model until the
+    envelope and the allocations it gives are the ones it was modeled under. Every request of the exact model
+    (`active_replay.model_releases`) must then be admitted within the run."""
+    T, admission, key = WINDOW_BUCKETS, None, None
     for _ in range(8):
-        sent, report, setup = _calibrate(lab, D, name, closed)
-        holds = {b: admission_hold(lab, b, setup) for b in lab.blocks}
-        shut = {b: holds[b] + (lab.fixlen[b][1] - 1) // setup.ingress_params.allocation for b in lab.blocks}
-        if shut == closed:
+        sent, report, setup = _calibrate(lab, D, name, admission)
+        settled = (setup.envelope, setup.egress_params.allocation, setup.ingress_params.allocation)
+        if settled == key:
             break
-        closed = shut
+        admission, key = admissions(lab, setup), settled
     else:
-        raise ValueError(f"the calibration on the held model doesn't settle: holds {closed}")
+        raise ValueError(f"the calibration on the admitted model doesn't settle: (envelope, r, r_in) {key}")
     envelope, sync_set = setup.envelope, setup.sync_set
     if envelope.delta < D:
         raise ValueError(f"the calibration's envelope δ = {envelope.delta} is below the model's D = {D}")
-    if late := {b: n for b, n in closed.items() if n >= T}:
-        raise ValueError(f"blocks {late}: a response of F frames doesn't fit one window of {T} buckets behind the "
-                         f"admission hold (Δ = δ + G + ⌈F/r⌉, F_in − 1 more at r_in)")
     end = max(release + D + 1 + len(lab.events[b]) for b in lab.blocks for _, release in sent[b])
     windows = math.ceil((end + 2 * D + 20) / T)
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
@@ -211,21 +217,17 @@ def calibrate_run(lab: L.Lab, D: int, name: str) -> tuple[dict, ar.Setup, dict[s
                      "enqueue": math.ceil(t / setup.ingress_params.bucket_ms), "send_ms": t}
                     for s, (t, _) in zip(lab.sessions[b], sent[b], strict=True)]
         release = ar.model_releases(requests, setup.ingress_params, windows, setup.egress_params.bucket_ms,
-                                    hold=holds[b])
-        counts = [[0] * T for _ in range(windows)]
-        for a in release.values():
-            counts[a // T][a % T] += FIN
-        for w, row in enumerate(counts):
-            if derive(row, envelope, ServedProfile(F, FIN, 1), setup.egress_params.allocation) is None:
-                raise ValueError(f"{b}'s modeled window {w} doesn't end idle under the envelope: requests anchored at "
-                                 f"{[t for t, n in enumerate(row) if n]}, responses of {F} frames")
+                                    admission[b])
+        if len(release) < len(requests):
+            raise ValueError(f"{b}: the admission rule admits {len(release)} of its {len(requests)} requests within "
+                             f"the run's {windows} windows")
         chosen, _, misses = calibration.choose_syncs([ar.model_frames(sessions, release, windows * T)], sync_set, T)
         chosen = (list(chosen) + [eager] * windows)[:windows]
         plans[b] = {"name": f"{name}/{b}", "windows": windows, "sessions": sessions, "requests": requests,
                     "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
                     "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
                     "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": name, "seed": 0,
-                    "served": {"response_frames": F, "request_frames": FIN, "hold": holds[b]}}
+                    "served": {"response_frames": F, "request_frames": FIN}}
     return report, setup, plans
 
 
@@ -666,7 +668,7 @@ def run(args) -> int:
           f"{sum(len(ss) for ss in lab.sessions.values())} sessions, {sum(len(e) for e in lab.events.values())} events; "
           f"slowest session {max(compute.values()) * 1000:.0f} ms, D = {D} buckets; envelope δ = {setup.envelope.delta}, "
           f"ρ = {setup.envelope.rho}, r = {setup.egress_params.allocation}, r_in = {setup.ingress_params.allocation}; "
-          "served (F, F_in, hold Δ): " + ", ".join(f"{b} {tuple(plans[b]['served'].values())}" for b in lab.blocks),
+          "served (F, F_in): " + ", ".join(f"{b} {tuple(plans[b]['served'].values())}" for b in lab.blocks),
           flush=True)
     codes = launch(args, dc, out, config, lab, report, setup, plans, tamper)
 

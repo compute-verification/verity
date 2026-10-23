@@ -31,9 +31,10 @@ a window).
 frame pending and no earlier hand, and checks that it ends the same way. So by induction from the run's first window,
 whose certifier starts empty (and from a certifier back from maintenance, which carries nothing), on a link whose every
 window is accepted (`service.LinkWindows.network_verdict`'s AND) each window's egress counts are the Program's under the
-premises below, and they depend on that window's ingress counts and sync alone. A proxy meets it with its admission hold
-(`active.Bucketer(hold=…)`): it releases no request in a window's last buckets, so each request's response fits its own
-window. A request whose response would straddle a window's end makes the window refuse.
+premises below, and they depend on that window's ingress counts and sync alone. A proxy meets it with its admission rule
+(`Admission`, `active.Bucketer(served=…)`): it admits a request only while the window, with it, still ends idle
+(`admits`), and holds the rest, in order, for the next window, so each response is released in its request's window. A
+request whose response would straddle a window's end makes the window refuse.
 
 **Premises** of "the egress counts are the Program's": every response is F frames (FIXLEN: every request runs to its
 max_tokens, one token a frame), every ingress frame is a request's and every request FIN frames (a fixed request size),
@@ -60,7 +61,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from types import SimpleNamespace
-from typing import Sequence
+from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, compress_columns, const_bits, multiply, mux, \
@@ -126,6 +127,33 @@ def derive(ingress: Sequence[int], sync: ClockSync, profile: ServedProfile, allo
         enqueued[h] += 1
     counts = released(allocation, enqueued)
     return counts if sum(counts) == len(frames) else None
+
+
+@dataclass(frozen=True)
+class Admission:
+    """A served link's admission rule at its proxy (`active.Bucketer(served=…)`): requests of the profile's F_in frames,
+    each admitted only while its window, with it, still ends idle (`admits`) under `sync(window)` at the egress
+    allocation. `sync` gives the window's declared sync where the proxy holds it, else the slowest of Σ_sync (largest
+    δ, smallest ρ): a later hand only lowers the release curve, so a window idle under it is idle under any sync of
+    Σ_sync."""
+
+    profile: ServedProfile
+    allocation: int
+    sync: Callable[[int], ClockSync]
+
+
+def admits(released_counts: Sequence[int], queued: int, sync: ClockSync, profile: ServedProfile, allocation: int,
+           ingress_allocation: int, T: int) -> bool:
+    """Whether the window still ends idle (`derive` is not None) with `released_counts` the ingress counts of its
+    buckets so far and `queued` frames, the request's being admitted included, released FIFO at `ingress_allocation` a
+    bucket from the next bucket on: false when one would be released after the window's last bucket."""
+    counts = list(released_counts) + [0] * (T - len(released_counts))
+    for k in range(queued):
+        t = len(released_counts) + k // ingress_allocation
+        if t >= T:
+            return False
+        counts[t] += 1
+    return derive(counts, sync, profile, allocation) is not None
 
 
 def sync_words(sync: ClockSync) -> tuple[int, int, int]:

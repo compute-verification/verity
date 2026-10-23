@@ -116,10 +116,10 @@ def test_a_late_block_an_extra_frame_or_a_dropped_frame_is_refused(tmp_path, kin
 def test_a_request_that_straddles_the_windows_end_is_refused_and_a_held_one_accepted(tmp_path):
     """A request in window 0's bucket 6 is answered in buckets 7 to 9 under δ = 1, ρ = 1: window 0 doesn't end idle
     and window 1's counts carry frames its ingress counts don't derive, so both are refused. Behind the proxy's
-    admission hold (`active.Bucketer`, Δ = δ + G + ⌈F/R⌉ = 5) the same arrivals are admitted at window 1's start
-    instead, and every window is accepted."""
+    admission rule (`Admission`, `active.Bucketer`) the same arrivals are admitted at window 1's start instead, and
+    every window is accepted."""
     arrivals = ([1, 0, 0, 0, 0, 0, 1, 0], [0] * 8, [0] * 8)
-    bucketer = Bucketer(Certifier(LINK, P), hold=5, request_frames=FIN)
+    bucketer = Bucketer(Certifier(LINK, P), served=SV.Admission(PROFILE, P.allocation, lambda w: SYNCS[w]))
     for t, n in enumerate(c for counts in arrivals for c in counts):
         for _ in range(n):
             bucketer.arrive(b"q", t)
@@ -131,6 +131,36 @@ def test_a_request_that_straddles_the_windows_end_is_refused_and_a_held_one_acce
         egress = egress_records(frames_of([occupancy(r.grid) for r in ingress]))
         assert [run.round(w, egress[w], ingress[w]).accepted for w in range(WINDOWS)] == want
         assert run.lw.network_verdict(run.stream)["accepted"] is all(want)
+
+
+def test_behind_the_admission_rule_every_window_derives_the_programs_grid_under_load():
+    """Random dense arrivals, sizes and syncs, several requests a window: behind the admission rule every request is
+    admitted, whole, in a window that still ends idle with it, so each window's derived counts are the Program's grid
+    under its sync (`schedule.expected_grids` of each response anchored where the bucketer released its request), the
+    counts N2's served check accepts."""
+    rng = random.Random(3051)
+    syncs = list(SyncSet((0, 1, 2, 3), (Fraction(1), Fraction(2), Fraction(1, 2), Fraction(2, 3))))
+    checked = 0
+    for _ in range(150):
+        request_frames, response_frames, windows = rng.choice((1, 2)), rng.randint(1, 4), 8
+        profile = SV.ServedProfile(response_frames, request_frames, windows)
+        run = [rng.choice(syncs) for _ in range(windows)]
+        try:
+            bucketer = Bucketer(Certifier(LINK, P), served=SV.Admission(profile, P.allocation, run.__getitem__))
+        except ValueError:
+            continue
+        n = request_frames * rng.randint(2, 10)
+        for t in sorted(rng.randrange(2 * P.buckets) for _ in range(n)):
+            bucketer.arrive(b"q", t)
+        ingress = [r for r in (bucketer.tick()[1] for _ in range(windows * P.buckets)) if r is not None]
+        arrivals = [list(occupancy(r.grid)) for r in ingress]
+        if sum(map(sum, arrivals)) < n:
+            continue
+        grids = expected_grids(frames_of(arrivals, request_frames, response_frames), run, P)
+        derived = [SV.derive(a, s, profile, P.allocation) for a, s in zip(arrivals, run)]
+        assert derived == [list(occupancy(g)) for g in grids]
+        checked += 1
+    assert checked > 50
 
 
 def test_derive_is_the_programs_grid_on_an_idle_run():

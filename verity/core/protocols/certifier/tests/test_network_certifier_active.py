@@ -11,6 +11,7 @@ import random
 import resource
 from collections import defaultdict
 from concurrent.futures import Executor, Future
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -291,38 +292,44 @@ def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
     assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
 
 
-def test_the_bucketers_admission_hold_admits_whole_requests_released_before_the_windows_last_buckets():
-    """With a hold of Δ = 1 on requests of two frames: c and d complete a request at bucket 2, whose last frame would
-    be released at bucket 3, inside the hold, so they wait for window 1; e waits for f, and they for window 2. Over
-    random arrivals every window's released frames are whole requests, each anchored by bucket T − Δ − 1, in arrival
-    order. A hold takes no own frame."""
+def test_the_bucketers_admission_admits_whole_requests_while_the_window_ends_idle():
+    """Requests of two frames, each answered by two, under δ = 0, ρ = 1 with one frame a bucket on both ends: a and b
+    complete a request at bucket 1, answered in buckets 1 and 2; c and d would complete one at bucket 3, answered past
+    the window's end, so they wait for window 1, and e and f for window 2. Over random arrivals every window's released
+    frames are whole requests in arrival order, and every window derives (`served.derive`). A served link takes no own
+    frame, and its window holds at least one request and its response."""
     P = GridParams(buckets=4, allocation=1, frame_bytes=1)
-    b = Bucketer(Certifier("requests", P), hold=1, request_frames=2)
+    admission = served.Admission(served.ServedProfile(2, 2, 1), 1, lambda w: ClockSync(0, 1))
+    b = Bucketer(Certifier("requests", P), served=admission)
     for frame, bucket in ((b"a", 0), (b"b", 0), (b"c", 1), (b"d", 2), (b"e", 5), (b"f", 6)):
         b.arrive(frame, bucket)
     rows = [b.tick()[0] for _ in range(12)]
     assert rows == [(b"a",), (b"b",), (None,), (None,), (b"c",), (b"d",), (None,), (None,), (b"e",), (b"f",), (None,),
                     (None,)]
-    with pytest.raises(ValueError, match="admission hold"):
-        Bucketer(Certifier("requests", P), first=lambda w: b"s", hold=1)
-    with pytest.raises(ValueError, match="admission hold"):
-        Bucketer(Certifier("requests", P), hold=4)
+    with pytest.raises(ValueError, match="no own frame"):
+        Bucketer(Certifier("requests", P), first=lambda w: b"s", served=admission)
+    with pytest.raises(ValueError, match="holds one request"):
+        Bucketer(Certifier("requests", P), served=served.Admission(served.ServedProfile(4, 2, 1), 1,
+                                                                   lambda w: ClockSync(0, 1)))
 
     rng = random.Random(54)
     for _ in range(200):
         P = GridParams(buckets=rng.randint(3, 8), allocation=rng.randint(1, 3), frame_bytes=1)
-        n, hold = rng.choice((1, 2, 4)), rng.randrange(P.buckets)
-        if (n - 1) // P.allocation >= P.buckets - hold:
+        n, r = rng.choice((1, 2, 4)), rng.randint(1, 3)
+        sync = ClockSync(rng.randint(0, 2), rng.choice((Fraction(1), Fraction(2), Fraction(1, 2))))
+        admission = served.Admission(served.ServedProfile(rng.randint(1, 3), n, 1), r, lambda w: sync)
+        try:
+            b = Bucketer(Certifier("requests", P), served=admission)
+        except ValueError:
             continue
-        b = Bucketer(Certifier("requests", P), hold=hold, request_frames=n)
         sent = [bytes([k]) for k in range(n * rng.randint(0, 6))]
         for frame, bucket in zip(sent, sorted(rng.randrange(3 * P.buckets) for _ in sent)):
             b.arrive(frame, bucket)
-        records = [r for r in (b.tick()[1] for _ in range(12 * P.buckets)) if r is not None]
+        records = [r for r in (b.tick()[1] for _ in range(20 * P.buckets)) if r is not None]
         assert [f for r in records for row in r.grid for f in row if f is not None] == sent
-        for r in records:
-            counts = [row_count(row) for row in r.grid]
-            assert sum(counts) % n == 0 and all(a < P.buckets - hold for a in served.anchors(counts, n))
+        for rec in records:
+            counts = [row_count(row) for row in rec.grid]
+            assert served.derive(counts, sync, admission.profile, r) is not None
 
 
 def test_a_shaper_and_a_bucketer_back_from_maintenance_publish_the_full_runs_later_windows():
