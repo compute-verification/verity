@@ -517,7 +517,10 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves."""
+    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more than the
+    endpoint sent at the end of the first session's response, on time and logged."""
+    if strategy == "extra":
+        return plan | {"strategy": strategy, "seed": seed, "extra": plan["sessions"][0][0]}
     if strategy != "covert":
         return plan | {"strategy": strategy, "seed": seed,
                        "writes": adversary_writes(plan, setup.sync_set, setup.egress_params.buckets, strategy, seed)}
@@ -751,6 +754,12 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
             yield data
 
 
+async def _then(chunks, last: bytes):
+    async for data in chunks:
+        yield data
+    yield last
+
+
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
     request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
@@ -773,7 +782,7 @@ class LiveServer:
         key = os.environ[params["api_key_env"]] if params.get("api_key_env") else None
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
-        self.writes = plan.get("writes")
+        self.writes, self.extra = plan.get("writes"), plan.get("extra")
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -831,7 +840,10 @@ class LiveServer:
             planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
             hold = -1
             anchor = math.floor(received / self.tau)
-            async for data in _http_body(up_reader, up_head):
+            chunks = _http_body(up_reader, up_head)
+            if name == self.extra:
+                chunks = _then(chunks, b'data: {"choices":[{"text":" extra"}]}\n\n')
+            async for data in chunks:
                 for body in (b for e in cutter.feed(data) for b in canonical_events(e)):
                     if planned is not None:
                         hold = max(hold, planned[k] if k < len(planned) else hold)

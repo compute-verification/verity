@@ -2,7 +2,8 @@
 certifier (`active.Proxy` with its salt on, its records certified and its reveals signed) in front of it behind the
 shim, and the offline check of what it published, which asks each window's salt through a `RemoteCertifier` signed
 with the challenger's key. Honest traffic is accepted on every link-window (N2 on the planned profile, the audit and
-the salt), a shim that holds one session past every sync is refused, and each window's salt is revealed once."""
+the salt), a shim that holds one session past every sync or writes one event more than the endpoint sent is refused,
+and each window's salt is revealed once."""
 
 from __future__ import annotations
 
@@ -69,6 +70,7 @@ def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifi
     publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
     ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
                    proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
+    out["events"] = json.loads((run / "server.json").read_text())["events"]
     return out
 
 
@@ -84,7 +86,7 @@ def served(tmp_path_factory):
         probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", TOKENS), 2, clock=lambda: 0.0)
         report, plan = cs.served_plan(probed, REQUESTS)
         runs = {}
-        for strategy in ("honest", "late"):
+        for strategy in cs.STRATEGIES:
             certifier = cs.signer(tmp / "keys" / strategy, 6)
             try:
                 runs[strategy] = await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier,
@@ -132,7 +134,7 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
     *_, runs = served
-    for strategy in ("honest", "late"):
+    for strategy in cs.STRATEGIES:
         check = runs[strategy]["check"]
         assert [r["salt"] for r in check["rows"]] == ["revealed", "revealed"]
         assert re.fullmatch(r"refused: the certifier refused window 0's salt: window 0's salt is revealed already",
@@ -153,3 +155,17 @@ def test_a_shim_that_holds_a_session_past_every_sync_is_refused(served):
     assert first["audit"]["egress"] == {"raw": "status:coverage-never-established",
                                         "committed": "status:coverage-never-established"}
     assert check["salt_accepted"]
+
+
+def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served):
+    """The extra event is on time and logged, so every record is complete and the certifier's audit accepts it: only
+    N2's counts against the planned profile catch it, and `network_verdict` refuses the link at window 0."""
+    *_, runs = served
+    assert runs["honest"]["events"] == REQUESTS * TOKENS and runs["extra"]["events"] == REQUESTS * TOKENS + 1
+    check = runs["extra"]["check"]
+    assert check["comparisons"]["wire_is_the_records"]
+    assert check["verdict"] == "refused" and check["network_verdict"]["refused"] == [0]
+    assert check["audit_accepted"] and check["salt_accepted"] and check["issuer_refused"] == []
+    assert all(r["audit"] == {d: {"raw": None, "committed": None} for d in ("egress", "ingress")} for r in check["rows"])
+    assert check["rows"][0]["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
+    assert check["rows"][1]["n2"]["accepted"]

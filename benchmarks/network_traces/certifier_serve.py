@@ -46,7 +46,7 @@ head's.
     python certifier_serve.py keys --dir KEYDIR [--height 10]
     python certifier_serve.py plan --upstream URL --model NAME --out DIR [--requests 8] [--tokens 16] [--probes 3]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
-        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late]
+        --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10] [--tamper late|extra]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --model NAME --out DIR
@@ -58,8 +58,10 @@ head's.
   certifier session (`--session`, which the challenger draws), the links, the addresses, the origin and the reveal
   deadline. It takes one link connection, which must come before the origin. Once the link has ended it stops the shim,
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
-  window's reveal deadline has passed. `--tamper late` makes the shim the adversary of `active_replay.adversary_plan`:
-  it holds one session of window 0 past every sync. The key's directory may not be inside `--out`.
+  window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
+  holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
+  than the endpoint sent at the end of the first session's response, on time and logged, so the records are complete
+  and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -68,7 +70,7 @@ head's.
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
-- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late)
+- `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late, extra)
   runs `serve` and `client` as processes and `check`; `summary.json` holds each run's verdicts. With `--vllm MODEL` it
   starts vLLM on this host's GPU first (`active_replay.start_vllm`).
 
@@ -89,6 +91,7 @@ import math
 import multiprocessing
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -119,7 +122,7 @@ PROMPT = "Count from one to one hundred in words, separated by commas:"
 REVEAL_MARGIN_S = 300.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
-STRATEGIES = ("honest", "late")
+STRATEGIES = ("honest", "late", "extra")
 
 
 # Keys.
@@ -625,6 +628,7 @@ def rehearse(args) -> int:
                                    api_key_env=args.api_key_env, start_in=args.start_in)
                    for s in args.strategies.split(",")}
     finally:
+        shutil.rmtree(scratch)
         if started:
             import record
 
@@ -677,7 +681,8 @@ def main(argv=None) -> int:
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
-    s.add_argument("--tamper", choices=STRATEGIES[1:], help="the shim holds a window-0 session past every sync")
+    s.add_argument("--tamper", choices=STRATEGIES[1:],
+                   help="late: the shim holds a window-0 session past every sync; extra: it writes one event more")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--link", type=_address, help="HOST:PORT of the link, if not the deployment's")
     x.add_argument("--run", required=True, type=Path)
