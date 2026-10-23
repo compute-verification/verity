@@ -317,8 +317,8 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
         record, run, _tap = _window(tmp_path / name, monkeypatch, edit)
         got[name] = {"core": G.core_tie(record, run.served.program, tmp_path / "ev" / name),
                      "roots1": run.details["roots1"]}
-    assert got["commit"]["core"]["tied"] and got["commit"]["core"]["commit_values"] == 6
+    assert got["commit"]["core"]["tied"] and got["commit"]["core"]["commit_values"] == 4
     for name in ("commit-a-zero", "commit-a-row-off"):
         v = G.negative_verdict(got[name])
-        assert v["refused"] and v["arow"][1].startswith("call 0's A table h1/a/64@0 is not the Commit's "), v
+        assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
     assert G.core_from(str(tmp_path / "ev"), str(tmp_path / "out"))["ok"]
