@@ -284,13 +284,15 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
     reg = SV.register(run)
     for c, (u0, n) in enumerate(HW.call_units(prog)):
         k, f = run.shapes_[run.calls[c].layer][1], reg.files[c]
-        assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy", HW.PUB_PORT}
+        assert set(f["ports"]) == {f"{t}_k{k}_{i}" for t in "ab" for i in range(32)} | {"zy", HW.PUB_PORT, HW.OK_PORT}
         assert {(p["row_schema"], p["word_bits"]) for p in f["ports"].values()} == {(SV.V2, 16)}
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
         assert f["ports"][f"a_k{k}_0"]["reads"][u0] == at and at == T * served.step_calls(c).index(c)
         for port, p in f["ports"].items():
+            if port == HW.OK_PORT:
+                continue
             r = served.registered[p["value"]]
             assert (p["root"], p["words"], p["leaves"], p["domain"]) == (
                 r.root.hex(), r.words, r.leaves, r.domain.domain_id.hex())
@@ -320,7 +322,7 @@ def test_a_tile_of_one_row_or_column_maps_its_lone_read_to_port_0(tile, lone):
     other = "b" if lone == "a" else "a"
     for c, (u0, n) in enumerate(HW.call_units(served.program)):
         k = run.shapes_[c][1]
-        assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy", HW.PUB_PORT} | {f"{other}_k{k}_{i}" for i in range(32)}
+        assert set(reg.files[c]["ports"]) == {f"{lone}_k{k}_0", "zy", HW.PUB_PORT, HW.OK_PORT} | {f"{other}_k{k}_{i}" for i in range(32)}
         reads = reg.files[c]["ports"][f"{lone}_k{k}_0"]["reads"]
         assert [u for u, r in enumerate(reads) if r is not None] == list(range(u0, u0 + n))
 
