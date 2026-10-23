@@ -2,18 +2,20 @@ import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
-# `KSLin2` and `BitsLin2` at the coin server's record
+# `KSLin2` and `BitsLin2` at the model of the coin server's record
 
 `ksLin2_deployed_open` and `bitsLin2_deployed_open` take `ReadsBack`: a reader `untr` reads the brings' transcript of
-an accepted run's inner rounds back to those rounds. Where the transcript is the coin server's record (`recTr`, each
-inner round's message as its one commit string and its coin's first `n` values, whatever its other fields) and the
-reader is the record's own total reader (`recRead`), that holds at every accepted run (`readsBack_recTr`), so
-`ksLin2_deployed_rec` and `bitsLin2_deployed_rec` drop it.
+an accepted run's inner rounds back to those rounds. Where the transcript is the model of the coin server's record
+(`recTr`, each inner round's message as its one commit string and its coin's first `n` values, whatever its other
+fields) and the reader is the record's own total reader (`recRead`), that holds at every accepted run
+(`readsBack_recTr`), so `ksLin2_deployed_rec` and `bitsLin2_deployed_rec` drop it.
 
-That the deployed coin server writes `recTr`'s bytes is a difftest on the honest fixtures (`test_lean_rec_record.py`:
-`recordW` writes `rec_live.record_bytes`' bytes), not a theorem. What stays open at the dense form is `PartChecksB` and
-`PartOpensB` at `showsPart recRead`/`cmtTr recRead` (the staged V\* statements), `DecompB`, and the readers'
-`ReadersTrue` (`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
+The difftest on the honest fixtures (`test_lean_rec_record.py`: `recordW` writes `rec_live.record_bytes`' bytes) ties
+`recTr`'s format to the coin server's, not its round list. The coin server's record lists only the rep streams'
+rounds, with the tops and `c_k` in separate fields, and round 0 under `link` (`RecRecord.lean`), so `recTr` is a model
+of the record and not yet the deployed one. What stays open at the dense form is `PartChecksB` and `PartOpensB` at
+`showsPart recRead`/`cmtTr recRead` (the staged V\* statements), `DecompB`, and the readers' `ReadersTrue`
+(`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
 
 The reader is not vacuous: `recRead_honest_round` reads an honest one-round run back, and `Flock.Test.RecRecord`'s
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
@@ -34,10 +36,11 @@ theorem recRead_honest_round (c : Coin) (m : Msg) (a : Flock.RecRecord.Round) (n
     List.mapIdx_cons, List.mapIdx_nil, List.map_cons, List.map_nil]
   simp [roundOf, flatten_commits, outCoin, coinOf_bytes]
 
-/-- **`KSLin2` at the deployment's dense statements, at the coin server's record**: `ksLin2_deployed_open` at the
-brings whose transcript is `recTr aux nOf rest`, read by `recRead`, with `ReadsBack` from `readsBack_recTr`. What stays
-open at the dense form is `PartChecksB` and `PartOpensB` at `showsPart recRead`/`cmtTr recRead`, and `DecompB`; then the
-readers' two facts. This bounds no number by itself: those premises are open. -/
+/-- **`KSLin2` at the deployment's dense statements, at the model of the coin server's record (`recTr`)**:
+`ksLin2_deployed_open` at the brings whose transcript is `recTr aux nOf rest`, read by `recRead`, with `ReadsBack` from
+`readsBack_recTr`. What stays open at the dense form is `PartChecksB` and `PartOpensB` at
+`showsPart recRead`/`cmtTr recRead`, and `DecompB`; then the readers' two facts. This bounds no number by itself: those
+premises are open. -/
 theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -62,10 +65,10 @@ theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.
   exact ksLin2_deployed_open bR fin wE join final w recRead
     (readsBack_recTr _ _ bL _ aux nOf rest rfl) hP hRT
 
-/-- **`BitsLin2` at the deployment's dense statements, at the coin server's record**: `bitsLin2_deployed_open` with
-`ReadsBack` from `readsBack_recTr`. It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision
-assumptions, and `ksLin2_deployed_rec`'s open premises: a bound on a number under named premises, not a proved
-security level. -/
+/-- **`BitsLin2` at the deployment's dense statements, at the model of the coin server's record (`recTr`)**:
+`bitsLin2_deployed_open` with `ReadsBack` from `readsBack_recTr`. It reads `StrictBirthday` and `ExpectedCR`, the named
+SHA-512 collision assumptions, and `ksLin2_deployed_rec`'s open premises: a bound on a number under named premises, not
+a proved security level. -/
 theorem bitsLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

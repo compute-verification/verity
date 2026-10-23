@@ -771,8 +771,8 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the coin server's record, with the slots' commit strings proved**: `ksLin2_deployed_slots` with
-`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+/-- **`KSLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+`ksLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -795,8 +795,8 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
   intro bR L Bd D bL hP
   exact ksLin2_deployed_slots b aux nOf rest fin wE join final w hP hmSlotsCommit_of_full
 
-/-- **`BitsLin2` at the coin server's record, with the slots' commit strings proved**: `bitsLin2_deployed_slots` with
-`HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
+/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+`bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

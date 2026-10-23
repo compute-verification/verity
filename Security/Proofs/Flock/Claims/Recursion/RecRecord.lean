@@ -13,9 +13,13 @@ At the deployment's model (`recTr`, `recRead`) the coin server's transcript of t
 round's message as its one commit string (none where the message is empty: `RecVStar.innerCommits` allows at most one
 a round), the `nOf x i` values its coin drew, and everything else (stream, index, tops, level-0 count, the record's
 other fields) whatever `aux` and `rest` say. `recRead` reads the transcript back to each round's message and drawn
-values, at every accepted run (`readsBack_recTr`). That the deployed record is this one is a difftest
+values, at every accepted run (`readsBack_recTr`). The difftest
 (`verity/ml/flock/tests/test_lean_rec_record.py`: `recordW` writes `rec_live.record_bytes`' bytes of the honest
-records, and `readRecord` reads them), not a theorem: the record's writer is Python.
+records, and `readRecord` reads them) ties the format to the deployed writer, not the round list. The coin server's
+record (`rec_live`'s `round`) lists only the rep streams' rounds, each with its tops and level-0 copies in their own
+fields and only its `c_k` under `commits`. Round 0's roots and coins are in its `link` field, and the last round is
+absent. `recTr` lists every inner round, with each whole message as its one commit string. So `recTr` is not yet the
+deployed record, and a premise read at `cmtTr recRead` is about the model's record, not the coin server's.
 -/
 
 namespace Flock.RecRecord
