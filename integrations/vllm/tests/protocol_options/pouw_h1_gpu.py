@@ -55,7 +55,12 @@ the period's (`pouw_h1_served.Weights`, registered from the served model under t
 ``--commit`` (fill, ``--served``, in-process coins) serves the 64's window again with the Commit in the engine
 (`pouw_h1_commit.attach`: the committer, the int8 source at each linear's Int8RowQuant_v1 site and its tap) into
 ``<out>/commit/``, each call's A table held to the Commit's AROW and each round over its input ids (``roots1``), and
-records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``).
+records the peak GPU memory and step time of the plain run, the window and the window with the Commit (``commit``). Its
+B is registered once, at the first window's install under a fresh weights key, and reused by the later windows. Each
+Commit window is also held to core's ROOTS1 steps over its own evidence (`core_verdict`: `pouw_h1_challenger.manifest_reason`,
+`credit._a_link`, `credit._arow`), which it saves for ``--core-from DIR`` on a CPU node. ``--negatives`` then serves the
+window twice more with an honest Commit, H1 handed all-zero A codes or one A row off (`NEGATIVES`), each to be refused at
+``arow``. ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -66,6 +71,7 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import gc
 import gzip
 import hashlib
 import json
@@ -360,7 +366,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
     from verity_vllm.protocol_options import pouw_h1_served as SV
 
-    decl = PH.FILL
+    decl = declared_of(a)
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
     target = TargetProfile.from_device().with_overrides(int8_exact="all")
@@ -380,6 +386,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     wkey = Path(a.weights_key).read_bytes() if a.weights_key else None
     if wkey is not None and len(wkey) != 32:
         raise ValueError(f"--weights-key {a.weights_key}: the period's weights key is 32 bytes, not {len(wkey)}")
+    if a.commit and wkey is None:
+        # B registered once at the first window's install, out of its steps' time, and its `Weights` reused after
+        wkey = os.urandom(32)
+    shared: list[Any] = [None]
     if a.weights_only:
         served = SV.Served(prover=a.prover_dir, weights_key=wkey)
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
@@ -419,22 +429,32 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     print(f"[fill] plain {json.dumps(doc['plain'])}", flush=True)
     layers = None
 
-    def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
+    def window(name: str, want: list[dict[str, Any]], tdir: Path, commit: bool = False, edit: str | None = None
+               ) -> dict[str, Any]:
         nonlocal layers
+        from verity_vllm.engine.hooks import Hooks
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         com = tap = None
-        if name == "commit":
+        if commit:
             from verity_vllm.protocol_options import pouw_h1_commit as CT
             com, _src, tap = CT.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
         # in-process coins open no session, so a local window's key is its own (`Served.key`)
-        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, tap=tap, window=None if a.challenger else os.urandom(64))
+        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, weights=shared[0], tap=tap,
+                            window=None if a.challenger else os.urandom(64))
                   if a.served and name != "solo" else None)
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
-        out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
+        out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1), "host": host_memory()}
+        if served is not None and served.weights is not None:
+            shared[0] = served.weights
+        lie = Hooks(f"roots1-{edit}")
+        if edit is not None:
+            out["edit"], ed = edit, editor(edit)
+            for m in layers:
+                lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
         bad: list[str] = []
         stamps: dict[int, float] = {}
@@ -472,11 +492,12 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             else:
                 h1.close()
                 out["close_s"] = round(time.monotonic() - end, 1)
-                closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad)
+                closed_measures(h1, out, len(want), lambda w: layers[w].weight, bad, decl)
                 if tap is not None:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
         finally:
+            lie.uninstall()
             comp.close()
             if com is not None:
                 com.close()
@@ -484,23 +505,42 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if a.handoff:
             out["hook_bad"] = bad[:20]
             return out
-        return released(name, h1, out, served, tdir, bool(a.challenger), register=not a.commit)
+        out = released(name, h1, out, served, tdir, bool(a.challenger), register=not a.commit)
+        if tap is not None:
+            out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
+        out["host"] = {"install": out["host"], "end": host_memory()}
+        print(f"[fill] {name} core {json.dumps(out.get('core'), default=str)[:2000]} host {json.dumps(out['host'])}",
+              flush=True)
+        return out
 
     if a.commit:
-        doc["h1_commit"] = window("commit", plain, outdir / "commit")
+        doc["h1_commit"] = window("commit", plain, outdir / "commit", commit=True)
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
+        if a.negatives:
+            doc["negatives"] = {}
+            for edit in NEGATIVES:
+                got = window(f"commit-{edit}", plain, outdir / f"commit-{edit}", commit=True, edit=edit)
+                doc["negatives"][edit] = {**negative_verdict(got), "window": got}
+                gc.collect()
+                (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     doc["h1"] = window("fill", plain, outdir)
     if a.handoff:
         return hand_off(pouw.h1_run(entry_name), a, doc)
     if a.commit:
-        doc["h1_solo"] = {"skipped": "--commit measures the 64's window with and without the Commit"}
+        doc["h1_solo"] = {"skipped": "--commit measures the fill window with and without the Commit"}
         h, c = doc["h1"], doc["h1_commit"]
+        negs = {k: {x: v[x] for x in ("refused", "arow", "roots1")} for k, v in (doc.get("negatives") or {}).items()}
+        doc["host"] = host_memory()
         doc["commit"] = {"step_s": {"plain_mean": doc["plain"]["fill"]["step_s"], "h1_decode_median": h["decode_step_s_median"],
                                     "h1_commit_decode_median": c["decode_step_s_median"], "h1_mean": h["serve"]["step_s"],
-                                    "h1_commit_mean": c["serve"]["step_s"]},
+                                    "h1_commit_mean": c["serve"]["step_s"], "h1_commit_steps": c["step_s"]},
                          "gpu": {"plain": doc["plain"]["gpu"], "h1": h["gpu"], "h1_commit": c["gpu"]},
+                         "host": doc["host"], "window": doc["public"],
                          "layout_static": c.get("layout_static"), "same_tokens": c["same_tokens"],
-                         "roots1": c.get("roots1"), "committer": c.get("committer"), "ok": c["ok"]}
+                         "roots1": c.get("roots1"), "core": c.get("core"), "negatives": negs,
+                         "committer": c.get("committer"),
+                         "ok": bool(c["ok"] and (c.get("core") or {}).get("tied")
+                                    and all(v["refused"] for v in negs.values()) and len(negs) == len(NEGATIVES) * a.negatives)}
         print(f"[fill] commit {json.dumps(doc['commit'], default=str)[:3000]}", flush=True)
     elif a.challenger:
         doc["h1_solo"] = {"skipped": "the challenger serves one session, the 64's window"}
@@ -523,11 +563,12 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
             "static_schedule": static_check(got, cap)}
 
 
-def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad: list[str]) -> None:
+def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad: list[str], decl: Any = None) -> None:
     """A fill window's measures once closed (`want` requests served, linear w's weight `weight_of(w)`, the listener's
-    complaints `bad`), into `out`, and its ``ok`` before its release."""
+    complaints `bad`, `decl` its declaration, default `pouw_h1.FILL`), into `out`, and its ``ok`` before its release."""
     from verity_vllm.protocol_options import pouw_h1 as PH
-    decl, cap = PH.FILL, PH.FILL.max_tokens
+    decl = decl or PH.FILL
+    cap = decl.max_tokens
     rows = h1.step_rows()
     decl_w = decl if want == decl.slots else PH.Static(decl.prompt_lens[:want], cap, decl.rows, decl.steps)
     zs = []
@@ -632,6 +673,114 @@ def gpu_peak() -> dict[str, float]:
            "device_used_gib": round((total - free) / 2**30, 3), "device_total_gib": round(total / 2**30, 3)}
     torch.cuda.reset_peak_memory_stats()
     return out
+
+
+def host_memory() -> dict[str, float | None]:
+    """This process's peak and current resident GiB (``VmHWM``, ``VmRSS``)."""
+    got = {}
+    for line in Path("/proc/self/status").read_text().splitlines():
+        k, _, v = line.partition(":")
+        if k in ("VmHWM", "VmRSS"):
+            got[k] = round(int(v.split()[0]) / 2**20, 2)
+    return {"peak_gib": got.get("VmHWM"), "rss_gib": got.get("VmRSS")}
+
+
+def declared_of(a: argparse.Namespace) -> Any:
+    """The fill workload's declaration: `pouw_h1.FILL`, or with ``--declare SLOTS,CAP,T,S`` SLOTS one-token prompts at
+    cap CAP, T rows a call and S steps (`pouw_h1.Static`)."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+    if not a.declare:
+        return PH.FILL
+    slots, cap, rows, steps = a.declare
+    return PH.Static((1,) * slots, cap, rows, steps)
+
+
+#: the windows ``--negatives`` serves with the Commit in the engine, each handing H1 A codes other than the ones the
+#: Commit acquires (`test_pouw_h1_commit`'s edits, here on the served engine)
+NEGATIVES = ("a-zero", "a-row-off")
+#: a window's core evidence for ``--core-from`` (`core_tie`)
+CORE_EVIDENCE = "core_evidence.json.gz"
+
+
+def editor(kind: str) -> Any:
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe), or
+    row 1's first code moved off by one in the first call of two rows or more (``a-row-off``)."""
+    done = [False]
+
+    def edit(xq: Any) -> Any:
+        if kind == "a-zero":
+            return torch.zeros_like(xq)
+        if done[0] or xq.shape[0] < 2:
+            return xq
+        done[0], xq = True, xq.clone()
+        xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
+        return xq
+    return edit
+
+
+def edited(orig: Any, edit: Any) -> Any:
+    """A layer's ``observe`` (H1's) handed ``edit`` of the arm's codes; the served y and z/y records are the arm's own."""
+    def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> Any:
+        return orig(layer, edit(xq), s_a, y, z)
+    return observe
+
+
+def core_tie(record: dict[str, Any], program: Any, tdir: Path) -> dict[str, Any]:
+    """`core_verdict` of a window's own evidence: its record (commitment and manifest, `pouw_h1.CALLS_FILE`'s) and its
+    declared Program's descriptor (`pouw_h1_served.descriptor`), saved to ``<tdir>/CORE_EVIDENCE`` for ``--core-from``."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    c = record["commitment"]
+    ev = {"commitment": c, "calls": record["calls"], "descriptor": SV.descriptor(program).hex()}
+    tdir.mkdir(parents=True, exist_ok=True)
+    (tdir / CORE_EVIDENCE).write_bytes(gzip.compress(json.dumps(ev).encode()))
+    return core_verdict(ev)
+
+
+def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
+    """Core credit's ROOTS1 steps over a window's evidence, as `credit.window` runs them once its challenger steps pass
+    (a window under in-process coins has none to pass): the record one manifest under calls_root with the Commit's record
+    (`pouw_h1_challenger.manifest_reason`), each A table and input-ids table committed whole by its round's root
+    (`credit._a_link`), and each the Commit's value of its rows (`credit._arow`). ``tied`` when none refuses."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+    c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
+    entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
+    layout, why = CR.layout_of(raw)
+    got, cwhy = CR.commit_of(c.get("commit"))
+    out: dict[str, Any] = {"manifest": PHC.manifest_reason({"commitment": c, "calls": ev["calls"]}),
+                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+    out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
+    out["tied"] = all(v is None for v in out.values())
+    out["commit_values"] = len(got[1]) if got else None
+    return out
+
+
+def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
+    """A negative window's outcome: refused by core at ``arow`` (an A table not the Commit's value of its rows), the window
+    otherwise one manifest whose A tables its round roots commit, its Commit honest (its tap refused nothing and
+    registered trees of its own for the edited rows), and untied by the serving process (``details.roots1``)."""
+    core, r1 = out.get("core") or {}, out.get("roots1") or {}
+    arow = core.get("arow")
+    refused = bool(arow and arow[0] == "arow" and "is not the Commit's" in arow[1] and core.get("manifest") is None
+                   and core.get("a_link") is None and r1.get("reason") and r1.get("own_trees"))
+    return {"refused": refused, "arow": arow, "roots1": r1.get("reason"), "own_trees": r1.get("own_trees"),
+            "manifest": core.get("manifest"), "a_link": core.get("a_link"), "same_tokens": out.get("same_tokens")}
+
+
+def core_from(directory: str, out: str) -> dict[str, Any]:
+    """No GPU: `core_verdict` of each window's saved evidence under `directory` (``*/CORE_EVIDENCE``)."""
+    doc: dict[str, Any] = {"schema": SCHEMA + "/core", "argv": sys.argv, "windows": {}}
+    for f in sorted(Path(directory).glob(f"*/{CORE_EVIDENCE}")):
+        doc["windows"][f.parent.name] = core_verdict(json.loads(gzip.decompress(f.read_bytes())))
+    w = doc["windows"]
+    doc["ok"] = bool(w.get("commit", {}).get("tied") and all(
+        not v["tied"] and (v["arow"] or ("",))[0] == "arow" and v["manifest"] is None and v["a_link"] is None
+        for k, v in w.items() if k.startswith("commit-")))
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "pouw_h1_core.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    print(f"POUW-H1-CORE {'OK' if doc['ok'] else 'FAIL'} " + " ".join(
+        f"{k}={'tied' if v['tied'] else (v['arow'] or v['a_link'] or v['manifest'])}" for k, v in w.items()), flush=True)
+    return doc
 
 
 def fill_record(doc: dict[str, Any], outdir: Path) -> dict[str, Any]:
@@ -855,9 +1004,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served, in-process coins: after the 64's window, serve it again with the Commit in "
                          "the engine (pouw_h1_commit, ROOTS1) into <out>/commit/, and record each window's peak GPU memory "
                          "and step time beside the plain run's and the Commit's tie (no solo window, no --registered files)")
+    ap.add_argument("--declare", metavar="SLOTS,CAP,T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
+                    help="fill: serve SLOTS one-token prompts at cap CAP, T rows a call, S steps (pouw_h1.Static) in place "
+                         "of pouw_h1.FILL's 64,16,64,18")
+    ap.add_argument("--negatives", action="store_true",
+                    help="with --commit: after the honest window, serve one whose A codes H1 is handed are all zero and "
+                         "one with a row off, each with the Commit in the engine (NEGATIVES), and hold each to core's "
+                         "ROOTS1 steps (core_verdict)")
+    ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
+                                                       f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
+    if a.core_from:
+        return 0 if core_from(a.core_from, a.out)["ok"] else 1
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
         ap.error("--commit is the fill workload's, with --served, without --challenger or --handoff")
+    if a.negatives and not a.commit:
+        ap.error("--negatives is --commit's")
+    if a.declare and (a.workload != "fill" or len(a.declare) != 4):
+        ap.error("--declare is the fill workload's, SLOTS,CAP,T,S")
     if a.close_from:
         if a.stream_fd is None:
             ap.error("--close-from needs --stream-fd (the session's stream the holder took)")
