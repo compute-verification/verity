@@ -22,13 +22,12 @@ def _core(program, value, words, key, nonce, keep_rows=False, **binding):
 
 
 def test_salts_are_hm96_salts_across_a_chacha_pass():
-    """Row j's salt is `hm96_salt(key, nonce, j)`, a u64 nonce past 2^32 included, and rows past the first NumPy pass of
-    ChaCha20 blocks too."""
+    """Row j's salt is `hm96_salt(key, nonce, j)`, a u64 nonce past 2^32 included, and rows past the first pass too."""
     for nonce in (0, 7, (1 << 42) + 3, (1 << 63) + 5):
-        assert NR.salts(KEY, nonce, 3).tobytes() == b"".join(hm96_salt(KEY, nonce, j) for j in range(3))
-    n = NR._BLOCKS // 3 + 4
+        assert NR.salts(KEY, nonce, 3) == b"".join(hm96_salt(KEY, nonce, j) for j in range(3))
+    n = NR._SALTED + 4
     got = NR.salts(KEY, 11, n)
-    assert all(got[j].tobytes() == hm96_salt(KEY, 11, j) for j in range(n - 8, n))
+    assert len(got) == 192 * n and all(got[192 * j:192 * (j + 1)] == hm96_salt(KEY, 11, j) for j in range(n - 8, n))
 
 
 @pytest.mark.parametrize("n,w,binding", [(1, 1, {}), (2, 2, {"window": WINDOW}), (3, 66, {}), (5, 1026, {"window": WINDOW}),

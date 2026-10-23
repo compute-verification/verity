@@ -5,9 +5,9 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 * **The rows' digests.** Row j's bit row is its words little-endian, so ``x_j = SHA-512(sha512_row_v2_prefix(16 W) ||
   words[j])`` is hashed straight from the array's memory, rows split among threads (`hashlib` releases the GIL on a
   buffer of 2 KiB or more, which every H1 row is: a z/y record is 6 KiB, an A or B row K + 4 bytes).
-* **The salts.** ChaCha20 blocks 3j, 3j + 1, 3j + 2 under the key at the nonce, the block function `audit.chacha20_block`
-  (64-bit counter in words 12 and 13, 64-bit nonce in 14 and 15), every row's at once over NumPy.
-* **The commit strings.** ``b = x ⊕ M y`` gathers hm96's byte tables over every row (`hiding.HidingLeaves.masks`), ``c``
+* **The salts.** ChaCha20 blocks 3j, 3j + 1, 3j + 2 under the key at the nonce, every row's at once
+  (`crypto.chacha20.keystream`, `audit.chacha20_block`'s layout).
+* **The commit strings.** ``b = x ⊕ M y`` gathers hm96's byte tables over every row (`hm96.batch.masks`), ``c``
   and the tree leaf hash from the instance's one-block prefixes, and the frame-v3-sha512 leaves, nodes and pads from
   their tag's and domain's constant prefix (`merkle._hash`'s message), so a row costs a few short SHA-512 calls.
 * **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are drawn again on read
@@ -35,18 +35,15 @@ import numpy as np
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
+from verity.ml.commitments.hm96 import batch
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-
-from verity_vllm.commit.hiding import HidingLeaves
+from verity.ml.crypto import chacha20
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
-_SIGMA = np.frombuffer(b"expand 32-byte k", dtype="<u4")
-_QR = ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13),
-       (3, 4, 9, 14))
-#: ChaCha20 blocks a pass, rows a digest task
-_BLOCKS, _ROWS = 1 << 16, 1 << 11
+#: rows a salt pass, rows a digest task
+_SALTED, _ROWS = 1 << 16, 1 << 11
 
 
 @cache
@@ -54,38 +51,9 @@ def _pool() -> ThreadPoolExecutor:
     return ThreadPoolExecutor(max(1, min(16, os.cpu_count() or 1)), thread_name_prefix="h1-registered")
 
 
-@cache
-def _hiding() -> HidingLeaves:
-    return HidingLeaves(instance=_INST)
-
-
-def _rotl(v: np.ndarray, n: int) -> np.ndarray:
-    return (v << np.uint32(n)) | (v >> np.uint32(32 - n))
-
-
-def salts(key: bytes, nonce: int, n: int) -> np.ndarray:
-    """Rows 0 .. n - 1's salts ``(n, 192)`` u8: row j's `audit.hm96_salt(key, nonce, j)`."""
-    if len(key) != 32 or not 0 <= nonce < 1 << 64 or 3 * n > 1 << 64:
-        raise ValueError("a 32-byte key, a u64 nonce and at most 2^64 blocks")
-    out = np.empty((3 * n, 16), "<u4")
-    for lo in range(0, 3 * n, _BLOCKS):
-        m = min(_BLOCKS, 3 * n - lo)
-        ctr = np.arange(lo, lo + m, dtype=np.uint64)
-        s = np.empty((16, m), np.uint32)
-        s[0:4] = _SIGMA[:, None]
-        s[4:12] = np.frombuffer(key, "<u4")[:, None]
-        s[12], s[13] = (ctr & np.uint64(0xFFFFFFFF)).astype(np.uint32), (ctr >> np.uint64(32)).astype(np.uint32)
-        s[14], s[15] = nonce & 0xFFFFFFFF, nonce >> 32
-        x = s.copy()
-        for _ in range(10):
-            for a, b, c, d in _QR:
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 16)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 12)  # noqa: E702
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 8)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 7)  # noqa: E702
-        x += s
-        out[lo:lo + m] = x.T
-    return out.view(np.uint8).reshape(n, 3 * 64)
+def salts(key: bytes, nonce: int, n: int) -> bytes:
+    """Rows 0 .. n - 1's salts, concatenated: row j's `audit.hm96_salt(key, nonce, j)`."""
+    return b"".join(chacha20.keystream(key, nonce, 3 * lo, 3 * min(_SALTED, n - lo)) for lo in range(0, n, _SALTED))
 
 
 def _digests(words: np.ndarray, lo: int, hi: int, head: Any, out: np.ndarray) -> None:
@@ -185,9 +153,8 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = words.shape
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
-    y = salts(key, nonce, n)
-    b = (row_digests(words) ^ _hiding().masks(y.tobytes(), n)).tobytes()
-    ys = y.tobytes()
+    ys = salts(key, nonce, n)
+    b = (row_digests(words) ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
     frame, schema = _Frame(dom.domain_id), _part(G.SCHEMA_V2.encode())
     bcs, leaves = [], []
