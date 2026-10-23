@@ -204,17 +204,19 @@ atomically by all of them at once. -/
 theorem parGenWith_eq {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) :
     parGenWith ctx f n = parGen (f (ctx ())) n := rfl
 
-/-- `mulMap` in tasks, each with its own table of `r`. -/
+/-- `mulMap` in tasks, each with its own table of `r`, expanded from one `nibTable r` they share. -/
 def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
-  if t.size < 2048 then parMap (· * r) t else parGenWith (fun _ => F128.mulTable r) (fun tb i => F128.mulBy tb t[i]!) t.size
+  if t.size < 2048 then parMap (· * r) t else
+    let nb := F128.nibTable r
+    parGenWith (fun _ => F128.expandNib nb) (fun tb i => F128.mulBy tb t[i]!) t.size
 
 theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
   unfold mulMapPar
   split
   · exact parMap_eq _ t
   · rw [parGenWith_eq]
-    show parMap (F128.mulBy (F128.mulTable r)) t = _
-    rw [parMap_eq]
+    show parMap (F128.mulBy (F128.expandNib (F128.nibTable r))) t = _
+    rw [parMap_eq, F128.expandNib_nibTable]
     exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
 
 /-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table

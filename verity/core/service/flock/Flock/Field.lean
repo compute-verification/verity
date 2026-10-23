@@ -606,6 +606,17 @@ def mulTableLFast (r : F128) : Array F128 :=
   simp only [nibTableL]
   rw [h, nib_split, byteMono_xor, F128.mul_add]
 
+/-- `mulTableFast`'s additions over a `nibTable` already built: tasks that each need their own `mulTable r` share
+one `nibTable r` and pay no product. -/
+def expandNib (n : Array F128) : Array F128 :=
+  (Array.range 4096).map fun k => n[32 * (k / 256) + k % 16]! + n[32 * (k / 256) + 16 + k / 16 % 16]!
+
+theorem expandNib_nibTable (r : F128) : expandNib (nibTable r) = mulTable r := by
+  rw [mulTable_eq_fast]
+  apply Array.ext (by simp [expandNib, mulTableFast])
+  intro k h1 _
+  simp only [expandNib, mulTableFast, Array.getElem_map, Array.getElem_range, Array.getElem_ofFn]
+
 /-- `x^i` for `i < 128`. -/
 def monomial (i : Nat) : F128 :=
   if i < 64 then ⟨(1 : UInt64) <<< i.toUInt64, 0⟩ else ⟨0, (1 : UInt64) <<< (i - 64).toUInt64⟩
