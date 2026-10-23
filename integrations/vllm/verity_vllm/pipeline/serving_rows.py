@@ -134,11 +134,9 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 steps: Sequence[int] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
     prefix) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition; and its instance count.  Rows are
-    matched by the template's word (:func:`template`), so two templates that compute one word Definition are refused, as is a row
-    two templates hold instances of unless each is a different part of it (``PARTS``).  Fixed by the Build's Programs before
-    serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program (`pipeline.tp.serving_rows`)."""
-    from verity_vllm.query.program_view import spec_base
-
+    matched by the template's word (:func:`template`), so two templates that compute one word Definition are refused.  Fixed by
+    the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
+    (`pipeline.tp.serving_rows`)."""
     ts = [template(t) for t in tmpls]
     want: dict[str, int] = {}
     for k, t in enumerate(ts):
@@ -162,8 +160,8 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
-            fams = [spec_base(ts[k].word) for k, _ in hits]
-            if len(hits) > 1 and (len(set(fams)) < len(fams) or any(part(ts[k].word, r["spec"]) is None for k, _ in hits)):
+            ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
+            if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)):
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
                                  f"or one member per part of it (PARTS)")
             for k, n in hits:

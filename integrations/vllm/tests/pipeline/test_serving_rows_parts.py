@@ -84,6 +84,7 @@ def row(monkeypatch):
                 return vals[member][lo:hi], None
 
         monkeypatch.setattr(SRW, "ProgramIndex", Index)
+        monkeypatch.setattr(SRW, "index_of", lambda inst, _reuse, **kw: Index(inst, **kw), raising=False)
         return {"spec": spec, "store": Store(), "weights": lambda f, lo, hi: w[lo:hi], "w": w, **vals}
     return make
 
