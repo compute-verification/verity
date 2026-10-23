@@ -18,8 +18,8 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
 * `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
   (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
 * `LeanRelease.ofLoop_progChecks_sizes`: `ofLoop_progChecks` with its size premises (`hS`, `hP`, `hRow`) from that check.
-* **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf`, with no `ProgReads`, and
-  `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
+* **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
+  with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
   level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
   `final_c'` (`hL0`: Rust's firewall sends that round, `check_self`, at the inner proof's label).
@@ -154,8 +154,9 @@ end LeanRelease
 open FlockSoundness.Discharge
 
 /-- **`Flock.zk_server_lean_loop` at the session loop's own frames** (`LeanRelease.ofLoop`): the transport's frame
-state is `Loop.progOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`), and the deployed frame's
-state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion here, at every `x` the loop
+states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, so `ProgReads` is a theorem (`ofLoop_progReads`),
+and the deployed frame's state is that one but for `stopped` (`ProgChecks`, `ofLoop_progChecks_sizes`), a conclusion
+here, at every `x` the loop
 serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
 the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
