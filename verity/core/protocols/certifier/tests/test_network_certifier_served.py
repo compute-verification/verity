@@ -269,7 +269,7 @@ def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
     """The served unit holds N2's checks and the served counts as one gate, the spec declares the window's sync and the
     served sizes public, and a served link has no egress occupancy profile and one T and τ_b on both ends."""
     lw = Run(tmp_path).lw
-    assert lw.unit.id == "NetworkServedLinkWindow_v1{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
+    assert lw.unit.id == "NetworkServedLinkWindow_v2{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
     assert lw.spec.public == PUBLIC_SERVED and {"sync", "served"} <= {p.item for p in lw.spec.public}
     assert lw.spec.digest() != replace(lw, served=SV.ServedProfile(4, 1, WINDOWS)).spec.digest()
     assert replace(lw, served=replace(PROFILE, own=1)).unit.id.endswith("SERVED=(8,3,1,2,2,1)}")

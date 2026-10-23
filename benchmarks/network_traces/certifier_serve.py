@@ -92,11 +92,12 @@ frame too, so it refuses every window of a run with the salt on.
   starts vLLM on this host's GPU first (`active_replay.start_vllm`).
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
-(`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head and certificate,
-or the link-window the signer refused), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
-client's `peer.json`, `serve.json` and `check.json`. Records, certificates and the shim's events are witness, kept behind
-the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. No salt is written, only
-its SHA-512 (`active_replay.fingerprint`).
+(`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
+certifier's salt for it and certificate, or the link-window the signer refused), `proxy.json.gz`, the shim's
+`server.json` and `server.events.gz`, the client's `peer.json`, `serve.json` and `check.json`. Records, certificates,
+the certifier's salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal
+publishes them so that its check can be replayed. No PoUW salt is written, only its SHA-512
+(`active_replay.fingerprint`).
 """
 
 from __future__ import annotations
@@ -197,7 +198,8 @@ def read_public(doc: dict) -> LmsKey:
     return LmsKey(lms.Params(*doc["params"]), bytes.fromhex(doc["public"]))
 
 
-# Certified records on disk: one JSON line each, the head's and the certificate's fields, bytes in hex.
+# Certified records on disk: one JSON line each, the head's and the certificate's fields and the certifier's salt for
+# the head (`salt_c`), bytes in hex.
 
 _BYTES = {"parameters", "root", "key_id", "digest", "signature"}
 
@@ -223,12 +225,13 @@ def _dec(field: str, value):
 
 
 def certified_json(record: CertifiedRecord) -> dict:
-    return {part: {f: _enc(getattr(obj, f)) for f in type(obj).__slots__}
-            for part, obj in (("head", record.head), ("certificate", record.certificate))}
+    return {"salt_c": record.salt.hex(),
+            **{part: {f: _enc(getattr(obj, f)) for f in type(obj).__slots__}
+               for part, obj in (("head", record.head), ("certificate", record.certificate))}}
 
 
 def certified_from_json(doc: dict) -> CertifiedRecord:
-    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}),
+    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"]),
                            Certificate(**{f: _dec(f, v) for f, v in doc["certificate"].items()}))
 
 
