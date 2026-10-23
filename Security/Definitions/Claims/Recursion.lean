@@ -411,7 +411,8 @@ pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2
 type); its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
 error and no other; and the inputs of the SHA-512 evaluations the V* setup makes outside the oracle at a V* statement
 (`setup`: its registered reads' leaves and climbs, and the roots it recomputes from public data, a function of the
-statement's bytes), none by default. -/
+statement's bytes), none by default; and the inputs of the SHA-512 evaluations the inner verifier's setup makes at an
+inner statement (`innerSetup`, reading no message and no coin: the inner statement's own), none by default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -433,6 +434,7 @@ structure Deploy (Coin : Type) where
   P : Flock.Wit → Prover Tape
   δc : (Msg → Msg) → Msg → ℝ
   setup : Msg → List Msg := fun _ => []
+  innerSetup : Msg → List Msg := fun _ => []
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 

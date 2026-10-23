@@ -67,6 +67,8 @@ theorem ebind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β}
   | error e => rw [hx] at h; cases h
   | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
+instance : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
+
 /-- Not one of hm96's prefixes at byte 7. -/
 def untagged (b : ByteArray) : Bool := decide (¬ HmTagged (Claims.toMsg b))
 
@@ -90,8 +92,9 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
   unfold Stmt.setupHiddenWith at hs
   dsimp only at hs
   repeat' (first
-    | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs; try (cases hx; done);
-        try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
+    | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
+       try (cases hx; done)
+       try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
     | (split at hs))
 
 theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
@@ -116,10 +119,13 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
   unfold Stmt.setupTablesWith at hs
   dsimp only at hs
   repeat' (first
-    | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs; try (cases hx; done);
-        try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag);
-        try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx; simp only [hhid, ↓reduceIte] at ha;
-          refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha; exact htag))
+    | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
+       try (cases hx; done)
+       try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
+       try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx
+            simp only [hhid, ↓reduceIte] at ha
+            refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
+            exact htag))
     | (split at hs))
 
 /-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
