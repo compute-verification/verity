@@ -1,5 +1,6 @@
 import Flock.TmplSplit
 import Flock.NetAt
+import Flock.TmplRows
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -17,7 +18,9 @@ net name, read a line at a time. One `PHASE {json}` line per phase on stdout: mi
 `flock-tmpl unrollat TMPL [--mode MODE] [--phases]`: `Tmpl.unrollAt` at the layout (default `iv/hybrid/4`), what the
 templated statement's read runs, timed whole or a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`,
 `placed`, `Sparse.ofRows`); `flock-tmpl flat CIRCUIT NAME`: `Net.parse` on the circuit file's block of net `NAME`, what
-the flat statement's read runs in its place.
+the flat statement's read runs in its place. `flock-tmpl checks TMPL`: the description checks (`Tmpl.wellFormed`,
+`Tmpl.ordered`, `Tmpl.inputsT`) timed one at a time, then the unrolled input-row checks they stand for (`Net.ofRows`' input
+rows and `Net.inputsOk` on `Tmpl.rows`), which must agree.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
@@ -205,6 +208,24 @@ def main (args : List String) : IO UInt32 := do
     | .ok n =>
       report "flat_parse" t0 [("useful", toJson n.useful), ("nnz", toJson ((n.a.data.size + n.b.data.size) / 4))]
       return 0
+  | ["checks", tp] =>
+    let some t ← readTmpl tp | return 1
+    let mut ok := true
+    for (name, check) in [("well_formed", Tmpl.Tmpl.wellFormed), ("ordered", Tmpl.Tmpl.ordered),
+        ("inputs_t", Tmpl.Tmpl.inputsT)] do
+      let t0 ← IO.monoNanosNow
+      let v := check t
+      report name t0 [("ok", toJson v)]
+      ok := ok && v
+    let t0 ← IO.monoNanosNow
+    match t.rows with
+    | .error e => report "unrolled_inputs" t0 [("error", Json.str e)]; return 1
+    | .ok acc =>
+      let rowsOk := (List.range t.inCols).all fun i =>
+        (acc.ra.getD i #[] == #[i] && acc.rb.getD i #[] == #[i]) || ((acc.ra.getD i #[]).isEmpty && (acc.rb.getD i #[]).isEmpty)
+      let v := rowsOk && Net.inputsOk t.inGroups acc.ra acc.rb
+      report "unrolled_inputs" t0 [("ok", toJson v), ("in_cols", toJson t.inCols)]
+      return if ok && v then 0 else 1
   | "layout" :: tp :: names =>
     let some t ← readTmpl tp | return 1
     let mut ok := true
@@ -266,5 +287,5 @@ def main (args : List String) : IO UInt32 := do
   | _ =>
     IO.eprintln ("usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | " ++
       "flock-tmpl layout TMPL [MODE…] | flock-tmpl fold TMPL [--mode MODE] [--split [--plain]] [--ref] | " ++
-      "flock-tmpl unrollat TMPL [--mode MODE] [--phases] | flock-tmpl flat CIRCUIT NAME")
+      "flock-tmpl unrollat TMPL [--mode MODE] [--phases] | flock-tmpl flat CIRCUIT NAME | flock-tmpl checks TMPL")
     return 2

@@ -1,0 +1,59 @@
+/-
+`Tmpl.inputsT` against `Tmpl.unroll`: `Flock.Test.Tmpl`'s unit, its input rows written by copies of a self-row Definition
+(`SELF`, directly or through a block of three) instead of the root's own rows, passes and unrolls to the same text, with
+input padding written by copies of an empty Definition. The forms it refuses, each one `Net.ofRows` refuses on the
+unrolled rows too: a copy in the input rows of a Definition writing a row that is not a self row, and input port bits
+left without a self row (copies too few, or not side by side).
+-/
+import Flock.Test.Tmpl
+import Flock.TmplRows
+
+namespace Flock.Test.TmplRows
+
+open Flock Flock.Test.Tmpl
+
+/-- `Flock.Test.Tmpl.header` with the root at Definition `root`. -/
+def headerAt (root : Nat) : String := s!"flock-ir-tmpl/v2 t {root} 1 0 1 1 3 1 2 1 1 2"
+
+/-- Definition 0, a self row: own column 0 is `[0]·[0]`. -/
+def SELF : List String := ["DEF 1 0 1 0", "0 1 0 1 0"]
+
+/-- Definitions 1 and 2, `Flock.Test.Tmpl`'s AND and pair, the pair calling Definition 1. -/
+def andPair : List String := ["DEF 1 2 1 0", "0 1 2 1 1", "DEF 3 2 1 1", "2 2 1 0 1 5", "CALL 1 2 0 1 1 2 3 0 1 0"]
+
+/-- The root after `extra` Definitions: `Flock.Test.Tmpl.root`'s rows past the input rows, its input rows written by
+`inputs`, and the pairs at 128 and 131. -/
+def rootAt (inputs : List String) : List String :=
+  [s!"DEF 400 0 3 {inputs.length + 1}", "256 1 130 1 399", "257 1 133 1 399", "300 3 0 1 0 1 400"] ++ inputs ++
+    ["CALL 2 2 128 3 1 2 0 1 1 0"]
+
+def lines (self : List String) (extra : List String) (inputs : List String) : Array String :=
+  (headerAt (3 + (extra.filter (·.startsWith "DEF ")).length) :: self ++ andPair ++ extra ++ rootAt inputs).toArray
+
+def inputsT (ls : Array String) : Option Bool := (_root_.Flock.Tmpl.parse ls).toOption.map _root_.Flock.Tmpl.Tmpl.inputsT
+
+-- the root's own self rows (`Flock.Test.Tmpl`)
+#guard inputsT tmplLines == some true
+-- three copies of `SELF` side by side
+#guard inputsT (lines SELF [] ["CALL 0 3 0 1 0"]) == some true
+#guard bytesAgree (lines SELF [] ["CALL 0 3 0 1 0"]) flatText
+-- a block of three copies of `SELF`, copied once
+#guard inputsT (lines SELF ["DEF 3 0 0 1", "CALL 0 3 0 1 0"] ["CALL 3 1 0 3 0"]) == some true
+#guard bytesAgree (lines SELF ["DEF 3 0 0 1", "CALL 0 3 0 1 0"] ["CALL 3 1 0 3 0"]) flatText
+-- input padding past the port bits written by copies of an empty Definition
+#guard inputsT (lines SELF ["DEF 1 0 0 0"] ["CALL 0 3 0 1 0", "CALL 3 125 3 1 0"]) == some true
+#guard bytesAgree (lines SELF ["DEF 1 0 0 0"] ["CALL 0 3 0 1 0", "CALL 3 125 3 1 0"]) flatText
+-- `SELF` writing `[0]·[const]`, not a self row
+#guard inputsT (lines ["DEF 1 0 1 0", "0 1 0 1 1"] [] ["CALL 0 3 0 1 0"]) == some false
+#guard refuses (lines ["DEF 1 0 1 0", "0 1 0 1 1"] [] ["CALL 0 3 0 1 0"])
+-- two copies: port bit 2 has no self row
+#guard inputsT (lines SELF [] ["CALL 0 2 0 1 0"]) == some false
+#guard refuses (lines SELF [] ["CALL 0 2 0 1 0"])
+-- copies at 0 and 2, not side by side: port bit 1 has no self row
+#guard inputsT (lines SELF [] ["CALL 0 2 0 2 0"]) == some false
+#guard refuses (lines SELF [] ["CALL 0 2 0 2 0"])
+-- the root's row 1 reading column 2, not a self row
+#guard inputsT (header :: and2 ++ pair ++ ["DEF 400 0 6 1", "0 1 0 1 0", "1 1 2 1 1", "2 1 2 1 2", "256 1 130 1 399",
+  "257 1 133 1 399", "300 3 0 1 0 1 400", CALL]).toArray == some false
+
+end Flock.Test.TmplRows
