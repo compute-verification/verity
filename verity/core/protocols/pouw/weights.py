@@ -11,9 +11,10 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   those stay under the prover's own key.
 * `weights_roots` computes each K's root streaming, in memory independent of the row count: it cuts K's rows into aligned
   chunks of at most `CHUNK_BYTES` (a power of two rows each), and each chunk's subtree root, pads past Σn included, is
-  folded in order as `tree_levels` folds the leaves. Chunks run on `workers` processes, at most two each in flight, so
-  the auditor's host holds about ``workers * (2 * CHUNK_BYTES + a process)``: the default, `DEFAULT_WORKERS`, fits
-  vy-challenger-1 (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
+  folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
+  shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
+  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits vy-challenger-1
+  (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
@@ -24,6 +25,8 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import itertools
+import mmap
 import multiprocessing
 import os
 from collections import deque
@@ -46,7 +49,7 @@ SCHEMA = G.SCHEMA_V2
 _INST = hm96.SHA512
 #: a chunk's rows are at most this many bytes, and from 2^4 to 2^14 rows (fewer only when K's tree is smaller)
 CHUNK_BYTES = 1 << 23
-#: `weights_roots`'s processes unless the caller says: memory ~ DEFAULT_WORKERS * (2 * CHUNK_BYTES + a process)
+#: `weights_roots`'s processes unless the caller says: memory ~ (2 * DEFAULT_WORKERS + 1) * CHUNK_BYTES and the processes
 DEFAULT_WORKERS = max(1, min(4, os.cpu_count() or 1))
 #: hm96_salt's ChaCha20 blocks per leaf (a 192-byte salt)
 _SALT_BLOCKS = _INST.salt_bytes // chacha20.BLOCK_BYTES
@@ -139,71 +142,118 @@ class _Fold:
         return self.stack[0][1]
 
 
+#: each `weights_roots` call's chunk slots, shared anonymous maps its forked workers inherit
+_SLOTS: dict[int, list[mmap.mmap]] = {}
+_CALLS = itertools.count()
+
+
+def _slot_subtree(spec: tuple, ci: int, slot: tuple[int, int], nbytes: int) -> bytes:
+    """A worker's `_subtree` of chunk `ci`, its rows the first `nbytes` of slot ``(call, index)``."""
+    call, index = slot
+    return _subtree(spec, ci, memoryview(_SLOTS[call][index])[:nbytes])
+
+
+def _shape(linears, k: int) -> tuple[list[int], int, int, int, int]:
+    """K's linears, Σn, row width, tree depth and chunk bits."""
+    mine = [w for w, (_n, kw) in enumerate(linears) if kw == k]
+    total, width = sum(linears[w][0] for w in mine), 2 * b_words(k)
+    depth = merkle_depth(total)
+    return mine, total, width, depth, chunk_bits(width, depth)
+
+
 def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]], rows: Callable[[int], Iterable[bytes]],
                   key: bytes, *, progress: Callable[[int, int], None] | None = None,
                   workers: int | None = None) -> dict[int, bytes]:
     """Each K's ``<prefix>b/<K>`` root: `linears` the window's linears in its order, ``(n, K)`` each; ``rows(w)`` linear w's
-    n rows, each `row_bytes`; `key` the registration's 32-byte salt key; `workers` the processes that commit chunks
-    (`DEFAULT_WORKERS` when None, none past the caller's own at 1). Equal to `Registered.commit`'s root over the same rows
-    and salts. ValueError on a row of another width, a linear of another row count, a key not 32 bytes or `workers` < 1."""
+    n rows, each `row_bytes` (any bytes-like object); `key` the registration's 32-byte salt key; `workers` the processes
+    that commit chunks (`DEFAULT_WORKERS` when None; at 1, or where processes can't fork, the caller's own alone). Equal to
+    `Registered.commit`'s root over the same rows and salts. ValueError on a row of another width, a linear of another
+    row count, a key not 32 bytes or `workers` < 1."""
     if len(key) != 32:
         raise ValueError(f"a salt key is 32 bytes, not {len(key)}")
     workers = DEFAULT_WORKERS if workers is None else workers
     if type(workers) is not int or workers < 1:
         raise ValueError(f"workers is a positive integer, not {workers!r}")
     order = ks(linears)
+    slot_bytes = max((1 << s[4]) * s[2] for s in (_shape(linears, k) for k in order))
+    if workers == 1 or "fork" not in multiprocessing.get_all_start_methods():
+        local = [memoryview(bytearray(slot_bytes))]
+        return {k: _k_root(circuit, prefix, linears, rows, key, i, k, local, None, None, progress)
+                for i, k in enumerate(order)}
+    call = next(_CALLS)
+    _SLOTS[call] = [mmap.mmap(-1, slot_bytes) for _ in range(2 * workers + 1)]
     pool = None
-    if workers > 1:
-        method = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
-        pool = multiprocessing.get_context(method).Pool(workers)
     try:
-        return {k: _k_root(circuit, prefix, linears, rows, key, i, k, pool, workers, progress) for i, k in enumerate(order)}
+        pool = multiprocessing.get_context("fork").Pool(workers)
+        views = [memoryview(m) for m in _SLOTS[call]]
+        try:
+            return {k: _k_root(circuit, prefix, linears, rows, key, i, k, views, pool, call, progress)
+                    for i, k in enumerate(order)}
+        finally:
+            for v in views:
+                v.release()
     finally:
         if pool is not None:
             pool.terminate()
             pool.join()
+        for m in _SLOTS.pop(call):
+            m.close()
 
 
-def _k_root(circuit, prefix, linears, rows, key, i, k, pool, workers, progress) -> bytes:
-    mine = [w for w, (_n, kw) in enumerate(linears) if kw == k]
-    total, width = sum(linears[w][0] for w in mine), 2 * b_words(k)
-    depth = merkle_depth(total)
-    bits = chunk_bits(width, depth)
+def _k_root(circuit, prefix, linears, rows, key, i, k, slots, pool, call, progress) -> bytes:
+    mine, total, width, depth, bits = _shape(linears, k)
     spec = (circuit, value(prefix, k), b_words(k), total, bytes(key), B_NONCE + i, width, bits)
-    fold, pending = _Fold(_domain(*spec[:4]), bits), deque()
+    fold, pending, free = _Fold(_domain(*spec[:4]), bits), deque(), list(range(len(slots)))[::-1]
 
-    def submit(ci: int, chunk: bytes) -> None:
+    def settle() -> None:
+        result, index = pending.popleft()
+        fold.push(result.get())
+        if index is not None:
+            free.append(index)
+
+    def submit(ci: int, index: int | None, nbytes: int) -> None:
         if pool is None:
-            fold.push(_subtree(spec, ci, chunk))
+            fold.push(_subtree(spec, ci, slots[0][:nbytes] if nbytes else b""))
             return
-        pending.append(pool.apply_async(_subtree, (spec, ci, chunk)))
-        while len(pending) > 2 * workers:
-            fold.push(pending.popleft().get())
+        slot = None if index is None else (call, index)
+        pending.append((pool.apply_async(_slot_subtree if slot else _subtree,
+                                         (spec, ci, slot, nbytes) if slot else (spec, ci, b"")), index))
 
-    per, buf, ci, j = (1 << bits) * width, bytearray(), 0, 0
+    def take() -> int:
+        while not free:
+            settle()
+        return free.pop()
+
+    per, ci, j = (1 << bits) * width, 0, 0
+    index, off = take(), 0
     for w in mine:
         got = 0
         for row in rows(w):
             if len(row) != width:
                 raise ValueError(f"linear {w}'s row {got} is {len(row)} bytes, not K = {k}'s {width}")
-            buf += row
-            if len(buf) == per:
-                submit(ci, bytes(buf))
-                buf.clear()
+            slots[index][off:off + width] = memoryview(row).cast("B")
+            off += width
+            if off == per:
+                submit(ci, index, off)
                 ci += 1
+                index, off = (take(), 0) if pool is not None else (index, 0)
             if progress is not None and j % 65536 == 0:
                 progress(k, j)
             got += 1
             j += 1
         if got != linears[w][0]:
             raise ValueError(f"linear {w} gave {got} rows, not its n = {linears[w][0]}")
-    if buf:
-        submit(ci, bytes(buf))
+    if off:
+        submit(ci, index, off)
         ci += 1
+    elif pool is not None:
+        free.append(index)
     for c in range(ci, (1 << depth) >> bits):
-        submit(c, b"")
+        submit(c, None, 0)
+        while len(pending) > 2 * len(slots):
+            settle()
     while pending:
-        fold.push(pending.popleft().get())
+        settle()
     return fold.root()
 
 

@@ -133,6 +133,21 @@ def test_edge_row_counts_around_chunks(total, workers, monkeypatch):
     assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=workers) == want
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+def test_bytes_like_rows_and_slots_released(workers, monkeypatch):
+    """Rows as bytearrays or memoryviews give the bytes' roots; a call's shared slots are gone after it ends, refused
+    midway included."""
+    monkeypatch.setattr(Wt, "CHUNK_BYTES", 1)
+    shapes, rows = random_model(7)
+    want = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=1)
+    for kind in (bytearray, memoryview):
+        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: map(kind, rows[w]), KEY, workers=workers) == want
+    assert Wt._SLOTS == {}
+    with pytest.raises(ValueError, match="gave"):
+        Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w][:-1], KEY, workers=workers)
+    assert Wt._SLOTS == {}
+
+
 def test_chunk_rows_are_a_bounded_power_of_two():
     assert Wt.chunk_bits(2 * Wt.b_words(6144), 30) == 10
     assert Wt.chunk_bits(2 * Wt.b_words(256), 30) == 14
