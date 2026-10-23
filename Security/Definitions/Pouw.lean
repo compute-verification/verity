@@ -152,6 +152,10 @@ the record's headlines already cover by their own quantifier over committed valu
 `Combine`: `PouwH1Combine_v1{TILE}`'s body (`h1zy._combine_body`) on its primitives' word views, the XOR and AND trees
 as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it the receipt check `LeafChecks` reads.
 
+`Lane`: `PouwH1LaneZy_v1{TILE}`'s body (`h1zy._lane_body`) at a 32 × 32 leaf over `PouwH1Tile_v1` on its primitives'
+word views: the index's mux trees, the EXACT z (`GemmAccumulatorS8_v2`), the cell check and the masked partials, with the
+dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the lane check `LeafChecks` reads.
+
 ## `PearlC`: Pearl-C's Π and the statements about it
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
