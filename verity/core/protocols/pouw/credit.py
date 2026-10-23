@@ -62,21 +62,21 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   and is drawn at the period's K, and a refused window refuses its period.
 * **The A rows are the round roots'** (`_a_link`): each registered A value of the window, among its registered
   ``entries``, is a tree whose rows the round roots commit as aligned subtrees. A window's ``…/a/<K>``
-  (`h1window.roles`) over L rows and S steps has rows ``[s·L/S, (s+1)·L/S)`` under round s's root. A call's A table
-  ``…/a/<K>@<c>`` (`h1window.table`, the M rows of its A block, which `h1window.table_reads` opens the call's units at)
-  is committed whole by its call's round, ``c // (C/S)`` of the window's C calls, and listed by no other round. Each
+  (`h1window.roles`) over L rows and S steps has rows ``[s·L/S, (s+1)·L/S)`` under round s's root. Round s's A table of
+  K ``…/a/<K>@<s>`` (`h1window.table`: the M rows of the A block of each of its calls of K, call after call, which
+  `h1window.table_reads` opens those calls' units at) is committed whole by round s and listed by no other round. Each
   round's ``a`` lists, for every A value it commits, its ``[level, index, root]`` subtrees in row order, and the root the
   challenger received for round s is `round_root` of the serving process's own round root (``inner``) and those
   segments. The verifier recomputes each value's root from the segments and its domain's pads. So the rows a unit reads
   are the ones fixed before its round's coin. Round s's input-ids table ``…/ids@<s>`` (slot i's input token id) is
-  committed whole by round s, as a call's A table is by its call's. The z and y records are not yet bound to the round
-  roots.
+  committed whole by round s, as its A tables are. The z and y records are not yet bound to the round roots.
 * **The A rows and input ids are the served Commit's** (`_arow`, ROOTS1): the window's evidence carries the record of the
   Commit that ran in the window's engine (``commit``, one-stage's `verity/registration/v2` record, its canonical JSON in
-  hex), whose digest `calls_root` binds before the draw coin, so it is fixed before any coin that selects a unit. Each
-  call's A table ``…/a/<K>@<c>`` must have the root, domain and leaf count of the Commit's `commit_rows` value of its
-  round and linear, and round s's ``…/ids@<s>`` those of its `commit_ids` value: the Commit registers the window's own
-  tables, so one tree is both. So the A rows a call's units read are its linear's input as the Commit commits it, and
+  hex), whose digest `calls_root` binds before the draw coin, so it is fixed before any coin that selects a unit. Round
+  s's A table of K ``…/a/<K>@<s>`` holds M rows for each of the round's calls of K (`step_tables`) and must have the
+  root, domain and leaf count of the Commit's `commit_rows` value of its round and K, and round s's ``…/ids@<s>`` those
+  of its `commit_ids` value: the Commit registers the window's own tables, so one tree is both. So the A rows a call's
+  units read are its linear's input as the Commit commits it, and
   the input token ids under each round's root are its step's. Round 0's ``…/ids@0`` is also inside round 0's request
   table: the round-0 request root the window's open root binds is `requests_root` of the table's root and ids@0's, so
   the prompt tokens are fixed before the salt coin. Its domain binds the window's session in place of the open root,
@@ -92,7 +92,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   0's input-ids table, whose root that open root contains, binds the window's session instead. Each proof was
   verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
-  value, the window's ``…/a/<K>`` or its own call's ``…/a/<K>@<call>``. So the A rows `_a_link` ties to the round roots
+  value, the window's ``…/a/<K>`` or its own call's round's ``…/a/<K>@<s>``. So the A rows `_a_link` ties to the round roots
   are the ones each drawn unit's proof opened, under this window's registration: entries of another window or circuit,
   a proof verified against another registration, and an entry whose root is not the one its sessions opened are
   refused.
@@ -247,7 +247,7 @@ PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, regi
                "{value, root}, port and value printable ASCII and root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
-NO_A = ("the window registers no A value (…/a/<K>, or a call's …/a/<K>@<call>), so nothing ties its units' A rows to "
+NO_A = ("the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to "
         "the round roots: register the window's A values")
 COMMIT_TAG = b"verity/pouw/h1/commit/v1\0"
 #: the served Commit's record: one-stage's registration record with registered values
@@ -265,10 +265,35 @@ IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root
                "window's open root")
 
 
-def commit_rows(s: int, linear: str) -> str:
-    """The Commit's name for the A rows (its AROW) of linear `linear` at the window's round `s`: what it registers as
-    that round's call of `linear`'s A table ``<prefix>a/<K>@<c>``."""
-    return f"row-table/{s}/{linear}"
+def commit_rows(s: int, k: int) -> str:
+    """The Commit's name for the A rows (its AROW) of the window's round `s`'s calls of contraction `k`: what it registers
+    as that round's A table of K ``<prefix>a/<K>@<s>`` (`step_tables`)."""
+    return f"row-table/{s}/k{k}"
+
+
+def step_tables(layout: dict, steps: int) -> list[tuple[int, int, list[int]]]:
+    """Each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the rounds' equal blocks,
+    in order): ``(s, K, calls)`` for each K round s's calls have, in order of its first call there, `calls` the round's
+    calls of K in call order. Round s's A table of K ``<prefix>a/<K>@<s>`` holds the M rows of each of their A blocks,
+    call after call, so the j-th of them reads its rows from row M·j (`step_row`). Empty when `steps` doesn't divide
+    the calls."""
+    calls, ks = layout["calls"], {name: k for name, k, _n in layout["linears"]}
+    if steps < 1 or len(calls) % steps:
+        return []
+    per, out = len(calls) // steps, []
+    for s in range(steps):
+        mine: dict[int, list[int]] = {}
+        for c in range(s * per, (s + 1) * per):
+            mine.setdefault(ks[calls[c][0]], []).append(c)
+        out += [(s, k, cs) for k, cs in mine.items()]
+    return out
+
+
+def step_row(layout: dict, steps: int, call: int) -> tuple[int, int, int]:
+    """Call `call`'s round of the layout's `steps`, its round's calls of its K, and its first row in its round's A table
+    of K (`step_tables`): ``(s, n, M·j)``."""
+    s, n, j = next(((s, len(cs), cs.index(call)) for s, _k, cs in step_tables(layout, steps) if call in cs), (0, 0, 0))
+    return s, n, layout["m"] * j
 
 
 def requests_root(table: bytes, ids: bytes) -> bytes:
@@ -688,14 +713,15 @@ def partition_of(program: str, shape: dict) -> dict:
                       "params": {"templates": [shape["tiles"][k]["fn"] for k in sorted(shape["tiles"])]}}}
 
 
-def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str
+def registered_file(program: str, layout: dict, shape: dict, call: int, roots: dict, window: str, steps: int
                     ) -> tuple[dict | None, tuple[str, str] | None]:
     """The verifier's ``--registered`` file (`registered.READS`) of call `call`'s statement in the window `layout` (one
-    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`), and None; or None and the
-    refusal (``registration``: the window registers no root, or two, for a value the statement reads). It is
-    `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t = ti·(n/C) + tj of the call, reads
-    its A row i (port ``a_k<K>_<i>``) at row R·ti + i of the call's A table ``<prefix>a/<K>@<call>`` (M rows), its B row
-    j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
+    `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shape_of` `shape`, its calls `steps` rounds'
+    equal blocks), and None; or None and the refusal (``registration``: the window registers no root, or two, for a value
+    the statement reads). It is `h1window.table_reads_file`'s, built from the descriptor alone: unit u, tile t =
+    ti·(n/C) + tj of the call, reads its A row i (port ``a_k<K>_<i>``) at row o + R·ti + i of its round s's A table of
+    K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o the call's first, `step_row`), its B row j
+    (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
     (a row a unit of the call); every other unit reads none of them. Each value is a row/v2 value of 16-bit leaves
     under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
@@ -713,8 +739,9 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         b0 += nn if kk == k else 0
     sizes = [size for size, _work in call_work(layout)]
     u0, size, per = sum(sizes[:call]), sizes[call], n // c
-    a, zy, b = f"{prefix}a/{k}@{call}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
-    rows_of = {a: (m, tile["a"]), zy: (size, tile["zy"]),
+    s, calls_k, at = step_row(layout, steps, call)
+    a, zy, b = f"{prefix}a/{k}@{s}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
+    rows_of = {a: (m * calls_k, tile["a"]), zy: (size, tile["zy"]),
                b: (sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
     for v in rows_of:
         if len(roots.get(v, ())) != 1:
@@ -722,7 +749,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
                                           f"{'twice' if roots.get(v) else 'not'}: register each of a call's tables and "
                                           "its weights once")
     ports: list[tuple[str, str, Any]] = (
-        [(f"a_k{k}_{i}", a, lambda t, i=i: r * (t // per) + i) for i in range(r)]
+        [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
         + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
         + [("zy", zy, lambda t: t)])
     out = {}
@@ -887,8 +914,8 @@ def other_registration(v: str) -> str:
             "another window's or another circuit's")
 
 
-def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list,
-                  session: str | None = None) -> tuple[str, str] | None:
+def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, steps: int,
+                  proofs: list, session: str | None = None) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
     (``registration``, and why). Each A value's and input-ids table's domain, and each other value's a proof opened, is
@@ -897,8 +924,9 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
     `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
     value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
-    or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in), and its K's B rows, the
-    window's ``<prefix>b/<K>`` (`prefix` the descriptor's ``PREFIX``). A step of `window`, after `_a_link` has held each
+    or its call's round's A table of K ``…/a/<K>@<s>`` (the call `layout`'s units place it in, s its round of `steps`,
+    its calls the rounds' equal blocks), and its K's B rows, the window's ``<prefix>b/<K>`` (`prefix` the descriptor's
+    ``PREFIX``). A step of `window`, after `_a_link` has held each
     A value's root to the segments the round roots commit and `_period_weights` each ``<prefix>b/<K>`` to the weights'
     root its period signed."""
     def held(v: str, e: dict) -> str | None:
@@ -914,7 +942,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
                 return "registration", why
     names = [e.get("value") for e in entries]
     checked: set[str] = set()
-    starts, at, c = [], 0, 0
+    starts, at, c, per = [], 0, 0, max(1, len(layout["calls"]) // steps)
     for size, _work in call_work(layout):
         starts.append(at)
         at += size
@@ -944,10 +972,11 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
                                         f"than the one the window registered for {v}: its session was verified against "
                                         "another registration, or the window's entry is not the root its sessions opened")
             got = a_value(v)
-            opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c)))
+            opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c // per)))
             weights = weights or v == f"{prefix}b/{k}"
         if not opened:
-            return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c} (its call's) of "
+            return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c // per} (its "
+                                    "call's round's) of "
                                     "the window, so nothing ties the A rows it proved to the ones the round roots "
                                     "committed: verify each drawn unit's session with the window's A value registered")
         if not weights:
@@ -964,19 +993,18 @@ def _same(e: dict, c: dict) -> bool:
 
 
 def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: str) -> tuple[str, str] | None:
-    """None when each call's A table and each round's input-ids table among the window's registered `entries` is the
-    Commit's value of the same rows among its record's `registered` (`commit_of`'s): same root, domain and leaf count;
-    else the refusal (``arow``, and why). Call c of the window's `layout` (`strata`'s) is its linear's call at round
-    ``c // (C/S)`` of its round log `rounds`' S rounds, and its ``<prefix>a/<K>@<c>`` (K its linear's, `prefix` the
-    descriptor's ``PREFIX``) is the Commit's `commit_rows` of that round and linear; round s's ``<prefix>ids@<s>`` is
-    the Commit's
-    `commit_ids` of s. A round calls each linear once, and the Commit registers each of those values once. So the A rows
-    a call's units read are its linear's input as the served Commit commits it, and the input token ids under each
-    round's root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root
-    (``requests``, the one its open root binds) is `requests_root` of its request table's root (``request_table``) and
-    ``<prefix>ids@0``'s, so round 0's input ids are fixed before the salt coin. A step of `window`, after `_a_link` has
-    held each to the segments the round roots commit, `_period_weights` round 0's request root to the open root, and
-    the manifest to the layout's calls. Its cost is the calls and the records' entries."""
+    """None when each round's A table of each K and each round's input-ids table among the window's registered
+    `entries` is the Commit's value of the same rows among its record's `registered` (`commit_of`'s): same root, domain
+    and leaf count; else the refusal (``arow``, and why). The window's `layout` (`strata`'s) calls are its round log
+    `rounds`' S rounds' equal blocks, and round s's ``<prefix>a/<K>@<s>`` (`prefix` the descriptor's ``PREFIX``,
+    `step_tables`) holds M rows for each of the round's calls of K, call after call, and is the Commit's `commit_rows`
+    of s and K; round s's ``<prefix>ids@<s>`` is the Commit's `commit_ids` of s. The Commit registers each of those
+    values once. So the A rows a call's units read are its linear's input as the served Commit commits it, and the
+    input token ids under each round's root are its step's (ROOTS1). The window registers no other input-ids table, and
+    round 0's request root (``requests``, the one its open root binds) is `requests_root` of its request table's root
+    (``request_table``) and ``<prefix>ids@0``'s, so round 0's input ids are fixed before the salt coin. A step of
+    `window`, after `_a_link` has held each to the segments the round roots commit, `_period_weights` round 0's request
+    root to the open root, and the manifest to the layout's calls. Its cost is the calls and the records' entries."""
     steps, calls = len(rounds), layout["calls"]
     if len(calls) % steps:
         return "arow", (f"the window's {len(calls)} calls are not its {steps} rounds' equal blocks, so no call's round, "
@@ -986,32 +1014,26 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     for e in registered:
         if type(e.get("value")) is str:
             theirs.setdefault(e["value"], []).append(e)
-    ks = {name: k for name, k, _n in layout["linears"]}
-    per = len(calls) // steps
-    pairs = [(f"{prefix}a/{ks[lin]}@{c}", commit_rows(c // per, lin), f"call {c}'s A table")
-             for c, (lin, _blk) in enumerate(calls)]
-    seen: set[str] = set()
-    for c, (_v, name, _whose) in enumerate(pairs):
-        if name in seen:
-            return "arow", (f"round {c // per} calls linear {calls[c][0]} twice, so the Commit's {name} is no one "
-                            "call's A rows: each round of a served window is one engine step, which calls each linear "
-                            "once")
-        seen.add(name)
-    pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table") for s in range(steps)]
-    for v, name, whose in pairs:
+    pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}", layout["m"] * len(cs))
+             for s, k, cs in step_tables(layout, steps)]
+    pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table", None) for s in range(steps)]
+    for v, name, whose, rows in pairs:
         if v not in ours:
             return "arow", (f"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the "
-                            "served window registers each call's A table and each round's input-ids table")
+                            "served window registers each round's A table of each K and its input-ids table")
+        if rows is not None and ours[v]["leaves"] != rows:
+            return "arow", (f"{whose} {v} has {ours[v]['leaves']} rows, not {rows}: it holds the M rows of each of the "
+                            "round's calls of K, call after call, so a call missing from it reads another call's rows")
         got = theirs.get(name, [])
         if len(got) != 1:
             return "arow", (f"the Commit record registers {name} {'twice' if got else 'not'}: the served Commit "
-                            "registers each call's A table as its linear's row-table/<round>/<linear> and each round's "
+                            "registers each round's A table of each K as row-table/<round>/k<K> and each round's "
                             "input-ids table as input-ids/<round>, once")
         if not _same(ours[v], got[0]):
             return "arow", (f"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its "
                             "rows are not the ones the served Commit commits (ROOTS1). The Commit registers the "
                             "window's own table as its value, with no tree of its own")
-    want = {v for v, _name, _whose in pairs}
+    want = {v for v, _name, _whose, _rows in pairs}
     for v in ours:
         if ids_step(v) is not None and v not in want:
             return "arow", (f"the window registers input-ids table {v}, which is not {prefix}ids@<s> of any of its "
@@ -1030,13 +1052,14 @@ def no_statement_files(k: Any) -> str:
 
 
 def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
-              run: Run) -> tuple[list[dict] | None, tuple[str, str] | None]:
+              steps: int, run: Run) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """Each drawn unit's proof outcome (`PROOF_KEYS`) from the verifier of record's own run over the window's
     `statements` (`STATEMENT_KEYS`: one a call with a drawn unit among `units`, its proof files), and None; or None and
     the refusal. Call c's statement is verified by `run` (`proofs.verify`) on its circuit file, which must hash to
     `files`' digest for its K (``k<K>``, the period-open's `CIRCUIT_FILES`, else ``circuit``), against the circuit's
     descriptor `raw`, its partition object (`partition_of`) and the call's ``--registered`` file credit builds itself
-    (`registered_file`, at the roots the window's `entries` register and its open root `window`). A file missing or an
+    (`registered_file`, at the roots the window's `entries` register, its open root `window` and its `steps` rounds). A
+    file missing or an
     answer that is not one verdict a session refuses (``proof``), and so does a verifier that can't run: the window stays
     refused. A session the verifier rejects refuses the window (``failed``: no partial credit, and no retry), and one
     that proved a unit of another call refuses it (``proof``). Each unit an accepted session proved is one outcome:
@@ -1073,7 +1096,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
         k = ks[layout["calls"][c][0]]
         if f"k{k}" not in files:
             return None, ("circuit", no_statement_files(k))
-        reg, why = registered_file(program, layout, shape, c, roots, window)
+        reg, why = registered_file(program, layout, shape, c, roots, window, steps)
         if why is not None:
             return None, why
         try:
@@ -1096,7 +1119,7 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     return out, None
 
 
-Proved = Callable[[dict, bytes, list[int]], tuple[Any, tuple[str, str] | None]]
+Proved = Callable[[dict, bytes, list[int], int], tuple[Any, tuple[str, str] | None]]
 
 
 def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, commit: Any,
@@ -1108,7 +1131,7 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     why = CC.rounds(key, ledger, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds], verify)
     if why is not None:
         return None, why
-    why = _a_link(rounds, entries, len(calls))
+    why = _a_link(rounds, entries)
     if why is not None:
         return None, why
     if not (type(descriptor) is str and _HEX.fullmatch(descriptor)):
@@ -1131,11 +1154,11 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
                         {"receipts": draw["receipts"]}, ss, k)
     proofs = None
     if why is None:
-        proofs, why = proved(layout, bytes.fromhex(descriptor), units)
+        proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds))
     if why is None:
         why = _proved(units, proofs)
     if why is None:
-        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs, sid)
+        why = _registration(window["root"], program, prefix, entries, ss, layout, len(rounds), proofs, sid)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -1209,7 +1232,8 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
 
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, run: Run) -> Proved:
-    return lambda layout, raw, units: _verified(statements, files, raw, layout, entries, window["root"], units, run)
+    return lambda layout, raw, units, steps: _verified(statements, files, raw, layout, entries, window["root"], units,
+                                                       steps, run)
 
 
 def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, commit: Any,
@@ -1233,7 +1257,7 @@ def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any
        opened for the window it is the window's open root (`salt.window_open_root`). So every window of a period opens
        the B rows, codes and s_w, the period registered before its first window's salt, and a window of no period, or
        of one whose open signs no weights' root, is refused before any of its proofs is read;
-    6. the manifest one row per call of the layout (``manifest``), `_arow` (each call's A table and each round's
+    6. the manifest one row per call of the layout (``manifest``), `_arow` (each round's A tables and its
        input-ids table the Commit record `commit`'s value of the same rows), and `_outcome`'s rule on the draw coin
        `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
@@ -1483,9 +1507,9 @@ def _segments(a: Any) -> dict[str, list[tuple[int, int, bytes]]] | None:
 
 
 def a_value(value: Any) -> tuple[str, str | None] | None:
-    """A registered A value's contraction and call, as their digits: a name whose last two parts are ``a`` and either a
-    contraction (``…/a/<K>``, the window's A rows of K, `h1window.roles`), its call None, or a contraction and a call
-    (``…/a/<K>@<call>``, that call's A table, `h1window.table`); None for any other name.
+    """A registered A value's contraction and round, as their digits: a name whose last two parts are ``a`` and either a
+    contraction (``…/a/<K>``, the window's A rows of K, `h1window.roles`), its round None, or a contraction and a round
+    (``…/a/<K>@<s>``, that round's A table of K, `h1window.table`); None for any other name.
     K is a canonical decimal, no leading zero."""
     parts = value.split("/") if isinstance(value, str) else []
     m = _A.fullmatch(parts[-1]) if len(parts) >= 2 and parts[-2] == "a" else None
@@ -1493,7 +1517,7 @@ def a_value(value: Any) -> tuple[str, str | None] | None:
 
 
 def is_a(value: Any) -> bool:
-    """A registered A value (`a_value`): ``…/a/<K>`` or a call's ``…/a/<K>@<call>``."""
+    """A registered A value (`a_value`): ``…/a/<K>`` or a round's ``…/a/<K>@<s>``."""
     return a_value(value) is not None
 
 
@@ -1521,14 +1545,14 @@ def is_held(value: Any) -> bool:
     return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
 
 
-def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
+def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
     """None when every registered A value among `entries` (the window's registered entries, ``{value, root, leaves,
     domain, …}``) is the tree over the segments the round log `rounds` commits (each round's ``root``, the one the
     challenger received, over its ``inner`` root and its segments ``a``, `round_root`); else the refusal (``a-link``,
     and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
-    ``[s·L/S, (s+1)·L/S)``; a call's A table ``…/a/<K>@<c>`` is committed whole by its call's round, the window's
-    `calls` calls being the rounds' equal blocks, so round ``c // (calls/S)``'s segments tile all its rows and no other
-    round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole by round s alike. A step of
+    ``[s·L/S, (s+1)·L/S)``; round s's A table of K ``…/a/<K>@<s>`` is committed whole by round s, whose segments tile
+    all its rows, and no other round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole
+    by round s alike. A step of
     `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
     if not (isinstance(rounds, list) and rounds):
         return "a-link", LOG_FORM
@@ -1568,23 +1592,19 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
             return "a-link", (f"registered {_what(v)} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} "
                               "(the verifier hashes its pads)")
         step = ids_step(v)
-        call = None if step is not None else a_value(v)[1]
+        at = None if step is not None else a_value(v)[1]
         if step is not None:
             if step >= steps:
                 return "a-link", f"registered input-ids table {v} is round {step}'s, and the window has {steps} rounds"
             per, own, whose = count, step, f"round {step}'s input-ids table"
-        elif call is None:
+        elif at is None:
             if count % steps:
                 return "a-link", f"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
             per, own, whose = count // steps, None, ""
         else:
-            if int(call) >= calls:
-                return "a-link", (f"registered A value {v} is call {int(call)}'s A table, and the window has {calls} "
-                                  "calls")
-            if calls % steps:
-                return "a-link", (f"the window's {calls} calls are not its {steps} rounds' equal blocks, so the round "
-                                  f"whose root commits call {int(call)}'s A table {v} is not fixed")
-            per, own, whose = count, int(call) // (calls // steps), f"call {int(call)}'s A table"
+            if int(at) >= steps:
+                return "a-link", f"registered A value {v} is round {int(at)}'s A table, and the window has {steps} rounds"
+            per, own, whose = count, int(at), f"round {int(at)}'s A table"
         have = {}
         for r, p in enumerate(segs):
             if own is not None and r != own:
@@ -1697,4 +1717,4 @@ __all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT"
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
            "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
            "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
-           "strata", "tree_root", "window"]
+           "step_row", "step_tables", "strata", "tree_root", "window"]
