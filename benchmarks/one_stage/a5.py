@@ -17,9 +17,11 @@ SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --firewall flock-firewall --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --firewall flock-firewall --out DIR [--delta 0.5]
 
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
@@ -49,7 +51,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
-  PROTOCOL §16.15). Lean `verify --zk` holds each session with `--partition` and `--program` (units derived).
+  PROTOCOL §16.15). Each prover runs behind the firewall's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
+  PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
+  `--partition` and `--program` (units derived).
 """
 from __future__ import annotations
 
@@ -116,7 +120,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law; the partition file's is {law}")
     want = CS.expected_ports(mine)
-    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta,
+    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -199,7 +203,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True)
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True,
+                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])})
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
@@ -346,6 +351,8 @@ def main() -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
+    ap.add_argument("--firewall", required=True,
+                    help="Lean's flock-firewall: every session's prover runs behind its send check (FC_FIREWALL=1, live PROTOCOL.md §10.4)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
