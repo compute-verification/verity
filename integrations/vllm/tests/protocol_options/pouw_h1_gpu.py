@@ -418,7 +418,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
         rss0 = rss_gib()
-        served = SV.Served(prover=a.prover_dir, weights_key=wkey) if a.served and name == "fill" else None
+        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, window=None if a.challenger else os.urandom(64))
+                  if a.served and name == "fill" else None)
         registered_s: dict[int, float] = {}
         if served is not None and not a.handoff:
             commit = served.commit
