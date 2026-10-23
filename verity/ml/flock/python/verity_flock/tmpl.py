@@ -695,7 +695,7 @@ class _Evaluator:
         reads.append(np.fromiter((c for c, _a, _b in rows), np.int64, len(rows)))
         for c, (p0, st) in zip(D.calls, binds):
             R = (p0[None, :] + np.arange(c.count, dtype=np.int64)[:, None] * st[None, :]).reshape(-1)
-            reads.append(R[R < cols])
+            reads.append(np.unique(R[R < cols]))
         cand = np.unique(np.concatenate(reads))
         live = np.zeros(len(cand), bool)
         live[np.searchsorted(cand, want)] = True
