@@ -129,7 +129,7 @@ def test_once_node_1_has_stopped_verity_jobs_go_to_its_share_on_node_2():
     c = model.load(Path(NEBIUS).with_name("nebius-after-n1.toml"))
     assert model.validate(c) == [] and set(c.nodes) == {"vy-nebius-2"} and c.workstreams == ()
     cpu = submit.resolve(c, _job(cpus=4, memory_gib=16), "r1", T)
-    assert cpu["node"] == "vy-nebius-2" and cpu["wrap"][-6:] == ["taskset", "-c", "48-95", "nice", "-n", "19"]
+    assert cpu["node"] == "vy-nebius-2" and cpu["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in cpu["wrap"]
     gpu = submit.resolve(c, _job(gpus=1), "r1", T)
     assert gpu["node"] == "vy-nebius-2" and gpu["workload_wrap"][0] == submit.GPU_LEASE
     with pytest.raises(submit.Refused, match="vy-nebius-1"):
