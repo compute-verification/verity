@@ -166,16 +166,17 @@ theorem lincheckCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold)
     exact ⟨hR.2.1, hR.2.2⟩
 
 /-- **A returned ring switch's switched claims are `Rs.sws` at its coins**: claim `k`'s `r''` at `l.size + k`, the
-batching `γ` at `l.size + |claims|`, whatever the switched vectors, after `|claims| + 1` bodies. -/
+batching `γ` at `l.size + |claims|`, whatever the switched vectors, after `|claims| + 1` bodies, the last before the
+cut's stop `n`. -/
 theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
     (hc : claims.size ≠ 0) {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128}
     {sws : Array Switched}
     (h : ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok ((ss, T, sws), t'), l')) :
     sws = Rs.sws claims ⟨fun k => coin (l.size + k), coin (l.size + claims.size)⟩ ∧
-      l'.size = l.size + claims.size + 1 := by
+      l'.size = l.size + claims.size + 1 ∧ l'.size ≤ n := by
   have hA : GoAlike (fun (a b : Array (Array F128) × F128 × Array Switched) L => a = b ∧
         a.2.2 = Rs.sws claims ⟨fun k => coin (l.size + k), coin (l.size + claims.size)⟩ ∧
-        L.size = l.size + claims.size + 1)
+        L.size = l.size + claims.size + 1 ∧ L.size ≤ n)
       (((ringSwitchCut (asksCut coin n) sv claims).run t).go l)
       (((ringSwitchCut (asksCut coin n) sv claims).run t).go l) := by
     unfold ringSwitchCut
@@ -210,8 +211,8 @@ theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → 
       obtain ⟨ss, betas, perClaim⟩ := s
       try dsimp only
       refine alike_bind_eq rfl fun gamma t₁ l₁ e₁ => ?_
-      obtain ⟨-, rfl, -, rfl⟩ := sampleVecP_cut_inv coin hc e₁
-      refine alike_pure _ _ ⟨rfl, ?_, by simp only [Array.size_push, hsz]⟩
+      obtain ⟨hlt, rfl, -, rfl⟩ := sampleVecP_cut_inv coin hc e₁
+      refine alike_pure _ _ ⟨rfl, ?_, by simp only [Array.size_push, hsz], by simp only [Array.size_push]; omega⟩
       dsimp only at hpc ⊢
       rw [hpc, hsz]
       all_goals rfl
@@ -221,12 +222,12 @@ theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → 
   · rw [h] at hx
     simp only [Prod.mk.injEq, Except.ok.injEq] at hx
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
-    exact ⟨hR.2.1, hR.2.2⟩
+    exact hR.2
 
 /-- **The firewall's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the firewall's PIOP
 returns, its switched claims are `Rs.sws` of the closed-form claims at any trace `tr` (the zerocheck's and lincheck's
 points are their coins', and a switched claim reads its claim's point alone, `Rs.sws_congr`) at the ring switch's coins,
-and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies. -/
+and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/
 theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128} {mk : ℕ → F128}
     {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
     (hm : 14 ≤ st.m)
@@ -237,18 +238,19 @@ theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk
             (lcCoins coin (l.size + 3 + (st.m - 6)) (st.fold.kLog - 6))) ++ extras)
         ⟨fun k => coin (l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + k),
           coin (l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size))⟩ ∧
-      l₃.size = l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size) + 1 := by
+      l₃.size = l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size) + 1 ∧ l₃.size ≤ n := by
   obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.Firewall.Finish.piopFw_split h
   obtain ⟨hz, hl₁⟩ := zerocheckCut_at coin n hm _ _ _ _ _ h₁
   obtain ⟨hlc, hl₂⟩ := lincheckCut_at coin n _ _ _ _ _ h₂
   have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by
     rw [Array.size_append, abcClaims_size]
-  obtain ⟨hs, hl₃⟩ := ringSwitchCut_sws coin n _ _ (by rw [hsz]; omega) h₃
+  obtain ⟨hs, hl₃, hn₃⟩ := ringSwitchCut_sws coin n _ _ (by rw [hsz]; omega) h₃
   rw [hl₂, hl₁, hsz] at hs
   rw [hl₁] at hlc
-  rw [hl₃, hl₂, hl₁, hsz]
   refine ⟨hs.trans (Rs.sws_congr (by rw [Array.size_append, Array.size_append, abcClaims_size, abcClaims_size])
     (claims_x (abcClaims_size _ _ _ _) (abcClaims_size _ _ _ _)
-      (abc_x hz.2.1 hz.2.2 hlc.2).1 (abc_x hz.2.1 hz.2.2 hlc.2).2) _), rfl⟩
+      (abc_x hz.2.1 hz.2.2 hlc.2).1 (abc_x hz.2.1 hz.2.2 hlc.2).2) _), ?_, hn₃⟩
+  rw [hsz] at hl₃
+  omega
 
 end FlockComplete

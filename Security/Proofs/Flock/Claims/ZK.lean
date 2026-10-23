@@ -630,15 +630,16 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FinishSwPts`: the firewall's PIOP's points at the coins. Answered by `asksCut`, a returned zerocheck's and lincheck's
   points are their coins' (`zerocheckCut_at`, `lincheckCut_at`), and a ring switch's switched claims are `Rs.sws` at its
   coins (`ringSwitchCut_sws`), so the firewall's PIOP switched the closed-form claims at the coins from its base after
-  `piopRoundsZk` bodies (**`piopFw_at`**).
+  `piopRoundsZk` bodies, all before the cut's stop (**`piopFw_at`**).
 * `FinishSwBit`: the firewall's switched vectors read off the packed table, bit `v` of word `y` being the trace's bit
   `128 y + v` (`packed_bit`), are the prover's at a claim with `m − 6` coordinates (**`switchVec_packed`**).
 * `FinishSwRep`: **`Masked.swSrcE_repCut`**, `repCut_fw` at the switched source. Its `hmk` is `swSrcE_hmk_frame`;
   `hpiop` is `rank_at_admits` and `swSrc_sv` through `switchVec_packed`; `hlig` is `swSrcE_ligHyp_E` at `piopFw_at`'s
   log and `swsE`; `hinner` is `swSrcE_hinner_sv`. So where the firewall's rep returns at table `j`'s rep `r`, the cut
   from the switched source returns the same transcript and log, and the proof up to `eraseZ`. Its premises: the
-  firewall's packed table is the witness's (`hg`, a host-input trust as `LinkIs` is for the link), the rep's PIOP is
-  sent before the stop, the coins are admitted, and level 0's clear values are `l0Clear` (`hB`).
+  firewall's packed table is the witness's (`hg`, a host-input trust as `LinkIs` is for the link), the coins are
+  admitted, and level 0's clear values are `l0Clear` (`hB`). The rep's base being before the stop comes from its PIOP
+  having returned (`repFwC_piopFw`), and no refusal from the admitted coins (`not_refused_of_admits`).
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the firewall's stop reads them.
