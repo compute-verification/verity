@@ -33,8 +33,7 @@ def _rni_s32(v):
 @triton.jit
 def _fwht(x, A: tl.constexpr, LOG: tl.constexpr):
     for s in tl.static_range(LOG):
-        h: tl.constexpr = 1 << s
-        t = tl.permute(tl.reshape(x, (A // (2 * h), 2, h)), (0, 2, 1))
+        t = tl.permute(tl.reshape(x, (A >> (s + 1), 2, 1 << s)), (0, 2, 1))
         a, b = tl.split(t)
         x = tl.reshape(tl.permute(tl.join(a + b, a - b), (0, 2, 1)), (A,))
     return x
