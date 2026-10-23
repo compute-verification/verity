@@ -2,6 +2,7 @@ import Proofs.Accounting.TS.Session.Checked.Layer
 import Proofs.Accounting.TS.Session.Held.Layer
 import Proofs.Flock.Recursive.Registrants
 import Flock.KnownRead
+import PouwWindow.OwnPorts
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -205,7 +206,9 @@ combine's), its known-content check at the session's known content `known x w i 
 its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content, then at each port
 `full x w i k` names, the ports `F` marks `read_in_full`, as one row of its registered row's words
 (`KnownRead.fullRows`): each such port is a `sha512/row/v2` row of those words, and a computed row of the unit reads each
-bit of such an input row, a copy returns each bit of such an output row),
+bit of such an input row, a copy returns each bit of such an output row) and the leaf verifier's check of its file
+(`PouwWindow.Lanes.checkOwn`, which `pouw-leaf-own` runs: the file holds the ports `want x w i k`, the statement's data
+ports at the accepted registration's and produced record's roots),
 opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
 the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides
@@ -214,6 +217,7 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession) (out : ∀ x w i k, (sess x w i k).Out)
     (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
     (full : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Array String)
+    (want : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → List Flock.Registered.Port)
     (dq : List ℤ → ℤ) (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (pub : Paths Ω S → Fin S → Fin nπ → Pub) (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
     (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K)
@@ -222,7 +226,8 @@ noncomputable def leafLayer {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
     Flock.Registered.checkKnownAll (sess x w i k).own (known x w i k) = .ok () ∧
     Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
     Flock.KnownRead.check (sess x w i k).c
-      (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok ()
+      (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok () ∧
+    PouwWindow.Lanes.checkOwn (want x w i k) (sess x w i k).own = .ok ()
   opened := leaf
   rel x w i v := UnitServed dq part (pub x w i) (receipt x w i) v ∨ LeafColl (sess x w i) ∨
     LeafKnownColl (sess x w i) (known x w i)
