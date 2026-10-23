@@ -18,3 +18,6 @@ If an 8xH200 comes up for circuits before 23:45Z, they take that one and don't t
 - `integrations/vllm/verity_vllm/engine/int8_gemm_configs.py` has no sm_90 rows for GLM, so pick() falls back to vLLM's tiles. That's fine for exactness; leave it.
 - On vy-nebius-2 at TP4, K = 512 for those projections, so the truncated path is inside the domain.
 - Kernels may also want an 8xH200 for a served-step gamma. vllm holds eu2 until 23:45Z; if kernels asks to ride along, the coordinator will tell you here.
+
+## 20:08Z, an ask from kernels for the eu2 run (secondary to the tie check)
+Once GLM53_INT8 serves on eu2 at TP8 with expert parallelism, record decode TPOT at T64 (64 requests in flight) twice: (1) exact int8 with no PoUW (no hooks, no Commit); (2) with H1's hooks (Commit plus z/y records, receipts off). Same prompts and output length for both, and say what they were. These are the two baselines Dither's GLM number divides by. If time runs short, the tie check comes first.
