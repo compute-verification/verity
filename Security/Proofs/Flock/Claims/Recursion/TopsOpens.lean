@@ -644,7 +644,8 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
     have hts : top.size = ((rs.getD (j % rs.size) default).2.1).getD e 0 := tops_size hlens hey hye
     have hnS : (RecVStar.topSizes rs)[topsBefore rs (j % rs.size) + e]? =
         some (((rs.getD (j % rs.size) default).2.1).getD e 0) := by
-      rw [topSizes_at hk heT, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem heT, Option.getD_some]
+      have hgd : ∀ (a : Array ℕ) (i : ℕ) (h : i < a.size), a.getD i 0 = a[i] := fun a i h => by simp [Array.getD, h]
+      rw [topSizes_at hk heT, hgd _ _ heT]
     have hsv := capStmt_at hr hrs hnS
     rw [← Nat.add_assoc] at hsv
     obtain ⟨c, hpc⟩ := staged_circuit hS hr
@@ -659,7 +660,7 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
     obtain ⟨k0, t0, h0, hs0⟩ := hside 0 (by omega)
     obtain ⟨k1, t1, h1, -⟩ := hside 1 (by omega)
     rw [hye, topPiece_at hpc hq, ← hts]
-    refine readSegs_topPiece fun t ht => ?_
+    refine (readSegs_topPiece fun t ht => ?_).symm
     have hm : j / rs.size * top.size + t < 2 * ((rs.getD (j % rs.size) default).2.1).getD e 0 := by
       rw [← hts]
       rcases (by omega : j / rs.size = 0 ∨ j / rs.size = 1) with h | h <;> rw [h] <;> omega
