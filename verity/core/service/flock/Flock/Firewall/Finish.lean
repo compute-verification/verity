@@ -159,10 +159,19 @@ def switchVec (g : Array F128) (c : Claim) : Array F128 :=
 
 namespace Fast
 
+/-- `Link.parRange` specialized at each call (`parRangeS_eq`): each task's loop runs `f` inline, so no entry calls a
+closure or touches the reference count of anything the tasks share. -/
+@[specialize] def parRangeS {α : Type} (f : Nat → α) (a b : Nat) : Array α :=
+  ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+    (fun acc t => acc ++ t.get) #[]
+
+theorem parRangeS_eq {α : Type} (f : Nat → α) (a b : Nat) : parRangeS f a b = (Array.range (a * b)).map f :=
+  Link.parRange_eq f a b
+
 /-- `t.map f` in tasks of `2^12` entries. -/
-def parMap (f : F128 → F128) (t : Array F128) : Array F128 :=
+@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 :=
   let a := t.size / 4096
-  Link.parRange (fun i => f t[i]!) a 4096 ++ (Array.range (t.size - a * 4096)).map fun j => f t[a * 4096 + j]!
+  parRangeS (fun i => f t[i]!) a 4096 ++ (Array.range (t.size - a * 4096)).map fun j => f t[a * 4096 + j]!
 
 theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
   have hm : t.map f = (Array.range (t.size / 4096 * 4096 + (t.size - t.size / 4096 * 4096))).map fun i => f t[i]! := by
@@ -172,7 +181,7 @@ theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f :=
     · intro i h1 h2
       simp only [Array.getElem_map, Array.getElem_range]
       rw [getElem!_eq t (by simpa using h1)]
-  rw [hm, Array.range_add, Array.map_append, Array.map_map, parMap, Link.parRange_eq]
+  rw [hm, Array.range_add, Array.map_append, Array.map_map, parMap, parRangeS_eq]
   rfl
 
 /-- `eqTable` with each step's two halves in tasks (`parMap`). Not a `@[csimp]` of `eqTable`, which the verifier's
@@ -210,13 +219,13 @@ tasks of `2^12` points. -/
 def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
   let tabs := sws.map fun sw => (sw.gamma, eqTablePar sw.z, byteTable (eqTable sw.rpp))
   let k := min l 12
-  Link.parRange (fun y => tabs.foldl (fun acc (g, ez, tb) =>
+  parRangeS (fun y => tabs.foldl (fun acc (g, ez, tb) =>
       let v := ez[y]!
       acc + g * sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
 
 theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
   unfold basisVals basisValsFast
-  rw [Link.parRange_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  rw [parRangeS_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
   apply Array.map_congr_left
   intro y _
   simp only [Array.foldl_map, byteTable_sum, eqTablePar_eq]

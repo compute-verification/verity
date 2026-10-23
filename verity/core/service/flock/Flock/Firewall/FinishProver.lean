@@ -90,14 +90,18 @@ theorem foldRange_succ {α : Type} (f : α → Nat → α) (n : Nat) (acc : α) 
   rw [foldRange_eq, foldRange_eq, ← List.range_eq_range', ← List.range_eq_range', List.range_succ, List.foldl_append]
   rfl
 
-/-- `sumF` as compiled code computes it: the same additions in the same order, with no list. -/
-@[inline] def sumFFast (n : Nat) (f : Nat → F128) : F128 := foldRange (fun acc i => acc + f i) 0 n 0
+/-- `sumF` as compiled code computes it: the same additions in the same order, with no list. Each term comes first
+(`F128.add_comm`) so that the sum reuses the accumulator's cell: with the term second, compiled code takes a table entry
+`f i = t[i]!` as its own and counts a reference on it, which parallel tasks reading one table contend on. -/
+@[inline] def sumFFast (n : Nat) (f : Nat → F128) : F128 := foldRange (fun acc i => f i + acc) 0 n 0
 
 end Fast
 
 open Fast in
 @[csimp] theorem sumF_eq_sumFFast : @sumF = @sumFFast :=
-  funext fun n => funext fun f => by rw [sumF, sumFFast, foldRange_eq, List.range_eq_range']
+  funext fun n => funext fun f => by
+    rw [sumF, sumFFast, show (fun acc i => f i + acc) = fun acc i => acc + f i from
+      funext fun _ => funext fun _ => F128.add_comm _ _, foldRange_eq, List.range_eq_range']
 
 namespace Fast
 
@@ -150,15 +154,16 @@ theorem getElem!_range_map {α : Type} [Inhabited α] (f : Nat → α) {n i : Na
   rw [getElem!_eq _ (by simpa using h)]
   simp
 
-/-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). -/
+/-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). The term comes
+first for the reason `sumFFast`'s does: sixteen tasks read `e`. -/
 def byteBuckets (g e : Array F128) (j : Nat) : Array F128 :=
-  foldRange (fun B y => B.modify ((g[y]!).byte j) (· + e[y]!)) 0 e.size (Array.replicate 256 0)
+  foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 e.size (Array.replicate 256 0)
 
 /-- After the first `n` words, the buckets' sum over the bytes with bit `i` set is `Σ_{y < n} bit_{8j+i}(g[y])·e[y]`. -/
 theorem byteBuckets_go (g e : Array F128) (j : Nat) {i : Nat} (hj : j < 16) (hi : i < 8) : ∀ n : Nat,
-    (foldRange (fun B y => B.modify ((g[y]!).byte j) (· + e[y]!)) 0 n (Array.replicate 256 0)).size = 256 ∧
+    (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0)).size = 256 ∧
     (sumF 256 fun b => if b.testBit i then
-      (foldRange (fun B y => B.modify ((g[y]!).byte j) (· + e[y]!)) 0 n (Array.replicate 256 0))[b]! else 0) =
+      (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0))[b]! else 0) =
       sumF n fun y => if (g[y]!).bit (8 * j + i) then e[y]! else 0
   | 0 => by
     refine ⟨by simp [foldRange], ?_⟩
@@ -172,7 +177,7 @@ theorem byteBuckets_go (g e : Array F128) (j : Nat) {i : Nat} (hj : j < 16) (hi 
   | n + 1 => by
     obtain ⟨hs, ih⟩ := byteBuckets_go g e j hj hi n
     rw [foldRange_succ]
-    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (· + e[y]!)) 0 n (Array.replicate 256 0) = B at hs ih ⊢
+    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0) = B at hs ih ⊢
     refine ⟨by rw [Array.size_modify, hs], ?_⟩
     have hk := (g[n]!).byte_lt j
     rw [sumF_succ n, ← ih, ← F128.testBit_byte _ hj hi]
@@ -180,7 +185,7 @@ theorem byteBuckets_go (g e : Array F128) (j : Nat) {i : Nat} (hj : j < 16) (hi 
     · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hk), getElem!_eq B (by rw [hs]; exact hk),
         Array.getElem_modify_self]
       split
-      · rfl
+      · exact F128.add_comm _ _
       · rw [F128.add_zero]
     · intro b hb
       by_cases hb256 : b < 256
