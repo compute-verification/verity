@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Proofs.Flock.Claims.Recursion.VStarLinks
+import Proofs.Flock.Claims.Recursion.DeployComplete
 
 /-!
 # The hm96 slots' commit strings at the outer relation
@@ -397,5 +399,336 @@ theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {t
     omega
   rw [hpfx, hrow, hsalt, ← hbc o hgn hqs]
   exact (bc_bit (L.model regs) w st.c rfl hb hy ht).symm
+
+/-! ## The checks a staged part passed -/
+
+theorem sum_rows_le : ∀ (a : List String) (b : List ℕ) (k : ℕ),
+    ((((a.zip b).map fun p => (p.1, p.2, 16 * p.2)).take k).map (·.2.1)).sum ≤ b.sum
+  | [], _, _ => by simp
+  | _ :: _, [], _ => by simp
+  | _ :: _, _ :: _, 0 => by simp
+  | _ :: a, y :: b, k + 1 => by
+    have := sum_rows_le a b k
+    simp only [List.zip_cons_cons, List.map_cons, List.take_succ_cons, List.sum_cons]
+    omega
+
+/-- Rows that run an input block of `16 · w`-bit rows, then rows named among `outs`: a row named outside `outs` is in
+the input block, so its words end within the block's. -/
+theorem in_block_list {β : Type} (f : β → String × ℕ × ℕ) (l : List β) (ins outs : List String) (ip : List ℕ)
+    (B : List (String × ℕ × ℕ)) (hB : ∀ r ∈ B, r.1 ∈ outs)
+    (hr : l.map f = (ins.zip ip).map (fun p => (p.1, p.2, 16 * p.2)) ++ B)
+    {q : ℕ} (hq : q < l.length) (hnm : (f l[q]).1 ∉ outs) :
+    16 * ((l.take q).map fun p => (f p).2.1).sum + (f l[q]).2.2 ≤ 16 * ip.sum := by
+  have hq' : q < (l.map f).length := by simpa using hq
+  have hqA : q < ((ins.zip ip).map (fun p => (p.1, p.2, 16 * p.2))).length := by
+    refine Nat.lt_of_not_le fun hge => hnm (hB _ ?_)
+    have h := List.getElem_append_right (as := ((ins.zip ip).map (fun p => (p.1, p.2, 16 * p.2)))) (bs := B)
+      (i := q) (h₂ := by rw [← hr]; exact hq') hge
+    simp only [← hr, List.getElem_map] at h
+    rw [h]
+    exact List.getElem_mem _
+  have hbits : (f l[q]).2.2 = 16 * (f l[q]).2.1 := by
+    have h := List.getElem_append_left (bs := B) (h' := by rw [← hr]; exact hq') hqA
+    simp only [← hr, List.getElem_map] at h
+    rw [h]
+  have htake : (l.take (q + 1)).map (fun p => (f p).2.1) =
+      (((ins.zip ip).map (fun p => (p.1, p.2, 16 * p.2))).take (q + 1)).map (·.2.1) := by
+    have h := congrArg (fun m => (m.take (q + 1)).map (·.2.1)) hr
+    rw [List.take_append_of_le_length hqA, ← List.map_take, List.map_map] at h
+    exact h
+  have hs := sum_rows_le ins ip (q + 1)
+  have hsucc : ((l.take (q + 1)).map fun p => (f p).2.1).sum =
+      ((l.take q).map fun p => (f p).2.1).sum + (f l[q]).2.1 := by
+    rw [List.take_add_one, List.map_append, List.sum_append, List.getElem?_eq_getElem hq]; simp
+  rw [← htake, hsucc] at hs
+  omega
+
+/-- **A port named outside V\*'s outputs is one of its input rows**, at the circuit V\*'s parse check passed
+(`checkParsed_ok`'s rows, `vstarRows`): its row ends within the unit's input words. -/
+theorem in_block {c : Flock.Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = Flock.RecVStar.vstarRows sub u)
+    {nm : String} (hnm : nm ∉ sub.outputs) {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) :
+    16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + c.ports[q]!.bits ≤ 16 * u.inWords := by
+  obtain ⟨hqs, hname, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq
+  have hql : q < c.ports.toList.length := by simpa using hqs
+  have hr' : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) ++
+        (sub.outputs.zip u.outPorts).map fun p => (p.1, (p.2 + 63) / 64 * 64, 16 * ((p.2 + 63) / 64 * 64)) := hr
+  have h := in_block_list (fun p => (p.name, p.words, p.bits)) c.ports.toList sub.inputs sub.outputs u.inPorts _
+    (fun r hr => by
+      obtain ⟨⟨a, b⟩, hm, rfl⟩ := List.mem_map.1 hr
+      exact (List.of_mem_zip hm).1) hr' hql (by simpa [beq_iff_eq.1 hname] using hnm)
+  rw [extract_words (·.words), getElem!_pos c.ports q hqs, VStar.UnitC.inWords,
+    FlockSoundness.foldl_add_eq_sum]
+  simpa using h
+
+theorem mIndex_out : Flock.RecVStar.mIndex "out" = none := by
+  unfold Flock.RecVStar.mIndex
+  exact ite_eq_right_iff.2 fun h => absurd h (by decide +kernel)
+
+theorem claimIndex_out : Flock.RecVStar.claimIndex "out" = none := by
+  unfold Flock.RecVStar.claimIndex
+  exact ite_eq_right_iff.2 fun h => absurd h (by decide +kernel)
+
+theorem cIndex_claim : Flock.RecVStar.cIndex Flock.RecVStar.CLAIM_VALUE = none := by
+  unfold Flock.RecVStar.cIndex Flock.RecVStar.CLAIM_VALUE
+  exact ite_eq_right_iff.2 fun _ => by decide +kernel
+
+/-- **A statement's own ports are none of its outputs**, `out` (no `m<k>` nor `claim<k>`), and each row one registered
+under a `rec-c<k>` reads is rep `0` or `1`. -/
+theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option ℕ)}
+    (hq : q ∈ Flock.RecVStar.ownPorts sv) :
+    q.1 ∉ sv.sub.outputs ∧ ∀ k, Flock.RecVStar.cIndex q.2.1 = some k → ∀ rep, some rep ∈ q.2.2.toList → rep < 2 := by
+  cases sv with
+  | inner .. =>
+    unfold Flock.RecVStar.ownPorts at hq
+    obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
+    dsimp only at h
+    obtain ⟨k, hk, rfl⟩ := Option.map_eq_some_iff.1 h
+    refine ⟨fun hm => ?_, fun _ _ rep hr => ?_⟩
+    · rw [show nm = "out" from List.mem_singleton.1 hm, mIndex_out] at hk
+      cases hk
+    · simp at hr
+      omega
+  | sparse .. =>
+    unfold Flock.RecVStar.ownPorts at hq
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+    rcases hq with rfl | rfl
+    · refine ⟨by decide, fun _ _ rep hr => ?_⟩
+      simp at hr
+      omega
+    · refine ⟨by decide, fun _ hk => ?_⟩
+      rw [cIndex_claim] at hk
+      cases hk
+  | opening .. =>
+    unfold Flock.RecVStar.ownPorts at hq
+    obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
+    dsimp only at h
+    cases hm : Flock.RecVStar.mIndex nm with
+    | some k =>
+      rw [hm] at h
+      cases h
+      refine ⟨fun ho => ?_, fun _ _ rep hr => ?_⟩
+      · rw [show nm = "out" from List.mem_singleton.1 ho, mIndex_out] at hm
+        cases hm
+      · simp at hr
+        omega
+    | none =>
+      cases hc : Flock.RecVStar.claimIndex nm with
+      | some k =>
+        rw [hm, hc] at h
+        cases h
+        refine ⟨fun ho => ?_, fun _ hk => ?_⟩
+        · rw [show nm = "out" from List.mem_singleton.1 ho, claimIndex_out] at hc
+          cases hc
+        · rw [cIndex_claim] at hk
+          cases hk
+      | none =>
+        rw [hm, hc] at h
+        cases h
+  | recOpen => simp [Flock.RecVStar.ownPorts] at hq
+  | recOpenStacked => simp [Flock.RecVStar.ownPorts] at hq
+  | cap => simp [Flock.RecVStar.ownPorts] at hq
+
+/-- What `heldRows` holds: a row a statement's own port reads, at the port's index among its circuit's ports. -/
+theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
+    (hs : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv)
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
+    ∃ q ∈ Flock.RecVStar.ownPorts sv, ∃ k, Flock.RecVStar.cIndex q.2.1 = some k ∧ some h.2.2.2 ∈ q.2.2.toList ∧
+      h.2.1 = q.1 ∧ c.ports.findIdx? (·.name == q.1) = some h.2.2.1 := by
+  unfold heldRows at hh
+  rw [hs, hc] at hh
+  cases hrs : repSched r.shape with
+  | none =>
+    rw [hrs] at hh
+    simp at hh
+  | some rs =>
+    rw [hrs] at hh
+    dsimp only at hh
+    obtain ⟨q, hq, hh⟩ := List.mem_flatMap.1 hh
+    split at hh
+    · rename_i k hk
+      obtain ⟨row, hrow, hh⟩ := List.mem_filterMap.1 hh
+      simp only [Option.bind_eq_bind] at hh
+      obtain ⟨rep, rfl, hh⟩ := Option.bind_eq_some_iff.1 hh
+      obtain ⟨j, -, hh⟩ := Option.bind_eq_some_iff.1 hh
+      obtain ⟨qi, hqi, hh⟩ := Option.bind_eq_some_iff.1 hh
+      cases hh
+      exact ⟨q, hq, k, hk, hrow, rfl, hqi⟩
+    · simp at hh
+
+theorem checkStmt_scopeOk {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {registered : Option (Array Flock.Registered.Port)} {part : Option ℕ} {bindings : Option VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)}
+    (h : Flock.RecVStar.checkStmt (some i) tags tables st circuitB partition program registered part bindings rows =
+      .ok ()) :
+    Flock.ProvedScope.scopeOk st.c = true := by
+  unfold Flock.RecVStar.checkStmt at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+    cases h1
+  · split at h
+    · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+      cases h1
+    · split at h
+      · split at h
+        · split at h
+          · split at h
+            · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+              cases h1
+            rename_i hs
+            simpa using hs
+          · cases h
+        · cases h
+      · cases h
+
+/-- **What a staged part's tables passed**: each is in `ProvedScope.scopeOk`, and its population is the instance
+count of V\*'s statement `s` at the inner shape (`checkStmt`, `checkCircuit_ok`, `check_ok`). -/
+theorem staged_scope {st : Stage} {s : ℕ} {x xO : Claims.Msg} (h : StagedPart st s x xO)
+    {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
+    Flock.ProvedScope.scopeOk p.sts[t].c = true ∧ ∃ r ss sv, readX x = some r ∧
+      Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv ∧
+      Flock.RecVStar.population p.sts[t] = sv.instances := by
+  obtain ⟨ms, i, spec, sts, rfl, hsu, -⟩ := h
+  have e : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  subst e
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
+  have hC := RecIns.setup_checks hset
+  rw [hinner, insO_staged_part hins] at hC
+  have hck := checks_stmt hC t ht
+  refine ⟨checkStmt_scopeOk hck, ?_⟩
+  obtain ⟨j, f, sv, hj, -, hc⟩ := checkStmt_circuit hck
+  cases hj
+  obtain ⟨hck', -⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hc
+  obtain ⟨ss, hss, hs, -, hn, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck'
+  exact ⟨r, ss, sv, hr, hss, hs, hn⟩
+
+/-! ## The two facts no verifier check gives -/
+
+/-- **A staged part sets up one table** (V\*'s statements' honest form). No check of the verifier's forces it: the
+statement rules allow up to `zkTableCap` tables under zk, and only completeness's `readyO` asks `sts.size == 1`.
+`SlotCommits` reads a slot at its table's own addresses, which are the witness's only at one table (`zOf 1`). The
+verifier change that proves it: `RecIns.setup` (or the staged scope check) refusing a V\* statement with more than one
+table, as `readyO` does. -/
+def OneTable (st : Stage) : Prop :=
+  ∀ (s : ℕ) (x xO : Claims.Msg) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
+    StagedPart st s x xO → setupO xO = some (i, spec, sts) → sts.size = 1
+
+/-- `OneTable` holds wherever the verifier's ready check holds at each staged part (`setupO_of_readyO`). -/
+theorem oneTable_of_ready {st : Stage} (H : Claims.Msg → Claims.Msg)
+    (h : ∀ s x xO, StagedPart st s x xO → readyO H xO = true) : OneTable st := by
+  intro s x xO i spec sts hS hsu
+  obtain ⟨i', spec', sts', hsu', h1⟩ := setupO_of_readyO (h s x xO hS)
+  rw [hsu] at hsu'
+  cases hsu'
+  exact h1
+
+/-- **A staged RecCap part's table holds all its `N` instances.** `checkStmt` makes its population `N`
+(`staged_scope`), but a drawn table proves only its drawn units (`HmRow.drawn`: `n` the draw's size), and RecCap reads
+every instance's slot. The verifier change that proves it: `checkStmt` refusing a `.cap _ N` statement whose table has
+fewer than its population's instances (`st.n < population st`). -/
+def CapFull (st : Stage) : Prop :=
+  ∀ (s : ℕ) (x xO : Claims.Msg) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (r : XR)
+    (l N : ℕ),
+    StagedPart st s x xO → setupO xO = some (i, spec, sts) → readX x = some r →
+    (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) → ∀ h0 : 0 < sts.size, N ≤ sts[0].n
+
+/-- `CapFull` holds wherever a staged RecCap part's first table carries no draw population (`checkStmt` then makes its
+`n` its population, `N`). -/
+theorem capFull_of_undrawn {st : Stage}
+    (h : ∀ s x xO i spec sts, StagedPart st s x xO → setupO xO = some (i, spec, sts) → ∀ h0 : 0 < sts.size,
+      sts[0].pub.population = none) : CapFull st := by
+  intro s x xO i spec sts r l N hS hsu hr hcap h0
+  have hx := parse_of_setupO hsu
+  obtain ⟨-, r', ss, sv, hr', hss, hsv, hn⟩ := staged_scope hS hx (t := 0) h0
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hcap
+  have e : sv = .cap l N := Option.some.inj (hsv.symm.trans hcap)
+  subst e
+  have hp : (sts[0].pub.population.map (·.1)).getD sts[0].n = N := hn
+  rw [h s x xO i spec sts hS hsu h0] at hp
+  exact Nat.le_of_eq hp.symm
+
+/-! ## The slots commit at a staged part -/
+
+theorem div_lt_blocks {n m g e : ℕ} (hg : 0 < g) (hn : n < m)
+    (he : e = max 3 (Flock.log2ceil (max ((m + g - 1) / g) 1))) : n / g < 2 ^ e := by
+  have h1 : (m + g - 1) / g ≤ 2 ^ e :=
+    le_trans (le_trans (le_max_left _ 1) (FlockSoundness.le_two_pow_log2ceil _))
+      (Nat.pow_le_pow_right (by norm_num) (he ▸ le_max_right _ _))
+  have h2 : n / g < (m + g - 1) / g := by
+    rw [Nat.div_lt_iff_lt_mul hg]
+    have := Nat.div_add_mod' (m + g - 1) g
+    have := Nat.mod_lt (m + g - 1) hg
+    omega
+  omega
+
+theorem div_lt_blocks_two {n m g e : ℕ} (hn : n < 2)
+    (he : e = max 3 (Flock.log2ceil (max ((m + g - 1) / g) 1))) :
+    n / g < 2 ^ e := by
+  have h8 : 2 ^ 3 ≤ 2 ^ e := Nat.pow_le_pow_right (by norm_num) (he ▸ le_max_left _ _)
+  have := Nat.div_le_self n g
+  have : (2 : ℕ) ^ 3 = 8 := by norm_num
+  omega
+
+/-- **V\*'s hm96 slots output their commit strings at the outer relation**, wherever a staged part sets up one table
+(`OneTable`) and a RecCap part's table holds all its instances (`CapFull`): at `Flock.check` its one table's model is
+satisfied at the witness (`layout_of_check`), the table is `setupOne`'s (`setupTables_setupOne`), in scope
+(`staged_scope`) and V\*'s parse (`checkParsed_ok`), and each held row's port and RecCap's `top` is an input row of
+V\*'s (`in_block`, `ownPorts_held`) at a block of the table (`div_lt_blocks`), so `slotCommits_table` applies. -/
+theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st) :
+    HmSlotsCommit (deployZkRec Flock.Readable.relation) st := by
+  intro x ms s w r c hS hck hr hpc
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv⟩, h0, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  have hS' := hS
+  obtain ⟨ms', i, spec, sts, he, hsu, -⟩ := hS'
+  rw [← he] at hsu
+  have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  have hsz : p.sts.size = 1 := by rw [hp]; exact h1 s x _ i spec sts hS hsu
+  have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
+  obtain ⟨L, regs, hz⟩ := Flock.Readable.layout_of_check hck hx ht hpi h0
+  have hz1 : (L.model regs).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
+    have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
+    simp only at e
+    rw [← e]
+    exact hz
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hx
+  obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
+  unfold Flock.Readable.Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset
+  obtain ⟨d, hd, -⟩ := hall 0 h0
+  have ht' : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans ht
+  obtain ⟨hscope, -⟩ := staged_scope hS hx h0
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨-, hg0, hnbl, -⟩ := table_rows ht' hd (by omega) hv1 L regs hz1
+  have hsv' : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv := by
+    rw [hss]
+    exact hsv
+  subst hc0
+  refine ⟨fun h hh => ?_, fun l N hN q hq n hn => ?_⟩
+  · obtain ⟨q, hq, k, hk, hrep, hnm, hqi⟩ := mem_heldRows hsv' hpc hh
+    obtain ⟨hout, hrep2⟩ := ownPorts_held hq
+    rw [hnm]
+    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hqi (in_block hrows hout hqi)
+      (div_lt_blocks_two (hrep2 k hk _ hrep) hnbl)
+  · rw [hsv'] at hN
+    have e : sv = .cap l N := Option.some.inj hN
+    subst e
+    have hfull : N ≤ p.sts[0].n := by
+      subst hp
+      exact hcap s x _ i spec sts r l N hS hsu hr hsv' h0
+    exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hq (in_block hrows (by decide) hq)
+      (div_lt_blocks hg0 (by omega) hnbl)
 
 end RecDeploy
