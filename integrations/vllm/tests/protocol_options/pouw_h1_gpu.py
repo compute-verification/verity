@@ -52,7 +52,8 @@ the period's (`pouw_h1_served.Weights`, registered from the served model under t
 ``--weights-only OUT`` registers them, writes their root (the period-open's ``--weights-root``) and serves nothing.
 ``pouw_h1_rehearsal.py`` runs it all against infra's gate. ``--baseline-h1`` (fill, with ``--served``) serves an H1 window
 without `Served` first, in the solo window's place, so one engine measures plain, H1 and H1 with its registered tables;
-each window records its host RSS, and a served one its registration's seconds a step (``registered_s``, VLLM-76).
+each window records its host RSS, and a served one its registration's seconds a step (``registered_s``, VLLM-76). The
+period's declared Program and its digest are declared once before any window (`period_program`), as the period's.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -88,6 +89,43 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
            "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,",
            "The speed of light is", "In 1492, Columbus", "The largest planet in the solar system is", "To make a cup of tea,",
            "The chemical symbol for gold is", "A haiku about autumn:", "The square root of 144 is", "Photosynthesis is the process"]
+
+
+PERIOD_DIGEST = """
+import json, resource, sys, time
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity_vllm.protocol_options import pouw_h1_served as SV
+shapes, modules, rows, steps = json.loads(sys.argv[1])
+t = time.monotonic()
+digest = P.program_digest(SV.declared([tuple(s) for s in shapes], {int(w): n for w, n in modules.items()}, rows, steps))
+print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
+                  "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)}))
+"""
+
+
+def period_program(model: Any, rows: int, steps: int) -> tuple[Any, str, dict[str, Any]]:
+    """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run),
+    its digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares
+    them. The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window
+    pays, so this process's RSS is the windows' own."""
+    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocol_options import pouw_h1_hooks as PHK
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+
+    layers = PHK.layers(model, pouw.linear_types())
+    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
+    child = subprocess.Popen([sys.executable, "-c", PERIOD_DIGEST, json.dumps([shapes, modules, rows, steps])],
+                             stdout=subprocess.PIPE, text=True)
+    t = time.monotonic()
+    program = SV.declared(shapes, modules, rows, steps)
+    declare_s = round(time.monotonic() - t, 1)
+    out, _ = child.communicate()
+    if child.returncode:
+        raise RuntimeError(f"the period's Program digest exited {child.returncode}")
+    got = json.loads(out.strip().splitlines()[-1])
+    return program, got["digest"], {"shapes": shapes, "modules": modules, "declare_s": declare_s,
+                                    "digest_s": got["s"], "digest_peak_gib": got["peak_gib"]}
 
 
 def gate_argv(argv: list[str], args: Any) -> list[str]:
@@ -404,6 +442,10 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     lens = tuple(len(tok.encode(p)) for p in SERVE_H1_PROMPTS)
     doc["serve_h1"] = {"prompt_lens": list(lens), "u": str(PH.Static(lens, decl.max_tokens, decl.rows, decl.steps).u)}
     cap, served_steps = decl.max_tokens, decl.max_tokens
+    period = period_program(eng.model, decl.rows, decl.steps) if a.served else None
+    if period is not None:
+        doc["period"] = {k: v for k, v in period[2].items() if k not in ("shapes", "modules")} | {"circuit": period[1]}
+        print(f"[fill] period {json.dumps(doc['period'])} rss_gib={rss_gib()}", flush=True)
     t0 = time.monotonic()
     plain = generate_static(eng.llm, prompts, cap)
     t1 = time.monotonic()
@@ -418,7 +460,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
         rss0 = rss_gib()
-        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, window=None if a.challenger else os.urandom(64))
+        served = (SV.Served(prover=a.prover_dir, weights_key=wkey, window=None if a.challenger else os.urandom(64),
+                            program=period[0], program_digest=period[1])
                   if a.served and name == "fill" else None)
         registered_s: dict[int, float] = {}
         if served is not None and not a.handoff:
@@ -442,6 +485,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1)}
         print(f"[fill] {name} installed install_s={out['install_s']} rss_gib={rss_gib()}", flush=True)
         h1 = pouw.h1_run(entry_name)
+        if served is not None:
+            out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         bad: list[str] = []
         stamps: dict[int, float] = {}

@@ -223,8 +223,8 @@ class Served:
     ``weights``: the period's registered `Weights`, or ``weights_key`` the period's key to register them with from the
     served model at install (`weights_root`, from `pouw._install_h1`); without either the window
     registers its own ``b/<K>``. ``program``: the period's declared Program (`declared` under ``prefix``), given or
-    declared at the first call. From the first call: ``root`` (the window's open root its tables' domains bind, hex),
-    ``program_digest``, ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
+    declared at the first call, and ``program_digest`` its digest, given with it or computed then. From the first call:
+    ``root`` (the window's open root its tables' domains bind, hex), ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
     `registered.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
 
     tile: tuple[int, int] = PH.TILE
@@ -258,13 +258,17 @@ class Served:
         return PS.window_open_root(bytes.fromhex(need[0]), bytes.fromhex(need[1]), need[2])
 
     def declare(self, shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int) -> str:
-        """The period's declared Program (`declared` under ``prefix``), unless given, and its digest. ValueError on an odd
-        K or what `h1window.program` refuses."""
+        """The period's declared Program (`declared` under ``prefix``) and its digest, each unless given (the period's,
+        declared once for all its windows: at FILL the digest alone takes minutes and tens of GB). ValueError on an odd K
+        or what `h1window.program` refuses."""
         if any(k % 2 for _n, k in shapes):
             raise ValueError(f"K {sorted({k for _n, k in shapes})}: a row's codes are whole u16 words")
         if self.program is None:
-            self.program = declared(shapes, modules, rows, steps, self.tile, self.blocks, self.prefix, self.unit)
-        S, self.program_digest = self.program.fn.S(), P.program_digest(self.program)
+            self.program, self.program_digest = declared(shapes, modules, rows, steps, self.tile, self.blocks,
+                                                         self.prefix, self.unit), None
+        if self.program_digest is None:
+            self.program_digest = P.program_digest(self.program)
+        S = self.program.fn.S()
         self.linears, self.calls, self.m = [tuple(x) for x in S.LINEARS], [tuple(x) for x in S.CALLS], int(S.M)
         return self.program_digest
 
