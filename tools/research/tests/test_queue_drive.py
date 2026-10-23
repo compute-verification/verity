@@ -86,7 +86,23 @@ def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queu
         world.gh.put(n, world.change({f"{f}.txt": f"{n}\n"}))
     assert h.tick().count("launched") == 3
     assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
-    assert ranks == {m.commit: str(k) for k, m in enumerate(h.q.chain(), 1)}
+    chain = h.q.chain()
+    assert ranks == {m.commit: str(k) for k, m in enumerate(chain[:-1], 1)} | {chain[-1].commit: "1"}, "the top tip ranks first"
+
+
+def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(world, monkeypatch):
+    """23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50 PRs (cold-circuit-check boundaries at 2, 4,
+    10 and 13), and nothing checked the 35 above them; a pass at the top lands all of `next` in one check."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 3
+    for n in range(1, 7):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    said = h.tick()
+    chain = h.q.chain()
+    assert [c for c, _, _ in h.launched] == [chain[0].commit, chain[1].commit, chain[-1].commit], said
+    assert "one is kept for the top" in said
+    h.tick()
+    assert len(h.launched) == 3, "the top's check runs; nothing more launches while three run"
 
 
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
