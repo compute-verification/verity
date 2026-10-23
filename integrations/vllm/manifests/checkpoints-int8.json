@@ -649,6 +649,76 @@
     "model-00003-of-00004.safetensors": "1720f03840074c9bdcfb513f086455c5e29602eced17c6b549b885d135d24f11",
     "model-00004-of-00004.safetensors": "b35df7411d44dbf0c22dc6ea8b5c1acc36a5bbef5ccaa98a2ca3d203d06c7cfc"
    }
+  },
+  {
+   "config_sha256": "ae37ce597c9765fdbba108dd48ec1b2cb6201762ba6dc0b6335927e3e56395c6",
+   "downloaded": false,
+   "files": {
+    "config.json": {
+     "sha256": "ae37ce597c9765fdbba108dd48ec1b2cb6201762ba6dc0b6335927e3e56395c6",
+     "size": 903,
+     "digest_source": "recipe"
+    },
+    "generation_config.json": {
+     "sha256": "d77272ffaa7e62a904e8e130bb25ab11585bd4a5026e388d6d682e4b82892ce2",
+     "size": 120,
+     "digest_source": "base"
+    },
+    "model-00001-of-00003.safetensors": {
+     "sha256": "b920f99354339a1084109906df5d89b22b60db02f4be9919412b13fe36edc483",
+     "size": 2609096984,
+     "digest_source": "recipe"
+    },
+    "model-00002-of-00003.safetensors": {
+     "sha256": "7cd5e5c034d4aa836e239e251e8fe9d1dba6eef8e34858879d8d1d23c3dba987",
+     "size": 2506103056,
+     "digest_source": "recipe"
+    },
+    "model-00003-of-00003.safetensors": {
+     "sha256": "47a32220ebf98e5e897fee06020080aebc3fa260905d0ffbebaf20f6e2b6cc9b",
+     "size": 2030305656,
+     "digest_source": "recipe"
+    },
+    "model.safetensors.index.json": {
+     "sha256": "616f50c275eb7dd7c958d39595a268fdbc6e9b8f03982ba530e455ff12c6a1c0",
+     "size": 586405,
+     "digest_source": "recipe"
+    },
+    "special_tokens_map.json": {
+     "sha256": "b77491e270c6fcc5b2ecf22370f7318a6a18d3cabea09ba7bab92e9bf12656c2",
+     "size": 65,
+     "digest_source": "base"
+    },
+    "tokenizer.json": {
+     "sha256": "a094266ac6c4982efba277bc251349a5a6d6ad37efb39a2a90f53d8be2a40a40",
+     "size": 2115417,
+     "digest_source": "base"
+    },
+    "tokenizer_config.json": {
+     "sha256": "78a839c7851f14f9fb30e664c2b46166dc0628f2900679e5ec160656f702edff",
+     "size": 5372,
+     "digest_source": "base"
+    }
+   },
+   "int8_of": "allenai/OLMoE-1B-7B-0924",
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--verity-int8--OLMoE-1B-7B-0924-INT8/snapshots/8a5b1bf8edfd364bc60f9ebeb060b0880bde10b6",
+   "note": "made offline by `verity-vllm int8-checkpoint` (verity-int8-channel127/v1) from the allenai/OLMoE-1B-7B-0924 pin; no hub repo holds it",
+   "recipe": {
+    "base_repo": "allenai/OLMoE-1B-7B-0924",
+    "base_revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+    "id": "verity-int8-channel127/v1"
+   },
+   "repo": "verity-int8/OLMoE-1B-7B-0924-INT8",
+   "resolved_at": "2026-10-23T06:25:00Z",
+   "resolved_by": "vllm-dither-moe",
+   "revision": "8a5b1bf8edfd364bc60f9ebeb060b0880bde10b6",
+   "role": "OLMOE_INT8",
+   "safetensors_sha256": {
+    "model-00001-of-00003.safetensors": "b920f99354339a1084109906df5d89b22b60db02f4be9919412b13fe36edc483",
+    "model-00002-of-00003.safetensors": "7cd5e5c034d4aa836e239e251e8fe9d1dba6eef8e34858879d8d1d23c3dba987",
+    "model-00003-of-00003.safetensors": "47a32220ebf98e5e897fee06020080aebc3fa260905d0ffbebaf20f6e2b6cc9b"
+   }
   }
  ],
  "hf_home": "/workspace/hf",

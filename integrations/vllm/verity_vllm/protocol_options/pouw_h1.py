@@ -363,7 +363,9 @@ class H1Run:
                                         "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0,
                                         "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
-                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
+                                        "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1), lm_head and "
+                                                     "a MoE layer's router (bf16), and the linears the checkpoint's "
+                                                     "modules_to_not_convert keeps bf16",
                                         "z": "the call's z/y records from verity_int8::scaled_mm_zy, if its arm hands them over"}
 
     def listen(self, fn: Listener) -> None:
@@ -413,9 +415,13 @@ class H1Run:
         if self.prover is not None and m:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
+    def _index(self, s: int, w: int) -> int:
+        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
+        return len(self.calls)
+
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
         n, k = self.shapes_[w]
-        call = Call(len(self.calls), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
+        call = Call(self._index(s, w), s, w, self.modules.get(w, str(w)), int(a.shape[0]) if a is not None else 0, k, n,
                     s * self.u_step + self.offs[w], self.rows)
         self.calls.append(call)
         if self.commit:
