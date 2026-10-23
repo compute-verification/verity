@@ -18,7 +18,8 @@ spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "to
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
-N1, N2 = CHECK.AUTO
+#: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
+N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
           "tree": "/workspace/research/src/" + "6b3d704c8" * 4 + "abcd", "by": "https://cursor.com/agents/bc-1"}
 
@@ -197,7 +198,7 @@ def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_
     assert CHECK.choose([N1, N2], {N1: n1, N2: n2})[1].startswith("the fewest waiting ahead")       # a check's pick: no room on n2
     n2_lean_unread = n2 | {"lean": {"error": "PermissionError: /workspace/research/locks/lean-slots"}}
     assert Q.place(f"{N1},{N2}", ROOT, read=lambda names: {N1: n1, N2: n2_lean_unread})[0] == N2
-    got, why = Q.place("auto", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
+    got, why = Q.place(f"{N1},{N2}", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
     assert got is None and why == f"no machine's slots could be read; skipped {N1}: exit 255: no route to host; skipped {N2}: exit 255: no route to host"
 
 

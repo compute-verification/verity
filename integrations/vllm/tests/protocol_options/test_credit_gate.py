@@ -206,36 +206,64 @@ def _circuit() -> str:
     return hashlib.sha512(_descriptor()).hexdigest()
 
 
-#: the period's weights key (VLLM-71)
+#: the prover's own weights key, which salted its b/<K> before the auditor's registration (VLLM-71)
 WKEY = bytes(range(32, 64))
 #: each K's circuit file's SHA-512 as a period-open commits them (``circuit_files``)
 FILES = {f"k{K}": hashlib.sha512(b"the k64 template's circuit file").hexdigest()}
 
 
+def _rows(edit=None):
+    """`_serve`'s one linear's (``Linear(64, 1)``) int8 codes and f32 s_w, with one row's s_w or one code other with
+    ``edit`` ``"s_w"`` or ``"code"``."""
+    layer = Linear(64, 1, None)
+    codes, scales = layer.weight.numpy().copy(), layer.weight_scale.numpy().reshape(-1).copy()
+    if edit == "s_w":
+        scales[3] *= 2
+    elif edit == "code":
+        codes[3, 5] ^= 1
+    return codes, scales
+
+
+def _registry(edit=None) -> CH.Registry:
+    """The auditor's model registry (infra's, in process) holding `CH.MODEL`'s registration under the period's circuit:
+    its checkpoint `_rows` of `edit`, committed under the auditor's own salt key (the gate's ``model-register``)."""
+    reg = CH.Registry()
+    codes, scales = _rows(edit)
+    reg.register(CH.MODEL, _circuit(), _descriptor(), lambda name, k: CH.linear_rows(codes, scales))
+    return reg
+
+
+@functools.cache
+def _model_key() -> SV.ModelKey:
+    """The lane's ``model-key --model LLAMA31_8B_INT8 --circuit C`` of the honest registration (`_registry`)."""
+    return SV.model_key(_registry().key(CH.MODEL, _circuit()))
+
+
 @functools.cache
 def _period_weights() -> SV.Weights:
-    """The period's registered weights: `_serve`'s one linear's (``Linear(64, 1)``) b/<K>, under the declared Program."""
-    layer = Linear(64, 1, None)
-    return SV.register_weights(_circuit(), [(64, K)], {0: (layer.weight.numpy(), layer.weight_scale.numpy().reshape(-1))},
-                               WKEY)
+    """The period's weights as the served path registers them: `_serve`'s one linear's b/<K> under the declared Program,
+    salted with the registration's key (`_model_key`)."""
+    return SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, _model_key().key)
 
 
-def _served() -> SV.Served:
+def _served(**kw) -> SV.Served:
+    """The served path's `Served`, its b/<K> registered at install from the served linear under `_model_key` (or as
+    ``kw`` says)."""
     from tests.protocol_options.test_pouw_h1_served import _unit
-    return SV.Served(PH.TILE, _unit(), weights=_period_weights())
+    return SV.Served(PH.TILE, _unit(), **(kw or {"registry": _model_key()}))
 
 
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
     """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
-    None) the draw K ``draw_k``, with ``weights`` the period's weights' root (`_period_weights`'s, another root as hex,
-    or none with False) and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
+    None) the draw K ``draw_k``, opened with ``--model`` `CH.MODEL` (unless ``model`` is False) on ``registry``
+    (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
     ``host.ledger.period_close`` once the session has ended."""
-    def make(draw_k, weights=True, files=None):
+    def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
-        ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves)
-        signed = _period_weights().root().hex() if weights is True else (weights or None)
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, circuit_files=files, weights_root=signed)
+        ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, circuit_files=files,
+                           model=CH.MODEL if model else None)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
         monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -564,11 +592,12 @@ def test_a_window_with_no_served_tables_credits_nothing(periodic):
 
 
 def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carries_proof_files(periodic):
-    """VLLM-71 and PRF-132: a served window over its period's registered weights registers the period's ``b/<K>`` entries,
-    its open root over their root (the one the period's open signed), its round-0 request table and its session; its
-    evidence (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its drawn calls'
-    statements (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds.
-    Core's credit (`credit.window`) passes its weights and refuses it only for want of its drawn calls' proof files."""
+    """VLLM-71, VLLM-72 and PRF-132: a served window whose b/<K> it registered at install under the auditor's
+    registration's key (`model-key`) registers the registration's ``b/<K>`` entries, its open root over their root (the
+    one the period's ``--model`` open signed), its round-0 request table and its session; its evidence
+    (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its drawn calls' statements
+    (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
+    (`credit.window`) passes its weights and refuses it only for want of its drawn calls' proof files."""
     from verity.core.protocols.pouw import salt as PS
     k = PHC.draw_k(LAYOUT)
     assert k == 2
@@ -577,6 +606,11 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert auditor.ended() is None and not run.served.refused
     rec, w = _record(run), _period_weights()
     c = rec["commitment"]
+    (line,) = auditor.ledger.registry.lines
+    opened = json.loads(auditor.ledger.lines[0])["body"]
+    assert opened["weights_root"] == line["weights_root"] == _model_key().weights_root == w.root().hex()
+    assert opened[CR.MODEL_FIELD] == {"name": CH.MODEL, "checkpoint_sha512": CR.PINNED_MODELS[CH.MODEL]}
+    assert [e for e in c["served"]["entries"] if CR.is_held(e["value"])] == line["entries"]
     assert c["weights_root"] == w.root().hex()
     assert c["session"]["root"] == PS.window_open_root(w.root(), bytes.fromhex(c["requests_root"]),
                                                        auditor.session_id).hex()
@@ -595,36 +629,101 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     assert ev["rounds"][0]["requests"] == c["requests_root"]
 
 
-def _other_weights(edit):
-    """The period's weights registered over one row's s_w, or one code, other than `_serve`'s linear's."""
-    layer = Linear(64, 1, None)
-    codes, scales = layer.weight.numpy().copy(), layer.weight_scale.numpy().reshape(-1).copy()
-    if edit == "s_w":
-        scales[3] *= 2
-    else:
-        codes[3, 5] ^= 1
-    return SV.register_weights(_circuit(), [(64, K)], {0: (codes, scales)}, WKEY)
-
-
-@pytest.mark.parametrize("edit", ["s_w", "code", "unsigned"])
+@pytest.mark.parametrize("edit", ["s_w", "code", "own-key", "unsigned"])
 def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path, edit):
-    """VLLM-71, by core's credit (`credit.window`, #3201): a period whose open signed the weights' root of B rows with
-    one row's s_w, or one code, other than the ones its window serves refuses that window (``weights``), though the
-    window is consistent all through (its open root over its own served weights' root) and every drawn session is
-    accepted; a window in a period whose open signs no weights' root is refused too."""
-    other = None if edit == "unsigned" else _other_weights(edit)
-    auditor = periodic(1, weights=False if other is None else other.root().hex(), files=FILES)
-    _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
+    """VLLM-71 and VLLM-72, by core's credit (`credit.window`, #3201): a period opened with ``--model`` signs the
+    auditor's registration of the model, and a window whose served b/<K> differ from that registration's is refused
+    (``weights``), though the window is consistent all through (its open root over its own served weights' root) and
+    every drawn session is accepted: the registration's checkpoint has one row's s_w, or one code, other than the ones
+    the window serves (the window's rows salted with the registration's key, so only the rows differ), or the window
+    salted the served rows with the prover's own key (VLLM-71's, before the registry). A window in a period whose open
+    names no model, so signs no weights' root, is refused too."""
+    reg = _registry(None if edit in ("own-key", "unsigned") else edit)
+    auditor = periodic(1, model=edit != "unsigned", files=FILES, registry=reg)
+    key = WKEY if edit == "own-key" else _model_key().key
+    _y, run = _serve(ZyArm(), remote=True, n=64,
+                     served=_served(weights=SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, key)))
     assert auditor.ended() is None and not run.served.refused
     rec = _record(run)
     drawn = _credit(auditor, rec)["drawn"]
     out = _credit(auditor, rec, [_statement(tmp_path / "c0", 0, len(drawn))], run=_verifier(drawn))
     assert out["manifest"] is None and out["credit"] is None, out
-    if other is None:
+    if edit == "unsigned":
         assert out["window"] == ("weights", CR.no_weights(PERIOD)), out
         return
-    assert rec["commitment"]["weights_root"] == _period_weights().root().hex() != other.root().hex()
+    signed = json.loads(auditor.ledger.lines[0])["body"]["weights_root"]
+    assert signed == reg.lines[0]["weights_root"] != rec["commitment"]["weights_root"]
     assert out["window"][0] == "weights" and f"the one period {PERIOD}'s open signed" in out["window"][1], out
+
+
+@pytest.mark.parametrize("edit", ["s_w", "code"])
+def test_a_window_serving_other_weights_than_the_registration_refuses_itself(periodic, edit):
+    """VLLM-72, the prover's own check: the served path registers its b/<K> at install from the served linear under the
+    registration's key (`Served`'s ``registry``, the lane's ``model-key``), and when they fold to another root than the
+    registration's (its checkpoint has one row's s_w, or one code, other than the served one) the window registers no
+    table and credits nothing, naming why."""
+    reg = _registry(edit)
+    auditor = periodic(1, files=FILES, registry=reg)
+    _y, run = _serve(ZyArm(), remote=True, n=64, served=_served(registry=SV.model_key(reg.key(CH.MODEL, _circuit()))))
+    assert auditor.ended() is None
+    assert any(f"the served b/<K> are not the auditor's registration of {CH.MODEL}" in r for r in run.served.refused)
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
+    assert _credit(auditor, _record(run))["credit"] is None
+
+
+def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_path):
+    """VLLM-72: a period's weights' root is the auditor's registration, never the prover's. The gate's ``period-open``
+    with ``--weights-root`` the prover's own root (its served b/<K> under its own key, VLLM-71's) is refused before
+    anything is signed, by the in-process ledger and gate alike (infra's `models.opened`); naming the registration's
+    own root signs it with its model, as ``--model`` does."""
+    M = CH.models()
+    own = SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, WKEY).root().hex()
+    ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, registry=_registry())
+    with pytest.raises(M.Refused, match="a period's weights' root is the auditor's registration"):
+        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=own)
+    assert ledger.lines == []
+    private, key = CH.challenger_key(2)
+    gate = CH.Gate(private, key, registry=_registry())
+    with pytest.raises(M.Refused, match="never the prover's"):
+        gate.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=own)
+    assert gate.lines == []
+    W = _model_key().weights_root
+    body = gate.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=W)["body"]
+    assert body["weights_root"] == W and body[CR.MODEL_FIELD]["name"] == CH.MODEL
+
+
+def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
+    """VLLM-72: `challenger_host.Gate` has infra's model registry verbs. ``model-register`` commits the checkpoint's
+    b/<K> under a fresh auditor key; ``model-key`` gives the lane that key, under which the served path's own
+    registration of the same rows (`register_weights`) is the registration, root for root; ``period-open --model``
+    signs its weights' root and model, which core's credit reads (`credit.committed_weights`). A model it has no
+    registration of has no key, one registered twice under the circuit needs ``--weights-root``, and an answer whose
+    key isn't its ``key_sha512``'s is refused by the served path."""
+    private, key = CH.challenger_key(2)
+    gate = CH.Gate(private, key)
+    codes, scales = _rows()
+    reg = gate.model_register(CH.MODEL, _circuit(), _descriptor(), lambda name, k: CH.linear_rows(codes, scales))
+    assert (reg["model"], reg["circuit"], reg["prefix"]) == (CH.MODEL, _circuit(), SV.PREFIX)
+    answer = gate.model_key(CH.MODEL, _circuit())
+    mk = SV.model_key(answer)
+    assert (mk.model, mk.circuit, mk.weights_root) == (CH.MODEL, _circuit(), reg["weights_root"])
+    ours = SV.register_weights(_circuit(), [(64, K)], {0: (codes, scales)}, mk.key)
+    assert ours.root().hex() == reg["weights_root"]
+    assert {str(k): r.root.hex() for k, r in ours.registered.items()} == reg["roots"]
+    body = gate.period_open(PERIOD, circuit=_circuit(), cap=1, draw_k=1, model=CH.MODEL)["body"]
+    assert body["weights_root"] == reg["weights_root"]
+    assert body[CR.MODEL_FIELD] == {"name": CH.MODEL, "checkpoint_sha512": CR.PINNED_MODELS[CH.MODEL]}
+    assert CR.committed_weights(gate.lines, PERIOD) == (reg["weights_root"], None)
+    assert "refused" in gate.model_key("LLAMA31_70B_INT8", _circuit())
+    with pytest.raises(ValueError, match="model-key: refused"):
+        SV.model_key(gate.model_key("LLAMA31_70B_INT8", _circuit()))
+    with pytest.raises(ValueError, match="SHA-512 is the answer's key_sha512"):
+        SV.model_key({**answer, "key": "00" * 32})
+    again = gate.model_register(CH.MODEL, _circuit(), _descriptor(), lambda name, k: CH.linear_rows(codes, scales))
+    assert again["weights_root"] != reg["weights_root"]
+    assert "registered 2 times" in gate.model_key(CH.MODEL, _circuit())["refused"]
+    assert SV.model_key(gate.model_key(CH.MODEL, _circuit(), reg["weights_root"])).key == mk.key
 
 
 def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
@@ -660,7 +759,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
     weights' to none), and credits the gate-passed call only when every drawn unit's session is accepted: none, a
     rejected one, or another circuit's descriptor refuses the whole window. The closed period's credit
-    (`period_credit`) is that window's, and a window whose ``b/<K>`` aren't the period's is refused there too."""
+    (`period_credit`) is that window's, its period opened with ``--model`` (VLLM-72: the auditor's registration, whose
+    key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
@@ -695,10 +795,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
         "coin", f"window 0 of period {PERIOD}: the window's session can't be read ({LC.NO_PINS})")
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
-    layer = Linear(64, 1, None)
-    scales = layer.weight_scale.numpy().reshape(-1).copy()
-    scales[3] *= 2
-    b = SV.register_weights(_circuit(), [(64, K)], {0: (layer.weight.numpy(), scales)}, WKEY).registered[K].entry()
+    b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
     forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
     refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
     assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "

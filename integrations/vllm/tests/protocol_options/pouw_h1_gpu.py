@@ -47,10 +47,11 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 
 ``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
 (`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
-the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--weights-key FILE`` the weights' ``b/<K>`` are
-the period's (`pouw_h1_served.Weights`, registered from the served model under that key before the salt), and
-``--weights-only OUT`` registers them, writes their root (the period-open's ``--weights-root``) and serves nothing.
-``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--model M --circuit C`` (and ``--gate``) the
+weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`, VLLM-72): the gate's ``model-key --model M --circuit C``
+answers the auditor's registration of M under the period's circuit C and its salt key (`model_key_of`), and the served
+model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
+weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
@@ -136,7 +137,22 @@ def gate_command(argv: list[str]) -> Any:
             print(f"[gate] session {session}: port {answer['port']} "
                   + (f"listening after {polls} polls" if polls is not None else "not listening after 300 polls"), flush=True)
         return answer
+    gate.argv = argv
     return gate
+
+
+def model_key_of(gate: Any, model: str, circuit: str) -> Any:
+    """The auditor's registration of `model` under the period's `circuit` and its salt key
+    (`pouw_h1_served.ModelKey`), as the gate's ``model-key --model M --circuit C`` answers the lane's gate key; the key
+    is never printed or written here."""
+    from verity_vllm.protocol_options import pouw_h1_served as SV
+    p = subprocess.run(gate_argv(gate.argv, ["model-key", "--model", model, "--circuit", circuit]), capture_output=True,
+                       text=True)
+    try:
+        answer = json.loads(p.stdout)
+    except ValueError:
+        answer = {"refused": f"exit {p.returncode}: {p.stderr[-500:]}"}
+    return SV.model_key(answer)
 
 
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
@@ -200,7 +216,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
                            "scheme": PH.SCHEME}
     with tempfile.TemporaryDirectory() as scratch:
@@ -358,7 +374,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     decl = PH.FILL
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
                            "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
                            "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
@@ -372,19 +388,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
                      "effective": eng.effective, "args": decl.engine_args()}
     entry_name = f"pouw:{PH.SCHEME}"
-    wkey = Path(a.weights_key).read_bytes() if a.weights_key else None
-    if wkey is not None and len(wkey) != 32:
-        raise ValueError(f"--weights-key {a.weights_key}: the period's weights key is 32 bytes, not {len(wkey)}")
-    if a.weights_only:
-        served = SV.Served(prover=a.prover_dir, weights_key=wkey)
-        ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, admission="round-0", served=served))
-        PO.install(eng.model, ctx).close()
-        weights = {"weights_root": served.weights.root().hex(), "circuit": served.weights.circuit,
-                   "entries": served.weights.entries()}
-        Path(a.weights_only).write_text(json.dumps(weights, indent=1) + "\n")
-        print(f"[fill] weights {weights['weights_root'][:16]}... under circuit {weights['circuit'][:16]}...", flush=True)
-        return {**doc, "weights": weights, "ok": True}
+    registry = model_key_of(a.gate, a.model, a.circuit) if a.model else None
+    if registry is not None:
+        doc["registry"] = {"model": registry.model, "circuit": registry.circuit, "weights_root": registry.weights_root}
+        print(f"[fill] {registry.model}'s registration {registry.weights_root[:16]}... under circuit "
+              f"{registry.circuit[:16]}...", flush=True)
     try:
         cfg = eng.llm.llm_engine.vllm_config
         doc["engine"]["scheduler"] = {"max_num_seqs": cfg.scheduler_config.max_num_seqs,
@@ -414,7 +422,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
 
     def window(name: str, want: list[dict[str, Any]], tdir: Path) -> dict[str, Any]:
         nonlocal layers
-        served = SV.Served(prover=a.prover_dir, weights_key=wkey) if a.served and name == "fill" else None
+        served = SV.Served(prover=a.prover_dir, registry=registry) if a.served and name == "fill" else None
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, a.session, a.gate, retain_steps=a.retain,
                                               transcript_dir=str(tdir), admission="round-0", served=served))
@@ -741,6 +749,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rows", type=int, default=64, help="T, the public rows a call: vLLM's max_num_batched_tokens")
     ap.add_argument("--steps", type=int, default=0, help="S, the public steps of the window (default 2 (max tokens + 2): the "
                                                          "batch and the one alone)")
+    ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
+                    help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
@@ -773,12 +783,11 @@ def main(argv: list[str] | None = None) -> int:
                                                             "credit reads the window's layout from")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
-    ap.add_argument("--weights-key", metavar="FILE", help="fill with --served: the period's weights key (32 bytes, kept "
-                                                          "by pouw_h1_prover.keep_key), under which each K's b/<K> is "
-                                                          "registered before the window's salt (pouw_h1_served.Weights)")
-    ap.add_argument("--weights-only", metavar="FILE", help="fill with --weights-key: register the period's weights from "
-                                                           "the served model, write {weights_root, circuit, entries} to "
-                                                           "FILE (the period-open's --weights-root) and serve nothing")
+    ap.add_argument("--model", metavar="ROLE", help="fill with --served and --gate: the served model's int8 checkpoint role "
+                                                    "(LLAMA31_8B_INT8), whose registration under --circuit the gate's "
+                                                    "model-key answers; each K's b/<K> is registered under its key before "
+                                                    "the window's salt (pouw_h1_served.Weights, VLLM-72)")
+    ap.add_argument("--circuit", metavar="SHA512", help="with --model: the period's circuit (its declared Program's digest)")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
                          "flight every served step (VLLM-52; its own T, S and cap)")
@@ -797,8 +806,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.stream_fd is None:
             ap.error("--close-from needs --stream-fd (the session's stream the holder took)")
         return 0 if fill_close(a)["ok"] else 1
-    if a.weights_only and not (a.weights_key and a.workload == "fill"):
-        ap.error("--weights-only is the fill workload's, with --weights-key")
+    if a.model and not (a.circuit and a.gate and a.served and a.workload == "fill"):
+        ap.error("--model is the fill workload's, with --served, --circuit and --gate (the gate's model-key)")
     if a.handoff and not (a.handoff_state and a.challenger and a.workload == "fill"):
         ap.error("--handoff is the fill workload's, with --challenger and --handoff-state")
     if a.compile_from:

@@ -72,9 +72,9 @@ eight items:
    `2^-128` target under every weight (ASK-73): its KS is stated and proved at that level, not at the floor. Route 2C's
    bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from
-   premises still open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's
-   transcript reading back (`RecDeploy.ReadsBack`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at
-   the parts that commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and
+   premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and the readers' three facts
+   (`RecDeploy.ksLin2_deployed_rec`, at the coin server's record, which reads back, and the last round's pieces at the
+   parts that commit the earlier rounds). Holo statements are candidate 3's own model, and
    `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
@@ -661,11 +661,10 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 `coverW`, ASK-72; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
 under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three
-facts and the coin server's transcript reading back (`RecDeploy.ReadsBack`, `RecDeploy.ksLin2_deployed_open`, with the
-last round's pieces at the parts that commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate
-3's own model, and
-`BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and the readers'
+three facts (`RecDeploy.ksLin2_deployed_rec`, at the coin server's record, which reads back, and the last round's pieces
+at the parts that commit the earlier rounds). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
   min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
     (128 - Real.logb 2 (γe D I x * cBe D x) / 2) - 2

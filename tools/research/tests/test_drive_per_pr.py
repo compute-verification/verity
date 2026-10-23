@@ -357,3 +357,27 @@ def test_stats_per_pr_reads_the_shadows_records_from_drives_state_file(tmp_path,
     assert "the per-PR shadow sampled 3 PR(s): 2 would land, 0 failed, 0 conflict with `main`, 1 still going" in out
     assert "first check's slot -> would land (drive's rule)" in out and "median  1.00 h  p90  1.75 h  (n=2)" in out
     assert "first launch -> its slot (an ordinary job's wait)" in out
+
+
+def test_the_shadow_yields_its_held_slots_and_launches_nothing_while_a_train_waits_for_one(world, monkeypatch):
+    """CI-141: 21 Oct the shadow's ordinary jobs took vy-nebius-2's two check slots while nothing waited, then held them for an
+    hour while trains queued behind. While a train's check waits for a slot, each shadow check holding one is cancelled and its
+    PR queued again, and no new shadow check launches; once no train waits, the shadow checks it again."""
+    h = Shadow(world, monkeypatch, n=2, trains=2)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    ours = {n: h.check_of(n)["ids"] for n in (1, 2)}
+    trains = {r for v in h.q.load_state()["drive"]["launched"].values() for r in v["ids"]}
+    waiting = {"on": True}
+    h.d._slot_state = lambda rid: ({"state": "waiting"} if rid in trains and waiting["on"] else
+                                   {"state": "held", "took": "2026-10-20T12:00:00Z"} if rid not in trains else {})
+    h.took.update({r: "2026-10-20T12:00:00Z" for ids in ours.values() for r in ids})
+    before = len(h.launched)
+    h.tick()
+    assert set(h.cancelled) >= {r for ids in ours.values() for r in ids}
+    assert [h.rec(n)["phase"] for n in (1, 2)] == ["queued", "queued"] and all(h.check_of(n).get("yielded") for n in (1, 2))
+    assert len(h.launched) == before and any("yields its slot" in x for x in world.logs)
+    waiting["on"] = False
+    h.tick()
+    assert len(h.launched) == before + 2 and [h.rec(n)["phase"] for n in (1, 2)] == ["checking", "checking"]

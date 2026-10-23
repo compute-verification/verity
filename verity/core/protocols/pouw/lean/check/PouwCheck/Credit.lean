@@ -61,6 +61,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   roots, the window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows,
   codes and s_w, were fixed before its salt. `window` composes it right after `layoutOf` (`periodWeights`), and holds their root to the
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
+  That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
+  `credit.py` reads, embedded here), else the period counts nothing.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -947,12 +949,12 @@ def OTHER_WEIGHTS : String :=
   "codes or its s_w, is not the one registered before the window's salt. Register each K's B rows once, before the " ++
   "window opens, and open them at that root"
 
-/-- `credit.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
+/-- `weights.weights_root`: `tagged` of `WEIGHTS_TAG` and each K's registered `…/b/<K>` root by ascending K. -/
 def weightsRoot (roots : List (Nat × ByteArray)) : ByteArray := weightsRootAt 64 WEIGHTS_TAG roots
 
 def weightsRefuse {α : Type} (why : String) : R α := throw ("weights", why)
 
-/-- `credit.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
+/-- `weights.b_words`: a B row's 16-bit words, its K int8 codes then the 4 bytes of its f32 s_w (`h1zy.ROW`). -/
 def bWords (k : Nat) : Nat := (k + 5) / 2
 
 def otherWeightsEntry (v : String) (k n : Nat) : String :=
@@ -1014,17 +1016,46 @@ def isHexBytes (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
 def noWeights (name : String) : String :=
-  s!"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --weights-root): " ++
+  s!"period {name}'s open signs no weights' root ({WEIGHTS_FIELD}, a SHA-512 digest, the gate's --model): " ++
   "the period registers each K's B rows before its first window's salt and opens with their root"
 
+def MODEL_FIELD : String := "model"
+def MODEL_FIX : String :=
+  "open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit pins " ++
+  "(models.json)"
+
+/-- `credit.PINNED_MODELS`: each checkpoint role a period's open may name, with its checkpoint's SHA-512, from the same
+`models.json` `credit.py` reads. Credit counts only an int8 role's weights: an open naming another role signs no
+weights' root, so `committedWeights` refuses its period. -/
+def PINNED_MODELS : List (String × String) :=
+  match Json.parse (include_str "../models.json") with
+  | .ok j => (fields j).filterMap fun (r, e) => (str? (get e "checkpoint_sha512")).map (r, ·)
+  | .error _ => []
+
+def noModel (name : String) : String :=
+  s!"period {name}'s open signs a weights' root but no model ({MODEL_FIELD}, \{name, checkpoint_sha512}), so " ++
+  s!"nothing says which checkpoint it is the root of: {MODEL_FIX}"
+
+def unpinnedModel (name model : String) : String :=
+  s!"period {name}'s open names model {model}, which is no checkpoint role credit pins: {MODEL_FIX}"
+
+def otherCheckpoint (name model : String) : String :=
+  s!"period {name}'s open names model {model} with another checkpoint than the one credit pins for it: {MODEL_FIX}"
+
 /-- `credit.committed_weights`: the weights' root period `name`'s open signed (`WEIGHTS_FIELD`, a SHA-512 digest) in
-the auditor's ledger, one the challenger's checks have trusted; else the refusal (`weights`). -/
+the auditor's ledger, one the challenger's checks have trusted, its open naming the model that root is of
+(`MODEL_FIELD`), a role `PINNED_MODELS` pins with the same checkpoint; else the refusal (`weights`). -/
 def committedWeights (ledger : Json) (name : String) : R String := do
   let .arr lines := ledger | throw ("weights", noWeights name)
   let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some w := body.bind fun b => if (digest? (get b WEIGHTS_FIELD)).isSome then str? (get b WEIGHTS_FIELD) else none
     | throw ("weights", noWeights name)
+  let m := (body.map (get · MODEL_FIELD)).getD .null
+  let some model := (if keys m == some ["checkpoint_sha512", "name"] then str? (get m "name") else none)
+    | throw ("weights", noModel name)
+  let some pin := PINNED_MODELS.lookup model | throw ("weights", unpinnedModel name model)
+  unless get m "checkpoint_sha512" == Json.str pin do throw ("weights", otherCheckpoint name model)
   pure w
 
 /-- `credit._prefix`: the `PREFIX` of the program function's record of a descriptor `layoutOf` accepted. -/

@@ -5,7 +5,8 @@ the prover's hello must carry (`verifier.py --model`), and the prover builds the
 ~~~text
 pin        the checkpoint's files with their SHA-512s, in the auditor's model registry's shape (`benchmarks/
            live_challenger/models.py`): {name, checkpoint: {file: SHA-512 hex}, checkpoint_sha512}, checkpoint_sha512
-           the SHA-512 of checkpoint's canonical JSON; every file is held to it before anything reads it (`check`)
+           the SHA-512 of checkpoint's canonical JSON, or a role's entry of core's pin (`models.json`, `read_pin`);
+           every file is held to it before anything reads it (`check`)
 arena      one engine's weights (`engine.Arena`: one GPU, tensor parallelism 1): every parameter of vLLM's model with
            two or more dimensions, in its module order, each from a block boundary, as the checkpoint's BF16 bytes:
            embed_tokens; each decoder layer's self_attn.qkv_proj (q's, k's and v's rows in turn), o_proj,
@@ -85,11 +86,14 @@ def checkpoint_sha512(files: dict[str, str]) -> str:
 def read_pin(path: Path, role: str | None = None) -> dict:
     """A pin in the registry's shape, its `checkpoint_sha512` held to its files: {name, checkpoint, checkpoint_sha512}.
     A registry line names its model `model`, which is read as `name`; a registry itself (`models.jsonl`, a line a
-    registration) is read as its lines of `role`, which must pin one checkpoint."""
+    registration) is read as its lines of `role`, which must pin one checkpoint; core's pin (`verity/core/protocols/
+    pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex}, ...}}) as its entry of `role`,
+    named `role`, its `files` the checkpoint."""
     try:
         text = Path(path).read_text()
     except OSError as e:
         raise Refused(f"the pin {path} is not readable: {e}") from None
+    form = "{name, checkpoint: {file: SHA-512 hex}, checkpoint_sha512}"
     try:
         doc = json.loads(text)
     except ValueError:
@@ -102,13 +106,17 @@ def read_pin(path: Path, role: str | None = None) -> dict:
             raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning "
                           f"{len({x.get('checkpoint_sha512') for x in mine})} checkpoints: one is the pin")
         doc = mine[-1]
+    if isinstance(doc, dict) and doc and all(isinstance(v, dict) for v in doc.values()):
+        if role not in doc:
+            raise Refused(f"the pin {path} pins no role {role!r}: its roles are {sorted(doc)}")
+        entry, form = doc[role], "{ROLE: {checkpoint_sha512, files: {file: SHA-512 hex}, ...}}"
+        doc = {"name": role, "checkpoint": entry.get("files"), "checkpoint_sha512": entry.get("checkpoint_sha512")}
     name = doc.get("name", doc.get("model")) if isinstance(doc, dict) else None
     files = doc.get("checkpoint") if isinstance(doc, dict) else None
     if (type(name) is not str or not name or not isinstance(files, dict) or not files
             or any(type(f) is not str or not f or "/" in f or f.startswith(".") or type(h) is not str
                    or not SHA512_HEX.fullmatch(h) for f, h in files.items())):
-        raise Refused(f"the pin {path} is not {{name, checkpoint: {{file: SHA-512 hex}}, checkpoint_sha512}} with a "
-                      "file name (no directory) a file")
+        raise Refused(f"the pin {path} is not {form} with a file name (no directory) a file")
     if doc.get("checkpoint_sha512") != checkpoint_sha512(files):
         raise Refused(f"the pin {path}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
                       f"({checkpoint_sha512(files)[:16]}...)")

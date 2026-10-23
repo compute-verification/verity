@@ -8,6 +8,7 @@ import Flock.RowLeaf
 import Flock.Piop
 import Flock.Merkle
 import Flock.Record
+import Flock.TmplSplit
 
 namespace Flock
 
@@ -374,14 +375,50 @@ def partialRanges (st : Stmt) (alpha : F128) (lw rho rr : Array F128) :
     let p := project base (eqTable (rr.extract 0 h))
     partialRanges st alpha lw rho rr rs bases' (Array.ofFn (n := 64) fun s => out[s.val]! + wt * p[s.val]!)
 
-/-- `folded` from the block's structure (`structured`), never a `2^k_log` vector: the ranges' shares (`partialRanges`),
+/-- A templated unit's share of entry `s` before `wt` (`Tmpl.foldUnit`, from the template's description, never the slot's
+`2^sl` base): where the circuit carries a template whose committed net (`Tmpl.unitNet`) is the range's (by pointer, else
+compared), of the slot's size and with no lookup. `none` elsewhere, and where `foldUnit` refuses, and the range is folded
+as any other, from the net's rows. -/
+def unitShare (st : Stmt) (alpha : F128) (lw rho rr : Array F128) (r : Range) : Option (Array F128) :=
+  match st.c.tmpl, r.kind with
+  | some tu, .net i =>
+    let net := (st.c.nets.getD i default).2
+    if net.unitLog == r.slotLog && net.lookup.isNone &&
+        withPtrEq net tu.net (fun _ => decide (net = tu.net)) (fun h => by simp [h]) then
+      let h := r.slotLog - 6
+      (Tmpl.foldUnit tu.t tu.lays r.slotLog alpha lw (rho.extract 0 h) (rr.extract 0 h)).toOption
+    else none
+  | _, _ => none
+
+/-- `partialRanges`, with a templated unit's range folded from its template (`unitShare`). -/
+def partialRangesT (st : Stmt) (alpha : F128) (lw rho rr : Array F128) :
+    List Range → Array ((Kind × Nat) × Array F128) → Array F128 → V (Array F128)
+  | [], _, out => pure out
+  | r :: rs, bases, out => do
+    let h := r.slotLog - 6
+    let (p, bases') ← match st.unitShare alpha lw rho rr r with
+      | some p => pure (p, bases)
+      | none => do
+        let key := (r.kind, r.slotLog)
+        let (base, bases') ← match bases.find? (fun kb => decide (kb.1 = key)) with
+          | some (_, b) => pure (b, bases)
+          | none => do
+            let b ← st.slotBase alpha lw rho key
+            pure (b, bases.push (key, b))
+        pure (project base (eqTable (rr.extract 0 h)), bases')
+    let eHi := eqTable (rho.extract h rho.size)
+    let rHi := eqTable (rr.extract h rr.size)
+    let wt := sumUpTo r.count fun k => eHi[r.pos0 + k]! * rHi[r.pos0 + k]!
+    partialRangesT st alpha lw rho rr rs bases' (Array.ofFn (n := 64) fun s => out[s.val]! + wt * p[s.val]!)
+
+/-- `folded` from the block's structure (`structured`), never a `2^k_log` vector: the ranges' shares (`partialRangesT`),
 then each Δ entry `(i, c)`'s `α·e(i)` (B's: `e(i)`) times `eq(r, ⌊c/64⌋)` at `c mod 64`, and `β·eq(r, ⌊pin/64⌋)`, for
 `r = ts` reversed. -/
 def foldedPartial (st : Stmt) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) := do
   let kl := st.c.kLog
   if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
   let rr := ts.reverse
-  let out ← st.partialRanges alpha lw rho rr st.c.ranges.toList #[] (Array.replicate 64 0)
+  let out ← st.partialRangesT alpha lw rho rr st.c.ranges.toList #[] (Array.replicate 64 0)
   let n := 2 ^ kl
   let eIn := eqTable rho
   let eR := eqTable rr

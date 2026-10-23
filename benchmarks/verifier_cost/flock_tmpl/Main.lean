@@ -1,6 +1,7 @@
 import Flock.TmplSplit
 import Flock.NetAt
-import Flock.TmplUnroll
+import Flock.TmplAt
+import Flock.ProvedScope
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -21,7 +22,16 @@ templated statement's read runs, timed whole or a stage at a time (`rows`, `posM
 the flat statement's read runs in its place. `flock-tmpl checks TMPL`: the description checks (`Tmpl.wellFormed`,
 `Tmpl.ordered`, `Tmpl.inputsT`, `Tmpl.apart`, `Tmpl.groupsOk`: together `Tmpl.unroll`'s success, `unroll_ok`) timed one at a
 time, then the unrolled input-row checks they stand for (`Net.ofRows`' input rows and `Net.inputsOk` on `Tmpl.rows`), which
-must agree.
+must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmpl.layApart` over the Definitions,
+`Tmpl.identOk`, `Tmpl.outsAt`) and all of `Tmpl.unrollOk`, `Tmpl.unrollAt`'s success, at `layoutM`'s layouts (default
+`iv/hybrid/4`), timed one at a time.
+`flock-tmpl stmt CIRCUIT`: a templated statement's circuit read as `HmOut.parseTmpl` reads it, a stage at a time (META off
+its own line, `HmOut.metaOf`; its template lines, `Tmpl.parse`, `layoutM`, `unrollOk`, `TmplUnit.read`, `HmRow.parse`, and
+`HmRow.parse`'s own work timed apart: its SHA-512, UTF-8 check, line split and META parse, the file's sections' `Net.parse`
+and `HmNets.check`'s comparison with the verifier's `sha512x3` and `hm96` nets, which `HmRow.parse` built (what is left of
+it is their build); then `checkRows`), then what decides
+which of the scope check's walks run (`ProvedScope.wiresFeed`), the unit's rows built (`Tmpl.unitNet`'s, which the
+verifier never reads), and the walks (`portReadsB`, `outReads`, `wiresAcyclic`) on the unit timed.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
@@ -227,6 +237,21 @@ def main (args : List String) : IO UInt32 := do
       let v := rowsOk && Net.inputsOk t.inGroups acc.ra acc.rb
       report "unrolled_inputs" t0 [("ok", toJson v), ("in_cols", toJson t.inCols)]
       return if ok && v then 0 else 1
+  | "checks-at" :: tp :: opt =>
+    let name := match opt.dropWhile (· != "--mode") with | _ :: m :: _ => m | _ => "iv/hybrid/4"
+    let some mode := modeOf name | IO.eprintln s!"unknown layout {name}"; return 2
+    let some t ← readTmpl tp | return 1
+    let t0 ← IO.monoNanosNow
+    let .ok lays := Tmpl.layoutM t mode | report "layout" t0 [("error", Json.str "layout refused")]; return 1
+    report "layout" t0 [("size", toJson (lays.getD t.root default).size)]
+    let mut ok := true
+    for (name, check) in [("lay_apart", fun t lays => (List.range t.defs.size).all (Tmpl.layApart t lays)),
+        ("ident_ok", Tmpl.identOk), ("outs_at", Tmpl.outsAt), ("unroll_ok", Tmpl.unrollOk)] do
+      let t0 ← IO.monoNanosNow
+      let v := check t lays
+      report name t0 [("ok", toJson v)]
+      ok := ok && v
+    return if ok then 0 else 1
   | "layout" :: tp :: names =>
     let some t ← readTmpl tp | return 1
     let mut ok := true
@@ -285,8 +310,72 @@ def main (args : List String) : IO UInt32 := do
     | .ok q =>
       report "fold_ref" t0 [("equal", toJson (p == q))]
       return if p == q then 0 else 1
+  | ["stmt", circuit] =>
+    let some tags := Tags.templated.head? | return 2
+    let t0 ← IO.monoNanosNow
+    let bytes ← IO.FS.readBinFile circuit
+    report "read" t0 [("bytes", toJson bytes.size)]
+    let t0 ← IO.monoNanosNow
+    let .ok mj := HmOut.metaOf bytes | report "meta" t0 [("error", Json.str "refused")]; return 1
+    report "meta" t0
+    let t0 ← IO.monoNanosNow
+    let .ok lines := (do (← J.arr mj "template" "META").mapM fun x => J.asStr x "template line" : V (Array String))
+      | report "template_lines" t0 [("error", Json.str "refused")]; return 1
+    report "template_lines" t0 [("lines", toJson lines.size)]
+    let some mode := (J.str mj "layout" "META").toOption.bind Tmpl.modeOf | IO.eprintln "META: no layout"; return 1
+    let t0 ← IO.monoNanosNow
+    let .ok t := Tmpl.parse lines | report "parse" t0 [("error", Json.str "refused")]; return 1
+    report "parse" t0 [("defs", toJson t.defs.size)]
+    let t0 ← IO.monoNanosNow
+    let .ok lays := Tmpl.layoutM t mode | report "layout" t0 [("error", Json.str "refused")]; return 1
+    report "layout" t0
+    let t0 ← IO.monoNanosNow
+    report "unroll_ok" t0 [("ok", toJson (Tmpl.unrollOk t lays))]
+    let t0 ← IO.monoNanosNow
+    let .ok tu := TmplUnit.read t mode | report "unit_read" t0 [("error", Json.str "refused")]; return 1
+    report "unit_read" t0 [("useful", toJson tu.net.useful), ("unit_log", toJson tu.net.unitLog)]
+    let t0 ← IO.monoNanosNow
+    let .ok c := HmRow.parse tags bytes [] (pre := #[("unit", tu.net)]) | report "hmrow_parse" t0 [("error", Json.str "refused")]; return 1
+    report "hmrow_parse" t0
+    let t0 ← IO.monoNanosNow
+    report "hmrow_sha" t0 [("digest", toJson (Sha512.hash bytes).size)]
+    let t0 ← IO.monoNanosNow
+    let some text := String.fromUTF8? bytes | report "hmrow_utf8" t0 [("error", Json.str "refused")]; return 1
+    report "hmrow_utf8" t0 [("bytes", toJson text.utf8ByteSize)]
+    let t0 ← IO.monoNanosNow
+    let lines := (text.splitOn "\n").toArray
+    report "hmrow_lines" t0 [("lines", toJson lines.size)]
+    let t0 ← IO.monoNanosNow
+    let mj := Json.parse ((lines.getD 1 "").trimAsciiEnd.toString.drop 5).toString
+    report "hmrow_meta" t0 [("ok", toJson (mj matches .ok _))]
+    let t0 ← IO.monoNanosNow
+    let mut at_ := 2
+    let mut parsed := 0
+    while at_ < lines.size do
+      let n := ((tokens lines[at_]!).getD 2 "").toNat?.getD 0
+      if Net.parse (lines.extract (at_ + 1) (at_ + 1 + n)) matches .ok _ then parsed := parsed + 1
+      at_ := at_ + 1 + n
+    report "hmrow_sections" t0 [("nets", toJson parsed)]
+    let t0 ← IO.monoNanosNow
+    report "hmnets_check" t0 [("ok", toJson (HmNets.check c matches .ok _))]
+    let t0 ← IO.monoNanosNow
+    let .ok () := HmOut.checkRows c | report "check_rows" t0 [("error", Json.str "refused")]; return 1
+    report "check_rows" t0
+    report "scope" t0 [("in_groups", toJson c.unit.inGroups.size), ("out_is_unit", toJson (c.outNet == c.unitNet)),
+      ("wires", toJson c.wires.size), ("wires_feed", toJson (ProvedScope.wiresFeed c)), ("nets", toJson c.nets.size),
+      ("unit_log", toJson c.unit.unitLog), ("ranges", toJson c.ranges.size)]
+    let t0 ← IO.monoNanosNow
+    report "rows" t0 [("nnz", toJson (c.unit.a.data.size / 4 + c.unit.b.data.size / 4))]
+    let t0 ← IO.monoNanosNow
+    report "port_reads" t0 [("ok", toJson (ProvedScope.portReadsB c.unit))]
+    let t0 ← IO.monoNanosNow
+    report "out_reads" t0 [("ok", toJson (ProvedScope.outReads c.unit).2)]
+    let t0 ← IO.monoNanosNow
+    report "wires_acyclic" t0 [("ok", toJson (ProvedScope.wiresAcyclic c))]
+    return 0
   | _ =>
     IO.eprintln ("usage: flock-tmpl read TMPL | flock-tmpl unroll TMPL | flock-tmpl diff TMPL CIRCUIT | " ++
       "flock-tmpl layout TMPL [MODE…] | flock-tmpl fold TMPL [--mode MODE] [--split [--plain]] [--ref] | " ++
-      "flock-tmpl unrollat TMPL [--mode MODE] [--phases] | flock-tmpl flat CIRCUIT NAME | flock-tmpl checks TMPL")
+      "flock-tmpl unrollat TMPL [--mode MODE] [--phases] | flock-tmpl flat CIRCUIT NAME | flock-tmpl checks TMPL | " ++
+      "flock-tmpl checks-at TMPL [--mode MODE] | flock-tmpl stmt CIRCUIT")
     return 2
