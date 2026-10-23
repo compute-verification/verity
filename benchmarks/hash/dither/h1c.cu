@@ -35,7 +35,8 @@
 // (stag, j, ns, 8 m_j) is the same in every row of its table, so where a table has at most SEGMID_MAX segments a row, a
 // segments block compresses each of its segments' first blocks once (one lane each) and its threads start from them.
 // H1C_SMINB = B: the segments kernel's registers leave room for B blocks an SM (with H1C_SEGMID it holds 120 registers
-// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).
+// on sm_120a, 4 blocks, against 96 without; 96 on sm_90a and sm_100a).  H1C_MKT = 1 (H1C_MK, sm_80 and up): a warp's 32
+// leaves' M_key y on the tensor cores (hb_mkt), and a leaf's c before it, so y is dead through it.
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -69,6 +70,9 @@
 #ifndef H1C_SEGMID
 #define H1C_SEGMID 0
 #endif
+#ifndef H1C_MKT
+#define H1C_MKT 0
+#endif
 // unset, h1c_segs' bounds name no blocks an SM: __launch_bounds__(HT, 1) lets it take 136 registers on sm_90a, not 96
 #ifdef H1C_SMINB
 #define H1C_SEGS_BOUNDS __launch_bounds__(HT, H1C_SMINB)
@@ -79,6 +83,7 @@ static_assert(H1C_HB || (H1C_LVF < 0 && !H1C_DOMSEG && !H1C_MK && !H1C_SEGMID),
               "H1C_LVF, H1C_DOMSEG, H1C_MK and H1C_SEGMID are H1C_HB's");
 static_assert(H1C_MK || !H1C_MID, "H1C_MID's snapshots are published at H1C_MK's barriers");
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
+static_assert(H1C_MK || !H1C_MKT, "H1C_MKT is H1C_MK's leaves kernel's");
 
 namespace sh {
 typedef unsigned long long u64;
@@ -909,6 +914,95 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
   __syncthreads();
 }
 
+#if H1C_MKT
+// H1C_MKT: a warp's 32 leaves' y (rows; k over y's 1536 bits as 48 u32 words, word K the bits 32 (K % 2) up of
+// y[K / 2]) times M_key's 512 outputs over GF(2): mma.m16n8k256's b1 AND-popc over 2 row tiles, 64 output tiles and 6 k
+// tiles, an output bit its sum's low bit.  g_mkt (h1c_mkt, from the byte tables) holds M_key in the B operand's lane
+// order, 8 output tiles a chunk, and the block stages a chunk at a time in bf.  An output tile's column g is bit
+// 4 (g & 1) + (g >> 1) of its output byte, so a row's lane takes its byte from two ballots' nibbles.
+constexpr int MKT_KT = 6, MKT_CW = 8 * MKT_KT * 32 * 2, MKT_WORDS = 8 * MKT_CW;  // a chunk's u32 words; g_mkt's
+static_assert(MKT_CW * 4 <= HT * HB && HT % 32 == 0, "a chunk fits bf and a block is whole warps");
+__device__ __align__(16) u32 g_mkt[MKT_WORDS];
+
+// g_mkt's word ((N * 6 + kt) * 32 + lane) * 2 + r: output tile N's column g = lane / 4, output n = 8 N + 4 (g & 1) +
+// (g >> 1); k word K = 8 kt + lane % 4 + 4 r; its bit i M_key's (n, K's bit i): bit n of byte table p's row 1 << s for
+// y[K / 2]'s bit b = 32 (K % 2) + i, p = 8 (K / 2) + 7 - b / 8, s = b % 8 (hb_mk's columns)
+extern "C" __global__ void h1c_mkt_k(const u64* __restrict__ btab) {
+  const int w = blockIdx.x * blockDim.x + threadIdx.x;
+  if (w >= MKT_WORDS) return;
+  const int r = w & 1, lane = (w >> 1) & 31, kt = (w >> 6) % MKT_KT, N = (w >> 6) / MKT_KT;
+  const int g = lane >> 2, K = 8 * kt + (lane & 3) + 4 * r, n = 8 * N + 4 * (g & 1) + (g >> 1);
+  u32 v = 0;
+  for (int i = 0; i < 32; ++i) {
+    const int b = 32 * (K & 1) + i, p = 8 * (K >> 1) + 7 - (b >> 3);
+    v |= (u32)((btab[((size_t)p * 256 + (1u << (b & 7))) * 8 + (n >> 6)] >> (n & 63)) & 1u) << i;
+  }
+  g_mkt[w] = v;
+}
+// g_mkt from the byte tables btab (hm96's for the one KEY), before any leaves launch reads it
+extern "C" int h1c_mkt(const u64* btab) {
+  h1c_mkt_k<<<(MKT_WORDS + 255) / 256, 256>>>(btab);
+  const cudaError_t e = cudaDeviceSynchronize();
+  return e ? (int)e : (int)cudaGetLastError();
+}
+
+__device__ __forceinline__ void mkt_mma(u32 (&d)[4], const u32 (&a)[4], u32 b0, u32 b1) {
+  asm("mma.sync.aligned.m16n8k256.row.col.s32.b1.b1.s32.and.popc {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+      : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+// every thread of the block, at its barriers (as hb_mk); y the thread's own row, which its warp's shuffles read
+__device__ __forceinline__ void hb_mkt(const u64 y[24], u64 mk[8], uint8_t* bf) {
+  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3, sel = lane >> 3, gg = lane & 7;
+  // row tile mt's A fragment of k tile kt: rows 16 mt + g (a[1], a[3]: + 8), k words 8 kt + t (a[2], a[3]: + 4)
+  u32 a[2][MKT_KT][4];
+#pragma unroll
+  for (int K = 0; K < 8 * MKT_KT; ++K) {
+    const u32 w = (u32)(y[K >> 1] >> (32 * (K & 1)));
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int h = 0; h < 2; ++h) {
+        const u32 v = __shfl_sync(~0u, w, 16 * mt + 8 * h + g);
+        if ((K & 3) == t) a[mt][K >> 3][h + 2 * ((K >> 2) & 1)] = v;
+      }
+  }
+  const uint2* cs = reinterpret_cast<const uint2*>(bf);
+#pragma unroll 1
+  for (int c = 0; c < 8; ++c) {
+    __syncthreads();
+    for (int q = threadIdx.x; q < MKT_CW / 4; q += HT)
+      reinterpret_cast<uint4*>(bf)[q] = __ldg(reinterpret_cast<const uint4*>(g_mkt) + c * (MKT_CW / 4) + q);
+    __syncthreads();
+    u64 by = 0;
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) {
+      u32 d[2][4] = {};
+#pragma unroll
+      for (int kt = 0; kt < MKT_KT; ++kt) {
+        const uint2 b = cs[(nt * MKT_KT + kt) * 32 + lane];
+        mkt_mma(d[0], a[0][kt], b.x, b.y);
+        mkt_mma(d[1], a[1][kt], b.x, b.y);
+      }
+      u32 bl[2][4];
+#pragma unroll
+      for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+        for (int k = 0; k < 4; ++k) bl[mt][k] = __ballot_sync(~0u, d[mt][k] & 1u);
+      // lane (sel, gg) is row 8 sel + gg, D row gg + 8 (sel & 1) of tile sel / 2: its column 2 t + j is bit 4 gg + t of
+      // that tile's ballot 2 (sel & 1) + j
+      const u32 lo = sel == 0 ? bl[0][0] : sel == 1 ? bl[0][2] : sel == 2 ? bl[1][0] : bl[1][2];
+      const u32 hi = sel == 0 ? bl[0][1] : sel == 1 ? bl[0][3] : sel == 2 ? bl[1][1] : bl[1][3];
+      by |= (u64)((lo >> (4 * gg) & 0xFu) | (hi >> (4 * gg) & 0xFu) << 4) << (8 * nt);
+    }
+#pragma unroll
+    for (int k = 0; k < 8; ++k)
+      if (k == c) mk[k] = by;
+  }
+  __syncthreads();
+}
+#endif
+
 // row leaf i's x = SHA-512(Q(n_bits) || d_0 || ..), its salt y, and (mk = M_key y on entry) its frame leaf.  sn (H1C_MID,
 // leaf_head's snapshots) null: every message from its first byte
 constexpr int SNW = 32;  // a snapshot's words: hb_save's 9 and a partial block
@@ -972,9 +1066,7 @@ __device__ __forceinline__ void leaf_salt(const H1Tab& T, long long i, const int
     hb_final(s, y + 8 * cc);
   }
 }
-__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
-                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
-  u64 c[8], h[8];
+__device__ __forceinline__ void leaf_c(uint8_t* b, const u64 y[24], u64 c[8], const u64* sn) {
   Hb s;
   if (sn) {
     hb_load(s, sn + SNW, b);
@@ -984,6 +1076,12 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
   }
   hb_words(s, y, 24);
   hb_final(s, c);
+}
+// the frame leaf from x, c (leaf_c's) and mk = M_key y on entry (x ^ M_key y on return)
+__device__ __forceinline__ void leaf_fin(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 c[8],
+                                         u64 mk[8], u64 out[8], const u64* sn) {
+  u64 h[8];
+  Hb s;
 #pragma unroll
   for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
   if (sn) {
@@ -1008,6 +1106,12 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
   hb_be(s, 64, 8);
   hb_words(s, h, 8);
   hb_final(s, out);
+}
+__device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b, const u64 x[8], const u64 y[24],
+                                         u64 mk[8], u64 out[8], const u64* sn = nullptr) {
+  u64 c[8];
+  leaf_c(b, y, c, sn);
+  leaf_fin(T, i, b, x, c, mk, out, sn);
 }
 
 __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long long idx);
@@ -1040,11 +1144,27 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
     const u64* snp = nullptr;
 #endif
     if (real) leaf_salt(T, i, step, b, y);
+#if H1C_MKT
+    u64 c[8];
+    if (!real)
+#pragma unroll
+      for (int k = 0; k < 24; ++k) y[k] = 0;
+#if H1C_MID
+    __syncthreads();  // publishes the snapshots leaf_c reads
+#endif
+    if (real) leaf_c(b, y, c, snp);
+    hb_mkt(y, mk, bf);
+    if (real) {
+      leaf_x(T, i, b, x, snp);
+      leaf_fin(T, i, b, x, c, mk, out, snp);
+    }
+#else
     hb_mk(y, mk, btab, bf, real);
     if (real) {
       leaf_x(T, i, b, x, snp);
       leaf_out(T, i, b, x, y, mk, out, snp);
     }
+#endif
   }
   const bool mine = i < width && (i >= T.count || T.data);
 #if !H1C_LVB

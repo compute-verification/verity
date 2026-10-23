@@ -262,6 +262,11 @@ class H1C:
         tabs = inst.byte_tables(CM.KEY)
         raw = b"".join(v.to_bytes(64, "little") for row in tabs for v in row)
         self.btab = torch.from_numpy(words(raw)).to(dev)
+        if hasattr(self.lib, "h1c_mkt"):  # H1C_MKT: the leaves' M_key in its tensor-core order, from these tables
+            self.lib.h1c_mkt.argtypes = [C.c_void_p]
+            rc = self.lib.h1c_mkt(self.btab.data_ptr())
+            if rc:
+                raise RuntimeError(f"h1c_mkt returned {rc}")
         self.dev = dev
 
     def form(self, f: int) -> None:
