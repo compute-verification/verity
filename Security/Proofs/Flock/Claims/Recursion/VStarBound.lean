@@ -31,7 +31,7 @@ So the restated facts constrain every round:
 * `PartChecksB`: `PartChecks`, where the messages it quantifies over also agree with the part's pieces of the
   assembled rounds, at their offsets. A part's check can read its own pieces of the last message.
 * `PartOpensB`: `PartOpens`, where what a part holds of a round before the last is the commit string itself, so it is
-  the string the part's statement shows.
+  the string the part's statement shows, and each piece it holds of such a round sits in that string at its offset.
 * `VstarShowsB`: `VstarShows`, the staging shows the coins and, at each round before the last, the run's commit string.
   With `RunPairs` it ties `shows` and `cmt` to an accepted run's coins and messages, so `PartChecksB` speaks of the run's
   coins and every holder of a round holds the run's commit string there.
