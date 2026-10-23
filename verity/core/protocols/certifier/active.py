@@ -26,7 +26,8 @@ clock as its turn comes, which is when it reads its link, and that reading is th
 grids, the link and every server connection, so whatever runs between a boundary and a tick's turn makes the tick late.
 An egress tick hands the frames read and writes a whole bucket to the link, and ingress ticks run after it at shared
 boundaries read their link past the slack on a loaded host and failed honest windows closed; an ingress tick releases a
-bucket's few request frames, so the egress tick after it is late by little. Two tickers wake together when their
+bucket's few request frames, so the egress tick after it is late by little, more only at a window's last bucket, where
+the ingress tick publishes its record. Two tickers wake together when their
 boundaries meet (both timers expire in one turn of the loop, or one `VirtualClock.advance` passes both); the device
 difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
 takes one event, and the trace orders a shared boundary's two ticks either way.
