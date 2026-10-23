@@ -1,0 +1,4 @@
+description = "the int8 W8A8 linears H1 serves (Dither's leg): weights one scale per output row (amax / 127, rounded, the recipe verity-int8-channel127 and its -fp8 form), activations one per token, rounded, no rotation; lm_head and attention bf16"
+
+[[linear]]
+step = "int8"

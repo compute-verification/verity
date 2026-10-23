@@ -939,6 +939,8 @@ E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 #: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
 BLOCKS = {"mx": 32, "nv": 16, "nvi": 16, "nv9": 16, "nvi10": 16, "nvi9": 16, "nvi5": 16}
 FP_SCALES = ("tensor", "channel", "mx", "nv")
+#: the `fp` step's own scale: groups of G128 along k, each max(amax, G128_EPS) / the format's max (`fake_quant`)
+G128, G128_EPS = 128, 1e-10
 #: a weight's rows are quantized (and emulated) this many at a time, so lm_head's temporaries stay small
 ROW_CHUNK = 8192
 
@@ -959,7 +961,8 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
     """x on the format, dequantized, scaled along `dim` (the contraction): `tensor` one scale amax / max, `channel` one
     per slice along `dim` (per token, per output row), `mx` per block of 32 a power of two (OCP's E8M0 X), `nv` per
     block of 16 a UE4M3 scale times one FP32 scale per tensor (NVIDIA's: s = amax / (448 * 6), s_b = e4m3(amax_b / 6 /
-    s)). `amax`: the whole tensor's, when x is a slice of it."""
+    s)), `g128` per group of 128 an FP32 scale max(amax_g, 1e-10) / max (vLLM's `per_token_group_quant_fp8`, a
+    block-FP8 checkpoint's activations). `amax`: the whole tensor's, when x is a slice of it."""
     top, emax = FORMATS[fmt]
     x = x.float()
     amax = x.abs().amax() if amax is None else amax
@@ -968,6 +971,10 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
         s = a.clamp(min=1e-30) / top
         return to_format(x / s, fmt) * s
     xt = x.movedim(dim, -1)
+    if scale == "g128":
+        b = xt.reshape(*xt.shape[:-1], -1, G128)
+        s = b.abs().amax(-1, keepdim=True).clamp(min=G128_EPS) / top
+        return (to_format(b / s, fmt) * s).reshape(xt.shape).movedim(-1, dim)
     b = xt.reshape(*xt.shape[:-1], -1, BLOCKS[scale])
     a = b.abs().amax(-1, keepdim=True)
     if scale == "mx":
@@ -982,23 +989,31 @@ def fake_quant(x: torch.Tensor, fmt: str, scale: str, dim: int = -1, amax: torch
 def _check_fp(p):
     if p["fmt"] not in FORMATS:
         raise ValueError(f"fp.fmt is one of {sorted(FORMATS)}")
-    if p["scale"] not in FP_SCALES:
-        raise ValueError(f"fp.scale is one of {FP_SCALES}")
+    if p["scale"] not in FP_SCALES + ("g128",):
+        raise ValueError(f"fp.scale is one of {FP_SCALES + ('g128',)}")
     if p["scale"] == "nv" and p["fmt"] != "e2m1":
         raise ValueError("fp: nv blocks hold E2M1")
 
 
 @linear_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
-def fp_linear(mm, nxt, *, fmt: str, scale: str):
+def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
     """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
-    (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv), the
-    product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator)."""
+    (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv; g128), the
+    product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator). `keep_weight`: the
+    weights are the checkpoint's own, already on the format with their scales (a block-FP8 checkpoint), and only the
+    activations are rounded."""
+    if scale == "g128" and mm.x.shape[-1] % G128:
+        raise ValueError(f"{mm.where}: k = {mm.x.shape[-1]} is not a multiple of {G128}")
+    x = fake_quant(mm.x, fmt, scale)
+    if keep_weight:
+        return nxt(mm.replace(x=x))
+
     def weights():
         w = mm.weight()
         amax = w.abs().amax()
         return torch.cat(by_rows(lambda r: fake_quant(r, fmt, scale, amax=amax), w))
 
-    return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=mm.cached("fp", weights)))
+    return nxt(mm.replace(x=x, w=mm.cached("fp", weights)))
 
 
 @attention_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
