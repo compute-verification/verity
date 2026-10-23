@@ -424,6 +424,18 @@ def test_two_windows_of_one_layout_declare_one_program():
     assert hashlib.sha512(SV.descriptor(decl)).hexdigest() == run.served.program_digest
 
 
+def test_a_periods_program_and_digest_given_are_not_declared_again(monkeypatch):
+    """A window handed its period's Program and digest declares neither again (at FILL the digest alone takes minutes),
+    and one handed only the Program takes its digest."""
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=_unit())
+    digest = P.program_digest(decl)
+    taken = SV.Served(program=decl).declare(SHAPES, MODULES, T, STEPS)
+    monkeypatch.setattr(SV, "declared", lambda *a, **k: pytest.fail("declared again"))
+    monkeypatch.setattr(SV.P, "program_digest", lambda *a, **k: pytest.fail("digested again"))
+    served = SV.Served(program=decl, program_digest=digest)
+    assert taken == digest == served.declare(SHAPES, MODULES, T, STEPS) and served.calls == list(decl.fn.bindings["CALLS"])
+
+
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():
     """Two windows of a period share every name, so a window's call tables are its own only through their domains, which
     bind its open root: window 1's, presented as window 2's, are not under the domains window 2's root gives them

@@ -355,19 +355,19 @@ def _period(seed: int, tmp: Path, files: dict | None = "own"):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_of_statements_on_its_committed_circuit_files_earns(seed, tmp_path, verifier):
     d, windows = _period(seed, tmp_path)
-    got, refused = Cr.period_credit(d["key"], d["ledger"], d["name"], windows, rc.lms_verify)
+    got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
     assert refused is None
     assert got["windows"] == [_credited(w) for w in windows]
-    assert Cr.period_credit(d["key"], d["ledger"], d["name"], d["windows"], rc.lms_verify) == (
+    assert Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], d["windows"], rc.lms_verify) == (
         None, ("period", Cr.PERIOD_FORM))
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_committing_no_circuit_files_earns_nothing(seed, tmp_path, verifier):
     d, windows = _period(seed, tmp_path, files=None)
-    got, refused = Cr.period_credit(d["key"], d["ledger"], d["name"], windows, rc.lms_verify)
+    got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
     assert got is None and refused[0] == "circuit" and f"commits no circuit files ({Cr.CIRCUIT_FILES}" in refused[1]
     d, windows = _period(seed, tmp_path / "other", files={"k1": "ab" * 64})
-    got, refused = Cr.period_credit(d["key"], d["ledger"], d["name"], windows, rc.lms_verify)
+    got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
     assert got is None and refused[0] == "window" and "circuit: the period's open commits no circuit file for K = " in \
         refused[1], refused
