@@ -49,18 +49,33 @@ noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (n
 def bitsN (rd : ℕ → Option Bool) (lo n : ℕ) : ℕ :=
   ∑ i ∈ Finset.range n, if rd (lo + i) = some true then 2 ^ i else 0
 
+/-- A field's `n` bits spell a number below `2^n`. -/
+theorem bitsN_lt (rd : ℕ → Option Bool) (lo : ℕ) : ∀ n, bitsN rd lo n < 2 ^ n
+  | 0 => by simp [bitsN]
+  | n + 1 => by
+    have ih := bitsN_lt rd lo n
+    have e : bitsN rd lo (n + 1) = bitsN rd lo n + (if rd (lo + n) = some true then 2 ^ n else 0) := by
+      unfold bitsN
+      rw [Finset.sum_range_succ]
+    rw [e, pow_succ]
+    split <;> omega
+
 /-- Two's complement at `n` bits. -/
 def sgnBits (n x : ℕ) : ℤ := if x < 2 ^ (n - 1) then (x : ℤ) else (x : ℤ) - 2 ^ n
 
 /-- The first bit of the field at `path` among the ports `ps` (`fieldOf?`), 0 where none holds it. -/
 def fieldBit (ps : List Port) (path : String) : ℕ := ((fieldOf? ps path).map fun pf => pf.2.bit).getD 0
 
-/-- **A lane's public inputs** as its statement reads them: its admit bits and the salt, position and roots. -/
+/-- **A lane's public inputs** as its statement reads them: its admit bits and the salt, position and roots, each
+within its field's width (a digest's 512 bits, a u64, two digests), as the decode reads them from those bits. -/
 structure LanePub where
   admit : Fin 32 → Bool
   salt : ℕ
   position : ℕ
   roots : ℕ
+  salt_lt : salt < 2 ^ digestBits
+  position_lt : position < 2 ^ positionBits
+  roots_lt : roots < 2 ^ (2 * digestBits)
 
 /-- **Lane `l`'s view from a reader of its ports' row bits**, each field at its port and first bit in the tile's layout:
 an A row at row slot `s` from port `a<s>`, a B row at column slot `t` from `b<t>` (its `K` s8 codes, then its scale's
@@ -77,7 +92,8 @@ noncomputable def decLane (K nw : ℕ) (T : Tile) (rd : String → ℕ → Optio
   pub := ⟨fun i => rd "admit" (fieldBit (lanePorts T 0) "admit" + i.val) == some true,
     bitsN (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits,
     bitsN (rd "pub") (fieldBit (lanePorts T 0) "position") positionBits,
-    bitsN (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits)⟩
+    bitsN (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits), bitsN_lt _ _ _, bitsN_lt _ _ _,
+    bitsN_lt _ _ _⟩
   lane := ⟨bitsN (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits % 32, Nat.mod_lt _ (by norm_num)⟩
   ok := rd "o0" 0 == some true
 

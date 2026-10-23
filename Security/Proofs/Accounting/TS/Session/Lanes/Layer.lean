@@ -173,11 +173,12 @@ def LeafColl (sess : Option (Fin 32) → RowsSession) : Prop :=
 abbrev Known := Array (String × Array (Array ℕ × ByteArray))
 
 /-- **The known rows hold at a session**: at every registered read `p` of every unit's registrant whose registered port
-is one the known content `known` names, the registrant's row bytes there (`rsOf`'s encoding) are the `sha512/row/v2`
-bytes of the known row at `p`'s position. -/
+is one the known content `known` names, `p`'s position is one of the known rows' and the registrant's row bytes there
+(`rsOf`'s encoding) are the `sha512/row/v2` bytes of the known row at that position. -/
 def KnownHeld (s : RowsSession) (known : Known) : Prop :=
   ∀ nm ks, (nm, ks) ∈ known → ∀ (u : Fin s.n) (p : s.vb.Pos), (s.rdU u).isRead p → ((s.rdU u).port p).name = nm →
-    (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList
+    (s.rdU u).readAt p < ks.size ∧
+      (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList
 
 /-- **A leaf's known-content tie collides**: at one of its 33 sessions `k`, at a port `nm` its known content names with
 rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest

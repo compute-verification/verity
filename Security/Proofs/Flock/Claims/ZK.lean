@@ -99,6 +99,10 @@ import Proofs.Flock.Claims.ZK.FrameLoop
 import Proofs.Flock.Claims.ZK.FrameSched
 import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Claims.ZK.FrameCount
+import Proofs.Flock.Claims.ZK.FrameAsks
+import Proofs.Flock.Claims.ZK.FramePlan
+import Proofs.Flock.Claims.ZK.FrameLinks
+import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
@@ -715,6 +719,18 @@ import Proofs.Flock.Claims.ZK.SessionLean
 * `FrameCount`: the algebraic phase's scheduled rounds squeeze the masked replay's counts (`rounds_counts`,
   `piop_counts`: `replayCoins` with its zeros dropped), each round's count as its squeeze header holds it (`Tally`, over
   the recording channel `Skeleton.recAsks`).
+* `FrameAsks`: the live opening's squeezes ask for their counts (`OT`, over `Drive.stepAsks` past the coins it was
+  given): the ring switch's (`ringSwitchP_ot`) and, with `1 ≤ k0`, Ligerito's, `ligeritoCoins` with its zeros dropped
+  (`ligeritoPZk_ot`).
+* `FramePlan`: a rep's schedule so far squeezes a prefix of the algebraic phase's counts, then the opening's
+  (`sched_prefix`): the PIOP on the algebraic phase's coins asks for nothing (`piop_na`), the opening asks for the ring
+  switch's and Ligerito's (`openStep_sp`), and fed coins, the rounds sent are a prefix of the asks (`feed_prefix`). So at
+  the placeholder at a link of `spec.points` points, each scheduled round squeezes the plan's count (`plan_sched`).
+* `FrameLinks`: at a `Live` statement every rep stream's table has the session's link points, nonzero and within
+  `Frames.COIN_MAX` at its two points (`Masked.live_links`): `ofLoop_progChecks_of`'s `hP`.
+* `FrameReal`: where `real` answers the session loop's own tables (`RealTabs`: `tabOfLevel0` of a level 0 `ofDraws`
+  drew), the rep's own table is of the placeholder's shape (`real_tabAlike`) and within the bounds `schedSoFar_alike`
+  reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
   round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
