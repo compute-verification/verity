@@ -215,7 +215,7 @@ theorem rowsAt {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCom
     {sparse : Option RecSparse.Shape} (hP : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
     (hR : checkRegistered st (some own) = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
     (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) :
-    ∃ t idx p (positions : Array ℕ), st.pub.tables = some t ∧ Registered.unitIndices st.pub = .ok idx ∧
+    ∃ t idx p, ∃ positions : Array ℕ, st.pub.tables = some t ∧ Registered.unitIndices st.pub = .ok idx ∧
       (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
       positions.size = t.counts.getD p 0 ∧
       (∀ i < st.pub.n, Registered.ref t st.c.ports.size p i < positions.size ∧
@@ -945,7 +945,6 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset) 0 h0'
   have hpr := Flock.Readable.array_forM_ok (RecIns.setup_pubRows hset) 0 h0'
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
-  dsimp only at hcoin hpr
   rw [← e0] at hcoin hpr hreg
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
   obtain ⟨hn, hpt, -⟩ := htab 0 h0
