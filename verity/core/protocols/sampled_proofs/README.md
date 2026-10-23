@@ -139,7 +139,10 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
+    is one template, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
+    and the window is drawn once by `stratified:K`, a stratum per template.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
@@ -451,9 +454,10 @@ drawn once. The record is each `Segment` (family, first index, `after` and the o
 are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
 `"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
 verifier of record (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
-is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, segment, session}`), and
-the run takes the commitment and the roots from the session the auditor's ledger opens for the registration's window
-(`register`'s `window_root`, never a window the evidence names) and refuses the select step (code `coins`) unless the
+is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
+session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
+registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
+pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
 bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
 failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,

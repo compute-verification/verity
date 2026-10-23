@@ -51,7 +51,11 @@ CREDIT_EXPECT = {
     "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the challenger's session is not trusted"),
+    "unpinned": ("coin", "the challenger's session is not trusted: session s-1 ran commit "),
+    "branch-pin": ("coin", "the challenger's session is not trusted: session s-1 ran commit "),
 }
+#: a session pinned to a logged commit off main's first-parent line
+OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
 NOT_DRAWN = "has a proof outcome and was not drawn"
 UNTIED = "Register the A value whose rows each round's root committed"
 NOT_COMMITS = "is not the Commit's "
@@ -84,6 +88,7 @@ WINDOW_EXPECT = {
     "alt-layout": ("layout", Cr.BODY),
     "credit-changed": ("draw", Cr.CHANGED), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the challenger's session is not trusted"),
+    "credit-branch-pin": ("coin", OFF_MAIN),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
     "a-untied": ("a-link", UNTIED), "no-a": ("a-link", Cr.NO_A),
@@ -125,6 +130,7 @@ PERIOD_EXPECT = {
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
     "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
+    "branch-pin": ("circuit", "doesn't count toward it, so the period earns nothing: session s-"),
     "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
     "no-model": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
     "model-form": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
@@ -570,8 +576,8 @@ def test_a_round_log_the_challenger_never_received_refuses(seed):
     got, refused = Cr._credited(*cases.credit_args(d))
     assert refused is None and got == [i for i, row in enumerate(d["calls"]) if row[Cr.CREDIT]]
     assert Cr._a_link(d["rounds"], d["entries"], len(d["calls"])) is None
-    rounds = CC.rounds(d["key"], d["ledger"], d["window"], d["session"], [x["root"] for x in d["rounds"]],
-                       [x["coin"] for x in d["rounds"]], rc.lms_verify)
+    rounds = CC.rounds(d["key"], d["ledger"], d["pins"], d["main"], d["window"], d["session"],
+                       [x["root"] for x in d["rounds"]], [x["coin"] for x in d["rounds"]], rc.lms_verify)
     assert rounds == ("rounds", NOT_RECEIVED)
     assert Cr._window_outcomes(*cases.window_args(d)) == (None, rounds)
     got, refused = _period("never-received", seed)
@@ -619,13 +625,26 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     d = cases.period_instance(random.Random(f"other-circuit/{seed}"), "other-circuit")
     big_k, _ = Cr.committed_k(d["ledger"], d["name"])
     for w in d["windows"]:
-        args = (w[k] for k in cases.WINDOW_ARGS[2:-1])
-        assert Cr._window_outcomes(d["key"], d["ledger"], *args, big_k, rc.lms_verify)[1] is None
+        args = (w[k] for k in cases.WINDOW_ARGS[4:-1])
+        assert Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"], *args, big_k, rc.lms_verify)[1] is None
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
     assert got is None and refused[0] == "circuit" and "is not" in refused[1] and "the one period" in refused[1]
     assert "doesn't count toward it, so the period earns nothing" in refused[1]
     got, refused = _period("no-circuit", seed)
     assert got is None and refused[0] == "circuit"
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
+    """CMP-74: a window whose session ran a commit the host's pins log records but that is off main's first-parent line
+    (a branch commit merged into main) counts toward no period (`challenger.credited_session`, the pin before the
+    circuit), so its period earns nothing; the same period, with that commit on the verifier's copy of main, earns."""
+    d = cases.period_instance(random.Random(f"branch-pin/{seed}"), "branch-pin")
+    got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    assert got is None and refused[0] == "circuit" and OFF_MAIN in refused[1]
+    on_main = {**d, "main": [rc.BRANCH, *d["main"]]}
+    got, refused = Cr._period_outcomes(*(on_main[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
+    assert refused is None and len(got["windows"]) == len(d["windows"])
 
 
 def _work(layout: dict) -> int:
@@ -842,8 +861,8 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
                                    Cr._prefix(bytes.fromhex(w["descriptor"])))
             assert why is None, why
             folds.add(got.hex())
-            refused.append(Cr._window_outcomes(d["key"], d["ledger"], *(w[k] for k in cases.WINDOW_ARGS[2:-1]), big_k,
-                                               rc.lms_verify)[1])
+            refused.append(Cr._window_outcomes(d["key"], d["ledger"], d["pins"], d["main"],
+                                               *(w[k] for k in cases.WINDOW_ARGS[4:-1]), big_k, rc.lms_verify)[1])
         assert len(folds) == 2 and signed in folds
         assert sum(r is not None for r in refused) == 1
         assert all(r is None or (r[0] == "weights" and OTHER_PERIOD_WEIGHTS in r[1]) for r in refused), refused
