@@ -216,3 +216,19 @@ def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root
     assert f["ports"]["receipt"]["root"] == "ff" * 64
     with pytest.raises(ValueError, match="does not hold"):
         LL.registered_file(LL.reads(8, 16, "lane", 0), entries, roots)
+
+
+def test_a_statements_partials_ports_and_only_those_are_read_in_full():
+    """Lane l's ``partials`` and the combine's ``p<x>`` are marked ``read_in_full``, which flock-verify holds to one row
+    of the registered row's words (`KnownRead.fullRows`, proofs' `PouwWindow.Lanes.readFull`); no other port is."""
+    reg, pd = "ab" * 64, "12" * 64
+    vals = [LL.PARTIALS, LL.RECEIPT, LL.A, LL.B, LL.ZY]
+    entries = {v: PR.entry(pd, v, 32, 2, reg) for v in vals}
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
+    for kind, ln in LL.statements(32, 32):
+        ports = LL.reads(32, 32, kind, ln)
+        f = LL.registered_file(ports, entries, roots)
+        full = sorted(p for p, e in f["ports"].items() if e.get(LL.READ_IN_FULL) is True)
+        assert full == sorted(p for p, (v, _) in ports.items() if v == LL.PARTIALS), (kind, ln)
+        assert full == (["partials"] if kind == LL.LANE else sorted(f"p{x}" for x in range(32)))
+        assert all(LL.READ_IN_FULL not in e for p, e in f["ports"].items() if p not in full)
