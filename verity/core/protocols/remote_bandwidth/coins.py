@@ -23,10 +23,11 @@ opens after that root, once.
 `Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
-(`remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session, inside the
-period holding it), `released_reason` holds to the session's own record: the same commitment, the same roots in the same
-order, σ_0 after R, and each window's openings coin after that window's last root, so a coin opened before its window's
-root, or a session whose coins are another challenger session's, is refused.
+(`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
+inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
+log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
+the same roots in the same order, σ_0 after R, and each window's openings coin after that window's last root, so a coin
+opened before its window's root, or a session whose coins are another challenger session's, is refused.
 """
 
 from __future__ import annotations
@@ -39,8 +40,8 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
-                                                             LiveOpening, LiveRecord, Verify, audited_session,
-                                                             ledger_head, live_reason, order_reason, record_many)
+                                                             LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
+                                                             order_reason, pinned_session, record_many)
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
@@ -232,22 +233,24 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, verify: Verify,
-            period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
-    """What the challenger signed for the session's window, read on the auditor's side (`remote.trusted_session`): the
-    one challenger session the auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the
-    session's own (`window`), its files in `directory`, under the pinned `key`; its commitment and the roots its signed
-    release log shows it received.  With `period`, the audit's period on the ledger, the window must be one of that
-    period's (`challenger.audited_session`), so the session is bound to its (period, registration).  Raises
-    `CoinError` naming why."""
+def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
+            verify: Verify, period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+    """What the challenger signed for the session's window, read on the auditor's side: the one challenger session the
+    auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the session's own (`window`),
+    under the pinned `key`, run from main's code (`challenger.pinned_session`: the host's pins log `pins`, its lines,
+    records the open's pin, and `main`, the verifier's own ``git rev-list --first-parent origin/main``, holds it); then
+    its files in `directory` (`remote.trusted_session`), its commitment and the roots its signed release log shows it
+    received.  With `period`, the audit's period on the ledger, the window must be one of that period's, so the session
+    is bound to its (period, registration).  The pin first, then the period, then the files; raises `CoinError` naming
+    why, so a session with no pins log or no copy of main, an open that sealed no log, a pin the log doesn't record or
+    one off main's first-parent line is refused."""
     w = window(coins.registration, coins.session)
-    got = remote.trusted_session(directory, heads, w, key, verify)
-    if period is not None:
-        held = audited_session(ledger_head([remote.ledger_lines(p) for p in heads], key, verify), w, key, verify).period
-        if held != period:
-            raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
-                            f"period {period}")
-    return got
+    ledger = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+    held = pinned_session(ledger, w, key, pins, main, verify).period
+    if period is not None and held != period:
+        raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
+                        f"period {period}")
+    return remote.trusted_session(directory, heads, w, key, verify)
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",

@@ -80,11 +80,12 @@ machine and reached through `sampled_proofs.remote`'s client (`--challenger serv
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
-(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
-fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W openings coins
-and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the prover's hello says
-its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of
-such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
+(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
+session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W
+openings coins and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
+prover's hello says its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the
+challenger's close of such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
 under the Lean, whose session holds only the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
@@ -94,7 +95,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-                        --challenger-period P [--challenger-minutes M]]
+                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
                        [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
@@ -1488,6 +1489,10 @@ def main() -> int:
     ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
     ap.add_argument("--challenger-period", metavar="P",
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-main", type=Path, metavar="FILE",
+                    help="gate: the auditor's own first-parent list of main, a commit a line (`git rev-list "
+                         "--first-parent origin/main`): a session whose host ran a tree its pins log doesn't record on "
+                         "it is refused as coins")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
     ap.add_argument("--appends", type=int, metavar="A",
@@ -1552,7 +1557,7 @@ def main() -> int:
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
-                                    period=a.challenger_period, minutes=a.challenger_minutes)
+                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     binding = None
