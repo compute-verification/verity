@@ -22,18 +22,18 @@ theorem realTabs_realOf {R : Type}
   intro k tr hr h
   unfold realOf at h
   rw [hs] at h
-  rcases hsrc : src x w ρ k with e | ⟨g, d, hi⟩
-  · rw [hsrc] at h
-    cases h
-  · rw [hsrc] at h
-    rcases hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d with e | l
-    · rw [hl] at h
-      cases h
-    · rw [hl] at h
-      rcases ht : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l with e | t
-      · rw [ht] at h
-        cases h
-      · rw [ht] at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  · rename_i a _
+    obtain ⟨g, d, hi⟩ := a
+    dsimp only at h
+    split at h
+    · cases h
+    · rename_i l hl
+      split at h
+      · cases h
+      · rename_i t ht
         cases h
         exact ⟨g, d, l, hl, ht⟩
 

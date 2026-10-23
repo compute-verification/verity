@@ -11,8 +11,8 @@ frames', `Session.sizesOk`), and at the hiding gap of hm96-sha512's pinned key (
 premise). It concludes that the deployed frame's state is the loop's but for `stopped` (`ProgChecks`) and the bound.
 
 Each rep's table is the loop's own (`Loop.realOf`: `tabOfLevel0` at the level 0 `Level0.ofDraws` draws), at every
-level-0 source `src` (the host's packed witness, the bytes drawn for level 0 and the salts for levels ≥ 1). What it takes
-of the loop beyond the code is named, each an obligation:
+level-0 source `src` (the host's packed witness, the bytes drawn for level 0 and the salts for levels ≥ 1). What it
+takes of the loop beyond the code is named, each an obligation:
 
 * `LoopInnerRound0`: `L₀`'s round at the inner proof's round 0 is the firewall's own at some 16-byte `final_c'` (Rust's
   firewall sends that round, `check_self`, at the inner proof's label).
