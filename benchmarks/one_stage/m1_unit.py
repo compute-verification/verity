@@ -4,7 +4,8 @@ statement on the serving rows' ports (an input row per parameter and an output r
 the flat unit never built), and with ``--bin`` and ``--lean`` one round of ``--n`` units staged on finite bf16 values (every
 parameter of a bf16 family; a stand-in for the served values, which only the window reads), proved by M0 under ``--zk``
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
-(`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`, the expert-indexed pair GEMMs at N = 1) with ``--call-n N``
+(`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`: the expert-indexed pair GEMMs and FlashInfer's FP8 linear at
+N = 1) with ``--call-n N``
 stages instead the ``--units`` of a synthetic Call at N read through the serving rows' split (`split_call`), each held to the
 Call's output word by the numpy twin before and after staging.  A K-chunk of a w13 coordinate
 (`MoeExpertFp8CoordinateChunk`) with ``--chunk-k K`` stages instead the ``--units`` chunks of a synthetic coordinate at K, each
@@ -49,29 +50,39 @@ def bf16_rows(rng: np.random.Generator, n: int, words: int) -> np.ndarray:
 
 def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     """A synthetic Call of a coordinate template's family (`serving_rows.COORDS`) at N = ``n_call``, its operands committed
-    members and registered weights (finite e4m3 codes, positive f32 scales, a routed id in [0, E), a routed weight in (0, 1)),
-    read through the serving rows' split as a window reads it (`serving_rows.members` and `read`).  Returns the units' rows by
-    port, their output words (the Call's, as committed), the Call's output words by the numpy twin
-    (`fp8_moe_rows.moe_expert_fp8_block_row`) and the IR reference of the coordinate on every unit's rows."""
+    members and registered weights (finite e4m3 codes, positive f32 scales, a routed id in [0, E), a routed weight in (0, 1);
+    FlashInfer's linear: a finite bf16 row and powers of two as GLM-5.3's requantised block scales), read through the serving
+    rows' split as a window reads it (`serving_rows.members` and `read`).  Returns the units' rows by port, their output words
+    (the Call's, as committed), the Call's output words by the numpy twin (`fp8_moe_rows.moe_expert_fp8_block_row`,
+    `deepgemm_twins.flashinfer_linear_row`) and the IR reference of the coordinate on every unit's rows."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.program.kernels import deepgemm_twins as DT
     from verity_vllm.program.kernels import fp8_moe_rows as FR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
-    S = spec_statics(tp.word)
-    E, K, G, KB, N = int(S["E"]), int(S["K"]), int(S["G"]), int(S["KB"]), n_call
+    S = {**SRW.COORDS[spec_base(tp.word)], **spec_statics(tp.word)}
+    E, K, G, N = int(S["E"]), int(S["K"]), int(S["G"]), n_call
     NB, KG = -(-N // G), K // G
     routed = spec_base(tp.word) == "MoeExpertFp8GemmW_v1"
     codes = lambda n: (lambda c: np.where((c & 0x7F) == 0x7F, c ^ 1, c).astype(np.uint8))(rng.integers(0, 256, n, dtype=np.uint8))  # noqa: E731
     scales = lambda n, lo, hi: ((2.0 ** rng.integers(lo, hi, n)) * rng.uniform(1, 2, n)).astype(np.float32)  # noqa: E731
-    acts = {"xq": codes(K), "sx": scales(KG, -6, 0), "e": np.array([rng.integers(0, E)], dtype=np.int32),
-            **({"g": rng.uniform(0, 1, 1).astype(np.float32)} if routed else {})}
-    wts = {"w": codes(E * N * K), "ws": scales(E * NB * KG, -12, -6)}
-    e = int(acts["e"][0])
-    y, nonfin = FR.moe_expert_fp8_block_row(acts["xq"], acts["sx"].view(np.uint32), wts["w"].reshape(E, N, K)[e],
-                                            wts["ws"].reshape(E, NB, KG)[e].view(np.uint32), G=G, KB=KB, swap=S["SWAP"] in (True, "true"),
-                                            g=int(acts["g"].view(np.uint32)[0]) if routed else None, dot=FR.TWIN_DOT_OF[S["DOT"]])
+    if spec_base(tp.word) == "FlashInferFp8Linear_v1":
+        acts, e = {"x": bf16_rows(rng, 1, K)[0]}, 0
+        wts = {"w": codes(N * K), "ws": DT.upcast_e8m0(rng.integers(112, 124, NB * KG))}
+        y, nonfin = DT.flashinfer_linear_row(acts["x"], wts["w"].reshape(N, K), wts["ws"].reshape(NB, KG))
+        statics, op = {"K": K, "N": N}, "model.layers.3.self_attn.o_proj"
+    else:
+        acts = {"xq": codes(K), "sx": scales(KG, -6, 0), "e": np.array([rng.integers(0, E)], dtype=np.int32),
+                **({"g": rng.uniform(0, 1, 1).astype(np.float32)} if routed else {})}
+        wts = {"w": codes(E * N * K), "ws": scales(E * NB * KG, -12, -6)}
+        e = int(acts["e"][0])
+        y, nonfin = FR.moe_expert_fp8_block_row(acts["xq"], acts["sx"].view(np.uint32), wts["w"].reshape(E, N, K)[e],
+                                                wts["ws"].reshape(E, NB, KG)[e].view(np.uint32), G=G, KB=int(S["KB"]),
+                                                swap=S["SWAP"] in (True, "true"), g=int(acts["g"].view(np.uint32)[0]) if routed else None,
+                                                dot=FR.TWIN_DOT_OF[S["DOT"]])
+        statics, op = {"E": E, "K": K, "N": N, "G": G, "KB": int(S["KB"])}, "model.layers.3.mlp.experts"
     at = np.cumsum([0, wts["w"].size])
     names = list(acts)
 
@@ -93,8 +104,7 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     spec = descriptor_id(SRW._bind(tp.word, N=N))
     r = {"i": 0, "spec": spec, "args": [[["n", k, 0, acts[nm].size]] for k, nm in enumerate(names)]
          + [[["p", 0, int(at[0]), int(at[1])]], [["p", 0, int(at[1]), int(at[1]) + wts["ws"].size]]]}
-    d = {"statics": {"E": E, "K": K, "N": N, "G": G, "KB": KB}, "op_path": "model.layers.3.mlp.experts", "members": [("out", N, "bf16")],
-         "row": 0, "step": 16}
+    d = {"statics": statics, "op_path": op, "members": [("out", N, "bf16")], "row": 0, "step": 16}
     row = ("r0", Index(), r, d)
     (m,) = SRW.members([tp.id], [[row]], [N])
     data, entries = SRW.read(m, [row], Store(), lambda f, lo, hi: wts[f][lo:hi])

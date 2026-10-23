@@ -1,8 +1,9 @@
-"""The expert-indexed pair GEMMs split into coordinates (`pipeline.serving_rows`' ``coord`` layout, ``COORDS``): a
-``MoeExpertFp8Gemm(W)_v1{N}`` row is N units of its Definition at N = 1, unit n reading the row's leading operands whole and
-``w[:, n, :]``, ``ws[:, n // G, :]`` of every expert, its output port the row's output word n.  The units cover the row's outputs
-with nothing left over (N units under one index entry, unit n's output port word n) and compute them: the coordinate Definition
-on each unit's committed rows is the row's Definition's word n."""
+"""The expert-indexed pair GEMMs and FlashInfer's FP8 linear split into coordinates (`pipeline.serving_rows`' ``coord`` layout,
+``COORDS``): a ``MoeExpertFp8Gemm(W)_v1{N}`` row is N units of its Definition at N = 1, unit n reading the row's leading operands
+whole and ``w[:, n, :]``, ``ws[:, n // G, :]`` of every expert, its output port the row's output word n; a
+``FlashInferFp8Linear_v1{K,N}`` row likewise, unit n reading the bf16 row whole (each unit quantises it itself), ``w[n]`` and
+``ws[n // 128]``.  The units cover the row's outputs with nothing left over (N units under one index entry, unit n's output
+port word n) and compute them: the coordinate Definition on each unit's committed rows is the row's Definition's word n."""
 from __future__ import annotations
 
 import numpy as np
@@ -15,8 +16,12 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 
 from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.program.kernels import deepgemm_twins as DT
+from verity_vllm.program.registry import boolean_deepgemm as BDG
 from verity_vllm.program.registry import boolean_fp8_moe as BFM
+from verity_vllm.program.registry import deepgemm as DG
 from verity_vllm.program.registry import fp8_moe_experts as X
+from verity_vllm.program.registry.fp8 import FP8_BLOCK
 
 E, K, N, G, KB = 3, 64, 40, 32, 32
 NB, KG = -(-N // G), K // G
@@ -114,3 +119,51 @@ def test_a_row_whose_operands_are_not_the_statics_is_refused(row):
     (m,) = SRW.members([descriptor_id(gemm(True, 1))], [[x]], [N])
     with pytest.raises(ValueError, match=rf"member down of {N - 1} elements, not its N = {N} coordinates"):
         SRW.read(m, [x], store, None)
+
+
+FK, FN = 256, 200
+FNB, FKG = -(-FN // FP8_BLOCK), FK // FP8_BLOCK
+FOP = "model.layers.5.self_attn.o_proj"
+
+
+def linear(n: int):
+    return bind(DG.FlashInferFp8Linear, K=FK, N=n)
+
+
+def test_flashinfer_s_linear_is_its_n_coordinates_each_quantising_the_row(monkeypatch):
+    """N = 200 spans a whole 128-wide weight block and a partial one, so the units read both of ``ws``'s rows."""
+    assert SRW.COORDS["FlashInferFp8Linear_v1"] == {"E": 1, "G": FP8_BLOCK}
+    spec, T = descriptor_id(linear(FN)), descriptor_id(linear(1))
+    assert SRW.unit_templates(spec) == ((spec, 1), (T, FN))
+    boolean = SRW.template(descriptor_id(bind(BDG.FlashInferFp8LinearV2, K=FK, N=1)))
+    assert (boolean.layout, boolean.word, boolean.packed) == ("coord", T, (16, 8, 32, 16))
+    rng = np.random.default_rng(5)
+    w = rng.integers(0, 256, FN * FK, dtype=np.uint8)
+    ops = {"x": (rng.standard_normal(FK).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16),
+           "w": np.where((w & 0x7F) == 0x7F, w ^ 1, w).astype(np.uint8), "ws": DT.upcast_e8m0(rng.integers(112, 124, FNB * FKG))}
+    names = list(ops)
+    y = evaluate(linear(FN), [ops[nm].astype(np.uint64).reshape(1, -1) for nm in names]).reshape(-1)
+    twin, nonfinite = DT.flashinfer_linear_row(ops["x"], ops["w"].reshape(FN, FK), ops["ws"].reshape(FNB, FKG))
+    assert not nonfinite.any() and y.tolist() == np.asarray(twin).reshape(-1).tolist()
+    r = {"i": 4, "spec": spec, "args": [[["x", k, 0, ops[nm].size]] for k, nm in enumerate(names)]}
+    d = {"statics": {"K": FK, "N": FN}, "op_path": FOP, "members": [("out", FN, "bf16")], "row": 0, "step": 16}
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return y[lo:hi].astype(np.uint16), None
+
+    monkeypatch.setattr(SRW, "_slices", lambda _pi, _s, _w, _rid, _a, group: [ops[names[group[0][1]]][:group[0][3]]])
+    x = ("r0", None, r, d)
+    (m,) = SRW.members([boolean.id], [[x]], [FN])
+    assert (m.n, m.rows, m.outs) == (FN, (("in0", FK), ("in1", FK // 2), ("in2", 2 * FKG)), (("out.out", 1),))
+    data, entries = SRW.read(m, [x], Store(), None)
+    assert entries == [[0, FN, "r0", 16, 5, FOP, "out", 0, 4]]
+    assert data["outs"]["out.out"].reshape(-1).tolist() == y.tolist()
+    W, WS = ops["w"].reshape(FN, FK), ops["ws"].reshape(FNB, FKG)
+    for n in range(FN):
+        assert data["rows"]["in0"][n].tobytes() == ops["x"].tobytes()
+        assert data["rows"]["in1"][n].tobytes() == W[n].tobytes()
+        assert data["rows"]["in2"][n].tobytes() == WS[n // FP8_BLOCK].tobytes()
+    leaves = [np.ascontiguousarray(data["rows"][p], dtype="<u2").view(np.uint8 if b == 8 else np.dtype(f"<u{b // 8}")).reshape(FN, -1)
+              .astype(np.uint64) for (p, _w), b in zip(m.rows, boolean.packed)]
+    assert evaluate(linear(1), leaves).reshape(-1).tolist() == y.tolist()
