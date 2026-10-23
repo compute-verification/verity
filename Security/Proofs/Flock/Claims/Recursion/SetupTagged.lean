@@ -67,13 +67,9 @@ theorem ebind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β}
   | error e => rw [hx] at h; cases h
   | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
-theorem ite_ok {α : Type} {c : Prop} [Decidable c] {a b : Flock.V α} {v : α} (h : (if c then a else b) = .ok v) :
-    a = .ok v ∨ b = .ok v := by
-  by_cases hc : c
-  · simp only [hc, ↓reduceIte] at h
-    exact Or.inl h
-  · simp only [hc, ↓reduceIte] at h
-    exact Or.inr h
+theorem ite_ok {α : Type} {c : Prop} [Decidable c] {a b : Flock.V α} {v : α} :
+    (if c then a else b) = .ok v ↔ c ∧ a = .ok v ∨ ¬ c ∧ b = .ok v := by
+  by_cases hc : c <;> simp [hc]
 
 instance : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
 
@@ -89,7 +85,7 @@ theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧
     show (Claims.toMsg t.toUTF8)[7]? = some 102 from h2]
   simp
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 4000000 in
 /-- **A hidden-output setup refuses on an oracle refusing its `σ` input.** -/
 theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
     (hp : ∀ a b c : ByteArray, p (sig.toUTF8 ++ a ++ b ++ c) = true) {tags : Tags} (htag : tags.sigmaTag = sig)
@@ -103,7 +99,8 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
        try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
-    | (rcases ite_ok hs with hs | hs)
+    | (rw [ite_ok] at hs
+       rcases hs with ⟨-, hs⟩ | ⟨-, hs⟩)
     | (split at hs))
 
 theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
@@ -114,7 +111,7 @@ theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V
   | error e => rw [h0] at h; cases h
   | ok a => exact hf a h0
 
-set_option maxHeartbeats 1600000 in
+set_option maxHeartbeats 4000000 in
 /-- **A session of hidden-output tables refuses on an oracle refusing their `σ` input**: one table's setup is
 `setupHiddenWith`, and several tables' first is. -/
 theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
@@ -135,7 +132,8 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
             simp only [hhid, ↓reduceIte] at ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
-    | (rcases ite_ok hs with hs | hs)
+    | (rw [ite_ok] at hs
+       rcases hs with ⟨-, hs⟩ | ⟨-, hs⟩)
     | (split at hs))
 
 /-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
@@ -145,7 +143,7 @@ theorem setupM_log_untagged (H : Msg → Msg) (r : Readable.Read) (hhid : r.tags
     {v : SessionSpec × Array Stmt} (hok : FlockDeploy.setupWith (Claims.hOf H) r = .ok v) :
     ∃ e ∈ ((FlockDeploy.setupM Claims.Hashes.oc r).run.eval H).2, ¬ HmTagged e.1 := by
   by_contra hn
-  push_neg at hn
+  push Not at hn
   have h := setupM_poison untagged H r fun e he => by
     simp only [untagged, toMsg_ofMsg, decide_eq_false_iff_not, not_not]
     exact hn e he
