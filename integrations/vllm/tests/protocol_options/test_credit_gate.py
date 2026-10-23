@@ -702,6 +702,25 @@ def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, 
     assert out["credit"] is None
 
 
+@pytest.mark.parametrize("edit", [None, "a-zero"], ids=["honest", "a-all-zero"])
+def test_the_gpu_harness_holds_an_in_process_window_to_cores_roots1_steps(edit):
+    """`pouw_h1_gpu.core_verdict` on a window under in-process coins (the GPU run's local gate), the Commit in its
+    engine: its record is one manifest under calls_root with the Commit's record (`pouw_h1_gpu.record_reason`, its salt
+    from the in-process coin commitment), its A tables under their rounds' roots, and each the Commit's value; with the
+    A codes all zero, core refuses it at ``arow`` alone. A calls_root off the record is refused."""
+    from tests.protocol_options import pouw_h1_gpu as G
+    from tests.protocol_options.test_pouw_h1_served import _unit
+    arm = ZyArm() if edit is None else EditArm(torch.zeros_like)
+    _y, run = _serve(arm, n=64, served=SV.Served(PH.TILE, _unit(), weights=_period_weights(), window=bytes(64)))
+    assert run.commits.get("coin_source") != PH.CHALLENGER and not run.served.refused
+    record = {"commitment": dict(run.commits), "calls": run.manifest()}
+    v = G.core_verdict({**record, "descriptor": _descriptor().hex()})
+    assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 2, v
+    assert v["tied"] if edit is None else (v["arow"][0] == "arow" and "is not the Commit's" in v["arow"][1]), v
+    off = {**record["commitment"], "calls_root": "00" * 64}
+    assert "calls_root is not over" in G.record_reason({**record, "commitment": off})
+
+
 def _bare_table(monkeypatch):
     bare = PH.H1Run._requests0
 
