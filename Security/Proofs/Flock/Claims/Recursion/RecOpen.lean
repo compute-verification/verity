@@ -12,8 +12,8 @@ reader is the record's own total reader (`recRead`), that holds at every accepte
 
 That the deployed coin server writes `recTr`'s bytes is a difftest on the honest fixtures (`test_lean_rec_record.py`:
 `recordW` writes `rec_live.record_bytes`' bytes), not a theorem. What stays open at the dense form is `PartChecksB` and
-`PartOpensB` at `showsTr recRead`/`cmtTr recRead`, `DecompB`, and the readers' two facts (`ReadersTrue`,
-`ReadersLogCollS`).
+`PartOpensB` at `showsTr recRead`/`cmtTr recRead`, `DecompB`, and the readers'
+`ReadersTrue` (`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
 
 The reader is not vacuous: `recRead_honest_round` reads an honest one-round run back, and `Flock.Test.RecRecord`'s
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
@@ -56,12 +56,11 @@ theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRT hRL
+  intro bR L Bd D bL hP hRT
   exact ksLin2_deployed_open bR fin wE join final w recRead
-    (readsBack_recTr _ _ bL _ aux nOf rest rfl) hP hRT hRL
+    (readsBack_recTr _ _ bL _ aux nOf rest rfl) hP hRT
 
 /-- **`BitsLin2` at the deployment's dense statements, at the coin server's record**: `bitsLin2_deployed_open` with
 `ReadsBack` from `readsBack_recTr`. It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision
@@ -85,11 +84,10 @@ theorem bitsLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D bL hP hRT hRL
+  intro bR L Bd D bL hP hRT
   exact bitsLin2_deployed_open bR fin wE join final w recRead
-    (readsBack_recTr _ _ bL _ aux nOf rest rfl) hP hRT hRL
+    (readsBack_recTr _ _ bL _ aux nOf rest rfl) hP hRT
 
 end RecDeploy

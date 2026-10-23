@@ -16,7 +16,7 @@ rounds have no pieces, as `layoutBTops`'s don't (`heldWhole_layoutBTops`). `Held
 `schedMatches_dense`, `capPorts` and `rowsCover`, and the decoder and calls premises from `canonicalProofFiles` and
 `plainCallsBindOrSlack_sha512`. What stays open at the dense form is the last round's pieces (`FinPieces`),
 `PartChecksB` and `PartOpensB` at the coin server's transcript read by a reader `untr` (`showsTr`, `cmtTr`), `DecompB`,
-the readers' two facts (`ReadersTrue`, `ReadersLogCollS`), and `untr` reading that transcript back at an accepted run's
+the readers' `ReadersTrue`, and `untr` reading that transcript back at an accepted run's
 inner rounds (`ReadsBack`).
 `bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`). At `finOpen`,
 `FinPieces` holds (`finPieces_finOpen`), and `ksLin2_deployed_open` and `bitsLin2_deployed_open` (`FinOpen.lean`)
@@ -80,12 +80,11 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
           L shape (showsTr untr) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hrb hP hRT hRL
+  intro L Bd D bL hrb hP hRT
   refine ksLin2_deployed_plain_parts b L (heldWhole_layoutBTops fin) wE join final w canonicalProofFiles
-    plainCallsBindOrSlack_sha512 untr hrb ?_ hRT hRL
+    plainCallsBindOrSlack_sha512 untr hrb ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
   obtain ⟨hF, chk, hPC, hPO, hD⟩ := hP _ hsh
@@ -114,12 +113,11 @@ theorem bitsLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (
           L shape (showsTr untr) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hrb hP hRT hRL
+  intro L Bd D bL hrb hP hRT
   exact Claims.Recursion.bitsLin2On_of_ksLin2On
     (sessionAccepts Bd.IVStar (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck bL)
-    (ksLin2_deployed_staged b fin wE join final w untr hrb hP hRT hRL)
+    (ksLin2_deployed_staged b fin wE join final w untr hrb hP hRT)
 
 end RecDeploy

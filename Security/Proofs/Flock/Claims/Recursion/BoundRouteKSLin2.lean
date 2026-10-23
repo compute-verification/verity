@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Recursion.SetupCalls
+import Proofs.Flock.Claims.Recursion.InnerLogFree
 
 /-!
 # `KSLin2` at the deployment (route 2C)
@@ -251,7 +251,7 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
-      ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
+      Bd.StepsLogFree FlockDeploy.sha512 →
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp DenseAt := by
   intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hst hT hL hRRP decI hdI decO hdO x hx Ω _ _
@@ -271,7 +271,8 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
   have hA := Claims.Recursion.innerAcceptsCollAt_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
     (hacc _ (by simp)) hx
-  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT hL
+  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
+    (readersLogCollS_ivstar hL bL (deployZkRec relO))
   have hFk := forksBindAt_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hEC hCF hTc hLc
     (fun decO x Ω P ω r c ws hg => readersRun_played FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hplay hT hRRP
       hg) x hA

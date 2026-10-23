@@ -47,15 +47,14 @@ theorem ksLin2_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) Cp DenseAt := by
-  intro Bd D bL hKS hst hT hL hRRP
+  intro Bd D bL hKS hst hT hRRP
   exact ksLin2_route rel _root_.Flock.Readable.relation b L Cp (FlockDeploy.V false).next
     (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final w hKS
     (binds_deployed rel _ _ wE join final w) (lastBindsEC_deployed_sha512 rel wE join final w hC hK)
     (lastCoinFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) FlockDeploy.KS.zk_KS_outer
-    hst hT hL hRRP
+    hst hT (stepsLogFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) hRRP
 
 end RecDeploy

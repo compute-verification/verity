@@ -144,7 +144,7 @@ omit [Fintype Coin] [Nonempty Coin] in
 /-- `λ₂ > 0` at `ksRV` over `ksB` with no cap position: `κ < 1/6` binds, against `log₂ 6 < 3`; the rest are above
 `155` (`γ = 0`, `k_I = 1`, `c_Be = 4`, `k = 32`, `N_I = 129`, `β₂ = 261`). -/
 theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
-    0 < lamLin2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy decI) noCaps [] := by
+    0 < lamLin2 (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy decI) noCaps [] 0 := by
   have hx : xI (ksRV Coin (ksB Coin).IVStar) [] = [] := rfl
   have hkV : (Inner.ofFlock (ksB Coin).deploy decI).V.k [] = 1 := rfl
   have hk : (Inner.ofFlock (ksB Coin).deploy decI).k [] = 32 := Flock.ksD_k (Coin := Coin) []
@@ -170,10 +170,12 @@ theorem ksB_lamLin2_pos (decI : List (ℕ × Unit) → List Unit) :
     rw [Real.logb_lt_iff_lt_rpow (by norm_num) (by norm_num), show (3 : ℝ) = ((3 : ℕ) : ℝ) by norm_num,
       Real.rpow_natCast]
     norm_num
-  have hs : (setupLen (ksRV Coin (ksB Coin).IVStar) [] : ℝ) = 0 := by
-    rw [show setupLen (ksRV Coin (ksB Coin).IVStar) [] = 0 from rfl, Nat.cast_zero]
+  have hs : (cBe (ksRV Coin (ksB Coin).IVStar) [] : ℝ) + setupLen (ksRV Coin (ksB Coin).IVStar) [] +
+      2 * ((0 : ℕ) : ℝ) = 4 := by
+    rw [hc, show setupLen (ksRV Coin (ksB Coin).IVStar) [] = 0 from rfl]
+    norm_num
   unfold lamLin2 βdev2 NI
-  rw [hx, hkV, hk, hw, hW, hc, hs, add_zero, hγ, hκ, Real.logb_zero, sub_pos]
+  rw [hx, hkV, hk, hw, hW, hs, hγ, hκ, Real.logb_zero, sub_pos]
   refine lt_min (lt_min (lt_min (lt_min (lt_min h1 ?_) ?_) ?_) ?_) ?_
   · linarith
   all_goals exact lt_sub_logb _ (by norm_num) (by norm_num) (by norm_num) h6
@@ -252,7 +254,7 @@ theorem expectedCR_charge_zero {H : Msg → Msg} {F : Finder} {n : ℕ} (h : Exp
 theorem BitsLin2_fails (H : Msg → Msg) : ¬ BitsLin2 H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) noCaps := fun h =>
   bits_bound_fails H _ _ _ (ksRV_noR _ _ []) (ksB_lamLin2_pos _) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1
-      le_rfl (calls_silentP_accV H []) (strictBirthday_B_accV H silentP [])
+      le_rfl (calls_silentP_accV H []) 0 (fun _ => le_rfl) (strictBirthday_B_accV H silentP [])
       (fun hk => expectedCR_charge_zero (binner_expectedCR_noCalls H ((ksRV Coin (ksB Coin).IVStar).withSetup H)
         (fun _ _ => rfl) _ _ _ silentP [] hk) rfl)
       (fun M hk => expectedCR_charge_zero (fdev_expectedCR_noCalls H ((ksRV Coin (ksB Coin).IVStar).withSetup H)

@@ -7,11 +7,12 @@ import Proofs.Flock.Claims.Recursion.WithSetup
 `ReadersLogColl` asks that the inner verifier's calls in its run of the readers' messages be among the calls the outer
 witnesses record, or that two recorded calls collide. The inner verifier's setup makes calls at the inner statement
 that no `layoutBTops` part records (`setupM_not_layoutBTops`), so at a setup it asks for a collision among the recorded
-calls. `ReadersLogCollS` asks the same of the recorded calls and the inner setup's at SHA-512's inputs
-(`innerSetupIns`, a function of the inner statement), each with `H`'s answer: what the deployed record's
-`withSetup H` searches.
+calls. `ReadersLogCollS` asks the same of the recorded calls, the inner setup's at SHA-512's inputs (`innerSetupIns`,
+a function of the inner statement) and the inner verifier's on the readers' messages at the coins `default`
+(`innerCallsOf`), each with `H`'s answer: what the deployed record's `withSetup H` searches.
 
-* `readersLogCollS_of`: `ReadersLogColl` gives it.
+* `readersLogCollS_of`: `ReadersLogColl` gives it; `RecDeploy.readersLogCollS_ivstar` (`InnerLogFree.lean`) proves it
+  at `IVStar` wherever `DE`'s steps read no coin in their calls.
 * `callsLogCollS`: `CallsLogColl` at `(deployRec I.V ivScope b).withSetup H` from it.
 * `callsLogColl_C_setup`, `forksBindAt_C_pick_setup`, `forksBindAt_C_setup`: `callsLogColl_C` and
   `forksBindAt_C_pick` with the setup's calls searched.
@@ -25,10 +26,11 @@ open Claims.Recursion (Bound Inner)
 
 variable {W Col T : Type}
 
-/-- **The readers record the inner verifier's calls with its setup's, off a collision** (a code fact about V*'s
-circuits and the readers): `ReadersLogColl` with the inner setup's calls at the inner statement (`innerSetupIns`, each
-with `H`'s answer) beside the recorded ones, both in where the inner verifier's calls are and in where a collision is
-found. -/
+/-- **The readers record the inner verifier's calls with its own, off a collision**: `ReadersLogColl` with the inner
+setup's calls at the inner statement (`innerSetupIns`) and the inner verifier's on the readers' messages at the coins
+`default` (`innerCallsOf`), each with `H`'s answer, beside the recorded ones, both in where the inner verifier's calls
+are and in where a collision is found. At `IVStar` it holds wherever `DE`'s steps read no coin in their calls
+(`readersLogCollS_ivstar`). -/
 def ReadersLogCollS (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
@@ -36,8 +38,9 @@ def ReadersLogCollS (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (
       Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ e ∈ (innerRunAt H IV b.rd x ws cs).vLog,
-          e ∈ callsOf b.rd x ws ++ (innerSetupIns (xIOf x)).map fun u => (u, H u)) ∨
-          ∃ u v, findColl (callsOf b.rd x ws ++ (innerSetupIns (xIOf x)).map fun u => (u, H u)) = some (u, v) ∧
+          e ∈ callsOf b.rd x ws ++ (innerSetupIns (xIOf x) ++ innerCallsOf H IV b.rd x ws).map fun u => (u, H u)) ∨
+          ∃ u v, findColl (callsOf b.rd x ws ++
+            (innerSetupIns (xIOf x) ++ innerCallsOf H IV b.rd x ws).map fun u => (u, H u)) = some (u, v) ∧
             Collision H u v
 
 /-- **`ReadersLogColl` gives `ReadersLogCollS`**: more calls hold the inner verifier's, and a collision among the
@@ -73,8 +76,9 @@ theorem callsLogCollS (hT : ReadersTrue H I.V b DO) (hL : ReadersLogCollS H I.V 
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   show (∀ e ∈ (Claims.Recursion.innerRun H (deployRec I.V ivScope b) I x r ws).vLog,
-      e ∈ callsOf b.rd x ws ++ (innerSetupIns (xIOf x)).map fun u => (u, H u)) ∨
-    ∃ u v, findColl (callsOf b.rd x ws ++ (innerSetupIns (xIOf x)).map fun u => (u, H u)) = some (u, v) ∧
+      e ∈ callsOf b.rd x ws ++ (innerSetupIns (xIOf x) ++ innerCallsOf H I.V b.rd x ws).map fun u => (u, H u)) ∨
+    ∃ u v, findColl (callsOf b.rd x ws ++
+      (innerSetupIns (xIOf x) ++ innerCallsOf H I.V b.rd x ws).map fun u => (u, H u)) = some (u, v) ∧
       Collision H u v
   rw [hrun]
   have hsp := stagedAll_run H I.V b x P ω r hg'.1
