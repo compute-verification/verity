@@ -28,9 +28,12 @@ Per (N, K) and m, on the device, every arm gated before any is timed (a failed g
 Timing (CUDA graphs, every arm of a point interleaved rep by rep, the weights cycling through copies whose bytes exceed
 2.5x the L2, as a served step's layers do): the configs first (3 reps each), the fastest gated config of each kernel
 kept; then `exact`, `zy`, `seeds` (kh_seeds), `units:NAME` (kh_units_multi), `units2:NAME` (kh_one_noise and
-kh_one_units, main's two launches), `dither:NAME` (zy, seeds and units on one stream) and `dither_ov:NAME` (the seeds
-and units on a side stream forked beside the zy GEMM and joined), and `exact_pick` / `zy_pick` where `pick`'s config
-is not the fastest.  γ = dither / exact (and dither_ov / exact, and dither / zy, the served product's), per build.
+kh_one_units, main's two launches), `dither:NAME` (zy, seeds and the one-launch units on one stream), `dither2:NAME`
+(the same with the two launches), `dither_ov:NAME` (the seeds and one-launch units on a side stream forked beside the zy
+GEMM and joined), and `exact_pick` / `zy_pick` where `pick`'s config is not the fastest.  γ = dither / exact per build
+and units form (and dither_ov / exact, and dither / zy, the served product's); `gamma_best` the least serial γ over the
+builds and the two forms, with the arm it came from.  A lone call is the worst case for the one launch, which batches a
+step's calls when served (DITHER_SO_FUSED); at decode its one warp a unit leaves most of the GPU idle.
 Writes OUT/gamma.json (after every point) and OUT/gamma.txt.
 """
 from __future__ import annotations
@@ -241,9 +244,10 @@ def time_arms(arms: dict, reps: int, item_ms: float, clock: Clock) -> dict:
 def point(libs: dict, names: list[str], n: int, k: int, m: int, args, rng: random.Random, clock: Clock, l2: int,
           sms: int, sm: str, side: torch.cuda.Stream) -> tuple[dict, bool]:
     T = (m + UNIT - 1) // UNIT * UNIT
-    copies = max(2, min(32, -(-int(2.5 * l2) // (n * k))))
+    copies = max(2, min(64, -(-int(2.5 * l2) // (n * k))))
     gm = Gemm(n, k, m, T, copies, seed=(n * 131 + k) * 7 + m)
-    d: dict = {"n": n, "k": k, "m": m, "t": T, "weight_copies": copies, "units": (T // UNIT) * (n // UNIT)}
+    d: dict = {"n": n, "k": k, "m": m, "t": T, "weight_copies": copies, "weights_over_l2": round(copies * n * k / l2, 2),
+               "units": (T // UNIT) * (n // UNIT)}
     L = d["units"]
     picks = sorted({0, L - 1, *rng.sample(range(L), min(L, args.picks))})
     d["picks"] = picks
@@ -322,6 +326,12 @@ def point(libs: dict, names: list[str], n: int, k: int, m: int, args, rng: rando
             c.seed()
             mus[i % len(mus)].run()
 
+        def dither2(i, c=c):
+            gm.zyrun(zc, i)
+            c.seed()
+            c.noise()
+            c.run_units(b=gm.ws[i % len(gm.ws)])
+
         def dither_ov(i, c=c, mus=mus):
             cur = torch.cuda.current_stream()
             side.wait_stream(cur)
@@ -331,36 +341,46 @@ def point(libs: dict, names: list[str], n: int, k: int, m: int, args, rng: rando
             gm.zyrun(zc, i)
             cur.wait_stream(side)
         arms[f"dither:{nm}"] = dither
+        arms[f"dither2:{nm}"] = dither2
         arms[f"dither_ov:{nm}"] = dither_ov
     tm = d["timing"] = time_arms(arms, args.reps, args.item_ms, clock)
     med = {k_: v["median_us"] for k_, v in tm.items()}
     d["median_us"] = med
     d["gamma"] = {nm: {"dither_over_exact": round(med[f"dither:{nm}"] / med["exact"], 4),
+                       "dither2_over_exact": round(med[f"dither2:{nm}"] / med["exact"], 4),
                        "dither_ov_over_exact": round(med[f"dither_ov:{nm}"] / med["exact"], 4),
                        "dither_over_zy": round(med[f"dither:{nm}"] / med["zy"], 4),
-                       "units_over_exact": round((med["seeds"] + med[f"units:{nm}"]) / med["exact"], 4)}
+                       "dither2_over_zy": round(med[f"dither2:{nm}"] / med["zy"], 4),
+                       "units_over_exact": round((med["seeds"] + med[f"units:{nm}"]) / med["exact"], 4),
+                       "units2_over_exact": round((med["seeds"] + med[f"units2:{nm}"]) / med["exact"], 4)}
                   for nm in units_ok}
+    arm = min((f"{f}:{nm}" for nm in units_ok for f in ("dither", "dither2")), key=lambda a: med[a])
+    d["gamma_best"] = {"arm": arm, "dither_us": med[arm], "exact_us": med["exact"], "zy_us": med["zy"],
+                       "gamma": round(med[arm] / med["exact"], 4), "gamma_zy": round(med[arm] / med["zy"], 4)}
     del keep
     return d, ok
 
 
 def table(doc: dict) -> str:
-    lines = ["N x K | linears | m | exact us | zy us | seeds+units us (build) | dither us | dither_ov us | "
-             "γ = dither/exact | γ_ov | dither/zy"]
+    """One line a point: the exact GEMM, the zy form, the least serial Dither arm, γ = that / exact, and per build the
+    one-launch and two-launch serial γ."""
+    names = list(doc["libs"])
+    lines = ["N x K | linears | m | exact us | zy us | best Dither arm | Dither us | γ | γ over zy | "
+             + " | ".join(f"γ {nm} one / two launches" for nm in names)]
     for s in doc["shapes"]:
+        lin = ", ".join(s["linears"])
         if s["refused"]:
-            lines.append(f"{s['n']} x {s['k']} | {', '.join(s['linears'])} | - | refused: {s['refused']}")
+            lines.append(f"{s['n']} x {s['k']} | {lin} | - | refused: {s['refused']}")
             continue
         for p in s["points"]:
-            if not p.get("median_us"):
-                lines.append(f"{s['n']} x {s['k']} | {', '.join(s['linears'])} | {p['m']} | not timed (gate)")
+            if not p.get("gamma_best"):
+                lines.append(f"{s['n']} x {s['k']} | {lin} | {p['m']} | not timed (a gate failed or the point erred)")
                 continue
-            med = p["median_us"]
-            for nm, g in p["gamma"].items():
-                lines.append(f"{s['n']} x {s['k']} | {', '.join(s['linears'])} | {p['m']} | {med['exact']:.1f} | "
-                             f"{med['zy']:.1f} | {med['seeds'] + med[f'units:{nm}']:.1f} ({nm}) | "
-                             f"{med[f'dither:{nm}']:.1f} | {med[f'dither_ov:{nm}']:.1f} | {g['dither_over_exact']:.3f} | "
-                             f"{g['dither_ov_over_exact']:.3f} | {g['dither_over_zy']:.3f}")
+            b, g = p["gamma_best"], p["gamma"]
+            per = " | ".join(f"{g[nm]['dither_over_exact']:.2f} / {g[nm]['dither2_over_exact']:.2f}" if nm in g else "-"
+                             for nm in names)
+            lines.append(f"{s['n']} x {s['k']} | {lin} | {p['m']} | {b['exact_us']:.1f} | {b['zy_us']:.1f} | {b['arm']} | "
+                         f"{b['dither_us']:.1f} | {b['gamma']:.2f} | {b['gamma_zy']:.2f} | {per}")
     return "\n".join(lines) + "\n"
 
 
