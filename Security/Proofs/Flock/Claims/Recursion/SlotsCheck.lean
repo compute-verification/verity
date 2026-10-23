@@ -414,7 +414,8 @@ theorem sum_rows_le : ∀ (a : List String) (b : List ℕ) (k : ℕ),
 
 /-- Rows that run an input block of `16 · w`-bit rows, then rows named among `outs`: a row named outside `outs` is in
 the input block, so its words end within the block's. -/
-theorem in_block_list {β : Type} (f : β → String × ℕ × ℕ) (l : List β) (ins outs : List String) (ip : List ℕ)
+theorem in_block_list {β : Type} (f : β → String × ℕ × ℕ) (l : List β) (ins outs : List String)
+    (ip : List ℕ)
     (B : List (String × ℕ × ℕ)) (hB : ∀ r ∈ B, r.1 ∈ outs)
     (hr : l.map f = (ins.zip ip).map (fun p => (p.1, p.2, 16 * p.2)) ++ B)
     {q : ℕ} (hq : q < l.length) (hnm : (f l[q]).1 ∉ outs) :
@@ -458,8 +459,9 @@ theorem in_block {c : Flock.Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (fun r hr => by
       obtain ⟨⟨a, b⟩, hm, rfl⟩ := List.mem_map.1 hr
       exact (List.of_mem_zip hm).1) hr' hql (by simpa [beq_iff_eq.1 hname] using hnm)
-  rw [extract_words (·.words), getElem!_pos c.ports q hqs, VStar.UnitC.inWords,
-    FlockSoundness.foldl_add_eq_sum]
+  have hst : (c.ports.extract 0 q).foldl (· + ·.words) 0 = ((c.ports.toList.take q).map (·.words)).sum :=
+    extract_words (·.words) c.ports q
+  rw [hst, getElem!_pos c.ports q hqs, VStar.UnitC.inWords, FlockSoundness.foldl_add_eq_sum]
   simpa using h
 
 theorem mIndex_out : Flock.RecVStar.mIndex "out" = none := by
@@ -470,17 +472,25 @@ theorem claimIndex_out : Flock.RecVStar.claimIndex "out" = none := by
   unfold Flock.RecVStar.claimIndex
   exact ite_eq_right_iff.2 fun h => absurd h (by decide +kernel)
 
+theorem toNat_laim : ("laim" : String).toNat? = none := by
+  rw [← String.toNat?_toSlice, String.Slice.toNat?_eq_none_iff, String.isNat_toSlice, ← Bool.not_eq_true,
+    String.isNat_iff]
+  simp
+
 theorem cIndex_claim : Flock.RecVStar.cIndex Flock.RecVStar.CLAIM_VALUE = none := by
   unfold Flock.RecVStar.cIndex Flock.RecVStar.CLAIM_VALUE
-  exact ite_eq_right_iff.2 fun _ => by decide +kernel
+  refine ite_eq_right_iff.2 fun _ => ?_
+  rw [show ("rec-claim".drop 5).toString = "laim" by decide +kernel]
+  exact toNat_laim
 
 /-- **A statement's own ports are none of its outputs**, `out` (no `m<k>` nor `claim<k>`), and each row one registered
 under a `rec-c<k>` reads is rep `0` or `1`. -/
 theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option ℕ)}
     (hq : q ∈ Flock.RecVStar.ownPorts sv) :
-    q.1 ∉ sv.sub.outputs ∧ ∀ k, Flock.RecVStar.cIndex q.2.1 = some k → ∀ rep, some rep ∈ q.2.2.toList → rep < 2 := by
+    q.1 ∉ sv.sub.outputs ∧
+      ∀ k, Flock.RecVStar.cIndex q.2.1 = some k → ∀ rep, some rep ∈ q.2.2.toList → rep < 2 := by
   cases sv with
-  | inner .. =>
+  | inner _ _ _ =>
     unfold Flock.RecVStar.ownPorts at hq
     obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
     dsimp only at h
@@ -490,7 +500,7 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
       cases hk
     · simp at hr
       omega
-  | sparse .. =>
+  | sparse _ _ =>
     unfold Flock.RecVStar.ownPorts at hq
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl
@@ -500,7 +510,7 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
     · refine ⟨by decide, fun _ hk => ?_⟩
       rw [cIndex_claim] at hk
       cases hk
-  | opening .. =>
+  | opening _ _ _ _ _ _ =>
     unfold Flock.RecVStar.ownPorts at hq
     obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
     dsimp only at h
@@ -526,15 +536,16 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
       | none =>
         rw [hm, hc] at h
         cases h
-  | recOpen => simp [Flock.RecVStar.ownPorts] at hq
-  | recOpenStacked => simp [Flock.RecVStar.ownPorts] at hq
-  | cap => simp [Flock.RecVStar.ownPorts] at hq
+  | recOpen _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
+  | recOpenStacked _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
+  | cap _ _ => simp [Flock.RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds: a row a statement's own port reads, at the port's index among its circuit's ports. -/
 theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
     (hs : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv)
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
-    ∃ q ∈ Flock.RecVStar.ownPorts sv, ∃ k, Flock.RecVStar.cIndex q.2.1 = some k ∧ some h.2.2.2 ∈ q.2.2.toList ∧
+    ∃ q ∈ Flock.RecVStar.ownPorts sv, ∃ k, Flock.RecVStar.cIndex q.2.1 = some k ∧
+      some h.2.2.2 ∈ q.2.2.toList ∧
       h.2.1 = q.1 ∧ c.ports.findIdx? (·.name == q.1) = some h.2.2.1 := by
   unfold heldRows at hh
   rw [hs, hc] at hh
@@ -549,12 +560,17 @@ theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
     split at hh
     · rename_i k hk
       obtain ⟨row, hrow, hh⟩ := List.mem_filterMap.1 hh
-      simp only [Option.bind_eq_bind] at hh
-      obtain ⟨rep, rfl, hh⟩ := Option.bind_eq_some_iff.1 hh
-      obtain ⟨j, -, hh⟩ := Option.bind_eq_some_iff.1 hh
-      obtain ⟨qi, hqi, hh⟩ := Option.bind_eq_some_iff.1 hh
-      cases hh
-      exact ⟨q, hq, k, hk, hrow, rfl, hqi⟩
+      cases row with
+      | none => simp at hh
+      | some rep =>
+        cases hj : msgRound rs rep k with
+        | none => simp [hj] at hh
+        | some j =>
+          cases hqi : c.ports.findIdx? (·.name == q.1) with
+          | none => simp [hj, hqi] at hh
+          | some qi =>
+            obtain rfl : (j, q.1, qi, rep) = h := by simpa [hj, hqi] using hh
+            exact ⟨q, hq, k, hk, hrow, rfl, hqi⟩
     · simp at hh
 
 theorem checkStmt_scopeOk {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
@@ -635,7 +651,8 @@ def CapFull (st : Stage) : Prop :=
   ∀ (s : ℕ) (x xO : Claims.Msg) (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (r : XR)
     (l N : ℕ),
     StagedPart st s x xO → setupO xO = some (i, spec, sts) → readX x = some r →
-    (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) → ∀ h0 : 0 < sts.size, N ≤ sts[0].n
+    (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) →
+      ∀ h0 : 0 < sts.size, N ≤ sts[0].n
 
 /-- `CapFull` holds wherever a staged RecCap part's first table carries no draw population (`checkStmt` then makes its
 `n` its population, `N`). -/
@@ -688,8 +705,7 @@ theorem hmSlotsCommit_of_full {st : Stage} (h1 : OneTable st) (hcap : CapFull st
   rw [hr] at hr'
   cases hr'
   have hS' := hS
-  obtain ⟨ms', i, spec, sts, he, hsu, -⟩ := hS'
-  rw [← he] at hsu
+  obtain ⟨ms', i, spec, sts, -, hsu, -⟩ := hS'
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have hsz : p.sts.size = 1 := by rw [hp]; exact h1 s x _ i spec sts hS hsu
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
