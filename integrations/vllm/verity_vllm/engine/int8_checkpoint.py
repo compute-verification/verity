@@ -1,5 +1,5 @@
 """Int8 checkpoints for the exact-int8 linears, made offline from a pinned BF16 checkpoint: the recipes ``verity-int8-channel127/v1``
-and ``/v2``.
+and ``/v2``, and from a pinned block-FP8 one: ``verity-int8-channel127-fp8/v1``.
 
     verity-vllm int8-checkpoint make --role ROLE [--hf-home DIR]        re-make a registered int8 pin (under its own recipe) and check
                                                                           every file's sha256
@@ -27,6 +27,13 @@ method ``engine.int8_vllm`` registers.  The pin's ``int8_of`` names its BF16 bas
 ``lm_head.weight`` and an F32 ``lm_head.weight_scale`` [vocab_size, 1]), and ``modules_to_not_convert`` is ``[]``, so vLLM's
 ``ParallelLMHead`` serves the int8 linear too.  The embedding stays as the base has it (a gather, not a product).  A config with
 ``tie_word_embeddings`` true or absent is refused, as is a checkpoint without an ``lm_head.weight`` of its own.
+
+``verity-int8-channel127-fp8/v1`` is v1's row rule on a block-FP8 base (``fp8_checkpoint``'s ``fp8_base``: GLM-5.3 as Z.ai
+publishes it, ``int8_of`` its FP8 pin).  Its linears are exactly the base's block-scaled ``F8_E4M3`` weights, the dense ones and
+every routed and shared expert's (a MoE stores each expert's as its own 2-D tensors); W is read as RN32(e4m3fn(q) * s), the float32
+product of each code with its 128 x 128 block's ``weight_scale_inv`` (vLLM's own block dequantization, ``f32(w) * s``), and the
+base's ``weight_scale_inv`` tensors are dropped.  What the base keeps in bf16 (the router, the indexer's ``weights_proj``, the MTP
+``eh_proj``, the embedding and the LM head) is copied, and ``modules_to_not_convert`` is the base's own list.
 """
 from __future__ import annotations
 
@@ -42,6 +49,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 RECIPE = "verity-int8-channel127/v1"
 RECIPE_V2 = "verity-int8-channel127/v2"
+RECIPE_FP8 = "verity-int8-channel127-fp8/v1"
 QUANTIZATION = {"quant_method": TargetProfile.INT8_EXACT_QUANTIZATION, "weight_max": E.W_MAX}
 
 
@@ -62,7 +70,8 @@ INT8 = F.Recipe(id=RECIPE, weight_dtype="I8", scale_suffix="weight_scale", rows_
                 refusal=lambda n, k: "not a multiple of 8 on both axes" if n % 8 or k % 8 else None,
                 scales=channel_scales, quantize=quantize, quantization=QUANTIZATION, of="int8_of")
 INT8_V2 = replace(INT8, id=RECIPE_V2, lm_head=True)
-RECIPES = {r.id: r for r in (INT8, INT8_V2)}
+INT8_FP8 = replace(INT8, id=RECIPE_FP8, fp8_base=True)
+RECIPES = {r.id: r for r in (INT8, INT8_V2, INT8_FP8)}
 
 
 def recipe_of(entry: dict) -> F.Recipe:
@@ -81,11 +90,13 @@ class MakeOptions:
     checkpoints: str = option("--checkpoints", default=str(C.CHECKPOINTS))
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None,
                                  help="HF cache holding the base snapshot; the int8 snapshot goes beside it (default: the pins' local_path)")
+    jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
 
 
 @dataclass(frozen=True, kw_only=True)
 class PinOptions:
-    """Make an int8 checkpoint from a BF16 pin and print its new entry (to append to checkpoints-int8.json, append-only)."""
+    """Make an int8 checkpoint from a BF16 (or, under the -fp8 recipe, block-FP8) pin and print its new entry (to append to
+    checkpoints-int8.json, append-only)."""
 
     base_role: str = option("--base-role", help="the BF16 pin's role, or its repo id when the role is prose")
     role: str = option("--role", help="the new int8 pin's role")
@@ -94,7 +105,8 @@ class PinOptions:
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None)
     by: str = option("--by", default="int8-checkpoint pin", help="resolved_by of the entry")
     at: str = option("--at", help="resolved_at of the entry (UTC, ISO 8601)")
-    recipe: str = option("--recipe", default=RECIPE, choices=sorted(RECIPES), help="the int8 recipe (v2 also makes the LM head)")
+    recipe: str = option("--recipe", default=RECIPE, choices=sorted(RECIPES), help="the int8 recipe (v2 also makes the LM head; -fp8 reads a block-FP8 base)")
+    jobs: int = option("--jobs", type=int, default=1, help="shards made at once (the bytes are the same for any value)")
 
 
 COMMANDS = {"make": MakeOptions, "pin": PinOptions}

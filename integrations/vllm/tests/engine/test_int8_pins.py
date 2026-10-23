@@ -1,6 +1,6 @@
 """The int8 pins in `manifests/checkpoints-int8.json` (every entry with `int8_of`), checked offline.
 
-An int8 pin is a recipe pin (`engine.int8_checkpoint`, `verity-int8-channel127/v1` or `/v2`, its `recipe.id`): it names its BF16 base pin and keeps its
+An int8 pin is a recipe pin (`engine.int8_checkpoint`, `verity-int8-channel127/v1`, `/v2` or `-fp8/v1`, its `recipe.id`): it names its base pin and keeps its
 shard names; its revision is the recipe's digest of the made files, its made config is the recipe's transform of the base
 config wherever that is shipped (`profiles/hf_configs/<BASE ROLE>.config.json`), and it resolves under the pins' HF cache like
 a hub snapshot.  Int8 pins live only in the sibling manifest, which `config.checkpoint_entries` reads after `checkpoints.json`.
@@ -61,4 +61,6 @@ def test_int8_pin_is_the_recipes_output_of_its_base_pin(entry):
     if shipped_base is not None:
         cfg = F.fp8_config(shipped_base.read_bytes(), recipe)
         assert hashlib.sha256(cfg).hexdigest() == entry["config_sha256"]
-        assert json.loads(cfg)["quantization_config"] == {**I.QUANTIZATION, "modules_to_not_convert": [] if recipe.lm_head else ["lm_head"]}
+        kept = json.loads(shipped_base.read_bytes())["quantization_config"]["modules_to_not_convert"] if recipe.fp8_base \
+            else [] if recipe.lm_head else ["lm_head"]
+        assert json.loads(cfg)["quantization_config"] == {**I.QUANTIZATION, "modules_to_not_convert": kept}
