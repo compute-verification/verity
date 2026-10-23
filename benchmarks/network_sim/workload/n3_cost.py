@@ -34,9 +34,10 @@ from . import n3_unit as U
 from . import n3_v4 as V4
 from . import n3_v5 as V5
 
-N2_LINK_WINDOW = 2 * (1_876_070 + 807 + 19_199 + 2)
-"""N2's two head checks a link-window at T = 600 buckets and a link name of 9 bytes, 3,792,156 ANDs: each head's
-opening, its fields, its counts against the profile and the 2 ANDs that join them (`head_check.size`)."""
+N2_LINK_WINDOW = 2 * (1_876_070 + 807 + 19_199 + 1_333_292 + 3)
+"""N2's two head checks a link-window at T = 600 buckets and a link name of 9 bytes, 6,458,742 ANDs: each head's
+opening, its fields, its counts against the profile, its signed digest (the record digest salted by the certifier) and
+the 3 ANDs that join them (`head_check.size`)."""
 
 SERVED = {"T": 600, "R": 1686, "B": 4096, "L": 9, "windows_a_day": 1440, "egress_frames": (34_499, 35_386),
           "ingress_share": 21_372 / 715_340}

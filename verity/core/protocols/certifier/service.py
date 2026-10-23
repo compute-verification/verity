@@ -90,8 +90,9 @@ never a violation's kind.
 What that establishes, and what it doesn't: the outcome is accept exactly when the opening seals, both head checks
 accept and the host audit accepts the committed records, and the outcome record binds the registered root, the draw and
 the delivered session. The verifier of record reads the witness, so it is not zero-knowledge: until the unit is proved,
-the head checks run where the heads may go. Of the certificates' check, the signature check reads each certificate's
-public fields and its signed digest, which hides the head under the certifier's salt; the rest reads each head's
+the head checks run where the heads and the certifier's salts may go, and the audit checks each signed digest against
+its head and salt there too (`CertifiedRecord.verify`). Once it is proved, the certificates' check reads each
+certificate's public fields and its signed digest, which hides the head under the certifier's salt, and each head's
 deadline bit, which is the public `deadline` output. One clock per spatial unit across links
 (`Audit.syncs`) is not checked here: each registration is one link-window, checked alone. The frames, their content
 and their order within the counts, are left to N3: an accepted outcome says nothing of them, so the claim is counts
