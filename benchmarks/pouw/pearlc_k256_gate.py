@@ -29,7 +29,9 @@ weight slices) adds a family ``glm-w2-NAME`` per slice: those rows as B, with t(
 
 ``--verdict DIR`` is the run's status (`pearlc_k256_gate.sh`): it passes only when every ``census_*.json`` under DIR (the
 census with the replayed debit) passes its own criterion, every ``gate*.json`` passes, and ``slices.json``
-(`pearl_c_sm90/glm53_slices.py`) has no row failing the per-row rules.
+(`pearl_c_sm90/glm53_slices.py`) covers every down projection.  A weight row failing the per-row rules is excluded (bound,
+no credit), so the slices' failing share is reported, not gated.  ``verdict.json`` also reports the honest tiles' acceptance
+(Gaussian and the w2 samples): how many of them -h3's row cap rejects before any row is given up.
 """
 from __future__ import annotations
 
@@ -60,6 +62,8 @@ FRAG = (16, 8)
 THRESHOLD = Fraction(1, 400)
 ALL_FAMILIES = K.FAMILIES + K.ACTIVATION_FAMILIES + K.OUTLIER_FAMILIES + K.FREEZE_FAMILIES + K.XCANCEL_FAMILIES
 B_SAMPLES = ""
+#: GLM-5.3's down projections: 76 MoE layers (3-77, and the MTP layer 78), each 256 routed experts' w2 and a shared one
+SLICE_TENSORS = 76 * 257
 POP = np.array([bin(m).count("1") for m in range(256)], dtype=np.int64)
 
 
@@ -250,19 +254,31 @@ def verdict(d: Path) -> None:
         good = g["selftest_mismatches"] == 0 and not g["falsifiers"] and g["in_domain_cells"] > 0
         parts.append({"file": f.name, "pass": good, "in_domain_cells": g["in_domain_cells"],
                       "accepted_in_domain_cells": g["accepted_in_domain_cells"], "worst_fragment_share": g["worst_fragment_share"],
-                      "worst_word_share_tile_cap_ok": g["worst_word_share"], "falsifiers": g["falsifiers"]})
+                      "worst_word_share_tile_cap_ok": g["worst_word_share"],
+                      "worst_word_share_accepted": g.get("worst_word_share_accepted"), "falsifiers": g["falsifiers"]})
         ok &= good
+    honest = {}
+    for f in gates:
+        for r in json.loads(f.read_text())["cells"]:
+            if r["in_domain"] and (r["family"] == "gaussian" or r["family"].startswith("glm-w2-")):
+                h = honest.setdefault("glm-w2" if r["family"].startswith("glm-w2-") else r["family"],
+                                      {"tiles": 0, "accepted": 0, "rows": 0, "rows_over_row_cap": 0})
+                h["tiles"] += 1
+                h["accepted"] += r["accepted"]
+                h["rows"] += r["rows_ok_A"]
+                h["rows_over_row_cap"] += r["rows_over_row_cap"]
     sl = d / "slices.json"
     if sl.exists():
         x = json.loads(sl.read_text())
-        good = x["rows"] > 0 and x["either_fail"] == 0
-        parts.append({"file": sl.name, "pass": good, "rows": x["rows"], "either_fail": x["either_fail"], "fail_share": x["fail_share"],
+        good = x["rows"] > 0 and x["tensors"] == SLICE_TENSORS
+        parts.append({"file": sl.name, "pass": good, "tensors": x["tensors"], "rows": x["rows"], "either_fail": x["either_fail"],
+                      "fail_share": x["fail_share"],
                       "roles": {r: {y: v[y] for y in ("rows", "floor_fail", "live_fail", "either_fail", "fail_share", "worst_slice")}
                                 for r, v in x["roles"].items()}})
         ok &= good
     ok &= bool(gates) and sl.exists() and any(p["file"].startswith("census_") for p in parts)
     out = d / "verdict.json"
-    out.write_text(json.dumps({"pass": ok, "parts": parts}, indent=1) + "\n")
+    out.write_text(json.dumps({"pass": ok, "parts": parts, "honest_acceptance": honest}, indent=1) + "\n")
     failed = [p["file"] for p in parts if not p["pass"]]
     run_result.write(out, ok, "pearlc-k256-gate-verdict", "every part passes" if ok else f"failing: {', '.join(failed) or 'a part is missing'}",
                      [("parts", len(parts), "count"), ("failing_parts", len(failed), "count")])
@@ -299,6 +315,7 @@ def main() -> None:
     scored = [r for r in rows if r["in_domain"]]
     worst = max(scored, key=lambda r: r["fragment_share_of_credit"], default=None)
     worst_word = max((r for r in scored if r["tile_cap_ok"]), key=lambda r: r["word_share_of_credit"], default=None)
+    worst_acc = max((r for r in scored if r["accepted"]), key=lambda r: r["word_share_of_credit"], default=None)
     by_family = {}
     for r in scored:
         f = by_family.setdefault(r["family"], {"cells": 0, "tile_cap_ok": 0, "accepted": 0, "rows_over_row_cap": 0})
@@ -314,6 +331,7 @@ def main() -> None:
                                                                      "xg_fragment_share_of_credit", "peel_fragment_share_of_credit")},
            "worst_word_share": worst_word and {x: worst_word[x] for x in ("family", "run", "word_share_of_credit",
                                                                           "xg_word_share_of_credit", "peel_word_share_of_credit")},
+           "worst_word_share_accepted": worst_acc and {x: worst_acc[x] for x in ("family", "run", "word_share_of_credit")},
            "falsifiers": [{x: r[x] for x in ("family", "run", "fragment_share_of_credit")} for r in falsified],
            "seconds": round(time.time() - t0, 1)}
     out = Path(a.out)
