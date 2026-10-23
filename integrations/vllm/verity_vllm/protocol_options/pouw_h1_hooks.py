@@ -12,8 +12,22 @@ from verity_vllm.protocol_options import pouw_h1_requests as RQ
 
 def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
     """The linear layers by type in module order; ValueError names every one not on the int8_exact plain arm
-    (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales."""
-    out = [m for m in model.modules() if isinstance(m, types)]
+    (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales.
+
+    A MoE layer's routed experts (a module whose quant method is a ``FusedMoEMethodBase``) count in its place as their
+    sites (`engine.int8_experts.ExpertSite`), each expert's gate_up then its down in expert order, the order the method
+    calls them on every forward, each its own call however many tokens it got; a method with no sites is refused.  The
+    routers (`kernel_readback.routers`) stay bf16 as the model builds them, and the linears the checkpoint's
+    ``modules_to_not_convert`` keeps bf16 (`kernel_readback.kept`) stay bf16 too; neither is recorded."""
+    from verity_vllm.program.frontend.kernel_readback import kept, routers
+    skip, seen, out = routers(model) | kept(model), set(), []
+    for m in model.modules():
+        qm = getattr(m, "quant_method", None)
+        if isinstance(m, types) and id(m) not in skip:
+            out.append(m)
+        elif any(c.__name__ == "FusedMoEMethodBase" for c in type(qm).__mro__) and id(qm) not in seen:
+            seen.add(id(qm))
+            out += list(getattr(qm, "sites", None) or [m])
     if not out:
         raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer")
     bad = []
@@ -22,10 +36,17 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
         dtype = str(getattr(getattr(layer, "weight", None), "dtype", None)).removeprefix("torch.")
         if getattr(method, "int8_arm", None) is None or not callable(getattr(method, "observe", None)) or dtype != "int8" \
                 or getattr(layer, "weight_scale", None) is None:
-            bad.append(f"linear {w}: {type(method).__name__} with a {dtype} weight is not the int8_exact plain arm")
+            bad.append(f"linear {w}: {type(method).__name__} with a {dtype} weight is not the int8_exact plain arm"
+                       + (" (a MoE layer's routed experts record as their sites)" if not hasattr(layer, "weight") else ""))
     if bad:
         raise ValueError(f"pouw:{PH.SCHEME} refused at install: " + "; ".join(bad))
     return out
+
+
+def expert_names(layers: list[Any]) -> dict[int, str]:
+    """Each expert site's name (`engine.int8_experts.ExpertSite`, no module of its own): ``prefix.expert.projection``."""
+    from verity_vllm.engine.int8_experts import ExpertSite
+    return {w: m.name for w, m in enumerate(layers) if isinstance(m, ExpertSite)}
 
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:

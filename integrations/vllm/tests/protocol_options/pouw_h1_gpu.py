@@ -216,7 +216,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
                            "scheme": PH.SCHEME}
     with tempfile.TemporaryDirectory() as scratch:
@@ -374,7 +374,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     decl = PH.FILL
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact="all")
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
     doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
                            "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
                            "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
@@ -749,6 +749,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rows", type=int, default=64, help="T, the public rows a call: vLLM's max_num_batched_tokens")
     ap.add_argument("--steps", type=int, default=0, help="S, the public steps of the window (default 2 (max tokens + 2): the "
                                                          "batch and the one alone)")
+    ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
+                    help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "

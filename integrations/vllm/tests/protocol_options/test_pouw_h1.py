@@ -422,6 +422,105 @@ def test_a_layer_off_the_int8_arm_is_refused_at_install():
     assert hooks.live(_entry()) == ()
 
 
+class LinearMethodBase:
+    """Stands in for vLLM's base class by name (`kernel_readback.routers`)."""
+
+
+class Bf16Router(LinearMethodBase):
+    def apply(self, layer, x, bias=None):
+        return (x.float() @ layer.weight.float().T).bfloat16()
+
+
+class FusedMoEMethodBase:
+    """Stands in for vLLM's base class by name (`pouw_h1_hooks.layers`)."""
+
+
+class Experts(FusedMoEMethodBase):
+    """A stand-in for `engine.int8_vllm.Int8ExpertsMethod`: its sites, as `int8_experts.sites` makes them."""
+
+    int8_arm = E.ARM
+
+    def __init__(self, sites):
+        self.sites = sites
+
+
+class MoE:
+    """A MoE layer of `experts` experts (hidden K, intermediate 16): its bf16 router beside its runner, whose routed
+    experts are int8 (`Experts`), or `method` if given."""
+
+    def __init__(self, experts, seed, method=None):
+        from verity_vllm.engine import int8_experts as X
+        g = torch.Generator().manual_seed(seed)
+        w13, w2 = (torch.randint(-127, 128, s, generator=g, dtype=torch.int8) for s in ((experts, 32, K), (experts, K, 16)))
+        s13, s2 = ((torch.rand(*s, generator=g) * 0.01 + 1e-4).float() for s in ((experts, 32, 1), (experts, K, 1)))
+        self.router = Linear(experts, seed + 1)
+        self.router.weight = torch.randn(experts, K, generator=g).bfloat16()
+        self.router.quant_config, self.router.output_size, self.router.quant_method = None, experts, Bf16Router()
+        self.runner = SimpleNamespace(routed_experts=SimpleNamespace(global_num_experts=experts),
+                                      quant_method=method or Experts(X.sites("moe.experts", w13, s13, w2, s2)))
+
+    def children(self):
+        return iter([self.router, self.runner])
+
+
+def test_a_moe_layer_records_every_expert_gemm_in_static_order_and_not_its_router():
+    """A MoE layer's routed experts record as their sites, (e, gate_up) then (e, down), every forward: an expert no token
+    routed to is a call of zero rows, so each step is the same calls at the same public positions; its bf16 router is no
+    call. The served y is the arm's, and only served calls count."""
+    from verity_vllm.engine import int8_experts as X
+    moe = MoE(2, 5)
+    dense = Linear(32, 1)
+    model = Model(dense, moe, moe.router, moe.runner)
+    sites = moe.runner.quant_method.sites
+    assert PHK.layers(model, (Linear,)) == [dense, *sites]
+    settings = _settings()
+    runner = settings["pouw"]["runner"]
+    comp = PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings))
+    try:
+        g = torch.Generator().manual_seed(9)
+        for so, m, ids in ((_so(("a", [5, 6, 7], 4)), 3, [0, 0, 0]), (_so(running={"a": 1}), 1, [1])):
+            runner.execute_model(so)
+            dense.quant_method.apply(dense, (torch.randn(m, K, generator=g) * 3).bfloat16())
+            x = (torch.randn(m, K, generator=g) * 3).bfloat16()
+            topk = torch.tensor(ids).reshape(m, 1)
+            w = torch.ones(m, 1)
+            y = X.forward(sites, x, w, topk)
+            fresh = [X.ExpertSite(s.prefix, s.expert, s.projection, s.weight, s.weight_scale) for s in sites]
+            assert torch.equal(y.view(torch.int16), X.forward(fresh, x, w, topk).view(torch.int16))
+        run = pouw.h1_run(_entry())
+        assert [(c.step, c.layer, c.module, c.m) for c in run.calls] == [
+            (0, 0, "linear 0", 3), (0, 1, "moe.experts.0.gate_up", 3), (0, 2, "moe.experts.0.down", 3),
+            (0, 3, "moe.experts.1.gate_up", 0), (0, 4, "moe.experts.1.down", 0),
+            (1, 0, "linear 0", 1), (1, 1, "moe.experts.0.gate_up", 0), (1, 2, "moe.experts.0.down", 0),
+            (1, 3, "moe.experts.1.gate_up", 1), (1, 4, "moe.experts.1.down", 1)]
+        assert [s.quant_method.calls for s in sites] == [2, 2, 2, 2]
+        assert run.tables[3]["z"] is not None and set(run.gated()) == {0, 1, 2, 5, 8, 9}
+    finally:
+        comp.close()
+    commitment = comp.installed[0].commitment()
+    assert commitment["static"] and commitment["calls"] == 15
+    assert run.shapes_ == [(32, K), (32, K), (K, 16), (32, K), (K, 16)]
+
+
+def test_a_linear_the_checkpoint_keeps_bf16_is_not_recorded():
+    """A linear ``modules_to_not_convert`` names (`engine.int8_vllm.Int8KeptLinearMethod`, bf16) is no call, as a router;
+    an unmarked bf16 linear is still refused."""
+    dense, kv_b = Linear(32, 1), Linear(32, 2)
+    kv_b.quant_method = type("Int8KeptLinearMethod", (LinearMethodBase,), {"int8_kept": True})()
+    assert PHK.layers(Model(dense, kv_b), (Linear,)) == [dense]
+    kv_b.quant_method = LinearMethodBase()
+    with pytest.raises(ValueError, match="not the int8_exact plain arm"):
+        PHK.layers(Model(dense, kv_b), (Linear,))
+
+
+def test_a_moe_layer_without_int8_sites_is_refused_at_install():
+    moe = MoE(2, 5, method=type("UnquantizedFusedMoEMethod", (FusedMoEMethodBase,), {})())
+    with pytest.raises(ValueError, match="routed experts record as their sites"):
+        PO.install(Model(Linear(32, 1), moe, moe.router, moe.runner),
+                   PO.Context(stage="serve", enabled=(_entry(),), settings=_settings()))
+    assert hooks.live(_entry()) == ()
+
+
 KEY = bytes(range(32))
 
 

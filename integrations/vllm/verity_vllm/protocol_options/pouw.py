@@ -796,4 +796,4 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
 
 
 def _named(model: Any, layers: list[Any]) -> dict[int, str]:
-    return {w: name for name, w in _sites(model, layers).items()}
+    return {w: name for name, w in _sites(model, layers).items()} | PHK.expert_names(layers)
