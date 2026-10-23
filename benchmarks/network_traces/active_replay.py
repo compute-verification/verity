@@ -420,14 +420,19 @@ def plan_configuration(cfg: dict, setup: Setup, live_model: str | None = None, s
     return out
 
 
-def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int) -> dict[int, int]:
+def model_releases(requests: Sequence[dict], params: GridParams, windows: int, egress_bucket_ms: int,
+                   hold: int | None = None) -> dict[int, int]:
     """Each request's release as the ingress certifier's rule gives it: its frames enqueued at their bucket, in send
-    order, and released r_in per bucket; the egress bucket of its last frame's release."""
+    order, and released r_in per bucket; the egress bucket of its last frame's release. With `hold`, the proxy's
+    admission hold (`active.Bucketer`): a request is enqueued only while its last frame would be released before the
+    window's last `hold` buckets."""
     pending = sorted((q["enqueue"], q["send_ms"], q["stream"], q["frames"]) for q in requests)
     out, queue, k = {}, [], 0
     for t in range(windows * params.buckets):
         while k < len(pending) and pending[k][0] <= t:
             _, _, s, n = pending[k]
+            if hold is not None and (len(queue) + n - 1) // params.allocation >= params.buckets - hold - t % params.buckets:
+                break
             queue += [(s, j == n - 1) for j in range(n)]
             k += 1
         for s, last in queue[: params.allocation]:
@@ -1128,6 +1133,14 @@ def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], con
     asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause, host, port))
 
 
+def served_args(plan: dict) -> dict:
+    """The proxy's admission hold on a served link (`active.Proxy(hold=…)`), from the plan's `served` (none
+    otherwise)."""
+    if "served" not in plan:
+        return {}
+    return {"hold": plan["served"]["hold"], "request_frames": plan["served"]["request_frames"]}
+
+
 def phase_args(plan: dict, start: int, end: int) -> dict:
     """The arguments of the proxy that serves windows `start` … `end` − 1 of an outage plan (none otherwise)."""
     if "outage" not in plan:
@@ -1159,7 +1172,7 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
             return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
                          publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
                          salt=fresh_salt if salt else None, reveal_deadline=reveal_deadline(plan, window_s),
-                         **advice, **phase_args(plan, start, end))
+                         **advice, **phase_args(plan, start, end), **served_args(plan))
 
         if k == 0:
             listening = await asyncio.start_server(on_link, host, port)
