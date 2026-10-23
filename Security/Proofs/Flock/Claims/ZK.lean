@@ -106,6 +106,7 @@ import Proofs.Flock.Claims.ZK.FrameReal
 import Proofs.Flock.Claims.ZK.FrameRep
 import Proofs.Flock.Claims.ZK.FrameInner
 import Proofs.Flock.Claims.ZK.FrameZK
+import Proofs.Flock.Claims.ZK.FrameLive
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -116,6 +117,7 @@ import Proofs.Flock.Claims.ZK.Stop
 import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
+import Proofs.Flock.Claims.ZK.FrameTaken
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishLevel0
 import Proofs.Flock.Claims.ZK.FinishPiop
@@ -123,6 +125,7 @@ import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Claims.ZK.FinishLig
 import Proofs.Flock.Claims.ZK.FinishRep
 import Proofs.Flock.Claims.ZK.FinishRank
+import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -523,6 +526,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   `Finish` does not stop either its files encode `fin` of the switched views (`LeanRelease.FinishIs`), so
   `FinalRoundEq` follows (**`LeanRelease.finalRoundEq_of_finishIs`**, a live run's `Finish` not stopping by
   `finStops_of_live`).
+* `FrameTaken`: `FrameAdmits`' first piece, at any `LeanRelease`. On a live history up to the `Finish` whose last
+  coins the frame takes, at every prefix of at least three rounds the transport's coin check passed and the frame of
+  the rep that released the prefix's last round, at its state and configuration, answered its coins without refusal
+  (**`LeanRelease.coins_taken_of_live`**, from `refusesCoins_of_live` at the prefixes, `live_take`). `Hello`'s and the
+  `Commit`'s coins go to the session (`takeAt`), so it says nothing of them.
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
@@ -572,6 +580,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
   table admits the opened coins no refusal shows, so table `j`'s rep `r`'s check passes at coins that are the opened
   ones through it (**`Claims.ZKMal.Masked.rank_at_admits`**).
+* `AdmitsOf`: `not_refused_of_admits`' converse. At the executable's coin plan of any prover, where every refusal's round
+  is below `n` (`SlotsBelow`) and the coins below `n` show none (`Refused`), every table admits the opened coins
+  (**`Claims.ZKMal.Masked.admits_of_not_refused`**). Every refusal's round is a round of the session
+  (`slotsBelow_refK`, each within its rep's `repRounds`), so no refusal by `refK x` is enough
+  (**`admits_of_not_refused_refK`**), and `LeanRelease.FrameAdmits` at the session loop is the frames refusing each
+  fault `Refused` names at its round.
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
@@ -727,8 +741,9 @@ import Proofs.Flock.Claims.ZK.SessionLean
   alike to `fs` and the same squeeze (`passes_frames`): the words the frame frees are the frames' values
   (`roundFree_free`), and any 16 bytes are a value's (`toBytes_readWord`).
 * `FrameLoop`: the release at the session loop's own frames (`LeanRelease.ofLoop`), its transport's state the loop's
-  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone (`Loop.progOf`), so
-  `ProgReads` holds by definition (`ofLoop_progReads`).
+  `Frame.run` over `Drive.reqs` at placeholder draws and salts, from the decoded coins alone: the state of the rep that
+  released the last round (`Loop.progOf`), which takes its coins, and a rep's first-round state (`Loop.freshOf`, as
+  `Frames.roundPlace` starts it), so `ProgReads` holds by definition (`ofLoop_progReads`).
 * `FrameSched`: two runs of the firewall's prover at inputs of one shape send rounds of one shape (`Sim`, over any
   monad with a `Lift`): the algebraic phase's schedule at two level-0 caps of one size (`rounds_alike`), a rep's
   opening at two tables of one shape whatever its salts for levels ≥ 1 (`openStep_alike`), and so a rep's scheduled
@@ -768,6 +783,10 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (`ofLoop_progReads`) and `ProgChecks` a conclusion (`ofLoop_progChecks_sizes`): `hS`, `hP` and `hRow` from one check
   of the setup's sizes (`Session.sizesOk`, which the loop runs at its `Hello`: `Loop.Serves`), and `hR` (`RealTabs`)
   and `hL0` its premises.
+* `FrameLive`: the bound is not vacuous past `Hello`: at `ofLoop` the link's coins are the session's, so the link is the
+  firewall's (`ofLoop_ownMsg_link`), and the history of `Hello`, the link and rep 0's first round is live at the honest
+  worker through rep 0's second round wherever the deployed frame's check passes those device rounds at the loop's
+  states (`ofLoop_live_three`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
