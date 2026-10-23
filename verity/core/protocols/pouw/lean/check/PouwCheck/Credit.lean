@@ -949,10 +949,11 @@ each of the round's calls of K, o the call's first, `stepRow`), its B row j (`b_
 row b0 + C·tj + j of the weights' `<prefix>b/<K>` (b0 the call's linear's first row in it), and its record (`zy`) at row
 t of the call's z table `<prefix>zy@<call>`; and, when the window registers the call's receipt table
 `<prefix>receipt@<call>`, the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shapeOf`'s width) at its
-row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them. Each value is a row/v2 value of 16-bit
-leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the window's open root `window`
-but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its cost is the window's units,
-once a port: the reads file's form. -/
+row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them, and
+the file lists no unit past the call's last (`Flock.Registered.badInstance` reads none past `reads`). Each value is a
+row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
+window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
+cost is the window's units up to the call's last, once a port: the reads file's form. -/
 def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Nat) (roots : Json) (window : String)
     (steps : Nat) : R Json := do
   let num := fun j => (nat? j).getD 0
@@ -1001,14 +1002,13 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     | [.str x] => root := root ++ [(v, x)]
     | _ => throw ("registration", s!"call {call}'s statement reads {v}, which the window registers " ++
         s!"{if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
-  let population := sizes.foldl (· + ·) 0
   let ports : List (String × String × (Nat → Nat)) :=
     (List.range r).map (fun i => (s!"a_k{k}_{i}", a, fun t => at_ + r * (t / per) + i)) ++
     (List.range c).map (fun j => (s!"b_k{k}_{j}", bv, fun t => b0 + c * (t % per) + j)) ++
     [("zy", zy, fun t => t)] ++ (if receipted then [(RECEIPT_PORT, rc, fun t => t)] else [])
   let mut out : List (String × Json) := []
   for (port, v, row) in ports do
-    let reads := (List.range population).map fun u =>
+    let reads := (List.range (u0 + size)).map fun u =>
       if u0 ≤ u && u < u0 + size then Lean.toJson (row (u - u0)) else Json.null
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw

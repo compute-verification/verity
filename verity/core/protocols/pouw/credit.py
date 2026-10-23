@@ -760,11 +760,12 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
     (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
     the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
-    receipts the round roots commit are the ones the units return; every other unit reads none of them. Each value is a
-    row/v2 value of 16-bit leaves
+    receipts the round roots commit are the ones the units return; every other unit reads none of them, and the file
+    lists no unit past the call's last (the verifier reads none past ``reads``). Each value is a row/v2 value of 16-bit
+    leaves
     under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its cost is the window's units, once a port: the reads file's form."""
+    gives it. Its cost is the window's units up to the call's last, once a port: the reads file's form."""
     (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
     lin = layout["calls"][call][0]
     ks = {name: (k, n) for name, k, n in layout["linears"]}
@@ -798,7 +799,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
     out = {}
     for port, v, row in ports:
-        reads: list[int | None] = [None] * sum(sizes)
+        reads: list[int | None] = [None] * (u0 + size)
         for t in range(size):
             reads[u0 + t] = row(t)
         leaves, words = rows_of[v]
