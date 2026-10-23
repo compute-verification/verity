@@ -130,6 +130,18 @@ def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", *cmd], unit
 
 
+def scope_refusal(run=subprocess.run) -> str | None:
+    """Why `systemd-run --user --scope` can't run here (no user manager or bus: a run started over ssh without
+    XDG_RUNTIME_DIR, no lingering), or None when it can. A `scope=1` slot fails open on it: its check runs unscoped rather than
+    failing every train check that slot takes."""
+    try:
+        r = run(["systemd-run", "--user", "--scope", "--quiet", "--collect", "--", "true"], capture_output=True, text=True,
+                timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"{type(e).__name__}: {e}"
+    return None if r.returncode == 0 else f"exit {r.returncode}: {(r.stderr or '').strip()[-200:] or 'no message'}"
+
+
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use, in GiB: the least of MemAvailable and what each cgroup v2 limit over it leaves (a run's
     session scope and the user slice on a VM; a pod's /proc/meminfo is the host's). A cgroup's page cache (active_file and
@@ -697,7 +709,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         print(said, file=sys.stderr, flush=True)
     if run_max is not None:
         print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
-    if slot.get("scope"):
+    if slot.get("scope") and (why := scope_refusal()):
+        print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
+    elif slot.get("scope"):
         cmd, unit = scoped(cmd, slot["name"], os.environ.get("RESEARCH_RUN_ID") or str(os.getpid()))
         env[SCOPE_ENV] = unit
         print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)

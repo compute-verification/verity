@@ -147,6 +147,7 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
         raise Exec
 
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
     (tmp_path / "slots").write_text("b 0 scope=1\n")
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
@@ -157,6 +158,39 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
     with pytest.raises(Exec):
         SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
     assert ran["argv"] == ["uv", "run", "check.py"] and ran["unit"] is None, "no scope=1: CMD as it is, and no stale unit name"
+
+
+def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
+    """Fail open (ci's review of #3336): a run with no user manager or bus would otherwise fail every train check the slot
+    takes, which drive reads as the train failing."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, unit=env.get(SLOT.SCOPE_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    real = SLOT.scope_refusal
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: "exit 1: Failed to connect to bus: No medium found")
+    (tmp_path / "slots").write_text("b 0 scope=1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran == {"argv": ["uv", "run", "check.py"], "unit": None}
+    assert "scope=1 but systemd-run --user doesn't run here (exit 1: Failed to connect to bus" in capsys.readouterr().err
+
+    class R:
+        def __init__(self, rc, err=""):
+            self.returncode, self.stderr = rc, err
+
+    assert real(lambda *a, **k: R(0)) is None
+    assert real(lambda *a, **k: R(1, "Failed to connect to bus\n")) == "exit 1: Failed to connect to bus"
+
+    def hang(*a, **k):
+        raise SLOT.subprocess.TimeoutExpired(a[0], 10)
+
+    assert real(hang).startswith("TimeoutExpired")
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
