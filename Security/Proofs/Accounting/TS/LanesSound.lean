@@ -325,7 +325,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         obtain ⟨hN, hex⟩ := names_of_check (hacc k).2.2.2 hm'
         obtain ⟨reg, hf, -⟩ := FlockC3.RegLevels.checkKnownAll_ok (hacc k).2.1 hm
         exact ⟨hN, hex _ _ hm', reg, Array.mem_toList_iff.1 (List.mem_of_find?_eq_some hf),
-          beq_iff_eq.1 (List.find?_some hf)⟩
+          by simpa using List.find?_some hf⟩
       have hR : CheckedRel (sess x w i k) (out x w i k) ok (openedReg (sess x w i k)) := by
         by_contra hR
         exact hk1 ⟨(hacc k).1, fun h => hR (h hP)⟩
