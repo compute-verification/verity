@@ -118,4 +118,4 @@ def test_the_head_check_is_its_reference(cases, bare):
     assert (size["fields"], size["counts"], size["other"]) == (807, 19_199, 3)
     assert size["opening"] == HC.ands(bind(HC.NetworkHidingRead, N_BITS=8 * HC.Shape(9, 600).HL, D=2)) > 32 * 600
     assert size["signed"] == (HC.ands(bind(HC.NetworkRecordDigest, HL=HC.Shape(9, 600).HL))
-                              + HC.ands(HC.NetworkSignedDigest)) == 1_333_292
+                              + HC.ands(bind(HC.NetworkSignedDigest))) == 1_333_292
