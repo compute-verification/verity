@@ -8,7 +8,8 @@ each connection is one session, relayed on a connection of its own to the audito
 * `Register` is relayed, and its answer (`Resp::Draw`) is the session's draw (`State.answer`).
 * `Hello`: the prover's text is dropped, and what leaves is the Lean `Hello` at that draw (`Hello.msg`), at a nonce this
   process draws from the operating system (`State.sendHello`). The coin check reads the session's tree, link points and
-  nonce from the setup's values (`helloOf`), never from the text.
+  nonce from the setup's values (`helloOf`), never from the text. A setup whose sizes are past what the loop's frames
+  read (`sizesOk`) is refused there: no `Hello` leaves, and the session is stopped.
 * `Hello`'s answer must be the coin tree's root and session key (`Coins.Session.start`), under a tree whose streams are
   the session's (`streamsOk`), and it is relayed as it is.
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
@@ -202,23 +203,39 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
   | .round _ _, some 2 => S.coins a
   | _, _ => (S, a)
 
+/-- **The sizes the loop's frames read**, at the setup `spec`, `sts`: at each rep stream `k`, its table's link points the
+session's, nonzero and within `Frames.COIN_MAX` words at the session's points; its domain, and its table's regions at
+`COIN_MAX` link points, within a `u64`'s count; and `Drive.start`'s layout plus `Zk.K_PAD`, its pad row, within a
+`u64`'s count. The loop serves no session whose setup fails it (`State.sendHello`). -/
+def sizesOk (spec : SessionSpec) (sts : Array Stmt) : Bool :=
+  (List.range spec.repStreams.size).all fun k =>
+    decide (sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧ spec.points * spec.mPts ≤ Frames.COIN_MAX) &&
+      decide ((spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8.size < 2 ^ 64) &&
+      decide (sts[k / 2]!.regions.size * Frames.COIN_MAX + 2 < 2 ^ 64) &&
+      match Drive.start sts[k / 2]! with
+      | .ok (lay, _) => decide (lay.len + Zk.K_PAD < 2 ^ 64)
+      | .error _ => true
+
 /-- **The `Hello` that leaves** at the set-up statement `s` and the nonce `nonce` (`Hello.msg`), and the session after:
 what the coin check reads of it (`helloOf`, the setup's values) and the schedule's openings (`planOf`); or the refusal
-the prover receives in its place, where the statement does not set up or the verifier's `Hello` is not JSON. -/
+the prover receives in its place, where the statement does not set up, its sizes are past what the loop's frames read
+(`sizesOk`), or the verifier's `Hello` is not JSON. -/
 def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : ByteArray) :
     Except (State × ByteArray) (State × ByteArray) :=
   match S.stop, s with
   | some why, _ => .error (S, refused why)
   | none, .error e => .error (S.refuse s!"{Coins.STOP}the Lean Hello: setup: {e}")
   | none, .ok (spec, sts) =>
-    match Hello.msg spec nonce with
-    | [] => .error (S.refuse s!"{Coins.STOP}the Lean Hello: the verifier's Hello is not JSON")
-    | m =>
-      let domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r))
-      let tables := spec.tables.zip (sts.map (·.m))
-      let reps := spec.repStreams.map fun (i, r, s) => (s, i, r)
-      .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains, reps, tables },
-           ⟨m.toArray⟩)
+    if !sizesOk spec sts then
+      .error (S.refuse s!"{Coins.STOP}the Lean Hello: the session's sizes are past the frames' (`sizesOk`)")
+    else match Hello.msg spec nonce with
+      | [] => .error (S.refuse s!"{Coins.STOP}the Lean Hello: the verifier's Hello is not JSON")
+      | m =>
+        let domains := spec.repStreams.map fun (i, r, s) => (s, Frames.domainFrame (spec.domain spec.tables[i]! r))
+        let tables := spec.tables.zip (sts.map (·.m))
+        let reps := spec.repStreams.map fun (i, r, s) => (s, i, r)
+        .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains, reps, tables },
+             ⟨m.toArray⟩)
 
 /-- `k` named byte strings of `f` from byte `o`, after `acc` (reversed). -/
 def namedList (f : ByteArray) : Nat → Nat → List (String × ByteArray) → Option (List (String × ByteArray))

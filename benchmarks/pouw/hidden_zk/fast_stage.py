@@ -320,7 +320,7 @@ def install(scratch: Path) -> None:
     def compose_(low, *a, **k):
         text = compose(low, *a, **k)
         e = _units.get((id(low.layout), low.name))
-        if e is not None:
+        if e is not None and text.startswith(f"{FC.FORMAT} "):
             j = text.index("\n", text.index("\n") + 1) + 1
             mark = f"CIRCUIT unit {e['newlines']}\n"
             at = j + len(mark)

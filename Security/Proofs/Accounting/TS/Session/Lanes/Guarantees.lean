@@ -10,8 +10,8 @@ committed rows and one post-draw partials record. Accepted together, they realiz
 `Accounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
 sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
-(`LeafKnownColl`). Its acceptance includes flock-verify's known-content and complete checks at each of the 33
-sessions, and it takes `CheckedSessionSound`'s hypotheses at each of them and two named premises: the circuits compute
+(`LeafKnownColl`). Its acceptance includes flock-verify's known-content, complete and known-read checks at each of
+the 33 sessions, and it takes `CheckedSessionSound`'s hypotheses at each of them and two named premises: the circuits compute
 their Definitions at their port rows (`Accounting.Assumptions.TS.LeafChecks`; the complete check makes those the
 registered reads) and, where the sessions' registrants' rows agree, the decodes read one leaf, one partials record and
 the verifier's registrations (`Accounting.Assumptions.TS.LeafReads`, which may take the known rows as holding: the
@@ -37,7 +37,9 @@ open scoped ENNReal
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
 (`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
-of `own`) included, opening the leaf's values `leaf`, its relation the unit's served checks at the path's public inputs
+of `own`) and its known-read check (`Flock.KnownRead.check`: each known port is a `sha512/row/v2` row of its known rows'
+words, a computed row of the unit reads each bit of a known input row and a copy returns each bit of a known output row)
+included, opening the leaf's values `leaf`, its relation the unit's served checks at the path's public inputs
 `pub` and receipt `receipt`, or a clash of two of the sessions' registrants' records, `LeafColl`, or a collision of a
 session's known-content tie, `LeafKnownColl`): given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
 window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, a circuit that names each port once, every

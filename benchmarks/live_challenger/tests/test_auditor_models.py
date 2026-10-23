@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 import models as M  # noqa: E402
-from test_auditor_periods import CIRCUIT, PIN, T0, admin, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
+from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
 
 _spec = importlib.util.spec_from_file_location(
     "h1window_case", HERE.parents[2] / "verity/core/protocols/pouw/tests/test_circuit_h1window.py")
@@ -194,9 +194,11 @@ def test_a_linear_the_checkpoint_shapes_otherwise_is_refused(model, monkeypatch)
         reg(model)
 
 
-def register_hooks(host, signer, model, **kw):
+def register_hooks(host, signer, model, key=KEY, **kw):
     return dict(hooks(host, signer, **kw), seal=lambda p: None,
-                register=lambda args: A.model_register(host, args, pinned=PIN, now=T0, key=KEY, tree=model["tree"]))
+                register=lambda args: A.model_register(host, args, pinned=PIN, now=T0, key=key, tree=model["tree"]),
+                period=lambda args: A.period(host, args, signer=signer, pinned=PIN, now=T0, active=lambda s: False,
+                                             tree=model["tree"]))
 
 
 def test_vy_admin_registers_and_a_period_open_signs_the_registered_root_and_model(host, signer, model):
@@ -229,15 +231,54 @@ def test_vy_admin_registers_and_a_period_open_signs_the_registered_root_and_mode
     refused((rc, json.loads(out)), "reads only")
 
 
-@pytest.mark.parametrize("args", ["--model OTHER", "--weights-root " + "5e" * 64, "--model TINY_INT8 --weights-root " + "5e" * 64])
-def test_a_period_open_refuses_a_model_or_root_the_registry_has_no_entry_of(host, signer, model, args):
-    """A period's weights' root is the auditor's registration, never the prover's: an unregistered model, root, or a
-    registered model with another root, is refused, as is a registered model under another circuit."""
+def gate(host, signer, model, words, key=None, **kw):
+    """A lane key's request (`key`), or vy-admin's, through the gate with the fixture's pinned tree."""
+    argv = ["--ssh", words, "--key", key] if key else words.split()
+    rc, out = A.gate(argv, host, **({} if key else {"by": "vy-admin"}), **register_hooks(host, signer, model, **kw))
+    return rc, json.loads(out)
+
+
+@pytest.mark.parametrize("args, why", [
+    ("--model OTHER", "pins no checkpoint_sha512 of OTHER"),
+    ("--weights-root " + "5e" * 64, "no entry"),
+    ("--model TINY_INT8 --weights-root " + "5e" * 64, "no entry"),
+])
+def test_a_period_open_refuses_a_root_the_registry_lacks_or_a_model_core_doesnt_pin(host, signer, model, args, why):
+    """A period's weights' root is the auditor's registration, never the prover's: an unregistered root, or a registered
+    model with another root, is refused, and so is a model core's pin doesn't name."""
     words = (f"model-register --model {ROLE} --circuit {model['circuit']} --descriptor {model['desc_path']} "
              f"--checkpoint {model['ckpt']}")
     assert A.gate(words.split(), host, by="vy-admin", **register_hooks(host, signer, model))[0] == 0
-    refused(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {model['circuit']} {args}", "hash"),
-            "no entry")
-    refused(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --model {ROLE}", "hash"), "no entry")
-    body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT}", "hash"))["body"]
+    refused(gate(host, signer, model, f"period-open --name p1 --cap 2 --circuit {model['circuit']} {args}", "hash"), why)
+    body = ok(gate(host, signer, model, f"period-open --name p1 --cap 2 --circuit {CIRCUIT}", "hash"))["body"]
     assert "weights_root" not in body and "model" not in body
+
+
+def test_a_pinned_model_under_a_circuit_the_registry_lacks_signs_the_model_alone(host, signer, model):
+    """A remote memory audit's period (its circuit its verifier tree, no b/<K> registered) names its pinned model: the
+    open signs `model` with core's pinned digest and no weights' root, so H1 credit, which needs one, refuses its windows;
+    a role core doesn't pin is refused."""
+    body = ok(gate(host, signer, model, f"period-open --name m1 --cap 2 --circuit {CIRCUIT} --model {ROLE}",
+                   "hash"))["body"]
+    assert body["model"] == {"name": ROLE, "checkpoint_sha512": model["pin"]} and "weights_root" not in body
+    ok(gate(host, signer, model, "period-close --name m1", "hash"))
+    refused(gate(host, signer, model, f"period-open --name m2 --cap 2 --circuit {CIRCUIT} --model OTHER", "hash"),
+            "pins no checkpoint_sha512")
+    assert set(checked(host)) == {"m1"}
+
+
+def test_model_key_names_the_registration_when_the_model_has_two(host, signer, model):
+    """After a re-registration under the same circuit, model-key without --weights-root is refused (the period's signed
+    root picks the key); with it, each period's key is its own registration's."""
+    words = (f"model-register --model {ROLE} --circuit {model['circuit']} --descriptor {model['desc_path']} "
+             f"--checkpoint {model['ckpt']}")
+    roots = []
+    for key in (KEY, bytes(32)):
+        rc, out = A.gate(words.split(), host, by="vy-admin", **register_hooks(host, signer, model, key=key))
+        assert rc == 0, out
+        roots.append(json.loads(out)["weights_root"])
+    c = model["circuit"]
+    refused(gate(host, signer, model, f"model-key --model {ROLE} --circuit {c}", "hash"), "registered 2 times")
+    for key, root in zip((KEY, bytes(32)), roots):
+        assert ok(gate(host, signer, model, f"model-key --model {ROLE} --circuit {c} --weights-root {root}",
+                       "hash"))["key"] == key.hex()

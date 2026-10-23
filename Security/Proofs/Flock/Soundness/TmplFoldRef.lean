@@ -1,5 +1,5 @@
 import Proofs.Flock.Level3.FoldedBase
-import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Soundness.SparseRows
 import Flock.TmplFold
 import Flock.NetAt
 
@@ -17,6 +17,10 @@ without `α`, with `e(q) = lw[q mod 64] · eq(ρ, ⌊q/64⌋)` and `g(q) = eq(r,
 open Flock Flock.Tmpl FlockLevel3 GF128
 
 namespace FlockSoundness.TmplFold
+
+open FlockSoundness.SparseRows
+
+export FlockSoundness.SparseRows (except_bind_ok)
 
 theorem size_le_pow_log2ceil (n : ℕ) : n ≤ 2 ^ log2ceil n := by
   unfold log2ceil
