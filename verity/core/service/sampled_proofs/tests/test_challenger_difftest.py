@@ -36,7 +36,7 @@ import json
 import random
 import shutil
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -1483,9 +1483,12 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 class Drawn:
     """A draw's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
-    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window."""
+    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
+    the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
+    or two reads of drawn lengths."""
 
-    def __init__(self, rng: random.Random, before: bool = False) -> None:
+    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None) -> None:
         s = self.s = _ledger_session(rng)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1498,11 +1501,14 @@ class Drawn:
         draw = self.records["draw"]
         self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
                       for _ in range(rng.randint(1 if before else 0, 2))]
-        self.after = rng.randbytes(64)
+        self.after = rng.randbytes(64) if after is None else after
         coins = T.ChallengerCoins(self.records["draw"])
         self.segment = coins.commit(self.after)
-        self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
-                             for _ in range(rng.choice([1, 1, 2])))
+        if reads is None:
+            self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
+                                 for _ in range(rng.choice([1, 1, 2])))
+        else:
+            self.read = self._step("draw", lambda: reads(coins))
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         s.close = s.signed(None)
