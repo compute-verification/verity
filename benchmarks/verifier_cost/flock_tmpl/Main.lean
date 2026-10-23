@@ -2,6 +2,7 @@ import Flock.TmplSplit
 import Flock.NetAt
 import Flock.TmplAt
 import Flock.ProvedScope
+import Flock.KnownRead
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -341,7 +342,22 @@ def main (args : List String) : IO UInt32 := do
       ("wires", toJson c.wires.size), ("wires_feed", toJson (ProvedScope.wiresFeed c)), ("nets", toJson c.nets.size),
       ("unit_log", toJson c.unit.unitLog), ("ranges", toJson c.ranges.size)]
     let t0 ← IO.monoNanosNow
+    let sure := Tmpl.readsSure tu.t
+    report "sure_reads" t0 [("columns", toJson sure.size), ("read", toJson (sure.filter id).size),
+      ("dispatched", toJson (KnownRead.sureReads c).isSome)]
+    let t0 ← IO.monoNanosNow
     report "rows" t0 [("nnz", toJson (c.unit.a.data.size / 4 + c.unit.b.data.size / 4))]
+    let t0 ← IO.monoNanosNow
+    let rd := RecResiduals.readIns c.unit
+    let mask := ProvedScope.portMask c.unit.inGroups (c.unit.inWords * WORD)
+    let cols := List.range (max rd.size sure.size)
+    let extra := cols.filter fun y => sure.getD y false && !rd.getD y false
+    let missed := cols.filter fun y => mask.getD y false && rd.getD y false && !sure.getD y false
+    report "read_ins" t0 [("columns", toJson rd.size), ("read", toJson (rd.filter id).size),
+      ("port_bits_read", toJson (cols.filter fun y => mask.getD y false && rd.getD y false).length),
+      ("sure_not_read", toJson extra.length), ("read_not_sure", toJson missed.length),
+      ("first_missed", toJson (missed.take 8))]
+    if !extra.isEmpty then return 1
     let t0 ← IO.monoNanosNow
     report "port_reads" t0 [("ok", toJson (ProvedScope.portReadsB c.unit))]
     let t0 ← IO.monoNanosNow
