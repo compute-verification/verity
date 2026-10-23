@@ -2,8 +2,9 @@
 
 An arm is a list of steps for the linears (`[[linear]]`, every x W^T of q/k/v/o/gate/up/down) and one for attention
 (`[[attention]]`, both of its matmuls: S = Q K^T and O = P V). Each step names a registered function and its keyword
-parameters; `layers = [...]` and, on linears, `linears = [...]` restrict where it applies. An arm with no steps is the
-bf16 reference itself.
+parameters; `layers = [...]` and, on linears, `linears = [...]` restrict where it applies (`LINEAR_NAMES`, GLM-5.3's
+`GLM_LINEAR_NAMES` with `mlp.experts.E.*` for every routed expert, and `lm_head`). An arm with no steps is the bf16
+reference itself.
 
 A step is one function, registered with `@linear_step(name)` or `@attention_step(name)`:
 
@@ -19,6 +20,7 @@ act on the integer operands; the chain ends in the gated exact integer product (
 from __future__ import annotations
 
 import inspect
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +33,12 @@ KINDS = ("linear", "attention")
 REGISTRY: dict[str, dict[str, "StepDef"]] = {k: {} for k in KINDS}
 LINEAR_NAMES = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj", "mlp.gate_proj",
                 "mlp.up_proj", "mlp.down_proj")
+#: GLM-5.3's linears (glm.py), every routed expert's under `mlp.experts.E`
+GLM_LINEAR_NAMES = ("self_attn.q_a_proj", "self_attn.q_b_proj", "self_attn.kv_a_proj_with_mqa", "self_attn.kv_b_proj",
+                    "self_attn.o_proj", "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj", "mlp.shared_experts.gate_proj",
+                    "mlp.shared_experts.up_proj", "mlp.shared_experts.down_proj", "mlp.experts.E.gate_up_proj",
+                    "mlp.experts.E.down_proj")
+EXPERT = re.compile(r"\.experts\.\d+\.")
 #: the output head, x W^T on the final norm's output: a linear step reaches it only by naming it in `linears`
 HEAD = "lm_head"
 ATTENTION_MATMULS = ("qk", "pv")
@@ -98,7 +106,8 @@ class Step:
         """kind: `linear`, `qk` or `pv`; name: the linear's module name (or the attention matmul's kind)."""
         if self.layers is not None and layer not in self.layers:
             return False
-        if (self.linears is None and name == HEAD) or (self.linears is not None and name not in self.linears):
+        if (self.linears is None and name == HEAD) or (
+                self.linears is not None and EXPERT.sub(".experts.E.", name) not in self.linears):
             return False
         return kind in self.defn.on
 
@@ -172,8 +181,8 @@ def parse_step(kind: str, table: dict) -> Step:
     defn = REGISTRY[kind][name]
     layers = table.pop("layers", None)
     linears = table.pop("linears", None) if kind == "linear" else None
-    if linears is not None and not set(linears) <= {*LINEAR_NAMES, HEAD}:
-        raise ValueError(f"{name}: linears are among {(*LINEAR_NAMES, HEAD)}")
+    if linears is not None and not set(linears) <= {*LINEAR_NAMES, *GLM_LINEAR_NAMES, HEAD}:
+        raise ValueError(f"{name}: linears are among {(*dict.fromkeys(LINEAR_NAMES + GLM_LINEAR_NAMES), HEAD)}")
     unknown = set(table) - set(defn.params)
     if unknown:
         raise ValueError(f"{name}: unknown parameters {sorted(unknown)} (it takes {sorted(defn.params)})")

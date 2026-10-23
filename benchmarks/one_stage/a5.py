@@ -218,7 +218,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json", zk=True,
-                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])})
+                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])},
+                                  prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
@@ -373,6 +374,9 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
+    ap.add_argument("--session-timeout", type=float, default=14400,
+                    help="each drawn member's prover limit in seconds: one firewalled session of a MoE w2 coordinate chunk "
+                         "(MoeExpertFp8GemmW_v2{N=1}, k_log 26) outlasts an hour")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
