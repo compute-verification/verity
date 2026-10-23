@@ -1,6 +1,6 @@
 import Flock.TmplSplit
 import Flock.NetAt
-import Flock.TmplUnroll
+import Flock.TmplAt
 
 /-!
 `flock-tmpl layout TMPL [MODE…]`: `Tmpl.layoutM`, option (iv) under each `MODE` (`iv`, `iv/strict`, `iv/hybrid`,
@@ -21,7 +21,9 @@ templated statement's read runs, timed whole or a stage at a time (`rows`, `posM
 the flat statement's read runs in its place. `flock-tmpl checks TMPL`: the description checks (`Tmpl.wellFormed`,
 `Tmpl.ordered`, `Tmpl.inputsT`, `Tmpl.apart`, `Tmpl.groupsOk`: together `Tmpl.unroll`'s success, `unroll_ok`) timed one at a
 time, then the unrolled input-row checks they stand for (`Net.ofRows`' input rows and `Net.inputsOk` on `Tmpl.rows`), which
-must agree.
+must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmpl.layApart` over the Definitions,
+`Tmpl.identOk`, `Tmpl.outsAt`) and all of `Tmpl.unrollOk`, `Tmpl.unrollAt`'s success, at `layoutM`'s layouts (default
+`iv/hybrid/4`), timed one at a time.
 `flock_tmpl.sh` builds it against the checkout's verifier and runs it; it is a measurement and a difftest, not a verifier.
 -/
 
@@ -227,6 +229,21 @@ def main (args : List String) : IO UInt32 := do
       let v := rowsOk && Net.inputsOk t.inGroups acc.ra acc.rb
       report "unrolled_inputs" t0 [("ok", toJson v), ("in_cols", toJson t.inCols)]
       return if ok && v then 0 else 1
+  | "checks-at" :: tp :: opt =>
+    let name := match opt.dropWhile (· != "--mode") with | _ :: m :: _ => m | _ => "iv/hybrid/4"
+    let some mode := modeOf name | IO.eprintln s!"unknown layout {name}"; return 2
+    let some t ← readTmpl tp | return 1
+    let t0 ← IO.monoNanosNow
+    let .ok lays := Tmpl.layoutM t mode | report "layout" t0 [("error", Json.str "layout refused")]; return 1
+    report "layout" t0 [("size", toJson (lays.getD t.root default).size)]
+    let mut ok := true
+    for (name, check) in [("lay_apart", fun t lays => (List.range t.defs.size).all (Tmpl.layApart t lays)),
+        ("ident_ok", Tmpl.identOk), ("outs_at", Tmpl.outsAt), ("unroll_ok", Tmpl.unrollOk)] do
+      let t0 ← IO.monoNanosNow
+      let v := check t lays
+      report name t0 [("ok", toJson v)]
+      ok := ok && v
+    return if ok then 0 else 1
   | "layout" :: tp :: names =>
     let some t ← readTmpl tp | return 1
     let mut ok := true
