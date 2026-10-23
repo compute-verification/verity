@@ -17,9 +17,10 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
     A MoE layer's routed experts (a module whose quant method is a ``FusedMoEMethodBase``) count in its place as their
     sites (`engine.int8_experts.ExpertSite`), each expert's gate_up then its down in expert order, the order the method
     calls them on every forward, each its own call however many tokens it got; a method with no sites is refused.  The
-    routers (`kernel_readback.routers`) stay bf16 as the model builds them, and are not recorded."""
-    from verity_vllm.program.frontend.kernel_readback import routers
-    skip, seen, out = routers(model), set(), []
+    routers (`kernel_readback.routers`) stay bf16 as the model builds them, and the linears the checkpoint's
+    ``modules_to_not_convert`` keeps bf16 (`kernel_readback.kept`) stay bf16 too; neither is recorded."""
+    from verity_vllm.program.frontend.kernel_readback import kept, routers
+    skip, seen, out = routers(model) | kept(model), set(), []
     for m in model.modules():
         qm = getattr(m, "quant_method", None)
         if isinstance(m, types) and id(m) not in skip:

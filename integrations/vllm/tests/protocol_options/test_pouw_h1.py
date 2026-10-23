@@ -502,6 +502,17 @@ def test_a_moe_layer_records_every_expert_gemm_in_static_order_and_not_its_route
     assert run.shapes_ == [(32, K), (32, K), (K, 16), (32, K), (K, 16)]
 
 
+def test_a_linear_the_checkpoint_keeps_bf16_is_not_recorded():
+    """A linear ``modules_to_not_convert`` names (`engine.int8_vllm.Int8KeptLinearMethod`, bf16) is no call, as a router;
+    an unmarked bf16 linear is still refused."""
+    dense, kv_b = Linear(32, 1), Linear(32, 2)
+    kv_b.quant_method = type("Int8KeptLinearMethod", (LinearMethodBase,), {"int8_kept": True})()
+    assert PHK.layers(Model(dense, kv_b), (Linear,)) == [dense]
+    kv_b.quant_method = LinearMethodBase()
+    with pytest.raises(ValueError, match="not the int8_exact plain arm"):
+        PHK.layers(Model(dense, kv_b), (Linear,))
+
+
 def test_a_moe_layer_without_int8_sites_is_refused_at_install():
     moe = MoE(2, 5, method=type("UnquantizedFusedMoEMethod", (FusedMoEMethodBase,), {})())
     with pytest.raises(ValueError, match="routed experts record as their sites"):

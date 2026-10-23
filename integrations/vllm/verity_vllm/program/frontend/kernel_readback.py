@@ -25,11 +25,11 @@ def moe_experts_class_of(model) -> str | None:
 def int8_exact_of(model) -> str | None:
     """The int8 scope the layers run (`TargetProfile.INT8_EXACT_SCOPES`): which of the linears (`quant_method.int8_arm` of every
     module whose quant_method is a vLLM linear method or fused-MoE method, a class named `LinearMethodBase` or
-    `FusedMoEMethodBase` in its MRO, but the MoE routers, `routers`) and the attention layers (`impl.int8_arm` of every module
-    whose `impl` has a class named `AttentionImpl` in its MRO) all run the plain arm.  None when neither does, '<mixed>' when
-    some but not all layers of a kind do (or one runs another arm)."""
+    `FusedMoEMethodBase` in its MRO, but the MoE routers, `routers`, and the linears the checkpoint keeps bf16, `kept`) and the
+    attention layers (`impl.int8_arm` of every module whose `impl` has a class named `AttentionImpl` in its MRO) all run the
+    plain arm.  None when neither does, '<mixed>' when some but not all layers of a kind do (or one runs another arm)."""
     parts = []
-    linears = _arms(model, "quant_method", ("LinearMethodBase", "FusedMoEMethodBase"), routers(model))
+    linears = _arms(model, "quant_method", ("LinearMethodBase", "FusedMoEMethodBase"), routers(model) | kept(model))
     for kind, arms in (("linears", linears), ("attention", _arms(model, "impl", ("AttentionImpl",)))):
         if arms == {INT8_ARM}:
             parts.append(kind)
@@ -80,6 +80,13 @@ def routers(model) -> set[int]:
                         and _is(getattr(c, "quant_method", None), ("LinearMethodBase",)):
                     out.add(id(c))
     return out
+
+
+def kept(model) -> set[int]:
+    """The ids of the linears the checkpoint's ``modules_to_not_convert`` keeps bf16: each module whose linear method says
+    so (``int8_kept``, `engine.int8_vllm.Int8KeptLinearMethod`)."""
+    return {id(m) for m in model.modules() if _is(qm := getattr(m, "quant_method", None), ("LinearMethodBase",))
+            and getattr(qm, "int8_kept", False) is True}
 
 
 def _is(obj, bases: tuple[str, ...]) -> bool:

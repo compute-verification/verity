@@ -364,7 +364,8 @@ class H1Run:
                                         "rounds": self.round_log, "admission": self.admission}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1), lm_head and "
-                                                     "a MoE layer's router (bf16)",
+                                                     "a MoE layer's router (bf16), and the linears the checkpoint's "
+                                                     "modules_to_not_convert keeps bf16",
                                         "z": "the call's z/y records from verity_int8::scaled_mm_zy, if its arm hands them over"}
 
     def listen(self, fn: Listener) -> None:

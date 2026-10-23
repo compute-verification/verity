@@ -6,9 +6,9 @@ declares `int8_exact`.  The engine core is in-process (`VLLM_ENABLE_V1_MULTIPROC
 model loader.  The checkpoint is `engine.int8_checkpoint`'s: `quantization_config.quant_method` names the method, every linear
 weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 
-Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix, and so does the LM head (`ParallelLMHead`)
-when `modules_to_not_convert` is `[]` (recipe v2), not `["lm_head"]` (v1, where it stays bf16): the logits processor calls the
-method's `apply` and takes its bf16 logits.  A MoE layer's routed experts (`RoutedExperts`) get an `Int8ExpertsMethod`: every
+Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix, but one `modules_to_not_convert` names,
+which stays bf16 (`Int8KeptLinearMethod`), and so does the LM head (`ParallelLMHead`) when the list doesn't name `lm_head`
+(`[]`, recipe v2; v1's `["lm_head"]` keeps it bf16): the logits processor calls the method's `apply` and takes its bf16 logits.  A MoE layer's routed experts (`RoutedExperts`) get an `Int8ExpertsMethod`: every
 expert GEMM, gate_up and down, is the same plain call on that expert's routed rows (`engine.int8_experts`, which states the
 routing, the activation and the combine), and its shared experts are linear layers like any other.  The router is not quantized
 (the model builds it with no quantization config, and it stays bf16, as the LM head does under v1).  Nothing else is quantized
@@ -35,9 +35,11 @@ from typing import Any
 
 import torch
 from vllm.model_executor.layers.fused_moe import FusedMoEMethodBase, FusedMoeWeightScaleSupported, RoutedExperts
-from vllm.model_executor.layers.linear import LinearBase, LinearMethodBase, register_weight_loader_v2_supported_method
+from vllm.model_executor.layers.linear import (LinearBase, LinearMethodBase, UnquantizedLinearMethod,
+                                               register_weight_loader_v2_supported_method)
 from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
+from vllm.model_executor.layers.quantization.utils.quant_utils import is_layer_skipped
 from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
 from vllm.model_executor.parameter import ChannelQuantScaleParameter, ModelWeightParameter
 from vllm.model_executor.utils import set_weight_attrs
@@ -143,18 +145,26 @@ class Int8ExpertsMethod(FusedMoEMethodBase):
         return X.forward(self.sites, x, topk_weights, topk_ids)
 
 
+class Int8KeptLinearMethod(UnquantizedLinearMethod):
+    """A linear the checkpoint's ``modules_to_not_convert`` keeps bf16: vLLM's own unquantized method, marked
+    (``int8_kept``) so the readback and H1 leave it out as they leave out a router (`kernel_readback.kept`)."""
+
+    int8_kept = True
+
+
 class Int8ExactConfig(QuantizationConfig):
-    """`quantization_config` {quant_method: NAME, weight_max: 127, modules_to_not_convert: ["lm_head"] | []}: every linear layer on
-    `Int8PlainLinearMethod`, and the LM head too under `[]`; every MoE layer's routed experts on `Int8ExpertsMethod`."""
+    """`quantization_config` {quant_method: NAME, weight_max: 127, modules_to_not_convert: [...]}: every linear layer on
+    `Int8PlainLinearMethod` but those the list names (vLLM's `is_layer_skipped`, exact names, a fused layer by its shards),
+    which stay bf16 on `Int8KeptLinearMethod`; the LM head too unless the list names ``lm_head`` (absent, the list is
+    ``["lm_head"]``); every MoE layer's routed experts on `Int8ExpertsMethod`, refused if the list names them.  The list
+    may name non-linear modules (norms, biases), which nothing here reads."""
 
     def __init__(self, weight_max: int, modules_to_not_convert: list[str] | None = None):
         super().__init__()
         if weight_max != E.W_MAX:
             raise ValueError(f"{NAME}: weight_max {weight_max!r} is not {E.W_MAX}")
-        kept = ["lm_head"] if modules_to_not_convert is None else list(modules_to_not_convert)
-        if kept not in (["lm_head"], []):
-            raise ValueError(f"{NAME}: modules_to_not_convert {kept!r} is neither ['lm_head'] nor []")
-        self.lm_head = not kept
+        self.kept = ["lm_head"] if modules_to_not_convert is None else list(modules_to_not_convert)
+        self.lm_head = "lm_head" not in self.kept
 
     def get_name(self) -> str:
         return NAME
@@ -174,10 +184,17 @@ class Int8ExactConfig(QuantizationConfig):
     def from_config(cls, config: dict[str, Any]) -> "Int8ExactConfig":
         return cls(int(cls.get_from_keys(config, ["weight_max"])), cls.get_from_keys_or(config, ["modules_to_not_convert"], None))
 
-    def get_quant_method(self, layer: torch.nn.Module, prefix: str) -> Int8PlainLinearMethod | Int8ExpertsMethod | None:
-        if isinstance(layer, LinearBase) or (self.lm_head and isinstance(layer, ParallelLMHead)):
+    def get_quant_method(self, layer: torch.nn.Module, prefix: str
+                         ) -> Int8PlainLinearMethod | Int8KeptLinearMethod | Int8ExpertsMethod | None:
+        skipped = isinstance(layer, (LinearBase, RoutedExperts)) and is_layer_skipped(prefix, self.kept,
+                                                                                      self.packed_modules_mapping)
+        if isinstance(layer, LinearBase):
+            return Int8KeptLinearMethod() if skipped else Int8PlainLinearMethod(prefix)
+        if self.lm_head and isinstance(layer, ParallelLMHead):
             return Int8PlainLinearMethod(prefix)
         if isinstance(layer, RoutedExperts):
+            if skipped:
+                raise ValueError(f"{NAME}: modules_to_not_convert names {prefix}; the int8 experts have no bf16 variant")
             return Int8ExpertsMethod(layer.moe_config, prefix)
         return None
 
@@ -186,5 +203,6 @@ class Int8ExactConfig(QuantizationConfig):
 def register() -> str:
     """Register the method with this process's vLLM (once); returns its name."""
     register_weight_loader_v2_supported_method(Int8PlainLinearMethod)
+    register_weight_loader_v2_supported_method(Int8KeptLinearMethod)
     register_quantization_config(NAME)(Int8ExactConfig)
     return NAME
