@@ -139,6 +139,7 @@ A_LINK_EXPECT = {
     "segments-form": "A segments are not", "entries-form": Cr.ENTRIES_FORM,
     "call-other-round": ", which only round ", "call-past": "and the window has",
     "call-blocks": "rounds' equal blocks, so the round",
+    "ids-other-round": "'s input-ids table, which only round ", "ids-past": "is round ",
 }
 WEIGHTS_EXPECT = {
     "other-root": Cr.OTHER_WEIGHTS, "other-requests": Cr.OTHER_WEIGHTS, "other-session": Cr.OTHER_WEIGHTS,

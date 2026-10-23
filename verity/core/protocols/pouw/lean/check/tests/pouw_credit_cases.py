@@ -1240,9 +1240,12 @@ def _reroot(log: list[dict]) -> list[dict]:
 def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `a_link` case: a window's registered entries, its round log and its call count, then mutation `name`. Its A
     values are each K's ``…/a/<K>`` and, at random (always under the ``call-`` mutations), one or two calls' A tables
-    ``…/a/<K>@<c>``, each committed whole by its call's round, the window's calls the rounds' equal blocks."""
-    calling = name.startswith("call-")
-    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "call-other-round", "call-blocks") else [1, 2, 3, 4])
+    ``…/a/<K>@<c>``, each committed whole by its call's round, the window's calls the rounds' equal blocks; and at
+    random (always under the ``ids-`` mutations) some rounds' input-ids tables ``…/ids@<s>``, each committed whole by
+    its round."""
+    calling, tying = name.startswith("call-"), name.startswith("ids-")
+    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "call-other-round", "call-blocks", "ids-other-round")
+                       else [1, 2, 3, 4])
     calls = steps * rng.randint(1, 3)
     window = f"h1/w-{rng.randrange(100)}"
     values, entries = {}, []
@@ -1259,13 +1262,17 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     if calling or rng.random() < 0.5:
         for c in rng.sample(range(calls), rng.randint(1, min(2, calls))):
             a(f"{window}/a/{rng.choice(ks)}@{c}", rng.choice(sizes), c // (calls // steps))
+    if tying or rng.random() < 0.5:
+        for s in rng.sample(range(steps), rng.randint(1, steps)):
+            a(f"{window}/ids@{s}", rng.choice(sizes), s)
     entries += [{"value": f"{window}/z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3, "domain": _hex(rng)},
                 {"value": f"{window}/a/x", "root": _hex(rng)}][:rng.randint(0, 2)]
     rng.shuffle(entries)
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
-    a_ = [e for e in entries if Cr.is_a(e["value"])]
-    e = rng.choice([x for x in a_ if (values[x["value"]][2] is not None) == calling] if calling or name == "blocks"
-                   else a_)
+    tied = [e for e in entries if Cr.is_tied(e["value"])]
+    e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+                   else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
+                   if calling or name == "blocks" else tied)
     v = e["value"]
     own = values[v][2]
     r = rng.randrange(steps) if own is None else own
@@ -1332,6 +1339,13 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             _reroot(log)
         case "call-blocks":
             calls += rng.randint(1, steps - 1)
+        case "ids-other-round":
+            log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
+            _reroot(log)
+        case "ids-past":
+            e["value"] = f"{window}/ids@{steps + rng.randrange(3)}"
+            log[own]["a"][e["value"]] = log[own]["a"].pop(v)
+            _reroot(log)
         case _:
             raise ValueError(name)
     return {"rounds": log, "entries": entries, "calls": calls}
@@ -1339,7 +1353,7 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
                 "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
-                "call-other-round", "call-past", "call-blocks"]
+                "call-other-round", "call-past", "call-blocks", "ids-other-round", "ids-past"]
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:

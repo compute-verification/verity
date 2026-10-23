@@ -592,8 +592,9 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
             files, why = CR.committed_files(lines, audited.period)
         if why is None:
             out["calls"], why = CR.window(key.to_json(), lines, ev["window"], ev["session"], ev["salt"], ev["calls"],
-                                          ev["served"], ev["rounds"], ev["draw"], ev["descriptor"], ev["entries"],
-                                          ev["statements"], files, out["k"], verify, **({} if run is None else {"run": run}))
+                                          ev["served"], ev["commit"], ev["rounds"], ev["draw"], ev["descriptor"],
+                                          ev["entries"], ev["statements"], files, out["k"], verify,
+                                          **({} if run is None else {"run": run}))
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
@@ -606,8 +607,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
 def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], statements: Any,
                     descriptor: bytes) -> dict[str, Any]:
     """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
-    record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw and registered ``entries``, every call table and
-    the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn calls' `statements` (`statement`: proof
+    record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw, its served Commit's record ``commit`` and
+    registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn calls' `statements` (`statement`: proof
     files, never verdicts) and `descriptor`, the bytes of the circuit its period committed (`pouw_h1_served.descriptor`).
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
     ValueError on a record whose served trees or salt can't be read."""
@@ -619,7 +620,8 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
         salt = program_salt_of(c).hex()
     except (CoinError, KeyError, TypeError) as e:
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e
-    return {"calls": list(record.get("calls") or ()), "descriptor": bytes(descriptor).hex(), "draw": c.get("draw"),
+    return {"calls": list(record.get("calls") or ()), "commit": c.get("commit"), "descriptor": bytes(descriptor).hex(),
+            "draw": c.get("draw"),
             "entries": list((served or {}).get("entries") or ()), "rounds": c.get("rounds"), "salt": salt,
             "served": digest, "session": remote.session_files(directory), "statements": list(statements),
             "window": dict(window)}
