@@ -141,6 +141,7 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp
 # taking the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; the same receipts
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
+UNITS_SMC_ENV = "DITHER_SO_UNITS_SMC"  # c > 0 (with $DITHER_SO_UNITS_SMQ): at most c of that launch's CTAs an SM
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
@@ -899,10 +900,13 @@ class SoSide(DA.Side):
                              "and an h1u build with kh_units_multi_sm")
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
+        self.units_smc = int(os.environ.get(UNITS_SMC_ENV) or 0)
+        if self.units_smc and not self.units_smq:
+            raise ValueError(f"${UNITS_SMC_ENV}={self.units_smc}: needs ${UNITS_SMQ_ENV}")
         if self.units_smq:
             vp, u32 = C.c_void_p, C.c_uint
-            self.h.kh_units_multi_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, vp]
-            self.unit_next = torch.zeros(1, dtype=torch.int32, device=dev)
+            self.h.kh_units_multi_sm.argtypes = [vp, u32, u32, u32, vp, u32, u32, vp, u32, vp]
+            self.unit_next = torch.zeros(1 + 1024, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
         self.capture_ms: list[float] = []
@@ -1016,7 +1020,7 @@ class SoSide(DA.Side):
         if self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
                                                 self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
-                                                self.unit_next.data_ptr(), st.cuda_stream)
+                                                self.unit_next.data_ptr(), self.units_smc, st.cuda_stream)
         elif self.fused:
             rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
                                              st.cuda_stream)
@@ -1092,7 +1096,8 @@ class SoSide(DA.Side):
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
-                                "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None},
+                                "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None,
+                                "ctas_an_sm_at_most": self.units_smc or None},
                 "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 

@@ -46,8 +46,8 @@
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
 //   kh_units_multi(calls, ncalls, units, M, live, stream)   kh_unit of ncalls calls (UCall) in one launch (h1um), for a
 //              step's units dispatched together, whose warps fill the GPU where one call's leave it idle
-//   kh_units_multi_sm(calls, ncalls, units, M, live, q, den, next, stream)   the same on the SMs whose id % den < q alone
-//              (h1um_sm)
+//   kh_units_multi_sm(calls, ncalls, units, M, live, q, den, next, cap, stream)   the same on the SMs whose id % den < q
+//              alone (h1um_sm), at most cap CTAs an SM unless cap is 0
 //   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
 //   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
 //              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
@@ -1013,15 +1013,23 @@ __device__ __forceinline__ void h1um_one(const UCall* __restrict__ calls, u32 nc
     h1u_unit<2, false, false>(c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, nullptr, OneOut{}, gu - c.u0, S);
 }
 
+constexpr u32 H1UM_SMIDS = 1024;  // the %smid values h1um_sm's cap counts (kh_units_multi_sm's next: 1 + this u32s)
+
 // h1um on the SMs whose %smid % den < q alone: a CTA on any other SM exits at once, and the warps of the rest take units
 // from *next in turn (a unit's receipts are its own, whichever warp takes it), so every other SM stays whole to the
 // streams beside it (the next forward's kernels, which a freed h1um slot is too small for)
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1um_sm(const UCall* __restrict__ calls, u32 ncalls, u32 M,
                                                       const uint8_t* __restrict__ live, u32 q, u32 den,
-                                                      u32* __restrict__ next) {
+                                                      u32* __restrict__ next, u32 cap) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (smid % den >= q) return;
+  if (cap) {  // at most cap CTAs an SM: next[1 + smid] counts the CTAs that stayed on it
+    __shared__ u32 stay;
+    if (threadIdx.x == 0) stay = smid < H1UM_SMIDS && atomicAdd(next + 1 + smid, 1u) < cap;
+    __syncthreads();
+    if (!stay) return;
+  }
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   for (;;) {
@@ -2011,7 +2019,7 @@ extern "C" int kh_units_multi(const void* calls, unsigned ncalls, unsigned units
 // kh_units_multi on q / den of the SMs (h1um_sm, 1 <= q <= den <= 64): next a device u32 the launch zeroes first, and
 // twice the CTAs that fit at once, so the SMs it keeps get theirs whatever else holds the GPU at the launch
 extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live, unsigned q,
-                                 unsigned den, void* next, void* stream) {
+                                 unsigned den, void* next, unsigned cap, void* stream) {
   if (!ncalls || M % 32 || !q || q > den || den > 64 || !next) return 2;
   if (!units) return 0;
   carve<h1um_sm>();
@@ -2020,9 +2028,9 @@ extern "C" int kh_units_multi_sm(const void* calls, unsigned ncalls, unsigned un
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1um_sm, 32 * WARPS, 0) != cudaSuccess || per < 1)
     return 3;
   cudaStream_t s = (cudaStream_t)stream;
-  if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
+  if (cudaMemsetAsync(next, 0, sizeof(u32) * (cap ? 1 + H1UM_SMIDS : 1), s) != cudaSuccess) return 3;
   h1um_sm<<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCall*)calls, ncalls, M, (const uint8_t*)live, q,
-                                                                   den, (u32*)next);
+                                                                   den, (u32*)next, cap);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
