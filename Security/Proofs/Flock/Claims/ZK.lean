@@ -119,6 +119,7 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.FrameTaken
 import Proofs.Flock.Claims.ZK.FrameRank
+import Proofs.Flock.Claims.ZK.FramePoints
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishLevel0
 import Proofs.Flock.Claims.ZK.FinishPiop
@@ -537,6 +538,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   (**`Rank.maskRankOk_of_maskRank`**: `MaskRank.maskRankOk`, by an invariant of both loops and a downward induction over
   the pivots, `lowBit_spec`, `span_of_pivots`), and the statement's slot (`Drive.maskSlot`) enumerates its mask words
   (`Rank.words_maskSlot`, `Composed.maskWordsOf`).
+* `FramePoints`: the frame's claim points are the session's. On the algebraic phase's coins as the frame keeps them,
+  one flat array holding round `1`'s outer coins from `K_SKIP`, `ρ`'s from `m − 6` and the lincheck's from `2 m − 10`,
+  `Flock.Firewall.Frame.claimPoints` is `MaskRank.claimPoints` at the rounds (**`Rank.claimPoints_frame`**), so a rep
+  whose frame takes the opening's label has full rank at its rounds and the earlier reps' points
+  (**`Rank.rank_of_label`**, with `maskRankOk_of_maskRank`).
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
