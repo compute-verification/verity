@@ -24,6 +24,8 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
+#   gamma    the same builds: gammabench.py (GLM53_INT8's int8 GEMM shapes under TP8 and EP: each build's units, kh_units_multi
+#            and the two launches, beside int8_fused's exact GEMM and its z/y form, every arm gated, then timed; γ a shape)
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
@@ -45,7 +47,7 @@
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|gamma|partials|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -153,7 +155,7 @@ for b in ${BENCH//,/ }; do
       [ -n "$jl" ] || { echo "job.sh: j10hb needs an h1u*.so in $LIBS" >&2; exit 2; }
       [ -f "$LIBS/h1noise.so" ] && { NEED+=(h1noise); jl+=" --noise-lib $LIBS/h1noise.so"; }
       CMDS+=("$PY $HERE/j10hb.py$jl --ref-lib $LIBS/h1zref.so --out $OUT ${BENCH_ARGS:-}") ;;
-    units|unitsprof)
+    units|unitsprof|gamma)
       # h1u_kr.so (today's served receipts-only build) as the base, then every other h1u_kr*.so shipped
       ul=""
       for f in "$LIBS"/h1u_kr.so "$LIBS"/h1u_kr?*.so; do
@@ -161,7 +163,9 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); ul+=" --lib ${v#h1u_}=$f"
       done
       [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
-      if [ "$b" = units ]; then
+      if [ "$b" = gamma ]; then
+        CMDS+=("$PY $HERE/gammabench.py$ul --out $OUT ${BENCH_ARGS:-}")
+      elif [ "$b" = units ]; then
         CMDS+=("$PY $HERE/unitsbench.py$ul --out $OUT ${BENCH_ARGS:-}")
       else
         NCU=${NCU:-$(dirname "$NVCC")/ncu}
