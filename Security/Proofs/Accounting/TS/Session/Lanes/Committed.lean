@@ -192,4 +192,51 @@ theorem b_read (K : ℕ) (l : Fin 32) (t : Fin 8) :
     (s!"b{t.val}", "b", (colOf l t).val) ∈ regReads (servedTile K) (some l.val) :=
   List.mem_filterMap.2 ⟨_, lanePorts_b K l t, rfl⟩
 
+theorem fullValue_a : fullValue "a" = true := by
+  first | rfl | decide | simp [fullValue]
+
+theorem fullValue_b : fullValue "b" = true := by
+  first | rfl | decide | simp [fullValue]
+
+/-- A decode's record cell does not depend on its partials' width. -/
+theorem decLane_z {K nw nw' : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} (i j : Fin 32) :
+    (decLane K nw T rd).z i j = (decLane K nw' T rd).z i j :=
+  rfl
+
+theorem decLane_y {K nw nw' : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} (i j : Fin 32) :
+    (decLane K nw T rd).y i j = (decLane K nw' T rd).y i j :=
+  rfl
+
+/-- The combine's decoded `ok` is its `o0` bit. -/
+theorem decComb_ok {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} :
+    (decComb nw T rd).ok = (rd "o0" 0 == some true) :=
+  rfl
+
+/-- **Lane `l`'s decode agrees with the leaf the committed rows decode to** (`leafOf`), where its `a<s>` ports read what
+lane `aHome l`'s do and its `b<t>` ports what lane `bHome l`'s do, its partials row is `p` and its known fields hold at
+`P`: its cells are its own (`cellLane_rowOf_colOf`), and its A and B rows are those lanes' at the same slots. -/
+theorem laneAgrees_of {K nw : ℕ} {T : Tile} (sess : Option (Fin 32) → RowsSession) {P : LanePub}
+    {p : Fin nw → BitVec 32} (l : Fin 32)
+    (ha : ∀ s : Fin 4, portBit (sess (some l)) (openedReg (sess (some l))) s!"a{s.val}" =
+      portBit (sess (some (aHome l))) (openedReg (sess (some (aHome l)))) s!"a{s.val}")
+    (hb : ∀ t : Fin 8, portBit (sess (some l)) (openedReg (sess (some l))) s!"b{t.val}" =
+      portBit (sess (some (bHome l))) (openedReg (sess (some (bHome l)))) s!"b{t.val}")
+    (hp : (decL K nw T (sess (some l)) (openedReg (sess (some l)))).part = p)
+    (hk : LaneKnownHolds T (portBit (sess (some l)) (openedReg (sess (some l)))) P l) :
+    LaneAgrees (decL K nw T (sess (some l)) (openedReg (sess (some l)))) (leafOf K T sess) P p l := by
+  refine ⟨funext fun s => ?_, funext fun t => ?_, fun s t => ?_, fun s t => ?_, hp, hk.pub_eq, hk.lane_eq,
+    hk.ok_eq⟩
+  · simp only [laneA, leafOf, decL]
+    rw [aLane_rowOf, aSlot_rowOf]
+    exact decLane_a (ha s)
+  · simp only [laneB, leafOf, decL]
+    rw [bLane_colOf, bSlot_colOf]
+    exact decLane_b (hb t)
+  · simp only [leafOf, decL]
+    rw [cellLane_rowOf_colOf]
+    exact decLane_z _ _
+  · simp only [leafOf, decL]
+    rw [cellLane_rowOf_colOf]
+    exact decLane_y _ _
+
 end Accounting.TS.Lanes

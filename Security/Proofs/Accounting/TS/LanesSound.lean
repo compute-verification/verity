@@ -363,8 +363,8 @@ and known-read checks at the known content of the path's public inputs (`knownOf
 with the leaf the lanes' committed rows decode to (`leafOf`) at the combine's decoded partials, and the combine's
 decode is those partials, its decoded receipt (`receiptOf`) and `ok = 1`. Lane `l`'s A row at slot `s` is lane
 `4⌊l/4⌋`'s at that slot and its B row at slot `t` lane `l mod 4`'s, one row of one tree each lane reads in full
-(`read_bits`); its cells are its own (`cellLane_rowOf_colOf`); its partials row is the combine's (`partials_bits`,
-`part_eq`); its known fields are the checks' (`laneKnownHolds_of_check`, `combKnownOk_of_check`). -/
+(`read_bits`); its cells are its own (`cellLane_rowOf_colOf`, `laneAgrees_of`); its partials row is the combine's
+(`partials_bits`, `part_eq`); its known fields are the checks' (`laneKnownHolds_of_check`, `combKnownOk_of_check`). -/
 theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
     {sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession}
     {salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray} {pub : Paths Ω S → Fin S → Fin nπ → LanePub}
@@ -400,35 +400,20 @@ theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
         (hS x w i (some l') _) (hRo (some l)) (hRo (some l'))
         (hA (some l) (some l') ⟨0, hn x w i (some l)⟩ ⟨0, hn x w i (some l')⟩) b
   refine ⟨(decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts, fun l => ?_, ?_⟩
-  · have hk := laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
-      (u := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2.1
-    refine ⟨funext fun s => ?_, funext fun t => ?_, fun s t => ?_, fun s t => ?_, hP l, hk.pub_eq, hk.lane_eq,
-      hk.ok_eq⟩
-    · show _ = (decL K 0 (servedTile K) (sess x w i (some (aLane (rowOf l s))))
-        (openedReg (sess x w i (some (aLane (rowOf l s)))))).a (aSlot (rowOf l s))
-      rw [aLane_rowOf, aSlot_rowOf]
-      have hm' := a_read K (aHome l) s
+  · refine laneAgrees_of (sess x w i) l (fun s => ?_) (fun t => ?_) (hP l)
+      (laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
+        (u := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2.1)
+    · have hm' := a_read K (aHome l) s
       rw [rowOf_aHome] at hm'
-      exact decLane_a (hbits l (aHome l) _ _ _ _ (a_read K l s) hm' rfl)
-    · show _ = (decL K 0 (servedTile K) (sess x w i (some (bLane (colOf l t))))
-        (openedReg (sess x w i (some (bLane (colOf l t)))))).b (bSlot (colOf l t))
-      rw [bLane_colOf, bSlot_colOf]
-      have hm' := b_read K (bHome l) t
+      exact hbits l (aHome l) _ _ _ _ (a_read K l s) hm' fullValue_a
+    · have hm' := b_read K (bHome l) t
       rw [colOf_bHome] at hm'
-      exact decLane_b (hbits l (bHome l) _ _ _ _ (b_read K l t) hm' rfl)
-    · show _ = (decL K 0 (servedTile K) (sess x w i (some (cellLane (rowOf l s) (colOf l t))))
-        (openedReg (sess x w i (some (cellLane (rowOf l s) (colOf l t)))))).z (rowOf l s) (colOf l t)
-      rw [cellLane_rowOf_colOf]
-      rfl
-    · show _ = (decL K 0 (servedTile K) (sess x w i (some (cellLane (rowOf l s) (colOf l t))))
-        (openedReg (sess x w i (some (cellLane (rowOf l s) (colOf l t)))))).y (rowOf l s) (colOf l t)
-      rw [cellLane_rowOf_colOf]
-      rfl
+      exact hbits l (bHome l) _ _ _ _ (b_read K l t) hm' fullValue_b
   · have ho := combKnownOk_of_check (s := sess x w i none) (hK none) (u := ⟨0, hn x w i none⟩) rfl
       (hS x w i none _) (hc none).1 (hc none).2.1
     refine CombineView.eta_ok _ ?_
-    show (portBit (sess x w i none) (openedReg (sess x w i none)) "o0" 0 == some true) = true
-    rw [ho]
+    unfold decC
+    rw [decComb_ok, ho]
     rfl
 
 open Accounting.TS.Lanes in
