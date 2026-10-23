@@ -121,7 +121,8 @@ class Receipts:
                  weight: Callable[[Any], torch.Tensor] | None = None,
                  roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None):
         self.served, self.run, self.units = served, run, units
-        self.device = torch.device(device if device is not None else ("cuda" if units is not None else "cpu"))
+        d = torch.device(device if device is not None else ("cuda" if units is not None else "cpu"))
+        self.device = torch.device("cuda", torch.cuda.current_device()) if d.type == "cuda" and d.index is None else d
         self._weight, self._roots, self._keep = weight, roots, keep
         self._b: dict[int, tuple[Any, torch.Tensor]] = {}
         self._starts: tuple[Any, list[tuple[int, int]]] | None = None
