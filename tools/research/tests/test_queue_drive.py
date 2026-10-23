@@ -124,6 +124,20 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
 
 
+def test_a_train_that_passes_while_a_tick_runs_lands_in_that_tick_not_the_next(world, monkeypatch):
+    """23 Oct: a passed train waited for the next tick to land, verdict to landed median 0.24 h over 98 PRs. A check whose verdict
+    comes in after the tick's land step (here: that step finds nothing) is landed before the tick ends."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    real, calls = h.d.land, []
+    h.d.land = lambda drive, dry_run: calls.append(1) or (None if len(calls) == 1 else real(drive, dry_run))
+    said = h.tick()
+    assert len(calls) == 2 and "landed #1 in the same tick" in said and _git(world.origin, "rev-parse", "main") == tip
+
+
 def test_the_steps_after_a_landing_run_with_the_queues_credentials_and_git_never_prompts(world, monkeypatch):
     """12 Oct 08:49Z: `caught_up`'s `ls-remote` in the queue's clone, which has no credential helper, waited on a password."""
     h = Harness(world, monkeypatch)

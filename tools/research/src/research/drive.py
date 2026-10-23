@@ -1081,6 +1081,7 @@ class Driver:
             v = self.verdict(m.commit, base, drive)
             if v.state != "passed":
                 continue
+            self._land_saw = m.commit
             members = chain[: i + 1]
             prs = " ".join(f"#{x.pr}" for x in members)
             if moved and ((shared := sorted(set(moved) & changed(self.repo, base, m.commit)))
@@ -2037,6 +2038,7 @@ class Driver:
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
         self.dry_run, self._seen, self._prs, self._ev, self._relaunched, self._tips, self._pos = dry_run, {}, None, {}, set(), None, {}
+        self._land_saw: str | None = None                   # the passed train this tick's land step tried, landed or held
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -2130,6 +2132,7 @@ class Driver:
         settling = {chain[i].commit for i in failed_at if f"failed:{chain[i].commit}" not in drive["told"]} | {
             c for c in drive["resent"] if self.verdict(c, main, drive).state != "passed"}
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
+        passed_now = False                                  # a check whose verdict came in since the land step at the start
         todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
         for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
@@ -2139,7 +2142,8 @@ class Driver:
                 what.append(f"{m.commit[:12]} failed")
                 break                                       # every train above it holds the failure too
             if v.state == "passed":
-                what.append(f"{m.commit[:12]} passed ({v.attempt}): it lands next tick")
+                what.append(f"{m.commit[:12]} passed ({v.attempt})")
+                passed_now = True
                 continue
             if v.state == "running":
                 what.append(f"{m.commit[:12]} ({prs}): {v.attempt} running")
@@ -2174,6 +2178,12 @@ class Driver:
             what[k] = f"launched {' '.join(ids)}"
         if shadowed := self.per_pr(drive):
             what.append(shadowed)
+        # a train that passed while this tick ran lands now, not a whole tick later (23 Oct: verdict to landed median 0.24 h,
+        # p90 0.42 h over 98 PRs, art:cefa7f0035d98a932ecba75c3c75f7df5b6f88c581e861bbc0e4d3c1508f40e4)
+        # only when the land step saw no passed train: one it held (its locks, the gate) stays held until the next tick
+        if (passed_now and landed is None and self._land_saw is None and not dry_run and not q.shadow
+                and (late := self.land(drive, dry_run)) is not None):
+            what.append(f"landed #{late.pr} in the same tick")
         if not dry_run:
             state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}   # what `failed` ejected since
             q.save_state(state)
