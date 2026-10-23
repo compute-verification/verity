@@ -56,7 +56,7 @@ structure LookupTable where
   loTop : Nat
   deriving Inhabited
 
-instance {α : Type} [DecidableEq α] : DecidableEq (Thunk α) := fun x y =>
+instance instDecidableEqThunk_flock {α : Type} [DecidableEq α] : DecidableEq (Thunk α) := fun x y =>
   decidable_of_iff (x.get = y.get) ⟨Thunk.ext, fun h => h ▸ rfl⟩
 
 /-- An expanded circuit in `flock-ir-unit/v2` form, `2^unitLog` rows (rows past `useful` are empty). Its A and B are built
@@ -77,11 +77,11 @@ structure Net where
 
 namespace Net
 
-/-- The net's A. -/
-def a (n : Net) : Sparse := n.aT.get
+/-- The net's A. Reducible, as the field it replaced was: `{ n with lookup := l }.a` is `n.a` to `rw` and `simp`. -/
+@[reducible] def a (n : Net) : Sparse := n.aT.get
 
 /-- The net's B. -/
-def b (n : Net) : Sparse := n.bT.get
+@[reducible] def b (n : Net) : Sparse := n.bT.get
 
 /-- Topological order: every computed row (after the `inCols` input rows, before the constant) reads, in A and in B, only
 earlier columns that are not input padding (an empty input row: a forced zero), or the constant. With the input rows and
