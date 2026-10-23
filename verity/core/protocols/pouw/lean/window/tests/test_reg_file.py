@@ -2,7 +2,7 @@
 to the Python on the shared harness (`verity_difftest`): `leaf_lanes.registered_file` at `leaf_lanes.reads` and at
 `leaf_lanes.verifier_entries`' entries and roots, the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/run.py`),
 and `pouw-leaf-own`'s check (`leafOwn?`), which accepts each such file and refuses one whose data port is not the
-layout's read at the records' root, and its draw policy (`checkFull`), which accepts a session record that draws every
+layout's read at the records' root or one of whose ports has two reads, and its draw policy (`checkFull`), which accepts a session record that draws every
 unit and refuses one that doesn't.
 
 The drawn inputs are registrations naming the leaf's four registered values (one sometimes missing, one sometimes named
@@ -136,6 +136,19 @@ def test_the_check_refuses_a_data_port_off_the_records(ln: int | None, field: st
     other, _ = _served(99, ln)
     kind, why = _own(server, other, file)
     assert kind == "reject" and "is not the layout's read" in why
+
+
+@pytest.mark.parametrize("ln", [3, None])
+@pytest.mark.parametrize("known", [True, False])
+def test_the_check_refuses_a_port_of_two_reads(ln: int | None, known: bool, server) -> None:
+    """A file one of whose ports, a known port or a data port, states two reads is refused by name: a statement is one
+    unit, which reads each port once."""
+    x, file = _served(20 + (ln or 0), ln)
+    port = LL.OK if known else next(iter(LL.reads(32, 32, LL.COMBINE if ln is None else LL.LANE, ln)))
+    bad = copy.deepcopy(file)
+    bad["ports"][port]["reads"] = bad["ports"][port]["reads"] * 2
+    kind, why = _own(server, x, bad)
+    assert kind == "reject" and f"port {port} has 2 reads" in why
 
 
 #: `pouw-leaf-own`'s draw policy alone: a session record's verdict (no Python counterpart)

@@ -28806,8 +28806,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.OwnPorts": {
-   "digest": "7d85b01a34fa16ea5be36070e380891a09146bda1c7607987e6d48ac2be6aff7",
+   "digest": "50df0fe148cb0d545bad3bb64916a720c4530daf46dbde52bd2fb40b6e7e0dc3",
    "definitions": {
+    "PouwWindow.Lanes.checkOneRead": "3b95a186e57f3a94840b8155da0a12547b896e7e43cde0b4130c5a3a20f69430",
     "PouwWindow.Lanes.checkOwn": "be30093a4cd40449bb6323c165f52af98b8ce879c6e74ce58854fe25a44ce51d",
     "PouwWindow.Lanes.fullValue": "398b05a09962e48f984185b8cdd8466f934a78cc64e3b4acae746e055807e8f3",
     "PouwWindow.Lanes.holds": "c84d7f11af9647f07fe46506ba83779fecb09a8b8aa6ab654240e1ed0c2cc6c6",
@@ -28915,6 +28916,25 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
+  "Proofs.Accounting.TS.Session.Lanes.Canon": {
+   "digest": "bc8dfc036a99851f128f3532be383a9b591ba1bec98050d7c06019109439559b",
+   "definitions": {
+    "Flock.SoundAtBridge.RowsSession.CanonRead": "d35b2607024201eac0aeb7559a41cefd6a8ca852bc2000135e3d0c8ac20c5505",
+    "Flock.SoundAtBridge.RowsSession.Openings": "fa4ea6212b134008f6a0747d88e240746066ff0a553e78e6719a56e35a860ff4",
+    "Flock.SoundAtBridge.RowsSession.Openings.wpath": "08c3c962ac776e020accd66daecf951afebc879d2621e62d6f43139d7e08b8fd",
+    "Flock.SoundAtBridge.RowsSession.Openings.ws": "fd5dd55d4316031df40ccb183604881048c6abaa7632521a0e917e9e47979419",
+    "Flock.SoundAtBridge.RowsSession.Openings.wv": "68f362ccb2bf2697c71225afbc546c58badfdf8cc8e1928bfe55ec8307ff8cad",
+    "Flock.SoundAtBridge.RowsSession.canon": "2ab9567ef843f30110288e987ce7bb569d813bb44d9402bb67950dd9f181e290",
+    "Flock.SoundAtBridge.RowsSession.canonAt": "a0b744a5b328b847e5f18177af8c5439b584b2f2ffc07b8c71eee0c3fd32fd77",
+    "Flock.SoundAtBridge.RowsSession.canonLay": "a2cfe2228b29a9ca813fe625c1955a9d650987ea3bfc7fa176be89059b95f321",
+    "Flock.SoundAtBridge.RowsSession.canonPort": "38b1bc403757673c42849d40f104c8f8c2c0eae95ba9950c0f7a76cae64c894a",
+    "Flock.SoundAtBridge.RowsSession.canonReads": "a875d40983e24f18a808c9ff452f11fe2c49e3506e3ceb3a6189a8e179376919",
+    "Flock.SoundAtBridge.RowsSession.canonRs": "84c784507c80f1e8b3c286081ab17137309c836fac57028485031b9d44d32da5",
+    "Flock.SoundAtBridge.RowsSession.oneRead": "9abe33232cdef83f72291f821167a7317e6d687ac663466c6655d16aad41cf04",
+    "Flock.SoundAtBridge.RowsSession.oneRead._sparseCasesOn_1": "bad9b2615e8be974a48295f404514b3824e16ccf9a38cbcae1102a88e55f0e84"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "Proofs.Accounting.TS.Session.Lanes.Committed": {
    "digest": "907c9a313c820000f3da73f962db9ddfae9bfefaec936efbb9fa79c69a96ea25",
    "definitions": {
@@ -28948,9 +28968,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "ce3cd48bea05cac98d17cbd165e0d72d49913a4b4527e9bd61caefabfdad91f5",
+   "digest": "9d52f654fa6ebf3387aefc4645afe4d22159862101954df86ff5eccdfb3235dc",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "b74684ea3340d963d2c4c14f10499857347c5de6e87da6c91332f285906e0727"
+    "Accounting.Guarantees.TS.LeafLanesSound": "bf8debb83f43600be0cd07dd99c291f53f554b344e27db1c2357ab3ae9b1396a"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28962,7 +28982,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "a7e0d0a844ea76c0fde568151d0d407eca7856a6214ba7c88c428d239ad73239",
+   "digest": "2f4bfb93caf342c57dfe1c84d3ad7d37fcd2225efd06c91d3f6293c462d1735d",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -28996,7 +29016,7 @@
     "Accounting.TS.Lanes.colOf": "4fc95a8f39ff64d2cbabaad7ef2aa27a7eb3fba31730f80ca8b9e087c27daa85",
     "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
-    "Accounting.TS.Lanes.leafLayer": "6347b3864457f595554aa6c2e8ca7cacbbc5f184bfaef07d472d5b8eda88678e",
+    "Accounting.TS.Lanes.leafLayer": "98465bf1facaf9814518b3003ea0a12364949f71b0f7b0fe0fd30af3e704734e",
     "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
     "Accounting.TS.Lanes.xorAll": "a96359ab1436113e227f53947be6c561c42fe7dba8207ab4d0908ce76934c193"

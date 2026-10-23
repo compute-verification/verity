@@ -39,7 +39,12 @@ has probability `0` in every session's game (`RowsSession.prob_unwritten`) and s
 written outcome the leaf verifier's draw check (`PouwWindow.Lanes.checkFull`, part of the leaf layer's acceptance)
 gives full checking: the record's draw is `subset` of every unit of a non-empty population, and the session's custody
 makes it the verifier's draw `subset kd` over `n` units, so the outcome draws every unit, `kd = n` and `0 < n`
-(`RowsSession.full_of_check`). The union bound over the 33 sessions gives `33 δ`.
+(`RowsSession.full_of_check`). Every unit's served roots are registered at an accepted proof
+(`RowsSession.ServedRegistered`): the leaf verifier's one-read check (`PouwWindow.Lanes.checkOneRead`, part of the
+leaf layer's acceptance) holds there, and `leafLanes_soundAt` takes the served roots registered wherever it does,
+which the guarantee's sessions, their reads built from `own` (`RowsSession.canon`), give
+(`RowsSession.servedRegistered_canon`); the checked layer asks them only where its setup predicate holds, as it does
+full checking. The union bound over the 33 sessions gives `33 δ`.
 
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.CheckedSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
@@ -286,7 +291,9 @@ open Pouw.RelativeSecurity (Paths) in
 open scoped ENNReal in
 /-- **A leaf's 33 linked C-Flock sessions realize one unit, at any public inputs and known content**: the leaf layer is
 sound at `33 δ` under `Accounting.Guarantees.TS.LeafLanesSound`'s hypotheses with any type `Pub` of public inputs and
-any known content `known` naming `ok` (the guarantee's is `knownOf` of the path's public inputs, `ok` its `o0`). -/
+any known content `known` naming `ok` (the guarantee's is `knownOf` of the path's public inputs, `ok` its `o0`), at
+any sessions whose units' served roots are registered wherever their files have one read at each port (the
+guarantee's, built from `own`, by `RowsSession.servedRegistered_canon`). -/
 theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ} {Pub : Type}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
     (out : ∀ x w i k, (sess x w i k).Out) (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
@@ -301,7 +308,8 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ)
     (hCR : ∀ x w i k, (sess x w i k).CR)
     (hLaw : ∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k))
-    (hS : ∀ x w i k u, (sess x w i k).ServedRegistered u)
+    (hS : ∀ x w i k, PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () →
+      ∀ u, (sess x w i k).ServedRegistered u)
     (hO : ∀ x w i k, ∃ ks, (ok, ks) ∈ known x w i k)
     (hδ : ∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ)
     (hC : ∀ x w i, Accounting.Assumptions.TS.LeafChecks dq part (sess x w i) decL decC)
@@ -309,6 +317,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         Flock.KnownRead.check (sess x w i k).c
           (known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k)) = .ok () ∧
         PouwWindow.Lanes.checkOwn (want x w i k) (sess x w i k).own = .ok ()) →
+      (∀ k u, (sess x w i k).ServedRegistered u) →
       (∀ k, 0 < (sess x w i k).n) → (∀ k, ReadsOwnRow (sess x w i k)) →
       RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
       ∃ parts : Fin 32 → Fin nw → BitVec 32,
@@ -317,9 +326,10 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         decC (sess x w i none) (openedReg (sess x w i none)) = ⟨parts, receipt x w i, true⟩) :
     (leafLayer sess out known full want dq part pub receipt leaf right).SoundAt (33 * δ) := by
   have hSound : ∀ k, (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
-      (fun s => PortsOk ok s ∧ s.kd = s.n)).SoundAt δ := fun k =>
-    checkedOn_soundAt (fun x w i => sess x w i k) (fun x w i => out x w i k) ok (fun s => PortsOk ok s ∧ s.kd = s.n) δ
-      (fun x w i => hCR x w i k) (hLaw k) (fun x w i => hS x w i k) (fun _ h => h) (fun x w i => hδ x w i k) hδ0
+      (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).SoundAt δ := fun k =>
+    checkedOn_soundAt (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
+      (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u) δ
+      (fun x w i => hCR x w i k) (hLaw k) (fun _ h => h) (fun x w i => hδ x w i k) hδ0
   have hUnwritten : ∀ k (w : Fin S) (i : Fin nπ),
       Pouw.RelativeSecurity.prob (fun x => ¬ (sess x w i k).Written (out x w i k)) ≤ 0 := fun k w i =>
     (hLaw k w i fun s o => ¬ s.Written o).trans (avg_le _ le_rfl fun x => le_of_eq
@@ -328,22 +338,24 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
   have hIn : ∀ x, (leafLayer sess out known full want dq part pub receipt leaf right).Unsound x w i →
       ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
         (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
-          (fun s => PortsOk ok s ∧ s.kd = s.n)).Unsound x w i ∨ ¬ (sess x w i k).Written (out x w i k) := by
+          (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).Unsound x w i ∨
+          ¬ (sess x w i k).Written (out x w i k) := by
     intro x ⟨hacc, hrel⟩
     by_contra hno
     push Not at hno
     apply hrel
     have hfull : ∀ k, (out x w i k).2.1 = Finset.univ ∧ (sess x w i k).kd = (sess x w i k).n ∧
         0 < (sess x w i k).n := fun k =>
-      RowsSession.full_of_check (sess x w i k) (hacc k).1 (hno k (Finset.mem_univ _)).2 (hacc k).2.2.2.2.2
+      RowsSession.full_of_check (sess x w i k) (hacc k).1 (hno k (Finset.mem_univ _)).2 (hacc k).2.2.2.2.2.1
+    have hSr : ∀ k u, (sess x w i k).ServedRegistered u := fun k => hS x w i k (hacc k).2.2.2.2.2.2
     rcases rowsAgree_or_leafColl (sess x w i) with hA | hc
-    · rcases knownHeld_or_coll (sess x w i) (known x w i) (fun k => (hacc k).2.1) (hS x w i) with hK | hK
+    · rcases knownHeld_or_coll (sess x w i) (known x w i) (fun k => (hacc k).2.1) hSr with hK | hK
       swap
       · exact Or.inr (Or.inr hK)
       have hRo : ∀ k, ReadsOwnRow (sess x w i k) := fun k =>
-        RowsSession.readsOwnRow_of (sess x w i k) (hacc k).1 (hno k (Finset.mem_univ _)).2 (hfull k).1 (hS x w i k)
+        RowsSession.readsOwnRow_of (sess x w i k) (hacc k).1 (hno k (Finset.mem_univ _)).2 (hfull k).1 (hSr k)
       obtain ⟨parts, hL, hCb⟩ := hSh x w i (fun k => ⟨(hacc k).2.2.1, (hacc k).2.2.2.1, (hacc k).2.2.2.2.1⟩)
-        (fun k => (hfull k).2.2) hRo hA hK
+        hSr (fun k => (hfull k).2.2) hRo hA hK
       refine Or.inl (unitServed_of (hC x w i) hL hCb fun k => ?_)
       have hk1 := (hno k (Finset.mem_univ _)).1
       have hP : PortsOk ok (sess x w i k) := by
@@ -356,19 +368,21 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
           by simpa using List.find?_some hf⟩
       have hR : CheckedRel (sess x w i k) (out x w i k) ok (openedReg (sess x w i k)) := by
         by_contra hR
-        exact hk1 ⟨(hacc k).1, fun h => hR (h ⟨hP, (hfull k).2.1⟩)⟩
+        exact hk1 ⟨(hacc k).1, fun h => hR (h ⟨hP, (hfull k).2.1, hSr k⟩)⟩
       obtain ⟨-, vals, hv, he⟩ := hR
-      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2.1 vals),
+      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hSr k) (hacc k).2.2.1 vals),
         fun u => he u (by rw [(hfull k).1]; exact Finset.mem_univ u)⟩
     · exact Or.inr (Or.inl hc)
   calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out known full want dq part pub receipt leaf right).Unsound x w i)
       ≤ Pouw.RelativeSecurity.prob (fun x => ∃ k ∈ (Finset.univ : Finset (Option (Fin 32))),
           (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
-            (fun s => PortsOk ok s ∧ s.kd = s.n)).Unsound x w i ∨ ¬ (sess x w i k).Written (out x w i k)) :=
+            (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).Unsound x w i ∨
+            ¬ (sess x w i k).Written (out x w i k)) :=
         Pouw.RelativeSecurity.prob_mono hIn
     _ ≤ ∑ k ∈ (Finset.univ : Finset (Option (Fin 32))), Pouw.RelativeSecurity.prob (fun x =>
           (checkedOnLayer (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
-            (fun s => PortsOk ok s ∧ s.kd = s.n)).Unsound x w i ∨ ¬ (sess x w i k).Written (out x w i k)) :=
+            (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).Unsound x w i ∨
+            ¬ (sess x w i k).Written (out x w i k)) :=
         Pouw.RelativeSecurity.prob_exists_le _ _
     _ ≤ ∑ _k ∈ (Finset.univ : Finset (Option (Fin 32))), δ := Finset.sum_le_sum fun k _ =>
           (Pouw.RelativeSecurity.prob_or_le _ _).trans
@@ -391,11 +405,12 @@ theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
     {sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession}
     {salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray} {pub : Paths Ω S → Fin S → Fin nπ → LanePub}
     {roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port}
-    (hS : ∀ x w i k u, (sess x w i k).ServedRegistered u) (x : Paths Ω S) (w : Fin S) (i : Fin nπ)
+    (x : Paths Ω S) (w : Fin S) (i : Fin nπ)
     (hc : ∀ k, Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
       Flock.KnownRead.check (sess x w i k).c (knownOf (pub x w i) (salts x w i k) k ++
         Flock.KnownRead.fullRows (sess x w i k).own (readFull (servedTile K) (k.map Fin.val))) = .ok () ∧
       checkOwn (ownOf (roots x w i) (servedTile K) (k.map Fin.val)) (sess x w i k).own = .ok ())
+    (hS : ∀ k u, (sess x w i k).ServedRegistered u)
     (hn : ∀ k, 0 < (sess x w i k).n) (hRo : ∀ k, ReadsOwnRow (sess x w i k))
     (hA : RowsAgree (sess x w i)) (hK : ∀ k, KnownHeld (sess x w i k) (knownOf (pub x w i) (salts x w i k) k)) :
     ∃ parts : Fin 32 → Fin nw → BitVec 32,
@@ -407,8 +422,8 @@ theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
       (decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts l := fun l =>
     part_eq (partials_bits (T := servedTile K) (roots := roots x w i) (l := l.val)
       (by rw [servedTile_lanes]; exact l.isLt) (checkOwn_ok (hc (some l)).2.2) (checkOwn_ok (hc none).2.2)
-      (hc (some l)).1 (hc none).1 (hc (some l)).2.1 (hc none).2.1 (uL := ⟨0, hn (some l)⟩) rfl (hS x w i (some l) _)
-      (uC := ⟨0, hn none⟩) rfl (hS x w i none _) (hRo (some l)) (hRo none)
+      (hc (some l)).1 (hc none).1 (hc (some l)).2.1 (hc none).2.1 (uL := ⟨0, hn (some l)⟩) rfl (hS (some l) _)
+      (uC := ⟨0, hn none⟩) rfl (hS none _) (hRo (some l)) (hRo none)
       (hA (some l) none ⟨0, hn (some l)⟩ ⟨0, hn none⟩))
   have hbits : ∀ (l l' : Fin 32) (nm nm' v : String) (row : ℕ), (nm, v, row) ∈ regReads (servedTile K) (some l.val) →
       (nm', v, row) ∈ regReads (servedTile K) (some l'.val) → fullValue v = true →
@@ -417,13 +432,13 @@ theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
     fun l l' _ _ _ _ hm hm' hv => funext fun b =>
       read_bits (roots := roots x w i) hm hm' (full_of hm hv) (full_of hm' hv) (checkOwn_ok (hc (some l)).2.2)
         (checkOwn_ok (hc (some l')).2.2) (hc (some l)).1 (hc (some l')).1 (hc (some l)).2.1 (hc (some l')).2.1
-        (uL := ⟨0, hn (some l)⟩) rfl (hS x w i (some l) _) (uC := ⟨0, hn (some l')⟩) rfl
-        (hS x w i (some l') _) (hRo (some l)) (hRo (some l'))
+        (uL := ⟨0, hn (some l)⟩) rfl (hS (some l) _) (uC := ⟨0, hn (some l')⟩) rfl
+        (hS (some l') _) (hRo (some l)) (hRo (some l'))
         (hA (some l) (some l') ⟨0, hn (some l)⟩ ⟨0, hn (some l')⟩) b
   refine ⟨(decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts, fun l => ?_, ?_⟩
   · refine laneAgrees_of (sess x w i) l (fun s => ?_) (fun t => ?_) (hP l)
       (laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
-        (u := ⟨0, hn (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2.1)
+        (u := ⟨0, hn (some l)⟩) rfl (hS (some l) _) (hc (some l)).1 (hc (some l)).2.1)
     · have hm' := a_read K (aHome l) s
       rw [rowOf_aHome] at hm'
       exact hbits l (aHome l) _ _ _ _ (a_read K l s) hm' fullValue_a
@@ -431,7 +446,7 @@ theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
       rw [colOf_bHome] at hm'
       exact hbits l (bHome l) _ _ _ _ (b_read K l t) hm' fullValue_b
   · have ho := combKnownOk_of_check (s := sess x w i none) (hK none) (u := ⟨0, hn none⟩) rfl
-      (hS x w i none _) (hc none).1 (hc none).2.1
+      (hS none _) (hc none).1 (hc none).2.1
     refine CombineView.eta_ok _ ?_
     unfold decC
     rw [decComb_ok, ho]
@@ -444,12 +459,13 @@ open Accounting.TS.Lanes in
 served tile, and the leaf and receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the
 decodes `decodes_of_checks` gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess out salts dq part pub roots right δ hCR hLaw hS hδ hδ0 hC
+  intro Ω _ S nπ K nw sess₀ op sess out salts dq part pub roots right δ hCR hLaw hδ hδ0 hC
   exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (servedTile K) (k.map Fin.val)) "o0" dq part
     (decL K nw (servedTile K)) (decC nw (servedTile K)) pub (fun x w i => receiptOf nw (servedTile K) (sess x w i))
-    (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw hS
+    (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw
+    (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0 hC
-    (decodes_of_checks (roots := roots) hS)
+    (decodes_of_checks (roots := roots))
