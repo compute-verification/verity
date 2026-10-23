@@ -238,12 +238,13 @@ class Local:
 class Gate:
     """vy-challenger-1's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
     listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
-    records at `key_record`."""
+    records at `key_record`; `main` is the verifier's copy of main's first-parent line."""
 
-    def __init__(self, gate: str, ssh_key: str | None, peer: str, key_record: str) -> None:
+    def __init__(self, gate: str, ssh_key: str | None, peer: str, key_record: str, main: list[str]) -> None:
         self.H1 = served_h1()
         self.gate, self.peer, self.ssh = gate, peer, self.H1.ssh_args(ssh_key)
         self.key = self.H1.key_record(key_record)
+        self.main = main
         self.session: str | None = None
 
     def _raw(self, words: str) -> bytes:
@@ -253,6 +254,15 @@ class Gate:
         return p.stdout
 
     def open(self, root: str, layout: list, minutes: int = MINUTES) -> tuple[str, str, str]:
+        """Reserve and open the root's one session, once the host's pins log pins, in its last line, a commit on `main`: a
+        session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
+        pins = [x for x in self._raw("pins").decode().split("\n") if x]
+        pin = json.loads(pins[-1]).get("commit") if pins else None
+        if pin not in self.main:
+            raise Ch.CoinError(f"the challenger host's pins log pins {pin} last, which is not on main's first-parent line in the "
+                               f"verifier's copy ({len(self.main)} commits from {self.main[0][:10] if self.main else None}): "
+                               "repin the host to a commit on it (vy-challenger-pin), or refresh --main, before spending the "
+                               "root's one session")
         got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", SCHEME, "--families",
                                             json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes)], self.ssh)
         self.session = got["session"]
@@ -303,7 +313,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     if challenger == "local":
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
     elif challenger.startswith("gate:") and peer and key_record:
-        session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record)
+        session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
     else:
         raise SystemExit(f"--challenger is local or gate:USER@HOST (with --peer and --challenger-key), not {challenger!r}")
     address, secret, commitment = session.open(root, families(len(ranks)))
