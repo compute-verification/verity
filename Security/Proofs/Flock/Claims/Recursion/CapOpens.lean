@@ -408,7 +408,7 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks hg0 hnn hnbl)
   rw [digest_tables htt] at hsl
   rw [hname] at hpp
-  obtain rfl : pp = q := find_range_findIdx (f := (·.name == "top")) hpp hq2
+  obtain rfl : pp = q := find_range_findIdx (f := fun (x : Port) => x.name == "top") hpp hq2
   obtain ⟨hlt, hrd, -⟩ := hall' n hnp
   have hrn : ((Array.range N).map some)[n]? = some (some n) := by simp [hn]
   rw [hreads, range_getD hnp, hrn] at hrd
