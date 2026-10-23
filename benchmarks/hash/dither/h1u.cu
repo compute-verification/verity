@@ -529,14 +529,8 @@ struct OneOut {
 // RW (kh_units_multi_j10r): the fused receipts-only unit under J10-R's noise (h1tile.j10r_noise): seeds' first 8 words are
 // the call's seed_c, row 32 ri + lane's blocks come from the call's row workspace ws (h1jr_rows: block t at 16 t words)
 // and column 32 cj + lane's blocks, M RB + (32 cj + lane) CB + c, are hashed by the lane; the fold keys stay sigma_R's.
-// H1U_JRCP = 1 (RW's default): the lane's row block goes global -> shared by cp.async into the ring before the column's
-// compression and into rowbits after it, so the whole compression hides its L2 latency; with 0 it's loaded into registers,
-// and ptxas sinks those loads to the compression's last few hundred instructions.
 // h1u_unit is one warp's unit u (u < units) with its shared memory S; h1u runs unit blockIdx.x WARPS + warp of one call,
 // h1um (kh_units_multi) unit u of the call its warp's index falls in.
-#ifndef H1U_JRCP
-#define H1U_JRCP 1
-#endif
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -672,24 +666,10 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     if constexpr (RW) {
       const uint4* src = reinterpret_cast<const uint4*>(ws + 16 * ((u64)(32 * ri + lane) * rb + blk));
       uint4 rv[4];
+#pragma unroll
+      for (int w = 0; w < 4; ++w) rv[w] = ld4<H1U_L2HINT_WS>(src + w);
       u64 s[8];
-      if constexpr (H1U_JRCP) {
-        // the ring is free from a chunk's ring_xor to the next chunk's first ring_put
-        const u32 r0 = (u32)__cvta_generic_to_shared(&S.ring[0][0]), st = ((r0 + 15) & ~15u) + 64 * lane;
-#pragma unroll
-        for (int w = 0; w < 4; ++w)
-          asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(st + 16 * w), "l"(src + w) : "memory");
-        cp_commit();
-        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
-        cp_wait<0>();
-        const uint4* sp = reinterpret_cast<const uint4*>(reinterpret_cast<const char*>(&S.ring[0][0]) + (st - r0));
-#pragma unroll
-        for (int w = 0; w < 4; ++w) rv[w] = sp[w];
-      } else {
-#pragma unroll
-        for (int w = 0; w < 4; ++w) rv[w] = ld4<H1U_L2HINT_WS>(src + w);
-        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
-      }
+      noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
 #pragma unroll
       for (int w = 0; w < 4; ++w) {
         S.rowbits[lane][4 * w] = rv[w].x;
