@@ -1,7 +1,7 @@
 """A window's ``coord`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the expert-indexed pair GEMMs' coordinates
 (``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows C-Flock's `UnitStager`
-stages (`unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's units read once, so that the coordinate
-on each chunk's rows, parsed as the stager parses them, is the rows' committed words, and a flipped word is not."""
+stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's units read once, so that
+the coordinate on each chunk's rows, parsed as the stager parses them, is the rows' committed words, and a flipped word is not."""
 from __future__ import annotations
 
 import numpy as np
@@ -15,6 +15,7 @@ from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 from verity_vllm.commit import serving_rows as CS
+from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.registry import boolean_fp8_moe as BFM
 from verity_vllm.program.registry import fp8_moe_experts as X
@@ -69,7 +70,7 @@ def pairs(monkeypatch):
 
 def test_a_window_s_coordinates_are_chunks_of_the_stager_s_bit_rows(pairs):
     rows, _y, _store = pairs
-    in_rows, out_rows = SRW.unit_rows(T)
+    in_rows, out_rows = CR.unit_rows(SRW.template(T))
     params, _ret = SRW.template(T).fn.signature()
     assert [(p, s, ps) for p, s, _b, ps in in_rows] == [(f"in{g}", V2, [nm]) for g, (nm, _t) in enumerate(params)] and out_rows == [(V2, (0,))]
     ms = SRW.members([T], [rows], [2 * N], {T: CAP})
@@ -100,7 +101,7 @@ def test_a_chunk_on_its_rows_computes_the_committed_words_and_a_flipped_word_is_
     ms = SRW.members([T], [rows], [2 * N], {T: CAP})
     got = SRW.read_all(ms, [rows], store, None)
     st = object.__new__(UnitStager)     # reference_check reads only these: the circuit needn't be composed
-    st.definition, st.name, st.public_inputs, st.in_rows = SRW.template(T).fn, "coord-test", {}, SRW.unit_rows(T)[0]
+    st.definition, st.name, st.public_inputs, st.in_rows = SRW.template(T).fn, "coord-test", {}, CR.unit_rows(SRW.template(T))[0]
     for g, _entries in got:
         st.reference_check(g["rows"], g["outs"])
     g, _entries = got[1]

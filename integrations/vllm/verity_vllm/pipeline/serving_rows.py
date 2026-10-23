@@ -24,9 +24,9 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
 template's units (``CHUNKED``: a ``ScaledMmS8Coordinate`` or a ``COORDS`` coordinate) are split into consecutive chunks of at most
-its ``chunk_cap`` (flock-circuit's spec shape, ``chunk_cap``, as ``benchmarks/one_stage/a6.py`` computes it; ``chunk_caps`` writes
-the entry), each chunk a member on C-Flock's bit rows (`unit_rows`) with its public file of global unit indices; ``row_tables`` puts
-the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
+its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes it; ``chunk_caps`` writes the
+entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
+``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
 computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
@@ -57,7 +57,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    leading ones whole and the last two ``w[:, n, :]`` and ``ws[:, n // G, :]`` of every expert
                                    (FlashInfer's linear: ``w[n]`` and ``ws[n // 128]``) -> ``out.<member>``, the row's output
                                    word n (`_read_coord`); packed ports, one index entry per row; chunked (``chunk_cap``),
-                                   v2 bit rows (`unit_rows`) -> ``o0``
+                                   v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -85,6 +85,8 @@ from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline.chunk_rows import s8_words
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
 CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
@@ -94,14 +96,11 @@ CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128}}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8"}
-#: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`unit_rows`), in chunks of at most a chunk cap
+#: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord")
 #: a row template's element widths whose ports the rows commit as their little-endian bytes
 PACKED = frozenset((8, 16, 32, 64))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
-#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
-#: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
-M_MAX = 35
 TEMPLATE_QUERIES = (PO.Q_TEMPLATE_INSTANCE[0], PO.Q_TEMPLATE_INSTANCES[0])
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
@@ -303,57 +302,17 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     return out, [t.fn for t in ts], counts
 
 
-def s8_words(K: int) -> int:
-    """A ``ScaledMmS8Coordinate_v1{K}`` input row's u16 words: the K s8 codes' bytes, then the f32 scale's (A6's ``x`` / ``w``)."""
-    return K // 2 + 2
-
-
-def unit_rows(t: str) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
-    """A chunked template's rows as C-Flock's `UnitStager` stages them, ``(in_rows, out_rows)``: a ``ScaledMmS8Coordinate``'s A6
-    rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2); a ``COORDS``
-    coordinate's ``in<g>``, one v2 row per parameter (its packed port); then the one v2 output row ``o0``.  The window's
-    chunks (`members`) and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by it."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_vllm.query.program_view import spec_statics
-
-    tp = template(t)
-    if tp.layout == "s8":
-        bits = 16 * s8_words(int(spec_statics(t)["K"]))
-        return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout == "coord":
-        params, _ret = tp.fn.signature()
-        return [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)], [(V2, (0,))]
-    raise ValueError(f"{t}: its layout {tp.layout!r} is not a chunked one {CHUNKED}")
-
-
-def chunk_cap(t: str) -> int:
-    """The most instances of chunked template ``t`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by C-Flock's ``UnitStager`` on its rows (`unit_rows`), then ``vus_per_block``
-    blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes): a partition file pins it as ``chunk_cap``."""
-    import tempfile
-
-    from verity_flock.class_statement import UnitStager
-
-    in_rows, out_rows = unit_rows(t)
-    with tempfile.TemporaryDirectory() as d:
-        st = UnitStager(template(t).fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
-                        bind={"partition": "0" * 128, "program": "0" * 128})
-    if M_MAX - st.meta["k_log"] < 3:
-        raise ValueError(f"{t}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
-    return int(st.meta["vus_per_block"]) << (M_MAX - int(st.meta["k_log"]))
-
-
 def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
-    """``chunk_cap`` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``."""
-    return {t: chunk_cap(t) for t in tmpls if template(t).layout in CHUNKED}
+    """`chunk_rows.chunk_cap` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``."""
+    return {t: CR.chunk_cap(template(t)) for t in tmpls if template(t).layout in CHUNKED}
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (``CHUNKED``) are consecutive chunks of at most its ``caps`` entry, one member each, on its
-    `unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's units,
-    ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` coordinate is one member of word rows."""
+    `chunk_rows.unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's
+    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` coordinate is one member of word rows."""
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
@@ -365,7 +324,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            in_rows, _outs = unit_rows(t)
+            in_rows, _outs = CR.unit_rows(template(t))
             outs = (("o0", 1 if layout == "s8" else sum(template(t).fn.signature()[1].leaf_widths()) // 16),)
             schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + (("o0", CS.SCHEMA_HM96_SHA512_ROW_V2),)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
@@ -727,24 +686,13 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
         t = ms[at].template
         mine = [m for m in ms[at:] if m.template == t]
         layout = template(t).layout
-        out += (_read_s8(mine, rs, store, weights, arrivals) if layout == "s8"
-                else _read_coord_chunks(mine, rs, store, weights, arrivals) if layout == "coord" and mine[0].name
-                else [read(mine[0], rs, store, weights, arrivals)])
+        if layout == "s8":
+            out += _read_s8(mine, rs, store, weights, arrivals)
+        elif layout == "coord" and mine[0].name:
+            out += CR.split(mine, *_read_coord(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
+        else:
+            out.append(read(mine[0], rs, store, weights, arrivals))
         at += len(mine)
-    return out
-
-
-def _read_coord_chunks(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Callable,
-                       arrivals: dict[str, int] | None) -> list[tuple[dict[str, Any], list[list[Any]]]]:
-    """A ``COORDS`` template's chunks: its units read once (`_read_coord`), each chunk its units ``[base, base + n)``, and its index
-    entries the rows whose units it holds, each with the row's whole range."""
-    b0 = ms[0].base
-    data, entries = _read_coord(replace(ms[0], n=sum(m.n for m in ms), name=""), rows, store, weights, arrivals)
-    out = []
-    for m in ms:
-        a, b = m.base - b0, m.base - b0 + m.n
-        out.append(({part: {p: v[a:b] for p, v in data[part].items()} for part in ("rows", "outs")},
-                    [e for e in entries if e[0] < m.base + m.n and e[1] > m.base]))
     return out
 
 
