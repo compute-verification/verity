@@ -107,6 +107,7 @@ from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, Template,  # noqa: F401
                                                     _bind, part, template, unit_templates)
+from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice")
@@ -249,7 +250,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                           tuple((f"out.{d['members'][j][0]}", sum(ty.leaf_widths()) // 16)
                                 for j, ty in zip(p[2] if p else (0,), getattr(ret, "fields", None) or (ret,), strict=True)), n, base)
         else:
-            ins = [sum(int(sl[3]) - int(sl[2]) for sl in grp) for grp in r["args"]]
+            ins = [sum(int(sl[3]) - int(sl[2]) for sl in runs_from_file_items(grp)) for grp in r["args"]]
             outs = [int(mm[1]) for mm in d["members"]]
             packed = template(t).packed
             if packed is not None:
@@ -639,8 +640,10 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 
 def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> list[np.ndarray]:
+    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
+    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression."""
     words = []
-    for sl in group:
+    for sl in runs_from_file_items(group):
         kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
         if kind == "n":
             m = pi.member_at(a, lo, hi)
