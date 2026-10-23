@@ -255,7 +255,7 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   marks its fixed head ready.
 - A new head doesn't cancel a running train (top, 17 Oct): a train being checked runs on at the head its owner marked, and
   lands that head if it passes, telling its owner; the new head rejoins `next` above once that train ends. Only when the
-  PR's own train has failed does the new head rebuild at once, since then the push is the fix.
+  PR's own train has failed, or the head it checks has lost its ready mark, does the new head rebuild at once.
 - A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
