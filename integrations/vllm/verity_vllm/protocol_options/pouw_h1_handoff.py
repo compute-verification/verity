@@ -151,13 +151,13 @@ def resume(directory: str | Path, fd: int) -> tuple[PH.H1Run, Resumed]:
 
 
 def _declare(served: SV.Served, run: PH.H1Run) -> None:
-    """The resumed window's Program, declared again from the run's public shapes and the window's key: the saved state
+    """The resumed window's Program, declared again from the run's public shapes and the period's prefix: the saved state
     holds its digest, not the Program (whose Definitions don't pickle)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     served.program = None
     if served.program_digest is not None:
         served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,
-                                     SV.prefix(bytes.fromhex(served.root)), served.unit)
+                                     served.prefix, served.unit)
         if P.program_digest(served.program) != served.program_digest:
             raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 

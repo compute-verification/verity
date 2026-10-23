@@ -1,6 +1,6 @@
 """H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`), each layer's ``observe``
 (`observer`) and ``apply`` under the credit gate's trace (`traced`), and the model runner's ``execute_model``, which
-hands each step's admissions to the window (`admitting`)."""
+hands each step's admissions to the window (`admitting`), all wired at install by `wire`."""
 from __future__ import annotations
 
 from typing import Any
@@ -67,4 +67,17 @@ def admitting(run: PH.H1Run, orig: Any, runner: Any) -> Any:
     return execute_model
 
 
-__all__ = ["admitting", "layers", "observer", "traced"]
+def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -> None:
+    """The run's hooks on ``hooks`` (the option's `Hooks`): ``runner``'s ``execute_model`` (`admitting`), if given, and
+    each layer's ``observe`` (`observer`) and ``apply`` (`traced`); a committing run's layer on an arm with ``zy_rows``
+    whose N is whole tile columns serves z/y records over ``rows`` slots."""
+    if runner is not None:
+        hooks.wrap(runner, "execute_model", lambda orig: admitting(run, orig, runner))
+    for w, layer in enumerate(layers):
+        hooks.wrap(layer.quant_method, "observe", lambda orig, w=w: observer(run, w, orig))
+        hooks.wrap(layer.quant_method, "apply", lambda orig, w=w: traced(run, w, orig))
+        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+            hooks.patch(layer.quant_method, "zy_rows", rows)
+
+
+__all__ = ["admitting", "layers", "observer", "traced", "wire"]

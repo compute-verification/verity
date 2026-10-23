@@ -293,12 +293,15 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
 
 def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(host, signer):
     """PoUW's credit holds every window of a period to the served model's registered weights' root its open commits
-    (`weights_root`, `credit.weights_root` of the B rows registered before the period's first salt), signed before
-    window 0's first coin, beside its draw K or alone."""
+    (`weights_root`, `credit.weights_root` of the B rows the auditor registered before the period's first salt, with
+    its model), signed before window 0's first coin, beside its draw K or alone."""
     w = "5e" * 64
+    host.models.write_text(json.dumps({"model": "M8", "circuit": CIRCUIT, "weights_root": w,
+                                       "checkpoint_sha512": "c4" * 64}) + "\n")
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --weights-root {w}",
                     "hash"))
     assert (opened["body"]["draw_k"], opened["body"]["weights_root"]) == (27, w)
+    assert opened["body"]["model"] == {"name": "M8", "checkpoint_sha512": "c4" * 64}
     ok(ssh(host, signer, "period-close --name p1", "hash"))
     body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} --weights-root {w}"))[
         "body"]
@@ -313,11 +316,11 @@ def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(ho
 def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwise(host, signer):
     """PoUW's credit verifies each window's statements on the circuit file its period's open committed for the call's K
     (`circuit_files`, ``{k<K>: SHA-512}``, credit's `committed_files`), signed before window 0's first coin beside its
-    draw K and weights' root, whatever order or spacing the JSON came in."""
+    draw K, whatever order or spacing the JSON came in."""
     files = {"k4096": "1a" * 64, "k64": "2b" * 64}
     given = shlex.quote(json.dumps({"k64": "2b" * 64, "k4096": "1a" * 64}, indent=1))
-    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --weights-root "
-                                  f"{'5e' * 64} --circuit-files {given}", "hash"))
+    opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
+                                  f"--circuit-files {given}", "hash"))
     assert opened["body"]["circuit_files"] == files and opened["body"]["draw_k"] == 27
     ok(ssh(host, signer, "period-close --name p1", "hash"))
     body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} "

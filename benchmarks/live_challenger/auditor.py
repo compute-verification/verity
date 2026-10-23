@@ -4,9 +4,11 @@ first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
-    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--weights-root W] [--circuit-files JSON]
-                                   [--lane LANE] | period-close --name P
-    vy-challenger-gate status SESSION | ledger | pins | pubkey | fetch SESSION
+    vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W]
+                                   [--circuit-files JSON] [--lane LANE] | period-close --name P
+    vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
+    vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
+    vy-challenger-gate status SESSION | ledger | pins | models | pubkey | fetch SESSION
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
   which is this file's `gate` as root through one sudoers line. A lane's own key is forced with the lane's name
@@ -54,10 +56,13 @@ first coin.
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
   (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
   against), and with `--draw-k K` the draw K the proof service selects each window's units with (`draw_k`, a positive
-  integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--weights-root W` the
-  served model's registered weights' root (`weights_root`, 128 lowercase hex: `credit.weights_root` of the B rows the
-  prover registers once, before the period's first salt, which PoUW's credit holds every window's weights to; an open
-  without it commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
+  integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--model M` (or
+  `--weights-root W`, which must be a registered root) the served model's weights' root from the auditor's model registry
+  (`weights_root`, `credit.weights_root` of each K's b/<K> the auditor committed under its own salts, which PoUW's
+  credit holds every window's weights to, and `model: {name, checkpoint_sha512}`; a root the registry has no entry of
+  for the period's circuit is refused; a model it has none of there, a remote memory audit's whose circuit is its
+  verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
+  pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
   the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
   on; an open without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
@@ -74,6 +79,14 @@ first coin.
   (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
   pod's watchers loop `challenger-publish`), each put an extension of the last   (`publish.sh` refuses any other head, and
   `extends` is the check), labelled `challenger-ledger head` by infra, and the pins log the same way (`challenger-pins head`).
+
+- **The model registry** (`/var/lib/vy-challenger/models.jsonl`, auditor's, `chattr +a`; `models.py`) is one line a
+  registration, vy-admin's `model-register` run as `auditor`. It refuses a checkpoint whose
+  files aren't the pinned `checkpoints-int8.json` role's, or that root or auditor alone can't write, or whose digest
+  isn't core's pin (`verity/core/protocols/pouw/lean/check/models.json`), and a descriptor whose linears aren't the model's decoder
+  layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
+  (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
+  public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
 `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
@@ -157,6 +170,10 @@ class Host:
     @property
     def key(self) -> Path:
         return self.root / "key"
+
+    @property
+    def models(self) -> Path:
+        return self.root / "models.jsonl"
 
 
 def utc(now: datetime) -> str:
@@ -288,8 +305,17 @@ def circuit_files_of(s: str) -> dict[str, str]:
     return files
 
 
-#: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them
-PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of}
+def model_of(s: str) -> str:
+    """A period-open's model (`--model`): the int8 checkpoint role the model registry has it under, or Refused."""
+    if not NAME.fullmatch(s):
+        raise Refused(f"--model {s!r}: a role of the model registry (models), 1 to 64 of [A-Za-z0-9._:-]")
+    return s
+
+
+#: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
+#: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
+PERIOD_FIELDS = {"draw_k": draw_k_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
+                 "model": model_of}
 
 
 def field_text(v: Any) -> str:
@@ -388,6 +414,100 @@ def key_signer(host: Host, params=None, workers: int | None = None):
         with lms.LeafState(host.key / "state.json", public, key.params.H) as st:
             return lms.sign(key, st, message).encode()
     return public[:16], sign, hashlib.sha512(public).hexdigest()
+
+
+# --- the model registry (models.py) -------------------------------------------------------------------------------------------
+
+def registry():
+    """`models`, imported only by the verbs that read the registry (it brings numpy and PoUW's credit)."""
+    sys.path.insert(0, str(HERE))
+    import models
+    return models
+
+
+def model_register(host: Host, args: list[str], *, pinned: str, now: datetime, key: bytes | None = None,
+                   tree: Path = TREE) -> dict:
+    """`model-register ROLE CIRCUIT DESCRIPTOR CHECKPOINT`, as `auditor`: `models.register` under a fresh salt key, the key
+    kept in `models.key_path` (0600) and the line appended to the registry under its lock; or Refused."""
+    M = registry()
+    if len(args) != 4:
+        raise Refused(f"model-register: {args}")
+    role, circuit, descriptor, checkpoint = model_of(args[0]), circuit_of(args[1]), Path(args[2]), Path(args[3])
+    key = key or secrets.token_bytes(32)
+    try:
+        line = M.register(tree, role, circuit, descriptor.read_bytes(), checkpoint, key, pinned=pinned, now=utc(now),
+                          log=lambda s: print(s, file=sys.stderr, flush=True))
+    except (M.Refused, OSError) as e:
+        raise Refused(str(e)) from None
+    kp = M.key_path(host.root, line)
+    kp.parent.mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(kp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, key)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    with locked(host.root / "models.lock"):
+        fd = os.open(host.models, os.O_WRONLY | os.O_APPEND)
+        try:
+            os.write(fd, (json.dumps(line, sort_keys=True, separators=(",", ":")) + "\n").encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    return line
+
+
+def parse_model(verb: str, argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog=f"vy-challenger-gate {verb}", exit_on_error=False, add_help=False, allow_abbrev=False)
+    p.add_argument("--model", required=True)
+    p.add_argument("--circuit", required=True)
+    if verb == "model-key":
+        p.add_argument("--weights-root", dest="weights_root", default=None)
+    if verb == "model-register":
+        p.add_argument("--descriptor", required=True)
+        p.add_argument("--checkpoint", required=True)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    a.model, a.circuit = model_of(a.model), circuit_of(a.circuit)
+    return a
+
+
+def gate_model_key(argv: list[str], host: Host) -> dict:
+    """The salt key of `--model`'s registration under `--circuit` whose root is `--weights-root` (the period's signed one;
+    required when the model is registered more than once there): the prover's openings of its b/<K>."""
+    M = registry()
+    a = parse_model("model-key", argv)
+    try:
+        e = M.resolve(M.read(host.models), a.circuit, a.model, a.weights_root and weights_root_of(a.weights_root),
+                      unique=True)
+    except M.Refused as x:
+        raise Refused(str(x)) from None
+    key = M.key_path(host.root, e).read_bytes()
+    return {"model": e["model"], "circuit": e["circuit"], "weights_root": e["weights_root"], "key": key.hex(),
+            "key_sha512": e["key_sha512"]}
+
+
+def seal_models(host: Host, *, own: Callable[[Path], None], seal: Callable[[Path], None] = append_only) -> None:
+    """The registry made auditor's and append-only (`chattr +a`, which only root lifts) before its first line."""
+    if not host.models.exists():
+        host.models.touch()
+        host.models.chmod(0o644)
+        own(host.models)
+    seal(host.models)
+
+
+def as_auditor_register(args: list[str]) -> dict:
+    p = subprocess.run(_auditor(["model-register", *args]), stdout=subprocess.PIPE, stderr=None, text=True)
+    if p.returncode:
+        raise Refused(f"model-register exited {p.returncode} (its reason is on stderr above)")
+    return json.loads(p.stdout)
 
 
 # --- the gate (root) ----------------------------------------------------------------------------------------------------------
@@ -588,11 +708,13 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
          "| open --session S --root R "
-         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--weights-root W] [--circuit-files JSON] "
+         "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--lane LANE: vy-admin's] "
          "| period-close --name P "
          "(a lane's own gate key, or vy-admin) "
-         "| status SESSION | ledger | pins | pubkey | fetch SESSION")
+         "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
+         "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
+         "| status SESSION | ledger | pins | models | pubkey | fetch SESSION")
 
 
 def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, str | None, list[str]]:
@@ -608,6 +730,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--draw-k", dest="draw_k", default=None)
         p.add_argument("--weights-root", dest="weights_root", default=None)
         p.add_argument("--circuit-files", dest="circuit_files", default=None)
+        p.add_argument("--model", dest="model", default=None)
 
     def refuse(why: object) -> None:
         raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
@@ -676,6 +799,21 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             with locked(host.root / "gate.lock"):
                 e = (hooks.get("period") or as_auditor_period)([verb, name, lane or READ_ONLY, by, *extra])
             doc = {"seq": e["seq"], "kind": e["kind"], "body": e["body"]}
+        elif verb == "model-register":
+            if not admin:
+                raise Refused("a model is registered by vy-admin alone (sudo vy-challenger-gate model-register ...)")
+            a = parse_model(verb, rest)
+            seal_models(host, own=hooks.get("own") or own_by_auditor, seal=hooks.get("seal") or append_only)
+            line = (hooks.get("register") or as_auditor_register)(
+                [a.model, a.circuit, str(Path(a.descriptor).resolve()), str(Path(a.checkpoint).resolve())])
+            doc = {k: line[k] for k in ("model", "circuit", "prefix", "checkpoint_sha512", "roots", "weights_root",
+                                        "key_sha512", "registered_utc")}
+        elif verb == "model-key":
+            if by is None:
+                raise Refused("this key reads only: a model's salt key goes to a lane's own gate key, or vy-admin")
+            doc = gate_model_key(rest, host)
+        elif verb == "models" and not rest:
+            return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active, now)
         elif verb == "ledger" and not rest:
@@ -779,11 +917,13 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
     return append(host, "open", session, body_of, I, sign)
 
 
-def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
+def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool],
+           tree: Path = TREE) -> dict:
     """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
-    K (`draw_k`), the served model's registered weights' root (`weights_root`) and each K's circuit file's SHA-512
+    K (`draw_k`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
+    the registry has no entry of the model alone, from core's pin in `tree`) and each K's circuit file's SHA-512
     (`circuit_files`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
@@ -796,6 +936,13 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         if len(fields) != len(args) - 6 or not set(fields) <= set(PERIOD_FIELDS):
             raise Refused(f"period: {args}")
         given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
+        model, root = given.pop("model", None), given.pop("weights_root", None)
+        if model is not None or root is not None:
+            M = registry()
+            try:
+                given.update(M.opened(M.read(host.models), tree, circuit, model, root))
+            except M.Refused as e:
+                raise Refused(str(e)) from None
     I, sign, key_sha512 = signer
 
     def body_of(lines: list[bytes]) -> dict:
@@ -957,6 +1104,9 @@ def main(argv: list[str] | None = None) -> int:
         elif argv[:1] == ["run"] and len(argv) == 2:
             e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
+        elif argv[:1] == ["model-register"] and len(argv) == 5:
+            line = model_register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
+            print(json.dumps(line, sort_keys=True))
         elif argv[:1] == ["pinned"] and len(argv) == 3:
             print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
         elif argv[:1] == ["keygen"] and len(argv) == 1:

@@ -119,6 +119,10 @@ KINDS: dict[str, str] = {
     "challenger-pins/v1": "the auditor host's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
                           "payload pins.jsonl, one challenger.pin_line {commit, main, pinned_utc} a pin, append-only, each put an "
                           "extension of the last; meta {host, lines, sha512}; label challenger-pins head by infra",
+    "challenger-models/v1": "the auditor host's model registry (/var/lib/vy-challenger/models.jsonl, live_challenger/models.py, "
+                            "publish.sh): payload models.jsonl, one registration a line {model, circuit, prefix, checkpoint, "
+                            "roots, entries, weights_root, key_sha512, ...}, append-only, each put an extension of the last; "
+                            "meta {host, lines, sha512}; label challenger-models head by infra",
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",

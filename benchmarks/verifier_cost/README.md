@@ -51,6 +51,11 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
 ~~~
 
+`flock_unroll.sh K...` times what the templated statement's read costs against the flat one's on the same unit: `Tmpl.unrollAt` at
+`MODE` (default `iv/hybrid/4`) whole and a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`, `placed`,
+`Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
+unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
+
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's

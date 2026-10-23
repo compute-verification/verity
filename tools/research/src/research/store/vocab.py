@@ -100,6 +100,8 @@ CHALLENGER_LEDGER = "challenger-ledger"               # on a challenger-ledger/v
 CHALLENGER_LEDGER_VALUES = ("head",)
 CHALLENGER_PINS = "challenger-pins"                   # on a challenger-pins/v1 put, by infra's publisher: a head it published
 CHALLENGER_PINS_VALUES = ("head",)
+CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v1 put, by infra's publisher: a head it published
+CHALLENGER_MODELS_VALUES = ("head",)
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -335,6 +337,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(CHALLENGER_PINS, GROUP_VERIFICATION, ENUM, "on a challenger-pins/v1 artifact, by infra's publisher (publish.sh): a head of "
        "the auditor host's pins log it published, each an extension of the last; pinned_session reads the newest",
        CHALLENGER_PINS_VALUES),
+    _k(CHALLENGER_MODELS, GROUP_VERIFICATION, ENUM, "on a challenger-models/v1 artifact, by infra's publisher (publish.sh): a head "
+       "of the auditor host's model registry it published, each an extension of the last; a period-open's weights_root is "
+       "one of its entries'", CHALLENGER_MODELS_VALUES),
     _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),

@@ -1,7 +1,8 @@
-"""`pouw.leaf_lanes`: the stated lane geometry and partial word order held to the circuits (`h1tile`, `h1zy`), and the
-statement set's reads and ``--registered`` files."""
+"""`pouw.leaf_lanes`: the stated lane geometry and partial word order held to the circuits (`h1tile`, `h1zy`), the
+statement set's reads, known rows and ``--registered`` files."""
 from __future__ import annotations
 
+import itertools
 import random
 
 import pytest
@@ -126,6 +127,58 @@ def test_every_port_of_every_statement_is_the_verifiers_own():
         assert kind == LL.COMBINE or (k[LL.PUB], k[LL.ADMIT]) == (f"pub{ln}", LL.ADMIT)
         oks.append(k[LL.OK])
     assert len(set(oks)) == 33
+
+
+def _bits_n(words: list[int], lo: int, n: int) -> int:
+    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`Accounting.TS.Lanes.bitsN`)."""
+    return sum(((words[(lo + i) // 16] >> ((lo + i) % 16)) & 1) << i for i in range(n))
+
+
+def test_a_lanes_pub_row_is_its_seeds_leaves_then_its_index():
+    """Lane l's ``pub`` row is the salt's, position's and roots' leaves as the seed reads them, 100 words, then l, and its
+    fields read least significant bit first (`decLane`) are the salt and roots with their big-endian halves least
+    significant first, the position with its halves swapped, and l."""
+    salt, position, roots = bytes(range(64)), 0x0123456789ABCDEF, (bytes(range(64, 128)), bytes(range(128, 192)))
+    w = LL.pub_words(salt, position, roots, 7)
+    assert len(w) == 101 == sum(LL.PUBLIC_BITS) // 16 and w[100] == 7
+    assert w[:4] == [0x0203, 0x0001, 0x0607, 0x0405], "the salt's half 00 01 02 03 is its low 32 bits"
+    assert w[32:36] == [0x4567, 0x0123, 0xCDEF, 0x89AB], "the position's high half, then its low"
+    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    assert [(w[t // 16] >> (t % 16)) & 1 for t in range(1600)] == bits
+    at = dict(zip(LL.PUBLIC, zip(itertools.accumulate((0,) + LL.PUBLIC_BITS), LL.PUBLIC_BITS)))
+    assert at == {"salt": (0, 512), "position": (512, 64), "roots": (576, 1024), "lane": (1600, 16)}
+    got = {name: _bits_n(w, *at[name]) for name in LL.PUBLIC}
+    assert got["salt"] == sum(h << 32 * i for i, h in enumerate(SD.halves(salt)))
+    assert got["position"] == 0x89ABCDEF01234567
+    assert got["roots"] == sum(h << 32 * i for i, h in enumerate(SD.halves(roots[0] + roots[1])))
+    assert got["lane"] == 7
+    assert LL.pub_words(salt, position, roots, 0xFFFF)[100] == 0xFFFF
+    for bad in ((salt[:63], position, roots, 7), (salt, position, roots[:1], 7), (salt, position, roots, 1 << 16),
+                (salt, 1 << 64, roots, 7), (salt, position, roots, -1)):
+        with pytest.raises(ValueError):
+            LL.pub_words(*bad)
+
+
+def test_each_statements_known_rows_are_its_known_ports():
+    """Each statement's `known_rows` are its `known` ports: lane l's ``pub`` (`pub_words` at l) and ``admit`` (bit i the
+    admit bit i, whole words, of any length, as Lean's `PouwWindow.knownRows` takes them), and every ``o0`` the row 1."""
+    admit = [int(i % 3 == 0) for i in range(32)]
+    data = {"admit": admit, "salt": SALT, "position": POSITION, "roots": ROOTS}
+    for kind, ln in LL.statements(32, 32):
+        got = LL.known_rows(32, 32, kind, ln, **data)
+        assert {p: v for p, (v, _) in got.items()} == LL.known(32, 32, kind, ln) and got[LL.OK][1] == [1]
+        if kind == LL.LANE:
+            assert got[LL.PUB][1] == LL.pub_words(SALT, POSITION, ROOTS, ln) and got[LL.ADMIT][1] == [0x9249, 0x4924]
+    assert LL.known_rows(32, 32, LL.COMBINE) == {LL.OK: ("ok32", [1])}
+    assert LL.known_rows(8, 16, LL.LANE, 3, **{**data, "admit": admit[:8]})[LL.ADMIT][1] == [0x49]
+    assert LL.known_rows(32, 32, LL.LANE, 3, **{**data, "admit": admit[:17]})[LL.ADMIT][1] == [0x9249, 0]
+    assert LL.bits_words([1] * 17) == [0xFFFF, 1] and LL.bits_words([]) == []
+    with pytest.raises(ValueError, match="admit bits"):
+        LL.known_rows(32, 32, LL.LANE, 3, salt=SALT, position=POSITION, roots=ROOTS)
+    with pytest.raises(ValueError, match="lanes"):
+        LL.known_rows(32, 32, LL.LANE, 32, **data)
+    with pytest.raises(ValueError, match="0 or 1"):
+        LL.bits_words([0, 2])
 
 
 def test_a_known_port_opens_only_its_content():

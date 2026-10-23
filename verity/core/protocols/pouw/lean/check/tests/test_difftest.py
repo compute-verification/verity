@@ -318,8 +318,10 @@ def test_credit(pass_server):
     drawn unit failed or missing, a period unclosed or a window of it missing or out of order, an A tree the round roots
     didn't commit, a window's round log the challenger never received, entries or a drawn unit's proof of another
     registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
-    open root binds or registered under another domain, name or rows, and every other refusal of `credit.window`,
-    `credit.period_credit` and the steps they run or will."""
+    open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
+    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
+    model `models.json` pins (none, malformed, another checkpoint, another role), and every other
+    refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
              for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
@@ -376,9 +378,22 @@ def test_credit(pass_server):
                  "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",
                  "window registration: drawn unit #'s proof was verified against another circuit",
-                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "which the window registers not",
+                 "opened no A value …/a/# or …/a/#@# (its call's) of the window", "'s proof opened no weights ",
+                 "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
                  "so the period earns nothing: registration: drawn unit #",
+                 "window weights: the window's registered weights' root ",
+                 "open signed: a B row's codes or s_w differ from the ones the period registered",
+                 "'s open signs no weights' root (weights_root, a SHA# digest",
+                 "'s open signs a weights' root but no model (model, {name, checkpoint_sha#})",
+                 "with another checkpoint than the one credit pins for it: open the period with the gate's --model",
+                 "which is no checkpoint role credit pins: open the period with the gate's --model",
+                 "window weights: period ",
+                 "window weights: the window is in no period of the auditor's ledger",
+                 "window weights: the window's round# request table's root is not",
+                 "window weights: the window's registered weights are not the ones its open root binds",
+                 "window weights: registered weights ", "period weights: period ",
+                 "so the period earns nothing: weights: the window's registered weights' root",
                  "registered-file registration: call #'s statement reads ", "which the window registers not: register",
                  "which the window registers twice: register"):
         assert any(part in k for k in CREDITED), part
