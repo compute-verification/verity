@@ -1,6 +1,7 @@
-"""`protocol_options.pouw_h1_pp`: a window split over two pipeline stages, each stage's calls recorded where its linears are
-and the window held whole beside the scheduler, commits what one process serving every linear commits: the same calls at
-the same positions, the same tables, round roots, coins, calls root and draw root."""
+"""`protocol_options.pouw_h1_ranks`: a window split over two ranks (pipeline stages, or tensor-parallel ranks through
+`install`), each rank's calls recorded where its linears are and the window held whole beside the scheduler, commits what
+one process serving the same linears commits: the same calls at the same positions, the same tables, round roots, coins,
+calls root and draw root."""
 from __future__ import annotations
 
 import hashlib
@@ -14,12 +15,13 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
+from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine.hooks import Hooks  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_hooks as PHK  # noqa: E402
-from verity_vllm.protocol_options import pouw_h1_pp as PHP  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_ranks as PHR  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_requests as RQ  # noqa: E402
 
 K = 64
@@ -62,7 +64,7 @@ class Runner:
 
 
 class Executor:
-    """The multiprocess executor as the holder uses it: ``execute_model`` and ``collective_rpc`` over its stages' workers."""
+    """The multiprocess executor as the holder uses it: ``execute_model`` and ``collective_rpc`` over its ranks' workers."""
 
     def __init__(self, workers):
         self.workers, self.steps = workers, 0
@@ -101,10 +103,10 @@ def _forward(layers, m, seed, rows=None):
         layer.quant_method.apply(layer, (torch.randn(rows or m, K, generator=g) * 3).bfloat16())
 
 
-def _whole():
+def _whole(salt=SALT, modules=MODULES):
     """One process serving every linear (PP = 1): `pouw_h1_hooks.wire` on the runner and the layers."""
     layers, runner, h = _layers(), Runner(), Hooks(tag="pp1")
-    run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
+    run = PH.H1Run("t", salt, modules, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
     run.draw = LiveRecord(run.rounds.challenger, Wd.DRAW)
     PHK.wire(run, h, layers, runner, 32)
     for i, so in enumerate(STEPS):
@@ -116,22 +118,22 @@ def _whole():
 
 
 def _staged(rows_of=None):
-    """The same window over two stages (`StageRun` in each worker, `Holder` at the executor), empty batches between the
+    """The same window over two stages (`RankRun` in each worker, `Holder` at the executor), empty batches between the
     served ones as a pipeline's batch queue schedules them; `rows_of(stage, step)` overrides a stage's served rows."""
     layers, hooks, workers = _layers(), [], []
     for p, lo in enumerate(SPLIT):
         hi = SPLIT[p + 1] if p + 1 < len(SPLIT) else len(SHAPES)
-        stage = PHP.StageRun("t", MODULES, SHAPES, 32, 4, lo, hi, KEY)
+        stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, lo, hi, KEY)
         h = Hooks(tag=f"stage{p}")
-        PHP.wire_stage(stage, h, layers[lo:hi], 32)
-        worker = PHP.StageExtension()
-        worker._h1pp = {"run": stage, "hooks": h, "sent": 0}
+        PHR.wire_rank(stage, h, layers[lo:hi], 32)
+        worker = PHR.RankExtension()
+        worker._h1rank = {"run": stage, "hooks": h, "sent": 0}
         workers.append(worker)
         hooks.append((layers[lo:hi], h))
     executor = Executor(workers)
     run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
     run.draw = LiveRecord(run.rounds.challenger, Wd.DRAW)
-    holder = PHP.Holder(run, executor, [{"decode_query_len": 1}], Hooks(tag="holder"))
+    holder = PHR.Holder(run, executor, [{"decode_query_len": 1}], Hooks(tag="holder"))
     holder._push()
     holder.hooks.wrap(executor, "execute_model", holder.admitting)
     for i, so in enumerate(STEPS):
@@ -161,22 +163,22 @@ def test_two_stages_commit_what_one_process_does():
     assert staged.commits["draw"] == whole.commits["draw"] and staged.commits["draw"]["coin"] is not None
     assert staged.step_rows() == whole.step_rows() == [3, 4, 3, 0]
     assert executor.steps == 2 * len(STEPS) and holder.pulls == len(STEPS) + 1
-    assert staged.details["stages"] == {"0": {"refused": 0, "order_ok": True}, "2": {"refused": 0, "order_ok": True}}
+    assert staged.details["ranks"] == {"0": {"refused": 0, "order_ok": True}, "2": {"refused": 0, "order_ok": True}}
 
 
 def test_a_stage_call_past_the_rows_is_refused_and_the_window_is_not_static():
     holder, _ = _staged(rows_of=lambda p, s: 33 if (p, s) == (1, 1) else None)
     run = holder.run
     assert not run.static() and run.refused == [{"step": 1, "linear": 2, "m": 33}, {"step": 1, "linear": 3, "m": 33}]
-    assert run.details["stages"]["2"]["refused"] == 2
+    assert run.details["ranks"]["2"]["refused"] == 2
 
 
 def test_a_stage_numbers_its_calls_from_the_window_and_waits_for_its_salt():
-    stage = PHP.StageRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
+    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
     layer = Linear(32, seed=2)
     with pytest.raises(RuntimeError, match="before its holder pushed it"):
         stage.record(2, torch.zeros(1, K, dtype=torch.int8), torch.ones(1), layer.weight, layer.weight_scale)
-    stage = PHP.StageRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
+    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
     stage._salt = SALT
     rng = np.random.default_rng(0)
     for s in range(2):
@@ -187,3 +189,42 @@ def test_a_stage_numbers_its_calls_from_the_window_and_waits_for_its_salt():
     assert [(c.index, c.step, c.layer, c.base) for c in stage.calls] == [
         (s * 4 + w, s, w, s * stage.u_step + stage.offs[w]) for s in range(2) for w in (2, 3)]
     assert stage.order_ok and stage.round_log == []
+
+
+class FakeRank(PHR.RankExtension):
+    """A worker of a TP engine as `install` reaches it: its (pp, tp) rank and its shards, named as vLLM names them."""
+
+    def __init__(self, tp, layers):
+        self.rank, self.layers = (0, tp), layers
+        self.model_runner = SimpleNamespace(decode_query_len=1)
+        self.model = SimpleNamespace(named_modules=lambda: [(n, m) for n, m in zip(("l0.q", "l0.o"), layers)])
+
+    def _h1rank_layers(self):
+        return self.model, self.layers
+
+    def _h1rank_rank(self):
+        return self.rank
+
+
+def test_install_lays_tensor_parallel_ranks_out_rank_major_and_commits_one_window():
+    layers = _layers()
+    workers = [FakeRank(1, layers[2:]), FakeRank(0, layers[:2])]
+    executor = Executor(workers)
+    holder = PHR.install(None, executor=executor, rows=32, steps=4, coins=Challenger(0, random.Random(0).randbytes),
+                         rounds=_rounds(), key=KEY, entry="t", admission=RQ.PER_ROUND)
+    run = holder.run
+    assert run.modules == {0: "l0.q@tp0", 1: "l0.o@tp0", 2: "l0.q@tp1", 3: "l0.o@tp1"}
+    assert run.commits["ranks"] == [{"pp": 0, "tp": 0, "first_linear": 0, "linears": 2},
+                                    {"pp": 0, "tp": 1, "first_linear": 2, "linears": 2}]
+    assert run.commits["weights_root"] and run.commits["salt_opening"] and run.commits["round_coins"]
+    for i, so in enumerate(STEPS):
+        executor.execute_model(so)
+        _forward(layers, so.total_num_scheduled_tokens, seed=i)
+    holder.finish()
+    whole = _whole(salt=run._salt, modules=run.modules)
+    assert run.static() and [c.index for c in run.calls] == list(range(4 * len(SHAPES)))
+    assert [c.summary() for c in run.calls] == [c.summary() for c in whole.calls]
+    assert run.round_log == whole.round_log and run.calls_root() == whole.calls_root()
+    assert run.commits["draw"] == whole.commits["draw"]
+    assert run.details["ranks"] == {"0": {"refused": 0, "order_ok": True}, "2": {"refused": 0, "order_ok": True}}
+    assert all(w._h1rank is None for w in workers)

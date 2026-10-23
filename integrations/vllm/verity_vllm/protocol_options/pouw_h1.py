@@ -414,7 +414,7 @@ class H1Run:
             PV.keep_call(self.prover, call.index, av, sv, records)
 
     def _index(self, s: int, w: int) -> int:
-        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a pipeline stage's, `pouw_h1_pp`)."""
+        """Call (s, w)'s index: the calls before it here (s·L + w in a static window; a rank's, `pouw_h1_ranks`)."""
         return len(self.calls)
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None) -> Call:
