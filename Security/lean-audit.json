@@ -738,6 +738,10 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Flock.R": {
+   "owner": "@proofs",
+   "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826"
+  },
   "Claims.Hm96Hiding": {
    "owner": "@proofs",
    "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
@@ -749,6 +753,39 @@
   "Claims.StrictBirthday": {
    "owner": "@proofs",
    "digest": "113a796cfd6c01393b0be92014ae0e59eb6e5c5010f858f56fa480f5b1249cd8"
+  },
+  "Claims.ZKMal.RefSession.Causal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Complete": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.DummyReg": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.SwCausal": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.Tables": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKMal.RefSession.TapeOK": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FillRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.FinalRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LinkRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.LeanRelease.LiveRoundEq": {
+   "owner": "@proofs"
+  },
+  "Claims.ZKServer.Loop.Serves": {
+   "owner": "@proofs"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -769,6 +806,12 @@
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
+  },
+  "Flock.Guarantees.LoopInnerRound0": {
+   "owner": "@proofs"
+  },
+  "Flock.Guarantees.LoopTabsReal": {
+   "owner": "@proofs"
   },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
@@ -2064,7 +2107,8 @@
   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-  "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -5249,6 +5293,12 @@
    "signature": ["Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked"],
    "assumptions": [],
    "type_hash": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6"
+  },
+  "Flock.SecurityProofs.SessionLoopZK": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SessionLoopZK : Flock.Guarantees.SessionLoopZK"],
+   "assumptions": [],
+   "type_hash": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862"
   },
   "Flock.SecurityProofs.SoundAtBridge": {
    "owner": "@proofs",
@@ -10120,9 +10170,10 @@
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (Security/Models/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content and complete checks, Flock.Registered.checkKnownAll and checkComplete; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafReads (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
+   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafReads (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
    "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
-   "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
+   "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it takes the loop's two obligations (Flock.Guarantees.LoopTabsReal, LoopInnerRound0), the transport's round trusts (LeanRelease.LinkRoundEq, FinalRoundEq, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -21560,6 +21611,23 @@
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
+  "Flock.KnownRead": {
+   "digest": "bd7dc5be903b9dce3bc2d8857827bcbcfa0ce39c001f5c792ca599c2ebbc4a08",
+   "definitions": {
+    "Flock.KnownRead.bitOut": "032569a2097fc3e13f59f7cf19016ee8a3f2fd05044aeb53f6841474b674a09a",
+    "Flock.KnownRead.bitRead": "9803f78ce07286e8197a07e89e4dd6d351d983ab3df4dee49cb8acd13d8489e3",
+    "Flock.KnownRead.cands": "d5aa97544eb2f6d8c639670ecbefa9ab8d3b323ad3efe1caf290debc7ddfb48c",
+    "Flock.KnownRead.check": "18ee370d72da340203eab482b5cf4ca62c56c51806553bf3a05e6399b662da00",
+    "Flock.KnownRead.outAt": "ccf9e97c15e78f2f9b34465f1de3d2499ac3de7cde7feeab00cef283b4ba4df0",
+    "Flock.KnownRead.outCands": "5416b17a3eabaaa0e88219e69335cdeff60e606cfe8a6e4846acf8f93ea8b842",
+    "Flock.KnownRead.portOf": "5f1bfb7105c5bf412df017987eb03fd66ab9e1947edbf2cefa8a3275c11a5ba2",
+    "Flock.KnownRead.shapeOk": "f854d9c3ad0c90bce8c1fdcc6c04e0b59d01379044c647cdb34165ef90b5eeac",
+    "Flock.KnownRead.srcAtMsg": "5e52fc3200b07e58c8035f20c196bf2a69d707ce96b57545b8ccd9960e400ad3",
+    "Flock.KnownRead.srcMsg": "81f230c8cc5db4bebdaf576f262fb768f548ce41f6a28b062c61bea633550285",
+    "Flock.KnownRead.starts": "81b02d78652137cd6daa6b8e04b1ea015a804a917cd46cafd5429e013757e03a"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "Flock.Layout": {
    "digest": "54259998fe3fb874706c8a2645ef6f326434e71d0c782efc55e5b6a5013af3db",
    "definitions": {
@@ -22866,6 +22934,7 @@
     "Flock.ProvedScope.zkTableCap": "ec6007d6fce495b0384b2fbc0d16b18c938728b3227f2b697a9988a849e0a841"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
@@ -28505,9 +28574,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Decode": {
-   "digest": "ba14d3fdcfbda880f789f22c696e509b2a785ee98f3356ed574fe227929e8018",
+   "digest": "f9eb597f9932175bebea21bd752f09a45d34c1eaf2a7f4f9da86873b40dc4f27",
    "definitions": {
-    "Accounting.TS.Lanes.LanePub": "40e2e2146fc0b61f34b15b0e362f40e9bec0b08e235bb61c0160bce0cd38bbe7",
+    "Accounting.TS.Lanes.LanePub": "8d83439e43a5a86c5539abd9ea485750c78dfda8d9481c6fe21f63eb0205a331",
     "Accounting.TS.Lanes.LanePub.admit": "8d468acdab1356d793df653068e2911c2383ce5d22bcce22a8ff0432697d3a8e",
     "Accounting.TS.Lanes.LanePub.position": "6dc7e8fd10614e351621179b39afd0631391d798bff3c5b0eccc506402ea317e",
     "Accounting.TS.Lanes.LanePub.roots": "be2ad3a21d044f3ef499b2bccf509c797b145190f66d18f8cc0a5d0f92c6dd84",
@@ -28530,7 +28599,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "50a60edfe344adf6e9be69a25bc5681ff8502122e61892f8be5ad80d39740ddb",
+   "digest": "48e2eef5b5296ae03cfbe17dd35e5110af788f515b87cb227c2d76584f0b3ba2",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -28539,7 +28608,7 @@
     "Accounting.TS.Lanes.CombineView.parts": "6ab02fe4e95d2d7039a85b877b001fa514e9e0db4368ff7a24a8830cece6ec2d",
     "Accounting.TS.Lanes.CombineView.receipt": "a4d003105eeb8917e41473007a61d1b320909b127d5cbb6fff968a01d88aab11",
     "Accounting.TS.Lanes.Known": "9b74cbff5ba713b3865903c462558c861198be5dd8e61a9967900dad294be149",
-    "Accounting.TS.Lanes.KnownHeld": "56677e4ad5fc45c03a82eebf35998581572f4135cec975d595e5c031c0adfac4",
+    "Accounting.TS.Lanes.KnownHeld": "58bcd39bbaeab648448a6ca51648990a20fabcf5d5d2ac730ec0b8267ac34b52",
     "Accounting.TS.Lanes.LaneOk": "5808b5b735e582fa459f6fe616f70525528e86262a901548187b5ff0e1644680",
     "Accounting.TS.Lanes.LaneView": "4758e78b52cfa9eee788e3c200c66e08313eb0bd92c1bb5cc8db4325acb4b54e",
     "Accounting.TS.Lanes.LaneView.a": "77d70d58469a226fcd5d4202c4a2a6375ec30a23d85894ddc105fc3d5ef97770",
@@ -28567,7 +28636,7 @@
     "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
     "Accounting.TS.Lanes.laneView": "4359b4bf7a323d5b1db6d8cc4ab9de3b4972887cc8be63ea2b27a362839ac9ee",
-    "Accounting.TS.Lanes.leafLayer": "b71259e3330a7202fd98718aea83dba85013fd0780433035a0664d3f7ab5068e",
+    "Accounting.TS.Lanes.leafLayer": "f3aca971f8edf525a5acd1f4170842ff6fbc24d8e26eee5c7c463f1d79994c4e",
     "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
     "Accounting.TS.Lanes.rsOf": "e68b11949253774a8e49eea6b8665d1c1d1af54554dcc74669df304c3a314291",

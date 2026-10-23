@@ -59,8 +59,10 @@ first coin.
   integer at most 2^24, which PoUW's credit reads; an open without it commits none), and with `--model M` (or
   `--weights-root W`, which must be a registered root) the served model's weights' root from the auditor's model registry
   (`weights_root`, `credit.weights_root` of each K's b/<K> the auditor committed under its own salts, which PoUW's
-  credit holds every window's weights to, and `model: {name, checkpoint_sha512}`; a model or root the registry has no
-  entry of for the period's circuit is refused, and an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
+  credit holds every window's weights to, and `model: {name, checkpoint_sha512}`; a root the registry has no entry of
+  for the period's circuit is refused; a model it has none of there, a remote memory audit's whose circuit is its
+  verifier tree, is signed as `model` alone, its digest core's pin, `pouw/lean/check/models.json`, and refused when the
+  pin lacks it; an open without either commits none), and with `--circuit-files JSON` each K's circuit file (`circuit_files`, `{"k<K>": SHA-512}`:
   the circuit file the auditor's lowering built for K's template, which PoUW's credit verifies each window's statements
   on; an open without it commits none). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
@@ -479,11 +481,12 @@ def parse_model(verb: str, argv: list[str]) -> argparse.Namespace:
 
 def gate_model_key(argv: list[str], host: Host) -> dict:
     """The salt key of `--model`'s registration under `--circuit` whose root is `--weights-root` (the period's signed one;
-    the newest when not given): the prover's openings of its b/<K>."""
+    required when the model is registered more than once there): the prover's openings of its b/<K>."""
     M = registry()
     a = parse_model("model-key", argv)
     try:
-        e = M.resolve(M.read(host.models), a.circuit, a.model, a.weights_root and weights_root_of(a.weights_root))
+        e = M.resolve(M.read(host.models), a.circuit, a.model, a.weights_root and weights_root_of(a.weights_root),
+                      unique=True)
     except M.Refused as x:
         raise Refused(str(x)) from None
     key = M.key_path(host.root, e).read_bytes()
@@ -914,11 +917,13 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
     return append(host, "open", session, body_of, I, sign)
 
 
-def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool]) -> dict:
+def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool],
+           tree: Path = TREE) -> dict:
     """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
     vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its draw
-    K (`draw_k`), the served model's registered weights' root (`weights_root`) and each K's circuit file's SHA-512
+    K (`draw_k`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
+    the registry has no entry of the model alone, from core's pin in `tree`) and each K's circuit file's SHA-512
     (`circuit_files`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
@@ -932,16 +937,12 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
             raise Refused(f"period: {args}")
         given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
         model, root = given.pop("model", None), given.pop("weights_root", None)
-        registered = None
         if model is not None or root is not None:
             M = registry()
             try:
-                registered = M.resolve(M.read(host.models), circuit, model, root)
+                given.update(M.opened(M.read(host.models), tree, circuit, model, root))
             except M.Refused as e:
                 raise Refused(str(e)) from None
-        if registered is not None:
-            given["weights_root"] = registered["weights_root"]
-            given["model"] = {"name": registered["model"], "checkpoint_sha512": registered["checkpoint_sha512"]}
     I, sign, key_sha512 = signer
 
     def body_of(lines: list[bytes]) -> dict:

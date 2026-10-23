@@ -951,11 +951,12 @@ class UnitStager:
     that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
     Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
-    (`circuit.class_digest`) is the unbound stager's."""
+    (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
+    (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
-                 bind: dict | None = None):
+                 bind: dict | None = None, layout: str | None = None):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -982,7 +983,7 @@ class UnitStager:
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
                                seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"])
+                               partition=bind and bind["partition"], program=bind and bind["program"], layout=layout)
         self.bound = bind is not None
         self._meta = self.text.split("\n", 2)[1][5:]
         self.meta = json.loads(self._meta)

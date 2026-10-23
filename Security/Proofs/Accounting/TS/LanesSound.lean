@@ -121,13 +121,15 @@ theorem rowsAgree_or_leafColl (sess : Option (Fin 32) → RowsSession) : RowsAgr
 
 /-- **The known-content tie at any known port** (`Accounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
 any row): where flock-verify's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
-unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is the bytes of the
-known row at its position, unless the tie collides (`OkColl` at `nm`). -/
+unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is at a position of
+the known rows (`checkKnown`'s one known row a leaf, and `opensLeaf`'s position below the leaves) and is the bytes of the
+known row there, unless the tie collides (`OkColl` at `nm`). -/
 theorem tie_known (s : RowsSession) {known : Known} {nm : String} {ks : Array (Array ℕ × ByteArray)}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (nm, ks) ∈ known)
     (hS : ∀ u, s.ServedRegistered u) (hcol : ¬ Accounting.TS.Held.OkColl s nm ks) {u : Fin s.n} {p : s.vb.Pos}
     (hr : (s.rdU u).isRead p) (hn : ((s.rdU u).port p).name = nm) :
-    (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList := by
+    (s.rdU u).readAt p < ks.size ∧
+      (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList := by
   obtain ⟨reg, hf, hck⟩ := FlockC3.RegLevels.checkKnownAll_ok hk hm
   obtain ⟨q, hpq, hex⟩ := ((hS u).1 _).1 hr
   have hport : (s.rdU u).port p = s.ownPort q := by
@@ -143,9 +145,9 @@ theorem tie_known (s : RowsSession) {known : Known} {nm : String} {ks : Array (A
     rfl
   have ho := (s.rdU u).committed _ hr
   rw [hport, hreg] at ho
-  obtain ⟨-, hb | ⟨a, b, hc, hab, hh⟩⟩ := FlockC3.RegLevels.knownColl_spec
+  obtain ⟨hi, hb | ⟨a, b, hc, hab, hh⟩⟩ := FlockC3.RegLevels.knownColl_spec
     (r := (rsOf s).enc p ((s.rdU u).wv p)) (y := (s.rdU u).ws p) hck ho
-  · exact hb
+  · exact ⟨hi, hb⟩
   · exact (hcol ⟨u, p, hr, hn, a, b, by rw [hport, hreg]; exact hc, hab, hh⟩).elim
 
 /-- **A leaf's sessions' known rows hold, or a known-content tie collides**: at sessions whose known-content checks
@@ -254,7 +256,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         by_contra hR
         exact hk1 ⟨(hacc k).1, hR⟩
       obtain ⟨-, vals, hv, he⟩ := hR
-      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2 vals),
+      exact ⟨vals, hv.trans (RowsSession.rowsReg_eq_portRead (sess x w i k) (hS x w i k) (hacc k).2.2.1 vals),
         fun u => he u (by rw [hk2]; exact Finset.mem_univ u)⟩
     · exact Or.inr (Or.inl hc)
   calc Pouw.RelativeSecurity.prob (fun x => (leafLayer sess out known dq part pub receipt leaf right).Unsound x w i)

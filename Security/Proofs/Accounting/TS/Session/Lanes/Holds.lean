@@ -50,9 +50,9 @@ structure LaneHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool
   y : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat
   part : ∀ w : Fin nw, Holds (rd "partials") (fieldBit (lanePorts T 0) "partials" + 32 * w.val) 32 (p w).toNat
   admit : ∀ i : Fin 32, rd "admit" (fieldBit (lanePorts T 0) "admit" + i.val) = some (P.admit i)
-  salt : P.salt < 2 ^ digestBits ∧ Holds (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits P.salt
-  position : P.position < 2 ^ positionBits ∧ Holds (rd "pub") (fieldBit (lanePorts T 0) "position") positionBits P.position
-  roots : P.roots < 2 ^ (2 * digestBits) ∧ Holds (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits) P.roots
+  salt : Holds (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits P.salt
+  position : Holds (rd "pub") (fieldBit (lanePorts T 0) "position") positionBits P.position
+  roots : Holds (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits) P.roots
   lane : Holds (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits l.val
   ok : rd "o0" 0 = some true
 
@@ -95,16 +95,16 @@ theorem decLane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool}
     exact bitsN_cast (hR.y i j).1 (hR.y i j).2 (h.y i j)
   · funext w
     exact ofNat_bitsN (h.part w)
-  · obtain ⟨admit, salt, position, roots⟩ := P
+  · obtain ⟨admit, salt, position, roots, hs, hp, hr⟩ := P
     rw [LanePub.mk.injEq]
     refine ⟨?_, ?_, ?_, ?_⟩
     · funext i
       rw [h.admit i]
       dsimp only
       cases admit i <;> rfl
-    · exact bitsN_eq h.salt.2 h.salt.1
-    · exact bitsN_eq h.position.2 h.position.1
-    · exact bitsN_eq h.roots.2 h.roots.1
+    · exact bitsN_eq h.salt hs
+    · exact bitsN_eq h.position hp
+    · exact bitsN_eq h.roots hr
   · have hl : l.val < 2 ^ laneBits := by
       have := l.isLt
       simp only [laneBits]
