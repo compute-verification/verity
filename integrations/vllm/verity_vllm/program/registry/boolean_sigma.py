@@ -4,6 +4,7 @@ view is that composite at the same bindings (a function-valued static, `DOT` or 
 its word).
 
     ResidualAdd_v2{N}, AllGather_v2{WORLD,N}, EmbeddingShard_v2{VS,H,START}, AllReduceRmsNormMnnvl_v2{WORLD,N,SHOT,CLUSTER,EPS,FMA}
+    AllReduceResidualMnnvl_v2{WORLD,N,SHOT}, RmsNormMnnvl_v2{N,SHOT,CLUSTER,EPS,FMA}   (the fused one's parts)
     DotBf16_v4{K}, GemmCoordinate_v4{K}, Gemm_v4{K,N}   (σ of b1's v1, the Ampere accepted kind; v2's is ops.boolean.gemm's v3)
     MhcFusedPostPre_v2{HC,H,NS,TH,TN,REPEAT,EPS,HC_EPS}
     InductorRMSNorm_v2, InductorAddRMSNorm_v2, InductorAdd2RMSNorm_v2, InductorAdd2RMSNormFinal_v2   {N,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}
@@ -26,12 +27,13 @@ from __future__ import annotations
 from verity_vllm.program.boolean import sigma_lift
 from verity_vllm.program.registry import b1, b1_tp2, inductor as I, marlin_moe as MM, mhc, moe, tp_allreduce as TA
 
-__all__ = ["AllGather", "AllReduceRmsNormMnnvl", "DotBf16", "EmbeddingShard", "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm",
-           "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal", "InductorAddRMSNorm", "InductorQKNormRoPE",
-           "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead", "InductorSiluMul", "InductorSiluMulElem",
-           "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf", "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank",
-           "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart", "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm",
-           "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK", "MoeRouterTopKNorm", "ResidualAdd", "RouterArgmaxStep"]
+__all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "DotBf16", "EmbeddingShard", "Fa3AttentionHeadSplit",
+           "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal", "InductorAddRMSNorm",
+           "InductorQKNormRoPE", "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead",
+           "InductorSiluMul", "InductorSiluMulElem", "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf",
+           "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
+           "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
+           "MoeRouterTopKNorm", "ResidualAdd", "RmsNormMnnvl", "RouterArgmaxStep"]
 
 ResidualAdd = sigma_lift(b1.ResidualAdd, 2)
 DotBf16 = sigma_lift(b1.DotBf16, 4)
@@ -40,6 +42,8 @@ Gemm = sigma_lift(b1.Gemm, 4)
 AllGather = sigma_lift(b1_tp2.AllGather, 2)
 EmbeddingShard = sigma_lift(b1_tp2.EmbeddingShard, 2)
 AllReduceRmsNormMnnvl = sigma_lift(TA.AllReduceRmsNormMnnvl, 2)
+AllReduceResidualMnnvl = sigma_lift(TA.AllReduceResidualMnnvl, 2)
+RmsNormMnnvl = sigma_lift(TA.RmsNormMnnvl, 2)
 MhcFusedPostPre = sigma_lift(mhc.MhcFusedPostPre, 2)
 
 InductorRMSNorm = sigma_lift(I.InductorRMSNorm, 2)
