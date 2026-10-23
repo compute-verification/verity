@@ -281,10 +281,10 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
 `ksLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense
 form is `PartChecksB`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (rest : Msg → List (Msg × Out) → List UInt8)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
-    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let bR : Brings := { b with tr := recTr aux nOf hd rest }
     let L := layoutBTops (finOpen fin)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
@@ -301,7 +301,7 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hS
-  exact ksLin2_deployed_rec b aux nOf rest fin wE join final w hP
+  exact ksLin2_deployed_rec b aux nOf hd rest fin wE join final w hP
     (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS)
 
 /-- **`BitsLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
@@ -309,10 +309,10 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
 SHA-512 collision assumptions, and `ksLin2_deployed_slots`' open premises: a bound on a number under named premises, not
 a proved security level. -/
 theorem bitsLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (rest : Msg → List (Msg × Out) → List UInt8)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
-    let bR : Brings := { b with tr := recTr aux nOf rest }
+    let bR : Brings := { b with tr := recTr aux nOf hd rest }
     let L := layoutBTops (finOpen fin)
     let Bd := bdDeployed _root_.Flock.Readable.relation (FlockDeploy.V false).next
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
@@ -329,7 +329,7 @@ theorem bitsLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRec
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hS
-  exact bitsLin2_deployed_rec b aux nOf rest fin wE join final w hP
+  exact bitsLin2_deployed_rec b aux nOf hd rest fin wE join final w hP
     (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS)
 
 end RecDeploy

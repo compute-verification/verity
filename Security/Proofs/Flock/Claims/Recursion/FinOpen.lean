@@ -131,7 +131,7 @@ theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × Lis
 `FinPieces` from `finPieces_finOpen`. The last round's pieces are every earlier round's openings at the parts that
 commit them, then the element-level last message's at the parts `rest` names. What stays open at the dense form is
 `PartChecksB` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
-coin server's transcript back (`ReadsBack`). This bounds no number by itself: those premises are open. -/
+coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
 theorem ksLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -141,7 +141,7 @@ theorem ksLin2_deployed_open (b : Brings)
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
@@ -169,7 +169,7 @@ theorem bitsLin2_deployed_open (b : Brings)
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
         (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)

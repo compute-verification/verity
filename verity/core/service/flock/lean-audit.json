@@ -12,6 +12,7 @@
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecRecord",
+  "Flock.Test.RecSchedule",
   "Flock.Test.RecOpening",
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.RecSparseRows",

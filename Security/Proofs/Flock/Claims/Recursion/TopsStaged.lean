@@ -17,7 +17,7 @@ layout whose held rounds have no pieces, as `layoutBTops`'s don't (`heldWhole_la
 `canonicalProofFiles` and `plainCallsBindOrSlack_sha512`. What stays open at the dense form is the last round's pieces
 (`FinPieces`), `PartChecksB` and `PartOpensB` at the coin server's transcript read by a reader `untr` at the V\*
 statements staged as V\* stages them (`showsPart`, `cmtTr`), `DecompB`, the readers' `ReadersTrue`, and `untr` reading
-that transcript back at an accepted run's inner rounds (`ReadsBack`).
+that transcript back at an accepted run's inner rounds (`ReadsBackB`).
 `bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`). At `finOpen`,
 `FinPieces` holds (`finPieces_finOpen`), and `ksLin2_deployed_open` and `bitsLin2_deployed_open` (`FinOpen.lean`)
 drop it.
@@ -60,7 +60,7 @@ theorem heldWhole_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNe
 `ksLin2_deployed_plain_parts` at `layoutBTops`, with `HeldB` from `heldB_layoutBTops` and `HeldWhole` from
 `heldWhole_layoutBTops`. What stays at the dense form is
 `FinPieces`, `PartChecksB` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and
-`untr` reading the coin server's transcript back (`ReadsBack`). This bounds no number by itself: those premises are
+`untr` reading the coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
 open. -/
 theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -70,7 +70,7 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
@@ -103,7 +103,7 @@ theorem bitsLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (
       (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join rowInDeployed final w
     let D := recBound _root_.Flock.Readable.relation b L Bd.IVStar
     let bL : Brings := { b with rd := L.readers }
-    ReadsBack FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
+    ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,

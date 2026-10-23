@@ -549,7 +549,10 @@ def recLinkOfSession (args : List String) : IO (Except String (Option RecVStar.I
 /-- `rec-record FILE`: the coin server's record read in its own format (`RecRecord.readRecord`, the reader
 `Proofs.Flock.Claims.Recursion.RecRecord` reads back): `RECRECORD` and its rounds (stream, index, tops, level-0 count,
 commit strings, coin count and coins, in the record's hex) as JSON, and whether `recordW` writes the file's bytes up
-to the rounds' end (`writes`). Exit 1 where the file is not in the record's format. -/
+to the rounds' end (`writes`). Under `full`, the record read up to its link points (`RecRecord.readFull`): the inner
+rounds before the last as it shows them (`Record.msgs`: each message and its coins), and whether `recordFullW` writes
+the file's bytes up to the link points (`writes`); `null` where it doesn't read. Exit 1 where the file is not in the
+record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
   let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
@@ -561,7 +564,11 @@ def recRecordCmd (args : List String) : IO UInt32 := do
     ("k", Lean.toJson r.k), ("tops", arr (arr hex) r.tops), ("level0", Lean.toJson r.level0),
     ("commits", arr hex r.commits), ("n", Lean.toJson r.n), ("coins", arr (hex ∘ RecRecord.coinB) r.coins)]
   let writes := (RecRecord.recordW xs []).isPrefixOf bs
-  IO.println ("RECRECORD " ++ (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes)]).compress)
+  let full := ((RecRecord.readFull bs).map fun r => Lean.Json.mkObj [
+    ("msgs", arr (fun (m, cs) => Lean.Json.mkObj [("msg", hex m), ("coins", arr (hex ∘ RecRecord.coinB) cs)]) r.msgs),
+    ("writes", .bool ((RecRecord.recordFullW r []).isPrefixOf bs))]).getD .null
+  IO.println ("RECRECORD " ++
+    (Lean.Json.mkObj [("rounds", arr id js), ("writes", .bool writes), ("full", full)]).compress)
   return 0
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
