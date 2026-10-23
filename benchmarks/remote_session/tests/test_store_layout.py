@@ -241,6 +241,56 @@ def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_read
     assert "not the pin's" in doc["refused"] and doc["binding"]["bound"] is False
 
 
+@pytest.fixture
+def models_json(ckpt, tmp_path) -> Path:
+    """Core's pin in its shape (`verity/core/protocols/pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files,
+    recipe, repo, revision}}), pinning the synthetic checkpoint as SYNTHETIC_BF16 beside another role."""
+    pin = json.loads((ckpt / "pin.json").read_text())
+    other = {**pin["checkpoint"], "config.json": "ab" * 64}
+    doc = {role: {"checkpoint_sha512": sl.checkpoint_sha512(files), "files": files, "recipe": "bf16/v1",
+                  "repo": f"example/{role}", "revision": "0" * 40}
+           for role, files in (("SYNTHETIC_BF16", pin["checkpoint"]), ("OTHER_BF16", other))}
+    path = tmp_path / "models.json"
+    path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return path
+
+
+def test_cores_models_json_is_read_as_its_roles_pin_held_to_the_same_checks(ckpt, models_json, tmp_path):
+    """`read_pin` reads core's `models.json` as its entry of the role, named the role, its `files` the checkpoint, so
+    the verifier binds to core's pin itself (the auditor host's `--model`); a role the file lacks is refused with the
+    roles it has, and an entry is held to what a pin is."""
+    pin = json.loads((ckpt / "pin.json").read_text())
+    want = {"name": "SYNTHETIC_BF16", "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]}
+    assert sl.read_pin(models_json, "SYNTHETIC_BF16") == want
+    assert sl.Binding("SYNTHETIC_BF16", ckpt, models_json, 2, 7, log=lambda m: None).pin == want
+    for role in ("LLAMA31_8B_INT8", None):
+        with pytest.raises(sl.Refused) as e:
+            sl.read_pin(models_json, role)
+        assert str(e.value) == f"the pin {models_json} pins no role {role!r}: its roles are ['OTHER_BF16', 'SYNTHETIC_BF16']"
+    with pytest.raises(sl.Refused, match=re.escape(f"{ckpt / 'config.json'}: SHA-512 ")):
+        sl.Binding("OTHER_BF16", ckpt, models_json, 2, 7, log=lambda m: None)
+
+    doc = json.loads(models_json.read_text())
+
+    def refused(entry: dict) -> str:
+        path = tmp_path / f"models-{len(list(tmp_path.iterdir()))}.json"
+        path.write_text(json.dumps({**doc, "SYNTHETIC_BF16": entry}))
+        with pytest.raises(sl.Refused) as e:
+            sl.read_pin(path, "SYNTHETIC_BF16")
+        return str(e.value)
+
+    mine = doc["SYNTHETIC_BF16"]
+    assert "is not the SHA-512 of its checkpoint's canonical JSON" in refused({**mine, "checkpoint_sha512": "cd" * 64})
+    shape = "is not {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex}, ...}} with a file name (no directory) a file"
+    for entry in ({k: v for k, v in mine.items() if k != "files"}, {**mine, "files": {}},
+                  {**mine, "files": {**mine["files"], "../x": "ab" * 64}},
+                  {**mine, "files": {**mine["files"], "config.json": "AB" * 64}}):
+        assert shape in refused(entry)
+    no_config = {f: h for f, h in mine["files"].items() if f != "config.json"}
+    assert "pins no config.json or no .safetensors file" in refused(
+        {**mine, "files": no_config, "checkpoint_sha512": sl.checkpoint_sha512(no_config)})
+
+
 def test_the_paced_line_reports_weights_held_and_filler_held_apart():
     """A stretch's credit is each kind held less its lost blocks: weights, and filler, which is the rest of HBM and the
     host tier, each in both forms; filler never counts toward the weights line."""
