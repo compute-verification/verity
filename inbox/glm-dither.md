@@ -21,3 +21,6 @@ If an 8xH200 comes up for circuits before 23:45Z, they take that one and don't t
 
 ## 20:08Z, an ask from kernels for the eu2 run (secondary to the tie check)
 Once GLM53_INT8 serves on eu2 at TP8 with expert parallelism, record decode TPOT at T64 (64 requests in flight) twice: (1) exact int8 with no PoUW (no hooks, no Commit); (2) with H1's hooks (Commit plus z/y records, receipts off). Same prompts and output length for both, and say what they were. These are the two baselines Dither's GLM number divides by. If time runs short, the tie check comes first.
+
+## 20:15Z, CORRECTION to the 20:05Z note: do NOT use expert parallelism
+`Int8ExpertsMethod` (`engine/int8_vllm.py`) refuses EP today: "experts not all on this rank (no expert parallelism)". Serve eu2 at plain TP8 (no `enable_expert_parallel`). At TP8 the routed experts' w2 and the shared expert's down projection are 6144 x 256 (K = 256), outside H1's domain (K >= 384, 512 | K). Daniel is deciding the fix (card 82c1e288: EP8, widen Pearl-C's small-k cap, or leave w2 uncredited). Tonight, record those calls as outside the domain: give their count and shapes per step, keep them out of the H1 window, and tie-check the rest (attention and dense projections, routed w13 at K = 6144). The TPOT ask is unchanged, at TP8.
