@@ -793,7 +793,7 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     layout, why = CR.layout_of(raw)
     got, cwhy = CR.commit_of(c.get("commit"))
     out: dict[str, Any] = {"manifest": record_reason({"commitment": c, "calls": ev["calls"]}),
-                           "a_link": CR._a_link(rounds, entries, len(ev["calls"])), "layout": why, "commit": cwhy}
+                           "a_link": CR._a_link(rounds, entries), "layout": why, "commit": cwhy}
     out["arow"] = None if why or cwhy else CR._arow(rounds, entries, got[1], layout, CR._prefix(raw))
     out["tied"] = all(v is None for v in out.values())
     out["commit_values"] = len(got[1]) if got else None
