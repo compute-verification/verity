@@ -40,13 +40,13 @@ def _desc(LP, T):
     return encode_program(Program(_toy_request(LP, T)))
 
 
-def _wl(shapes, arrivals=None, ids=None):
+def _wl(shapes, arrivals=None, ids=None, **kw):
     arrivals = arrivals or [0] * len(shapes)
     reqs = []
     for i, ((LP, T), a) in enumerate(zip(shapes, arrivals)):
         c = W.request_component(_desc(LP, T), REGISTRY, _WP(LP))
         reqs.append(W.WorkloadRequest((ids or [f"r{i}" for i in range(len(shapes))])[i], i, LP, T + 1, a, c, T=T))
-    return W.WorkloadProgram(reqs, manifest_digest="m" * 8, lag=0)
+    return W.WorkloadProgram(reqs, manifest_digest="m" * 8, lag=0, **kw)
 
 
 def test_component_reproduces_the_request_body():
@@ -228,6 +228,49 @@ def test_a_workload_without_registered_values_keeps_its_digest():
     assert wl.registered == () and "registered" not in wl.artifact()["shared"]
     assert wl.descriptor["annotations"]["theta"] == [0]   # the weights, marked outside the digest
     assert wl.digest == "6e2b20e9356a27b5b3db628205d9b97f617a400cfa95c96fa7d9aff92b145de92892833688405e5e8ee4fa29cd4400395250238cc9764234376882bcb6904655"
+
+
+def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
+    """NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
+    their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
+    from verity.ml.circuits.constants import REGISTRATION, RUN
+    from verity.ml.circuits.ports import facts
+    from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
+    off, on = _wl([(3, 2), (5, 0)]), _wl([(3, 2), (5, 0)], theta_registered=True)
+    assert off.digest == _wl([(3, 2), (5, 0)], theta_registered=False).digest
+    assert on.registered == on.theta == ("shared.weights",) and on.digest != off.digest
+    assert program_digest(encode_program(on.program)) == on.digest
+    names = [n for n, _ in on.fn.signature()[0]]
+    assert dict(zip(names, on.program.bindings)) == {"shared.weights": REGISTRATION, names[1]: RUN, names[2]: RUN}
+    nodes = on.program.root.body.nodes
+    assert REGISTERED_ID.fullmatch(nodes[0].fn.id) and INPUT_ID.fullmatch(nodes[1].fn.id) and INPUT_ID.fullmatch(nodes[2].fn.id)
+    assert on.descriptor["annotations"]["theta"] == off.descriptor["annotations"]["theta"] == [0]
+    F = facts(on.program.root)
+    assert [set(F.node(k).one.origin) for k in range(3)] == [{"theta"}, {"input"}, {"input"}]
+    assert [r["program_digest"] for r in on.address_map()["requests"]] == [r["program_digest"] for r in off.address_map()["requests"]]
+    assert on.artifact()["shared"]["registered"] == ["shared.weights"] and on.artifact()["shared"]["theta_registered"] is True
+    assert "registered" not in off.artifact()["shared"] and "theta_registered" not in off.artifact()["shared"]
+    # beside registered values, the weights join them; the values stay registered and are no θ
+    ca, cb = _registered_component(2), _registered_component(5)
+    wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0, theta_registered=True)
+    assert wl.registered == ("shared.values", "shared.weights") and wl.theta == ("shared.weights",)
+    F = facts(wl.program.root)
+    assert [set(F.node(k).one.origin) for k in range(2)] == [{"registered"}, {"theta"}]
+
+
+def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
+    """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
+    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs NCI counts against the limit."""
+    from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
+    ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
+    cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))
+    reqs = [W.WorkloadRequest("r0", 0, 3, 3, 0, ca, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)]
+    off, on = W.WorkloadProgram(reqs, lag=0), W.WorkloadProgram(reqs, lag=0, theta_registered=True)
+    assert on.registered == ("shared.weights",) and on.digest != off.digest and on.shared_by_request == off.shared_by_request
+    ids = [n.fn.id for n in on.program.root.body.nodes if n.form == "batch"]
+    assert REGISTERED_ID.fullmatch(ids[0]) and all(INPUT_ID.fullmatch(i) for i in ids[1:]) and len(ids) == 1 + 4 + 2
+    assert [n.fn.id for n in off.program.root.body.nodes if n.form == "batch"][1:] == ids[1:]
 
 
 def _toy_rank_request(LP: int, T: int):
