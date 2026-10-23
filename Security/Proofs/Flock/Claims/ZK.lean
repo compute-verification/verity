@@ -130,6 +130,7 @@ import Proofs.Flock.Claims.ZK.FinishRank
 import Proofs.Flock.Claims.ZK.AdmitsOf
 import Proofs.Flock.Claims.ZK.FrameAdmits
 import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -610,6 +611,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   position, `Loop.locate_take_sum` with `Loop.repStartZk_eq`, and its schedule so far complete,
   `Count.schedSoFar_size`), whose frame takes only one nonzero `β` (`Loop.answer_beta`), so the opened `β` is nonzero
   (**`LeanRelease.beta_unrefused`**).
+* `FrameOuter`: `FrameUnrefused`' outer-coin fault. The algebraic phase's first two scheduled rounds are the
+  zero-check's head and the outer round (`Sched.rounds_two`); the frame takes the head (`roundFree_zcHead`) and owes the
+  outer round `m - 13` coins (`Loop.run_outer`), each of which it takes only when its `+ 1` is nonzero
+  (`Loop.answer_outer`), so at each rep's `outerSlot` the opened outer coin is never `1`
+  (**`LeanRelease.outer_unrefused`**).
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both

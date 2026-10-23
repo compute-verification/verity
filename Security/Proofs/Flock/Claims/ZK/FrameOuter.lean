@@ -88,6 +88,7 @@ def zcTail (io : Asks M) (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ �
   _root_.Flock.liftTM (_root_.Flock.Transcript.absorbF (mk lay.fb))
   return (⟨r1ab', r1c', rounds, mk lay.fa, mk lay.fb, mk lay.fc⟩, { z, rho, rRest := r, vA := 0, vB := 0, vC := 0 })
 
+omit [MonadExceptOf String M] in
 theorem zcRest_eq (io : Asks M) (m : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) :
     zcRest io m lay mk = sampleVecP io (m - 13) >>= zcTail io m lay mk :=
   rfl
@@ -128,7 +129,7 @@ theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Transcrip
                      some (framed t 2 n)⟩ }),
           (rs.push (framed t 2 n, (_root_.Flock.u64OfLE (framed t 2 n) ((framed t 2 n).size - 8)).toNat),
            k + (_root_.Flock.u64OfLE (framed t 2 n) ((framed t 2 n).size - 8)).toNat)) := by
-    simp only [sampleVecP, squeezeP, h0, if_false]
+    simp only [sampleVecP, squeezeP, h0, ↓reduceIte]
     rfl
   rw [e, Count.framed_count t 2 hn]
 
@@ -325,7 +326,7 @@ theorem forIn_yield_each {g : ℕ → PUnit → V (ForInStep PUnit)}
 
 theorem getElem!_append_size {a b : Array F128} {e : ℕ} (he : e < b.size) : (a ++ b)[a.size + e]! = b[e]! := by
   rw [getElem!_pos (a ++ b) (a.size + e) (by rw [Array.size_append]; omega), getElem!_pos b e he]
-  simp [Array.getElem_append]
+  simp
 
 /-- Where the frame takes coins for a round owing `n`, they are `n`. -/
 theorem answer_size {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho : s.owed = some n)
@@ -365,7 +366,7 @@ theorem answer_outer {cfg : Cfg} {s m : Masker} {cs : Array F128} {n : ℕ} (ho 
     rw [getElem!_append_size (by omega)]
     exact hz
   try dsimp only at hk
-  rw [if_pos (by simp [h1, h2, hz'])] at hk
+  simp only [h1, h2, hz', decide_true, Bool.and_self, ↓reduceIte] at hk
   cases hk
 
 /-- **The frame's check of a round against itself**: its state is `roundFree`'s, at the rep's state or its stop. -/
@@ -505,7 +506,215 @@ theorem run_outer {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.
     obtain ⟨s1, ha, -⟩ := run_coins_cons c _ _ _ h2
     exact absurd ha (answer_owed_none _ rfl)
 
+/-- A rep's schedule so far starts with the algebraic phase's. -/
+theorem schedSoFar_pre {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr = .ok sched) : ∃ rest, sched = alg ++ rest := by
+  unfold schedSoFar at hs
+  rw [hal] at hs
+  simp only [bind, Except.bind] at hs
+  split at hs
+  · simp only [pure, Except.pure, Except.ok.injEq] at hs
+    exact ⟨#[], by rw [← hs, Array.append_empty]⟩
+  · split at hs
+    · simp only [pure, Except.pure, Except.ok.injEq] at hs
+      exact ⟨_, hs.symm⟩
+    · simp only [pure, Except.pure, Except.ok.injEq] at hs
+      exact ⟨_, hs.symm⟩
+    · cases hs
+
+/-- **The loop's state at a rep's `r_outer` round**: where the frame takes coins there, they are `m − 13`, and none
+in an outer place of the layout `c''` is `1`. -/
+theorem repState_outer {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
+    {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hm : 14 ≤ t.st.m) (hm' : t.st.m < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdom : dom.size < 2 ^ 64) {cs : Array F128} {m : Masker}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (1 + 1)).answer c'' cs = .ok m) :
+    cs.size = t.st.m - 13 ∧ ∀ e < t.st.m - 13, e < c''.lay.nMlv - N_INNER → (cs[e]! + 1).isZero = false := by
+  obtain ⟨ha0, ha1⟩ := Sched.rounds_two hm hm' hal
+  obtain ⟨rest, hrest⟩ := schedSoFar_pre hal hs
+  have hg : ∀ k, k < alg.size → sched.getD k (.empty, 0) = (alg[k]?).getD (.empty, 0) := fun k hk => by
+    rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hk]
+  have h1s : 1 < alg.size := (Array.getElem?_eq_some_iff.1 ha1).1
+  have h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8,
+      .bytes t.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat t.cm0.cap),
+      .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
+    rw [hg 0 (by omega), ha0, Option.getD_some, head_encs]
+  have h1 : sched.getD 1 (.empty, 0) =
+      (ByteArray.mk (encs [] ++ (Frame.sq 2 (t.st.m - 13)).enc).toArray, t.st.m - 13) := by
+    rw [hg 1 h1s, ha1, Option.getD_some, outer_encs]
+  rw [repState_at c t rep dom xs hi cr0 cr ns 1 hal hs (by rw [hrest, Array.size_append]; omega)] at ha
+  dsimp only at ha
+  cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
+      (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr 1)).2
+  · rw [h2] at ha
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha
+    obtain ⟨hO, hon, hin, hl, hcs⟩ := run_outer hc _ sched cr hdg hcap hdom (by omega) (by omega) h0 h1 h2
+      (fun e => answer_owed_none cs e ha)
+    obtain ⟨hsz, hall⟩ := answer_outer hO hin hl hon ha
+    refine ⟨hsz, fun e he hlt => hall e he ?_ ?_⟩
+    · rw [hcs]; show 6 ≤ 6 + e; omega
+    · rw [hcs]; show 6 + e < 6 + (c''.lay.nMlv - N_INNER); omega
+  · rw [h2] at ha
+    simp only [↓reduceIte] at ha
+    exact absurd ha (answer_owed_none cs rfl)
+
+/-- A rep's start lays out `m − 6` residual rounds. -/
+theorem start_nMlv {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
+    (h : _root_.Flock.Firewall.Drive.start st = .ok (lay, mask)) : lay.nMlv = st.m - 6 := by
+  unfold _root_.Flock.Firewall.Drive.start at h
+  obtain ⟨⟨sch, tp⟩, -, h⟩ := bindV_ok h
+  obtain ⟨ms, -, h⟩ := bindV_ok h
+  simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+  rw [← h.1]
+  rfl
+
 end Loop
 
+
+namespace LeanRelease
+
+open Loop
+
+/-- **The frames refuse an outer coin `1`**: at a `Live` statement the loop serves, on a live history of `refK x`
+openings whose last coins the frame takes, table `j`'s rep `r`'s outer coin `e`, where it is among the opened coins, is
+not `1`. The opening at `outerSlot` is the rep's round 1, `r_outer`'s, its frame there in the algebraic phase on the
+binding's six coins (`repState_outer`), and the frame took its coins (`coins_taken_of_live`), which it does only at no
+outer coin `1` (`answer_outer`). -/
+theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
+    {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.outerSlot x j r < refK x)
+    (he : e < (Masked.stsOf x)[j]!.m - 13) :
+    Masked.outerAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
+      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r e ≠ 1 := by
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  obtain ⟨y⟩ := hx.2 j hj
+  obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hq2 : 2 * j + r < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
+  have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
+    rw [show (2 * j + r) / 2 = j by omega]
+    exact getElem!_pos _ j hj
+  have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    rw [hst]; exact y.hz
+  have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
+  obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
+      (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) := ⟨_, rfl⟩
+  have hs : Masked.outerSlot x j r = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + 1 := by
+    unfold Masked.outerSlot
+    rw [hsx]
+  have hrsl : (roundsOf spec (Masked.stsOf x)).length = spec.repStreams.size := by simp [roundsOf]
+  have hrq : (roundsOf spec (Masked.stsOf x)).getD (2 * j + r) 0 = N + 4 := by
+    simp only [roundsOf, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hq2, Option.map_some,
+      Option.getD_some]
+    have e1 : (Masked.stsOf x)[(2 * j + r) / 2]!.m + (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6 =
+        (Masked.stsOf x)[(2 * j + r) / 2]!.m + ((Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6) := by omega
+    rw [repRounds_true]
+    simp only [hz]
+    rw [hN]
+    unfold FlockComplete.piopRoundsZk
+    rw [e1]
+  have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
+    unfold FlockComplete.repStartZk; omega
+  obtain ⟨s, hsd⟩ : ∃ s, Masked.outerSlot x j r = s := ⟨_, rfl⟩
+  rw [hsd] at hs hb
+  have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
+  obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
+    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+  obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
+  have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
+  have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
+    rw [List.take_succ_cons, htk]
+  have hts : (ops.take s).length = s := by rw [List.length_take]; omega
+  rw [hh] at ha
+  change (progOf x ((ops.take s ++ [(dm, da)]).map fun p => ZKMal.CoinLayer.rd p.2)).answer
+    ((ofLoop T L₀ real).cfgAt x ρ (s + 1))
+    (coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)]))) = .ok m at ha
+  have hca : coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)])) =
+      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+    unfold coinsAt
+    simp only [List.tail_cons, List.getLast?_append, List.getLast?_singleton, List.length_append,
+      hts, List.length_singleton, Nat.add_sub_cancel]
+    exact feedOf_rd _ _
+  rw [hca, List.map_append, List.map_cons, List.map_nil] at ha
+  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, 1) := by
+    have e := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) 1 (by rw [hrsl]; exact hq2)
+      (by rw [hrq]; omega)
+    rw [Nat.zero_add] at e
+    rw [← e, hs, repStartZk_eq spec _ hq2.le]
+    congr 1
+    omega
+  have hlay : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay =
+      ((startOf x (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1)).1).toOption.map
+        (·.1)).getD default := by
+    show ((startOf x (repOf x (s + 1))).toOption.map (·.1)).getD default = _
+    rw [show s + 1 = s - 1 + 2 by omega, repOf_add_two hsx]
+  rw [progOf_snoc x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := s - 1)
+    (by rw [List.length_map, hts]; omega), hloc] at ha
+  rw [hloc] at hlay
+  dsimp only at ha
+  rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
+      (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e' | ⟨c', t, dom, xs, hi⟩
+  · rw [hph] at ha
+    exact absurd ha (answer_owed_none _ rfl)
+  rw [hph] at ha
+  dsimp only at ha
+  obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
+  obtain ⟨hts', -, -⟩ := Count.placeholder_tab hph
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ = .ok (y.sch, y.tPad) from hz)
+  obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
+  have hdg : t.st.digest.size < 2 ^ 64 := by
+    rw [hts']
+    simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
+    omega
+  have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
+  have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hnm : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay.nMlv = (Masked.stsOf x)[j]!.m - 6 := by
+    rw [hlay]
+    unfold startOf
+    rw [hsx]
+    dsimp only
+    rw [hds]
+    show lay.nMlv = _
+    rw [start_nMlv hds, hst, hstj]
+  obtain ⟨hsz, hall⟩ := repState_outer hcc hal hsc (by omega) hmb hdg (placeholder_cap hph) (hdm ▸ hdom') ha
+  rw [htm] at hsz hall
+  have hek : e < min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    have := hsz
+    simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range] at this
+    omega
+  have h0 : ((ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX))[e]! =
+      (ZKMal.CoinLayer.rd da).at e := by
+    rw [getElem!_pos _ e (by simp only [FlockDeploy.Coin.vals, Array.size_map, Array.size_range]; exact hek)]
+    simp [FlockDeploy.Coin.vals]
+  have hk := hall e he (by rw [hnm, N_INNER]; omega)
+  rw [h0] at hk
+  unfold Masked.outerAt
+  rw [hsd, dite_eq_left_of_eq_true (eq_true hb)]
+  show ((ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2).getD s default).at e ≠ 1
+  rw [List.getD_eq_getElem?_getD, List.getElem?_map, hd, Option.map_some, Option.getD_some]
+  show (ZKMal.CoinLayer.rd da).at e ≠ 1
+  intro h1
+  rw [h1] at hk
+  exact absurd hk (by decide)
+
+end LeanRelease
 
 end Claims.ZKServer
