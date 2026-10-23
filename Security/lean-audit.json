@@ -778,9 +778,6 @@
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs"
   },
-  "Claims.ZKServer.LeanRelease.FrameUnrefused": {
-   "owner": "@proofs"
-  },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs"
   },
