@@ -323,8 +323,9 @@ SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`R
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
 the root of that content (`Registered.checkKnownAll`). Beside the ports, whether the file names every port of the
-statement (`Registered.completeOf`, `Registered.checkComplete`), and the known content (`Registered.knownOf`), whose
-input ports every statement must read in every bit (`KnownRead.check`). -/
+statement (`Registered.completeOf`, `Registered.checkComplete`), and the rows `KnownRead.check` holds every statement
+to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
+the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray))))) := do
   let some f := argOf args flag | return .ok none
@@ -343,7 +344,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, ← Registered.completeOf j, known)
+          return (own, ← Registered.completeOf j, known ++ KnownRead.fullRows own (← KnownRead.readOf j))
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
 
