@@ -28,6 +28,7 @@ import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
+import Definitions.Pouw.H1Zy
 import Definitions.Pouw.M1
 import Definitions.Pouw.NCP.Defs
 import Definitions.Pouw.NCP.ExtraIdentity
@@ -145,6 +146,11 @@ coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-o
 g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
 `Models.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
 the record's headlines already cover by their own quantifier over committed values.
+
+## `H1Zy`: H1's drawn-leaf statements on words
+
+`Combine`: `PouwH1Combine_v1{TILE}`'s body (`h1zy._combine_body`) on its primitives' word views, the XOR and AND trees
+as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it the receipt check `LeafChecks` reads.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 
