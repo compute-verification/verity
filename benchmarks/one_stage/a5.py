@@ -376,7 +376,7 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds: one firewalled session of a MoE w2 coordinate chunk "
-                         "(MoeExpertFp8GemmW_v2{N=1}, k_log 26) outlasts an hour")
+                         "(MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded machine")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
