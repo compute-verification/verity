@@ -428,9 +428,11 @@ def test_honest_traffic_with_merged_events_is_accepted_on_every_window_and_late_
 def served_profile(tmp_path_factory):
     """The gate's shape on N2's served profile (`plan --profile served`): four in flight, 64 tokens, every other
     response's last two tokens in one chunk, at D = 30, so the second group doesn't fit in window 0 and is sent in
-    window 1's first bucket; honest, late and extra, each checked."""
+    window 1's first bucket; honest, late and extra, each checked. The endpoint answers each request as it arrives:
+    the salt frame puts window 1's requests a bucket apart, and the injected clock moves only once every request the
+    server holds is answered, so an endpoint that held one for its partner would never answer it."""
     tmp = tmp_path_factory.mktemp("served-profile")
-    endpoint = _SideBySide(2, merges=lambda request: request % 2 == 1)
+    endpoint = _SideBySide(1, merges=lambda request: request % 2 == 1)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=MERGED_TOKENS, probes=4,
                               in_flight=4, requests=REQUESTS, delta_buckets=30, profile="served")
     challenger = cs.signer(tmp / "keys" / "challenger", 6)
