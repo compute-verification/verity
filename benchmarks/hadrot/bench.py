@@ -8,6 +8,8 @@ Gate first, in the same process (a failure times nothing, exit 4): at each k, th
 Then per (k, M): each arm captured in a CUDA graph of `inner` calls (the GEMM cycling over enough weight copies to pass
 3x the L2, so W streams from DRAM; the quant arms on one x, as a just-written activation is), warmed up, then `--reps`
 replays per arm timed with CUDA events, arms interleaved rep by rep in a rotated order.  Reported: the median us a call.
+Both quant kernels are timed at each of WARPS (the gate requires the rotation's codes and scales bit-identical across
+them); a row reports each one's fastest, the plain quant at its served 16 warps too, and the added cost from the fastest.
 
     python bench.py --out OUT [--reps 60] [--ks 16384,12288,2048,1536,256] [--ms 1,8,32,64,2048,8192]
 """
@@ -21,6 +23,7 @@ import sys
 from pathlib import Path
 
 import torch
+import triton
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -29,6 +32,7 @@ import hadrot as H  # noqa: E402
 from verity_vllm.engine import int8_fused as F  # noqa: E402
 
 N = 6144
+WARPS = (2, 4, 8, 16, 32)
 LABELS = {16384: "o_proj full", 12288: "down dense full", 2048: "o_proj/8 TP8 = expert down full",
           1536: "down dense/8 TP8", 256: "expert down/8 TP8"}
 
@@ -53,7 +57,14 @@ def gate(rot: H.Rotation, m: int = 64) -> dict:
     diff = (xq.double() - codes).abs()
     doc = {"k": rot.k, "odd": rot.odd, "s_rel_max": rel, "codes_max_diff": diff.max().item(),
            "codes_off_frac": (diff > 0).double().mean().item()}
-    doc["ok"] = rel < 1e-5 and doc["codes_max_diff"] <= 1 and doc["codes_off_frac"] <= 1e-3
+    same = True
+    for nw in WARPS:
+        if 32 * nw <= rot.a:
+            xq2, s2 = torch.empty_like(xq), torch.empty_like(s)
+            H.hadrot_quant(rot, x, xq2, s2, num_warps=nw)
+            same = same and torch.equal(xq2, xq) and torch.equal(s2, s)
+    doc["warps_bit_identical"] = same
+    doc["ok"] = rel < 1e-5 and doc["codes_max_diff"] <= 1 and doc["codes_off_frac"] <= 1e-3 and same
     return doc
 
 
@@ -136,22 +147,30 @@ def main() -> int:
             cfg = F.pick(m, N, k)
             H.hadrot_quant(rot, x, xq, s_a)
             arms = {
-                "rot": lambda j: H.hadrot_quant(rot, x, xq, s_a),
                 "plain": lambda j: F.quant_rows(x, xq, s_a),
                 "gemm": lambda j: F.scaled_mm(xq, s_a, w[j % copies], s_w, y, cfg=cfg, work=work),
             }
+            for nw in WARPS:
+                if 32 * nw <= rot.a:
+                    arms[f"rot_w{nw}"] = lambda j, nw=nw: H.hadrot_quant(rot, x, xq, s_a, num_warps=nw)
+                if 32 * nw <= triton.next_power_of_2(k) and nw != F.quant_warps(k):
+                    arms[f"plain_w{nw}"] = lambda j, nw=nw: F.quant_rows(x, xq, s_a, num_warps=nw)
             if m > 16:
                 z = torch.empty(m, N, dtype=torch.int32, device="cuda")
                 arms["int_mm"] = lambda j: torch._int_mm(xq, w[j % copies].t(), out=z)
             graphs = {n: graph(f, copies) for n, f in arms.items()}
             t = time_arms(graphs, copies, args.reps)
-            gemm = t["gemm"]["median_us"]
-            best = min(gemm, t["int_mm"]["median_us"]) if "int_mm" in t else gemm
+            med = {n: v["median_us"] for n, v in t.items()}
+            rot_arm = min((n for n in med if n.startswith("rot_")), key=med.get)
+            plain_arm = min((n for n in med if n.startswith("plain")), key=med.get)
+            gemm = med["gemm"]
+            best = min(gemm, med["int_mm"]) if "int_mm" in med else gemm
             row = {"k": k, "label": LABELS.get(k, ""), "m": m, "cfg": str(cfg), "inner": copies,
-                   "rot_us": t["rot"]["median_us"], "plain_us": t["plain"]["median_us"], "gemm_us": gemm,
-                   "int_mm_us": t.get("int_mm", {}).get("median_us"),
-                   "added_pct_of_gemm": 100 * (t["rot"]["median_us"] - t["plain"]["median_us"]) / gemm,
-                   "added_pct_of_best_gemm": 100 * (t["rot"]["median_us"] - t["plain"]["median_us"]) / best,
+                   "rot_arm": rot_arm, "rot_us": med[rot_arm], "plain_served_us": med["plain"], "plain_arm": plain_arm,
+                   "plain_us": med[plain_arm], "gemm_us": gemm, "int_mm_us": med.get("int_mm"),
+                   "added_pct_of_gemm": 100 * (med[rot_arm] - med[plain_arm]) / gemm,
+                   "added_pct_vs_served_plain": 100 * (med[rot_arm] - med["plain"]) / gemm,
+                   "added_pct_of_best_gemm": 100 * (med[rot_arm] - med[plain_arm]) / best,
                    "spread": t}
             rows.append(row)
             print("row", json.dumps({kk: v for kk, v in row.items() if kk != "spread"}), flush=True)
@@ -159,11 +178,13 @@ def main() -> int:
             del graphs
         del w
         torch.cuda.empty_cache()
-    print(f"{'k':>6} {'M':>5} {'rot+q us':>9} {'plain us':>9} {'gemm us':>9} {'int_mm us':>9} {'added %':>8}  label")
+    print(f"{'k':>6} {'M':>5} {'rot+q us':>9} {'arm':>8} {'plain us':>9} {'arm':>9} {'served':>8} {'gemm us':>9} "
+          f"{'int_mm us':>9} {'added %':>8} {'vs best':>8}  label")
     for r in rows:
         im = f"{r['int_mm_us']:9.2f}" if r["int_mm_us"] else f"{'-':>9}"
-        print(f"{r['k']:>6} {r['m']:>5} {r['rot_us']:9.2f} {r['plain_us']:9.2f} {r['gemm_us']:9.2f} {im} "
-              f"{r['added_pct_of_gemm']:8.2f}  {r['label']}")
+        print(f"{r['k']:>6} {r['m']:>5} {r['rot_us']:9.2f} {r['rot_arm']:>8} {r['plain_us']:9.2f} {r['plain_arm']:>9} "
+              f"{r['plain_served_us']:8.2f} {r['gemm_us']:9.2f} {im} {r['added_pct_of_gemm']:8.2f} "
+              f"{r['added_pct_of_best_gemm']:8.2f}  {r['label']}")
     return 0
 
 
