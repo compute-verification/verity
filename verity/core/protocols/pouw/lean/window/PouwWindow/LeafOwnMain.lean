@@ -14,13 +14,17 @@ def readJson (path : String) : IO Json := do
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: {e}")
 
+def usage (why : String) : IO UInt32 := do
+  IO.eprintln why
+  pure 2
+
 def main (args : List String) : IO UInt32 := do
   let [reg, prod, file, r, c, k, stmt] := args
-    | IO.eprintln "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)"; return 2
+    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine)"
   let (some r, some c, some k) := (r.toNat?, c.toNat?, k.toNat?)
-    | IO.eprintln "R, C and K are natural numbers"; return 2
+    | usage "R, C and K are natural numbers"
   let some lane := (if stmt == "combine" then some none else stmt.toNat?.map some : Option (Option Nat))
-    | IO.eprintln s!"the statement is a lane's index or combine, not {stmt}"; return 2
+    | usage s!"the statement is a lane's index or combine, not {stmt}"
   match PouwWindow.Lanes.leafOwn? (← readJson reg) (← readJson prod) (← readJson file) ⟨r, c, k⟩ lane
       Flock.HmRow.ROW_SCHEMA_V2 with
   | .ok () =>
