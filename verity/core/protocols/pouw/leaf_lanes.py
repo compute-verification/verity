@@ -68,6 +68,8 @@ PUB, OK = "pub", "o0"
 OK_ROW = (1,)
 #: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
 COMPLETE = "complete"
+#: a ``--registered`` port's key that the statement reads its row in full (Flock's `KnownRead.READ_KEY`)
+READ_IN_FULL = "read_in_full"
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, COMBINE = "lane", "combine"
 
@@ -201,12 +203,17 @@ def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, 
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
     registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``complete``:
     the ports are every port of the statement (`own`), which the verifier then holds the circuit to
-    (`Registered.checkComplete`)."""
+    (`Registered.checkComplete`). A port of ``partials`` (lane l's ``partials``, the combine's ``p<x>``) is marked
+    ``read_in_full`` (`READ_IN_FULL`): the verifier holds it to one row of the registered row's words, every bit of
+    which the statement reads (Flock's `KnownRead.fullRows`), so lane l and the combine read one row's same bits
+    (proofs' `PouwWindow.Lanes.readFull`, which `LeafLanesSound` takes)."""
     out = {}
     for port, (value, row) in ports.items():
         if value not in entries or value not in roots:
             raise ValueError(f"port {port!r} reads {value!r}, whose entry and root the verifier does not hold")
         out[port] = PR.port(value, entries[value], roots[value], [row], (schemas or {}).get(value, G.SCHEMA))
+        if value == PARTIALS:
+            out[port][READ_IN_FULL] = True
     if set(out) & set(known_ports or {}):
         raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
     return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
@@ -225,6 +232,7 @@ __all__ = [
     "PUB",
     "PUBLIC",
     "PUBLIC_BITS",
+    "READ_IN_FULL",
     "RECEIPT",
     "ZY",
     "A",

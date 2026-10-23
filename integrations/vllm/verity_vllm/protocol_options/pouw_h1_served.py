@@ -102,8 +102,6 @@ B_NONCE = Wt.B_NONCE
 IDS_NONCE = B_NONCE + (1 << 39)
 #: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
 RECEIPT_NONCE = IDS_NONCE + (1 << 38)
-#: a statement's output row of its units' receipts (`h1window.STATEMENT_OUT_ROWS`' o0), in its ``--registered`` file
-RECEIPT_PORT = "o0"
 #: an input-ids slot past the step's rows: no token id is 2^32 - 1
 EMPTY_ID = 0xFFFFFFFF
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
@@ -435,16 +433,17 @@ class Served:
         return HW.table(self.program, "a", c, self.steps)
 
     def receipt_table(self, c: int) -> str:
-        """Call ``c``'s receipt table, ``<prefix>receipt@<c>``."""
-        return self.program.fn.bindings["PREFIX"] + f"receipt@{int(c)}"
+        """Call ``c``'s receipt table, ``<prefix>receipt@<c>`` (`h1window.table`'s `h1window.RECEIPTS`)."""
+        return HW.table(self.program, HW.RECEIPTS, int(c))
 
     def receipt_shape(self, c: int) -> tuple[int, int]:
         """Call ``c``'s receipt table's rows and u16 words a row: one row a unit of the call, its tile unit's ``receipt``
-        (the statement's output row o0, `h1window.STATEMENT_OUT_ROWS`), as a ``row/v2`` row of its bits."""
+        (the statement's output row o0, `h1window.RECEIPT_PORT`), as a ``row/v2`` row of its bits; 0 words when they
+        are no whole u16 words, which `h1window.table_reads_file` refuses to read."""
         S = self.program.fn.S()
         k = {name: k for name, k, _n in S.LINEARS}[S.CALLS[c][0]]
-        ret = dict(S.TILES)[k].signature()[1]
-        return HW.call_units(self.program)[c][1], sum(dict(ret.fields)["receipt"].leaf_widths()) // 16
+        bits = dict(dict(S.TILES)[k].signature()[1].fields)[HW.OUTPUTS[0]].leaves
+        return HW.call_units(self.program)[c][1], bits // 16 if bits % 16 == 0 else 0
 
     def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
         """The tree of call ``call``'s step's A table ``a/<K>@<s>`` over ``words`` (its step's calls of K's `a_words`,
@@ -683,22 +682,13 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
     """The verifier's ``--registered`` file of a statement over call ``call``'s units: `h1window.table_reads_file` over the
     window's Program (``tp`` its template partition, `partition.evaluate`'s, when the caller holds it) and its trees'
     roots, under the circuit ports ``ports`` (default `Served.ports`), each call table's domain bound to the window's open
-    root and the weights' to none, as their trees' are. With ``receipts``, its output row `RECEIPT_PORT` (each unit's
-    receipt) at the call's receipt table, unit u of the call's t-th tile at row t, under the same domain rule."""
+    root and the weights' to none, as their trees' are. With ``receipts``, the file reads its units' receipts at the
+    call's receipt table as its output row o0 (`h1window.RECEIPT_PORT`), unit u0 + t at row t."""
     served = _served(run)
     prog = served.program
     tp = tp if tp is not None else P.evaluate(prog, served.query())
-    doc = HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
-                              prog=served.program_digest, window=served.root, steps=served.steps)
-    if served.receipts is not None:
-        value, (u0, n), (leaves, words) = served.receipt_table(call), HW.call_units(prog)[call], served.receipt_shape(call)
-        reads: list[int | None] = [None] * tp.population
-        reads[u0:u0 + n] = range(n)
-        doc["ports"][RECEIPT_PORT] = {
-            "value": value, "root": served.registered[value].root.hex(), "leaves": leaves, "words": words,
-            "word_bits": G.WORD_BITS, "domain": served.registered[value].domain.domain_id.hex(), **G.schema_entry(V2),
-            "reads": reads}
-    return doc
+    return HW.table_reads_file(prog, tp, int(call), served.roots(), served.ports() if ports is None else dict(ports),
+                               prog=served.program_digest, window=served.root, steps=served.steps)
 
 
 @dataclass(frozen=True)
@@ -735,5 +725,5 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
            "V2", "Weights", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
-           "model_key", "nonce", "RECEIPT_NONCE", "RECEIPT_PORT", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
+           "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]

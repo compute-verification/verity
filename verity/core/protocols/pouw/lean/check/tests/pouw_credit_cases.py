@@ -453,15 +453,17 @@ def _template_id(k: int, unit: dict) -> str:
     return f"{Cr.TILE_FN}{{UNIT={_canon(unit)},K={k}}}"
 
 
-def _template(k: int, r: int, c: int, unit: dict) -> dict:
+def _template(k: int, r: int, c: int, unit: dict, receipt: object = None) -> dict:
     """K's template as `h1window.template` encodes it: a composite over the tile unit `unit`, its A and B rows
-    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots."""
+    ``a_k<K>`` and ``b_k<K>``, then the unit's z/y record ``zy``, the salt, its position and the roots; returning
+    ``{receipt, ok}`` with ``receipt`` the type `receipt` when one is given, else a word."""
     word = ["Value", 16]
     params = [[f"a_k{k}", ["Array", r, ["Array", 2, word]]], [f"b_k{k}", ["Array", c, ["Array", 2, word]]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
               ["roots", ["Array", 2, ["Array", 4, word]]]]
+    ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
-            "body": {"params": params, "ret_type": word, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
+            "body": {"params": params, "ret_type": ret, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
                      "ret": {"affine": ["n", 0, 0, 1]}}}
 
 
@@ -471,16 +473,17 @@ def record(tiles: list, lay: dict, prefix: str = "") -> str:
     return Cr.WINDOW_FN + "{" + ",".join(f"{k}={_canon(vals[k])}" for k in Cr.RECORD) + "}"
 
 
-def window_desc(rng: random.Random, lay: dict, prefix: str = "") -> dict:
+def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
-    then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch."""
+    then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
+    template returning a receipt of type `receipt` (`_template`) when one is given."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
     units = {k: {"fn": f"H1Tile_v1{{K={k},R={r},C={c}}}"} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
-    defs |= {tids[k]: _template(k, r, c, units[k]) for k in ks}
+    defs |= {tids[k]: _template(k, r, c, units[k], receipt) for k in ks}
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
     nodes = [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": rng.randint(1, 64)}
              for _ in range(2 * len(ks) + 3)]
@@ -505,9 +508,9 @@ def desc_bytes(desc: dict) -> bytes:
     return _canon(desc).encode()
 
 
-def descriptor(rng: random.Random, lay: dict, prefix: str = "") -> str:
+def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt)).hex()
 
 
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
@@ -1231,8 +1234,10 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     none), one of its calls, the window's open root, its rounds (one to three dividing its calls), and the roots the
     window registers (``{value: [root, ...]}``) for each value a statement of that call reads (`h1window.table`'s A
     table of its round and K, its z table and the weights' ``b/<K>``), some other rounds' and K's A tables among them,
-    as `credit.registered_file` takes them; ``missing`` leaves one of the call's out and ``twice`` registers one
-    twice."""
+    as `credit.registered_file` takes them, and at random (always under the ``receipt-`` mutations) the call's receipt
+    table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words; ``missing`` leaves one of the
+    call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
+    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none."""
     lay = layout(rng)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
@@ -1240,11 +1245,16 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     k_of = {lin: k for lin, k, _n in lay["linears"]}
     a = f"{prefix}a/{k_of[lay['calls'][call][0]]}@{Cr.step_row(lay, steps, call)[0]}"
     vals = [a, f"{prefix}zy@{call}", f"{prefix}b/{k_of[lay['calls'][call][0]]}"]
+    receipted = name.startswith("receipt-") or rng.random() < 0.5
+    bit = ["Value", 1]
+    receipt = ["Array", 16 * rng.randint(1, 8), bit] if receipted else None
+    if receipted:
+        vals.append(f"{prefix}receipt@{call}")
     roots = {v: [_hex(rng)] for v in vals}
     for st, k, _cs in Cr.step_tables(lay, steps):
         if f"{prefix}a/{k}@{st}" != a and rng.random() < 0.5:
             roots[f"{prefix}a/{k}@{st}"] = [_hex(rng)]
-    v = rng.choice(vals)
+    v = rng.choice(vals[:3])
     match name:
         case "honest":
             pass
@@ -1255,13 +1265,18 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
                 roots[v] = []
         case "twice":
             roots[v].append(_hex(rng))
+        case "receipt-twice":
+            roots[vals[-1]].append(_hex(rng))
+        case "receipt-width":
+            receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
+                                  ["Array", 2, ["Array", 4, bit]]])
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix), "call": call, "roots": roots, "window": _hex(rng),
+    return {"descriptor": descriptor(rng, lay, prefix, receipt), "call": call, "roots": roots, "window": _hex(rng),
             "steps": steps}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
@@ -1298,10 +1313,13 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `a_link` case: a window's registered entries and its round log, then mutation `name`. Its A values are each
     K's ``…/a/<K>`` and, at random (always under the ``table-`` mutations), one or two rounds' A tables
     ``…/a/<K>@<s>``, each committed whole by its round; and at random (always under the ``ids-`` mutations) some
-    rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round."""
-    calling, tying = name.startswith("table-"), name.startswith("ids-")
-    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round")
-                       else [1, 2, 3, 4])
+    rounds' input-ids tables ``…/ids@<s>``, each committed whole by its round; and at random (always under the
+    ``receipt-`` mutations) some calls' receipt tables ``…/receipt@<c>``, each committed whole by its call's round, of
+    the window's ``calls`` (the rounds' equal blocks)."""
+    calling, tying, receipts = name.startswith("table-"), name.startswith("ids-"), name.startswith("receipt-")
+    steps = rng.choice([2, 3, 4] if name in ("blocks", "swapped", "table-other-round", "ids-other-round",
+                                             "receipt-other-round") else [1, 2, 3, 4])
+    calls = steps * rng.randint(1, 3)
     window = f"h1/w-{rng.randrange(100)}"
     values, entries = {}, []
 
@@ -1320,12 +1338,16 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
     if tying or rng.random() < 0.5:
         for s in rng.sample(range(steps), rng.randint(1, steps)):
             a(f"{window}/ids@{s}", rng.choice(sizes), s)
+    if receipts or rng.random() < 0.5:
+        for c in rng.sample(range(calls), rng.randint(1, calls)):
+            a(f"{window}/receipt@{c}", rng.choice(sizes), c // (calls // steps))
     entries += [{"value": f"{window}/z/{rng.choice([64, 4096])}", "root": _hex(rng), "leaves": 3, "domain": _hex(rng)},
                 {"value": f"{window}/a/x", "root": _hex(rng)}][:rng.randint(0, 2)]
     rng.shuffle(entries)
     log = _log(steps, values, [_hex(rng) for _ in range(steps)])
     tied = [e for e in entries if Cr.is_tied(e["value"])]
     e = rng.choice([x for x in tied if Cr.ids_step(x["value"]) is not None] if tying
+                   else [x for x in tied if Cr.receipt_call(x["value"]) is not None] if receipts
                    else [x for x in tied if Cr.is_a(x["value"]) and (values[x["value"]][2] is not None) == calling]
                    if calling or name == "blocks" else tied)
     v = e["value"]
@@ -1399,14 +1421,30 @@ def a_link_instance(rng: random.Random, name: str = "honest") -> dict:
             e["value"] = f"{window}/ids@{steps + rng.randrange(3)}"
             log[own]["a"][e["value"]] = log[own]["a"].pop(v)
             _reroot(log)
+        case "receipt-other-round":
+            log[rng.choice([x for x in range(steps) if x != own])]["a"][v] = [list(x) for x in segs]
+            _reroot(log)
+        case "receipt-past":
+            e["value"] = f"{window}/receipt@{calls + rng.randrange(3)}"
+            log[own]["a"][e["value"]] = log[own]["a"].pop(v)
+            _reroot(log)
+        case "receipt-calls":
+            calls = rng.choice([0, calls + rng.randrange(1, steps)] if steps > 1 else [0])
+        case "receipt-unknown":
+            free = [c for c in range(calls) if f"{window}/receipt@{c}" not in values]
+            log[own]["a"][rng.choice([f"{window}/zy@{Cr.receipt_call(v)}", f"{window}/receipt@0{Cr.receipt_call(v)}",
+                                      f"{window}/receipts@{Cr.receipt_call(v)}",
+                                      *(f"{window}/receipt@{c}" for c in free)])] = [[0, 0, _hex(rng)]]
+            _reroot(log)
         case _:
             raise ValueError(name)
-    return {"rounds": log, "entries": entries}
+    return {"rounds": log, "entries": entries, "calls": calls}
 
 
 A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra", "swapped", "misaligned", "unknown",
                 "no-a", "twice", "entry-form", "blocks", "log-form", "round-form", "segments-form", "entries-form",
-                "table-other-round", "table-past", "ids-other-round", "ids-past"]
+                "table-other-round", "table-past", "ids-other-round", "ids-past", "receipt-other-round", "receipt-past",
+                "receipt-calls", "receipt-unknown"]
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:

@@ -60,7 +60,8 @@ def periodOf (j : Json) : Except String Json := do
 
 def aLinkOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun _ => Json.null)
-    (Credit.Internal.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries"))
+    (Credit.Internal.aLink (← PouwCheck.Difftest.get j "rounds") (← PouwCheck.Difftest.get j "entries")
+      ((PouwCheck.nat? (← PouwCheck.Difftest.get j "calls")).getD 0))
 
 def weightsOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j

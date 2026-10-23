@@ -52,15 +52,17 @@ W1, W2 = hashlib.sha512(b"window 1").digest(), hashlib.sha512(b"window 2").diges
 WKEY = bytes(range(32))
 V1, V16 = Value(1), Value(16)
 XOR1 = PrimitiveDefinition("H1ServedTestXor1", 1, (("a", V1), ("b", V1)), V1, lambda a, b: a ^ b, register=False)
-XOR16 = PrimitiveDefinition("H1ServedTestXor16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: a ^ b, register=False)
-FOLD16 = PrimitiveDefinition("H1ServedTestFold16", 1, (("key", V16), ("x", V16)), V16, lambda key, x: key ^ x,
-                             register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
-OUT = Record(("receipt", V16), ("ok", V1))
+LOW1 = PrimitiveDefinition("H1ServedTestLow1", 1, (("v", V16),), V1, lambda v: v & 1, register=False)
+FOLD1 = PrimitiveDefinition("H1ServedTestFold1", 1, (("key", V1), ("x", V1)), V1, lambda key, x: key ^ x,
+                            register=False, ports=Ports(params={"key": In(kind="coin")}, ret=Out(sink=True)))
+#: the stand-in's receipt: 16 bits, one u16 word a unit (a receipt is bits, as the tile's u32 words are)
+RECEIPT = Array(16, V1)
+OUT = Record(("receipt", RECEIPT), ("ok", V1))
 
 
 def _sig(S):
     return ((("a", Array(S.R, Z.ROW(S.K))), ("b", Array(S.C, Z.ROW(S.K))), ("zy", Z.RECORD(S.R, S.C)),
-             ("salt", Array(4, V16)), ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
+             ("salt", Array(4, V1)), ("position", V16), ("roots", Array(2, Array(4, V16)))), OUT)
 
 
 def _first(c):
@@ -69,7 +71,10 @@ def _first(c):
 
 def _body(B, S, a, b, zy, salt, position, roots):
     ok = B.call(XOR1, B.call(XOR1, _first(a[0]), _first(b[0])), _first(zy))
-    return coll_concat(OUT, [B.call(FOLD16, salt[0], B.call(XOR16, position, roots[0][0])), ok])
+    x = B.call(XOR1, B.call(LOW1, position), B.call(LOW1, roots[0][0]))
+    receipt = coll_concat(RECEIPT, [B.call(FOLD1, _first(salt), B.call(XOR1, x, Coll(V1, a[0].refs.slice(i, i + 1))))
+                                    for i in range(16)])
+    return coll_concat(OUT, [receipt, ok])
 
 
 StandIn = CompositeDefinition("H1ServedTestTile", 0, ("K", "R", "C"), _sig, _body, register=False,
@@ -217,9 +222,10 @@ def test_b_is_each_linears_weight_once_a_window(steps):
 def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     """A MoE layer's expert GEMMs (`engine.int8_experts`), wired as the option wires every recorded layer
     (`pouw_h1_hooks.wire`: z/y records over T, observe, apply), hand H1 each call's A rows, s_a and `scaled_mm_zy`'s z/y
-    records as a dense linear's call does: each (step, expert, projection) registers ``zy@<c>`` and puts its rows in its
-    step's ``a/<K>@<s>``, whose roots recompute from each expert's own served rows (an idle expert's zero-row call from
-    zeros), and its manifest row carries its served rows m."""
+    records as a dense linear's call does: each (step, expert, projection) puts its rows in its step's A table of its K
+    ``a/<K>@<s>`` (the step's experts' calls of K, call after call) and registers ``zy@<c>``, whose roots recompute from
+    each expert's own served rows (an idle expert's zero-row call from zeros), and its manifest row carries its served
+    rows m."""
     from verity_vllm.engine import hooks
     from verity_vllm.engine import int8_experts as X
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
@@ -250,18 +256,17 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     assert not served.refused and [c.m for c in run.calls] == [3, 3, 3, 3, 0, 0, 2, 2]
     assert [c.summary()["served"] for c in run.calls] == [3, 3, 3, 3, 0, 0, 2, 2]
     assert [c.module for c in run.calls[:4]] == ["moe.0.gate_up", "moe.0.down", "moe.1.gate_up", "moe.1.down"]
+    for _s, k, cs in CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, STEPS):
+        ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
+        rows = [row for c in cs for row in _a_rows(*got[c][:2], T, k)]
+        assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+        assert run.tables[cs[-1]]["registered"][ra.value] == ra.root.hex()
     for c in run.calls:
-        n, k = run.shapes_[c.layer]
+        n, _k = run.shapes_[c.layer]
         _a, _s_a, z, y = got[c.index]
         rz = served.registered[HW.table(prog, "zy", c.index)]
         assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
         assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
-        cs = served.step_calls(c.index)
-        if c.index == cs[-1]:
-            ra = served.registered[HW.table(prog, "a", c.index, STEPS)]
-            rows = [row for d in cs for row in _a_rows(*got[d][:2], T, k)]
-            assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
-            assert run.tables[c.index]["registered"][ra.value] == ra.root.hex()
 
 
 def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
@@ -551,11 +556,12 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
     """With a receipt producer, each call's ``receipt@<c>`` (BRIDGE2) is registered at its step's last call of its K, after
     the roots its units' seeds take (its step's ``a/<K>@<s>`` and ``b/<K>``), the producer asked for each of the step's
     calls of K in call order with that call's own served codes: one ``row/v2`` row a unit of the call in its tile order,
-    the unit's receipt (the stand-in's one u16 word), its root recomputed here from the call's receipts under row j's salt
-    at `RECEIPT_NONCE` + c, its domain the registered-value domain of the Program's digest bound to the window's open root
-    (as ``zy@<c>``'s), and its root in the manifest row of the call that registered it. Round r lists step r's calls'
-    receipt tables whole under its root, `tables` lists every call's, and each call's ``--registered`` file names it at
-    its output row o0, unit u of its t-th tile at row t."""
+    the unit's receipt (the stand-in's 16 bits, one u16 word), its root recomputed here from the call's receipts under row
+    j's salt at `RECEIPT_NONCE` + c, its domain the registered-value domain of the Program's digest bound to the window's
+    open root (as ``zy@<c>``'s), and its root in the manifest row of the call that registered it. Round r lists step r's
+    calls' receipt tables whole under its root, which core's `credit._a_link` ties to the call's round, `tables` lists
+    every call's, and each call's ``--registered`` file names it at its output row o0 (`h1window.RECEIPT_PORT`), unit u
+    of its t-th tile at row t."""
     made = _Receipts()
     run, _ws, got = _window(W1, receipts=made)
     served, pre = run.served, SV.PREFIX
@@ -584,9 +590,10 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
             reg = served.registered[v]
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
         assert CR.round_root(r, bytes.fromhex(log["inner"]), segs).hex() == log["root"]
+    assert CR._a_link(run.round_log, served.entries(), len(run.calls)) is None
     reg = SV.register(run)
     for c, (u0, n) in enumerate(HW.call_units(prog)):
-        p, rc = reg.files[c]["ports"][SV.RECEIPT_PORT], served.registered[pre + f"receipt@{c}"]
+        p, rc = reg.files[c]["ports"][HW.RECEIPT_PORT], served.registered[pre + f"receipt@{c}"]
         assert (p["value"], p["root"], p["leaves"], p["words"], p["domain"], p["row_schema"]) == (
             rc.value, rc.root.hex(), rc.leaves, rc.words, rc.domain.domain_id.hex(), SV.V2)
         assert [(u, row) for u, row in enumerate(p["reads"]) if row is not None] == [(u0 + t, t) for t in range(n)]
