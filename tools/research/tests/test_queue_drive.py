@@ -301,6 +301,25 @@ def test_a_failure_only_one_trains_change_reaches_ejects_that_pr_and_tells_ci_an
     assert [m.pr for m in h.q.chain()] == [1] and len(h.posts) == 1
 
 
+def test_a_failure_only_a_lower_running_trains_change_reaches_ejects_it_without_waiting_on_that_check(world, monkeypatch,
+                                                                                                      tmp_path):
+    """23 Oct 12:05Z: a5ded716d48d failed on files only #3266, in the lower train still checking, changed; drive waited on that
+    check and held every train above it until #3266 was ejected by hand at 12:48Z."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    _once()\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    lower, upper = (m.commit for m in h.q.chain())
+    assert {lower, upper} <= set(h.d.q.load_state()["drive"]["launched"])
+    _check(world, monkeypatch, upper, ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2]
+
+
 def test_a_failure_two_changes_reach_ejects_both(world, monkeypatch, tmp_path):
     """16 Oct (Daniel, through top): every failed train that waited on a lander stalled landing for hours; drive ejects every
     PR whose change the failure reaches, and the rest of the train goes on."""

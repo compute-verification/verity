@@ -1373,8 +1373,10 @@ class Driver:
         - A lower check that passed with `--defer`'s steps still running clears nobody of a failure in one of them.
         - A kill that points at nothing, or a failure nothing in the train reaches, a machine's fault, is checked again once,
           on ``on``'s machines (`resend`); a kill again, or a failure with no report, is told to `CI`.
-        A member a lower running check covers is left to that check (18 Oct 01:55Z: ejecting it cancelled that train, and were
-        it the cause, that check fails too), and a lower failed check acts first (10:30Z)."""
+        A member a lower running check covers is ejected all the same when the failure names a file only such members change:
+        that check carries the same change, and every train above waits on it while it runs (23 Oct 12:05-12:48Z: #3266's
+        read-guard failure held the queue behind a lower check whose deferred pytest would have failed it after landing). A
+        lower failed check acts first (18 Oct 10:30Z)."""
         key, prs = f"failed:{m.commit}", " ".join(f"#{x.pr}" for x in members)
         if key in drive["told"]:
             return
@@ -1412,11 +1414,9 @@ class Driver:
             self._eject(drive, key, head, m, prs, v, above, f"it is the only PR above {low}; {on}")
             return
         hit = [x for x in hit if members.index(x) > passed]
-        if hit and all(members.index(x) < floor for x in hit):
-            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
-                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
-            return
-        if hit := [x for x in hit if members.index(x) >= floor]:
+        if upper := [x for x in hit if members.index(x) >= floor]:
+            hit = upper
+        if hit:
             self._eject(drive, key, head, m, prs, v, hit, f"{'its' if len(hit) == 1 else 'their'} change touches {what}")
             return
         if known:
