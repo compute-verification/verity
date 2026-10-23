@@ -19,7 +19,9 @@ slot's commit string at the outer relation (`readersTrue_layoutBTops`), and `ksL
 `bitsLin2_deployed_slots` take that in its place.
 
 `HmSlotsCommit` is a fact about the slots' circuits at `Flock.check`, the form `Hm.row_bc_flat` and
-`Hidden.port_commit_rowsP` prove at a satisfied table's columns, and is open here.
+`Hidden.port_commit_rowsP` prove at a satisfied table's columns, and is open here. An honest slot commits
+(`slotCommits_of_hm96`): `SlotCommits` holds wherever the slot's columns carry a satisfying hm96 assignment on the row
+and salt it reads (`Hm.hm96_commit`).
 -/
 
 namespace RecDeploy
@@ -40,7 +42,8 @@ theorem testBit_bitsNat : ∀ (bs : List Bool) (i : ℕ), (Claims.Recursion.VSta
   | b :: bs, i + 1 => by
       show ((if b then 1 else 0) + 2 * Claims.Recursion.VStar.bitsNat bs).testBit (i + 1) = bs.getD i false
       rw [Nat.testBit_succ, show ((if b then 1 else 0) + 2 * Claims.Recursion.VStar.bitsNat bs) / 2 =
-        Claims.Recursion.VStar.bitsNat bs by cases b <;> simp <;> omega, testBit_bitsNat bs i]
+        Claims.Recursion.VStar.bitsNat bs by rw [Nat.add_mul_div_left _ _ (by omega)]; cases b <;> simp,
+        testBit_bitsNat bs i]
 
 /-- **A bit of bits read as bytes** is that bit. -/
 theorem bitL_bytesOf {bs : List Bool} {q : ℕ} (hq : q < bs.length) :
@@ -97,15 +100,48 @@ def SlotCommits (c : Circuit) (nm : String) (q n : ℕ) (w : Claims.Flock.Wit) :
   readForms w (hmCommit c q n) = FlockSoundness.Binding.commitString
     (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)) (readForms w (hmSalt c q n))
 
+/-- **The slot commits where its out columns carry the commit string's bits.** -/
+theorem slotCommits_of_bits {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit}
+    (h : ∀ t < 1024, w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false =
+      bitL (FlockSoundness.Binding.commitString
+        (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))
+        (readForms w (hmSalt c q n))) t) :
+    SlotCommits c nm q n w :=
+  readForms_eq_of_bits (by simp [hmCommit, FlockSoundness.Discharge.Hm.length_commitString]) fun t ht => by
+    simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var]
+    exact h t (by simpa [hmCommit] using ht)
+
+/-- **An honest slot commits** (the witness that `SlotCommits` holds of honest slots): where the witness's slot columns
+carry a satisfying assignment `z` of the hm96 circuit, its `cv` and `pad` inputs the row's last chaining value and block
+and its salt inputs the salt the slot reads, the slot outputs its commit string (`Hm.hm96_commit`). -/
+theorem slotCommits_of_hm96 {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit} (z : HmNets.Var → Bool)
+    (hz : FlockSoundness.Discharge.Hm.stHolds z ((HmNets.hm96Row Hm96.Default512.key).run HmNets.St.empty).2)
+    (hcv : ∀ i < 512, z i = FlockSoundness.Discharge.Hm.wbit (FlockSoundness.Discharge.Hm.lastCv
+      ⟨(rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)).toArray⟩) i)
+    (hpad : ∀ i < 1024, z (512 + i) = FlockSoundness.Discharge.Hm.wbit (FlockSoundness.Discharge.Hm.lastBlock
+      ⟨(rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)).toArray⟩) i)
+    (hy : ∀ j < 1536, z (1536 + j) = bitL (readForms w (hmSalt c q n)) j)
+    (hout : ∀ t < 1024, w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false =
+      FlockSoundness.Discharge.Hm.bit z ((HmNets.hm96Row Hm96.Default512.key).run HmNets.St.empty).1.2.2.2 t) :
+    SlotCommits c nm q n w :=
+  slotCommits_of_bits fun t ht => (hout t ht).trans
+    ((FlockSoundness.Discharge.Hm.hm96_commit z hz _ (by simp [readForms, Claims.Recursion.VStar.bytesOf, hmSalt])
+      hcv hpad hy).2 t ht)
+
 theorem length_xorMask (r y : List UInt8) :
-    (Merkle.xorBytes (FlockSoundness.Binding.digBytes (Refine.H512 r)) (Refine.K512.mask y)).length = 64 := by
-  rw [Merkle.xorBytes, List.length_zipWith, FlockSoundness.Discharge.Hm.length_digBytes, Refine.K512.mask_len]
+    (FlockSoundness.Merkle.xorBytes (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 r))
+      (FlockSoundness.Refine.K512.mask y)).length = 64 := by
+  rw [FlockSoundness.Merkle.xorBytes, List.length_zipWith, FlockSoundness.Discharge.Hm.length_digBytes,
+    FlockSoundness.Refine.K512.mask_len]
+  rfl
+
+theorem sha512_eq (m : Msg) :
+    FlockDeploy.sha512 m = FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) := by
+  rw [FlockSoundness.Binding.digBytes, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val]
   rfl
 
 /-- **A slot's calls are true evaluations where it outputs its commit string**: the salt's is the commit string's
 second half; the row's digest form `b ⊕ Φy` is `SHA-512(row) ⊕ M·y ⊕ Φy`, and `Φy` is `M·y` (`maskV_filter`). -/
-theorem sha512_eq (m : Msg) : FlockDeploy.sha512 m = FlockSoundness.Binding.digBytes (Refine.H512 m) := rfl
-
 theorem hmCalls_true {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.Wit} (h : SlotCommits c nm q n w) :
     ∀ p ∈ hmCalls c nm q n, FlockDeploy.sha512 (p.1 ++ readForms w p.2.1) = readForms w p.2.2 := by
   have hb : ∀ t (ht : t < 1024), w.hid.getD (slotHid c n (hmBase c q n) (hmOutCol c + t)) false =
@@ -137,10 +173,10 @@ theorem hmCalls_true {c : Circuit} {nm : String} {q n : ℕ} {w : Claims.Flock.W
       fun i hi => ?_).symm
     have hi' : i < 512 := by simpa [hmDigest] using hi
     have hm := FlockSoundness.Discharge.Hm.bitL_mask (readForms w (hmSalt c q n)) hi'
-    rw [← Refine.K512_mask] at hm
+    rw [← FlockSoundness.Refine.K512_mask] at hm
     have hx := FlockSoundness.Discharge.Hm.bitL_xorBytes (FlockSoundness.Discharge.Hm.length_digBytes
-      (Refine.H512 (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))))
-      (Refine.K512.mask_len (readForms w (hmSalt c q n))) hi'
+      (FlockSoundness.Refine.H512 (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))))
+      (FlockSoundness.Refine.K512.mask_len (readForms w (hmSalt c q n))) hi'
     have hci := hb i (by omega)
     rw [FlockSoundness.Binding.commitString, FlockSoundness.Discharge.Hm.bitL_append_lo (length_xorMask _ _) hi', hx,
       hm, maskV_filter] at hci
@@ -186,10 +222,12 @@ theorem mem_capsCalls {r : XR} {s : ℕ} {p : Msg × List HmNets.Lin × List HmN
       generalize hc : r.w.parts[s]?.bind partCircuit = oc at hp
       rcases oc with _ | c
       · simp at hp
-      · generalize hq : capPort c = oq at hp
-        rcases oq with _ | q
-        · simp at hp
-        · simp only [Option.bind_some, Option.map_some, Option.getD_some, List.mem_flatMap, List.mem_range] at hp
+      · simp only [Option.bind_some] at hp
+        cases hq : capPort c with
+        | none => simp [hq] at hp
+        | some q =>
+          rw [hq] at hp
+          simp only [Option.map_some, Option.getD_some, List.mem_flatMap, List.mem_range] at hp
           obtain ⟨n, hn, hp⟩ := hp
           exact ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩
     · simp at hp
@@ -216,13 +254,17 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
     have hp' : p ∈ layoutBDeployed.shaAt x s ∨ p ∈ capsCalls r s := by
       simpa [layoutBTops, hr] using hp
     rcases hp' with hp | hp
-    · cases hc : r.w.parts[s]?.bind partCircuit with
-      | none => simp [layoutBDeployed, hr, hc] at hp
-      | some c =>
-        simp only [layoutBDeployed, hr, hc, Option.bind_some, Option.map_some, Option.getD_some,
-          List.mem_flatMap] at hp
-        obtain ⟨hh, hmem, hp⟩ := hp
-        exact hmCalls_true ((h x _ s ws[s] r c hck hr hc).1 hh hmem) p hp
+    · cases hpt : r.w.parts[s]? with
+      | none => simp [layoutBDeployed, hr, hpt] at hp
+      | some pt =>
+        cases hc : partCircuit pt with
+        | none => simp [layoutBDeployed, hr, hpt, hc] at hp
+        | some c =>
+          simp only [layoutBDeployed, hr, hpt, hc, Option.bind_some, Option.map_some, Option.getD_some,
+            List.mem_flatMap] at hp
+          obtain ⟨hh, hmem, hp⟩ := hp
+          have hc' : r.w.parts[s]?.bind partCircuit = some c := by rw [hpt]; exact hc
+          exact hmCalls_true ((h x _ s ws[s] r c hck hr hc').1 hh hmem) p hp
     · obtain ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩ := mem_capsCalls hp
       exact hmCalls_true ((h x _ s ws[s] r c hck hr hc).2 l N hst q hq n hn) p hp
 
@@ -248,13 +290,14 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    HmSlotsCommit (deployZkRec _root_.Flock.Readable.relation) b.st →
+    HmSlotsCommit (deployZkRec _root_.Flock.Readable.relation) bR.st →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hS hRL hRP
-  exact ksLin2_deployed_rec b aux nOf rest fin wE join final w hP (readersTrue_layoutBTops _ _ bR _ hS) hRL hRP
+  exact ksLin2_deployed_rec b aux nOf rest fin wE join final w hP
+    (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS) hRL hRP
 
 /-- **`BitsLin2` at the coin server's record, with `ReadersTrue` as the slots' commit strings**:
 `bitsLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit`. It reads `StrictBirthday` and `ExpectedCR`, the named
@@ -277,12 +320,13 @@ theorem bitsLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRec
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
-    HmSlotsCommit (deployZkRec _root_.Flock.Readable.relation) b.st →
+    HmSlotsCommit (deployZkRec _root_.Flock.Readable.relation) bR.st →
     ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hS hRL hRP
-  exact bitsLin2_deployed_rec b aux nOf rest fin wE join final w hP (readersTrue_layoutBTops _ _ bR _ hS) hRL hRP
+  exact bitsLin2_deployed_rec b aux nOf rest fin wE join final w hP
+    (readersTrue_layoutBTops (finOpen fin) Bd.IVStar bR (deployZkRec _root_.Flock.Readable.relation) hS) hRL hRP
 
 end RecDeploy
