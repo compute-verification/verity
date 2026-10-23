@@ -11,9 +11,9 @@ statements (`roots v`: its registered root, leaf count, row width, domain and sc
 
 * `ownOf roots T k`: statement `k`'s data ports (lane `l`'s at `some l`, the combine's at `none`), port `name` reading
   row `row` of `roots v` (`reads := #[some row]`, the statement's one unit);
-* `readFull T k`: the ports statement `k` marks `read_in_full` (`Flock.KnownRead.READ_KEY`), lane `l`'s `partials` and
-  the combine's `p<x>`: two statements' reads of one partials row, which flock-verify holds to one width read in every
-  bit (`Flock.KnownRead.fullRows`);
+* `readFull T k`: the ports statement `k` marks `read_in_full` (`Flock.KnownRead.READ_KEY`), its reads of an A row, a B
+  row or a partials row (`fullValue`: lane `l`'s `a<s>`, `b<t>` and `partials`, the combine's `p<x>`), each row read by
+  several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
   `want` (`ownOf` at the roots it takes from the accepted registration and produced record, `PouwWindow.Lanes.rootsOf?`),
   each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file.
@@ -38,10 +38,14 @@ def regReads (T : Tile) (k : Option Nat) : List (String × String × Nat) :=
 def ownOf (roots : String → Flock.Registered.Port) (T : Tile) (k : Option Nat) : List Flock.Registered.Port :=
   (regReads T k).map fun (nm, v, row) => { roots v with name := nm, value := v, reads := #[some row] }
 
-/-- **The ports statement `k` reads in full** (`leaf_lanes.registered_file`'s `read_in_full`): its reads of the
-partials, lane `l`'s `partials` and the combine's `p<x>`. -/
+/-- **The values a statement reads in full** (`leaf_lanes.FULL`): the A rows, the B rows and the partials, each row
+read by several statements. -/
+def fullValue (v : String) : Bool := v == "a" || v == "b" || v == "partials"
+
+/-- **The ports statement `k` reads in full** (`leaf_lanes.registered_file`'s `read_in_full`): its reads of a
+`fullValue`, lane `l`'s `a<s>`, `b<t>` and `partials` and the combine's `p<x>`. -/
 def readFull (T : Tile) (k : Option Nat) : Array String :=
-  ((regReads T k).filterMap fun (nm, v, _) => if v == "partials" then some nm else none).toArray
+  ((regReads T k).filterMap fun (nm, v, _) => if fullValue v then some nm else none).toArray
 
 /-- Two registered ports are one: every field equal, a byte string's by its bytes. -/
 def portEq (p q : Flock.Registered.Port) : Bool :=

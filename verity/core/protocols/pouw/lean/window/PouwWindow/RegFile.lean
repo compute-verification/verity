@@ -15,8 +15,8 @@ accepted produced record alone:
   `SampledProofs.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
   `partials`. Every value's rows are `schema`'s.
 * `want?`: statement `k`'s data ports at those roots (`ownOf`), where the verifier holds every value they read.
-* `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each read of the
-  partials marked `read_in_full`, then the known ports, and `complete`.
+* `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each read of a
+  `fullValue` (A, B and partials rows) marked `read_in_full`, then the known ports, and `complete`.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) holds `want?`'s ports (`checkOwn`). `leafOwnCmd` runs it on
   files.
@@ -93,7 +93,7 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
     (if full then [(Flock.KnownRead.READ_KEY, Json.bool true)] else []))
 
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
-verifier's roots (`want?`), each read of the partials marked `read_in_full`, then the known ports `known`, and
+verifier's roots (`want?`), each read of a `fullValue` marked `read_in_full`, then the known ports `known`, and
 `complete` where it is set. A known port that is also a read is an error. -/
 def fileOf? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option Nat) (known : List (String × Json))
     (complete : Bool) : Except String Json := do
@@ -101,7 +101,7 @@ def fileOf? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option
   if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
     throw s!"port {nm} is both a read and known"
   pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT),
-    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (p.value == PARTIALS))) ++ known))] ++
+    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (fullValue p.value))) ++ known))] ++
     (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
