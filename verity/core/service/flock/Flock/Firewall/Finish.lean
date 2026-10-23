@@ -614,8 +614,8 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
   proof's rounds, live (`innerLive`); answered `ok 0` after the last. Its proof file is then `rep`'s on every round's coins.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
-  (`proofFile`), encoded from the proof the `inner` request just before it computed where that request's inputs and
-  coins are this one's (`Kept.answers`).
+  (`proofFile`), encoded from the proof the rep's last `inner` request computed where that request's inputs and coins
+  are this one's (`Kept.answers`). Another rep's requests may come between the two.
 Anything else, or a request it refuses, is answered `err WHY` and ends it, with exit code `1`. -/
 def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) (setups : Array Setup)
     (level0Of : ByteArray → IO (Option Level0.Level0))
@@ -630,7 +630,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
     ch.flush
   let mut tabs : Array (Option Tab) := Array.replicate setups.size none
   let mut hi : Array (Array (Option (Array ByteArray))) := Array.replicate setups.size #[none, none]
-  let mut kept : Option Kept := none
+  let mut kept : Array Kept := #[]
   repeat
     let line := (← ch.getLine).replace "\n" ""
     if line.isEmpty then break
@@ -647,7 +647,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       | .ok t =>
         tabs := tabs.set! i (some t)
         hi := hi.set! i #[none, none]
-        kept := none
+        kept := kept.filter (·.i != i)
         answer (flat t.cm0.cap)
       | .error e => return (← refuse e)
     | ["salts", i, r, len] =>
@@ -667,11 +667,10 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       let some name := spec.tables[i]? | return (← refuse s!"table {i} of the session's {spec.tables.size}")
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
-      let file : V ByteArray := parseRep t s b >>= fun q => match kept with
-        | some k => if k.answers i r q then pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
-          else proofFile t r (spec.domain name r).toUTF8 q
+      let file : V ByteArray := parseRep t s b >>= fun q => match kept.find? (·.answers i r q) with
+        | some k => pure (encZk (shapeZk t.st t.sch (claimsOf q.xs).size) k.proof)
         | none => proofFile t r (spec.domain name r).toUTF8 q
-      kept := none
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
       match file with
       | .ok p => answer p
       | .error e => return (← refuse e)
@@ -683,19 +682,19 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
       if r > 1 then return (← refuse s!"rep {r}: a table has reps 0 and 1")
       let some s := (hi[i]!)[r]! | return (← refuse s!"table {i} rep {r} before its salts for levels ≥ 1")
       let dom := (spec.domain name r).toUTF8
-      kept := none
+      kept := kept.filter fun k => !(k.i == i && k.r == r)
       let run : V (LiveM (Option Kept)) := if line.startsWith "open " then
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return none
         else (parseRep t s b).map fun q => do
           let z ← innerLive ch t r dom q
           let coins ← getThe (Array (Array F128))
-          return z.map fun proof => { i, r, q, coins, proof }
+          return z.map fun proof => ({ i, r, q, coins, proof } : Kept)
       match run with
       | .error e => return (← refuse e)
       | .ok m =>
         match ← (m.run' #[]).run with
         | .ok k =>
-          kept := k
+          kept := kept ++ k.toArray
           answer ByteArray.empty
         | .error e => return (← refuse e)
     | _ => return (← refuse s!"a request `{line}`")
