@@ -13,6 +13,7 @@ import importlib.util
 import itertools
 import json
 import re
+import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -111,7 +112,14 @@ def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifi
         out["revealed"] = sorted(proxies[0]._revealed)
         reveals.close()
 
-    publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
+    out["published"] = []
+
+    class Recording(cs.CertifyingPublisher):
+        def keep(self, record, params) -> None:
+            out["published"].append((record, params))
+            super().keep(record, params)
+
+    publish = Recording(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
     ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
                    proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
     out["events"] = json.loads((run / "server.json").read_text())["events"]
@@ -257,6 +265,41 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
     assert check["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
     assert check["issuer_refused"] == [] and check["comparisons"]["wire_is_the_records"]
+
+
+def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(served, tmp_path):
+    """`serve`'s `CertifierProcess`, on a copy of one key, writes the honest run's records, commitments and
+    certificates byte for byte as `CertifyingPublisher` inline does, and a reveal signed between two records takes the
+    same leaf: its calls run in the order they are made."""
+    import certifier_serve  # by name, so that the spawned process finds its functions
+
+    _, report, _, runs = served
+    published = runs["honest"]["published"]
+    cs.load_key(tmp_path / "inline", 6)
+    shutil.copytree(tmp_path / "inline", tmp_path / "process")
+    (tmp_path / "inline-run").mkdir()
+    (tmp_path / "process-run").mkdir()
+    own = cs.signer(tmp_path / "inline")
+    inline = cs.CertifyingPublisher(tmp_path / "inline-run", ar.Setup(report), Issuer(own, SESSION), cs.N2_LINK,
+                                    threaded=False)
+    process = certifier_serve.CertifierProcess(tmp_path / "process", tmp_path / "process-run", report, SESSION,
+                                               cs.N2_LINK)
+    try:
+        signed = []
+        for k, (record, params) in enumerate(published):
+            if k == len(published) // 2:
+                signed.append((own.sign(b"reveal"), process.sign(b"reveal")))
+            inline(record, params)
+            process(record, params)
+        process.close()
+        assert process.refused()[0] == inline.issuer.refused == []
+        assert process.public_key() == own.public_key()
+    finally:
+        process.shutdown()
+        own.close()
+    assert len(published) == 4 and signed[0][0] == signed[0][1]
+    for name in ("requests.records", "responses.records", "committed.jsonl", "certified.jsonl"):
+        assert (tmp_path / "process-run" / name).read_bytes() == (tmp_path / "inline-run" / name).read_bytes(), name
 
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):

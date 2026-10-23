@@ -61,8 +61,9 @@ frame too, so it refuses every window of a run with the salt on.
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
-- `serve` starts the shim, then the proxy, the link's listener and the reveal endpoint (`active.serve_reveals`), and
-  writes `deployment.json`, the auditor's record of the run: the certifier's public key, the proxy's run id, the
+- `serve` starts the shim, then the certifier's key in a process of its own (`CertifierProcess`, which keeps and certifies
+  every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal endpoint
+  (`active.serve_reveals`), and writes `deployment.json`, the auditor's record of the run: the certifier's public key, the proxy's run id, the
   certifier session (`--session`, which the challenger draws), the links, the addresses, the origin and the reveal
   deadline. It takes one link connection, which must come before the origin. Once the link has ended it stops the shim,
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
@@ -106,7 +107,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -250,19 +251,10 @@ class CertifyingPublisher(ar.Publisher):
 
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
 
-    def __call__(self, record, params) -> None:
-        if self.timing is not None:
-            self.timing.append({"submit": time.monotonic(), "link": record.link, "window": record.window})
-        super().__call__(record, params)
-
     def keep(self, record, params) -> None:
-        if self.timing is not None:
-            row = next(r for r in self.timing if r["link"] == record.link and r["window"] == record.window)
-            row["start"], c0 = time.monotonic(), time.thread_time()
+        start = time.monotonic(), time.thread_time()
         super().keep(record, params)
-        if self.timing is not None:
-            row["kept"], c1 = time.monotonic(), time.thread_time()
-            row["keep_cpu"] = c1 - c0
+        kept = time.monotonic(), time.thread_time()
         direction, parameters = self.ends[record.link]
         certified = self.issuer.certify(replace(record, link=self.link), direction, params, parameters)
         line = ({"refused": [self.link, direction.value, record.window]} if certified is None
@@ -270,7 +262,81 @@ class CertifyingPublisher(ar.Publisher):
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
         if self.timing is not None:
-            row["end"], row["certify_cpu"] = time.monotonic(), time.thread_time() - c1
+            end = time.monotonic(), time.thread_time()
+            self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
+                                "end": end[0], "keep_cpu": kept[1] - start[1], "certify_cpu": end[1] - kept[1]})
+
+
+_CERTIFIER: dict = {}
+
+
+def _certifier_start(key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
+    own = signer(key)
+    _CERTIFIER.update(signer=own, publish=CertifyingPublisher(out, ar.Setup(report), Issuer(own, session), link,
+                                                              threaded=False))
+
+
+def _certifier_call(name: str, *args):
+    own, publish = _CERTIFIER["signer"], _CERTIFIER["publish"]
+    if name == "keep":
+        return publish.keep(*args)
+    if name == "refused":
+        return publish.issuer.refused, publish.timing
+    if name == "close":
+        return own.close()
+    return getattr(own, name)(*args)
+
+
+class CertifierProcess:
+    """The served proxy's `publish` and its reveals' `signer` in one spawned process, which alone holds the certifier's
+    key and its leaf state: each record kept and certified as `CertifyingPublisher(threaded=False)` keeps it, and each
+    reveal signed, one call at a time in the order they are made. Certifying a window's records hashes for
+    milliseconds, so a thread would hold the proxy's GIL at its window's end. `close` waits for every record (the
+    signer stays up for the reveals), `refused` gives the issuer's refusals and `shutdown` closes the signer."""
+
+    def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
+        self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"), initializer=_certifier_start,
+                                        initargs=(key, out, report, session, link))
+        self.key: LmsKey = self.pool.submit(_certifier_call, "public_key").result()
+        self.futures: list = []
+        self.submits: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
+
+    @property
+    def key_id(self) -> bytes:
+        return self.key.key_id
+
+    def public_key(self) -> LmsKey:
+        return self.key
+
+    def start(self, session: bytes) -> None:
+        self.pool.submit(_certifier_call, "start", session).result()
+
+    def sign(self, message: bytes) -> bytes:
+        return self.pool.submit(_certifier_call, "sign", message).result()
+
+    def __call__(self, record, params) -> None:
+        if self.submits is not None:
+            self.submits.append((record.link, record.window, time.monotonic()))
+        self.futures.append(self.pool.submit(_certifier_call, "keep", record, params))
+
+    def close(self) -> None:
+        for f in self.futures:
+            f.result()
+
+    def refused(self) -> tuple[list, list | None]:
+        """The issuer's refused link-windows, and the publisher's timing (`CERTIFIER_SERVE_TIMING`) with each record's
+        submit time."""
+        refused, timing = self.pool.submit(_certifier_call, "refused").result()
+        if timing is not None and self.submits is not None:
+            submits = {(link, window): t for link, window, t in self.submits}
+            timing = [row | {"submit": submits[(row["link"], row["window"])]} for row in timing]
+        return refused, timing
+
+    def shutdown(self) -> None:
+        try:
+            self.pool.submit(_certifier_call, "close").result()
+        finally:
+            self.pool.shutdown()
 
 
 # The served plan.
@@ -446,10 +512,11 @@ def _address(text: str) -> tuple[str, int]:
 
 
 async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict, link: tuple[str, int],
-                reveal: tuple[str, int], signer: LmsSigner, challenger_key: LmsKey, session: bytes,
+                reveal: tuple[str, int], key: Path, challenger_key: LmsKey, session: bytes,
                 start_in: float = 10.0, reveal_deadline: float | None = None, n2_link: str = N2_LINK,
                 tamper: str | None = None, announce=_announce) -> dict:
-    """One served run on the host's clock (the module docstring's `serve`). Returns what `serve.json` holds."""
+    """One served run on the host's clock (the module docstring's `serve`), the certifier's key (the directory `key`)
+    held by its `CertifierProcess`. Returns what `serve.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     setup = ar.Setup(report)
     e, i, windows = setup.egress_params, setup.ingress_params, plan["windows"]
@@ -464,13 +531,12 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     shim.start()
     loop = asyncio.get_running_loop()
     shim_port = await loop.run_in_executor(None, conn.recv)
-    issuer = Issuer(signer, session)
-    publish = CertifyingPublisher(out, setup, issuer, n2_link)
+    certifier = CertifierProcess(key, out, report, session, n2_link)
     origin = time.monotonic() + start_in
     proxy = ServedProxy(("127.0.0.1", shim_port), e, i, setup.sync_set,
-                        [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=publish,
+                        [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=certifier,
                         egress_link=setup.egress_link, ingress_link=setup.ingress_link, salt=fresh_salt,
-                        reveal_deadline=deadline, challenger_key=challenger_key, signer=signer)
+                        reveal_deadline=deadline, challenger_key=challenger_key, signer=certifier)
     taken, served = loop.create_future(), loop.create_future()
 
     async def on_link(reader, writer) -> None:
@@ -500,7 +566,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     else:
         await served
     listening.close()
-    publish.close()
+    certifier.close()
     conn.send("stop")
     await loop.run_in_executor(None, shim.join)
     ar.write_logs(out, [proxy])
@@ -509,14 +575,16 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     while "error" not in log and len(proxy.revealed) < windows and time.monotonic() < end:
         await asyncio.sleep(0.25)
     reveals.close()
-    log |= {"revealed": sorted(proxy.revealed), "issuer_refused": [[l, d.value, w] for l, d, w in issuer.refused],
+    refused, timing = certifier.refused()
+    certifier.shutdown()
+    log |= {"revealed": sorted(proxy.revealed), "issuer_refused": [[l, d.value, w] for l, d, w in refused],
             "shim_exit": shim.exitcode}
     (out / "serve.json").write_text(json.dumps(log, indent=1))
-    if publish.timing is not None:
+    if timing is not None:
         (out / "publisher_timing.json").write_text(json.dumps(
             {"origin": origin, "switchinterval": sys.getswitchinterval(),
              "bucket_ms": {"egress": e.bucket_ms, "ingress": i.bucket_ms}, "start": proxy.start,
-             "links": {"egress": setup.egress_link, "ingress": setup.ingress_link}, "calls": publish.timing}))
+             "links": {"egress": setup.egress_link, "ingress": setup.ingress_link}, "calls": timing}))
     return log
 
 
@@ -804,7 +872,7 @@ def main(argv=None) -> int:
         ar._quiet_runtime()
         log = asyncio.run(serve(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()), args.out,
                                 url=args.upstream, upstream=upstream_params(args.upstream, args.api_key_env),
-                                link=args.link, reveal=args.reveal, signer=signer(args.key),
+                                link=args.link, reveal=args.reveal, key=args.key,
                                 challenger_key=read_public(json.loads(args.challenger_key.read_text())),
                                 session=session, start_in=args.start_in, reveal_deadline=args.reveal_deadline,
                                 n2_link=args.n2_link, tamper=args.tamper))
