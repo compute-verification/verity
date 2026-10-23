@@ -582,7 +582,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS", "READS_FROM", "READS_V1", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
            "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
