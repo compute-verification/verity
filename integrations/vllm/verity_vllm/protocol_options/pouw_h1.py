@@ -32,13 +32,9 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
-* **The Commit** (ROOTS1, `pouw_h1_commit`): with the Commit in the serving engine (``served``'s tap), the window
-  registers each round's input-ids table ``ids@<s>`` under its round's root (round 0's from its prompts' tokens, before
-  the window opens, its root inside round 0's request root: `credit.requests_root`), and the Commit's record (the commitment's ``commit``) registers each call's A table
-  as its AROW of the call's (round, linear) and each round's ids table as its step's input ids, the window's own trees
-  when the rows are the same. `calls_root` binds the record before the draw root; core's credit holds each table to
-  the Commit's value (`credit._arow`), and the serving process credits nothing in a window that fails it or whose
-  prefill ids aren't its prompts (`pouw_h1_commit.UNTIED`).
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and each call's A
+  table are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+  credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
@@ -64,9 +60,7 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   from the challenger's salt coin) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG` (`program_salt`)
   until the challenger opens a 64-byte one. A challenger's window opens its salt coin after its own open root
   (`salt.window_open_root` of the weights' root, round 0's request root and its session), once round 0 is admitted
-  and before step 0's forward (`H1Run.open_window`). Round 0's request root is its request table's root
-  (``request_table`` in its row of the log), with the Commit `credit.requests_root` of it and round 0's input-ids
-  table's root.
+  and before step 0's forward (`H1Run.open_window`); with the Commit, that request root takes in round 0's ids table.
 """
 from __future__ import annotations
 
@@ -238,8 +232,7 @@ def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
     served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table
-    holds slot i at leaf i, served for i < m and empty after; with the Commit, it is held to the Commit's AROW of (step,
-    layer) (`pouw_h1_commit`)."""
+    holds slot i at leaf i, served for i < m and empty after (with the Commit, its AROW of (step, layer))."""
 
     index: int
     step: int
@@ -392,12 +385,10 @@ class H1Run:
         return self._salt if self._salt is not None else self.open_window()
 
     def open_window(self, ids: bytes | None = None) -> bytes:
-        """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and round
-        0's request root handed to ``opener``, which opens the window's session and its salt coin after the window's open
-        root over it (`pouw_h1_window.Window.open`). With ``ids``, the root of round 0's input-ids table (the Commit's,
-        `pouw_h1_served.Served.open_ids`), that request root is `credit.requests_root` of the table's root and it, so the
-        prompt tokens are fixed before the salt. The commitment records the request root (``requests_root``), the
-        table's (``request_table``) and what ``opener`` returns of the opening."""
+        """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and round 0's
+        request root (`_requests0`, over ``ids``, round 0's input-ids table's root, with the Commit, so the prompt tokens
+        are fixed before the salt) handed to ``opener``, which opens the window's session and its salt coin after the
+        window's open root over it (`pouw_h1_window.Window.open`); the commitment records what ``opener`` returns."""
         if ids is not None:
             self._ids0 = ids
         if self._salt is None:
@@ -416,8 +407,7 @@ class H1Run:
         return self._salt
 
     def _requests0(self, table: bytes) -> bytes:
-        """Round 0's request root over its request table's root `table`: with round 0's input-ids table, `credit.requests_root`
-        of the two, else the table's own."""
+        """Round 0's request root: `credit.requests_root` of `table` and round 0's ids table's root, else `table`."""
         requests = table if self._ids0 is None else CR.requests_root(table, self._ids0)
         self.commits["requests_root"], self.commits["request_table"] = requests.hex(), table.hex()
         return requests
