@@ -24,17 +24,18 @@ its own and earlier windows (`schedule.expected_grids`), so such a sync never ch
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
 
-A record may also come certified (`certificate`): a network certificate and the record head it signs, both witness.
-The audit checks the certificate's signature against the network certifier's public key (`key`) over its message in
-the certifier session (`session`, the id the challenger drew for it), and that it names the head's link-window and signs
-the head's digest; a certificate that fails, one from another session included, is a `signature` violation. A head settled
-after the verdict deadline is a `no-verdict`. The status is the head's, which the signed digest binds. On egress the
-grid check compares the certified record digest with the digest of the Program's grid, under the parameters digest
-of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier every certificate verifies,
-and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid comparison:
-`check_link(grid=False)` leaves the grid to its unit's head check (`head_check`), which holds the head's status, grid
-parameters and counts on every link-window, so N2's claim is counts only. The frames are left to N3, a design and the
-simulator's behaviour (a prototype in the clear), not yet a proof-service unit.
+A record may also come certified (`certificate`): the record head, the certifier's salt for it and the network
+certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that
+the certificate names the head's link-window and signs the head's salted digest (`certificate_digest`), and its
+signature against the network certifier's public key (`key`) over its message in the certifier session (`session`,
+the id the challenger drew for it); a certificate that fails, one from another session included, is a `signature`
+violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
+digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
+under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
+every certificate verifies, and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid
+comparison: `check_link(grid=False)` leaves the grid to its unit's head check (`head_check`), which holds the head's
+status, grid parameters and counts on every link-window, so N2's claim is counts only. The frames are left to N3, a
+design and the simulator's behaviour (a prototype in the clear), not yet a proof-service unit.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
 its statuses: a link-window is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
@@ -169,7 +170,7 @@ def _mismatch(record: Published, link: str, window: int, expected, params: GridP
     committed digest, or the raw grid."""
     if isinstance(record, CertifiedRecord):
         want = record_head(link, Direction.EGRESS, window, expected, COMPLETE, params, parameters)
-        return record.certificate.digest != want.digest()
+        return record.head.digest() != want.digest()
     if isinstance(record, CommittedRecord):
         return record.digest != record_digest(link, window, expected, COMPLETE, params)
     return record.grid != expected

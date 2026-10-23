@@ -31,16 +31,18 @@ closes the period, takes the ledger (``GATE ledger``), the host's pins log (``GA
 ``challenger-pins head``), the session's tree (``GATE fetch S``) and the key's pin (``GATE pubkey``), and runs the
 verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
 against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``, each
-reading the session through core's `challenger.pinned_session` under that pins log,
+reading the session through core's `challenger.pinned_session` under that pins log and the verifier's own first-parent
+history of main (``--main``, ``git rev-list --first-parent origin/main``; without it every session is refused),
 `pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome (each call's
 ``--registered`` file) is in the serve record. Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
 the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
 step, a pin that isn't the gate key's, no pins log, a pins log cut before the lines the open sealed and one with a
-line rewritten; and with the local gate, a period opened with a ``--weights-root`` no registration has (refused at the
-open), and sessions forged through the gate itself (a period of their own), opened on the bare weights' root and on
-another window's root with the window's other coins after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
+line rewritten, no copy of main's first-parent history and one without the session's pin; and with the local gate, a
+period opened with a ``--weights-root`` no registration has (refused at the open), and sessions forged through the gate
+itself (a period of their own), opened on the bare weights' root and on another window's root with the window's other
+coins after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
 under its round's root (``a_roots``), its served layout is the declared one's, the salt key is kept past the close in
 the prover's own directory and published nowhere under ``$OUT`` (``key_custody``), and every red-team case is refused.
@@ -54,10 +56,11 @@ its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 sn
 
     git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
       integrations/vllm/manifests/checkpoints-int8.json
-    research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz \\
+    git rev-list --first-parent origin/main > main.txt
+    research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
-      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 \\
+      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --main $RESEARCH_RUN_DIR/inputs/main.txt \\
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit COMMIT --checkpoint SNAPSHOT_DIR'
 
 Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build it once as its own run and send it with
@@ -322,10 +325,12 @@ def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
 
 
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
-          period: str | None = None, descriptor: bytes | None = None, pins: list[Path] | None = None) -> dict[str, Any]:
+          period: str | None = None, descriptor: bytes | None = None, pins: list[Path] | None = None,
+          main: list[str] | None = None) -> dict[str, Any]:
     """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the session's ``out/``
-    (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins`; its
-    credit over `descriptor`, the period's circuit's bytes (`program_bytes`)."""
+    (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins` and the
+    verifier's own first-parent history of main `main`; its credit over `descriptor`, the period's circuit's bytes
+    (`program_bytes`)."""
     from tests.protocol_options import pouw_h1_gpu as GPU
     wfile = None
     if window is not None:
@@ -334,7 +339,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
         wfile.write_text(json.dumps(window) + "\n")
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
-                               [str(p) for p in pins or ()])
+                               [str(p) for p in pins or ()], main)
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -376,10 +381,10 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
 
 
 def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at: str, circuit: str = "00" * 64,
-             draw_k: int = 1, model: str | None = None, circuit_files: dict[str, str] | None = None
-             ) -> dict[str, Any]:
+             draw_k: int = 1, model: str | None = None, circuit_files: dict[str, str] | None = None,
+             main: list[str] | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
-    `gate` (the local gate's), sessions forged through it."""
+    `gate` (the local gate's), sessions forged through it; `main` is the verifier's first-parent history of main."""
     from verity.core.protocols.pouw import salt as PS
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
@@ -393,8 +398,9 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     cases: dict[str, Any] = {}
 
     def case(name: str, rec: Path, *, window: dict | None = None, led: list[Path] | None = None, tr: Path | None = None,
-             pn: list[Path] | None = None) -> None:
-        got = check(rec, tr or tree, pin, led or ledger, rt / name, window, period, pins=pins if pn is None else pn)
+             pn: list[Path] | None = None, mn: Any = main) -> None:
+        got = check(rec, tr or tree, pin, led or ledger, rt / name, window, period, pins=pins if pn is None else pn,
+                    main=mn)
         cases[name] = {**got, "refused": not got["ok"]}
 
     case("r_bare_weights_root", _edited(record, lambda d: d["commitment"]["session"].update(root=weights), rt / "bare.json"))
@@ -417,11 +423,13 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
         logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
     (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
     case("pins_rewritten", record_path, pn=[rt / "pins-rewritten.jsonl"])
+    case("main_none", record_path, mn=None)
+    case("main_without_pin", record_path, mn=[c for c in main or () if c not in {json.loads(ln)["commit"] for ln in logged}])
     first = next(i for i, x in enumerate(record["calls"]) if x.get("tables"))
     case("table_root_changed", _edited(record, lambda d: d["calls"][first]["tables"].update(a="00" * 64), rt / "table.json"))
     case("table_a_root_unbound", _edited(record, lambda d: d["calls"][first]["tables"].update(a=None), rt / "unbound.json"))
     case("table_rounds_cut", _edited(record, lambda d: d["commitment"]["rounds"].pop(), rt / "rounds-cut.json"))
-    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period, pins=pins)
+    got = check(record_path, tree, "ab" * 64, ledger, rt / "other_pin", None, period, pins=pins, main=main)
     cases["other_pin"] = {**got, "refused": not got["ok"]}
     if gate is not None:
         forged_period = f"{period}-forged"
@@ -451,7 +459,8 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
         case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"],
              pn=[rt / "forged_gate" / "pins.jsonl"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
-    must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "table_", "other_pin", "forged_b", "forged_o"))]
+    must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "main_", "table_", "other_pin", "forged_b",
+                                              "forged_o"))]
     return {"cases": cases, "all_refused": all(cases[k].get("refused") for k in must), "must_refuse": must}
 
 
@@ -461,6 +470,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "period": a.period, "live": a.gate is not None, "served": a.served}
+    main = _main_of(a)
     pdir = Path(a.program) if a.program else out / "program"
     doc["program"] = (json.loads((pdir / PROGRAM_META).read_text()) if a.program else build_program(pdir))
     circuit = doc["program"]["program_digest"]
@@ -550,11 +560,12 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         record = json.loads(calls.read_text())
         desc, root = program_bytes(pdir), record["commitment"]["session"]["root"]
         doc["verify"] = {
-            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc, pins),
-            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc, pins),
+            "session": check(calls, tree, pin, ledger, out / "verify" / "session", None, a.period, desc, pins, main),
+            "trusted": check(calls, tree, pin, ledger, out / "verify" / "trusted", {"root": root}, None, desc, pins,
+                             main),
         }
         doc["red_team"] = red_team(out, pin, a.period, gate if a.gate is None else None, a.peer, a.at_addr, circuit,
-                                   draw_k, model, files)
+                                   draw_k, model, files, main)
     doc["gate_log"] = gate.log
     v = doc.get("verify") or {}
     cr = (v.get("trusted") or {}).get("credit") or {}
@@ -567,6 +578,12 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     return doc
 
 
+def _main_of(a: argparse.Namespace) -> list[str] | None:
+    """The verifier's own first-parent history of main at ``--main`` (`remote.main_lines`), or None without one."""
+    from verity.core.protocols.sampled_proofs import remote
+    return None if a.main is None else remote.main_lines(a.main)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
@@ -577,6 +594,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", default="local", help="the serving node's name in the gate's peers")
     ap.add_argument("--at", help="the challenger's HOST:PORT before the open answers its port (live: 127.0.0.1:7811)")
     ap.add_argument("--key-sha512", help="live: the auditor's pinned public_sha512")
+    ap.add_argument("--main", metavar="FILE", help="the verifier's own `git rev-list --first-parent origin/main`, a commit a "
+                                                  "line, which must hold the session's pin; without it every session is "
+                                                  "refused")
     ap.add_argument("--period", default="vllm-h1-rehearsal")
     ap.add_argument("--no-served", dest="served", action="store_false",
                     help="serve without pouw_h1_served.Served (no A and B trees, no registration)")
@@ -607,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
             for d in ("serve", "gate"):
                 shutil.copytree(src / d, out / d, dirs_exist_ok=True)
         rt = red_team(out, done["key_sha512"], done["period"], None, a.peer, a.at or "127.0.0.1:1",
-                      (done.get("program") or {}).get("program_digest", "00" * 64))
+                      (done.get("program") or {}).get("program_digest", "00" * 64), main=_main_of(a))
         Path(out, "red_team.json").write_text(json.dumps(rt, indent=1, default=str) + "\n")
         print(f"POUW-H1-RED-TEAM all_refused={rt['all_refused']} "
               + " ".join(f"{k}={'refused' if v.get('refused') else 'ACCEPTED'}" for k, v in rt["cases"].items()), flush=True)

@@ -26,7 +26,7 @@ first coin.
   the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current` (RT4-INT-40).
   A reserve or an open is refused unless that log records this tree's pin (`pins_refusal`, the verifier's `pins_reason`),
   and each open seals the log as it stands (`pins: {lines, sha512}`), so `pinned_session` can hold the session to a pin
-  of main. The key (`/var/lib/vy-challenger/key`,
+  the log records, and that pin to the auditor's own first-parent list of main. The key (`/var/lib/vy-challenger/key`,
   serve.py's layout) and every session's `out/` are `auditor`'s, in a directory only `auditor` and root can enter.
 - **A window** is opened in two steps, each a signed entry appended under the ledger's lock (or refused) and fsynced.
   `reserve` takes the request (peer, scheme, families, epoch, minutes) and appends the session's `reserve` entry with its
