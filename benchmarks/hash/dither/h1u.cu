@@ -529,8 +529,18 @@ struct OneOut {
 // RW (kh_units_multi_j10r): the fused receipts-only unit under J10-R's noise (h1tile.j10r_noise): seeds' first 8 words are
 // the call's seed_c, row 32 ri + lane's blocks come from the call's row workspace ws (h1jr_rows: block t at 16 t words)
 // and column 32 cj + lane's blocks, M RB + (32 cj + lane) CB + c, are hashed by the lane; the fold keys stay sigma_R's.
+// Its A and B loads run H1U_JPD segments ahead in H1U_JPD + H1U_JRING sets, RW's own H1U_PD and H1U_RING: it hashes one
+// block an iteration where h1um hashes two, so its loads have half the time to land.
 // h1u_unit is one warp's unit u (u < units) with its shared memory S; h1u runs unit blockIdx.x WARPS + warp of one call,
 // h1um (kh_units_multi) unit u of the call its warp's index falls in.
+#ifndef H1U_JPD
+#define H1U_JPD 3
+#endif
+#ifndef H1U_JRING
+#define H1U_JRING 1
+#endif
+static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JPD + H1U_JRING) == 0,
+              "a chunk's 16 segments are whole rings of H1U_JPD (+ 1 with H1U_JRING) sets");
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
@@ -539,7 +549,8 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
   static_assert(!RW || !(WS || OS || J10 || PL || DG), "J10-R's units are the fused receipts-only form");
   constexpr bool PF = WS || H1U_PF;
-  constexpr int PD = H1U_PD, NS = H1U_PD + H1U_RING;
+  constexpr bool RING = RW ? H1U_JRING : H1U_RING;
+  constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -763,7 +774,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
           prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
         }
-        if (PF && H1U_RING) {
+        if (PF && RING) {
           if (sg + PD < ks) load_seg(sg + PD, pa[(jj + PD) % NS], pb[(jj + PD) % NS]);
 #pragma unroll
           for (int r = 0; r < 4; ++r) {
