@@ -328,16 +328,22 @@ MERGED_TOKENS = 64
 
 def test_a_latency_budget_that_doesnt_fit_a_window_is_cut_to_the_most_that_does():
     """vLLM's endpoint took up to 1.7 s for 64 tokens four in flight: four times that and half a second is 73 buckets,
-    and four such responses don't fit in a window of 60, so the plan takes the largest D that does, 56. A plan is
-    refused only when twice the slowest and half a second doesn't fit either."""
+    and four such responses don't fit in a window of 60, so the plan takes the largest D that does, 52. At 56 they fit
+    from a later window's bucket 1 but not from window 0's bucket 2, which would leave window 0 without a session for
+    `late` to hold, so 56 doesn't fit. A plan is refused only when twice the slowest and half a second doesn't fit
+    either."""
     body = cs.request_body("stub", MERGED_TOKENS)
 
     def probed(slowest):
         return {"url": "stub", "body": body,
                 "responses": [{"events": MERGED_TOKENS, "first_s": 0.0, "last_s": slowest}]}
 
-    _, plan = cs.served_plan(probed(1.7), 40, in_flight=4)
-    assert plan["served"]["delta_buckets"] == 56 and plan["windows"] == 12
+    report, plan = cs.served_plan(probed(1.7), 40, in_flight=4)
+    assert plan["served"]["delta_buckets"] == 52 and plan["windows"] == 11
+    assert [q["enqueue"] for q in plan["requests"]][::4] == [2] + [60 * w + 1 for w in range(1, 10)]
+    assert ar.adversary_plan(plan, ar.Setup(report), "late")["writes"]
+    with pytest.raises(cs.DoesntFit, match="window 0 from its bucket 2"):
+        cs.served_plan(probed(1.7), 40, delta_buckets=56, in_flight=4)
     assert cs.served_plan(probed(0.6), 40, in_flight=4)[1]["served"]["delta_buckets"] == 29
     with pytest.raises(cs.DoesntFit, match=r"D of 65 … 125 buckets"):
         cs.served_plan(probed(3.0), 40, in_flight=4)

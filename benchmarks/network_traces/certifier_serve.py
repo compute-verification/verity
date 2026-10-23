@@ -36,7 +36,9 @@ raw count, which must be 1 … F, and its seconds to the last are kept; a respon
 `active.TOKEN_BYTES` bytes of text) isn't cut, and N2's counts refuse its window. D, the latency budget in buckets, is
 four times the slowest response plus half a second, as `lab_run.py` sets it, or, when a group's responses that late
 don't fit in the window they're sent in (below), the most that does, down to twice the slowest plus half a second
-(`DoesntFit` below that); `--delta-buckets` sets it. The plan sends `--requests` requests `--in-flight` at a time, the groups D + 1 buckets apart in the middle of a bucket, each
+(`DoesntFit` below that); `--delta-buckets` sets it. Window 0's first group is released in its bucket 2, a bucket
+later than any other window's, and a D whose group fits only from bucket 1 doesn't fit: it would leave window 0
+without a request, and `late` without a window-0 session to hold. The plan sends `--requests` requests `--in-flight` at a time, the groups D + 1 buckets apart in the middle of a bucket, each
 request padded to the same number of link frames. The endpoint serves a group side by side, and the shim writes the
 group's responses one after another in the order their requests reached it (`request_major`), so the canonical order
 is request-major and the egress counts don't depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that run: every
@@ -386,6 +388,9 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int)
                 a = (a // T + 1) * T + 1
             starts.append(a)
             a += D + 1
+        if starts[0] >= T:
+            raise DoesntFit(f"{in_flight} responses of {F} events, D = {D} buckets after their requests, don't fit in "
+                            f"window 0 from its bucket 2: give a smaller latency budget (--delta-buckets)")
         anchors = [a for g, a in zip(groups, starts) for _ in g]
         sends = [(a - 0.5) * BUCKET_MS for a in anchors]
         frames = [{"session": s, "index": k, "anchor": a, "ready": a + D} for s, a in zip(names, anchors)
