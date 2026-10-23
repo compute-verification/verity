@@ -530,8 +530,9 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more than the
-    endpoint sent at the end of the first session's response, on time and logged."""
+    `covert.LiveSender` draws the symbols as it serves. `extra`, on a live shim only, writes one event more at the end
+    of the first session's response, after what the endpoint sent and the shim's padding (`pad_to`), on time and
+    logged."""
     if strategy == "extra":
         return plan | {"strategy": strategy, "seed": seed, "extra": plan["sessions"][0][0]}
     if strategy != "covert":
@@ -767,12 +768,6 @@ async def _http_body(reader: asyncio.StreamReader, head: bytes):
             yield data
 
 
-async def _then(chunks, last: bytes):
-    async for data in chunks:
-        yield data
-    yield last
-
-
 class LiveServer:
     """A live OpenAI endpoint inside the boundary, behind a shim: `handle` serves one stream's connection by sending its
     request (less its padding and `user`, which names the session) to the endpoint at `upstream`, and writing back the
@@ -788,7 +783,10 @@ class LiveServer:
     path `prefix`, sent the bearer key in the environment variable `api_key_env` names, if any. With
     `plan["request_major"]` (a served plan's) the endpoint serves streams side by side but the shim writes them in the
     order it received their requests, each stream's first event only after the stream before it has ended, so the
-    canonical order is request-major however the endpoint interleaves its responses."""
+    canonical order is request-major however the endpoint interleaves its responses. With `plan["pad_to"]` = F (a
+    served plan's, F its body's tokens) a response the endpoint ends after fewer than F canonical events, having sent
+    some tokens together in one chunk, gets empty canonical events after its last, up to F, written and logged as the
+    endpoint's are, so every response is F events long; one of more than F isn't cut."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
@@ -798,7 +796,7 @@ class LiveServer:
         key = os.environ[params["api_key_env"]] if params.get("api_key_env") else None
         self.authorization = b"" if key is None else b"authorization: Bearer %s\r\n" % key.encode()
         self.tau, self.horizon = params["bucket_ms"] / 1000, plan["windows"] * params["buckets"]
-        self.writes, self.extra = plan.get("writes"), plan.get("extra")
+        self.writes, self.extra, self.pad_to = plan.get("writes"), plan.get("extra"), plan.get("pad_to")
         self.held: Counter = Counter()
         self.windows = plan["windows"]
         self.position, self.origin, self.open = 0, None, 0
@@ -813,7 +811,7 @@ class LiveServer:
         self.writers: set = set()
         self.events: list[tuple[int, str, int, int, bytes]] = []
         self.log = {"receipt_late_ms": [], "batch_late_ms": [], "late_registrations": 0, "requests": 0, "events": 0,
-                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live"}
+                    "failed": [], "cut_at_horizon": 0, "first_event_ms": [], "server": "live", "padded": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
@@ -854,6 +852,21 @@ class LiveServer:
         finally:
             self.open += 1
 
+    async def _response_events(self, chunks, name: str):
+        """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
+        (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
+        the `extra` session, one event more after those."""
+        cutter, n = Events(), 0
+        async for data in chunks:
+            bodies = [b for e in cutter.feed(data) for b in canonical_events(e)]
+            n += len(bodies)
+            yield bodies
+        if self.pad_to is not None and n < self.pad_to:
+            self.log["padded"].append([name, self.pad_to - n])
+            yield [event(b"")] * (self.pad_to - n)
+        if name == self.extra:
+            yield canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n')
+
     async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
@@ -869,15 +882,12 @@ class LiveServer:
             if not up_head.startswith((b"HTTP/1.1 200", b"HTTP/1.0 200")):
                 self.log["failed"].append(up_head.split(b"\r\n")[0].decode(errors="replace"))
                 return
-            cutter, k, cutoff = Events(), 0, self.origin + (self.horizon - 1.5) * self.tau
+            k, cutoff = 0, self.origin + (self.horizon - 1.5) * self.tau
             planned = None if self.writes is None else [b for b, _ in self.writes.get(name, [])]
             hold = -1
             anchor = math.floor(received / self.tau)
-            chunks = _http_body(up_reader, up_head)
-            if name == self.extra:
-                chunks = _then(chunks, b'data: {"choices":[{"text":" extra"}]}\n\n')
-            async for data in chunks:
-                for body in (b for e in cutter.feed(data) for b in canonical_events(e)):
+            async for bodies in self._response_events(_http_body(up_reader, up_head), name):
+                for body in bodies:
                     if k == 0:
                         await self._await_turn(ticket)
                     if planned is not None:
@@ -1695,7 +1705,9 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
     if live:
         timing |= {"server_first_event_ms": percentiles_ms(server["first_event_ms"]),
                    "server_failed": len(server["failed"]), "server_failures": server["failed"][:20],
-                   "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"]}
+                   "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"],
+                   "server_padded": {"responses": len(padded := server.get("padded", [])),
+                                     "events": sum(n for _, n in padded)}}
     out = {"config": plan["name"], "windows": windows, "rows": rows, "comparisons": comparisons, "timing": timing,
            "egress": {"real": real, "slots": slots, "frames": len(frames)},
            "hist": {k: {str(x): n for x, n in v.items()} for k, v in hist.items()},
