@@ -170,7 +170,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
 - **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε
   or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
-  the egress profile, the w-th registration is window w and its outcome of record accepted. A rejected or late window,
+  the egress profile (on a served link, of its served profile), the w-th registration is window w and its outcome of
+  record accepted. A rejected or late window,
   a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
   their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
@@ -183,7 +184,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   predicts), all bound by the spec's context with the link, the run,
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
-  a root entry with another key, or anything more in `window` is refused.
+  a root entry with another key, or anything more in `window` is refused. A served link has no egress profile, and its
+  sizes and each window's declared sync are public instead (`PUBLIC_SERVED`, "A served link" below).
 - **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v2{EGRESS, INGRESS}: the AND of the certificates' check and
   each end's head check. The certificates' check is one opaque primitive over the two record leaves' committed digests,
   with no gates: each certificate verifies under the certifier's key in its session (`LinkWindows.certifier_session`),
@@ -216,10 +218,9 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   the ingress head's, where that end declares one), which puts the link's timing at the profile. The egress grid is
   the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
   the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection `All`, it doesn't
-  say the egress grid is the Program's. A link whose egress end has no profile has no verdict (`ValueError`, failing
-  closed), since nothing would hold its egress timing: every link whose egress counts aren't fixed before the run (the
-  lab's, served traffic's), until a shaper fixes them or a unit holds them to the Program's under the declared syncs.
-  The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
+  say the egress grid is the Program's. On a served link it also runs the served counts' check (`served_check`, "A
+  served link" below). A link whose egress end has neither an occupancy profile nor a served profile has no verdict
+  (`ValueError`, failing closed), since nothing would hold its egress timing. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one. An
   unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
   compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
@@ -231,13 +232,84 @@ What this establishes: the outcome is accept exactly when the opening seals, bot
 accepts the registered link-window's records, and the outcome record binds the root, the draw and the session. The
 claim is counts only: on every link-window of a link whose egress end declares a profile, the egress head's counts are
 the profile's (and the ingress head's, where that end declares one), so the link's timing is at the profile. It stays
-counts only until N3 is a proof-service unit with Selection `All`. N2 covers no lab or served link yet: an egress end
-without an occupancy profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the verifier
+counts only until N3 is a proof-service unit with Selection `All`. On a served link the egress head's counts are
+instead the ones its ingress head's counts derive under the window's declared sync ("A served link" below). An egress
+end with neither profile gets no verdict (`ValueError`, failing closed). What it doesn't establish: the verifier
 of record reads the witness, so it is not zero-knowledge, and it must run where the certificates may go until the unit
 is proved. The head check leaves the head's deadline byte and frames root free. The certificates' check reads the
 deadline, and N3's design would read the frames root, so an accepted outcome says nothing of the frames. One clock per
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
+
+## A served link (`served`)
+
+A served link's egress counts follow its requests' arrivals and the run-time syncs, so nothing fixes them before the
+run and its egress end has no occupancy profile. Declared with
+`LinkWindows(served=ServedProfile(F, F_in, windows, own))`, N2 derives them inside the unit instead: on such a link it
+holds the egress head's counts to the ones the ingress head's counts derive under the window's declared sync, with no
+public egress profile.
+
+- **The unit** is `NetworkServedLinkWindow` v1{EGRESS, INGRESS, SERVED}: `NetworkLinkWindow`'s certificates' check and
+  two head checks (neither end with a count check unless its end declares a profile), and one gate (`served.gate`)
+  naming the Boolean Definition `served.NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}` over the two heads' counts,
+  cut from the heads the head checks open (so witness), and the window's sync (δ, p, q), ρ = p/q. OWN is the ingress
+  certifier's own frames at the head of every window's first bucket: 1 with its salt on, else 0. Its one output, the
+  ok bit, is 1 when every ingress count is at most R_in, bucket 0's at least OWN, p and q are nonzero, and the egress
+  counts are `served.derive`'s, of the ingress counts with bucket 0's OWN own frames taken off:
+  - each request's anchor is the bucket whose ingress release completes its F_in frames, as the proxy anchors one;
+  - each request is answered by F frames, request after request in canonical order, the k-th frame of a response at
+    logical index k, handed by `schedule.handing_buckets` under the sync;
+  - the egress certifier releases them FIFO, at most R a bucket, left-packed (`grid.released`);
+  - the window ends idle at both ends: the ingress counts sum to a multiple of F_in, and every frame is handed and
+    released by bucket T − 1.
+
+  The circuit is a closed form of `derive` (`served`'s docstring), and `served.reference` is its reference, which the
+  tests hold to it. Its size (`served.size`) is 678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1, and
+  688,210 at F_in = 2, R = 16, R_in = 4, beside the head checks' openings (1,876,070 each at T = 600); OWN = 1 adds 63.
+- **Public** (`PUBLIC_SERVED`): the items above, with the occupancy profile on ingress only where the placement fixes
+  it and none on egress, the served sizes (F, F_in, OWN and the link's windows, fixed before the run), and each window's
+  declared sync as an output of the protocol. That sync is the clock-sync advice the audit already reads and charges
+  (log2 #Σ_sync bits a window, 7 at 16 × 8): the served counts read it, and nothing else about the run is declared.
+- **The verifier of record** is `LinkWindows.verify`, which on a served link also runs `served_check`:
+  `served.reference` over the opened heads' counts and the window's declared sync. `network_verdict` takes the served
+  profile's windows.
+- **Carry-over: none.** Each window's derivation starts with an empty egress queue, no request frame pending and no
+  earlier hand, and checks that the window ends the same way. By the check alone, an accepted window's egress counts
+  are a function of its own ingress counts and sync. By induction from the run's first window, which starts empty (as
+  a certifier back from maintenance does, carrying nothing), on a link whose every window is accepted
+  (`network_verdict`'s AND) the Program's run ends every window idle too, so each window's counts are the Program's
+  grid under the premises below. It is the smallest sound rule: no state crosses a window's boundary, so no unit needs
+  a carry that another window's unit would have to hold it to.
+- **Request boundaries.** A request is in one window: its F_in frames are released there, and its F response frames
+  are handed and released there. A request whose frames, or whose response, would straddle a window's end makes the
+  window refuse, and the next one, whose counts carry frames its ingress counts don't derive.
+- **The admission rule** (`active.Bucketer(served=served.Admission(…))`, `active.Proxy(served=…)`) is how an honest
+  proxy meets that. It enqueues arrived frames only as whole requests, and only while the window, with the request,
+  still ends idle (`served.admits`: the queued frames released at r_in from the next bucket, then `derive` under the
+  window's sync); the rest wait, in order, for the next window. The sync is the window's declared one where the proxy
+  holds it before the run, else the slowest of Σ_sync (largest δ, smallest ρ): a later hand only lowers the release
+  curve, so a window idle under it is idle under any sync of Σ_sync. A served link's ends share T and τ_b (its anchors
+  are ingress buckets), its ingress takes the certifier's own frame exactly when the profile counts one (OWN 1: the
+  salt on, at a PoUW window of one certifier window, so the salt frame heads every window), and a window must hold
+  that frame, one request and its response, or the proxy refuses to start (`ValueError`).
+- **Premises** of "the derived counts are the Program's grid", which tie the counts to the served computation; N2's
+  claim rests on none of them:
+  - FIXLEN: every response is F frames, since every request runs to its `max_tokens` and the server writes one token
+    a frame (#3051). The lab pads each block's responses to F with empty events.
+  - A fixed request size: every request is F_in frames, a power of two, and every ingress frame is a request's but
+    the certifier's own salt frame, which heads each window's first bucket when the salt is on (OWN).
+  - The Program's canonical order is request-major: each response's frames are consecutive, responses in request
+    order. The shaper hands in canonical order, so a server that interleaves responses changes nothing on the wire
+    while each frame is ready by its hand.
+  - Both ends share T and τ_b (checked by `LinkWindows` and the proxy), and one declared sync applies to all of a
+    window's anchors, as each request is admitted in its window.
+
+What this establishes: on every accepted link-window of a served link, the egress head's counts are `derive`'s of the
+ingress head's counts under the declared sync, whatever the frames hold. So the egress timing adds nothing to what
+the ingress counts and the charged advice carry, and under the premises it is the Program's. The ingress counts are
+the record's own, at most r_in a bucket, as on any end without a profile. What it doesn't establish: the frames
+(N3's, the salt frame's place among them included: the counts see only that bucket 0 holds OWN frames more), and the
+premises, which nothing checks.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -484,7 +556,9 @@ them.
     anchor's window. The egress `Certifier` releases min(queue, r) frames per bucket, left-packed, and r − n padding
     frames follow them on the wire.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in
-  (`Bucketer`, `calibration.size_ingress_ms`'s model).
+  (`Bucketer`, `calibration.size_ingress_ms`'s model). On a served link (`Proxy(served=…)`, off by default) it is
+  enqueued only with its request's other frames, and only while the window, with the request, still ends idle: the
+  admission rule ("A served link" above).
 - **The salt** (`Proxy(salt=…)`) is off by default, and with it off every record, wire and verdict is as above.
   - **What.** `salt_bits` bits (512 by default, `SALT_BITS`) per PoUW window from the certifier's own randomness
     (`fresh_salt`). PoUW window p is the `pouw_window` = k certifier windows p·k … p·k + k − 1 (k = 1 by default),
@@ -696,7 +770,14 @@ and seven lemmas, and three more proved lemmas:
   another root), each held to the stand-in; the unit's id and its gates by size class; N2 compares no grid, so a window
   whose frames differ from the Program's at the profile's counts (in content, or in order within a bucket) is accepted
   where the stand-in rejects it, its frames being left to N3, and an egress head under another parameters digest is
-  rejected; a link whose egress end has no profile has no verdict; a head of another size class is a reject;
+  rejected; a link whose egress end has neither an occupancy profile nor a served profile has no verdict; a head of
+  another size class is a reject;
+- **`test_network_certifier_served.py`:** a served link: honest served traffic is accepted in every window; a window
+  whose response is handed late, or carries a frame more or one fewer, is refused while the audit accepts it; a
+  request straddling a window's end refuses that window and the next, and behind the admission rule the same arrivals
+  are accepted; behind the admission rule, under random dense load, and on random idle runs, each window's derived
+  counts are the Program's grid (`expected_grids`); a window that doesn't end idle has no derivation; the circuit
+  equals its reference on four size classes, sync edge cases included; the served unit's id, public items and spec;
 - **`test_network_certifier_head_check.py`:** N2's head check: the count check is 32·T − 1 ANDs and the fields
   736 + 8·L − 1; each part equals its reference on honest heads and refuses each tampered input where it belongs (link,
   direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another
@@ -723,6 +804,8 @@ and seven lemmas, and three more proved lemmas:
   - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
     window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
     instances. A proxy can't start past its windows or with an online prover;
+  - the served bucketer admits whole requests while the window ends idle, holds the rest for the next window, and
+    every record it publishes derives; it refuses an own frame and a window that can't hold one request;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
