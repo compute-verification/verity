@@ -862,7 +862,27 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
     its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
-    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s."""
+    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
+    (`unit_circuit`)."""
+    ports, out_words, row_words = unit_ports(definition, name, in_rows, public)
+    n_words, W = len(ports.ins), len(ports.outs)
+    units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
+                     out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
+    sig = (tuple((r, Array(w, Value(16))) for r, w in zip([*public, *(r for r, _ps in in_rows)], row_words)),
+           Tuple(tuple(Array(w, Value(16)) for w in out_words)))
+    unit = SimpleNamespace(id=name, signature=lambda: sig)
+    if structural:
+        t, _lw, _top = SL.lower(definition, name=name, ports=ports)
+        return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
+    C = unit_circuit(definition, ports)
+    lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
+    return IL.Lowering(name, unit, units, C, lay), out_words
+
+
+def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
+               public: Sequence[str] = ()) -> tuple[SL.Ports, list[int], list[int]]:
+    """`unit_lowering`'s ports: the u16 input ports, each argument leaf's bits among them, and the u16 output ports' bits
+    (`struct_lower.Ports`); each output port's words; and each input port's (``public``'s, then the rows')."""
     params, ret = definition.signature()
     types = dict(params)
 
@@ -906,24 +926,22 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
         out_words.append(len(bits) // 16)
         out_bits += bits
     W = len(out_bits) // 16
-    ports = SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits))
-    units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
-                     out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
     row_words = [sum(-(-w // 16) for w in widths(p)) for p in public] + [sum(sum(widths(p)) for p in ps) // 16 for _r, ps in in_rows]
-    sig = (tuple((r, Array(w, Value(16))) for r, w in zip([*public, *(r for r, _ps in in_rows)], row_words)),
-           Tuple(tuple(Array(w, Value(16)) for w in out_words)))
-    unit = SimpleNamespace(id=name, signature=lambda: sig)
-    if structural:
-        t, _lw, _top = SL.lower(definition, name=name, ports=ports)
-        return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
+    return SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits)), out_words, row_words
+
+
+def unit_circuit(definition, ports: SL.Ports) -> gf2.Circuit:
+    """The flat unit on ``ports`` (`unit_ports`), never laid out: ``definition`` lowered by `ir_lower.lower` on input ports
+    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero."""
     C = gf2.Circuit()
-    in_bits = [b for j in range(n_words) for b in C.input(f"in{j}", 16)]
-    outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in flat_in]) for b in w]
-    out_bits = [gf2.ZERO if i is None else outs[i] for i in out_bits]
-    for j in range(W):
-        C.output(f"out{j}", out_bits[16 * j:16 * (j + 1)])
-    lay = IL.layout(C, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)])
-    return IL.Lowering(name, unit, units, C, lay), out_words
+    in_bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
+    outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in ports.leaves]) for b in w]
+    bits = [gf2.ZERO if i is None else outs[i] for i in ports.bits]
+    at = 0
+    for j, w in enumerate(ports.outs):
+        C.output(f"out{j}", bits[at:at + w])
+        at += w
+    return C
 
 
 @dataclass
