@@ -1979,7 +1979,7 @@ def _stats(a: argparse.Namespace) -> int:
     """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
     store, the landing check's records fetched with `research status --also`."""
     from . import queue_stats
-    from .drive import _fetch
+    from .merge import fetch_run
     from .store.local import LocalStore
 
     top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
@@ -2000,7 +2000,11 @@ def _stats(a: argparse.Namespace) -> int:
         return queue_stats.ts(at) if at else None
 
     def run_dir(rid: str) -> Path:
-        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+        # a landing's check has ended (--refresh); one name a fetch, since slot.json beside steps.jsonl fetched neither (23 Oct)
+        got = fetch_run(rid, ["steps.jsonl"], top, refresh=True)
+        if got and not (got[0] / "slot.json").is_file():
+            fetch_run(rid, ["slot.json"], top, refresh=True)
+        return got[0] if got else Path("/nonexistent")
 
     return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
 
