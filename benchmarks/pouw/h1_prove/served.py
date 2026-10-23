@@ -12,8 +12,9 @@ descriptor (the rehearsal's ``window-program.json.gz``), whose SHA-512 must be t
 1. The window's draw coin is the verifier's challenger's, or nothing is drawn: the session the signed ledger opens and
    ends for the window's root, under the pinned key (`remote.trusted_session`), and in it the window's one draw coin,
    opened after its `draw_root` over its manifest, last receipts and every round's root and coin
-   (`pouw_h1_challenger.draw_reason`). The window's salt and round coins are its served values' checks (vllm's verify),
-   not the draw's.
+   (`pouw_h1_challenger.draw_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
+   (`pouw_h1_challenger.manifest_reason`). The window's salt and round coins are its served values' checks (vllm's
+   verify), not the draw's.
 2. The draw is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the served window's arguments: stream the window's
    root, registration its draw root, receipt ``{"receipts": …}``), over the layout of the descriptor its period committed
    (`credit.layout_of`), at the K that period's open committed (`credit.committed_k`): one work stratum a K.
@@ -75,6 +76,8 @@ def main(argv=None) -> int:
     except CoinError as e:
         raise SystemExit(f"REFUSED: the challenger's session is not trusted: {e}") from e
     if (why := PHC.draw_reason(commits, trusted, received.get(Wd.DRAW, ()))) is not None:
+        raise SystemExit(f"REFUSED: {why}")
+    if (why := PHC.manifest_reason(doc)) is not None:
         raise SystemExit(f"REFUSED: {why}")
     if sum(c["units"] for c in calls) != commits["units"] or any(
             c["base"] != sum(x["units"] for x in calls[:j]) for j, c in enumerate(calls)):
