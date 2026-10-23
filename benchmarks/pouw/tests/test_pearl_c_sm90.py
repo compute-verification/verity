@@ -158,6 +158,18 @@ def test_sass_gate_refuses_what_it_should(monkeypatch):
     assert S.gate(PTXAS_OK, SASS_OK.replace("gemm_x", "gemm_y"))[1]
 
 
+def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypatch):
+    assert {k: v[0] for k, v in S.LOCAL_OK.items()} == {"s512_rows": 16}
+    monkeypatch.setattr(S, "WANT", {"gemm_x": (128, 2, 1)})
+    rows = ("ptxas info    : Compiling entry function 's512_rows' for 'sm_90a'\n"
+            "ptxas info    : Function properties for s512_rows\n    8 bytes stack frame, 4 bytes spill stores, 4 bytes spill loads\n"
+            "ptxas info    : Used 255 registers\n")
+    sass = SASS_OK + "\nFunction : s512_rows\n  /*0010*/ STL [R1], R2 ;\n  /*0020*/ LDL R2, [R1] ;"
+    assert not S.gate(PTXAS_OK + rows, sass)[1]
+    assert S.gate(PTXAS_OK + rows.replace("8 bytes stack", "24 bytes stack"), sass)[1]
+    assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
+
+
 @pytest.mark.skipif(not os.environ.get("VERITY_POUW_NVCC"), reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
 def test_the_sm90a_build_passes_the_gate(tmp_path):
     cuda = Path(os.environ["VERITY_POUW_NVCC"])

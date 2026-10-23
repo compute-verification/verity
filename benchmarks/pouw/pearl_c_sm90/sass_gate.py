@@ -29,6 +29,11 @@ def hgmma(n: int) -> str:
 WANT = {**{f"{g}{t}": (n, 4, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
         **{f"{g}{t}": (n, 4, 4) for g in ("gemm_pearlc", "gemm_pearlc_s") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
         "gemm_words": (32, 4, 0), "gemm_words_d": (32, 4, 0), "form_s5": (128, 1, 0), "form_s5_scalar": (128, 1, 0)}
+#: kernels that may use a little local memory, each with at most these bytes of stack and of spills, and why: none of
+#: them is on the served path or the GEMMs'
+LOCAL_OK = {"s512_rows": (16, "hash_h3.cuh's reference row digest (PEARLC_SHA=ref, or a caller without segdig_<tree>; the served "
+                               "path gives every segdig buffer and runs hash_fast.cuh's): 255 registers and 4 bytes spilled at "
+                               "sm_90a, r20261023-065436-805b")}
 
 
 def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
@@ -63,7 +68,9 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
             else:
                 funcs[cur]["other_mma"].append(form)
     for name, r in funcs.items():
-        if r.get("stack") or r.get("spill_stores") or r.get("spill_loads") or r.get("LDL") or r.get("STL"):
+        bound = LOCAL_OK.get(name, (0,))[0]
+        if max(r.get("stack", 0), r.get("spill_stores", 0), r.get("spill_loads", 0)) > bound or \
+                (not bound and (r.get("LDL") or r.get("STL"))):
             problems.append(f"{name}: local memory {r}")
         n, q, h = WANT.get(name, (0, 0, 0))
         if r.get("other_mma"):
@@ -80,14 +87,15 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
 def main(argv: list[str]) -> int:
     ptxas, sass, out = argv[1:4]
     funcs, problems = gate(open(ptxas).read(), open(sass).read())
-    json.dump({"want": {k: list(v) for k, v in WANT.items()}, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
+    json.dump({"want": {k: list(v) for k, v in WANT.items()}, "local_ok": LOCAL_OK, "kernels": funcs, "problems": problems},
+              open(out, "w"), indent=1)
     if problems:
         print("REFUSED: " + "; ".join(problems), file=sys.stderr)
         return 1
     print(f"pearl_c_sm90.cubin: {len(funcs)} kernels; " + ", ".join(
         f"{n} {funcs[n]['regs']} regs {funcs[n]['QGMMA']} QGMMA" + (f" {funcs[n]['HGMMA']} HGMMA" if funcs[n]["HGMMA"] else "")
         for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_n64", "gemm_pearlc_d", "gemm_words", "form_s5"))
-        + "; no local memory")
+        + f"; no local memory but {sorted(LOCAL_OK)}'s")
     return 0
 
 
