@@ -5,9 +5,10 @@ proved as its 32 lanes and its combine (PRF-134, option A:
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
-  statement is unit 0 of its own Program, a one-call template over the Definition (STAND-IN for the window Program whose
-  units the 33 statements realize, BRIDGE2's), and the Lean verifier derives its unit from its own copy of that Program
-  (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL`` (`h1unit.layout`).
+  statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
+  Program (`h1window.leaf_program`, here of a one-call window at K over this leaf's tile), and the Lean verifier derives
+  its unit from its own copy of that Program (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL``
+  (`h1unit.layout`).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -21,7 +22,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 * **Each statement's rows** are all ports of the verifier's own registered reads (`leaf_lanes.own`): `leaf_lanes.reads`'
   (lane l's ``a0..a3``, ``b0..b7``, ``zy`` and ``partials`` (row l); the combine's ``p0..p31`` and ``receipt``) and its
   known ports (`leaf_lanes.known_rows`, `produced.known_port`): lane l's ``admit`` and ``pub`` (salt, position, roots and the
-  lane index l as a u16 word, `lane_word`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
+  lane index l as a u16 word, `h1zy.LANE`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
   `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s, the public file `h1unit.verifier_pub`'s.
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
@@ -72,12 +73,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
 import h1unit as U  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, concat  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
@@ -136,21 +134,6 @@ def _template(name: str, d):
                                     conformance="protocol-defined", register=False, **ports))
 
 
-def lane_word(d):
-    """STAND-IN: the lane ``d`` with its index read from a whole u16 word, its low `h1zy.lane_bits` bits, the rest unread. A
-    C-Flock row is whole u16 words, and the index (5 bits at 32 × 32) leaves ``pub`` 1605 bits."""
-    params, ret = d.signature()
-    nb = params[-1][1].n
-
-    def body(B, S, *args):
-        *rest, word = args
-        return B.call(d, *rest, Coll(Array(nb, BL.BIT), concat([word[t].refs for t in range(nb)])))
-
-    decl = d.defn.ports
-    return bind(CompositeDefinition("H1LanesLaneWord", 1, (), lambda S: ((*params[:-1], ("lane", Array(16, BL.BIT))), ret), body,
-                                    conformance="protocol-defined", register=False, ports=lambda S: decl(d.S())))
-
-
 @dataclass
 class Bound:
     """One statement kind's Definition, its Program (a one-call template) and partition."""
@@ -172,6 +155,21 @@ def bound(name: str, d) -> Bound:
     if P.units(program, query) != 1:
         raise AssertionError(f"{name}: the statement's Program is one unit")
     return Bound(d, program, query, part)
+
+
+def window(t, k: int) -> Program:
+    """A window of one call at K over the leaf's tile ``t``: its one unit is the leaf."""
+    return HW.program((("w", k, RC[1]),), (("w", 0),), RC[0], RC, unit=lambda _k: Z.unit(t))
+
+
+def derived(win: Program, k: int, kind: str) -> Bound:
+    """``kind``'s statement at K as a served window's verifier derives it from its own copy of the window Program ``win``
+    (`h1window.leaf_program`): the one-call Program of its wrapper over the lane or combine of ``win``'s template at K."""
+    program, query = HW.leaf_program(win, k, kind)
+    part = P.partition(program, query)
+    if P.units(program, query) != 1:
+        raise AssertionError(f"{kind}: the statement's Program is one unit")
+    return Bound(HW.leaf_unit(win, k, kind), program, query, part)
 
 
 # -- the leaf, its registration and its partials -----------------------------------------------------------------------------
@@ -465,7 +463,8 @@ def prepare(args) -> None:
     ctx = Ctx(work, args.name, args.k, args.position)
     t = tile(args.k)
     ctx.wp = 2 * LL.words(args.k)
-    ctx.lane, ctx.combine = bound("H1LanesLaneStatement", lane_word(Z.lane(t))), bound("H1LanesCombineStatement", Z.combine(t))
+    win = window(t, args.k)
+    ctx.lane, ctx.combine = derived(win, args.k, LL.LANE), derived(win, args.k, LL.COMBINE)
     ctx.reg = ctx.lane
     ctx.prog = P.program_digest(ctx.reg.program)
     for kind, b in ((LL.LANE, ctx.lane), (LL.COMBINE, ctx.combine)):
@@ -600,7 +599,7 @@ def cost(args) -> None:
     lane = ([(f"a{s}", [f"a[{s}]"]) for s in range(LL.LANE_ROWS)] + [(f"b{s}", [f"b[{s}]"]) for s in range(LL.LANE_COLS)]
             + [(LL.ADMIT, [LL.ADMIT]), (LL.ZY, [LL.ZY]), (LL.PARTIALS, [LL.PARTIALS]), ("pub", list(LL.PUBLIC))])
     units = {"combine": (Z.combine(t), [(f"p{x}", [f"{LL.PARTIALS}[{x}]"]) for x in range(n)] + [(LL.RECEIPT, [LL.RECEIPT])]),
-             "lane": (lane_word(Z.lane(t)), lane)}
+             "lane": (Z.lane(t), lane)}
     out = {"k": args.k, "tile": U.tile(), "lanes": n, "words": LL.words(args.k)}
     for name, (d, rows) in units.items():
         t0 = time.time()
