@@ -22,7 +22,8 @@ the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit le
 the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
 `registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
 or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
-and root, R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
+and root, or that record's registered value `EARLIER_VALUE`, its domain and root at W's leaves, words and word bits,
+R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
 R6-prover). A verifier may name its window's open root (`window_root`, `WROOT`) and the values it holds across windows
 (`held`): the record registers every other value it doesn't fill, pin or take as an output under `WROOT`'s domain, and
 the log's earlier record under another window's (`EARLIER_WROOT`), its own or none.
@@ -130,6 +131,8 @@ EARLIER = {"kind": "served", "row": 100, "run": "r-test"}
 #: the earlier record's output port a verifier's `outputs` may name as W's commitment, and its domain
 EARLIER_OUT = "earlier.out"
 EARLIER_OUT_DOMAIN = "dd" * 64
+#: the earlier record's registered value a verifier's `outputs` may reuse as W's commitment, under that domain
+EARLIER_VALUE = "earlier.W"
 #: the window's open root a verifier may name, and an earlier window's
 WROOT = "a7" * 64
 EARLIER_WROOT = "e0" * 64
@@ -1256,15 +1259,20 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if earlier and values and "W" in values and "W" not in sup and draw(st.booleans()):
         # W is an output of the earlier run: its port, of W's rows, under a root and domain of its own
         output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+    reuse = bool(output) and draw(st.booleans())
     pin = not output and bool(values) and "W" in values and "W" not in sup and draw(st.booleans())
     fixed = [*keep, *(["W"] if pin or output else []), *sup]
     if earlier:
         # the log's commitment of a supplied value is any other: it is the record's own, never held
         roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-        if output:
+        given = list(s.entries(held, log_window, fixed)) if held else []
+        if reuse:
+            # W reuses the earlier record's registered value: an entry of W's rows, words and word bits, under that root
+            given.append({**s.committed["W", values["W"]].entry(), "value": EARLIER_VALUE, **output})
+        elif output:
             roots.append({"port": EARLIER_OUT, "leaves": s.committed["W", values["W"]].entry()["leaves"], **output})
         log = [R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
-                        registered=s.entries(held, log_window, fixed) if held else ())]
+                        registered=given)]
     anchors = draw(st.sampled_from([[], ["weights"]]))
     binding = BINDING if _reads_window(sup) or draw(st.booleans()) else None
     rec = _record_of(s, values, law, {**WINDOW, **(binding or {})}, log, binding, output=output,
@@ -1279,7 +1287,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
     if output:
-        params["outputs"] = {"W": {"port": EARLIER_OUT, "record": R.digest(log[-1])}}
+        params["outputs"] = {"W": {**({"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}),
+                                   "record": R.digest(log[-1])}}
     elif pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     if values and s.formats and draw(st.integers(0, 3)):
@@ -1496,8 +1505,31 @@ def _earlier_out(a: dict, x: int) -> None:
     a["params"]["log"] = [{**r, "roots": [
         {**e, ["leaves", "domain", "root"][x % 3]: [1, 1000, True, None, "x", -1][x // 3 % 6]} if e["port"] == EARLIER_OUT
         else e for e in r["roots"]]} for r in a["params"]["log"]]
+    _repoint(a)
+
+
+def _earlier_value(a: dict, x: int) -> None:
+    """The earlier record's registered value `EARLIER_VALUE` changed (its leaves, words, word bits, domain, root or name,
+    to another form or value, or its word bits left out), with `outputs` naming the changed record, so R7 reads the entry
+    itself."""
+    def change(e):
+        if not (isinstance(e, dict) and e.get("value") == EARLIER_VALUE):
+            return e
+        if x % 7 == 6:
+            return {k: v for k, v in e.items() if k != G.WIDTH_KEY}
+        return {**e, ["leaves", "words", G.WIDTH_KEY, "domain", "root", "value"][x % 7]:
+                [1, 1000, True, None, "x", -1, 16, 32, "W"][x // 7 % 9]}
+    a["params"]["log"] = [{**r, "registered": [change(e) for e in r["registered"]]}
+                          if isinstance(r.get("registered"), list) else r for r in a["params"]["log"]]
+    _repoint(a)
+
+
+def _repoint(a: dict) -> None:
+    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value)."""
     if "outputs" in a["params"]:
-        a["params"]["outputs"] = {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}
+        o = a["params"]["outputs"]
+        kind = {"value": EARLIER_VALUE} if isinstance(o, dict) and "value" in (o.get("W") or {}) else {"port": EARLIER_OUT}
+        a["params"]["outputs"] = {"W": {**kind, "record": _earlier(a)}}
 
 
 def _earlier(a: dict) -> str:
@@ -1534,9 +1566,15 @@ REGISTERED_PARAMS = [
         {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"S": {"port": EARLIER_OUT, "record": _earlier(a)}},
         {"nope": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": "EE" * 64}},
         {"W": {"port": EARLIER_OUT}}, {"W": {"port": 1, "record": _earlier(a)}},
-        {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {}][x % 15]),
+        {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {},
+        {"W": {"value": EARLIER_VALUE, "record": "ee" * 64}}, {"W": {"value": "nope", "record": _earlier(a)}},
+        {"W": {"value": "W", "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE, "record": _earlier(a)}},
+        {"W": {"value": EARLIER_VALUE, "record": R.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
+        {"W": {"value": EARLIER_VALUE, "port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE}},
+        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}][x % 24]),
     lambda a, x: a["params"].pop("outputs"),
     _earlier_out,
+    _earlier_value,
     _set("params", "row_schemas", lambda a, x: [
         {"A": G.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
         {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
