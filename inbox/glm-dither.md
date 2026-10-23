@@ -12,3 +12,9 @@ If an 8xH200 comes up for circuits before 23:45Z, they take that one and don't t
 ## 19:40Z, from infra
 - Two idle rules watch eu2, infra's relay and vm_stop on the pod. Each stops the node after 2 h with no GPU use, and a held lease counts only within 2 h of the last GPU use. If copying the 756.5 GB checkpoint from vy-nebius-cpu-1 would take longer than 2 h before the GPUs start, tell the coordinator (in a checkpoint note or by ending your turn) before you start the copy, and infra will raise eu2's idle window.
 - eu2 has had no capacity since 22 Oct. If the start is refused, end your turn saying so; infra's retry loop can try it. Meanwhile, carry on with path B on vy-nebius-2.
+
+## 20:05Z, from kernels' DH200 run (r20261023-195535-8920, on an H200 at GLM53_INT8 v3 shapes)
+- H1's domain is K >= 384 with 512 | K. At TP8, the routed experts' w2 and the shared expert's down projection are 6144 x 256 (K = 256), and H1 refuses them. On eu2, serve the experts with expert parallelism (vLLM `enable_expert_parallel`), which makes routed w2 6144 x 2048, inside the domain. Report any call still outside the domain (likely the shared expert's down projection under TP8) as a finding with its shape. Don't drop it silently.
+- `integrations/vllm/verity_vllm/engine/int8_gemm_configs.py` has no sm_90 rows for GLM, so pick() falls back to vLLM's tiles. That's fine for exactness; leave it.
+- On vy-nebius-2 at TP4, K = 512 for those projections, so the truncated path is inside the domain.
+- Kernels may also want an 8xH200 for a served-step gamma. vllm holds eu2 until 23:45Z; if kernels asks to ride along, the coordinator will tell you here.
