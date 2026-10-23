@@ -19,6 +19,13 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
   shape, from the deployed state but for `stopped`, and leaves the same state but for `stopped`; so where the deployed
   frame's check releases a round past the inner proof's label (`check_own_ok`), and at it where the scheduled round in
   its place is the firewall's own round 0 at some `final_c'` (`check_own0_ok`).
+* `repState_own_inner`, `check_inner_done`, `repState_past`: along the loop's requests the rep's state counts the
+  inner proof's rounds (`run_ownReqs_inner`), the frame's check refuses its round 4, and past its last coins the state
+  owes none. A round the frame refuses leaves the rep owing nothing, so it ends at the next coins.
+* `repState_own_check`, `progOf_own_step`: the loop's frame state one round past the rep's schedule is the deployed
+  check's but for `stopped`; so `ofLoop_progChecks`: `ProgChecks` at `ofLoop`, from `ofLoop_progChecks_of`'s premises
+  but `hO`, the placeholder's pad row within a `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0
+  the firewall's own at some `final_c'` (`hL0`).
 -/
 
 namespace Claims.ZKServer
@@ -819,6 +826,786 @@ theorem ownRounds_zero {c : Cfg} (hz : ZeroCfg c) (ci ci' : Array (Array F128)) 
   rw [ownRound_zero hz { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 }
     { eps := (ci'.getD 0 #[]).getD 0 0, beta := (ci'.getD 2 #[]).getD 0 0 } _ _ _ hj]
 
+theorem ownRounds_getD (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) {j : ℕ} (hj : j < INNER_ROUNDS) :
+    (ownRounds c ci ns).getD j (.empty, 0) =
+      (ownRound c { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 } (zeros 16) (zeros 64) (ns j) j,
+        ns j) := by
+  unfold ownRounds
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hj, ↓reduceIte, Option.map_some,
+    Option.getD_some]
+
+/-- **The frame's coins, then the inner proof's round**: where the frame takes the coins `cs` and the round `r` there,
+its state after both is the round's. -/
+theorem run_coins_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (cs : Array F128) (n : ℕ) (r : ByteArray)
+    {s1 s' : Masker} {out : ByteArray} {fr : Array ℕ} (ha : st.m.answer c cs = .ok s1)
+    (hr : roundFree c s1 r n = .ok (out, s', fr)) (hin : s'.inner.isSome) :
+    _root_.Flock.Firewall.Frame.run c st [.coins (.ok cs), .round n r .own] = ({ m := s', begun := true }, false) := by
+  have ho := answer_owed ha
+  have hr' := round_of_roundFree hr
+  have hn : s'.inner.isNone = false := by cases h : s'.inner <;> simp_all
+  simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, ho, hr', hn, bind, Except.bind,
+    pure, Except.pure, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+
+/-- Coins inside the inner proof count one more of its rounds. -/
+theorem answer_inner_some {c : Cfg} {s s' : Masker} {cs : Array F128} {k : ℕ} (hs : s.inner = some k)
+    (h : s.answer c cs = .ok s') : s'.inner = some (k + 1) := by
+  unfold Masker.answer at h
+  simp only [bind, Except.bind, pure, Except.pure, hs] at h
+  repeat' split at h
+  all_goals (cases h <;> rfl)
+
+theorem ownReqs_push (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128))
+    (a : Array F128) {i : ℕ} (hi : sched.size + i ≤ cr.size) :
+    ownReqs prior sched own (cr.push a) i = ownReqs prior sched own cr i := by
+  have hg : ∀ k, k < cr.size → (cr.push a).getD k #[] = cr.getD k #[] := fun k hk => by
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, show k ≠ cr.size by omega, ↓reduceIte]
+  unfold ownReqs
+  rw [flatMap_range_congr (i := sched.size) fun k hk => by rw [hg k (by omega)],
+    flatMap_range_congr (i := i) fun j hj => by rw [hg (sched.size + j) (by omega)]]
+
+/-- **The loop's frame state one round on, inside the inner proof**: where the rep's schedule is complete on its coins
+`cr` and on those before the last, `cr` covers the inner proof's round `i`, the frame takes that round's coins at the
+rep's state after it, at the state `m`, and takes the inner proof's round `i + 1` there, the rep's state after round
+`i + 1` on one more round's coins is that round's. -/
+theorem repState_own_step {c : Cfg} (hz : ZeroCfg c) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ)
+    (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ)
+    (a : Array F128) (i : ℕ) {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched)
+    (hcr : cr.size = sched.size + i + 1) (hi4 : i + 1 < INNER_ROUNDS) (s₀ : Masker) {m s' : Masker}
+    {out : ByteArray} {fr : Array ℕ}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (sched.size + i + 1)).answer c (cr.getD (sched.size + i) #[]) = .ok m)
+    (hr : roundFree c m (ownRound c s₀ (zeros 16) (zeros 64) (ns (sched.size + (i + 1))) (i + 1))
+      (ns (sched.size + (i + 1))) = .ok (out, s', fr)) (hin : s'.inner.isSome) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (sched.size + i + 2) = s' := by
+  rw [show sched.size + i + 2 = sched.size + (i + 1) + 1 by omega,
+    repState_own_at c t rep dom xs hi cr0 (cr.push a) ns (i + 1) hal (by rw [Array.pop_push]; exact hs') hi4,
+    ownReqs_succ, ownReqs_push _ _ _ _ _ (by omega),
+    ownRounds_zero hz ((cr.push a).extract sched.size (cr.push a).size) (cr.extract sched.size cr.size),
+    ownRounds_getD _ _ _ hi4]
+  rw [repState_own_at c t rep dom xs hi cr0 cr ns i hal hs (by omega)] at ha
+  have hg : (cr.push a).getD (sched.size + i) #[] = cr.getD (sched.size + i) #[] := by
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_push, show sched.size + i ≠ cr.size by omega, ↓reduceIte]
+  rw [hg, ownRound_zero hz _ s₀ _ _ _ hi4]
+  dsimp only at ha ⊢
+  rw [run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (ownReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched
+      (ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)) cr i) = R at ha ⊢
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha ⊢
+    rw [run_coins_own c S _ _ _ ha hr hin]
+    rfl
+  | true =>
+    have e : (({} : Masker).answer c (cr.getD (sched.size + i) #[])) = .error "coins for no round" := rfl
+    simp only [↓reduceIte] at ha
+    rw [e] at ha
+    cases ha
+
+/-! ## The inner proof's count along the loop -/
+
+/-- A round the frame takes comes before the inner proof's last. -/
+theorem roundFree_ok_inner {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
+    (h : roundFree c s xb n = .ok q) : s.inner ≠ some INNER_ROUNDS := by
+  intro e
+  have hb : (s.inner == some INNER_ROUNDS) = true := by rw [e]; exact beq_self_eq_true _
+  unfold roundFree at h
+  simp only [hb, ↓reduceIte] at h
+  cases h
+
+theorem roundFree_done {c : Cfg} {s : Masker} (hs : s.inner = some INNER_ROUNDS) (xb : ByteArray) (n : ℕ) :
+    ∃ e, roundFree c s xb n = .error e := by
+  have hb : (s.inner == some INNER_ROUNDS) = true := by rw [hs]; exact beq_self_eq_true _
+  unfold roundFree
+  simp only [hb, ↓reduceIte]
+  exact ⟨_, rfl⟩
+
+open _root_.Flock.Firewall.Frame (check standIn passes) in
+/-- **The frame's check refuses every round past the inner proof's last**, whatever the device's and the scheduled
+round. -/
+theorem check_inner_done {c : Cfg} {s : Masker} (hs : s.inner = some INNER_ROUNDS) (v r : ByteArray) (n : ℕ)
+    (q : ByteArray × Masker × Option String) : check c s v r n ≠ .ok q := by
+  obtain ⟨e, he⟩ := roundFree_done (c := c) hs r n
+  obtain ⟨e', he'⟩ := roundFree_done (c := c) (s := { s with stopped := true }) hs r n
+  intro h
+  unfold check passes standIn _root_.Flock.Firewall.Frame.round at h
+  cases hst : s.stopped <;> simp only [hst, he, he', Bool.false_eq_true, ↓reduceIte, bind, Except.bind] at h <;>
+    cases h
+
+/-- The frame's steps over the firewall's own round 0, where it takes them, start the inner proof's count. -/
+theorem roundFree_own0_inner {c : Cfg} {m s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) {n : ℕ}
+    {q : ByteArray × Masker × Array ℕ} (h : roundFree c m (ownRound c s w t n 0) n = .ok q) : q.2.1.inner = some 0 := by
+  have hs := roundFree_ok_inner h
+  have hR : ownRound c s w t n 0 = ByteArray.mk (encs (ownFrames c s w t 0) ++ (Frame.sq 1 1).enc).toArray := by
+    have e := ownRound_encs (c := c) (s := s) (n := n) hw ht (k := 0) (by norm_num)
+    simp only [ownSq] at e
+    rw [← e, Array.toArray_toList]
+  have hn : n = 1 := (sqOk_frames (xb := ownRound c s w t n 0) (by rw [hR]) (by norm_num) (roundFree_sq hs h)).1.symm
+  subst hn
+  rw [hR, roundFree_encs c m _ 1 1 hs (ownFrames0_mid c s w t) (.inr ⟨rfl, rfl⟩) (by decide) (by norm_num)] at h
+  cases hf : (ownFrames c s w t 0).foldlM (stepAt c) (m, ByteArray.empty, #[], 0) with
+  | error e => rw [hf] at h; cases h
+  | ok r =>
+    have hr := foldlM_own0_inner c s w t _ r hf
+    rw [hf] at h
+    simp only [bind, Except.bind, hr] at h
+    cases hio : innerOwn c r.1 0 (ByteArray.mk (encs (ownFrames c s w t 0) ++ (Frame.sq 1 1).enc).toArray) 1 with
+    | error e => rw [hio] at h; cases h
+    | ok u =>
+      rw [hio] at h
+      cases h
+      rfl
+
+/-- **The frame's step at the inner proof's round**, where it neither ends the rep nor leaves it owing no coins: the
+frame took the round, which kept the rep inside the inner proof, and the state is the round's. -/
+theorem run_own1 (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (n : ℕ) (r : ByteArray)
+    (h2 : (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).1.m.owed ≠ none) :
+    ∃ out s' fr, roundFree c S.m r n = .ok (out, s', fr) ∧ s'.inner.isSome = true ∧
+      (_root_.Flock.Firewall.Frame.run c S [.round n r .own]).1.m = s' := by
+  cases hS : S.m.owed with
+  | some k =>
+    simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS,
+      _root_.Flock.Firewall.Frame.Reply.ends] at h2
+    cases h2
+  | none =>
+    cases hr : roundFree c S.m r n with
+    | error e =>
+      have hR : _root_.Flock.Firewall.Frame.round c S.m r n = .error e := by
+        unfold _root_.Flock.Firewall.Frame.round; rw [hr]; rfl
+      by_cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP = true
+      · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, bind, Except.bind,
+          hst, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at h2
+        cases h2
+      · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, bind, Except.bind,
+          hst, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at ho
+        exact absurd rfl ho
+    | ok p =>
+      obtain ⟨out, s', fr⟩ := p
+      have hR := round_of_roundFree hr
+      cases hin : s'.inner.isNone with
+      | true =>
+        by_cases hst : ("a round with no scheduled round in its place, outside the inner proof").startsWith
+            _root_.Flock.Firewall.Frame.STOP = true
+        · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+            Except.bind, throw, throwThe, MonadExceptOf.throw, hst, ↓reduceIte,
+            _root_.Flock.Firewall.Frame.Reply.ends] at h2
+          cases h2
+        · simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+            Except.bind, throw, throwThe, MonadExceptOf.throw, hst, Bool.false_eq_true,
+            ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends] at ho
+          exact absurd rfl ho
+      | false =>
+        refine ⟨out, s', fr, rfl, by cases e : s'.inner <;> simp_all, ?_⟩
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, hS, hR, hin, bind,
+          Except.bind, pure, Except.pure, Bool.false_eq_true, ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+
+/-- Coins the frame takes without ending the rep are its answer to them. -/
+theorem run_coins_cons (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (cs : Array F128)
+    (L : List _root_.Flock.Firewall.Frame.Req) (h : (_root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L)).2 = false) :
+    ∃ s1, S.m.answer c cs = .ok s1 ∧
+      _root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L) = _root_.Flock.Firewall.Frame.run c { S with m := s1 } L := by
+  cases ha : S.m.answer c cs with
+  | error e =>
+    exfalso
+    have h' : (_root_.Flock.Firewall.Frame.run c S (.coins (.ok cs) :: L)).2 = true := by
+      cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hst, Bool.false_eq_true,
+          ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+    rw [h'] at h
+    cases h
+  | ok s1 =>
+    exact ⟨s1, rfl, by
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha,
+        _root_.Flock.Firewall.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]⟩
+
+/-- `run_own1` past any requests `L`. -/
+theorem run_snoc_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (L : List _root_.Flock.Firewall.Frame.Req)
+    (n : ℕ) (r : ByteArray) (h2 : (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).1.m.owed ≠ none) :
+    ∃ out s' fr, roundFree c (_root_.Flock.Firewall.Frame.run c st L).1.m r n = .ok (out, s', fr) ∧
+      s'.inner.isSome = true ∧ (_root_.Flock.Firewall.Frame.run c st (L ++ [.round n r .own])).1.m = s' := by
+  rw [run_append] at h2 ho ⊢
+  cases hb : (_root_.Flock.Firewall.Frame.run c st L).2
+  · simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ho ⊢
+    exact run_own1 c _ n r h2 ho
+  · simp only [hb, ↓reduceIte, Bool.true_eq_false] at h2
+
+/-- The frame's coins, then the inner proof's round, past any requests `L`, where neither ends the rep nor leaves it
+owing no coins: the frame took the coins at `L`'s state, then the round. -/
+theorem run_snoc_coins_own (c : Cfg) (st : _root_.Flock.Firewall.Frame.State)
+    (L : List _root_.Flock.Firewall.Frame.Req) (cs : Array F128) (n : ℕ) (r : ByteArray)
+    (h2 : (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).2 = false)
+    (ho : (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).1.m.owed ≠ none) :
+    (_root_.Flock.Firewall.Frame.run c st L).2 = false ∧
+      ∃ s1, (_root_.Flock.Firewall.Frame.run c st L).1.m.answer c cs = .ok s1 ∧
+        ∃ out s' fr, roundFree c s1 r n = .ok (out, s', fr) ∧ s'.inner.isSome = true ∧
+          (_root_.Flock.Firewall.Frame.run c st (L ++ [.coins (.ok cs), .round n r .own])).1.m = s' := by
+  rw [run_append] at h2 ho ⊢
+  cases hb : (_root_.Flock.Firewall.Frame.run c st L).2
+  · refine ⟨rfl, ?_⟩
+    simp only [hb, Bool.false_eq_true, ↓reduceIte] at h2 ho ⊢
+    obtain ⟨s1, ha, he⟩ := run_coins_cons c _ cs _ h2
+    rw [he] at h2 ho ⊢
+    exact ⟨s1, ha, run_own1 c _ n r h2 ho⟩
+  · simp only [hb, ↓reduceIte, Bool.true_eq_false] at h2
+
+/-- After coins, then `finish`, the frame's state owes no coins. -/
+theorem run_coins_finish_owed (c : Cfg) (S : _root_.Flock.Firewall.Frame.State) (cs : Array F128) :
+    (if (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).2 then ({} : Masker)
+      else (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).1.m).owed = none := by
+  cases ha : S.m.answer c cs with
+  | error e =>
+    have h : (_root_.Flock.Firewall.Frame.run c S [.coins (.ok cs), .finish]).2 = true := by
+      cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+        simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hst, Bool.false_eq_true,
+          ↓reduceIte, _root_.Flock.Firewall.Frame.Reply.ends]
+    rw [h]
+    rfl
+  | ok s1 =>
+    have ho := answer_owed ha
+    cases hu : s1.unfinished c <;>
+      simp only [_root_.Flock.Firewall.Frame.run, _root_.Flock.Firewall.Frame.step, ha, hu, ho,
+        _root_.Flock.Firewall.Frame.Reply.ends, Bool.false_eq_true, ↓reduceIte]
+
+/-- **The inner proof's count along the loop's requests**: where the requests up to the inner proof's round `i` neither
+end the rep nor leave it owing no coins, the rep is at the inner proof's round `i`. Round 0 is the firewall's own. -/
+theorem run_ownReqs_inner (c : Cfg) (prior : Array F128) (sched own : Array (ByteArray × ℕ))
+    (cr : Array (Array F128)) (h0 : ∃ s w t n, w.size = 16 ∧ t.size = 64 ∧ own.getD 0 (.empty, 0) = (ownRound c s w t n 0, n)) :
+    ∀ i, (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).2 = false →
+      (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).1.m.owed ≠ none →
+      (_root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr i)).1.m.inner = some i
+  | 0, h2, ho => by
+    obtain ⟨s, w, t, n, hw, ht, he⟩ := h0
+    have e : ownReqs prior sched own cr 0 =
+        ((if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+          (List.range sched.size).flatMap (fun k =>
+            [.round (sched.getD k (.empty, 0)).2 (sched.getD k (.empty, 0)).1 (.sched (sched.getD k (.empty, 0)).1),
+              .coins (.ok (cr.getD k #[]))])) ++ [.round n (ownRound c s w t n 0) .own] := by
+      unfold ownReqs
+      rw [he]
+      simp only [List.range_zero, List.flatMap_nil, List.append_nil]
+    rw [e] at h2 ho ⊢
+    obtain ⟨out, s', fr, hr, -, hm⟩ := run_snoc_own c {} _ n _ h2 ho
+    rw [hm]
+    exact roundFree_own0_inner hw ht hr
+  | i + 1, h2, ho => by
+    rw [ownReqs_succ] at h2 ho ⊢
+    obtain ⟨hb, s1, ha, out, s', fr, hr, -, hm⟩ := run_snoc_coins_own c {} _ _ _ _ h2 ho
+    have hI := run_ownReqs_inner c prior sched own cr h0 i hb (fun e => answer_owed_none _ e ha)
+    rw [hm]
+    exact roundFree_inner_some (roundFree_ok_inner hr) (answer_inner_some hI ha) hr
+
+theorem zeros_size (n : ℕ) : (zeros n).size = n := by simp [zeros, ByteArray.size]
+
+/-- **The inner proof's count at the loop's state**: where the frame takes coins at the rep's state after the inner
+proof's round `i`, it is at round `i + 1`. -/
+theorem repState_own_inner (c c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) {i : ℕ}
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hi4 : i < INNER_ROUNDS) {cs : Array F128} {m : Masker}
+    (ha : (repState c t rep dom xs hi cr0 cr ns (sched.size + i + 1)).answer c' cs = .ok m) : m.inner = some (i + 1) := by
+  rw [repState_own_at c t rep dom xs hi cr0 cr ns i hal hs hi4] at ha
+  dsimp only at ha
+  generalize hR : _root_.Flock.Firewall.Frame.run c {}
+    (ownReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched
+      (ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)) cr i) = R at ha
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | true =>
+    simp only [↓reduceIte] at ha
+    exact absurd ha (answer_owed_none cs rfl)
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha
+    have hI := run_ownReqs_inner c _ sched _ cr ⟨_, zeros 16, zeros 64, _, zeros_size 16, zeros_size 64,
+      ownRounds_getD c _ _ (show 0 < INNER_ROUNDS by decide)⟩ i (by rw [hR])
+      (by rw [hR]; exact fun e => answer_owed_none cs e ha)
+    rw [hR] at hI
+    exact answer_inner_some hI ha
+
+theorem ownReqs_zero (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {j : ℕ}
+    (hS : sched.size = j + 1) :
+    ownReqs prior sched own cr 0 = schedReqs prior sched cr j ++
+      [.coins (.ok (cr.getD j #[])), .round (own.getD 0 (.empty, 0)).2 (own.getD 0 (.empty, 0)).1 .own] := by
+  unfold ownReqs schedReqs
+  rw [hS, List.range_succ, List.flatMap_append, List.flatMap_singleton]
+  simp only [List.range_zero, List.flatMap_nil, List.append_nil, List.append_assoc, List.cons_append, List.nil_append]
+
+/-- **The loop's frame state one round on, into the inner proof**: where the rep's schedule is complete on its coins
+`cr` and on those before the last, its last round `j` is the last `cr` covers, the frame takes that round's coins at the
+rep's state after it, at the state `m`, and takes the inner proof's round 0 there, the rep's state after it on one more
+round's coins is that round's. -/
+theorem repState_own0_step {c : Cfg} (hz : ZeroCfg c) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ)
+    (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ)
+    (a : Array F128) (j : ℕ) {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched)
+    (hcr : cr.size = j + 1) (hS : sched.size = j + 1) (s₀ : Masker) {m s' : Masker} {out : ByteArray}
+    {fr : Array ℕ} (ha : (repState c t rep dom xs hi cr0 cr ns (j + 1)).answer c (cr.getD j #[]) = .ok m)
+    (hr : roundFree c m (ownRound c s₀ (zeros 16) (zeros 64) (ns (j + 1)) 0) (ns (j + 1)) = .ok (out, s', fr))
+    (hin : s'.inner.isSome) :
+    repState c t rep dom xs hi cr0 (cr.push a) ns (j + 2) = s' := by
+  rw [show j + 2 = sched.size + 0 + 1 by omega,
+    repState_own_at c t rep dom xs hi cr0 (cr.push a) ns 0 hal (by rw [Array.pop_push]; exact hs') (by decide),
+    ownReqs_push _ _ _ _ _ (by omega), ownReqs_zero _ _ _ _ hS,
+    ownRounds_zero hz ((cr.push a).extract sched.size (cr.push a).size) (cr.extract sched.size cr.size),
+    ownRounds_getD _ _ _ (show 0 < INNER_ROUNDS by decide)]
+  rw [repState_at c t rep dom xs hi cr0 cr ns j hal hs (by omega)] at ha
+  rw [ownRound_zero hz _ s₀ _ _ _ (show 0 < 4 by decide)]
+  dsimp only at ha ⊢
+  rw [show sched.size + 0 = j + 1 by omega, run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {}
+    (schedReqs (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr j) = R at ha ⊢
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte] at ha ⊢
+    rw [run_coins_own c S _ _ _ ha hr hin]
+    rfl
+  | true =>
+    have e : (({} : Masker).answer c (cr.getD j #[])) = .error "coins for no round" := rfl
+    simp only [↓reduceIte] at ha
+    rw [e] at ha
+    cases ha
+
+theorem reqs_length (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
+    (coins : Array (Array F128)) :
+    (_root_.Flock.Firewall.Drive.reqs prior sched own dev coins).length =
+      (if prior.isEmpty then 0 else 1) + 2 * sched.size + 2 * own.size + 1 := by
+  unfold _root_.Flock.Firewall.Drive.reqs
+  simp only [List.length_append, List.length_singleton]
+  rw [flatMap_range_length _ fun _ => rfl, flatMap_range_length _ fun _ => rfl]
+  split <;> simp
+
+/-- **Past the inner proof's last round's coins the loop's state owes no coins**: there the rep has taken every
+round's coins, then `finish`. -/
+theorem repState_past (c : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+    (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) {N : ℕ}
+    {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hN : sched.size + INNER_ROUNDS + 1 ≤ N) :
+    (repState c t rep dom xs hi cr0 cr ns N).owed = none := by
+  unfold repState
+  rw [hal]
+  simp only [bind, Except.bind, hs, pure, Except.pure]
+  generalize (if rep = 0 then (#[] : Array F128) else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) = prior
+  generalize hown : ownRounds c (cr.extract sched.size cr.size) (fun j => ns (sched.size + j)) = own
+  have ho4 : own.size = 4 := by rw [← hown, ownRounds_size]; rfl
+  have hN5 : sched.size + 5 ≤ N := by
+    have : INNER_ROUNDS = 4 := rfl
+    omega
+  rw [List.take_of_length_le (by rw [reqs_length, ho4]; split <;> omega)]
+  have e : _root_.Flock.Firewall.Drive.reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) cr =
+      ownReqs prior sched own cr 3 ++ [.coins (.ok (cr.getD (sched.size + 3) #[])), .finish] := by
+    unfold _root_.Flock.Firewall.Drive.reqs ownReqs
+    simp only [ho4, show List.range 4 = List.range 3 ++ [3] from rfl, List.flatMap_append, List.flatMap_singleton,
+      List.append_assoc, List.cons_append, List.nil_append]
+  rw [e, run_append]
+  generalize _root_.Flock.Firewall.Frame.run c {} (ownReqs prior sched own cr 3) = R
+  obtain ⟨S, b⟩ := R
+  cases b with
+  | true => rfl
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    exact run_coins_finish_owed c S _
+
+/-- Where the schedule on the coins `cr` is no longer than they are, it is the schedule on all of them but the last. -/
+theorem schedSoFar_pop_eq {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+    {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {j : ℕ}
+    {sched sched' : Array (ByteArray × ℕ)} (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched)
+    (hs' : schedSoFar t rep dom xs hi cr = .ok sched') (hcr : cr.size = j + 1) (hle : sched'.size ≤ j + 1) :
+    sched' = sched := by
+  rw [Array.eq_push_pop_back!_of_size_ne_zero (show cr.size ≠ 0 by omega)] at hs'
+  by_cases hd : sched.size ≤ cr.pop.size
+  · exact schedSoFar_snoc_done t rep dom xs hi cr.pop cr.back! hs hd hs'
+  · obtain ⟨u, rfl⟩ := schedSoFar_snoc t rep dom xs hi cr.pop cr.back! hs hs'
+    rw [Array.size_pop, hcr] at hd
+    rw [Array.size_append] at hle
+    rw [Array.eq_empty_of_size_eq_zero (show u.size = 0 by omega), Array.append_empty]
+
+theorem ofDraws_rowH_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
+    (Cfg.ofDraws l (Draws.ofBytes l b) m).rowH.size = l.len + _root_.Flock.Zk.K_PAD := by
+  show ((Draws.ofBytes l b).h ++ (Draws.ofBytes l b).padH).size = _
+  rw [Array.size_append, ofBytes_h_size]
+  show l.len + (words b (32 * l.len) _root_.Flock.Zk.K_PAD).size = _
+  rw [words_size]
+
+theorem ofDraws_rowMu_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
+    (Cfg.ofDraws l (Draws.ofBytes l b) m).rowMu.size = l.len + _root_.Flock.Zk.K_PAD := by
+  show (words b (16 * l.len) l.len ++ words b (32 * l.len + 16 * _root_.Flock.Zk.K_PAD) _root_.Flock.Zk.K_PAD).size = _
+  rw [Array.size_append, words_size, words_size]
+
+/-- Where the located rep's schedule so far ends before its next round, the loop has no round of its own in the
+device's place. -/
+theorem schedOf_none (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (x : Msg)
+    (cs : List FlockDeploy.Coin) {s0 : _} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
+    {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    (hreal : real (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = .ok (t, hi)) {sched : Array (ByteArray × ℕ)}
+    (hs : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
+      (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
+        ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
+      (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+          (wordsAt x cs 0))) hi
+      ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
+        fun j => wordsAt x cs (q - (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 + j + 1)) = .ok sched)
+    (hle : sched.size ≤ (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2) :
+    schedOf real x cs = none := by
+  unfold schedOf
+  rw [hx, hq]
+  simp only [hreal, hs, Array.getElem?_eq_none hle, Option.map_none]
+
+open _root_.Flock.Firewall.Frame (check) in
+/-- **The loop's frame state one round on, past the rep's schedule, is the deployed check's** but for `stopped`: where
+the rep's schedule is complete on its coins `cr` and on those before the last, no longer than they are, and its rounds
+framed, the frame takes the last coins at the state `m`, and the deployed frame's check at an alike configuration of a
+device round against `r` releases a round, the rep's state on one more round's coins is that check's, but for
+`stopped`. At the inner proof's round 0 (the schedule as long as the coins), `r` is the firewall's own round 0 at some
+`final_c'` (`hr0`); at its rounds 1 to 3 `r` is any; at its round 4 the check refuses (`check_inner_done`), and past it
+the state owes no coins (`repState_past`). -/
+theorem repState_own_check {c c' : Cfg} (hc : CfgAlike c c') (hz : ZeroCfg c') (hH : c.rowH.size = c'.rowH.size)
+    (hM : c.rowMu.size = c'.rowMu.size) (hrow : c'.rowH.size < 2 ^ 64) (t : _root_.Flock.Firewall.Finish.Tab)
+    (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128))
+    (ns : ℕ → ℕ) (a : Array F128) (j : ℕ) {alg sched : Array (ByteArray × ℕ)}
+    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+      .ok alg)
+    (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hs' : schedSoFar t rep dom xs hi cr = .ok sched)
+    (hcr : cr.size = j + 1) (hle : sched.size ≤ j + 1)
+    (hF : ∀ k, k < sched.size → Sched.Framed (sched.getD k (.empty, 0))) {m : Masker}
+    (ha : (repState c' t rep dom xs hi cr0 cr ns (j + 1)).answer c' (cr.getD j #[]) = .ok m)
+    {st : Bool} {v r out : ByteArray} {s : Masker} {why : Option String}
+    (h : check c { m with stopped := st } v r (ns (j + 1)) = .ok (out, s, why))
+    (hr0 : sched.size = j + 1 → ∃ w : ByteArray, w.size = 16 ∧ r.data.toList =
+      (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList) :
+    repState c' t rep dom xs hi cr0 (cr.push a) ns (j + 2) =
+      { s with stopped := (repState c' t rep dom xs hi cr0 (cr.push a) ns (j + 2)).stopped } := by
+  by_cases hS : sched.size = j + 1
+  · have hnone : m.inner = none := Sched.answer_inner (repState_inner c' t rep dom xs hi cr0 cr ns j hal hs
+      (by omega) fun k hk => hF k (by omega)) ha
+    obtain ⟨w, hw, hrw⟩ := hr0 hS
+    obtain ⟨⟨out', s'', fr⟩, hq', hu⟩ := check_own0_ok hc hz m {} st hnone hw hrw h
+    have hin : s''.inner.isSome := by rw [roundFree_own0_inner (zeros_size 16) (zeros_size 64) hq']; rfl
+    rw [repState_own0_step hz t rep dom xs hi cr0 cr ns a j hal hs hs' hcr hS {} ha hq' hin]
+    exact eq_unstop hu
+  · obtain ⟨i, rfl⟩ : ∃ i, j = sched.size + i := ⟨j - sched.size, by omega⟩
+    rcases Nat.lt_or_ge i 3 with h3 | h3
+    · have hI := repState_own_inner c' c' t rep dom xs hi cr0 cr ns hal hs (i := i) (by show i < 4; omega) ha
+      obtain ⟨⟨out', s'', fr⟩, hq', hu⟩ := check_own_ok hc hz hH hM hrow m {} st (i := i + 1) (by omega) (by omega)
+        hI h
+      have hin : s''.inner.isSome := by rw [roundFree_inner_some (roundFree_ok_inner hq') hI hq']; rfl
+      have hq'' : roundFree c' m (ownRound c' {} (zeros 16) (zeros 64) (ns (sched.size + (i + 1))) (i + 1))
+          (ns (sched.size + (i + 1))) = .ok (out', s'', fr) := by
+        rw [← Nat.add_assoc]
+        exact hq'
+      rw [repState_own_step hz t rep dom xs hi cr0 cr ns a i hal hs hs' hcr (by show i + 1 < 4; omega) {} ha hq''
+        hin]
+      exact eq_unstop hu
+    · rcases Nat.eq_or_lt_of_le h3 with h3 | h3
+      · subst h3
+        have hI : m.inner = some (3 + 1) :=
+          repState_own_inner c' c' t rep dom xs hi cr0 cr ns hal hs (i := 3) (by decide) ha
+        exact absurd h (check_inner_done (s := { m with stopped := st }) hI v r _ _)
+      · exact absurd ha (answer_owed_none _ (repState_past c' t rep dom xs hi cr0 cr ns hal hs
+          (by have : INNER_ROUNDS = 4 := rfl; omega)))
+
+open _root_.Flock.Firewall.Frame (check) in
+/-- **The loop's frame state one round on, past the rep's schedule, within a rep stream, is the deployed check's** but
+for `stopped`: as `progOf_check_step`, where the placeholder's schedule so far is no longer than its coins
+(`repState_own_check`). -/
+theorem progOf_own_step (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
+    {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
+    (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 = (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1)
+    {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray}
+    (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
+      .ok (c', t, dom, xs, hi))
+    (hc : CfgAlike c c') (hz : ZeroCfg c') (hH : c.rowH.size = c'.rowH.size) (hM : c.rowMu.size = c'.rowMu.size)
+    (hrow : c'.rowH.size < 2 ^ 64) {j : ℕ} (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1)
+    {sched' : Array (ByteArray × ℕ)}
+    (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
+      ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched')
+    (hle : sched'.size ≤ j + 1) (hF : ∀ k, k < sched'.size → Sched.Framed (sched'.getD k (.empty, 0)))
+    {m : Masker} (ha : (progOf x cs).answer c (wordsAt x cs q) = .ok m)
+    {st : Bool} {v r out : ByteArray} {s : Masker} {why : Option String}
+    (h : check c { m with stopped := st } v r (loopNr x (q + 1)) = .ok (out, s, why))
+    (hr0 : sched'.size = j + 1 → ∃ w : ByteArray, w.size = 16 ∧ r.data.toList =
+      (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList) :
+    progOf x (cs ++ [d]) = { s with stopped := (progOf x (cs ++ [d])).stopped } := by
+  have hle' := locate_snd_le (roundsOf spec sts) 0 q
+  rw [progOf_at x cs hx hq hph, hj] at ha
+  rw [progOf_snoc x cs d hx hq hk, hph]
+  dsimp only
+  rw [hj]
+  obtain ⟨alg, hal⟩ := schedSoFar_ok_rounds hs'
+  obtain ⟨sched, hs⟩ := schedSoFar_pop_ok hs'
+  have hg : ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)).getD j #[] = wordsAt x cs q := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by simp), Option.getD_some, Array.getElem_map,
+      Array.getElem_range]
+    congr 1
+    omega
+  rw [answer_congr _ _ hc.lay hc.order, ← hg] at ha
+  have hcr : ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)).size = j + 1 := by simp
+  obtain rfl := schedSoFar_pop_eq hs hs' hcr hle
+  have hn : loopNr x (q + 1) = (fun i => loopNr x (q - (j + 1) + i + 1)) (j + 1) := by
+    show _ = loopNr x (q - (j + 1) + (j + 1) + 1)
+    congr 1
+    omega
+  rw [hn] at h
+  exact repState_own_check hc hz hH hM hrow t _ dom xs hi _ _ _ _ j hal hs hs' hcr hle hF ha h hr0
+
 end Loop
+
+namespace LeanRelease
+
+open _root_.Flock (Stmt SessionSpec)
+open _root_.Flock.Firewall.Frame (check)
+
+open Loop in
+/-- **The deployed configuration at the located rep and its placeholder's**: alike, of one row size each, the
+placeholder's at zero pads. -/
+theorem ofLoop_cfg_place (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (h : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q k j : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2)
+    (hki : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1)) {link : Array F128} {c' : Cfg}
+    {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
+    (hph : placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
+    CfgAlike ((ofLoop T L₀ real).cfg x ρ h) c' ∧ ((ofLoop T L₀ real).cfg x ρ h).rowH.size = c'.rowH.size ∧
+      ((ofLoop T L₀ real).cfg x ρ h).rowMu.size = c'.rowMu.size ∧ ZeroCfg c' := by
+  obtain ⟨lay, mask, hst, hc', -, -⟩ := placeholder_ok hph
+  have hrk : (ofLoop T L₀ real).rep x h.length = k := by
+    show repOf x h.length = k
+    unfold repOf
+    rw [hx, hq]
+    simp only [Nat.add_sub_cancel]
+    rw [hki]
+  have hso : startOf x k = .ok (lay, mask) := by
+    unfold startOf
+    rw [hx]
+    exact hst
+  have e1 : (ofLoop T L₀ real).lay x k = lay := by
+    show ((startOf x k).toOption.map (·.1)).getD default = lay
+    rw [hso]
+    rfl
+  have e2 : (ofLoop T L₀ real).slot x k = some mask := by
+    show (startOf x k).toOption.map (·.2) = some mask
+    rw [hso]
+    rfl
+  subst hc'
+  refine ⟨?_, ?_, ?_, zeroCfg_ofDraws lay _ _⟩
+  · unfold cfg drawsAt
+    rw [hrk, e1, e2]
+    exact cfgAlike_ofBytes lay _ _ (some mask)
+  · unfold cfg drawsAt
+    rw [hrk, e1, ofDraws_rowH_size, ofDraws_rowH_size]
+  · unfold cfg drawsAt
+    rw [hrk, e1, ofDraws_rowMu_size, ofDraws_rowMu_size]
+
+open Loop in
+/-- **`ProgChecks` past the rep's schedule, at the loop's own frames**: as `ofLoop_progChecks_step`, where the rep's
+schedule so far at its own table and salts (`rsched`) ends before the next round, so the loop has no round of its own
+in the device's place (`schedOf_none`) and `L₀`'s stands there. At the inner proof's round 0, the first past the
+schedule, `L₀`'s round is the firewall's own round 0 at some `final_c'` (`hL0`). -/
+theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (h : List (Msg × Msg)) (a : Msg) {m : Masker} {out : ByteArray}
+    (hA : (ofLoop T L₀ real).answered x ρ h = .ok m)
+    (hrep : (ofLoop T L₀ real).rep x (h.length + 1) = (ofLoop T L₀ real).rep x h.length)
+    (hex : ∃ v s' why, (ofLoop T L₀ real).checkAt x w ρ h m false v = .ok (out, s', why))
+    {cs : List FlockDeploy.Coin} (hcs : h.tail.map (fun p => ZKMal.CoinLayer.rd p.2) = cs)
+    {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q : ℕ}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2) {k j : ℕ}
+    (hki : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1))
+    {c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+    {hi : Array ByteArray} (hph : placeholder spec sts k (wordsAt x cs 0) = .ok (c', t, dom, xs, hi))
+    (hc : CfgAlike ((ofLoop T L₀ real).cfg x ρ h) c') (hz : ZeroCfg c')
+    (hH : ((ofLoop T L₀ real).cfg x ρ h).rowH.size = c'.rowH.size)
+    (hM : ((ofLoop T L₀ real).cfg x ρ h).rowMu.size = c'.rowMu.size) (hrow : c'.rowH.size < 2 ^ 64)
+    {tr : _root_.Flock.Firewall.Finish.Tab} {hr : Array ByteArray} (hreal : real x w ρ k = .ok (tr, hr))
+    {rsched sched' : Array (ByteArray × ℕ)}
+    (hrs0 : schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
+      (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+        (wordsAt x cs 0))) hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok rsched)
+    (hrs : Sched.RoundsAt rsched sched')
+    (hs' : schedSoFar t (k % 2) dom xs hi ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) =
+      .ok sched')
+    (hle : rsched.size ≤ j + 1)
+    (hL0 : rsched.size = j + 1 → ∀ vals, ∃ w' : ByteArray, w'.size = 16 ∧ L₀.scheduled x w ρ h vals =
+      (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList) :
+    ∃ v st s' why, (ofLoop T L₀ real).checkAt x w ρ h m st v = .ok (out, s', why) ∧
+      (ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)]) =
+        { s' with stopped := ((ofLoop T L₀ real).prog x (h ++ [(0 :: out.data.toList, a)])).stopped } := by
+  have hco : (ofLoop T L₀ real).coins x h.length = loopNr x (q + 1) := by
+    show loopNr x (h.length - 1) = _
+    rw [hq, show q + 2 - 1 = q + 1 by omega]
+  obtain ⟨v, s', why, hv⟩ := hex
+  refine ⟨v, false, s', why, hv, ?_⟩
+  have hk1 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = k := by rw [hki]
+  have hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1 := by rw [hki]
+  cases h with
+  | nil => simp only [List.length_nil] at hq; omega
+  | cons e0 h1 =>
+  obtain ⟨m0, r0⟩ := e0
+  have hcs1 : h1.map (fun p => ZKMal.CoinLayer.rd p.2) = cs := hcs
+  have hq1 : cs.length = q + 1 := by
+    rw [← hcs1, List.length_map]
+    simp only [List.length_cons] at hq
+    omega
+  have hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q + 1)).1 =
+      (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 := by
+    have h2 : repOf x (q + 2 + 1) = repOf x (q + 2) := by rw [← hq]; exact hrep
+    unfold repOf at h2
+    rw [hx] at h2
+    simp only at h2
+    rwa [show q + 2 + 1 - 2 = q + 1 by omega, show q + 2 - 2 = q by omega] at h2
+  have hcr : coinsAt x ((m0, r0) :: h1) = readCoins x cs := by
+    rw [← hcs1]
+    exact loop_coinsRead loopNr T (withFrames T L₀ real) x m0 r0 h1
+  have hF : (ofLoop T L₀ real).frameAnswer x ρ ((m0, r0) :: h1) = .ok m := by
+    unfold answered at hA
+    split at hA
+    · exact hA
+    · cases hA
+  change (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ ((m0, r0) :: h1))
+    (coinsAt x ((m0, r0) :: h1)) = .ok m at hF
+  rw [hcs1] at hF
+  have hsch : schedOf (real x w ρ) x cs = none :=
+    schedOf_none (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
+      (by rw [hj]; exact hle)
+  have hv' : check ((ofLoop T L₀ real).cfg x ρ ((m0, r0) :: h1)) { m with stopped := false } ⟨v.toArray⟩
+      ⟨(L₀.scheduled x w ρ ((m0, r0) :: h1)
+        (computedOf ((ofLoop T L₀ real).computed x w ρ ((m0, r0) :: h1)))).toArray⟩ (loopNr x (q + 1)) =
+      .ok (out, s', why) := by
+    unfold checkAt at hv
+    have hsc : ∀ vals, (ofLoop T L₀ real).scheduled x w ρ ((m0, r0) :: h1) vals =
+        L₀.scheduled x w ρ ((m0, r0) :: h1) vals := fun vals => by
+      show (match schedOf (real x w ρ) x (h1.map fun p => ZKMal.CoinLayer.rd p.2) with
+        | some r => r.data.toList
+        | none => L₀.scheduled x w ρ ((m0, r0) :: h1) vals) = _
+      rw [hcs1, hsch]
+    rw [hsc] at hv
+    rw [← hco]
+    exact hv
+  have hcs' : (((m0, r0) :: h1) ++ [(0 :: out.data.toList, a)]).tail.map (fun p => ZKMal.CoinLayer.rd p.2) =
+      cs ++ [ZKMal.CoinLayer.rd a] := by
+    simp only [← hcs1, List.cons_append, List.tail_cons, List.map_append, List.map_cons, List.map_nil]
+  show progOf x ((((m0, r0) :: h1) ++ [(0 :: out.data.toList, a)]).tail.map fun p => ZKMal.CoinLayer.rd p.2) =
+    { s' with stopped :=
+      (progOf x ((((m0, r0) :: h1) ++ [(0 :: out.data.toList, a)]).tail.map fun p => ZKMal.CoinLayer.rd p.2)).stopped }
+  rw [hcs']
+  rw [hcr, readCoins_eq x cs hq1] at hF
+  have hsz := roundsAt_size hrs
+  exact progOf_own_step x cs (ZKMal.CoinLayer.rd a) hx hq1 hk (by rw [hk1]; exact hph) hc hz hH hM hrow hj
+    (by rw [hk1]; exact hs') (by rw [← hsz]; exact hle) (fun k' hk' => roundsAt_framed hrs hk') hF hv'
+    (fun hS => by
+      obtain ⟨w', hw', he⟩ := hL0 (by rw [hsz]; exact hS)
+        (computedOf ((ofLoop T L₀ real).computed x w ρ ((m0, r0) :: h1)))
+      exact ⟨w', hw', by rw [← he]⟩)
+
+open Loop in
+/-- **`ProgChecks` at the loop's own frames** (`ofLoop_progChecks_of`, its round past the rep's schedule proved,
+`ofLoop_progChecks_own`): from the bounds the placeholder's schedule reads (`hS`), the rep's own tables where `real`
+answers the loop's (`hR`), the tables' link points (`hP`), and two named premises:
+* `hRow`: the placeholder's row of pads, which the inner proof's rounds 1 to 3 frame, within a `u64`'s count;
+* `hL0`: at the inner proof's round 0, the first past the rep's schedule on its own table, `L₀`'s round in the
+  device's place is the firewall's own round 0 at some `final_c'`. -/
+theorem ofLoop_progChecks (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (w : Flock.Wit)
+    (hS : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) (c' : Cfg)
+      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      link.size ≤ _root_.Flock.Firewall.Frames.COIN_MAX → placeholder spec sts k link = .ok (c', t, dom, xs, hi) →
+      dom.size < 2 ^ 64 ∧ xs.size + 2 < 2 ^ 64)
+    (hR : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+      (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
+    (hP : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧ spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX)
+    (hRow : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) (c' : Cfg)
+      (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → k < spec.repStreams.size →
+      placeholder spec sts k link = .ok (c', t, dom, xs, hi) → c'.rowH.size < 2 ^ 64)
+    (hL0 : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+      (h : List (Msg × Msg)) (vals : _) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ)
+      (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
+      ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) → real x w ρ k = .ok (tr, hr) →
+      schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
+        (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+          (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hr
+        ((Array.range (j + 1)).map
+          fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
+      rsched.size = j + 1 →
+      ∃ w' : ByteArray, w'.size = 16 ∧ L₀.scheduled x w ρ h vals =
+        (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList) :
+    ProgChecks (ofLoop T L₀ real) x w := by
+  refine ofLoop_progChecks_of T L₀ real x w hS hR hP ?_
+  intro ρ h a m out s0 spec sts q k j c' t dom xs hi tr hr rsched hx hq hki hph hreal hrs hle hA hrep hex
+  have hqs := loop_round_in_plan T (withFrames T L₀ real) x ρ h hA hx hq hki
+  have hk : k < spec.repStreams.size := by
+    have := locate_lt (roundsOf spec sts) 0 q hqs
+    rw [hki] at this
+    simpa [roundsOf] using this
+  have hls : (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
+      min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    match h, hq with
+    | [], hq => simp only [List.length_nil] at hq; omega
+    | [_], hq => simp only [List.length_cons, List.length_nil] at hq; omega
+    | _ :: _ :: _, _ => simp [wordsAt, FlockDeploy.Coin.vals]
+  obtain ⟨hdom, hxs⟩ := hS s0 spec sts k _ c' t dom xs hi hx hk (by rw [hls]; exact Nat.min_le_right _ _) hph
+  have hT := Count.real_tabAlike (hR ρ s0 spec sts hx) hph hreal
+  obtain ⟨hdg, hm, hn, hlq, hp, hd⟩ := Count.real_bounds hph hT
+  obtain ⟨-, -, -, -, hdm, hxe⟩ := placeholder_ok hph
+  have hR' := Sched.schedSoFar_alike tr t (k % 2) dom xs hr hi
+    ((Array.range (j + 1)).map fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1))
+    hT.1 hT.2.1 hT.2.2.1 hT.2.2.2.1 hT.2.2.2.2 hdom hdg hm hxs hn hlq hp hd
+  rw [hrs] at hR'
+  cases hs' : schedSoFar t (k % 2) dom xs hi
+      ((Array.range (j + 1)).map fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1))
+    with
+  | error e => rw [hs'] at hR'; exact (hR' : False).elim
+  | ok sched' =>
+  rw [hs'] at hR'
+  obtain ⟨hc, hH, hM, hz⟩ := ofLoop_cfg_place T L₀ real x ρ h hx hq hki hph
+  have hrs0 : schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
+      (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+        (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hr
+      ((Array.range (j + 1)).map
+        fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched := by
+    rw [← hdm, ← hxe]
+    exact hrs
+  exact ofLoop_progChecks_own T L₀ real x w ρ h a hA hrep hex rfl hx hq hki hph hc hz hH hM
+    (hRow s0 spec sts k _ c' t dom xs hi hx hk hph) hreal hrs0 hR' hs' hle
+    (fun hS vals => hL0 ρ h vals s0 spec sts q k j tr hr rsched hx hq hki hreal hrs0 hS)
+
+end LeanRelease
 
 end Claims.ZKServer
