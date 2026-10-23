@@ -300,8 +300,8 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
         let tables := spec.tables.zip (sts.map (·.m))
         let reps := spec.repStreams.map fun (i, r, s) => (s, i, r)
         let labels := spec.repStreams.map fun (i, r, s) => (s, spec.domain spec.tables[i]! r)
-        .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains := domains,
-               reps := reps, labels := labels, tables := tables, sigma := spec.sigma, points := spec.points },
+        .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains, reps,
+                      labels, tables, sigma := spec.sigma, points := spec.points },
              ⟨m.toArray⟩)
 
 /-- **What leaves for a request of kind `k`** that carries no coin, the loop's own frame (`Register`, `Ping`, `Link` and
