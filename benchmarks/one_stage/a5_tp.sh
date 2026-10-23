@@ -13,6 +13,8 @@
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
+#     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
 #   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~16.5 min and ~13.3 GB, then ~35 min of
@@ -20,7 +22,7 @@
 #   single-core Lean firewall; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit).
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
-# circuits' pins; never a prover's file (inst-*, m*-inst-*, m*-private.bin: the rows and their salts) nor a circuit (its pin is).
+# circuits' pins; never a prover's file (inst-*, m*-inst-*, *-private.bin: the rows and their salts) nor a circuit (its pin is).
 # A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
 #   challenger's coins through its own service.Stream, the proof service's path of record, its outcome held to the Lean's run;
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
@@ -69,6 +71,10 @@ if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
 fi
 
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
+keep() {  # NAME: $W/NAME's records into $O/NAME
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
+    | xargs -0 -r -I{} cp --parents {} $O/$1/)
+}
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
@@ -77,8 +83,7 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
     ${MAIN:+--main $MAIN} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name 'm*-private.bin' ! -path './*/archive/*' -print0 \
-    | xargs -0 -r -I{} cp --parents {} $O/$1/)
+  keep $1
   return $rc
 }
 
@@ -111,6 +116,15 @@ if [ -n "${A5_TP:-}" ]; then
   audit glm $A5_TP/commit ${A5_BUILD:-$A5_TP/build} integrations/vllm/workloads/$ROW.json $WIN $PART || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
+    if [ "$e" = row-tables ]; then
+      [ -n "$MAIN" ] || { echo "STANDIN row-tables draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
+      mkdir -p $O/row-tables
+      $TIME $PY benchmarks/one_stage/a5_row_tables.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
+        ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --out $W/row-tables > $O/row-tables/a5.log 2> $O/row-tables/a5.err || rc=1
+      grep '^A5' $O/row-tables/a5.log | cut -c1-4000; tail -25 $O/row-tables/a5.err
+      keep row-tables
+      continue
+    fi
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
     (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED) \

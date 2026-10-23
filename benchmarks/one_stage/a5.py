@@ -74,6 +74,13 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   stream's outcome on the honest draw's bytes: the evidence with a tampered opening, with the coin opened before the
   registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
   window. Every rank of the step draws from the one session, so `--jobs` covers every rank.
+* **Row tables** (`commit.serving_rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
+  rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
+  ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
+  (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
+  verifier's own layout, and before the draw the tables are held to the chunks' public ``x`` strings, the registered root
+  and the step roots serving recorded before each step's coin (`row_tables.check_row_tables`). No TP window of record has
+  row tables yet (`tp.serving_rows.window_of_record` names no serve-time context); `a5_row_tables.py` is their stand-in.
 """
 from __future__ import annotations
 
@@ -87,6 +94,7 @@ import sys
 import time
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -98,9 +106,10 @@ import a5_coins as AC  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity_vllm.commit import serving_rows as CS  # noqa: E402
+from verity_vllm.commit import row_tables as RTB, serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -140,7 +149,8 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
               coins: CC.ChallengerCoins) -> tuple[S.Stream, dict | None]:
     """The rank's `service.Stream` on the challenger's ``coins``: its unit the window's templates in their order (the one
-    template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports, its public
+    template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
+    row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
     items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
     selection the partition file's rule, and its proof deadline every member's session; -> (the stream, `register`'s counts,
     None for one template's)."""
@@ -161,7 +171,9 @@ def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want:
               ("window", "the window's provenance"),
               *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
-    spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), S.Law(a.rule),
+    values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
+                   for p in sorted(want))
+    spec = S.Spec(values, S.Law(a.rule),
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
     stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
@@ -252,13 +264,15 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
-          summary: dict, more_negatives: dict | None = None, rank: int | None = None) -> tuple[dict, bool]:
+          summary: dict, more_negatives: dict | None = None, rank: int | None = None,
+          step_roots: dict[int, bytes] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
-    ``source``), one Lean draw by its law (with ``a.coins``: TP rank ``rank``'s draw of record from the challenger's coins,
-    its `service.Stream`'s, `coins_draw`), a `--zk` session per member with drawn units on ports from ``port``, Lean's verdicts,
-    the audit record (with ``a.coins``, the stream's outcome on the coins' evidence, `coins_outcome`) and the negatives
-    (``more_negatives`` beside them), all under ``out``; -> its summary and whether it was accepted with every negative
-    refused."""
+    ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
+    ``step_roots``, what serving recorded before each step's coin, `row_tables.check_row_tables`), one Lean draw by its law
+    (with ``a.coins``: TP rank ``rank``'s draw of record from the challenger's coins, its `service.Stream`'s, `coins_draw`), a
+    `--zk` session per member with drawn units on ports from ``port``, Lean's verdicts, the audit record (with ``a.coins``,
+    the stream's outcome on the coins' evidence, `coins_outcome`) and the negatives (``more_negatives`` beside them), all
+    under ``out``; -> its summary and whether it was accepted with every negative refused."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     if a.coins is None and law.get("law") != "subset":
@@ -312,7 +326,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
               "indices": header["units"]["indices"] == list(range(m.base, m.base + m.n)),
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
               "template_program": a0.template_program_ok(meta, defn),
-              "no_shared_rows": "shared_rows" not in header}
+              "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
+                                                           if m.tables else None)}
         for p_name in fv["roots"]:
             name = m.port(p_name)
             reg = next((r for r in rec["roots"] if r["port"] == name), None)
@@ -326,6 +341,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
+    if mine.row_tables:
+        bad = RTB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
+        checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -346,11 +364,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(law["k"])], out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
-        if mine.row_tables:  # its tables' roots are frame-v3-sha512/root/v1 leaves, which no Spec's Value (hiding) declares
-            summary["refused"] = {"row-tables": "a window with row tables isn't drawn from the challenger's coins yet"}
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
-            print("A5 " + json.dumps(summary["refused"]))
-            return summary, False
         stream, draw, counts_of, read, segment, refused = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
         (out / "segment.json").write_text(json.dumps({"segment": segment, "read": read.hex()}, sort_keys=True))
         if draw is None:
@@ -425,7 +438,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         else P.population_program(defs[0][0], defs[0][1] - 1)
     v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    other = CS.expected_ports(CS.Window(program, query, law, "00" * 32, mine.members))
+    other = CS.expected_ports(replace(mine, run="00" * 32))
     v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer)
     neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["m"].key
