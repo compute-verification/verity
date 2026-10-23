@@ -172,7 +172,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
-  with `closure_of` for a work design's closure.
+  with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
+  challenger, and `challenger_stream` and `read_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
@@ -439,6 +440,17 @@ The draw of record is `coins.OwnRandomness` on the Lean verifier of record's coi
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
 `Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
+
+A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
+`coins.ChallengerCoins` as the stream's `coins`. `commit(after)` takes the prover's commitment (the registration's
+digest after its receipt, or the run's root) and fixes the family and its next index. Each read then opens
+ceil(missing / 64) more of the family's coins after it in one round trip, checks each against the challenger's
+commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
+drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
+`read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
+are exactly those released after the commitment, every one read. The Lean verifier of record replays the draw from the
+bytes (`Run.run`, `Select.select` on `source`) but does not yet check them against the segment. Pinned by
+`tests/test_challenger_coins.py`.
 
 ### Verification plans
 
