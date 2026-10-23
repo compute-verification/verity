@@ -164,12 +164,16 @@ theorem LaneKnownHolds.ok_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Op
 /-- A decode's A row at slot `s` reads only its port `a<s>`. -/
 theorem decLane_a {K nw nw' : ℕ} {T : Tile} {rd rd' : String → ℕ → Option Bool} {s : Fin 4}
     (h : rd s!"a{s.val}" = rd' s!"a{s.val}") : (decLane K nw T rd).a s = (decLane K nw' T rd').a s := by
-  simp only [decLane, h]
+  first
+  | (simp only [decLane, h]; done)
+  | (unfold decLane; dsimp only; rw [h])
 
 /-- A decode's B row at slot `t` reads only its port `b<t>`. -/
 theorem decLane_b {K nw nw' : ℕ} {T : Tile} {rd rd' : String → ℕ → Option Bool} {t : Fin 8}
     (h : rd s!"b{t.val}" = rd' s!"b{t.val}") : (decLane K nw T rd).b t = (decLane K nw' T rd').b t := by
-  simp only [decLane, h]
+  first
+  | (simp only [decLane, h]; done)
+  | (unfold decLane; dsimp only; rw [h])
 
 /-- A combine view whose `ok` is `1` is its partials, its receipt and `1`. -/
 theorem CombineView.eta_ok {nw : ℕ} (v : CombineView nw) (h : v.ok = true) : v = ⟨v.parts, v.receipt, true⟩ := by
