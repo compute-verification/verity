@@ -2189,6 +2189,12 @@ class Driver:
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
         passed_now = False                                  # a check whose verdict came in since the land step at the start
         todo: list[tuple[int, Member, str, bool]] = []          # (its place in `what`, the train's tip, its PRs, agreement)
+        # the top tip keeps a check of its own, ranked first in the slot queues: one pass of it lands all of `next`, while the
+        # trains below it still land what they can (23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50,
+        # cut at their cold-circuit-check boundaries, and nothing checked the 35 above them)
+        top = trains[-1] if len(trains) > 1 and trains[-1] <= stop and self.max_running > 2 else None
+        reserve = top is not None and self.verdict(members[top].commit, main, drive).state == "none"
+        waited = False
         for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
@@ -2207,8 +2213,13 @@ class Driver:
                 what.append(f"{m.commit[:12]} waits: {members[stop].commit[:12]} (#{members[stop].pr}) below it failed, and "
                             "its failure is settled first")
                 break
-            if running >= self.max_running:
-                what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running")
+            if running >= self.max_running - (reserve and i != top):
+                if not waited:
+                    what.append(f"{m.commit[:12]} waits: {running} checks of `{q.branch}` running"
+                                + (f", and one is kept for the top, {members[top].commit[:12]}" if reserve and i != top else ""))
+                    waited = True
+                if reserve and i != top:
+                    continue
                 break
             agreement = needs_agreement(self.repo, main, m.commit)
             if dry_run or q.shadow:
@@ -2221,7 +2232,8 @@ class Driver:
             what.append("")
             running += 1
         chain = q.chain() if todo else []
-        started = _each(lambda t: self._start(t[1], main, t[3], self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
+        started = _each(lambda t: self._start(t[1], main, t[3], 1 if top is not None and t[1] is members[top] else
+                                              self._rank(t[1].commit, chain)), todo, LAUNCH_JOBS)
         for (k, m, prs, agreement), (ids, tail, *rest) in zip(todo, started):
             self._record(drive, m, agreement, (ids, tail, *rest))
             if not ids:
