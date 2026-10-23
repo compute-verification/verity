@@ -33,7 +33,10 @@ for one prover's stream is refused in any other's.
 
 A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
-digest, whose leaf count must be the value's rows (`R7-output` otherwise).
+digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
+registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
+log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
+nothing is registered afresh.
 -/
 import SampledProofs.Draw
 import SampledProofs.Registered
@@ -65,6 +68,13 @@ def digestHex (rec : Json) : V String := return Flock.hexOf (← digest rec)
 /-- `registration.query_digest`: SHA-512 of the canonical query. -/
 def queryDigest (q : Json) : V String := canonSha512 q
 
+/-- What an output value reuses of the log's earlier record: one of its ports (`roots`), or one of its registered values
+(`registered`). -/
+inductive Earlier where
+  | port (name : String)
+  | value (name : String)
+  deriving Inhabited
+
 /-- The verifier's own copies that R1–R7 hold the record to. -/
 structure Verifier where
   program : Program
@@ -89,9 +99,9 @@ structure Verifier where
   supplied : Array (String × Supplied.Rows) := #[]
   /-- of `registered`, values it doesn't fill whose roots it held before the record, `(value, root)` each -/
   pinned : Array (String × String) := #[]
-  /-- of `registered`, values it neither fills nor pinned that are outputs of an earlier run, `(value, record digest,
-  port)` each, sorted by value -/
-  outputs : Array (String × String × String) := #[]
+  /-- of `registered`, values it neither fills nor pinned that are outputs of an earlier run or reuse an earlier record's
+  registered value, `(value, record digest, its port or value)` each, sorted by value -/
+  outputs : Array (String × String × Earlier) := #[]
   /-- the stream and prover it registers the record for, `(stream, prover)`, each lowercase hex -/
   binding : Option (String × String) := none
   /-- of `registered`, values it doesn't fill whose rows are not `row/v1` rows, `(value, schema)` each
@@ -150,22 +160,50 @@ def outputRoot (log : Array Json) (leaves : Nat) (record port : String) : Option
     | true, .str dom, .str root => some (dom, root)
     | _, _, _ => none
 
-/-- One output value `(v, record, port)` with an entry in `mine` takes its earlier record's port (`outputRoot`): its
-domain in `mine` and its root ahead of what `held` holds, or `R7-output` in `c`. -/
+/-- `registration._output_port` on `registered`: the entry for `value` in the `registered` of the log's first record with
+digest `record` (its last naming it, as a dict reads it). -/
+def outputValue (log : Array Json) (record value : String) : Option Json := do
+  let r ← log.find? fun r => match digestHex r with | .ok h => h == record | .error _ => false
+  let .arr es := getD r "registered" | none
+  es.reverse.find? fun e => (e matches .obj _) && jeq (getD e "value") (Json.str value)
+
+/-- An entry's word bits: its `word_bits`, an integer, or 16 when it leaves it out. -/
+def widthOf (e : Json) : Option Int :=
+  match field? e Registered.WIDTH_KEY with
+  | none => some (Registered.WORD_BITS : Int)
+  | some j => int? j
+
+/-- The domain and root of `value`'s entry in the log's record with digest `record` (`outputValue`), when its leaves,
+words and word bits are `leaves`, `words` and `bits` and both are strings. -/
+def valueRoot (log : Array Json) (leaves words bits : Nat) (record value : String) : Option (String × String) :=
+  (outputValue log record value).bind fun e =>
+    match int? (getD e "leaves") == some (leaves : Int) && int? (getD e "words") == some (words : Int)
+        && widthOf e == some (bits : Int), getD e "domain", getD e "root" with
+    | true, .str dom, .str root => some (dom, root)
+    | _, _, _ => none
+
+/-- The domain and root an output value with entry `want` takes from the log's record with digest `record`: its port's
+(`outputRoot`, at `want`'s leaf count) or its registered value's (`valueRoot`, at `want`'s leaves, words and bits). -/
+def earlierRoot (log : Array Json) (want : Registered.Entry) (record : String) : Earlier → Option (String × String)
+  | .port p => outputRoot log want.leaves record p
+  | .value u => valueRoot log want.leaves want.words want.wordBits record u
+
+/-- One output value `(v, record, earlier)` with an entry in `mine` takes its earlier record's port or registered value
+(`earlierRoot`): its domain in `mine` and its root ahead of what `held` holds, or `R7-output` in `c`. -/
 def applyOutput (log : Array Json) :
-    Array String × Array Registered.Entry × Array (String × String) → String × String × String →
+    Array String × Array Registered.Entry × Array (String × String) → String × String × Earlier →
       Array String × Array Registered.Entry × Array (String × String)
   | (c, mine, held), (v, d, p) =>
     match mine.find? (·.value == v) with
     | none => (c, mine, held)
-    | some want => match outputRoot log want.leaves d p with
+    | some want => match earlierRoot log want d p with
       | some (dom, root) =>
         (c, mine.map fun e => if e.value == v then { e with domain := dom } else e, #[(v, root)] ++ held)
       | none => (addCode c "R7-output", mine, held)
 
 /-- `registration._check_registered`'s output values, before the rest of R7: `applyOutput` for each, in order. -/
 def applyOutputs (c : Array String) (mine : Array Registered.Entry) (held : Array (String × String))
-    (outputs : Array (String × String × String)) (log : Array Json) :
+    (outputs : Array (String × String × Earlier)) (log : Array Json) :
     Array String × Array Registered.Entry × Array (String × String) :=
   outputs.foldl (applyOutput log) (c, mine, held)
 
@@ -220,7 +258,7 @@ def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.
 def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → V String)
-    (outputs : Array (String × String × String)) (log : Array Json) : Array String :=
+    (outputs : Array (String × String × Earlier)) (log : Array Json) : Array String :=
   match mine with
   | .error _ => addCode c "R7-registered"
   | .ok mine =>

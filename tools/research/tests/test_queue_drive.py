@@ -124,6 +124,20 @@ def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(w
     assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
 
 
+def test_a_train_that_passes_while_a_tick_runs_lands_in_that_tick_not_the_next(world, monkeypatch):
+    """23 Oct: a passed train waited for the next tick to land, verdict to landed median 0.24 h over 98 PRs. A check whose verdict
+    comes in after the tick's land step (here: that step finds nothing) is landed before the tick ends."""
+    h = Harness(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    real, calls = h.d.land, []
+    h.d.land = lambda drive, dry_run: calls.append(1) or (None if len(calls) == 1 else real(drive, dry_run))
+    said = h.tick()
+    assert len(calls) == 2 and "landed #1 in the same tick" in said and _git(world.origin, "rev-parse", "main") == tip
+
+
 def test_the_steps_after_a_landing_run_with_the_queues_credentials_and_git_never_prompts(world, monkeypatch):
     """12 Oct 08:49Z: `caught_up`'s `ls-remote` in the queue's clone, which has no credential helper, waited on a password."""
     h = Harness(world, monkeypatch)
@@ -880,6 +894,20 @@ def test_a_collection_error_names_its_test_module(tmp_path):
                                                 "failed_tests": [], "log": "/x/suites/filler.log"}]))
     (d / "suites" / "filler.log").write_text("ERROR tests/test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
     assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
+
+
+def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
+    """22-23 Oct: #3215's orphan file and #3140's out-of-layer imports named no file drive matched, so it resent each train
+    instead of ejecting the one PR (a hand eject saved each about 30 min)."""
+    from research.drive import lean_errors
+
+    log = ("AUDIT /w/lean-audit-scratch-1-x/verity/core/service/flock: FAIL  14588 declarations in 159 modules\n"
+           "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
+           " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/core/protocols/pouw/lean/check: FAIL  944 declarations in 13 modules\n"
+           "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
+    assert lean_errors(log) == {"verity/core/service/flock/Flock/Test/KnownRead.lean",
+                                "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
