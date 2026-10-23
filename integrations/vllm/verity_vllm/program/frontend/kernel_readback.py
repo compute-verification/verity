@@ -84,9 +84,22 @@ def routers(model) -> set[int]:
 
 def kept(model) -> set[int]:
     """The ids of the linears the checkpoint's ``modules_to_not_convert`` keeps bf16: each module whose linear method says
-    so (``int8_kept``, `engine.int8_vllm.Int8KeptLinearMethod`)."""
-    return {id(m) for m in model.modules() if _is(qm := getattr(m, "quant_method", None), ("LinearMethodBase",))
-            and getattr(qm, "int8_kept", False) is True}
+    so (``int8_kept``, `engine.int8_vllm.Int8KeptLinearMethod`), and each linear the model builds with no quantization config
+    (``quant_config`` None, so no quantization method reaches it: vLLM's ``DeepseekV32Indexer.wk_weights_proj``) whose every
+    shard (the model's ``packed_modules_mapping``) the checkpoint's ``modules_to_not_convert`` names."""
+    marked = {id(m) for m in model.modules() if _is(qm := getattr(m, "quant_method", None), ("LinearMethodBase",))
+              and getattr(qm, "int8_kept", False) is True}
+    qc = getattr(getattr(model, "config", None), "quantization_config", None)
+    names = set((qc.get("modules_to_not_convert") if isinstance(qc, dict) else getattr(qc, "modules_to_not_convert", None)) or ())
+    if not names or not callable(getattr(model, "named_modules", None)):
+        return marked
+    packed = getattr(model, "packed_modules_mapping", None) or {}
+    for name, m in model.named_modules():
+        if getattr(m, "quant_config", 0) is None and _is(getattr(m, "quant_method", None), ("LinearMethodBase",)):
+            head, _, leaf = name.rpartition(".")
+            if all((f"{head}.{s}" if head else s) in names for s in packed.get(leaf, [leaf])):
+                marked.add(id(m))
+    return marked
 
 
 def _is(obj, bases: tuple[str, ...]) -> bool:
