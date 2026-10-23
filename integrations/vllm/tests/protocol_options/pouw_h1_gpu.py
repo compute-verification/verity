@@ -463,6 +463,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                 out["committer"] = {"run_root": rc.run_root.hex(), "name": com.name, "finalize_s": round(rc.t_finalize_s, 3),
                                     **{k: rc.extra.get(k) for k in ("values_retained_bytes", "expected_tensors",
                                                                      "committed_tensors", "errors_n", "errors")}}
+            if a.commit:
+                print(f"[fill] {name} served {json.dumps({k: out.get(k) for k in ('gpu', 'step_s', 'decode_step_s_median', 'serve', 'same_tokens', 'committer')}, default=str)[:3000]}",
+                      flush=True)
             if a.handoff:
                 comp.installed[0].release = None
             else:
@@ -482,11 +485,13 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             return out
         return released(name, h1, out, served, tdir, bool(a.challenger), register=not a.commit)
 
+    if a.commit:
+        doc["h1_commit"] = window("commit", plain, outdir / "commit")
+        (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     doc["h1"] = window("fill", plain, outdir)
     if a.handoff:
         return hand_off(pouw.h1_run(entry_name), a, doc)
     if a.commit:
-        doc["h1_commit"] = window("commit", plain, outdir / "commit")
         doc["h1_solo"] = {"skipped": "--commit measures the 64's window with and without the Commit"}
         h, c = doc["h1"], doc["h1_commit"]
         doc["commit"] = {"step_s": {"plain_mean": doc["plain"]["fill"]["step_s"], "h1_decode_median": h["decode_step_s_median"],
