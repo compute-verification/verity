@@ -56,6 +56,7 @@ from typing import Any
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -196,6 +197,26 @@ def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, admit: Seque
     return out
 
 
+def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any], lanes_: int,
+                     words_: int) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
+    """The verifier's entries and roots of a drawn leaf's values, from the accepted registration record and the accepted
+    produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
+    ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
+    ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of
+    ``partials``. `registered_file` reads them; `pouw-leaf-own` holds a statement's file to them."""
+    ent: dict[str, Mapping[str, Any]] = {}
+    roots: dict[str, str] = {}
+    for e in registration.get("registered") or ():
+        if e["value"] not in ent:
+            ent[e["value"]], roots[e["value"]] = e, e["root"]
+    got = [e for e in produced["produced"] if e.get("value") == PARTIALS]
+    if not got:
+        raise ValueError(f"the produced record has no {PARTIALS}")
+    ent[PARTIALS] = PR.entry(registration["program"], PARTIALS, lanes_, words_, R.digest(registration))
+    roots[PARTIALS] = got[0]["root"]
+    return ent, roots
+
+
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
                     known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
@@ -250,6 +271,7 @@ __all__ = [
     "reads",
     "registered_file",
     "statements",
+    "verifier_entries",
     "word_order",
     "words",
 ]

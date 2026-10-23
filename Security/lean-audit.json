@@ -28799,9 +28799,12 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.OwnPorts": {
-   "digest": "3e425c7cf11e7217a020be2be79fc8df34541966ad561eaef7598983202da6f1",
+   "digest": "1382838e9b0eb3222b0f1b3c3f3295b9b826a5a9950046a5761a817fc1cf6482",
    "definitions": {
+    "PouwWindow.Lanes.checkOwn": "be30093a4cd40449bb6323c165f52af98b8ce879c6e74ce58854fe25a44ce51d",
+    "PouwWindow.Lanes.holds": "c84d7f11af9647f07fe46506ba83779fecb09a8b8aa6ab654240e1ed0c2cc6c6",
     "PouwWindow.Lanes.ownOf": "c21b81dc22391e61c59c0a702da3e61d7bda87a9b6642e0c0edec61093d3bc38",
+    "PouwWindow.Lanes.portEq": "c9bdef61d2cfafddfb2a308b8973a9b60247dd48c72a02d82b7045d900f1adde",
     "PouwWindow.Lanes.portsOf": "27d88f69ce81a5e4ea515b923dd534d05a2538e3b5079b4dc41a427153f6ddd8",
     "PouwWindow.Lanes.readFull": "d3ecf481d6cdd13619a89eba5cfab9b4c22451fd7f666a938cea9eace3b3d41c",
     "PouwWindow.Lanes.regReads": "0445d880288a47d9f9f1b34f12a35656acf63a7abbe1fc7d81d91210e30d8324"
@@ -28925,9 +28928,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "cfea0dc5f4c9fb0b72cab8a1faeebf1eb3860f451d15642254eb1aab833dd2c4",
+   "digest": "682496cf67cbab7148bdbe640eb624e351ce08db5cb66fe4dcfc0f15d4aa05a0",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "909b6c024fca00ef8922808f14f2e1c54f61bf6a440da2f4e87ed32ec7204a87"
+    "Accounting.Guarantees.TS.LeafLanesSound": "ce1b748b655c6b67ce22414f513b96ec5b61b135fdcfde3194786144c36e50d9"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28949,7 +28952,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "655b1c71dc748346cf2413054f71ec058524af39c398df87fdc03aaabcd0639b",
+   "digest": "9933bb305c160a17200453964eab782098fd42cc9318c3f656c01bf4c6a2862d",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -28986,7 +28989,7 @@
     "Accounting.TS.Lanes.colOf": "4fc95a8f39ff64d2cbabaad7ef2aa27a7eb3fba31730f80ca8b9e087c27daa85",
     "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
-    "Accounting.TS.Lanes.leafLayer": "101ffc282addf156b0230b7888db001fbb19448451e4a9713cbf44087a8ffa8f",
+    "Accounting.TS.Lanes.leafLayer": "6765bb76bd226e5428d233ce177d0f65ddfa032578b53310d70e2d57d99677ce",
     "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
     "Accounting.TS.Lanes.rsOf": "e68b11949253774a8e49eea6b8665d1c1d1af54554dcc74669df304c3a314291",
