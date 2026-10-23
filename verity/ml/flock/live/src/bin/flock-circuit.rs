@@ -4864,7 +4864,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
                 }
             };
             if let Resp::Refused(why) = &resp {
-                at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["refused", why.chars().take(400).collect::<String>()]));
+                at.lock().unwrap_or_else(PoisonError::into_inner).push(json!(["refused", why.chars().take(3000).collect::<String>()]));
             }
             let done = matches!(resp, Resp::Verdict(_));
             if write_frame(&mut w, &resp.encode()).is_err() || done {
