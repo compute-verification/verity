@@ -15,7 +15,9 @@ the ``--units`` blocks of a synthetic row W wide read through the split (`cols_c
 output by the numpy twin of the whole row before and after staging.  A part template (`serving_rows.PARTS`: the fused MNNVL
 all-reduce + RMSNorm's all-reduce and residual add, in column blocks, and its norm) with ``--row SPEC`` stages instead the
 ``--units`` of a synthetic row of SPEC read through the split (`parts_call`), each held to the row's output it returns by the
-numpy twin of the whole row before and after staging.
+numpy twin of the whole row before and after staging.  A slice template (`serving_rows.SLICES`: the router GEMM, the LM
+head, cuBLAS's split-K and torch.bmm at their coordinates, DSA's logits per key, the embedding shard per column, the all-gather
+per shard) with ``--row SPEC`` likewise stages the ``--units`` of a synthetic row of SPEC read through the split (`slice_call`).
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
@@ -212,6 +214,64 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
             "twin": (normed[0], r[0])[j].reshape(n, -1), "reference": ref.astype(np.uint16), "entries": entries}
 
 
+def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
+    """A synthetic row of ``row`` (a descriptor id of a `serving_rows.SLICES` family) on finite operands (bf16 N(0, 1), e4m3 codes
+    but NaN, f32 in [0.5, 2), the embedding shard's token inside its shard), each a committed member, read through the split for
+    the slice template ``tp`` as a window reads it.  Returns the units' rows by port, their outputs (the row's, as committed),
+    those outputs by the row's twin (`glm53_rows.ROWS`' kernel where the family has one, the embedding shard's table row by
+    index, else the row's word Definition by `evaluate_batch`), and the IR reference of the template's word on every unit's
+    rows, each as u16 words."""
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.pipeline import slice_rows as SL
+    from verity_vllm.program.kernels import glm53_rows as GR
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    fn, S = SRW._bind(row), spec_statics(row)
+    if spec_base(row) not in SRW.SLICES or fn is None or descriptor_id(fn) != row:
+        raise ValueError(f"{row} is no row of a serving_rows.SLICES family, or no descriptor id")
+    params, ret = fn.signature()
+    ops = []
+    for nm, ty in params:
+        n, w = len(ty.leaf_widths()), ty.leaf_widths()[0]
+        ops.append(np.array([int(S["START"]) + int(S["VS"]) // 2], np.int32) if nm == "tok" else bf16_rows(rng, 1, n)[0] if w == 16
+                   else (lambda c: np.where((c & 0x7F) == 0x7F, c ^ 1, c).astype(np.uint8))(rng.integers(0, 256, n, dtype=np.uint8))
+                   if w == 8 else rng.uniform(0.5, 2, n).astype(np.float32))
+    bits = lambda a: a.view(f"<u{a.itemsize}").astype(np.uint64).reshape(1, -1)  # noqa: E731
+    if spec_base(row) in GR.ROWS:
+        y = np.asarray(GR.ROWS[spec_base(row)][0](S, ops)["0"]).reshape(-1)
+    elif spec_base(row) == "EmbeddingShard_v1":
+        t, VS = int(ops[0][0]) - int(S["START"]), int(S["VS"])
+        y = ops[1].reshape(VS, -1)[t] if 0 <= t < VS else np.zeros(int(S["H"]), np.uint16)
+    else:
+        y = np.asarray(evaluate_batch(fn, *(bits(o) for o in ops))).reshape(-1)
+    y = y.astype(np.uint16 if ret.leaf_widths()[0] == 16 else np.uint32)
+
+    class Index:
+        pnames: list[str] = []
+
+        def member_at(self, a, lo, hi):
+            return {"members": [(params[a][0], ops[a].size, str(ops[a].dtype))], "step": 16, "op_path": f"m1.{params[a][0]}",
+                    "row": 0}, params[a][0], lo, hi, None
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return (y if member == "out" else ops[[nm for nm, _t in params].index(member)])[lo:hi], None
+
+    r = {"i": 0, "spec": row, "args": [[["n", k, 0, o.size]] for k, o in enumerate(ops)]}
+    d = {"statics": S, "op_path": "model.layers.3.m1", "members": [("out", y.size, str(y.dtype))], "row": 0, "step": 16}
+    one = ("r0", Index(), r, d)
+    n = SL.extent(tp, S)
+    (m,) = SRW.members([tp.id], [[one]], [n])
+    data, entries = SRW.read(m, [one], Store(), None)
+    packed = tp.packed or (16,) * (len(params) + 1)
+    unit = [np.ascontiguousarray(data["rows"][p], dtype="<u2").view(f"<u{b // 8}").astype(np.uint64) for (p, _w), b in zip(m.rows, packed)]
+    ref = np.asarray(evaluate_batch(SRW._bind(tp.word), *unit)).reshape(n, -1).astype(f"<u{packed[-1] // 8}")
+    return {"call": row, "member": m, "rows": data["rows"], "outs": data["outs"][m.outs[0][0]], "entries": entries,
+            "twin": np.ascontiguousarray(y.reshape(n, -1)).view("<u2"), "reference": np.ascontiguousarray(ref).view("<u2")}
+
+
 def _packed(a: np.ndarray, bits: int) -> np.ndarray:
     """A port's elements as its row holds them: their little-endian bytes in u16 words (`serving_rows`' packed ports)."""
     return np.ascontiguousarray(np.asarray(a).reshape(-1).astype(np.dtype(f"<u{bits // 8}"))).view("<u2")
@@ -271,8 +331,8 @@ def main() -> int:
     ap.add_argument("--call-w", type=int, default=None, metavar="W",
                     help="a column-block template (serving_rows.COLS): stage blocks of a synthetic row this wide, read through the split")
     ap.add_argument("--row", default=None, metavar="SPEC",
-                    help="a part template (serving_rows.PARTS): stage its units of a synthetic row of this descriptor id, read "
-                         "through the split")
+                    help="a part template (serving_rows.PARTS) or a slice template (serving_rows.SLICES): stage its units of a "
+                         "synthetic row of this descriptor id, read through the split")
     ap.add_argument("--units", default=None,
                     help="with --call-n: the coordinates staged; with --chunk-k: the chunks; with --call-w or --row: the column "
                          "blocks or parts (comma-separated); else the first --n")
@@ -337,7 +397,9 @@ def main() -> int:
         want = np.stack([_packed(np.array([sc["chunks"][c]["out"]]), 16 if S["LAST"] else 32) for c in units])
     elif a.call_w or a.row:
         t = time.time()
-        sc = cols_call(SRW.template(a.spec), a.call_w, rng) if a.call_w else parts_call(SRW.template(a.spec), a.row, rng)
+        tp = SRW.template(a.spec)
+        sc = (cols_call(tp, a.call_w, rng) if a.call_w else slice_call(tp, a.row, rng) if tp.layout == "slice"
+              else parts_call(tp, a.row, rng))
         units = [int(u) for u in a.units.split(",")] if a.units else list(range(a.n))
         a.n = len(units)
         say("split", seconds=round(time.time() - t, 1), call=sc["call"], units=sc["member"].n, entries=sc["entries"],
