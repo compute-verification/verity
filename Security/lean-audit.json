@@ -810,9 +810,6 @@
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs"
   },
-  "Flock.Guarantees.LoopTabsReal": {
-   "owner": "@proofs"
-  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "ab28d1707da3d17764910d77bb753fff4d819a925426b03e90595154924c080d"
