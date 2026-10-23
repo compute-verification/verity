@@ -126,26 +126,33 @@ noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
 /-- **The loop's frame state at a rep's first round** after the decoded coins `cs` at `x`, rep round `q` the `q + 1`
 coins precede being the first of its rep stream `k`: rep 0's is the frame's start, and rep 1's its start after rep 0's
 algebraic-phase coins, as `Frames.roundPlace` hands them (`Frame.step`'s `prior`, at the placeholder's configuration,
-whose layout alone it reads), or why the loop refuses the round there: rep 0's algebraic phase not ended, the frame's
-refusal of the coins, or no placeholder or algebraic phase. The frame's start where `x` sets up no session or `cs` is
-empty. -/
+whose layout alone it reads), or why the loop refuses the round there: no placeholder or algebraic phase (which
+`Frames.withAlg` computes at every rep's first round), rep 0's algebraic phase not ended, or the frame's refusal of the
+coins. The frame's start where `cs` is empty (the `Commit`, whose coins no frame takes); refused where `x` sets up no
+session. -/
 noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String Masker :=
   match FlockDeploy.setupOf true x, cs.length with
   | some (_, spec, sts), q + 1 =>
     let rs := roundsOf spec sts
     let k := (ZKMal.CoinLayer.locate rs 0 q).1
     let n0 := rs.getD (k - 1) 0
-    if k % 2 = 0 then pure {} else do
-      let (c, t, dom, _, _) ← placeholder spec sts k (wordsAt x cs 0)
-      let alg ← _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
-      if n0 < alg.size then throw "rep 1's first round before rep 0's algebraic phase ended"
-      let cr0 := (Array.range n0).map fun j => wordsAt x cs (q - n0 + j + 1)
-      let prior := (cr0.extract 0 alg.size).foldl (· ++ ·) #[]
-      match _root_.Flock.Firewall.Frame.step c {}
-          (.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)) with
-      | (.ok, st') => pure st'.m
-      | _ => throw "rep 0's algebraic-phase coins"
-  | _, _ => pure {}
+    match placeholder spec sts k (wordsAt x cs 0) with
+    | .error e => throw e
+    | .ok (c, t, dom, _, _) =>
+      match _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom with
+      | .error e => throw e
+      | .ok alg =>
+        if k % 2 = 0 then pure {}
+        else if n0 < alg.size then throw "rep 1's first round before rep 0's algebraic phase ended"
+        else
+          let cr0 := (Array.range n0).map fun j => wordsAt x cs (q - n0 + j + 1)
+          let prior := (cr0.extract 0 alg.size).foldl (· ++ ·) #[]
+          match _root_.Flock.Firewall.Frame.step c {}
+              (.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)) with
+          | (.ok, st') => pure st'.m
+          | _ => throw "rep 0's algebraic-phase coins"
+  | some _, 0 => pure {}
+  | none, _ => throw "the loop's frames: no session"
 
 /-- **The scheduled round in the device's place after the decoded coins `cs`** at `x`, on the rep's own table and salts
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
