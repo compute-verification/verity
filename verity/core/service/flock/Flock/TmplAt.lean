@@ -89,23 +89,6 @@ def unrollWhy (t : Tmpl) (lays : Array Lay) : String :=
   else if !identOk t lays then "a layout marked ident moves a column, or the input rows move"
   else "an output group is outside the root's columns or its committed slot (D11)"
 
-/-- `unrollAt`'s net, or the default where it refuses. -/
-def unitFull (t : Tmpl) (lays : Array Lay) : Net :=
-  match unrollAt t lays with
-  | .ok n => n
-  | .error _ => default
-
-/-- **The templated unit's committed net, its rows built only when read**: its size and constant (the root's layout size),
-port groups (the output groups at their committed words, `posOf`) and slot from the description, its A and B
-`unrollAt`'s. Wherever `unrollOk` passes it is `unrollAt`'s net (`FlockSoundness.TmplFold.unitNet_eq`). -/
-def unitNet (t : Tmpl) (lays : Array Lay) : Net :=
-  let size := (lays.getD t.root default).size
-  let full : Thunk Net := Thunk.mk fun _ => unitFull t lays
-  { name := t.name, useful := size, constPos := size - 1, inGroups := t.inGroups,
-    outGroups := t.outGroups.map fun g => { g with col := posOf t lays (g.col * WORD) / WORD },
-    inWords := (t.inGroups.back?.map fun g => g.col + g.words).getD 0,
-    aT := Thunk.mk fun _ => full.get.a, bT := Thunk.mk fun _ => full.get.b, unitLog := max 7 (log2ceil size) }
-
 end Flock.Tmpl
 
 namespace Flock
