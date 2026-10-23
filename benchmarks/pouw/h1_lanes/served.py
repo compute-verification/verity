@@ -343,10 +343,8 @@ def prepare(a) -> None:
     work = Path(a.work)
     for d in ("verifier", "st", "circuits"):
         (work / d).mkdir(parents=True, exist_ok=True)
-    op = json.loads(Path(a.opened).read_text())
-    k, unit = int(op["k"]), op["unit"]
-    u = int(unit["unit"])
-    ctx = L.Ctx(work, a.name, k, u)
+    k = a.k if a.wait else int(json.loads(Path(a.opened).read_text())["k"])
+    ctx = L.Ctx(work, a.name, k, 0)
     t = L.tile(k)
     ctx.wp = 2 * LL.words(k)
     ctx.lane = ctx.reg = L.bound("H1LanesLaneStatement", L.lane_word(Z.lane(t)))
@@ -354,6 +352,21 @@ def prepare(a) -> None:
     (work / "verifier" / "lane.program.json").write_bytes(canonical_json(encode_program(ctx.lane.program)))
     (work / "verifier" / "lane.partition.json").write_text(json.dumps(ctx.lane.part))
     print(f"lane Program {ctx.prog[:16]}, {time.time() - t0:.0f} s", flush=True)
+    # the lane circuit depends on K alone: lowered (and pinned) before the openings, which --wait lets arrive meanwhile
+    ctx.stagers = {LL.LANE: L.stager(ctx, LL.LANE)}
+    st = ctx.stagers[LL.LANE]
+    st.pin, st.class_sha512  # noqa: B018
+    print(f"lane circuit {st.low.layout.counts['ands']} ANDs, {time.time() - t0:.0f} s", flush=True)
+    while a.wait and not Path(a.opened).exists():
+        if time.time() - t0 > a.wait:
+            raise SystemExit(f"no openings at {a.opened} after {a.wait} s")
+        time.sleep(10)
+    op = json.loads(Path(a.opened).read_text())
+    if int(op["k"]) != k:
+        raise SystemExit(f"the openings are at K={op['k']}, the lane circuit at K={k}")
+    unit = op["unit"]
+    u = ctx.position = int(unit["unit"])
+    print(f"openings of {op['window'][:16]} unit {u}, {time.time() - t0:.0f} s", flush=True)
 
     salt = bytes.fromhex(op["salt"])
     a_root = bytes.fromhex(op["ports"][f"a_k{k}_0"]["entry"]["root"])
@@ -392,11 +405,7 @@ def prepare(a) -> None:
     sw = Served(leaf, (a_root, b_root), d, op["draw_root"], tree, record, op["ports"],
                 {LL.PARTIALS: produced, "other-a": op["other"]["entry"]})
     ctx.worlds = {"served": sw}
-    ctx.stagers = {LL.LANE: L.stager(ctx, LL.LANE)}
-    st = ctx.stagers[LL.LANE]
-    st.pin, st.class_sha512  # noqa: B018
-    print(f"registration {d[:16]}, partials {tree.root.hex()[:16]}; lane circuit {st.low.layout.counts['ands']} ANDs, "
-          f"{time.time() - t0:.0f} s", flush=True)
+    print(f"registration {d[:16]}, partials {tree.root.hex()[:16]}, {time.time() - t0:.0f} s", flush=True)
     CTX = ctx
 
     lanes = [ln for ln in range(LL.lanes(*RC))] if a.lanes == "all" else [int(x) for x in a.lanes.split(",")]
@@ -509,6 +518,7 @@ def main() -> None:
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--lanes", default="all")
     ap.add_argument("--skip", default="")
+    ap.add_argument("--wait", type=int, default=0, help="prepare: wait up to this many seconds for --opened (K from --k)")
     ap.add_argument("--name", default="h1-served-local")
     a = ap.parse_args()
     if a.cmd == "extract":

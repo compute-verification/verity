@@ -19,6 +19,8 @@
 #      or H1S_SMOKE=K: a stand-in window at K (served.py smoke), the harness's own check
 #      or H1S_OPENED (an extract's private openings: one node's share of the lanes, H1L_LANES, the negatives skipped
 #      with H1S_SKIP=tampered-zy,other-call-a); H1S_EXTRACT_ONLY=FILE: keep the extract's openings there (0600) and stop
+#      or H1S_OPENED_AT=FILE: a node path (a private directory) the openings are copied to while prepare lowers the lane
+#      circuit, waited for up to H1S_WAIT seconds (14400), then moved into the scratch
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
 #      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
@@ -56,6 +58,10 @@ if [ -n "${H1S_SMOKE:-}" ]; then
   K=$H1S_SMOKE
   log "h1-served: SMOKE, a stand-in window at K=$K (the harness's own check, no served window)"
   "$PY" "$H/served.py" smoke --k "$K" --out "$OP" > "$OUT/extract.out" 2> "$OUT/extract.err" || { log "smoke FAILED: $(tail -3 "$OUT/extract.err")"; exit 1; }
+elif [ -n "${H1S_OPENED_AT:-}" ]; then
+  # the openings arrive at this node path (a private directory) while prepare lowers the lane circuit
+  OP=$H1S_OPENED_AT
+  log "h1-served: the openings are awaited at $OP (up to ${H1S_WAIT:-14400} s)"
 elif [ -n "${H1S_OPENED:-}" ]; then
   # an extract's private openings, moved into the scratch: a copy left in the run dir would be uploaded with its record
   install -m 600 "$H1S_OPENED" "$OP" || exit 1
@@ -83,8 +89,10 @@ fi
 # ---- the statements ------------------------------------------------------------------------------------------------------
 log "h1-served: K=$K tile=${H1_TILE:-v1} firewall $FW, sessions $PAR at a time, Lean $LPAR at a time"
 $TIME "$OUT/prepare.time" "$PY" "$H/served.py" prepare --opened "$OP" --work "$WK" --jobs "${H1L_JOBS:-8}" \
-  --lanes "${H1L_LANES:-all}" --skip "${H1S_SKIP:-}" --name "h1-served-${RESEARCH_RUN_ID:-local}" > "$OUT/prepare.out" 2> "$OUT/prepare.err"
+  --lanes "${H1L_LANES:-all}" --skip "${H1S_SKIP:-}" --name "h1-served-${RESEARCH_RUN_ID:-local}" --k "$K" \
+  ${H1S_OPENED_AT:+--wait "${H1S_WAIT:-14400}"} > "$OUT/prepare.out" 2> "$OUT/prepare.err"
 rc=$?
+if [ -n "${H1S_OPENED_AT:-}" ] && [ $rc = 0 ]; then mv "$H1S_OPENED_AT" "$W/opened.json"; OP=$W/opened.json; fi
 tail -4 "$OUT/prepare.out" | cut -c1-2000 | tee -a "$OUT/job.log"
 cp "$WK/plan.json" "$WK/prepare.json" "$OUT/" 2>/dev/null
 [ $rc = 0 ] || { log "prepare FAILED (exit $rc): $(tail -5 "$OUT/prepare.err")"; exit 1; }
