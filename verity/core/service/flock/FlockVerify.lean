@@ -1152,7 +1152,6 @@ def typedExpandCmd (args : List String) : IO UInt32 := do
   IO.println s!"TYPED {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-
 /-- `typed-rows FILE [--tables DIR] --out DIR`: a typed template's rows as the verifier derives them, through
 `deriveChecked` with its tables held (`Typed.rows`), written in the writer's `rows/` formats. -/
 def typedRowsCmd (args : List String) : IO UInt32 := do
