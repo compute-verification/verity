@@ -528,7 +528,7 @@ theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st 
     obtain ⟨c, hpc, hseg⟩ := Option.bind_eq_some_iff.1 hseg
     obtain ⟨q, hq, rfl⟩ := Option.map_eq_some_iff.1 hseg
     obtain ⟨q', hq', hroot, hbytes⟩ := capRow_bytes hS hck hr hpc (capAt_stmt hcap hsi) hi hil
-    obtain rfl : q' = q := Option.some.inj (hq'.symm.trans hq)
+    obtain rfl : q = q' := Option.some.inj (hq.symm.trans hq')
     have hN := hroot rfl
     unfold Claims.Recursion.VStarB.readSegs
     rw [List.flatMap_map, ← hN]
