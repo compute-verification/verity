@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from array import array
 from dataclasses import dataclass, field
 from functools import partial
 
@@ -84,24 +85,24 @@ class Spec:
 class _Block:
     pos: int
     key: tuple
-    labels: list
+    labels: array
     base: int = 0
 
 
 def _live(C: Circuit, seeds) -> set:
-    """``C.live`` from the variables ``seeds`` (a specialization's read labels and returns) rather than outputs."""
+    """The ANDs of ``C.live`` from the variables ``seeds`` (a specialization's read labels and returns) rather than
+    outputs: a specialization lays out only its ANDs, so no other variable is held."""
     seen: set = set()
     stack = list(seeds)
     kind, data = C.kind, C.data
     while stack:
         v = stack.pop()
-        if v in seen:
+        if v in seen or kind[v] != "and":
             continue
         seen.add(v)
-        if kind[v] == "and":
-            a, b = data[v]
-            stack.extend(a.s)
-            stack.extend(b.s)
+        a, b = data[v]
+        stack.extend(a.s)
+        stack.extend(b.s)
     return seen
 
 
@@ -192,7 +193,7 @@ class _Lowerer:
                 sp = self.specs.get(key) or self._generic(fc, key, pat, len(label_vars))
         sp = sp or self._lower(fc, key, pat, len(label_vars))
         key = sp.key
-        blk = _Block(len(C.kind), key, label_vars)
+        blk = _Block(len(C.kind), key, array("q", label_vars))
         C.blocks.append(blk)
         col_var: dict[int, L] = {}
         bits = iter(sp.rets)
@@ -220,7 +221,8 @@ class _Lowerer:
                         s = s ^ col_var[x].s
                 out.append(L(s, c))
             wires.setdefault(r, out)
-        C.used.update(v for v in label_vars if v >= 0)
+        kind = C.kind
+        C.used.update(v for v in label_vars if v >= 0 and kind[v] == "and")
         C.zero = getattr(C, "zero", False) or ZERO in label_vars
         return key
 
@@ -291,7 +293,7 @@ class _Lowerer:
                 if len(b.s) > self.support or (self.gather and len(b.s) > 1 and any(C.kind[v] != "arg" for v in b.s)):
                     b = C.commit([b])[0]
                 rets.append(("f", b.c, b.s))
-                C.used.update(b.s)
+                C.used.update(v for v in b.s if C.kind[v] == "and")
         sp = self._finish(C, key, ins, rets)
         self.specs[key] = sp
         sp.index = len(self.order)
@@ -307,8 +309,9 @@ class _Lowerer:
             if C.kind[v] == "and":
                 a, b = C.data[v]
                 read |= a.s | b.s
+        kind = C.kind
         for blk in C.blocks:
-            read.update(x for x in blk.labels if x >= 0)
+            read.update(x for x in blk.labels if x >= 0 and kind[x] == "and")
         out: dict[int, None] = {}
         for t in rets:
             if t[0] == "f" and len(t[2]) == 1:
@@ -342,17 +345,17 @@ class _Lowerer:
             col[v] = n
             n += 1
         sp.cols = n
-        for v in range(len(C.kind)):
-            if C.kind[v] == "call":
-                blk, x = C.data[v]
-                b = C.blocks[blk]
-                col[v] = b.base + x
         K = sp.cols + ins
+        kind, data, cblocks = C.kind, C.data, C.blocks
 
         def ref(v: int) -> int:
             if v < 0:
                 return 0 if v == ZERO else K
-            return sp.cols + C.data[v] if C.kind[v] == "arg" else col[v]
+            k = kind[v]
+            if k == "call":
+                blk, x = data[v]
+                return cblocks[blk].base + x
+            return sp.cols + data[v] if k == "arg" else col[v]
 
         def refs(f: L) -> tuple:
             return tuple(sorted(map(ref, f.s))) + ((K,) if f.c else ())
@@ -364,10 +367,10 @@ class _Lowerer:
             sp.rows.append((col[v], refs(a), refs(b)))
             sp.refs += len(a.s) + a.c + len(b.s) + b.c
             sp.commits += b is ONE
-        sp.rets = [t if t[0] == "c" else ("f", t[1], tuple(("l", C.data[v]) if C.kind[v] == "arg" else ("v", col[v])
+        sp.rets = [t if t[0] == "c" else ("f", t[1], tuple(("l", C.data[v]) if C.kind[v] == "arg" else ("v", ref(v))
                                                                 for v in sorted(t[2]))) for t in rets]
         sp.copies = [b.key for b in C.blocks]
-        sp.calls = _runs([(b.base, b.key, [ref(v) for v in b.labels]) for b in blocks], self.specs, sp.cols)
+        sp.calls = _runs(blocks, lambda b: np.fromiter(map(ref, b.labels), np.int64, len(b.labels)), self.specs, sp.cols)
         return sp
 
     def total(self, key: tuple) -> dict:
@@ -394,30 +397,42 @@ def _segs(r0: list[int], step: list[int], cols: int) -> tuple:
     return tuple(map(tuple, out))
 
 
-def _runs(blocks: list[tuple[int, tuple, list[int]]], specs: dict, cols: int) -> list[T.Call]:
+def _runs(blocks: list[_Block], refs, specs: dict, cols: int) -> list[T.Call]:
     """Consecutive copies of one specialization, side by side, whose input references step by one fixed vector per copy,
-    each staying among the caller's own columns or past them, as one call each."""
+    each staying among the caller's own columns or past them, as one call each. ``refs(block)`` is a copy's input
+    references, read once per copy, so only one run's are held."""
     calls = []
     i = 0
+    nxt = refs(blocks[0]) if blocks else None
     while i < len(blocks):
-        base, key, r0 = blocks[i]
+        base, key, r0 = blocks[i].base, blocks[i].key, nxt
+        own0 = r0 < cols
         sp = specs[key]
         j = i + 1
         step = None
+        nxt = None
         while j < len(blocks):
-            b, k2, rj = blocks[j]
-            if k2 != key or b != base + (j - i) * sp.cols or any((x < cols) != (y < cols) for x, y in zip(rj, r0)):
+            b = blocks[j]
+            if b.key != key or b.base != base + (j - i) * sp.cols:
+                nxt = None
                 break
-            d = [x - y for x, y in zip(rj, r0)]
+            rj = refs(b)
+            nxt = rj
+            if not np.array_equal(rj < cols, own0):
+                break
+            d = rj - r0
             if step is None:
-                if any(x < 0 for x in d):
+                if (d < 0).any():
                     break
                 step = d
-            elif any(x != (j - i) * s for x, s in zip(d, step)):
+            elif not np.array_equal(d, (j - i) * step):
                 break
+            nxt = None
             j += 1
-        calls.append(T.Call(sp.index, j - i, base, sp.cols, _segs(r0, step or [0] * len(r0), cols)))
+        calls.append(T.Call(sp.index, j - i, base, sp.cols, _segs(r0.tolist(), (step if step is not None else np.zeros(len(r0), np.int64)).tolist(), cols)))
         i = j
+        if nxt is None and i < len(blocks):
+            nxt = refs(blocks[i])
     return calls
 
 
