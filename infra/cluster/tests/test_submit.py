@@ -124,6 +124,18 @@ def test_a_pinned_node_is_the_only_one_tried():
     assert "vy-nebius-2" not in str(e.value)
 
 
+def test_once_node_1_has_stopped_verity_jobs_go_to_its_share_on_node_2():
+    """nebius-after-n1.toml, staged for node 1's retirement (INF-57): what the router does once it replaces nebius.toml."""
+    c = model.load(Path(NEBIUS).with_name("nebius-after-n1.toml"))
+    assert model.validate(c) == [] and set(c.nodes) == {"vy-nebius-2"} and c.workstreams == ()
+    cpu = submit.resolve(c, _job(cpus=4, memory_gib=16), "r1", T)
+    assert cpu["node"] == "vy-nebius-2" and cpu["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in cpu["wrap"]
+    gpu = submit.resolve(c, _job(gpus=1), "r1", T)
+    assert gpu["node"] == "vy-nebius-2" and gpu["workload_wrap"][0] == submit.GPU_LEASE
+    with pytest.raises(submit.Refused, match="vy-nebius-1"):
+        submit.resolve(c, _job(node="vy-nebius-1"), "r1", T)
+
+
 def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
     c = model.load(NEBIUS)
     assert c.nodes["vy-nebius-1"].gpu_executor == "n1-lease", "the cutover: the description switches node 1's executor on"

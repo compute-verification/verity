@@ -1,0 +1,50 @@
+# nebius.toml once vy-nebius-1 has stopped (INF-57, 19 Oct 15:00Z): node 2 alone, with Verity's share on it. The PR that
+# retires node 1 moves this file over nebius.toml (pods/nebius/n1_replacement.sh prints that step); until then nothing reads it
+# but the tests and `cluster validate`.
+#
+# Node 1's replacement (vy-nebius-cpu-4/5, deploy.toml) isn't a node here: those machines have no GPUs, take checks through
+# their slot files and research runs through `research run --on`, and `cluster submit` has an executor only for node 2.
+# Node 1's workstreams (Kueue's provers and deployments-gpu), PoUW's node 1 share and [policy.vy-nebius-1] retire with Kueue.
+# Node 2 stops at the same time unless it is renewed: renewing it moves `stops_at` and the share's `until` here and in
+# nebius.toml together.
+
+[cluster]
+name = "nebius"
+drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups (13:30Z) and custody before 14:55Z
+
+[priorities]
+service = 1000  # the node's own daemons: sampler, exporters, the node agent
+timed = 900     # quiet whole-node windows
+session = 700   # a lease taken by hand: a kernel inner loop, a debugger
+capture = 600   # port captures
+work = 500      # a lane's queued work: vLLM deployments, sweep-night
+bench = 300     # M0's pinned prover benches
+dev = 100
+fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpoints
+
+[nodes.vy-nebius-2]
+gpu_model = "rtx-pro-6000"
+owner = "pous"
+memory_gib = 1690
+stops_at = "2026-10-19T15:00:00Z"  # the VM's /etc/research/deadline
+numa = { 0 = "0-95", 1 = "96-191" }
+gpus = [
+  { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
+  { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
+]
+
+# Verity on node 2: idle capacity only, preemptible, never in a window, GPUs included; at nice 19 inside check slots a and b.
+[[shares]]
+project = "verity"
+node = "vy-nebius-2"
+cpus = "48-95"
+max_memory_gib = 1024
+max_job_memory_gib = 256
+max_jobs = 6
+until = "2026-10-19T15:00:00Z"
+
+[policy.vy-nebius-2]
+owner = "infra"
+user-cpuset = { delegate = "cpu cpuset memory pids" }
+check-slots = { a = "0-63 windows=/workspace/pouw/fill/windows lead=90 mem=560", b = "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560" }
+fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
