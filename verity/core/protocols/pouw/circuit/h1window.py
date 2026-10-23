@@ -456,7 +456,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         raise ValueError(f"call {call}'s statement reads {missing}, whose roots the verifier does not hold")
     reads: dict[str, dict[str, Any]] = {}
     for u in range(u0, u0 + n):
-        for key, (value, row) in table_reads(program, tp, u).items():
+        for key, (value, row) in table_reads(program, tp, u, steps).items():
             if value in shape:
                 reads.setdefault(key, {"value": value, "rows": [None] * tp.population})["rows"][u] = row
     prog = prog or P.program_digest(program)

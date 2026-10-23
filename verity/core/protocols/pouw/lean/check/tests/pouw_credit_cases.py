@@ -933,12 +933,19 @@ def window_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `window` case: an honest window, then mutation `name`."""
     credit = name.removeprefix("credit-")
     lay = None
+
+    def call_ks(lay: dict) -> list[int]:
+        ks = {lin: k for lin, k, _n in lay["linears"]}
+        return [ks[lin] for lin, _b in lay["calls"]]
+
     if name == "proof-other-call":
-        while len({k for _lin, k, _n in (lay := layout(rng))["linears"]}) < 2:
-            pass
+        lay = layout(rng)
+        while len(set(call_ks(lay))) < 2:
+            lay = layout(rng)
     elif name in TWO_CALLS:
-        while len({k for _lin, k, _n in (lay := layout(rng))["linears"]}) == len(lay["calls"]):
-            pass
+        lay = layout(rng)
+        while len(set(call_ks(lay))) == len(lay["calls"]):
+            lay = layout(rng)
     d, s = honest_window(rng, credit, lay=lay)
     signed: dict | None = {}
     match name:

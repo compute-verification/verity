@@ -173,13 +173,19 @@ def tables(com: dict) -> dict[str, int]:
     return out
 
 
+def steps(program) -> int:
+    """The window's steps as `h1window.table` counts them: h1_prove serves no rounds, so each call is a step of its own
+    and its step's A table ``a/<K>@<c>`` holds its slot alone."""
+    return len(HW.call_units(program))
+
+
 def program_tables(program, k: int) -> dict[str, int]:
-    """`tables` as the verifier's own window Program gives them: its B rows, and each call's A table (`h1window.table`,
-    its slot of M rows) and z table (its tiles)."""
+    """`tables` as the verifier's own window Program gives them: its B rows, and each call's A table (`h1window.table`
+    at `steps`, its slot of M rows) and z table (its tiles)."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     out = {f"b/{k}": sig[f"b/{k}"].n}
     for c, (_u0, n) in enumerate(HW.call_units(program)):
-        out[HW.table(program, "a", c)], out[HW.table(program, "zy", c)] = S.M, n
+        out[HW.table(program, "a", c, steps(program))], out[HW.table(program, "zy", c)] = S.M, n
     return out
 
 
@@ -238,7 +244,7 @@ def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
     the public row's): each registered port's value (its call c's ``a/<K>@<c>`` or ``zy@<c>``, the weights' ``b/<K>``)
     and its row there, and the window's parameter or output each other port reads."""
     port = {**window_ports(program), **OUT_PORTS}
-    return {port.get(key, key): (param, row) for key, (param, row) in HW.table_reads(program, tp, u).items()}
+    return {port.get(key, key): (param, row) for key, (param, row) in HW.table_reads(program, tp, u, steps(program)).items()}
 
 
 # -- the registered values: each call's tables and the weights' b/<K> -------------------------------------------------------
@@ -338,7 +344,8 @@ def registered_reads(program, tp, call: int, roots: dict[str, str], window: str,
     if OK_VALUE not in roots:
         raise ValueError(f"the verifier registers its ok rows ({OK_VALUE}) beside the window's values, and holds no root of them")
     prog = prog or P.program_digest(program)
-    doc = HW.table_reads_file(program, tp, call, roots, ports=window_ports(program), prog=prog, window=window_root)
+    doc = HW.table_reads_file(program, tp, call, roots, ports=window_ports(program), prog=prog, window=window_root,
+                              steps=steps(program))
     u0, n, T, o1 = *HW.call_units(program)[call], tp.population, OUT_PORTS["ok"]
     rows = [None] * T
     for u in range(u0, u0 + n):

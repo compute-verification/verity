@@ -1023,7 +1023,7 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
                             "served window registers each round's A table of each K and its input-ids table")
         if rows is not None and ours[v]["leaves"] != rows:
             return "arow", (f"{whose} {v} has {ours[v]['leaves']} rows, not {rows}: it holds the M rows of each of the "
-                            "round's calls of K, call after call, so a call missing from it reads another call's rows")
+                            "round's calls of K, call after call, so a call missing from it reads another call's rows (ROOTS1)")
         got = theirs.get(name, [])
         if len(got) != 1:
             return "arow", (f"the Commit record registers {name} {'twice' if got else 'not'}: the served Commit "

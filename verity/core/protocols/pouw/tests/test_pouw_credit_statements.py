@@ -104,7 +104,7 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
         (base / "session").mkdir(parents=True)
         (base / "circuit.txt").write_bytes(circuit(ks[lay["calls"][c][0]]))
         (base / "pub.bin").write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n")
-        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"])
+        reg, why = Cr.registered_file(program, lay, shape, c, roots, d["window"]["root"], len(d["rounds"]))
         assert why is None, why
         files = [base.joinpath("circuit.txt").read_bytes(), base.joinpath("pub.bin").read_bytes(), raw,
                  json.dumps(Cr.partition_of(program, shape)).encode(), json.dumps(reg).encode()]
@@ -221,7 +221,8 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     roots = {}
     for e in d["entries"]:
         roots.setdefault(e["value"], []).append(e["root"])
-    reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"])
+    reg, _ = Cr.registered_file(program, lay, shape, s["call"], roots, d["window"]["root"],
+                                len(d["rounds"]))
     files = [Path(s["circuit"]).read_bytes(), pub.read_bytes(), raw, json.dumps(Cr.partition_of(program, shape)).encode(),
              json.dumps(reg).encode()]
     bound = hashlib.sha512(b"".join(hashlib.sha512(f).digest() for f in files)).digest()

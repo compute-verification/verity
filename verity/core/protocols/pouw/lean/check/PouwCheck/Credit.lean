@@ -1098,7 +1098,7 @@ def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Jso
     if let some n := rows then
       unless nat? (get e "leaves") == some n do
         arowRefuse (s!"{whose} {v} has {(nat? (get e "leaves")).getD 0} rows, not {n}: it holds the M rows of each " ++
-          "of the round's calls of K, call after call, so a call missing from it reads another call's rows")
+          "of the round's calls of K, call after call, so a call missing from it reads another call's rows (ROOTS1)")
     let got := theirs.getD name #[]
     if got.size != 1 then
       arowRefuse (s!"the Commit record registers {name} {if got.isEmpty then "not" else "twice"}: the served " ++
