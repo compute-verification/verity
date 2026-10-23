@@ -288,6 +288,36 @@ def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
 
 
+class _Slices(str):
+    """A circuit text that records the longest slice taken of it."""
+
+    widest = 0
+
+    def __getitem__(self, k):
+        out = str.__getitem__(self, k)
+        if isinstance(k, slice):
+            _Slices.widest = max(_Slices.widest, len(out))
+        return out
+
+
+@pytest.mark.parametrize("chunk", [1, 7, 64, 1 << 24])
+def test_the_class_digest_hashes_the_body_a_chunk_at_a_time(chunk, monkeypatch):
+    """`class_digest` is SHA-512 of the file with META's bindings removed, its body read :data:`circuit._HASH_CHUNK`
+    characters at a time and never sliced whole (a GLM-5.3 norm's unit section is 8.6 GB)."""
+    import hashlib
+
+    monkeypatch.setattr(FC, "_HASH_CHUNK", chunk)
+    meta = {"format": "f", "k_log": 20, "partition": {"rule": "r"}, "program_sha512": "0" * 128, "program_digests": {"a": "b"}}
+    head = "flock-circuit u\nMETA "
+    body = "\nCIRCUIT unit 400\n" + "".join(f"2 {k} {k + 1} 1 {7 * k}\n" for k in range(400))
+    text = _Slices(head + json.dumps(meta, sort_keys=True, separators=(",", ":")) + body)
+    kept = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
+    _Slices.widest = 0
+    assert FC.class_digest(text) == hashlib.sha512((head + json.dumps(kept, sort_keys=True, separators=(",", ":")) + body).encode()).hexdigest()
+    assert _Slices.widest <= max(chunk, len(text) - len(body))
+    assert FC.digest(text) == hashlib.sha512(str(text).encode()).hexdigest()
+
+
 def test_leaf_scheme_reserves_what_hm96_needs():
     import hashlib
 

@@ -55,6 +55,7 @@ instance file's header carries each block's unit indices (the VUs of the partiti
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 from dataclasses import dataclass
@@ -146,7 +147,8 @@ def class_digest(text: str) -> str:
     i = text.index("\n") + 1
     j = text.index("\n", i)
     meta = {k: v for k, v in json.loads(text[i + 5:j]).items() if k not in BINDING_KEYS}
-    return _sha512([text[:i], "META ", *_COMPACT.iterencode(meta), text[j:]]).hexdigest()
+    rest = (text[k:k + _HASH_CHUNK] for k in range(j, len(text), _HASH_CHUNK))
+    return _sha512(itertools.chain([text[:i], "META "], _COMPACT.iterencode(meta), rest)).hexdigest()
 
 
 def set_statics(input_set) -> dict:
