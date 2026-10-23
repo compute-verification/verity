@@ -4,7 +4,8 @@ checkers and the manifest build.
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
 (1) the env contract in fresh interpreters, (2) that "default" leaves the interpreter alone, (3) that the fold's
 digest, instances, steps and report are identical under the interpreter defaults and the tuned thresholds,
-(4) that the entry points call it, and (5) that a tuned process's heap is frozen at exit, once, and "default"'s is not.
+(4) that the entry points call it, (5) that a tuned process's heap is frozen at exit, once, and "default"'s is not, and
+(6) that `tuned` holds the thresholds for one block (a rank's Program load) and gives the caller's back.
 """
 from __future__ import annotations
 
@@ -117,6 +118,40 @@ def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, mo
     assert strip(r_default.steps) == strip(r_tuned.steps)
     assert r_default.report.by_spec == r_tuned.report.by_spec and r_default.sampled == r_tuned.sampled
     assert len(r_default.body.nodes) == len(r_tuned.body.nodes)
+
+
+def test_tuned_holds_the_thresholds_for_its_block_and_gives_the_callers_back(monkeypatch):
+    saved = gc.get_threshold()
+    try:
+        gc.set_threshold(700, 10, 10)
+        monkeypatch.setenv(gc_tuning.ENV, "")
+        with gc_tuning.tuned() as th:
+            assert th == gc_tuning.TUNED and gc.get_threshold() == gc_tuning.TUNED
+        assert gc.get_threshold() == (700, 10, 10)
+        with pytest.raises(RuntimeError, match="the step failed"):
+            with gc_tuning.tuned():
+                raise RuntimeError("the step failed")
+        assert gc.get_threshold() == (700, 10, 10)
+        monkeypatch.setenv(gc_tuning.ENV, "default")
+        with gc_tuning.tuned() as th:
+            assert th is None and gc.get_threshold() == (700, 10, 10)
+        monkeypatch.setenv(gc_tuning.ENV, "50000,20,100")
+        gc.set_threshold(*gc_tuning.TUNED)
+        with gc_tuning.tuned():
+            assert gc.get_threshold() == (50000, 20, 100)
+        assert gc.get_threshold() == gc_tuning.TUNED
+    finally:
+        gc.set_threshold(*saved)
+
+
+def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
+    from verity_vllm.pipeline.tp import rank_replay
+    seen = []
+    monkeypatch.setattr(rank_replay, "_load", lambda *a: seen.append((a, gc.get_threshold())) or "loaded")
+    monkeypatch.setenv(gc_tuning.ENV, "")
+    saved = gc.get_threshold()
+    assert rank_replay.load({"programs": {}}, 3, 8, definitions=False) == "loaded"
+    assert seen == [(({"programs": {}}, 3, 8, False), gc_tuning.TUNED)] and gc.get_threshold() == saved
 
 
 def test_the_entry_points_call_tune():
