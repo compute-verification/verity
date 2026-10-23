@@ -409,7 +409,7 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   cases hent''
   rw [hname] at hpp
   have hq2 : p.sts[0].c.ports.findIdx? (·.name == "top") = some pp :=
-    findIdx_of_find_range (f := (·.name == "top")) hpp
+    findIdx_of_find_range (f := fun (x : Port) => x.name == "top") hpp
   refine ⟨pp, hq2, fun hl0 => ?_, fun n hn => ?_⟩
   · subst hl0
     exact root_of_checkLink hlnk hcp
