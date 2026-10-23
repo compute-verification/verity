@@ -228,7 +228,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact, batch_invariant=a.batch_invariant)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "torch": torch.__version__, "device": torch.cuda.get_device_name(0),
                            "scheme": PH.SCHEME}
     with tempfile.TemporaryDirectory() as scratch:
@@ -387,7 +387,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     decl = declared_of(a)
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
-    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
+    target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact, batch_invariant=a.batch_invariant)
     doc: dict[str, Any] = {"schema": SCHEMA + "/fill", "argv": sys.argv, "torch": torch.__version__,
                            "device": torch.cuda.get_device_name(0), "scheme": PH.SCHEME,
                            "public": {"slots": decl.slots, "prompt_lens": list(decl.prompt_lens), "max_tokens": decl.max_tokens,
@@ -997,6 +997,8 @@ def main(argv: list[str] | None = None) -> int:
                                                          "batch and the one alone)")
     ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
                     help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
+    ap.add_argument("--no-batch-invariant", dest="batch_invariant", action="store_false",
+                    help="VLLM_BATCH_INVARIANT=0: GLM-5.3's sparse MLA has no batch-invariant backend (sm_90 or sm_120)")
     ap.add_argument("--engine-arg", metavar="KEY=VALUE", action="append", default=[],
                     help="an LLM() keyword over the workload's (repeatable, the value JSON when it parses): "
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
