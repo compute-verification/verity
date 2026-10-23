@@ -62,7 +62,7 @@ def ofRowsAt (name : String) (useful constPos : Nat) (inGroups outGroups : Array
   let b ← Sparse.ofRows (placed pos inv rb) (2 ^ unitLog)
   if og.any (fun g => g.col + g.words > 2 ^ unitLog / WORD) then
     throw s!"{name}: an output group overruns its unit's {2 ^ unitLog / WORD} words (D11)"
-  return { n with useful := size, constPos := size - 1, outGroups := og, a, b, unitLog }
+  return { n with useful := size, constPos := size - 1, outGroups := og, aT := .pure a, bT := .pure b, unitLog }
 
 /-- A net `ofRowsAt` builds is the logical net `ofRows` built, moved: its A and B are the placed rows' at its slot size,
 its size is one past the constant's position, its output groups are at their committed words (inside the slot, D11),
@@ -171,4 +171,32 @@ def Tmpl.unrollAt (t : Tmpl.Tmpl) (lays : Array Tmpl.Lay) : V Net := do
   Net.ofRowsAt t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb
     (Tmpl.posMap t lays)
 
+/-- `unrollAt`'s net, or the default where it refuses. -/
+def Tmpl.unitFull (t : Tmpl.Tmpl) (lays : Array Tmpl.Lay) : Net :=
+  match Tmpl.unrollAt t lays with
+  | .ok n => n
+  | .error _ => default
+
+/-- **The templated unit's committed net, its rows built only when read**: its size and constant (the root's layout size),
+port groups (the output groups at their committed words, `posOf`) and slot from the description, its A and B
+`unrollAt`'s. Wherever `unrollOk` passes it is `unrollAt`'s net (`FlockSoundness.TmplFold.unitNet_eq`). -/
+def Tmpl.unitNet (t : Tmpl.Tmpl) (lays : Array Tmpl.Lay) : Net :=
+  let size := (lays.getD t.root default).size
+  let full : Thunk Net := Thunk.mk fun _ => Tmpl.unitFull t lays
+  { name := t.name, useful := size, constPos := size - 1, inGroups := t.inGroups,
+    outGroups := t.outGroups.map fun g => { g with col := Tmpl.posOf t lays (g.col * WORD) / WORD },
+    inWords := (t.inGroups.back?.map fun g => g.col + g.words).getD 0,
+    aT := Thunk.mk fun _ => full.get.a, bT := Thunk.mk fun _ => full.get.b, unitLog := max 7 (log2ceil size) }
+
+deriving instance DecidableEq for Group
+deriving instance DecidableEq for Sparse
+deriving instance DecidableEq for LookupTable
+deriving instance DecidableEq for Net
+
+/-- A layout mode by its name: `iv` (lenient), `iv/strict`, `iv/hybrid` (`T = 0`) or `iv/hybrid/T`. -/
+def Tmpl.modeOf : String → Option Tmpl.Mode
+  | "iv" => some .lenient
+  | "iv/strict" => some .strict
+  | "iv/hybrid" => some (.hybrid 0)
+  | s => if s.startsWith "iv/hybrid/" then ((s.drop 10).toString.toNat?).map .hybrid else none
 end Flock

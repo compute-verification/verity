@@ -162,8 +162,10 @@ WEIGHTS_FIELD = "weights_root"
 #: model registry): ``{name, checkpoint_sha512}``, its int8 checkpoint's role and that checkpoint's SHA-512
 MODEL_FIELD = "model"
 MODEL_KEYS = ("checkpoint_sha512", "name")
-#: each int8 checkpoint role credit counts the weights of, with its checkpoint's SHA-512 (``checkpoint_sha512``, of the
-#: canonical JSON of each of its files' SHA-512); the Lean embeds the same file
+#: each checkpoint role a period's open may name, with its checkpoint's SHA-512 (``checkpoint_sha512``, of the canonical
+#: JSON of each of its files' SHA-512); the Lean embeds the same file. Credit counts only an int8 role's weights: the
+#: gate signs a weights' root only from an H1 registration, so an open naming another role (the remote memory audit's
+#: BF16 checkpoint) signs none and its period counts nothing
 MODELS = Path(__file__).parent / "lean/check/models.json"
 PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text()).items()}
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "

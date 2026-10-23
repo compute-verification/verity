@@ -55,7 +55,7 @@ The remote's branch, fetched first, is the truth, never the checkout. With --pus
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
 `research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
-same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
+same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
 These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
@@ -472,11 +472,13 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
     return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
 
 
-def fetch_run(rid: str, names: list[str], cwd: Path | None = None) -> tuple[Path, dict] | None:
+def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read."""
+    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
-    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=cwd, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
+                       cwd=cwd, capture_output=True, text=True)
     try:
         row = json.loads(r.stdout)["runs"][0]
         return Path(row["dir"]), row
@@ -1511,7 +1513,7 @@ def _sweep_after(repo: Path, into: str, remote: str) -> None:
               file=sys.stderr)
 
 
-MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-1", "RESEARCH_MERGE_MIRROR", 120
+MIRROR, MIRROR_ENV, MIRROR_TIMEOUT_S = "vy-nebius-cpu-4", "RESEARCH_MERGE_MIRROR", 120
 
 
 def mirror_name() -> str | None:
