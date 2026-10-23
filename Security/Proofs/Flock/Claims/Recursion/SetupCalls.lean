@@ -11,7 +11,7 @@ calls. `ReadersLogCollS` asks the same of the recorded calls and the inner setup
 (`innerSetupIns`, a function of the inner statement), each with `H`'s answer: what the deployed record's
 `withSetup H` searches.
 
-* `readersLogCollS_of`: `ReadersLogColl` gives it, with `ReadersTrue`.
+* `readersLogCollS_of`: `ReadersLogColl` gives it.
 * `callsLogCollS`: `CallsLogColl` at `(deployRec I.V ivScope b).withSetup H` from it.
 * `callsLogColl_C_setup`, `forksBindAt_C_pick_setup`, `forksBindAt_C_setup`: `callsLogColl_C` and
   `forksBindAt_C_pick` with the setup's calls searched.

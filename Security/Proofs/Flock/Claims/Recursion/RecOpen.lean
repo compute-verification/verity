@@ -13,7 +13,7 @@ reader is the record's own total reader (`recRead`), that holds at every accepte
 That the deployed coin server writes `recTr`'s bytes is a difftest on the honest fixtures (`test_lean_rec_record.py`:
 `recordW` writes `rec_live.record_bytes`' bytes), not a theorem. What stays open at the dense form is `PartChecksB` and
 `PartOpensB` at `showsTr recRead`/`cmtTr recRead`, `DecompB`, and the readers' two facts (`ReadersTrue`,
-`ReadersLogColl`).
+`ReadersLogCollS`).
 
 The reader is not vacuous: `recRead_honest_round` reads an honest one-round run back, and `Flock.Test.RecRecord`'s
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
@@ -56,7 +56,7 @@ theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hRT hRL
@@ -85,7 +85,7 @@ theorem bitsLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
           L shape (showsTr recRead) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
+    ReadersLogCollS FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D bL hP hRT hRL

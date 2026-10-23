@@ -101,7 +101,7 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [poison, htag, hp, Bool.cond_true] at hx; cases hx; done))
+       try (simp only [poison, htag, hp, Bool.cond_true] at hx; exact nomatch hx))
     | (rw [ite_ok] at hs
        rcases hs with ⟨_, hs⟩ | ⟨_, hs⟩)
     | (split at hs))

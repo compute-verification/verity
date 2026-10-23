@@ -25,7 +25,7 @@ This is a bound on a number under named premises, not a proved security level. `
 `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512 collision assumptions. At the deployed records
 `λ₂ ≥ 100` (`RecDeploy.lamLin2_deployed_ge_dep`), so at the deployment's dense statements `Pr[acc ∧ ¬R] ≤ t·2^{-100}`
 holds once `KSLin2On` at `RecDeploy.DenseAt` does, which only follows from premises still open: `PartChecksB`,
-`PartOpensB`, `DecompB` and `ReadersLogColl` (`RecDeploy.ksLin2_deployed_full`, at the coin server's record,
+`PartOpensB`, `DecompB` and `ReadersLogCollS` (`RecDeploy.ksLin2_deployed_full`, at the coin server's record,
 which reads back). Holo statements are candidate 3's own model.
 -/
 
