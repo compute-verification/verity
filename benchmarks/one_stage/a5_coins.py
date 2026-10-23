@@ -14,9 +14,10 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   `FAMILY` of `COINS_PER_RANK` coins a rank and one more.
 * **The draws** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
-  then each rank's draw once, after its registration's digest (`ChallengerCoins.commit`, then `service.select_draw` under the
-  partition's rule on those coins), which returns the draw, the bytes it read and its segment. Once every rank has drawn or
-  won't (`skip`), the client closes the session.
+  then each rank's draw once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
+  commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
+  on the one client until `drawn` returns its segment. Once every rank has drawn or won't (`skip`), the client closes the
+  session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
 * **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
@@ -43,7 +44,7 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R
 from verity.ml.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
@@ -89,7 +90,9 @@ def lines(path: Path) -> list[str]:
 
 class Draws:
     """The step's coins: the client of the session at `address` (its hello with `secret`, its commitment the gate's open's
-    `commitment` when given), one `ChallengerCoins` for every rank of `ranks`, and the session's evidence once published."""
+    `commitment` when given), one `ChallengerCoins` for every rank of `ranks`, and the session's evidence once published.
+    A rank's draw holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its
+    commitment and its reads."""
 
     def __init__(self, address: str, secret: str | None, commitment: str | None, window_root: str, ranks: list[int]) -> None:
         self._client = R.RemoteChallenger.connect(address, None if secret is None else bytes.fromhex(secret))
@@ -99,38 +102,52 @@ class Draws:
                                f"gate's {commitment[:16]}…")
         self._coins = CC.ChallengerCoins(Ch.LiveRecord(self._client, FAMILY))
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
+        self._turn, self._current, self._segment = threading.Lock(), None, None
         self._ended: str | None = None
         self._evidence: dict | None = None
         pre = self._coins.commit(bytes.fromhex(window_root))
         self._coins(Ch.COIN_BYTES)
         self._pre = pre.to_json()
 
-    def draw(self, rank: int, digest: str, rule: str, law: dict, population: int) -> dict:
-        """Rank `rank`'s one draw: its coins after its registration's `digest`, under the selection rule `rule` and its law
-        expanded over the rank's program (`service.select_draw`): {draw, read (hex), segment}. A rank draws once."""
-        with self._lock:
-            if rank not in self._left:
-                raise Ch.CoinError(f"rank {rank} has drawn, or won't: a rank's registration draws once")
-            self._left.discard(rank)
-            try:
-                segment = self._coins.commit(bytes.fromhex(digest))
-                read = bytearray()
+    def commit(self, rank: int, after: str) -> None:
+        """Rank `rank`'s turn, once: the coins after its registration's digest `after` (hex), which its reads take until
+        its `drawn`."""
+        self._turn.acquire()
+        self._current, self._segment = rank, None
+        try:
+            with self._lock:
+                if rank not in self._left:
+                    raise Ch.CoinError(f"rank {rank} has drawn, or won't: a rank's registration draws once")
+                self._left.discard(rank)
+            self._segment = self._coins.commit(bytes.fromhex(after))
+        except BaseException:
+            self.drawn(rank)
+            raise
 
-                def take(n: int) -> bytes:
-                    b = self._coins(n)
-                    read.extend(b)
-                    return b
-                draw = S.select_draw(S.Law(rule), law, population, take)
-            finally:
-                if not self._left:
-                    self._close()
-            return {"draw": draw, "read": bytes(read).hex(), "segment": segment.to_json()}
+    def read(self, rank: int, n: int) -> bytes:
+        if self._current != rank or self._segment is None:
+            raise Ch.CoinError(f"rank {rank} reads coins only in its turn, after its commitment")
+        return self._coins(n)
+
+    def drawn(self, rank: int) -> dict | None:
+        """The end of rank `rank`'s turn: its segment (None when it committed none). No-op outside its turn."""
+        if self._current != rank:
+            return None
+        segment = None if self._segment is None else self._segment.to_json()
+        self._current, self._segment = None, None
+        self._turn.release()
+        with self._lock:
+            if not self._left:
+                self._close()
+        return segment
 
     def skip(self, rank: int) -> None:
-        """Rank `rank` draws nothing (refused before its draw, or its process failed): no-op once it has drawn."""
+        """Rank `rank` draws nothing (refused before its draw, or its process failed), ending its turn if it holds one: no-op
+        once it has drawn."""
+        self.drawn(rank)
         with self._lock:
             self._left.discard(rank)
-            if not self._left:
+            if not self._left and self._current is None:
                 self._close()
 
     def _close(self) -> None:
@@ -165,6 +182,40 @@ class _Manager(BaseManager):
 
 
 _Manager.register("Draws", Draws)
+
+
+class RankCoins(CC.ChallengerCoins):
+    """Rank `rank`'s coins of the step's session (`draws`, the `Draws` proxy) as its `service.Stream` reads them: a
+    `ChallengerCoins`, so the stream's coin source is the challenger, whose commitment and reads go to the one client in
+    `Draws`, in the rank's turn until `drawn`. `read` is every byte it read."""
+
+    def __init__(self, draws: Any, rank: int) -> None:
+        self._draws, self._rank, self.read = draws, rank, bytearray()
+
+    def commit(self, after: bytes) -> None:
+        self._draws.commit(self._rank, bytes(after).hex())
+
+    def __call__(self, n: int) -> bytes:
+        b = self._draws.read(self._rank, n)
+        self.read.extend(b)
+        return b
+
+    def drawn(self) -> dict | None:
+        return self._draws.drawn(self._rank)
+
+
+class Replay(CC.ChallengerCoins):
+    """The bytes an honest draw read from the challenger, read again in order: a negative's `service.Stream` on them draws
+    the honest draw's units, so its outcome differs from the honest one in its coins' evidence alone."""
+
+    def __init__(self, read: bytes) -> None:
+        self._read, self._at = bytes(read), 0
+
+    def __call__(self, n: int) -> bytes:
+        if self._at + n > len(self._read):
+            raise Ch.CoinError("the replayed draw reads past the honest draw's bytes")
+        self._at += n
+        return self._read[self._at - n:self._at]
 
 
 class Local:

@@ -60,20 +60,20 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   PROTOCOL §16.15). Each prover runs behind the firewall's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
-* **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`): the step's one
-  challenger session, opened on the TP run root, and each rank's draw by the partition file's rule (any law, `stratified:K`
-  among them) from its coins after the rank's registration digest (`coins.ChallengerCoins` over `remote.RemoteChallenger`,
-  `service.select_draw`), held to Lean's `Select.select` on the bytes it read and to `check_draw`, as `service.Stream.select`
-  holds it. Once the session has ended, the coins' evidence (key, ledger, main, pins, segment, session; ``--main`` the verifier's
-  own first-parent history of main, which must hold the commit the host's pins log pins for the session) is held to the draw by
-  `coins.coins_reason` (Python's `read_reason`) and the whole run by the Lean verifier of record (`verifier.run`, Lean
-  `Run.run`, `coin_source` challenger, its window the TP run root), as `service.Stream.outcome` holds it; where either refuses,
-  the audit record is a reject. These direct calls are not the record path: a `Stream` takes one template and a TP window
-  several, and once `Stream` takes a multi-template TP window, `Stream.outcome` is the one path of record and a5 draws and
-  checks through it. Negatives: the evidence with a tampered
-  opening, with the coin opened before the registration, with a segment that skips a released coin, with the pin off main,
-  with no pins log, none, and for another window. Every rank of the step draws from the one session, so `--jobs` covers every
-  rank.
+* **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
+  service's path of record: the step's one challenger session, opened on the TP run root, and each rank's own
+  `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
+  partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
+  `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
+  coins commit to the registration's digest, and the stream draws once (`select`: Lean's `Select.select` on the bytes it
+  read, then `check_draw`). Once the session has ended, the stream takes the proof (`deliver`) and its outcome (`outcome`)
+  with the coins' evidence (key, ledger, main, pins, segment, session; ``--main`` the verifier's own first-parent history of
+  main, which must hold the commit the host's pins log pins for the session): the audit record, and the whole run by the
+  Lean verifier of record (`Run.run`, `coin_source` challenger), which fails `run` unless it is the Python's. `coins.coins_reason`
+  (Python's `read_reason`) holds the evidence too, the audit record failing `coins` where it refuses. Negatives, each its own
+  stream's outcome on the honest draw's bytes: the evidence with a tampered opening, with the coin opened before the
+  registration, with a segment that skips a released coin, with the pin off main, with no pins log, none, and for another
+  window. Every rank of the step draws from the one session, so `--jobs` covers every rank.
 """
 from __future__ import annotations
 
@@ -96,6 +96,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ml.circuits.program import Program  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -133,73 +134,129 @@ def link(src: Path, dst: Path) -> None:
 
 
 SELECT_COINS = {"step": "select", "codes": ["coins"]}
+CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
-def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, law: dict) -> tuple[dict, bytes, dict, V.Verdict]:
-    """Rank ``rank``'s draw from the challenger's coins after its registration's digest (`a5_coins.Draws.draw`), held to Lean's
-    `Select.select` on the bytes it read and to the registration and the expanded ``law`` (`verifier.check_draw`), as
-    `service.Stream.select` holds it; -> (the draw of record, the bytes read, its segment, the verdict)."""
-    got = a.coins.draw(rank, R.digest(rec), a.rule, law, mine.population)
-    read = bytes.fromhex(got["read"])
-    draw, v = V.select(got["draw"], read, S.Law(a.rule).to_json(), mine.program, mine.query)
-    if v.ok:
-        v = V.check_draw(draw, rec, law)
-    return draw, read, got["segment"], v
+def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
+              coins: CC.ChallengerCoins) -> tuple[S.Stream, dict | None]:
+    """The rank's `service.Stream` on the challenger's ``coins``: its unit the window's templates in their order (the one
+    template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports, its public
+    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
+    selection the partition file's rule, and its proof deadline every member's session; -> (the stream, `register`'s counts,
+    None for one template's)."""
+    defs: dict[str, list] = {}
+    for mm in members:
+        defs.setdefault(P.template_id(mm["defn"]), [mm["defn"], 0])[1] += mm["m"].n
+    params = dict(mine.query).get("params") or {}
+    order = params["templates"] if "templates" in params else [params.get("template")]
+    if sorted(order) != sorted(defs):
+        raise ValueError(f"the window's query names templates {order}, its members {sorted(defs)}")
+    defs = {t: defs[t] for t in order}
+    units = [d for d, _ in defs.values()]
+    one = "templates" not in params
+    digests = tuple(P.program_digest(Program(u)) for u in units)
+    schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
+    strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law).get("strata") or ()]
+    public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
+              ("window", "the window's provenance"),
+              *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
+              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
+    spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), S.Law(a.rule),
+                  S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
+                  tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
+    stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+    return stream, None if one else {t: n for t, (_, n) in defs.items()}
 
 
-def coins_check(a: argparse.Namespace, rec: dict, mine: CS.Window, law: dict, want: dict, leaf_layer: str | None, receipt: dict,
-                draw: dict, read: bytes, segment: dict, result: dict, outcome: dict) -> tuple[dict, dict, dict]:
-    """The draw's coins once the challenger's session has ended (`a5_coins.Draws.evidence`): `coins.coins_reason` (Python's
-    `read_reason`) on their evidence for the TP run root's window, and the whole run by the Lean verifier of record
-    (`verifier.run`, Lean `Run.run`, `coin_source` challenger) held to a5's own, as `service.Stream.outcome` holds it, the
-    Spec's values and public items the verifier's own window's ports, strata and leaf layer. Where either refuses, the audit
-    record is a reject (failing `coins` or `run`). Then each negative (`a5_coins.negatives`, and the evidence for another
-    window) through both; ``outcome`` is the audit record's other arguments. -> (the audit record, the negatives, the
-    coins' record)."""
+def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, members: list[dict], want: dict,
+               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, bytes, dict | None, dict | None]:
+    """Rank ``rank``'s draw of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
+    the window's counts), the challenger's coins commit to the registration's digest, and the stream draws once from them
+    (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), in the rank's turn on the step's one client;
+    -> (the stream, its draw, `register`'s counts, the bytes read, the coins' segment, and why it drew none)."""
+    coins = AC.RankCoins(a.coins, rank)
+    stream = draw = counts = refused = None
+    try:
+        stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
+        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts)
+        coins.commit(bytes.fromhex(reg.digest))
+        draw = stream.select(reg)
+    except S.Refused as e:
+        refused = e.verdict.to_json()
+    except (ValueError, AC.Ch.CoinError) as e:
+        refused = {"ok": False, "codes": ["stream"], "detail": {"stream": str(e)}}
+    finally:
+        segment = coins.drawn()
+    return stream, draw, counts, bytes(coins.read), segment, refused
+
+
+def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Window,
+                  members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
+                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
+    """The draw's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`): its proof delivered
+    (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
+    roots) with the coins' evidence, whose audit record fails `run` unless the Lean verifier of record's whole run
+    (`Run.run`, `coin_source` challenger, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
+    `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
+    and the evidence for another window) as its own stream's outcome on the honest draw's bytes (`a5_coins.Replay`), refused
+    where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
+    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
-    python = {"receipt": receipt, "draw": draw, "read": len(read), "symbol": S.ACCEPT if result["accepted"] else S.REJECT,
-              "public": {}, "audit": {k: x for k, x in result.items() if k != "verifiers"}}
-    declared = ["population", *(f"population:{s['template']}" for s in law.get("strata") or ()), "window",
-                *(["leaf_layer"] if leaf_layer is not None else []), *(f"{x}:{p}" for p in sorted(want) for x in ("leaves", "domain"))]
 
-    def run(coins: dict | None, window: str) -> V.Verdict:
-        return V.run(python, rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer, (), [], None, None,
-                     S.Law(a.rule).to_json(), [(p, False) for p in sorted(want)], declared, receipt["verifier"],
-                     receipt["received"], read, None, outcome["sessions"], outcome["verdicts"], [], outcome["statement"], a.delta,
-                     outcome["proved"], outcome["instances"], outcome["served"], outcome["session_roots"], window_root=window,
-                     coin_source="challenger", coins=coins)
+    def outcome(s: S.Stream, d: S.Draw, coins: dict | None) -> tuple[S.Outcome, dict | None]:
+        late = s.deliver(d, sessions)
+        return (late if late is not None else s.outcome(d, verdicts, statement, coins=coins, **given)), s.records[-1]["audit"]
+
+    def refusal(e: Exception) -> dict:
+        return e.verdict.to_json() if isinstance(e, S.Refused) else {"pending": e.args[0] if e.args else None} \
+            if isinstance(e, S.Pending) else {"stream": str(e)}
+
+    def lean(audit: dict | None) -> dict | None:
+        return ((((audit or {}).get("checks") or {}).get("run") or {}).get("detail") or {}).get("disagree", {}).get("lean")
 
     def reason(coins: dict | None, window: str = root) -> str | None:
         return CC.coins_reason(coins, window, after, read, AC.lms_verify)
 
     why = published.get("error") if ev is None else reason(ev)
-    v = run(ev, root) if result["verifiers"]["agree"] else None
-    failed = {**({"coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}} if why is not None else {}),
-              **({"run": {"ok": False, "codes": list(v.codes), "detail": v.detail}} if v is not None and not v.ok else {})}
-    if failed:
+    try:
+        o, result = outcome(stream, draw, ev)
+        told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
+    except (S.Refused, S.Pending) as e:
+        result, told = None, {"stream": stream.digest, "accepted": False, "refused": refusal(e)}
+    if result is not None and why is not None:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
-                  "checks": {**result["checks"], **failed}}
+                  "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
     bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
     for name, coins in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        py, lean = reason(coins, window), run(coins, window)
-        side = (lean.verifiers or {}).get("lean")
-        neg[name] = {"refused": py is not None and not lean.ok and side == SELECT_COINS, "python": py, "lean": side}
-    coins = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why,
-             "run": None if v is None else {"ok": v.ok, "codes": list(v.codes), "lean": (v.verifiers or {}).get("lean")}}
-    return result, neg, coins
+        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
+        try:
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
+            if d.draw != draw.draw:
+                raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
+            got, audit = outcome(s, d, coins)
+            accepted, side = got.accepted, lean(audit)
+        except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
+            accepted, side = None, {"refused": refusal(e)}
+        py = reason(coins, window)
+        neg[name] = {"refused": py is not None and accepted is False and side == SELECT_COINS, "python": py, "lean": side}
+    checks = (result or {}).get("checks") or {}
+    record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
+              "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
+    return result, neg, record
 
 
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
-    ``source``), one Lean draw by its law (with ``a.coins``: TP rank ``rank``'s draw from the challenger's coins, `coins_draw`),
-    a `--zk` session per member with drawn units on ports from ``port``, Lean's verdicts, the audit record (with ``a.coins``,
-    held to the coins' evidence and the Lean's run, `coins_check`) and the negatives (``more_negatives`` beside them), all under
-    ``out``; -> its summary and whether it was accepted with every negative refused."""
+    ``source``), one Lean draw by its law (with ``a.coins``: TP rank ``rank``'s draw of record from the challenger's coins,
+    its `service.Stream`'s, `coins_draw`), a `--zk` session per member with drawn units on ports from ``port``, Lean's verdicts,
+    the audit record (with ``a.coins``, the stream's outcome on the coins' evidence, `coins_outcome`) and the negatives
+    (``more_negatives`` beside them), all under ``out``; -> its summary and whether it was accepted with every negative
+    refused."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     if a.coins is None and law.get("law") != "subset":
@@ -287,13 +344,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(law["k"])], out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
-        union_draw, read, segment, v = coins_draw(a, rank, rec, mine, drawn_law)
-        (out / "segment.json").write_text(json.dumps({"segment": segment, "read": read.hex()}, sort_keys=True))
-        if not v.ok:
-            summary.update(checks={**checks, "draw": v.to_json()}, draw=union_draw.get("units"))
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-            print("A5 " + json.dumps({"draw_refused": v.to_json()}, default=str))
+        if mine.row_tables:  # its tables' roots are frame-v3-sha512/root/v1 leaves, which no Spec's Value (hiding) declares
+            summary["refused"] = {"row-tables": "a window with row tables isn't drawn from the challenger's coins yet"}
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+            print("A5 " + json.dumps(summary["refused"]))
             return summary, False
+        stream, draw, counts_of, read, segment, refused = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
+        (out / "segment.json").write_text(json.dumps({"segment": segment, "read": read.hex()}, sort_keys=True))
+        if draw is None:
+            summary.update(checks={**checks, "draw": refused})
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+            print("A5 " + json.dumps({"draw_refused": refused}, default=str))
+            return summary, False
+        union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
+        (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     for mm in members:
@@ -329,17 +393,22 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                             "lean_verify_s": verdicts[f"lean-verify/m{k}"].get("verify_s"),
                             "lean_partition": verdicts[f"lean-verify/m{k}"].get("partition")}
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-    if a.coins is not None:  # every verdict of record names the sessions delivered (`service.check_verdicts`), as the run holds it
-        verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
-    result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta, sessions=sessions,
-                            served=sorted(served_units), session_roots=session_roots)
     coin_neg: dict[str, dict] = {}
-    if a.coins is not None:
-        result, coin_neg, summary["coins"] = coins_check(
-            a, rec, mine, drawn_law, want, leaf_layer, receipt, union_draw, read, segment, result,
-            {"sessions": sessions, "verdicts": verdicts, "statement": statement, "proved": sorted(proved), "instances": instances,
-             "served": sorted(served_units), "session_roots": session_roots})
-        result["coins"] = {"segment": segment, "read": read.hex()}
+    if a.coins is None:
+        result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
+                                sessions=sessions, served=sorted(served_units), session_roots=session_roots)
+    else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
+        verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
+        result, coin_neg, summary["coins"] = coins_outcome(
+            a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
+            {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units), "session_roots": session_roots})
+        if result is None:
+            summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
+                           negatives={x: y["refused"] for x, y in coin_neg.items()})
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+            print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
+            return summary, False
+        result["coins"] = {"segment": segment, "read": read.hex(), "outcome": summary["coins"]["outcome"]}
     result["draw_counts"] = counts
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -379,7 +448,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
     shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
     if "coins" in summary:
-        shown["coins"] = {x: summary["coins"][x] for x in ("coins_reason", "run")}
+        shown["coins"] = {x: summary["coins"][x] for x in ("coins_reason", "outcome", "run")}
     print("A5 " + json.dumps(shown, sort_keys=True, default=str))
     return summary, ok
 
