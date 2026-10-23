@@ -27,19 +27,21 @@ namespace has no other interface. On real hosts it is only the route of the meas
 fixed prompt, `max_tokens` with `ignore_eos`, temperature 0), straight from the host: each response's canonical events, as
 the shim cuts them, and its seconds to the last. The responses must all be F events long. D, the latency budget in
 buckets, is four times the slowest response plus half a second (`--delta-buckets` sets it), as `lab_run.py` sets it.
-The plan sends `--requests` requests one at a time, D + 1 buckets apart in the middle of a bucket (never one released in
-a window's first bucket, which carries the salt frame), each padded to the same number of link frames, so the
-responses never overlap and the canonical order is request-major. It is calibrated (`calibration.calibrate`) on the
-model of that run: every frame of a response ready D buckets after its request's release. Every window declares the
-calibration's envelope, refused when its δ is below D. The run lasts the windows that cover the last response with
-2D + 20 buckets to spare.
+The plan sends `--requests` requests one at a time, D + 1 buckets apart in the middle of a bucket, each padded to the
+same number of link frames, so the responses never overlap and the canonical order is request-major. It is calibrated
+(`calibration.calibrate`) on the model of that run: every frame of a response ready D buckets after its request's
+release. Every window declares the calibration's envelope, refused when its δ is below D. Every window ends idle: no
+request is released in a window's first bucket (the salt frame's), and one whose response the Program's grid wouldn't
+release by the window's last bucket goes to the next window's second, so each window's egress counts follow from its
+own requests, as N2's served profile (NET-54) requires. The run lasts one idle window past the last request's.
 
 **N2's profile.** N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has no occupancy profile fixed
 before the run. The plan's `occupancy` is the planned one: the Program's egress counts (`schedule.expected_grids`) under
 the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and fixed-length
 responses fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
 with outside traffic has no such schedule: it needs the served profile (NET-54), whose counts follow from the ingress
-head's.
+head's. As NET-54 stands (7a7197b880) that profile counts every ingress frame as a request's, the certifier's own salt
+frame too, so it refuses every window of a run with the salt on.
 
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -300,41 +302,48 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     names = [f"{name}.{j}" for j in range(requests)]
     frames_in = max(request_frame_count(len(ar.live_request_bytes(s, body, None, FRAME_BYTES)), FRAME_BYTES)
                     for s in names)
-    buckets, b = [], 1
-    for _ in names:
-        while (b + 1) % WINDOW_BUCKETS == 0:
-            b += 1
-        buckets.append(b)
-        b += D + 1
-    sends = [(b + 0.5) * BUCKET_MS for b in buckets]
-    frames = [{"session": s, "index": k, "anchor": b + 1, "ready": b + 1 + D}
-              for s, b in zip(names, buckets) for k in range(F)]
-    report = calibration.calibrate({
-        "bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS, "frame_bytes": FRAME_BYTES, "queue_capacity": QUEUE,
-        "configurations": [{"name": name, "egress": [{"link": EGRESS, "frames": frames}],
-                            "ingress": [{"link": INGRESS, "arrival_ms": [t for t in sends for _ in range(frames_in)]}]}]})
-    setup = ar.Setup(report)
-    e, i, envelope, T = setup.egress_params, setup.ingress_params, setup.envelope, WINDOW_BUCKETS
-    if envelope.delta < D:
-        raise ValueError(f"the calibration's envelope δ = {envelope.delta} is below the latency budget D = {D}")
-    sessions = [[s, j + 1, [D] * F] for j, s in enumerate(names)]
-    peer = [{"stream": j + 1, "session": s, "frames": frames_in, "trace_ms": t,
-             "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t} for j, (s, t) in enumerate(zip(names, sends))]
-    end = buckets[-1] + 2 + D + F
-    windows = math.ceil((end + 2 * D + 20) / T)
-    release = ar.model_releases(peer, i, windows, e.bucket_ms)
-    model = ar.model_frames(sessions, release, windows * T)
+    T = WINDOW_BUCKETS
+    for span in range(D + 1, T - 1):
+        anchors, a = [], 2
+        for _ in names:
+            if a % T == 0:
+                a += 1
+            elif a % T + span > T - 1:
+                a = (a // T + 1) * T + 1
+            anchors.append(a)
+            a += D + 1
+        sends = [(a - 0.5) * BUCKET_MS for a in anchors]
+        frames = [{"session": s, "index": k, "anchor": a, "ready": a + D} for s, a in zip(names, anchors)
+                  for k in range(F)]
+        report = calibration.calibrate({
+            "bucket_ms": BUCKET_MS, "window_buckets": T, "frame_bytes": FRAME_BYTES, "queue_capacity": QUEUE,
+            "configurations": [{"name": name, "egress": [{"link": EGRESS, "frames": frames}], "ingress": [
+                {"link": INGRESS, "arrival_ms": [t for t in sends for _ in range(frames_in)]}]}]})
+        setup = ar.Setup(report)
+        e, i, envelope = setup.egress_params, setup.ingress_params, setup.envelope
+        if envelope.delta < D:
+            raise ValueError(f"the calibration's envelope δ = {envelope.delta} is below the latency budget D = {D}")
+        sessions = [[s, j + 1, [D] * F] for j, s in enumerate(names)]
+        peer = [{"stream": j + 1, "session": s, "frames": frames_in, "trace_ms": t,
+                 "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t} for j, (s, t) in enumerate(zip(names, sends))]
+        windows = anchors[-1] // T + 2
+        release = ar.model_releases(peer, i, windows, e.bucket_ms)
+        model = ar.model_frames(sessions, release, windows * T)
+        profile = [list(occupancy(g)) for g in expected_grids(model[0], [envelope] * windows, e)]
+        if all(sum(map(sum, profile[:w + 1])) == F * sum(a // T <= w for a in anchors) for w in range(windows)):
+            break
+    else:
+        raise ValueError(f"a response of {F} events, D = {D} buckets after its request, doesn't fit in a window")
     chosen, _, misses = calibration.choose_syncs([model], setup.sync_set, T)
     eager = ClockSync(min(setup.sync_set.deltas), max(setup.sync_set.rhos))
     chosen = (list(chosen) + [eager] * windows)[:windows]
-    profile = [list(occupancy(g)) for g in expected_grids(model[0], [envelope] * windows, e)]
     plan = {"name": name, "windows": windows, "sessions": sessions, "requests": peer,
             "model_release": {str(k): v for k, v in release.items()}, "model_misses": misses,
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
             "seed": 0, "occupancy": {"kind": "planned", "egress": profile, "ingress": None},
-            "served": {"tokens": F, "delta_buckets": D, "gap_buckets": D + 1, "slowest_s": slowest,
-                       "request_frames": frames_in}}
+            "served": {"tokens": F, "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span,
+                       "slowest_s": slowest, "request_frames": frames_in}}
     return report, plan
 
 

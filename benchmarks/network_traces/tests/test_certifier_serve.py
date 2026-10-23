@@ -117,6 +117,19 @@ def test_the_served_plan_is_request_major_with_a_planned_egress_profile(served):
     assert plan["syncs"] == [[setup.envelope.delta, str(setup.envelope.rho)]] * plan["windows"]
 
 
+def test_every_window_of_the_served_plan_ends_idle():
+    """A latency budget of 20 buckets fits two requests a window: the third goes to the next window's second bucket,
+    never to a first (the salt frame's), and each window's planned egress counts are its own requests' responses."""
+    probed = {"url": "stub", "body": cs.request_body("stub", TOKENS),
+              "responses": [{"events": TOKENS, "first_s": 0.0, "last_s": 0.0}]}
+    report, plan = cs.served_plan(probed, 7, delta_buckets=20)
+    T = cs.WINDOW_BUCKETS
+    anchors = [q["enqueue"] for q in plan["requests"]]
+    assert [a // T for a in anchors] == [0, 0, 1, 1, 2, 2, 3] and all(a % T for a in anchors)
+    assert plan["windows"] == 5
+    assert [sum(w) for w in plan["occupancy"]["egress"]] == [2 * TOKENS] * 3 + [TOKENS, 0]
+
+
 def test_honest_served_traffic_is_accepted_on_every_link_window(served):
     """N2's verdict of record accepts every link-window on the planned profile, `network_verdict` accepts the link,
     the certifier's audit accepts every record raw and committed, and the shim received every salt the certifier
