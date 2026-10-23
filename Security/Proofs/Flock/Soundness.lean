@@ -72,6 +72,7 @@ import Proofs.Flock.Soundness.Game.LockOff
 import Proofs.Flock.Soundness.ExtractAccLin
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.ExecDelta
 import Proofs.Flock.Soundness.ExecPlacement
 import Proofs.Flock.Soundness.ExecParse
