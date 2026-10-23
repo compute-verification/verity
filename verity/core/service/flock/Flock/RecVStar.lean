@@ -1365,7 +1365,9 @@ registered position `x` it opens, is that value's row `x` in `innerCommits`: for
 `c_i`; for `rec-claim`, `claimRow`. `sparse` is the verifier's RecSparse shape (`rec-inner --sparse`), a rec-sparse unit's
 own. A rec-sparse unit's `claim` port and an R opening unit's `claim<k>` ports read `rec-claim` in the verifier's reads.
 `Registered.check` puts each instance's row at the position its unit reads. An R opening unit
-(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). -/
+(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). Such a
+table labels its instances `0` to `n - 1` in order (`Registered.unitIndices`), as every V* session's full draw does, so
+instance `x` reads its unit `x`'s row: the row at position `x` of what the inner transcript fixes. -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     (commits : Option InnerCommits) (sparse : Option RecSparse.Shape := none) : V Unit := do
   let unit := st.c.unit.name
@@ -1384,6 +1386,10 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
   checkOpeningShape unit cs
+  let idx ← Registered.unitIndices st.pub
+  if idx != Array.range st.pub.n then
+    throw (s!"rec-pub: {unit}: its instances are labelled {idx}, not the units below {st.pub.n} in order as a V* " ++
+      "session's full draw labels them, so an instance would read another unit's row")
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
   for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)

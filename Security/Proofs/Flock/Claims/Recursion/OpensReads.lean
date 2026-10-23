@@ -214,7 +214,7 @@ theorem rowsAt {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCom
     {sparse : Option RecSparse.Shape} (hP : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
     (hR : checkRegistered st (some own) = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
     (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) :
-    ∃ t idx p positions, st.pub.tables = some t ∧ Registered.unitIndices st.pub = .ok idx ∧
+    ∃ t idx p (positions : Array ℕ), st.pub.tables = some t ∧ Registered.unitIndices st.pub = .ok idx ∧
       (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
       positions.size = t.counts.getD p 0 ∧
       (∀ i < st.pub.n, Registered.ref t st.c.ports.size p i < positions.size ∧
@@ -435,11 +435,11 @@ theorem scheduleOf_reps {i : RecVStar.Inner} {t : String}
   | some rs =>
     rw [hr] at h
     simp only [bind, Option.bind, pure] at h
-    have fin : ∀ X : Array (String × String × ℕ × Array RecVStar.SchedRound),
-        want = #[0, 1].map (fun x : ℕ => (s!"{t}/rep{x}", "", 0, rs)) ++ X →
+    have fin : ∀ tl : Array (String × String × ℕ × Array RecVStar.SchedRound),
+        want = #[0, 1].map (fun x : ℕ => (s!"{t}/rep{x}", "", 0, rs)) ++ tl →
         ∃ E, want.toList = (s!"{t}/rep{(0 : ℕ)}", "", 0, rs) :: (s!"{t}/rep{(1 : ℕ)}", "", 0, rs) :: E := by
-      rintro X rfl
-      exact ⟨X.toList, by simp only [Array.toList_append, Array.toList_map, List.map_cons, List.map_nil,
+      rintro tl rfl
+      exact ⟨tl.toList, by simp only [Array.toList_append, Array.toList_map, List.map_cons, List.map_nil,
         List.cons_append, List.nil_append]⟩
     split at h
     · rename_i sh _
@@ -602,8 +602,10 @@ theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
   let o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl) := ⟨n / st.c.g, hb⟩
   have e : o.val * st.c.g + n % st.c.g = n := Nat.div_add_mod' n st.c.g
   have hpub := bc_setupOneAny hd L hz o hgn (vu_lt_pow2_setupOne ht hd hgn) hq (by rw [e]; exact hn)
-  rw [Hidden.bytesAt_bc L R _ _ o hgn hq, e] at hpub
-  rw [← hpub]
+  have hbc := (Hidden.bytesAt_bc L R (FlockSoundness.Refine.regionsOf st) (Flock.Readable.zOf 1 w 0 st.m) o hgn
+    hq).symm.trans hpub
+  rw [e] at hbc
+  rw [← hbc]
   refine readForms_eq_of_bits (by simp [hmCommit, Hm.length_bytesOf]) fun t ht' => ?_
   have ht1 : t < 1024 := by simpa [hmCommit] using ht'
   have hy : hmBase st.c q n + (hmOutCol st.c + t) < 2 ^ st.c.kLog := by
@@ -614,3 +616,372 @@ theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     omega
   simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var]
   exact (bc_bit (L.model _) w st.c rfl hb hy ht1).symm
+
+/-! ## A held row's slot is its rep's `c_k` -/
+
+/-- The recursive setup runs `RecCoins.check` at every table. -/
+theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
+      (RecSetup.c3 s.inner s.commits)) = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+/-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
+theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
+    {c3 : Option RecCoins.C3} (h : RecCoins.check st own f c3 = .ok ())
+    (hp : (RecResiduals.params st.c.unit.name).isSome ∨ (RecSparse.params st.c.unit.name).isSome ∨
+      (RecOpening.params st.c.unit.name).isSome) : own.isSome := by
+  cases own with
+  | some _ => rfl
+  | none =>
+    exfalso
+    unfold RecCoins.check at h
+    rcases hp with hp | hp | hp
+    all_goals
+      obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 hp
+      simp [hv] at h
+
+/-- A statement with an own port under its V\* statement's name is a rec-residuals, rec-sparse or rec-opening unit. -/
+theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts tags c) {sv : VStar.Stmt}
+    (hn : c.unit.name = sv.name) (hp : RecVStar.checkPart sv c = .ok ()) {q : String × String × Array (Option ℕ)}
+    (hq : q ∈ RecVStar.ownPorts sv) :
+    (RecResiduals.params c.unit.name).isSome ∨ (RecSparse.params c.unit.name).isSome ∨
+      (RecOpening.params c.unit.name).isSome := by
+  cases sv with
+  | inner _ _ _ =>
+    obtain ⟨_, _, _, _, _, _, _, _, _, h1, -⟩ := Flock.Readable.checkPart_inner hp
+    exact Or.inl (by simp [h1])
+  | sparse _ _ => exact Or.inr (Or.inl (by simp [Flock.Readable.sparseParams_of_check P.recSparse hn]))
+  | opening _ _ _ _ _ _ => exact Or.inr (Or.inr (by simp [Flock.Readable.openingParams_of_check P.recOpening hn]))
+  | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
+  | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
+  | cap _ _ => simp [RecVStar.ownPorts] at hq
+
+/-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
+theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
+    {circuitB : ByteArray} {partition : Option Json} {program : Option ByteArray} {own : Array Registered.Port}
+    {part : Option ℕ} {bindings : Option VStar.Bindings} {rows : Option (Array Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) part bindings rows =
+      .ok ()) :
+    ∃ j f sv, part = some j ∧ bindings = some f ∧
+      RecVStar.checkCircuit i j st.c (RecVStar.population st) circuitB f = .ok sv ∧
+        RecVStar.checkOwn sv own = .ok () := by
+  unfold RecVStar.checkStmt at h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+    cases h1
+  · split at h
+    · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+      cases h1
+    · split at h
+      · split at h
+        · split at h
+          · split at h
+            · obtain ⟨_, h1, -⟩ := FlockSoundness.Refine.ebind_ok h
+              cases h1
+            obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+            obtain ⟨sv, hs, h⟩ := FlockSoundness.Refine.ebind_ok h
+            obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+            obtain ⟨_, ho, -⟩ := FlockSoundness.Refine.ebind_ok h
+            exact ⟨_, _, sv, rfl, rfl, hs, ho⟩
+          · cases h
+        · cases h
+      · cases h
+
+/-- `checkOwn` finds each of the statement's own ports among the verifier's own reads. -/
+theorem checkOwn_mem {sv : VStar.Stmt} {own : Array Registered.Port} (h : RecVStar.checkOwn sv own = .ok ())
+    {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts sv) :
+    ∃ p ∈ own, p.name = q.1 ∧ p.value = q.2.1 ∧ p.reads = q.2.2 := by
+  unfold RecVStar.checkOwn at h
+  dsimp only at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i hnone
+  have hn : List.find? (fun x => !(RecVStar.msgPorts own).contains x) (RecVStar.ownPorts sv) = none := by
+    cases hf : List.find? (fun x => !(RecVStar.msgPorts own).contains x) (RecVStar.ownPorts sv) with
+    | none => rfl
+    | some q' => exact (hnone q' hf).elim
+  have hc := List.find?_eq_none.1 hn q hq
+  have hm : q ∈ RecVStar.msgPorts own := by simpa using hc
+  unfold RecVStar.msgPorts at hm
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hm
+  exact ⟨p, Array.mem_toList_iff.1 (List.mem_filter.1 hp).1, rfl, rfl, rfl⟩
+
+theorem fixedRow_isSome {v : String} {k : ℕ} (h : RecVStar.cIndex v = some k) :
+    (RecVStar.fixedRow { reps := #[] } v 0).isSome = true := by
+  unfold RecVStar.fixedRow
+  rw [h]
+  rfl
+
+/-- `fixedRow` at `rec-c<k>` is rep `x`'s `k`-th `c_k`. -/
+theorem fixedRow_c {cs : RecVStar.InnerCommits} {v : String} {k x : ℕ} {sp : Option RecSparse.Shape}
+    (hk : RecVStar.cIndex v = some k) {wh : String} {c : ByteArray}
+    (h : RecVStar.fixedRow cs v x sp = some (.ok (wh, c))) :
+    ∃ kk, (cs.reps.getD x #[])[k]? = some (kk, c) := by
+  unfold RecVStar.fixedRow at h
+  rw [hk] at h
+  dsimp only at h
+  cases hx : cs.reps[x]? with
+  | none =>
+    rw [hx] at h
+    cases h
+  | some a =>
+    rw [hx] at h
+    have ha : cs.reps.getD x #[] = a := by
+      rw [Array.getD_eq_getD_getElem?, hx, Option.getD_some]
+    rw [ha]
+    cases hk' : a[k]? with
+    | none =>
+      simp [hk'] at h
+    | some kc =>
+      obtain ⟨kk, c'⟩ := kc
+      simp only [hk', Option.bind_some, Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨-, rfl⟩ := h
+      exact ⟨kk, rfl⟩
+
+/-- **A table with a row the inner transcript fixes labels its instances in order**: `checkPubRows` refuses one whose
+`units.indices` are not `0` to `n - 1`. -/
+theorem checkPubRows_labels {st : Stmt} {own : Array Registered.Port} {cs : RecVStar.InnerCommits}
+    {sparse : Option RecSparse.Shape} (h : RecVStar.checkPubRows st (some own) (some cs) sparse = .ok ())
+    {reg : Registered.Port} (hmem : reg ∈ own) (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) :
+    Registered.unitIndices st.pub = .ok (Array.range st.pub.n) := by
+  have hreg : reg ∈ own.filter (fun reg => (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome) :=
+    Array.mem_filter.2 ⟨hmem, hfix⟩
+  unfold RecVStar.checkPubRows at h
+  simp only [Option.getD_some] at h
+  obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
+  split at h
+  · obtain ⟨_, -, h⟩ := Registered.except_bind_ok h
+    obtain ⟨idx, hidx, h⟩ := Registered.except_bind_ok h
+    split at h
+    · obtain ⟨_, h1, -⟩ := Registered.except_bind_ok h
+      exact absurd h1 (Registered.throw_ne_ok _ _)
+    · rename_i hne
+      rw [hidx, show idx = Array.range st.pub.n by simpa using hne]
+  · rename_i hnone
+    cases hz : (own.filter fun reg => (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome)[0]? with
+    | some r0 => exact (hnone r0 hz).elim
+    | none =>
+      rw [Array.getElem?_eq_none_iff] at hz
+      exact absurd (Array.size_pos_of_mem hreg) (by omega)
+
+theorem range_getD {n i : ℕ} (h : i < n) : (Array.range n).getD i 0 = i := by
+  simp [Array.getD, h]
+
+theorem find_range_findIdx {α : Type} [Inhabited α] {a : Array α} {f : α → Bool} {p q : ℕ}
+    (hp : (List.range a.size).find? (fun j => f a[j]!) = some p) (hq : a.findIdx? f = some q) : p = q := by
+  rw [List.find?_range_eq_some] at hp
+  obtain ⟨hfp, hpm, hlt⟩ := hp
+  have hps : p < a.size := List.mem_range.1 hpm
+  rw [Array.findIdx?_eq_some_iff_getElem] at hq
+  obtain ⟨hqs, hfq, hbq⟩ := hq
+  rcases Nat.lt_trichotomy p q with h | h | h
+  · have := hbq p h
+    rw [getElem!_pos a p hps] at hfp
+    simp_all
+  · exact h
+  · have := hlt q h
+    rw [getElem!_pos a q hqs] at this
+    simp_all
+
+/-- A row a statement's own port reads under `rec-c<k>` is one of the statement's instances, read at its own
+position. -/
+theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option ℕ)}
+    (hq : q ∈ RecVStar.ownPorts sv) {k : ℕ} (hk : RecVStar.cIndex q.2.1 = some k) {rep : ℕ}
+    (hr : some rep ∈ q.2.2.toList) : q.2.2[rep]? = some (some rep) ∧ rep < sv.instances := by
+  cases sv with
+  | inner _ _ _ =>
+    unfold RecVStar.ownPorts at hq
+    obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
+    dsimp only at h
+    obtain ⟨k', -, rfl⟩ := Option.map_eq_some_iff.1 h
+    simp at hr
+    rcases hr with rfl | rfl <;> exact ⟨rfl, by show _ < 2; omega⟩
+  | sparse _ _ =>
+    unfold RecVStar.ownPorts at hq
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+    rcases hq with rfl | rfl
+    · simp at hr
+      rcases hr with rfl | rfl <;> exact ⟨rfl, by show _ < 2; omega⟩
+    · rw [cIndex_claim] at hk
+      cases hk
+  | opening _ _ _ _ _ _ =>
+    unfold RecVStar.ownPorts at hq
+    obtain ⟨⟨nm, _⟩, -, h⟩ := List.mem_filterMap.1 hq
+    dsimp only at h
+    cases hm : RecVStar.mIndex nm with
+    | some k' =>
+      rw [hm] at h
+      cases h
+      simp at hr
+      subst hr
+      exact ⟨rfl, by show _ < 1; omega⟩
+    | none =>
+      cases hc : RecVStar.claimIndex nm with
+      | some k' =>
+        rw [hm, hc] at h
+        cases h
+        rw [cIndex_claim] at hk
+        cases hk
+      | none =>
+        rw [hm, hc] at h
+        cases h
+  | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
+  | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
+  | cap _ _ => simp [RecVStar.ownPorts] at hq
+
+/-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
+held at that rep's `k`-th message round. -/
+theorem mem_heldRows_round {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Circuit}
+    (hs : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv)
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
+    ∃ q ∈ RecVStar.ownPorts sv, ∃ k rs, RecVStar.cIndex q.2.1 = some k ∧ some h.2.2.2 ∈ q.2.2.toList ∧
+      h.2.1 = q.1 ∧ c.ports.findIdx? (·.name == q.1) = some h.2.2.1 ∧ repSched r.shape = some rs ∧
+      msgRound rs h.2.2.2 k = some h.1 := by
+  unfold heldRows at hh
+  rw [hs, hc] at hh
+  cases hrs : repSched r.shape with
+  | none =>
+    rw [hrs] at hh
+    simp at hh
+  | some rs =>
+    rw [hrs] at hh
+    dsimp only at hh
+    obtain ⟨q, hq, hh⟩ := List.mem_flatMap.1 hh
+    split at hh
+    · rename_i k hk
+      obtain ⟨row, hrow, hh⟩ := List.mem_filterMap.1 hh
+      cases row with
+      | none => simp at hh
+      | some rep =>
+        cases hj : msgRound rs rep k with
+        | none => simp [hj] at hh
+        | some j =>
+          cases hqi : c.ports.findIdx? (·.name == q.1) with
+          | none => simp [hqi] at hh
+          | some qi =>
+            obtain rfl : (j, q.1, qi, rep) = h := by simpa [hj, hqi] using hh
+            exact ⟨q, hq, k, rs, hk, hrow, rfl, hqi, rfl, hj⟩
+    · simp at hh
+
+theorem setupOne_n {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
+    (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
+    st.n = st.pub.n := by
+  unfold FlockSoundness.Discharge.HiddenExec.setupOne at h
+  split at h
+  · exact (FlockSoundness.Discharge.HiddenExec.setupHidden_n h).1
+  · exact (FlockSoundness.Discharge.Integrate.setupH_n h).1
+
+/-- **A held row's slot bytes are its rep's `c_k`**: at a staged part the witness checks against, the row `rep` that a
+statement's own port under `rec-c<k>` reads, at the port's index `qi`, reads off the witness's hm96 slot (`hmCommit`)
+as rep `rep`'s `k`-th commit string of the inner transcript the setup holds. The slot is its instance's public row
+(`slotPub_table`); the setup checked the port among the verifier's own reads (`checkOwn`), which `RecCoins.check`
+requires at such a unit (`registered_of_coins`); the table labels its instances in order (`checkPubRows_labels`), so
+instance `rep` reads row `rep` of the port's registered reads, which `checkPubRows` pins to that `c_k` (`rowsAt`,
+`fixedRow_c`). -/
+theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
+    (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {i : RecIns}
+    {cs : RecVStar.InnerCommits} (hi : insO xO = some i) (hcs : i.commits = some cs) {row : ℕ × String × ℕ × ℕ}
+    (hh : row ∈ heldRows r s) :
+    ∃ k rs kk cc, repSched r.shape = some rs ∧ msgRound rs row.2.2.2 k = some row.1 ∧ row.2.2.2 < 2 ∧
+      (cs.reps.getD row.2.2.2 #[])[k]? = some (kk, cc) ∧
+      Claims.Recursion.VStarB.readForms w (hmCommit c row.2.2.1 row.2.2.2) = cc.toList := by
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv⟩, h0, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  have hS' := hS
+  obtain ⟨ms, i', spec, sts, rfl, hsu, -⟩ := hS'
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  rw [← Option.some.inj (hins.symm.trans hi)] at hcs
+  have hp : p = { i'.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  obtain ⟨hsz1, hpop⟩ := oneFull_staged hS hsu
+  have h0' : 0 < sts.size := by omega
+  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
+  have hsz : p.sts.size = 1 := by rw [hp]; exact hsz1
+  have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
+  obtain ⟨L, hz⟩ := layout_of_check_regs hck hx ht hpi h0
+  have hz1 : (L.model (FlockSoundness.Refine.regionsOf p.sts[0])).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
+    have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
+    rw [← e]
+    exact hz
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hx
+  obtain ⟨_, hset0⟩ := Flock.Readable.setup_of_tablesOf hts
+  unfold Flock.Readable.Read.setup at hset0
+  rw [hpi] at hset0
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset0
+  obtain ⟨d, hd, -⟩ := hall 0 h0
+  have ht' : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans ht
+  obtain ⟨hscope, r2, ss2, sv2, hr2, hss2, hsv2, hpopn⟩ := staged_scope hS hx h0
+  rw [hr] at hr2
+  cases hr2
+  rw [hss] at hss2
+  cases hss2
+  rw [hsv] at hsv2
+  cases hsv2
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨_, -, hupv, -, -, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨-, -, hnbl, -⟩ := table_rows ht' hd (by omega) hv1 L _ hz1
+  have hsv' : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv := by
+    rw [hss]
+    exact hsv
+  subst hc0
+  obtain ⟨q, hq, k, rs, hk, hrep, -, hqi, hrs, hj⟩ := mem_heldRows_round hsv' hpc hh
+  obtain ⟨hrow, hinst⟩ := ownPorts_row hq hk hrep
+  have hlt2 := (ownPorts_held hq).2 k hk _ hrep
+  have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset) 0 h0'
+  have hpr := Flock.Readable.array_forM_ok (RecIns.setup_pubRows hset) 0 h0'
+  have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
+  dsimp only at hcoin hpr
+  rw [← e0] at hcoin hpr hreg
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  obtain ⟨hn, hpt, -⟩ := htab 0 h0
+  obtain ⟨own, hown⟩ := Option.isSome_iff_exists.1 (registered_of_coins hcoin (params_of_own P hn hpt hq))
+  obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins
+  rw [Option.some.inj (hxr.symm.trans hr)] at hinner
+  have hC := RecIns.setup_checks hset
+  rw [hinner, insO_staged_part hins, hown] at hC
+  have hst := checks_stmt hC 0 h0'
+  rw [← e0] at hst
+  obtain ⟨j, f, sv', hj', -, hcc, hco⟩ := checkStmt_own hst
+  cases hj'
+  obtain ⟨hck', -⟩ := FlockSoundness.Discharge.Recursion.checkCircuit_ok hcc
+  obtain ⟨ss', hss', hs', -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hs'
+  cases hs'
+  obtain ⟨reg, hmem, hname, hval, hreads⟩ := checkOwn_mem hco hq
+  rw [hown, hcs] at hpr
+  rw [hown] at hreg
+  have hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true := fixedRow_isSome (by rw [hval]; exact hk)
+  have hlab := checkPubRows_labels hpr hmem hfix
+  obtain ⟨t, idx, pp, positions, htt, hidx, hpp, -, hall', hrowsv⟩ := rowsAt hpr hreg hmem hfix
+  obtain rfl : Array.range p.sts[0].pub.n = idx := Except.ok.inj (hlab.symm.trans hidx)
+  have hnp : row.2.2.2 < p.sts[0].pub.n := by
+    have hle := hpop 0 h0'
+    rw [← e0] at hle
+    rw [← setupOne_n hd]
+    omega
+  obtain ⟨hq', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqi
+  have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks_two hlt2 hnbl)
+  rw [digest_tables htt] at hsl
+  rw [hname] at hpp
+  obtain rfl : pp = row.2.2.1 := find_range_findIdx (f := (·.name == q.1)) hpp hqi
+  obtain ⟨hlt, hrd⟩ := hall' _ hnp
+  rw [hreads, range_getD hnp, hrow] at hrd
+  obtain ⟨wh, cc, hfr, htr⟩ := hrowsv _ hlt
+  have hpos : positions.getD (Registered.ref t p.sts[0].c.ports.size row.2.2.1 row.2.2.2) 0 = row.2.2.2 := by
+    simpa using hrd.symm
+  rw [hpos, hval] at hfr
+  obtain ⟨kk, hkk⟩ := fixedRow_c hk hfr
+  refine ⟨k, rs, kk, cc, hrs, hj, hlt2, hkk, ?_⟩
+  rw [hsl, htr, byteArray_toList_eq]
