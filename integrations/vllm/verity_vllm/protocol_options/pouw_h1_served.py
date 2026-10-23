@@ -481,8 +481,9 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
         if held.get((t.value, t.domain), t.root) != t.root:
             raise ValueError(f"served tree {t.value!r}: an earlier record of the log registered it under this domain with "
                              f"root {held[(t.value, t.domain)][:16]}..., and a value is committed once a domain (R7-held)")
-    tp = P.evaluate(served.program, served.query())
-    files = {int(c): reads_file(run, c, ports, tp) for c in (range(len(served.calls)) if calls is None else calls)}
+    want = range(len(served.calls)) if calls is None else calls
+    tp = P.evaluate(served.program, served.query()) if len(want) else None
+    files = {int(c): reads_file(run, c, ports, tp) for c in want}
     d = directory if directory is not None else run.transcript_dir
     if d is not None:
         Path(d).mkdir(parents=True, exist_ok=True)

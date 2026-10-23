@@ -336,6 +336,23 @@ def test_register_writes_each_calls_file(tmp_path):
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
 
 
+def test_register_of_no_call_checks_the_trees_without_the_partition(tmp_path, monkeypatch):
+    """With no call asked for, `register` still gives every tree's entry and holds them to the log, but evaluates no
+    partition and writes no file: the close's `served_check` registers so, at a cost independent of the window Program's
+    size."""
+    run, _ws, _got = _window(W1)
+    want = SV.register(run).registered
+
+    def refused(*_a, **_k):
+        raise AssertionError("evaluated the window Program's partition for no call")
+
+    monkeypatch.setattr(P, "evaluate", refused)
+    reg = SV.register(run, calls=(), directory=tmp_path)
+    assert reg.registered == want and reg.files == {} and not any(tmp_path.iterdir())
+    with pytest.raises(ValueError, match="R7-held"):
+        SV.register(run, calls=(), log=[{"registered": [{**want[0], "root": "00" * 64}]}])
+
+
 def test_two_windows_of_one_layout_declare_one_program():
     """`declared` from the window's public shapes, modules, rows and steps alone, under the period's `PREFIX`, is the
     Program every window of the period serves: two windows, two open roots, one `program_digest`, the period's
