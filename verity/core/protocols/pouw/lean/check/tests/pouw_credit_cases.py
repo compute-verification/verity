@@ -1255,8 +1255,9 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     as `credit.registered_file` takes them, and at random (always under the ``receipt-`` mutations) the call's receipt
     table ``receipt@<call>``, its templates returning a receipt of whole 16-bit words (bits, of 1-bit leaves or wider); ``missing`` leaves one of the
     call's values out, ``twice`` registers one twice, ``receipt-twice`` registers the receipt table twice and
-    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, and ``pub-roots`` registers the
-    call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest."""
+    ``receipt-width`` gives the templates a receipt of no whole 16-bit words, or none, ``pub-roots`` registers the
+    call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
+    ``ok-registered`` registers the window's ok rows ``<prefix>ok``, which are the verifier's own."""
     lay = layout(rng)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
@@ -1290,6 +1291,8 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             roots[vals[-1]].append(_hex(rng))
         case "pub-roots":
             roots[rng.choice(vals[0:3:2])] = [rng.choice(["", _hex(rng)[:-2], _hex(rng).upper(), _hex(rng) + "00"])]
+        case "ok-registered":
+            roots[f"{prefix}{Cr.OK_VALUE}"] = [_hex(rng)]
         case "receipt-width":
             receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
                                   ["Array", 2, ["Array", 4, bit]], ["Array", rng.randint(1, 3), ["Value", 5]],
@@ -1300,7 +1303,7 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
             "steps": steps, "salt": _hex(rng)}
 
 
-REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots"]
+REGISTERED_FILE_NAMES = ["missing", "twice", "receipt-twice", "receipt-width", "pub-roots", "ok-registered"]
 
 
 def _tree(rng: random.Random, count: int, dom: CommitmentDomain | None = None) -> tuple[str, list[tuple[bytes, ...]]]:
