@@ -213,13 +213,13 @@ theorem mem_capsCalls {r : XR} {s : ℕ} {p : Msg × List HmNets.Lin × List HmN
     ∃ l N c q n, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) ∧
       r.w.parts[s]?.bind partCircuit = some c ∧ capPort c = some q ∧ n < N ∧ p ∈ hmCalls c "top" q n := by
   unfold capsCalls at hp
-  generalize hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = o at hp
+  generalize (RecVStar.statements r.shape).toOption.bind (·[s]?) = o at hp
   rcases o with _ | st
   · simp at hp
   · simp only [Option.bind_some] at hp
     split at hp
     · rename_i l N
-      generalize hc : r.w.parts[s]?.bind partCircuit = oc at hp
+      generalize r.w.parts[s]?.bind partCircuit = oc at hp
       rcases oc with _ | c
       · simp at hp
       · simp only [Option.bind_some] at hp
@@ -229,7 +229,7 @@ theorem mem_capsCalls {r : XR} {s : ℕ} {p : Msg × List HmNets.Lin × List HmN
           rw [hq] at hp
           simp only [Option.map_some, Option.getD_some, List.mem_flatMap, List.mem_range] at hp
           obtain ⟨n, hn, hp⟩ := hp
-          exact ⟨l, N, c, q, n, hst, hc, hq, hn, hp⟩
+          exact ⟨l, N, c, q, n, rfl, rfl, hq, hn, hp⟩
     · simp at hp
 
 /-- **`ReadersTrue` at `layoutBTops` from the slots' commit strings**: every call the readers record is a part's, at one
