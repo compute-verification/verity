@@ -729,12 +729,11 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   RecOpening.check c
   return c
 
-/-- `parse` with each net's rows read in tasks (`Net.parsePar`), `parse_eq_fast`: the firewall's setup runs it
-(`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`: `flock-verify` compiles `parse` too, and runs no
-task. -/
-def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
-  let sha := Sha512.hash bytes
+/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns. Not inlined: the
+compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, which here is the last. -/
+@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
+    V Circuit := do
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
@@ -876,7 +875,7 @@ def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   let leafScheme ← J.get mj "leaf_scheme" ctx
   let leafId ← J.str leafScheme "id" ctx
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
-  let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
+  let c : Circuit := { name, sha := sha.get, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
@@ -888,12 +887,19 @@ def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   RecOpening.check c
   return c
 
+/-- `parse` with each net's rows read in tasks (`Net.parsePar`) and the file hashed in a task beside them,
+`parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
+`flock-verify` compiles `parse` too, and runs no task. -/
+def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
+  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre
+
 set_option maxRecDepth 20000 in
 -- `rfl` compares the two whole bodies of `parse`, as `With.parseWith_std` does
 set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
-  unfold parse parseFast
+  unfold parse parseFast parseFastFrom
   simp -zeta only [Net.parsePar_eq]
   try rfl
 
