@@ -710,9 +710,6 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
             s.append("C")
         return s
 
-    for v in ands:
-        a, b = C.data[v]
-        rows_a[col[v]], rows_b[col[v]] = form(a), form(b)
     for r in reads.values():
         r.fill(rows_a, rows_b, form)
     for _, Lf in C.asserts:
@@ -734,7 +731,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     rows_b.append([const])
 
     def fix(r):
-        if isinstance(r, np.ndarray):
+        if r is None or isinstance(r, np.ndarray):
             return r
         par: dict[int, int] = {}
         for c in r:
@@ -745,6 +742,20 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     for rows in (rows_a, rows_b):
         for i, r in enumerate(rows):
             rows[i] = fix(r)
+    at, wired = col.__getitem__, frozenset(const_bit)
+
+    def and_row(Lf: L) -> list:
+        # fix(form(Lf)): over no constant-wired value bit, the form's columns are distinct (col is one-to-one) and below const
+        if not wired.isdisjoint(Lf.s):
+            return fix(form(Lf))
+        s = sorted(map(at, Lf.s))
+        if Lf.c & 1:
+            s.append(const)
+        return s
+
+    for v in ands:
+        a, b = C.data[v]
+        rows_a[col[v]], rows_b[col[v]] = and_row(a), and_row(b)
     lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
     read_rows = sum(r.rows for r in reads.values())
     lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
