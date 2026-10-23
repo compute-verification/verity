@@ -44,7 +44,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   `--jobs N` audits up to N ranks at once, each in its own process. Either
   window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
-  are never used), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
+  are never used), or, for a template whose units are bit rows in chunks (`serving_rows.CHUNKED`: a MoE pair GEMM's coordinate,
+  `COORDS`, or a MoeSum or all-reduce column block, `COLS`), by C-Flock's `UnitStager` on the rows the window lays out
+  (`compose_circuit.py --template`, once per template, every chunk on that circuit), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
@@ -100,6 +102,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition 
 from verity_vllm.commit import serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 RANK_PORTS = 16
@@ -213,22 +216,29 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     shutil.copy(served / "registration.json", out / "registration.json")
 
     # each member: the verifier's circuit, the prover's files under it, and every check on the public file before the draw
-    members, publics, checks = [], {}, {}
+    members, publics, checks, composed = [], {}, {}, {}
     for k, m in enumerate(mine.members):
-        if m.template not in sets:
+        chunked = m.template not in sets and SRW.template(m.template).layout in SRW.CHUNKED
+        if m.template not in sets and not chunked:
             summary["refused"] = {"no-template-set": m.template}
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
             print("A5 " + json.dumps(summary["refused"]))
             return summary, False
-        set_dir, defn = sets[m.template]
+        defn = SRW.template(m.template).fn if chunked else sets[m.template][1]
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
-        p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", str(set_dir), "--out", str(st_dir / "circuit.txt"),
-                    "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
-        if p.returncode != 0:
-            raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
-        made = json.loads(p.stdout.strip().splitlines()[-1])
+        if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
+            link(composed[m.template][0], st_dir / "circuit.txt")
+        else:
+            src = ["--template", m.template] if chunked else ["--input-set", str(sets[m.template][0])]
+            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+                        "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
+            if p.returncode != 0:
+                raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
+            if chunked:
+                composed[m.template] = (st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1]))
+        made = composed[m.template][1] if chunked else json.loads(p.stdout.strip().splitlines()[-1])
         text = (st_dir / "circuit.txt").read_text()
         compose_s = round(time.time() - t, 1)
         got = CS.flock_input_files(served, k, text, st_dir / "prover")
@@ -250,7 +260,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
-        publics[m.template] = body(st_dir / f"pub-{m.n}.bin")
+        publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json"},
@@ -289,15 +299,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     for mm in members:
         m, k = mm["m"], mm["k"]
         local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
-        counts[m.template] = len(local)
+        counts[m.template] = counts.get(m.template, 0) + len(local)
         if not local:
             continue
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True,
-                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])})
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json", zk=True,
+                                  env={"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])},
+                                  prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
@@ -312,11 +323,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                                          "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
-        statement[m.template] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
-                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
-                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
-                                 "lean_verify_s": verdicts[f"lean-verify/m{k}"].get("verify_s"),
-                                 "lean_partition": verdicts[f"lean-verify/m{k}"].get("partition")}
+        statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
+                            "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
+                            "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
+                            "lean_verify_s": verdicts[f"lean-verify/m{k}"].get("verify_s"),
+                            "lean_partition": verdicts[f"lean-verify/m{k}"].get("partition")}
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
     if a.coins is not None:  # every verdict of record names the sessions delivered (`service.check_verdicts`), as the run holds it
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
@@ -335,7 +346,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
 
     # negatives: each re-decides one input altered
     neg: dict[str, dict] = dict(more_negatives or {})
-    defs = [(mm["defn"], mm["m"].n) for mm in members]
+    by_template: dict[str, list] = {}
+    for mm in members:
+        by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
+    defs = [tuple(x) for x in by_template.values()]
     fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(defs)]) if len(defs) > 1 \
         else P.population_program(defs[0][0], defs[0][1] - 1)
     v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer)
@@ -343,7 +357,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     other = CS.expected_ports(CS.Window(program, query, law, "00" * 32, mine.members))
     v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer)
     neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    first = members[0]["m"].template
+    first = members[0]["m"].key
     flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
     v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped))
     neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -484,6 +498,9 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
+    ap.add_argument("--session-timeout", type=float, default=14400,
+                    help="each drawn member's prover limit in seconds: one firewalled session of a MoE w2 coordinate chunk "
+                         "(MoeExpertFp8GemmW_v2{N=1}, k_log 26) outlasts an hour")
     ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
                     "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
                     "infra's gate, with --peer and --challenger-key)")

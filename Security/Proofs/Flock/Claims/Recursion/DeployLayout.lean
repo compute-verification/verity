@@ -57,12 +57,13 @@ the earlier reps', at its `k`-th round that absorbs a message (`RecVStar.commitR
 def msgRound (rs : Array RecVStar.SchedRound) (r k : ℕ) : Option ℕ :=
   ((RecVStar.commitRounds rs)[k]?).map (r * rs.size + ·)
 
-/-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf that
-reads the port's word `i / 16` (`leavesIn`), the ports' words in order. -/
+/-- The input column of row bit `i` of the circuit's port `q` in unit `u`: bit `i % 16` of the unit input leaf `k` that
+reads the port's word `i / 16` (`leavesIn`), the ports' words in order, leaf `k` from column `col · WORD + 16 k` of the
+unit's first input group (`Flat.leafCol`). -/
 def portCol (c : Circuit) (u q i : ℕ) : Option ℕ := do
   let w : ℕ := (c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16
   let k ← (c.leavesIn.getD u #[]).findIdx? (· == (w : Int))
-  pure (16 * k + i % 16)
+  pure ((c.unit.inGroups.getD 0 default).col * WORD + 16 * k + i % 16)
 
 /-- **The hidden values of port `nm`'s row at instance `n`** of a part's one table: each row bit's input column
 (`portCol`) in the instance's copy (block `n / g`, VU `n % g`, its first unit: `Circuit.instOf`), at

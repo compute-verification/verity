@@ -5,6 +5,8 @@ all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P
     AllReduceMnnvl_v1{WORLD,N,SHOT}           (parts: Array<WORLD, Array<N, bf16>>) -> Array<N, bf16>
     AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}
                                               (parts, res: Array<N, bf16>, w: Array<N, bf16>) -> (normed, residual')
+    AllReduceResidualMnnvl_v1{WORLD,N,SHOT}   (parts, res) -> residual'   (the fused one's all-reduce and residual add)
+    RmsNormMnnvl_v1{N,SHOT,CLUSTER,EPS,FMA}   (r: Array<N, bf16>, w) -> normed   (the fused one's norm of residual' r)
     AllReduceCustomCoordinate_v1{WORLD,START} (col: Array<WORLD, bf16>) -> bf16
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
@@ -109,12 +111,13 @@ from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
-           "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES",
-           "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR", "NCCL_TREE_RUNS",
-           "RTX_PRO_6000", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
-           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot",
-           "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free", "ranks",
-           "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
+           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
+           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
+           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid",
+           "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free",
+           "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters",
+           "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -478,11 +481,44 @@ def AllReduceRmsNormMnnvl(B, S, parts, res, w):
     """FlashInfer's MNNVL all-reduce + residual add + RMSNorm (`kARResidualRMSNorm`, fp32 accumulation, weight bias 0) of one
     token: `AllReduceMnnvl_v1`, r = a + res, the sum of squares in `blockReduceSum`'s geometry over CLUSTER CTAs,
     ``rs = rsqrt(sum * rcp(N) + EPS)`` (FMA: one FFMA), and the normed row. Returns (normed, r)."""
-    N, shot, cluster = int(S.N), strategy(S.SHOT), int(S.CLUSTER)
-    block, warps = _fused_geometry(N, cluster)
+    N, shot = int(S.N), strategy(S.SHOT)
+    _fused_geometry(N, int(S.CLUSTER))
     zero = B.call(ZERO32)
     a = B.call(bind(AllReduceMnnvl, WORLD=S.WORLD, N=N, SHOT=shot), parts)
     r = B.batch(P.Bf16AddF2fp, a, res, axes=(0, 0))
+    return tuple_of(_mnnvl_norm(B, S, zero, r, w), r)
+
+
+@composite("AllReduceResidualMnnvl", 1, ["WORLD", "N", "SHOT"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("res", Array(S.N, BF16))), Array(S.N, BF16)),
+           conformance="not-yet-established: AllReduceRmsNormMnnvl_v1's r, whose captures are exact-model-tested; it is that "
+                       "Definition's AllReduceMnnvl_v1 and residual add node for node, not captured on its own "
+                       "(tests/program/test_tp_allreduce_parts.py)")
+def AllReduceResidualMnnvl(B, S, parts, res):
+    """`AllReduceRmsNormMnnvl_v1`'s new residual on its own: ``r = a + res`` (`Bf16AddF2fp_v1`) of the MNNVL all-reduce a,
+    element by element, so any block of its columns is the Definition at that width on those columns."""
+    a = B.call(bind(AllReduceMnnvl, WORLD=S.WORLD, N=S.N, SHOT=strategy(S.SHOT)), parts)
+    return B.batch(P.Bf16AddF2fp, a, res, axes=(0, 0))
+
+
+@composite("RmsNormMnnvl", 1, ["N", "SHOT", "CLUSTER", "EPS", "FMA"],
+           lambda S: ((("r", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
+           conformance="not-yet-established: AllReduceRmsNormMnnvl_v1's normed row from its r, whose captures are "
+                       "exact-model-tested; it is that Definition's norm node for node, not captured on its own "
+                       "(tests/program/test_tp_allreduce_parts.py)")
+def RmsNormMnnvl(B, S, r, w):
+    """`AllReduceRmsNormMnnvl_v1`'s norm on its own: the normed row of the new residual r with weight w, in the fused kernel's
+    geometry (`_fused_geometry`), so ``(RmsNormMnnvl(AllReduceResidualMnnvl(parts, res), w), AllReduceResidualMnnvl(parts,
+    res))`` is that Definition."""
+    _fused_geometry(int(S.N), int(S.CLUSTER))
+    return _mnnvl_norm(B, S, B.call(ZERO32), r, w)
+
+
+def _mnnvl_norm(B, S, zero, r, w):
+    """The fused kernel's normed row of r (one token, `AllReduceRmsNormMnnvl_v1`'s statics), the f32 zero ``zero`` already
+    called."""
+    N, shot, cluster = int(S.N), strategy(S.SHOT), int(S.CLUSTER)
+    block, warps = _fused_geometry(N, cluster)
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
     if shot == 1:
         sq = B.batch(P.Bf16ToF32, B.batch(P.Bf16MulBf16, r, r, axes=(0, 0)), axes=(0,))
@@ -519,7 +555,7 @@ def AllReduceRmsNormMnnvl(B, S, parts, res, w):
         y = B.batch(P.F32MulFtzV2, B.batch(P.F32MulFtzV2, rf, rs, axes=(0, None)), g, axes=(0, 0))
     else:
         y = B.batch(P.F32MulFtzV2, B.batch(P.F32MulFtzV2, g, rf, axes=(0, 0)), rs, axes=(0, None))
-    return tuple_of(B.batch(P.F2fpBf16, y, axes=(0,)), r)
+    return B.batch(P.F2fpBf16, y, axes=(0,))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
