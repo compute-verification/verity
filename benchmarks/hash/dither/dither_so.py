@@ -130,6 +130,11 @@ PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, 
 # "1": a step's units in one launch over every call (h1u.cu's kh_units_multi: each unit's noise hashed by its own warp,
 # no workspace), in place of each call's noise and units launches; the same receipts
 FUSED_ENV = "DITHER_SO_FUSED"
+# "1": step s's units, when coin s isn't back at the end of step s + D - 2's `after`, dispatched while the host waits on
+# forward s + D - 1, once the coin is back (at the latest just after that forward, before round s + D - 1 takes their
+# receipts), so the host launches forward s + D - 1 without waiting on the coin; the same order (`check`: coin, units,
+# receipts' round)
+COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
@@ -188,10 +193,15 @@ class SoWindow(DO.Window):
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
         self.order_why = None
+        self.coin_async = os.environ.get(COIN_ASYNC_ENV) == "1"
+        self.deferred: int | None = None
+        self.deferrals = {"deferred": 0, "in_forward": 0, "after_forward": 0}
+        self.late_waits: list[float] = []
         super().__init__(*args, **kwargs)
         # the gate's generation runs past its last capture until that step's receipts are in a round
         self.gate_extra = self.depth + 8 + (1 if self.overlap else 0)
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
+        self.ev_fwd = torch.cuda.Event()
         # the engine's own host time a step (from one `after`'s end to the next `before`), and `before`'s
         self.t_b0 = self.t_after_end = 0.0
 
@@ -237,6 +247,7 @@ class SoWindow(DO.Window):
         self.cap_at: dict[int, str] = {}
         self.rtt_from, self.order_from = 1, 0
         self.zlate = None
+        self.deferred = None
         if self.overlap and DA.SIDE:
             DA.SIDE[0].ov.zlate = None
         self.open = True
@@ -304,6 +315,21 @@ class SoWindow(DO.Window):
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
 
+    def _forward_wait_deferred(self, main: torch.cuda.Stream) -> None:
+        """$DITHER_SO_COIN_ASYNC: while forward s runs, the deferred step's units dispatched once its coin is back."""
+        self.ev_fwd.record(main)
+        j = self.deferred
+        i = self.ix(j)
+        while not self.ev_fwd.query():
+            if self.pipe.opening(i, wait=False) is not None:
+                self.deferred = None
+                self.deferrals["in_forward"] += 1
+                self.stashed.discard(j)
+                self.dispatch_units(j)
+                self.phase("forward_wait")
+                return
+            time.sleep(1e-4)
+
     def end(self) -> dict | None:
         """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
         final round, its coin back, the manifest root, the draw coin after it, the session closed."""
@@ -318,6 +344,7 @@ class SoWindow(DO.Window):
             pending = s1 - 1 - sd.ov.dispatched_upto
             sd.ov.drain()
         else:
+            self.deferred = None
             pending = len(self.stashed)
             for j in sorted(self.stashed):
                 self.stashed.discard(j)
@@ -402,6 +429,7 @@ class SoWindow(DO.Window):
             return None
         if self.window_end and self.s > self.s0:
             return self.end()
+        self.deferred = None
         self.drain()
         self._harvest()
         self.pipe.close()
@@ -487,8 +515,20 @@ class SoWindow(DO.Window):
         d = self.depth - 1
         main = torch.cuda.current_stream()
         self.phase("forward_wait")
+        if self.deferred is not None:
+            self._forward_wait_deferred(main)
         main.synchronize()
         t_fwd = time.perf_counter()
+        t_late = 0.0
+        if self.deferred is not None:
+            self.phase("coin_wait_late")
+            j, self.deferred = self.deferred, None
+            self.deferrals["after_forward"] += 1
+            self.stashed.discard(j)
+            t0 = time.perf_counter()
+            self.dispatch_units(j)
+            t_late = time.perf_counter() - t0
+            self.late_waits.append(1e3 * t_late)
         s, m, cap, pre, ev, kinds = self.s, self.m, self.cap, self.pre, self.ev, self.round_kinds
         if self.a_once:
             self.phase("a_tables")
@@ -585,15 +625,20 @@ class SoWindow(DO.Window):
         ju = s + 1 - d
         t_wait = t_coin = t_disp = time.perf_counter()
         if ju in self.stashed:
-            self.stashed.discard(ju)
-            t_coin = self.dispatch_units(ju)
-            t_disp = time.perf_counter()
+            if self.coin_async and s != self.end_at and self.pipe.opening(self.ix(ju), wait=False) is None:
+                self.deferred = ju
+                self.deferrals["deferred"] += 1
+            else:
+                self.stashed.discard(ju)
+                t_coin = self.dispatch_units(ju)
+                t_disp = time.perf_counter()
         t_end = time.perf_counter()
         self.phase(None)
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "trees_ms": 1e3 * (t_root - t_fwd),
               "record_host_ms": 1e3 * (t_sent - t_root), "captures_ms": 1e3 * (t_wait - t_sent),
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
-              "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd)}
+              "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
+              "coin_late_ms": 1e3 * t_late}
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
         self.phases.append({**ph, **self.host_ms()})
@@ -676,6 +721,8 @@ class SoWindow(DO.Window):
         self._order()
         rtt, self.rtts = sorted(self.rtts), []
         waits, self.coin_waits = sorted(self.coin_waits), []
+        late, self.late_waits = sorted(self.late_waits), []
+        deferrals, self.deferrals = self.deferrals, dict.fromkeys(self.deferrals, 0)
         sent = list(pipe.roots)
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
@@ -683,6 +730,8 @@ class SoWindow(DO.Window):
                      else "per call, in the forward", "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
+                     "coin_async": {"on": self.coin_async, **deferrals,
+                                    "late_wait_ms": {"n": len(late), "p50": _q(late, 0.5), "max": _q(late, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
                      # the challenger's log holds these round roots in this order (its published session's record)
