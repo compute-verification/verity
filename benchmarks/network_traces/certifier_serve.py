@@ -61,13 +61,13 @@ frame too, so it refuses every window of a run with the salt on.
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
-- `serve` starts the shim, then the certifier's key in a process of its own (`CertifierProcess`, which keeps and certifies
-  every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal endpoint
-  (`active.serve_reveals`), and writes `deployment.json`, the auditor's record of the run: the certifier's public key, the proxy's run id, the
-  certifier session (`--session`, which the challenger draws), the links, the addresses, the origin and the reveal
-  deadline. It takes one link connection, which must come before the origin. Once the link has ended it stops the shim,
-  writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
-  window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
+- `serve` starts the shim, then the certifier's key in a process of its own (`CertifierProcess`, which keeps and
+  certifies every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal
+  endpoint (`active.serve_reveals`), and writes `deployment.json`, the auditor's record of the run: the certifier's
+  public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the links, the
+  addresses, the origin and the reveal deadline. It takes one link connection, which must come before the origin. Once
+  the link has ended it stops the shim, writes the logs and prints `{"served": ...}`, then serves reveals until every
+  window's salt is revealed or the last window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
   than the endpoint sent at the end of the first session's response, on time and logged, so the records are complete
   and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
@@ -88,7 +88,9 @@ frame too, so it refuses every window of a run with the salt on.
 or the link-window the signer refused), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
 client's `peer.json`, `serve.json` and `check.json`. Records, certificates and the shim's events are witness, kept behind
 the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. No salt is written, only
-its SHA-512 (`active_replay.fingerprint`).
+its SHA-512 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes
+`publisher_timing.json`: when each record was handed over, kept and certified, on the proxy's clock, and each step's
+CPU seconds (`tick_load.py` reads it).
 """
 
 from __future__ import annotations
@@ -248,7 +250,6 @@ class CertifyingPublisher(ar.Publisher):
         self.issuer, self.link = issuer, link
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
-
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
 
     def keep(self, record, params) -> None:
