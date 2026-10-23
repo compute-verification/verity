@@ -24,7 +24,9 @@
   alike, and listed whole under round s's root (`segments`). Call c's public table ``pub@<c>`` holds its statement's
   public row ``pub`` (`h1window.PUBS`): row t unit u0 + t's, `core_check.public_words` of the window's Program salt,
   u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted `core_check.public_row_salt` of the open root and u0 + t, so
-  anyone rebuilds it, as credit's `registered_file` and Lean's ``registeredFile`` do; its rows are kept.
+  anyone rebuilds it, as credit's `registered_file` and   Lean's ``registeredFile`` do; its rows are kept. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the
+  statement's output row o1): row u `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry,
+  since credit registers them itself and refuses a window that does.
 * **The weights are the period's** (`Weights`, VLLM-71): each K's ``b/<K>`` is registered once a period, before its first
   window's salt (`register_weights`), under the period's declared Program, binding no window, its salts fixed for the
   registration. `credit.weights_root` of their roots is the weights' root every window's open root binds and the
@@ -339,6 +341,8 @@ class Served:
     #: each call's receipts, one a unit in its tile order (`receipt_words`' input), from ``(call, codes, s_a, weight
     #: codes, s_w)``: with it, each call's ``receipt@<c>`` is registered beside its z table (BRIDGE2)
     receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
+    #: the window's ok rows ``<prefix>ok`` (`h1window.OK_PORT`'s, o1), from `close`: in no entry, as credit registers them
+    ok: G.Registered | None = None
     #: each round's input-ids table and its words, with the tap
     ids: dict[int, G.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
@@ -639,7 +643,8 @@ class Served:
 
     def close(self, run: Any) -> None:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
-        unregistered."""
+        unregistered; else commit its ok rows (`ok`): row u unit u's, `core_check.OK_ROW` under `core_check.ok_salt` of
+        the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
         if self.refused:
             return
         if self.program is None:
@@ -649,6 +654,11 @@ class Served:
                                 "aren't the window's")
         elif missing := [v for v in self.tables() if v not in self.registered]:
             self.refused.append(f"{len(missing)} tables the Program reads were never registered: {missing[:4]}")
+        else:
+            n = sum(k for _u0, k in HW.call_units(self.program))
+            self.ok = self._tree(run, self.program.fn.bindings["PREFIX"] + HW.OUTPUTS[1],
+                                 np.tile(np.array(CC.OK_ROW, np.uint16), (n, 1)), 0, self.root,
+                                 row_salts=b"".join(CC.ok_salt(self.root, u) for u in range(n)))
 
     def tables(self) -> list[str]:
         """Every value the Program's units open at: each K's ``b/<K>``, then each step's A tables, then each call's z
