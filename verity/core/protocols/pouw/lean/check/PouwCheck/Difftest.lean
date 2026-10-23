@@ -22,11 +22,12 @@ harness (`verity/core/difftest`):
   `core_check.pass_epoch`, as `{"how"}` or `{"refused": [code, why]}`.
 * `draw` (`coins`, `recorded`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
   `core_check.draw` takes it): null, or `{"refused": [code, why]}`.
-* `salt` (`key`, `ledger`, `window` and `session` as `rounds` reads them, `weights` and `requests` the window's weights'
-  root and round-0 request table's root, `opening` the salt coin, each as `core_check.salt` takes it): null, or
-  `{"refused": [code, why]}`.
-* `rounds` (`key` the window's pinned challenger key, `ledger` the auditor's signed ledger's lines, `window` the window's
-  identity, `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
+* `salt` (`key`, `ledger`, `pins`, `main`, `window` and `session` as `rounds` reads them, `weights` and `requests` the
+  window's weights' root and round-0 request table's root, `opening` the salt coin, each as `core_check.salt` takes it):
+  null, or `{"refused": [code, why]}`.
+* `rounds` (`key` the window's pinned challenger key, `ledger` the auditor's signed ledger's lines, `pins` the challenger
+  host's published pins log, `main` the auditor's own first-parent list of main, `window` the window's identity,
+  `session` the challenger's session's files, `roots` the round roots, `openings` the round coins, each as
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
 -/
 
@@ -87,13 +88,13 @@ def drawOf (j : Json) : Except String Json := do
 
 def saltOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null) (saltCheck (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "weights")
-    (← f "requests") (← f "opening"))
+  refusal (fun _ => Json.null) (saltCheck (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window")
+    (← f "session") (← f "weights") (← f "requests") (← f "opening"))
 
 def roundsOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null)
-    (roundsCheck (← f "key") (← f "ledger") (← f "window") (← f "session") (← f "roots") (← f "openings"))
+  refusal (fun _ => Json.null) (roundsCheck (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window")
+    (← f "session") (← f "roots") (← f "openings"))
 
 def registeredOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")

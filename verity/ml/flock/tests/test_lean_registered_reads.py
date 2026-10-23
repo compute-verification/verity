@@ -189,6 +189,24 @@ def test_each_instance_reads_the_position_its_unit_reads_in_the_verifiers_progra
     assert code == 1 and f"reads no row of {VALUE} in unit 4" in out
 
 
+def test_a_unit_past_a_ports_reads_reads_none(staged):
+    """A unit past a port's ``reads`` reads none, as a null there does (`badInstance`'s ``reads[u]?``), so a reads file
+    trimmed of its trailing nulls (`h1window.table_reads_file`'s) verifies as the untrimmed one: the honest statement is
+    accepted alike under reads padded with nulls past the population, and a statement whose last unit's read is null or
+    absent is refused alike."""
+    public = _stage(staged, "honest-trim")
+
+    def verdict(name, edit):
+        code, out = _statement(staged, public, _own(staged, name, edit))
+        return code, [line for line in out.splitlines() if " ms" not in line]
+
+    trimmed = verdict("own-trimmed", lambda ps: None)
+    assert trimmed[0] == 0 and verdict("own-padded", lambda ps: ps["cs"]["reads"].extend([None] * 5)) == trimmed
+    null = verdict("own-last-null", lambda ps: ps["cs"]["reads"].__setitem__(7, None))
+    assert null[0] == 1 and any(f"reads no row of {VALUE} in unit 7" in line for line in null[1]), null
+    assert verdict("own-last-absent", lambda ps: ps["cs"]["reads"].pop()) == null
+
+
 def test_the_ports_are_exactly_the_verifiers(staged):
     public = _stage(staged, "honest-3")
     code, out = _statement(staged, public, _own(staged, "own-root", lambda ps: ps["cs"].__setitem__("root", "00" * 64)))
@@ -202,7 +220,10 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
     bad = staged.dir / "bad.json"
     cs = {k: v for k, v in staged.own["ports"]["cs"].items() if k not in ("words", "word_bits")}
-    for doc, want in (({"format": "verity/registered-reads/v1", "ports": {}}, "not a verity/registered-reads/v0 file"),
+    for doc, want in (({"format": "verity/registered-reads/v2", "ports": {}}, "not a verity/registered-reads/v1 file"),
+                      ({**staged.own, "ports": {"cs": {**cs, "reads_from": 0}}}, "reads_from is a verity/registered-reads/v1 key"),
+                      ({**staged.own, "format": G.READS_V1, "ports": {"cs": {**cs, "reads_at": 0}}}, "and no other"),
+                      ({**staged.own, "format": G.READS_V1, "window": 0}, "and no other"),
                       ({**staged.own, "ports": {}}, "no port"),
                       ({**staged.own, "ports": {"cs": {**cs, "words": 64, "word_bits": 8}}}, "leaves of 16 or 32 bits"),
                       ({**staged.own, "ports": {"cs": {**cs, "word_bits": 32}}}, "a row's words when they are 32"),
@@ -210,6 +231,22 @@ def test_the_ports_are_exactly_the_verifiers(staged):
         bad.write_text(json.dumps(doc))
         code, out = _statement(staged, public, bad)
         assert code == 2 and want in out, out
+
+
+def test_a_v1_files_reads_start_at_its_first_unit(staged):
+    """A `verity/registered-reads/v1` port's `reads` start at unit `reads_from`: from unit 0 they are v0's, and from unit 1
+    unit 0 reads nothing, so its instance is refused."""
+    public = _stage(staged, "honest-v1")
+    v1 = staged.dir / "own-v1.json"
+    v1.write_text(json.dumps({**staged.own, "format": G.READS_V1}))
+    code, out = _statement(staged, public, v1)
+    assert code == 0, out
+    cs = staged.own["ports"]["cs"]
+    later = staged.dir / "own-v1-later.json"
+    later.write_text(json.dumps({**staged.own, "format": G.READS_V1,
+                                 "ports": {"cs": {**cs, G.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
+    code, out = _statement(staged, public, later)
+    assert code == 1 and f"reads no row of {VALUE} in unit 0" in out, out
 
 
 def test_the_ports_rows_are_the_registered_rows(staged):

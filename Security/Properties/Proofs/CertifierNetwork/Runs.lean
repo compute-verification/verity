@@ -10,8 +10,9 @@ Every certificate the device's code issues is of a record it published (`issued_
 issues none where its signing state has started its session): the head `record_head` makes of the record under its
 grid's parameters digest, its digest, and the record's link-window. Unless a certificate of the commitment is an LMS
 forgery, the message of each one the check accepts, in the run's session, is one the device signed in it; unless two
-distinct strings of the run have one SHA-512 digest, that message names the same link-window and digest
-(`messageInput_inj`), and the digest the same head (`head_inj`) (`device_record`). The device publishes one record per link-window
+distinct strings of the run have one SHA-512 digest, that message names the same link-window and signed digest
+(`messageInput_inj`), the signed digest the same record digest whatever the two salts (`certificateDigest_inj`), and
+that the same head (`head_inj`) (`device_record`). The device publishes one record per link-window
 (`unique`, from `Inv`), so each record it published on its links is the one the check accepted: complete, since the
 check's is settled, and on egress of the Program's grid (`recordHead_grid_inj`).
 -/
@@ -31,54 +32,41 @@ namespace Properties.NetworkCertifier
 
 open Bytes _root_.Properties.NetworkCertifier.Tree GridProofs CheckProofs
 open Properties.CertifierNetwork.Proofs (Inv inv_after init_inv windowsOn)
+open Properties.CertifierDevice.Proofs.Issuer (except_bind_ok prepare_spec prepare_head)
 
 /-! ## What the device's code issues -/
 
-theorem certify_some {i i' : Issuer} {leaf : Except String Nat} {r : Record} {d : NetworkCheck.Direction} {g : NetworkCheck.Params}
-    {pd : ByteArray} {cr : CertifiedRecord} (h : i.certify leaf r d g pd = .ok (i', some cr)) :
+theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {r : Record}
+    {d : NetworkCheck.Direction} {g : NetworkCheck.Params} {pd : ByteArray} {cr : CertifiedRecord}
+    (h : i.certify salt leaf r d g pd = .ok (i', some cr)) :
     NetworkCheck.recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd true =
         .ok cr.head ∧
-      cr.head.digest = .ok cr.certificate.digest ∧ cr.certificate.link = r.link ∧ cr.certificate.direction = d ∧
-      cr.certificate.window = r.window := by
+      (∃ dg, cr.head.digest = .ok dg ∧ cr.certificate.digest = certificateDigest cr.salt dg) ∧
+      cr.certificate.link = r.link ∧ cr.certificate.direction = d ∧ cr.certificate.window = r.window := by
   unfold Issuer.certify at h
-  simp only [bind, Except.bind] at h
-  split at h
-  · cases h
-  rename_i prepared hprep
-  obtain ⟨head, digest, message⟩ := prepared
-  have hspec := Properties.CertifierDevice.Proofs.Issuer.prepare_spec hprep
-  unfold Issuer.prepare at hprep
-  simp only [bind, Except.bind] at hprep
-  split at hprep
-  · cases hprep
-  rename_i head' hh
-  split at hprep
-  · cases hprep
-  split at hprep
-  · cases hprep
-  simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hprep
-  obtain ⟨rfl, -, -⟩ := hprep
+  obtain ⟨⟨head, digest, message⟩, hprep, h⟩ := except_bind_ok h
+  obtain ⟨-, -, -, -, ⟨R, hR, hdg⟩, -⟩ := prepare_spec hprep
+  have hh := prepare_head hprep
   unfold Issuer.finish at h
   cases leaf with
   | error _ => simp [pure, Except.pure] at h
   | ok q =>
-    simp only [bind, Except.bind] at h
-    split at h
-    · cases h
+    obtain ⟨sig, -, h⟩ := except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq, Option.some.injEq] at h
     obtain ⟨-, rfl⟩ := h
-    exact ⟨hh, hspec.2.2.2.1, rfl, rfl, rfl⟩
+    exact ⟨hh, ⟨R, hR, hdg⟩, rfl, rfl, rfl⟩
 
 /-- Each certificate the code issues is of a record it was given: the head `record_head` makes of it under its grid's
-parameters digest, signing that head's digest and naming the record's link-window. -/
-theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {rs : List Record} {cr : CertifiedRecord},
-    cr ∈ issued c i next rs → ∃ rec ∈ rs, ∃ pd, parameters (gridOf c rec) (syncSetOf c rec) = .ok pd ∧
+parameters digest, signing that head's digest under the certificate's salt and naming the record's link-window. -/
+theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {salts : Nat → ByteArray} {rs : List Record}
+    {cr : CertifiedRecord},
+    cr ∈ issued c i next salts rs → ∃ rec ∈ rs, ∃ pd, parameters (gridOf c rec) (syncSetOf c rec) = .ok pd ∧
       NetworkCheck.recordHead rec.link (directionOf c rec) rec.window rec.grid
         ((Status.reason? rec.status).map reasonValue) (gridOf c rec) pd true = .ok cr.head ∧
-      cr.head.digest = .ok cr.certificate.digest ∧ cr.certificate.link = rec.link ∧
-      cr.certificate.direction = directionOf c rec ∧ cr.certificate.window = rec.window
-  | _, _, [], _, h => nomatch h
-  | i, next, r :: rs, cr, h => by
+      (∃ dg, cr.head.digest = .ok dg ∧ cr.certificate.digest = certificateDigest cr.salt dg) ∧
+      cr.certificate.link = rec.link ∧ cr.certificate.direction = directionOf c rec ∧ cr.certificate.window = rec.window
+  | _, _, _, [], _, h => nomatch h
+  | i, next, salts, r :: rs, cr, h => by
     unfold issued at h
     split at h
     · rename_i i' cr? hc
@@ -99,7 +87,7 @@ theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {rs : List Reco
 
 /-- The code's certificates are ones its issuer issues: none where the signer's state has started the session. -/
 theorem deviceCode_certificates {x : DeviceInput} {cr : CertifiedRecord} (h : cr ∈ (deviceCode x).certificates) :
-    cr ∈ issued x.config x.issuer x.next (published x.config x.trace) := by
+    cr ∈ issued x.config x.issuer x.next x.salts (published x.config x.trace) := by
   unfold deviceCode at h
   dsimp only at h
   split at h
@@ -144,7 +132,13 @@ theorem mem_run_check {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e
 theorem mem_run_head {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence} {cr : CertifiedRecord}
     (hcr : cr ∈ out.certificates) {y : ByteArray} (h : HeadString cr.head y) : y ∈ runStrings x out c e :=
   List.mem_append_right _ (List.mem_append_left _
-    (List.mem_flatMap.mpr ⟨cr, hcr, List.mem_append_left _ (mem_headStrings h)⟩))
+    (List.mem_flatMap.mpr ⟨cr, hcr, List.mem_append_left _ (List.mem_append_left _ (mem_headStrings h))⟩))
+
+theorem mem_run_salted {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence}
+    {cr : CertifiedRecord} (hcr : cr ∈ out.certificates) {y : ByteArray} (h : SaltedString cr.salt cr.head y) :
+    y ∈ runStrings x out c e :=
+  List.mem_append_right _ (List.mem_append_left _
+    (List.mem_flatMap.mpr ⟨cr, hcr, List.mem_append_left _ (List.mem_append_right _ (mem_saltedStrings h))⟩))
 
 theorem mem_run_message {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence}
     {cr : CertifiedRecord} (hcr : cr ∈ out.certificates) {y : ByteArray}
@@ -179,22 +173,25 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
   have hr : r ∈ c.records.toList := (List.mem_filter.mp hmem).1
   obtain ⟨cr, hcrm, hcm⟩ := hsig r hr m
     (by rw [certMessage, hk, hcl, hcd, hcw, hcdg, show x.issuer.session = (deviceParams x).session from rfl, hm]; rfl) hσ
-  obtain ⟨rec, hrecm, pd, hpd, hhead, hcrd, hcrl, hcrdir, hcrw⟩ := issued_spec (deviceCode_certificates hcrm)
+  obtain ⟨rec, hrecm, pd, hpd, hhead, ⟨R, hcrR, hcrd⟩, hcrl, hcrdir, hcrw⟩ :=
+    issued_spec (deviceCode_certificates hcrm)
   obtain ⟨y, hy, rfl⟩ := certificateMessage_ok hm
   obtain ⟨y', hy', hyy⟩ := certificateMessage_ok (toOption_eq_some.mp hcm)
   change messageInput cr.certificate.keyId x.issuer.session cr.certificate.link cr.certificate.direction
     cr.certificate.window cr.certificate.digest = .ok y' at hy'
   have hY : y ∈ runStrings x (deviceCode x) c e :=
-    mem_run_check (Or.inl ⟨r, hr, Or.inr (by rw [hk, hcl, hcd, hcw, hcdg]; exact hy)⟩)
+    mem_run_check (Or.inl ⟨r, hr, Or.inr (Or.inr (by rw [hk, hcl, hcd, hcw, hcdg]; exact hy))⟩)
   have hY' : y' ∈ runStrings x (deviceCode x) c e := mem_run_message hcrm hy'
   have := hcr _ _ hY hY' hyy
   subst this
   have hrl : r.head.link = l := (recordsOf_mem hmem).2.1
   have hcrhl : cr.head.link = rec.link := (recordHead_head hhead).1
   obtain ⟨-, -, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
-    (by rw [hcrl, ← hcrhl]; exact link_short hcrd)
+    (by rw [hcrl, ← hcrhl]; exact link_short hcrR)
+  have hdR : dg = R := certificateDigest_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inr (Or.inl hz)⟩))
+    (fun z hz => mem_run_salted hcrm hz) hdig hcrR (hg.trans hcrd)
   have hh : r.head = cr.head := head_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inl hz⟩))
-    (fun z hz => mem_run_head hcrm hz) hdig (by rw [hcrd, ← hg])
+    (fun z hz => mem_run_head hcrm hz) hdig (by rw [hcrR, hdR])
   refine ⟨rec, hrecm, by rw [hl, hcrl], ?_, by rw [hd, hcrdir], pd, hpd, by rw [hh]; exact hhead⟩
   have : (w : Int) = rec.window := by rw [hw, hcrw]
   exact_mod_cast this.symm

@@ -79,7 +79,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   (`Node`).
 - `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
-  opens for the session's window inside the audit's period (`trusted`).
+  opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
+  log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,

@@ -7,8 +7,8 @@ import Properties.Proofs.CertifierNetwork.Certify
 Each completeness theorem of `Outcomes` (`honestAccepted`, `accepts_of_linkWindowsAccepted`, `undecided_of_somePending`,
 `answer_of_decodedAccepted`) has one instance here whose hypotheses hold: a unit of one egress link (`out`) and one
 ingress link (`in`) over one window of a one-bucket grid, a toy LMS key (`N = 8`, `W = 8`, `H = 1`, two leaves), and
-the two records an honest certifier issues for it, each signed at its own leaf (`honestAccepted_instance`); the same
-unit with no records is undecided (`somePending_instance`).
+the two records an honest certifier issues for it, each under a 64-byte salt and signed at its own leaf
+(`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
 since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
@@ -75,6 +75,11 @@ theorem issuer_I : issuer.key.I.size = 16 := by
   rw [(key_spec toyKey_eq).2.1]
   exact ident_size
 
+/-- A certifier salt of 64 zero bytes, the one the honest certifier draws for each record. -/
+def salt : ByteArray := ⟨Array.replicate 64 0⟩
+
+theorem salt_size : salt.size = saltBytes := by decide +kernel
+
 /-! ## The unit -/
 
 /-- One bucket of one slot of 9-byte frames. -/
@@ -133,31 +138,34 @@ theorem recordHead_grid {l : String} {d : Direction} {w : Int} {gr : Array (Arra
       cases Except.ok.inj e
       exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- The honest certifier's record of link-window `(d, l, 0)` under parameters digest `pd`, signed at leaf `q`: its
-head, the head's digest and a signature that verifies under the key over the certificate message. -/
+/-- The honest certifier's record of link-window `(d, l, 0)` under parameters digest `pd` and `salt`, signed at leaf
+`q`: its head, the head's digest and a signature that verifies under the key over the certificate message of that
+digest under `salt`. -/
 theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64) (hl : l.toUTF8.size < 2 ^ 16)
     {q : Nat} (hq : q < 2) :
     ∃ (h : RecordHead) (dg σ : ByteArray), recordHead l d 0 #[#[none]] none grid pd true = .ok h ∧
-      h.digest = .ok dg ∧ ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 dg = .ok m ∧
+      h.digest = .ok dg ∧
+      ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 (certificateDigest salt dg) = .ok m ∧
         LmsVerifies params m σ := by
-  obtain ⟨h, dg, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
-    session_size rfl (by
+  obtain ⟨h, D, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
+    session_size salt_size rfl (by
       intro row hrow
       have : row = #[none] := by simpa [record] using hrow
       subst this
       exact ⟨#[], by decide, by simp, by decide +kernel⟩)
     hpd hl (by show (0 : Nat) < 2 ^ 64; decide) (by decide) (by decide) (by decide) (by decide) rfl
-  obtain ⟨-, -, -, hdg, -⟩ := prepare_spec hprep
+  obtain ⟨-, -, -, -, ⟨R, hR, hD⟩, -⟩ := prepare_spec hprep
   obtain ⟨sig, -, hv⟩ := verify_cert toyKey_valid hprep (q := q) (by show q < 2 ^ toyKey.params.H; rw [toyKey_params]; exact hq)
   obtain ⟨hkid, m', hm', s, hs, hv'⟩ := verify_facts hv
-  refine ⟨h, dg, sig.encode, hh, hdg, m', ?_, s, hs, hv'⟩
+  refine ⟨h, R, sig.encode, hh, hR, m', ?_, s, hs, hv'⟩
   have hk : params.key.extract 0 16 = issuer.key.I := hkid.symm
-  rw [hk]
+  rw [hk, ← hD]
   exact hm'
 
 /-- The commitment of the two records the honest certifier issues. -/
 def honest (he hi : RecordHead) (dge dgi σe σi : ByteArray) : Commitment :=
-  ⟨#[honestRecord params .egress "out" 0 he dge σe, honestRecord params .ingress "in" 0 hi dgi σi], ByteArray.empty⟩
+  ⟨#[honestRecord params .egress "out" 0 he salt dge σe, honestRecord params .ingress "in" 0 hi salt dgi σi],
+    ByteArray.empty⟩
 
 theorem syncSet_eq : checkSyncSet syncSet = manifestSet syncSet := by
   simp [checkSyncSet, manifestSet]
@@ -177,10 +185,10 @@ theorem honestAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params 
   obtain ⟨hil, hid, hiw, his, hidl, hip⟩ := GridProofs.recordHead_head hhi
   obtain ⟨hib, hia, hif, hibm⟩ := recordHead_grid hhi
   have hrece : recordsOf (honest he hi dge dgi σe σi) .egress "out" 0 =
-      [honestRecord params .egress "out" 0 he dge σe] := by
+      [honestRecord params .egress "out" 0 he salt dge σe] := by
     simp [recordsOf, honest, honestRecord, hel, hed, hew, hil, hid, hiw]
   have hreci : recordsOf (honest he hi dge dgi σe σi) .ingress "in" 0 =
-      [honestRecord params .ingress "in" 0 hi dgi σi] := by
+      [honestRecord params .ingress "in" 0 hi salt dgi σi] := by
     simp [recordsOf, honest, honestRecord, hel, hed, hew, hil, hid, hiw]
   refine ⟨honest he hi dge dgi σe σi, honestAccepted params _ evidence eg ig fits hpd ?_ ?_ ?_⟩
   · intro l hl w hw
@@ -193,14 +201,14 @@ theorem honestAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params 
     obtain ⟨rfl, rfl⟩ := hm
     have hw : w = 0 := by simpa [params] using hw
     subst hw
-    refine ⟨fun _ => sync, declares, he, dge, σe, ?_, hdge, hrece, me, hme, hσe⟩
+    refine ⟨fun _ => sync, declares, he, salt, dge, σe, ?_, hdge, hrece, me, hme, hσe⟩
     rw [programGrid_eq]
     exact hhe
   · intro l hl w hw
     have hl : l = "in" := by simpa [params] using hl
     have hw : w = 0 := by simpa [params] using hw
     subst hl hw
-    exact ⟨hi, dgi, σi, hib, hia, hif, hibm, hip, his, hidl, hdgi, hreci, mi, hmi, hσi⟩
+    exact ⟨hi, salt, dgi, σi, hib, hia, hif, hibm, hip, his, hidl, hdgi, hreci, mi, hmi, hσi⟩
 
 /-- **`accepts_of_linkWindowsAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every link-window of
 the honest commitment is accepted. -/

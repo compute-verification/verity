@@ -113,7 +113,7 @@ def why' (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))
 /-- A registered port `name` of `words` leaves of `bits` bits. -/
 def reg (name : String) (words : Option Nat) (bits : Nat := 16) : Registered.Port :=
   { name, value := "v", root := ByteArray.empty, leaves := 1, words, wordBits := bits, domain := ByteArray.empty,
-    reads := #[some 0] }
+    readsRel := #[some 0] }
 
 /-- The ports a file's JSON marks read in full, or its refusal. -/
 def marked (t : String) : String :=
