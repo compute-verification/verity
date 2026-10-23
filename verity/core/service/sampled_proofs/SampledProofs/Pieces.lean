@@ -40,6 +40,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
   `ledger_head`, infra's published heads; `trusted_session_of`; `credited_session`, a window counted toward its period's
   circuit; and `pinned_session`, a session from a tree the host's pins log records as main's.
+* `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
+  `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
+  auditor's ledger opens for the verifier's window (`trusted_session_of`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -55,6 +58,7 @@ import SampledProofs.Fleet
 import SampledProofs.Hello
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
+import SampledProofs.ChallengerCoins
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 
@@ -435,11 +439,14 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
     | _, _ => throw "a value is not a string name with a boolean"
 
 /-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
-"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots"}` to the stream's run
-of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and hex source,
-`check_public`'s values and declared items, the challenger's name and the log's length at the receipt (strings),
-`check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots, with the
-proved units and instances null for the draw's own. -/
+"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coin_source",
+"coins"}` to the
+stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
+hex source, `check_public`'s values and declared items, the challenger's name and the log's length at the receipt
+(strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
+with the proved units and instances null for the draw's own, where the coins came from (`coin_source`: `verifier` or
+`challenger`, required) and the coins' evidence (`coins_reason`'s, which a draw from the challenger must carry and one
+from the verifier's own coins must not). -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -465,6 +472,10 @@ def run (j : Json) : V Json := do
   let provedUnits ← match getD j "proved_units" with
     | .null => pure none
     | u => some <$> ints u "proved_units"
+  let fromChallenger ← match getD j "coin_source" with
+    | .str "challenger" => pure true
+    | .str "verifier" => pure false
+    | _ => throw "coin_source is \"verifier\" (the verifier's own coins) or \"challenger\" (the auditor's challenger's)"
   let instances ← match getD j "instances" with
     | .null => pure none
     | x => match int? x with
@@ -473,7 +484,8 @@ def run (j : Json) : V Json := do
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
-            served := getD j "served", sessionRoots := getD j "session_roots" }
+            served := getD j "served", sessionRoots := getD j "session_roots", fromChallenger,
+            coins := getD j "coins" }
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
@@ -491,7 +503,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
-   ("challenger_pinned", Challenger.pinnedPiece)]
+   ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
+   ("challenger_draw_coins", Challenger.drawCoinsPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
