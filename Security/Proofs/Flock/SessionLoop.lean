@@ -6,10 +6,38 @@ import Proofs.Flock.Claims.ZK.FrameUnrefused
 
 `Flock.SecurityProofs.SessionLoopZK : Flock.Guarantees.SessionLoopZK` is `Claims.ZKServer.Flock.zk_server_lean_ofLoop`
 at the deployed relation and at the hiding gap of hm96-sha512's pinned key (`CROnly.hm96Hiding_gap`, finite as a real),
-its `FinalRoundEq` from `FinishIs`, the loop's frames refusing every coin fault (`LeanRelease.frameUnrefused_ofLoop`)
-and the tables admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDeployed` is it at the
-deployed tables, which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`).
+at the loop's own tables (`Loop.realOf`, whose tables are `Count.RealTabs`: `Loop.realTabs_realOf`), its `FinalRoundEq`
+from `FinishIs`, the loop's frames refusing every coin fault (`LeanRelease.frameUnrefused_ofLoop`) and the tables
+admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDeployed` is it at the deployed tables,
+which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`).
 -/
+
+namespace Claims.ZKServer.Loop
+
+/-- **The loop's own tables are `RealTabs`**: each is `tabOfLevel0` at a level 0 `Level0.ofDraws` drew. -/
+theorem realTabs_realOf {R : Type}
+    (src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
+    (x : Msg) (w : Flock.Wit) (ρ : R) {s0 : _} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hs : FlockDeploy.setupOf true x = some (s0, spec, sts)) : Count.RealTabs sts (realOf src x w ρ) := by
+  intro k tr hr h
+  unfold realOf at h
+  rw [hs] at h
+  rcases hsrc : src x w ρ k with e | ⟨g, d, hi⟩
+  · rw [hsrc] at h
+    cases h
+  · rw [hsrc] at h
+    rcases hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d with e | l
+    · rw [hl] at h
+      cases h
+    · rw [hl] at h
+      rcases ht : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l with e | t
+      · rw [ht] at h
+        cases h
+      · rw [ht] at h
+        cases h
+        exact ⟨g, d, l, hl, ht⟩
+
+end Claims.ZKServer.Loop
 
 namespace Flock.SecurityProofs
 
@@ -18,10 +46,10 @@ open FlockSoundness.Discharge
 /-- **C-Flock's zero knowledge at the session loop's own frames**, at every statement the loop serves, at tables that
 admit unrefused coins. -/
 theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
-  intro T hA vs t ht hS hV hD hc hsc hT L₀ real wk x w hR hServe hRt hL0 hLk hFin hE hEf Θ Vs θ hk Ev
+  intro T hA vs t ht hS hV hD hc hsc hT L₀ src real wk x w hR hServe hL0 hLk hFin hE hEf Θ Vs θ hk Ev
   have h := Claims.ZKServer.Flock.zk_server_lean_ofLoop _root_.Flock.Readable.relation T vs t ht
     (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hS hV hD hc hsc hT L₀ real wk
-    x w hR hServe hRt hL0 hLk
+    x w hR hServe (fun ρ _ _ _ hs => Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
     (Claims.ZKServer.LeanRelease.finalRoundEq_ofLoop T vs L₀ real _ wk x w hA
       (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
