@@ -4,7 +4,8 @@
 # the verifier run's artifact RUN_ART, the ledger head and pins log the auditor run AUDITOR_ART read through the gate
 # key (auditor.sh's out/ledger.jsonl and out/pins.jsonl), and the prover run PROVER_ART's out/prover.json. PERIOD and
 # PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit; the gate sessions' peer is
-# the record's (PEER overrides it), RTT_MS the round trips replayed. Writes the line of record as auditor.sh does
+# the record's (PEER overrides it), RTT_MS the round trips replayed, PASS_SCALE and PASS_MS the pass models (each pass
+# its own time times F, or every pass MS). Writes the line of record as auditor.sh does
 # ($OUT/auditor_line.json, $OUT/credit.md) and the replay ($OUT/gate_whatif.json, $OUT/whatif.md), and exits 1 when a
 # session replayed at its own round trip isn't its record.
 #
@@ -45,7 +46,8 @@ uv run python "$HERE/auditor_line.py" "$S/run/$SUB/out" --host-bytes "${HOST_BYT
   --pins "$S/aud/out/pins.jsonl" "${MAIN[@]}" --table "$OUT/credit.md" > "$OUT/auditor_line.json" \
   2> "$OUT/auditor_line.err" || { cat "$OUT/fetch.log" "$OUT/auditor_line.err"; exit 3; }
 uv run python "$HERE/gate_whatif.py" "$S/run/$SUB/out" --line "$OUT/auditor_line.json" \
-  --prover "$S/prover/out/prover.json" ${RTT_MS:+--rtt-ms $RTT_MS} --table "$OUT/whatif.md" \
+  --prover "$S/prover/out/prover.json" ${RTT_MS:+--rtt-ms $RTT_MS} ${PASS_SCALE:+--pass-scale $PASS_SCALE} \
+  ${PASS_MS:+--pass-ms $PASS_MS} --table "$OUT/whatif.md" \
   > "$OUT/gate_whatif.json" 2> "$OUT/gate_whatif.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md" "$OUT/gate_whatif.err" "$OUT/whatif.md"
