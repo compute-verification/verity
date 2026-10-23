@@ -132,6 +132,7 @@ import Proofs.Flock.Claims.ZK.FrameAdmits
 import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRanked
+import Proofs.Flock.Claims.ZK.FrameRankFault
 import Proofs.Flock.Claims.ZK.FinishSrc
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishLive
@@ -623,6 +624,12 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the rounds' answers up to the label, each the round's count (`Ranked.run_head`), so where the requests up to an inner
   proof's round run on, the rank check held at the rounds' coins after the earlier rep's claim points
   (**`Ranked.ownReqs_rank`**).
+* `FrameRankFault`: `FrameUnrefused`' rank fault. At a `Live` statement the loop serves, on a live history of `refK x`
+  openings whose last coins the frame takes, each rep's opening at `betaSlot` finds the frame at its inner proof's round
+  2, where the rank check held on the rounds' coins after the earlier rep's claim points (`Ranked.repState_rank`).
+  Those coins are the opened ones (`Loop.wordsAt_slot`), at the algebraic phase's counts (`Ranked.alg_cnt`,
+  `Loop.loopNr_rep`), and the frame's claim points on them are the session's (`Ranked.frame_points`), so no rep's rank
+  check refuses (**`LeanRelease.rank_unrefused`**).
 * `FinishStop`: the firewall's stop at a worker's values. At constraints whose forms are rep `r`'s first seven rows on
   the masked values, none fails on the drawn pads exactly where those rows vanish at the clear values at zero pads
   (**`Composed.noFail_iff_rows`**, by `rows_padFree`), so the stop bit reads no pad; and where they vanish for both
