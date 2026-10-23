@@ -822,6 +822,18 @@ def test_a_calls_receipt_table_in_its_rounds_segments_is_tied_and_an_unknown_seg
     assert tied
 
 
+def test_a_templates_receipt_width_is_its_bits_as_the_statements_output_row_holds_them():
+    """`shape_of` reads K's receipt words from its template's return as `h1window.statement_rows` counts a row: the bits
+    of its leaves, so h1tile's ``Array(2·sets, U32)`` of 1-bit leaves and a stand-in's one ``Value(16)`` word agree with
+    the bits the statement's output row o0 holds; another form, or bits of no whole 16-bit words, is 0."""
+    bit, rec = ["Value", 1], lambda t: ["Record", [[Cr.RECEIPT_FIELD, t], ["ok", ["Value", 1]]]]
+    for t, words in ((["Array", 6, ["Array", 32, bit]], 12), (["Value", 16], 1), (["Array", 3, ["Value", 16]], 3),
+                     (["Tuple", [["Value", 16], ["Array", 4, ["Value", 8]]]], 3), (["Array", 16, bit], 1),
+                     (["Array", 8, bit], 0), (["Value", 17], 0), (["Array", 2, ["Value", "16"]], 0), (bit, 0)):
+        assert Cr._receipt_words(rec(t)) == words, t
+    assert Cr._receipt_words(["Value", 16]) == Cr._receipt_words(["Record", [["ok", ["Value", 16]]]]) == 0
+
+
 def test_cover_is_the_fewest_aligned_subtrees():
     for lo, hi in ((0, 1), (0, 8), (3, 11), (5, 6), (6, 21), (16, 48)):
         segs = Cr.cover(lo, hi)
