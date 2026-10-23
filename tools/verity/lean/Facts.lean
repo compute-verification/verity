@@ -465,9 +465,9 @@ partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf :
 /-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
 reducible unfolding (so a `Premises` abbrev names the assumption it stands for) and by the assumptions it mentions, and
 the assumptions the fields of a structure a binder ranges over mention (`fieldPremises`); also those of each conjunct,
-disjunct, `if` branch and `∃` body of a conclusion, and under the statement definitions (a `Guarantees` namespace's) a conclusion applies. Under
-any other definition under `meaning` a conclusion applies (outside an assumptions module), only the assumptions its
-hypotheses mention (`only`): its other hypotheses are what the conclusion means, not premises. -/
+disjunct, `if` branch and `∃` body of a conclusion, and under the statement definitions (a `Guarantees` namespace's) a
+conclusion applies. Under any other definition under `meaning` a conclusion applies (outside an assumptions module), only
+the assumptions its hypotheses mention (`only`): its other hypotheses are what the conclusion means, not premises. -/
 partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (only : Bool)
     (e : Expr) : MetaM (Array Json) := do
   let mut out := #[]
