@@ -64,9 +64,9 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import coll_concat, runs
 from verity.ml.circuits.types import Array, Tuple
 
-from verity.core.protocols.pouw.circuit import h1device as D
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import h1device as D
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
