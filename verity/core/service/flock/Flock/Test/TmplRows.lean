@@ -3,10 +3,12 @@
 (`SELF`, directly or through a block of three) instead of the root's own rows, passes and unrolls to the same text, with
 input padding written by copies of an empty Definition. The forms it refuses, each one `Net.ofRows` refuses on the
 unrolled rows too: a copy in the input rows of a Definition writing a row that is not a self row, and input port bits
-left without a self row (copies too few, or not side by side).
+left without a self row (copies too few, or not side by side). And `Tmpl.apart` against `Tmpl.rows`: the units above
+pass, and the collisions `Tmpl.rows` refuses fail it (a root row meeting a copy's, a row at the constant, two runs of
+copies meeting).
 -/
 import Flock.Test.Tmpl
-import Flock.TmplRows
+import Flock.TmplApart
 
 namespace Flock.Test.TmplRows
 
@@ -55,5 +57,23 @@ def inputsT (ls : Array String) : Option Bool := (_root_.Flock.Tmpl.parse ls).to
 -- the root's row 1 reading column 2, not a self row
 #guard inputsT (header :: and2 ++ pair ++ ["DEF 400 0 6 1", "0 1 0 1 0", "1 1 2 1 1", "2 1 2 1 2", "256 1 130 1 399",
   "257 1 133 1 399", "300 3 0 1 0 1 400", CALL]).toArray == some false
+
+def apart (ls : Array String) : Option Bool := (_root_.Flock.Tmpl.parse ls).toOption.map _root_.Flock.Tmpl.Tmpl.apart
+
+#guard apart tmplLines == some true
+#guard apart (lines SELF [] ["CALL 0 3 0 1 0"]) == some true
+#guard apart (lines SELF ["DEF 3 0 0 1", "CALL 0 3 0 1 0"] ["CALL 3 1 0 3 0"]) == some true
+-- the root's row at 130 meets the first pair's sum row
+#guard apart (tmplLines (extra := ["130 1 0 1 1"])) == some false
+#guard refuses (tmplLines (extra := ["130 1 0 1 1"]))
+-- a root row at 399, the constant's column
+#guard apart (tmplLines (extra := ["399 1 0 1 0"])) == some false
+#guard refuses (tmplLines (extra := ["399 1 0 1 0"]))
+-- two rows at column 0
+#guard apart (tmplLines (extra := ["0 1 1 1 1"])) == some false
+#guard refuses (tmplLines (extra := ["0 1 1 1 1"]))
+-- runs of `SELF` at 0 to 2 and 2 to 3, meeting at 2
+#guard apart (lines SELF [] ["CALL 0 3 0 1 0", "CALL 0 2 2 1 0"]) == some false
+#guard refuses (lines SELF [] ["CALL 0 3 0 1 0", "CALL 0 2 2 1 0"])
 
 end Flock.Test.TmplRows
