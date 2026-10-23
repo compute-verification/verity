@@ -63,6 +63,72 @@ class Lib:
         h.kh_noise_blocks.argtypes = [u32]
         h.kh_ws_bytes.restype = ctypes.c_ulonglong
         h.kh_ws_bytes.argtypes = [u32, u32, u32]
+        self.multi = hasattr(h, "kh_units_multi")
+        if self.multi:
+            h.kh_units_multi.argtypes = [vp, u32, u32, u32, vp, vp]
+            h.kh_ucall_bytes.restype = u32
+            h.kh_digits.argtypes = [u32]
+
+
+UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"),
+                  ("md", "<u4")])
+
+
+class Multi:
+    """kh_units_multi over (call, B, out) entries on one build, the three-digit calls first (as dither_so's
+    $DITHER_SO_FUSED tables): every unit of every entry in one launch, each entry's seeds and live row blocks its call's."""
+
+    def __init__(self, lib: Lib, entries: list):
+        if int(lib.h.kh_ucall_bytes()) != UCALL.itemsize:
+            raise RuntimeError(f"kh_units_multi's UCall is {int(lib.h.kh_ucall_bytes())} bytes, not {UCALL.itemsize}")
+        self.lib = lib
+        md = [int(lib.h.kh_digits(c.a.shape[1])) for c, _, _ in entries]
+        order = sorted(range(len(entries)), key=lambda i: -md[i])
+        t = np.zeros(len(entries) + 1, dtype=UCALL)
+        u0 = 0
+        for j, i in enumerate(order):
+            c, b, out = entries[i]
+            t[j] = (c.a.data_ptr(), b.data_ptr(), c.seeds.data_ptr(), out.data_ptr(), b.shape[0], c.a.shape[1], u0, md[i])
+            u0 += c.units
+        t[len(entries)]["u0"] = u0
+        self.n, self.units, self.rows = len(entries), u0, entries[0][0].a.shape[0]
+        self.live = entries[0][0].live
+        self.tab = torch.from_numpy(t.view(np.uint8).copy()).to("cuda")
+
+    def run(self, units: int | None = None) -> None:
+        if rc := self.lib.h.kh_units_multi(self.tab.data_ptr(), self.n, self.units if units is None else units, self.rows,
+                                           self.live.data_ptr(), torch.cuda.current_stream().cuda_stream):
+            raise RuntimeError(f"kh_units_multi rc {rc}")
+
+
+def multi_gate(lib: Lib, cs: list, base_outs: list) -> dict:
+    """kh_units_multi over one layer's calls against each call's own receipts (its two launches, every word), under
+    0xA5; the no-write control (zero units) refused; one bit of unit 0's seed of the first call flipped moves that
+    call's unit 0 alone."""
+    outs = [torch.empty_like(c.out) for c in cs]
+    mu = Multi(lib, [(c, c.b, o) for c, o in zip(cs, outs)])
+    for o in outs:
+        o.fill_(POISON)
+    mu.run()
+    torch.cuda.synchronize()
+    bad = [int((o != b).sum()) for o, b in zip(outs, base_outs)]
+    poison = sum(int((o == POISON).sum()) for o in outs)
+    got = [o.clone() for o in outs]
+    for o in outs:
+        o.fill_(POISON)
+    mu.run(units=0)
+    torch.cuda.synchronize()
+    k_bad = sum(int((o != b).sum()) for o, b in zip(outs, base_outs))
+    s = cs[0].seeds.view(torch.int32)
+    s[0, 0] ^= 1
+    mu.run()
+    torch.cuda.synchronize()
+    s[0, 0] ^= 1
+    moved = [(i, u) for i, (o, g) in enumerate(zip(outs, got)) for u in (o != g).any(dim=1).nonzero().flatten().tolist()]
+    r = {"calls": len(cs), "units": mu.units, "bad_words": bad, "poison_left": poison, "control_bad_words": k_bad,
+         "control_refused": k_bad > 0, "fault_moved": moved[:8], "fault_conforming": moved == [(0, 0)]}
+    r["ok"] = sum(bad) == 0 and poison == 0 and k_bad > 0 and r["fault_conforming"]
+    return r
 
 
 class Call:
@@ -172,6 +238,10 @@ def main() -> int:
     ap.add_argument("--layers", type=int, default=32)
     ap.add_argument("--linears", default=",".join(ORDER))
     ap.add_argument("--profile", action="store_true")
+    ap.add_argument("--multi", action="store_true",
+                    help="also gate kh_units_multi (where a build has it) over one layer's calls against their own "
+                         "receipts, and time the step in one launch (step_multi) against the base's noise and units "
+                         "call by call (step_noise_units)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -190,6 +260,7 @@ def main() -> int:
     linears = [x for x in ORDER if x in args.linears.split(",")]
     calls: dict = {}
     bcopy: dict = {}
+    base_outs: dict = {}
     failed: set = set()
     for name in linears:
         n, k = LINEARS[name]
@@ -218,8 +289,22 @@ def main() -> int:
             if not g["ok"]:
                 failed.add(nm)
         calls[name] = cs
+        base_outs[name] = base_out
         for c in cs.values():
             c.full()
+    multi_ok: set = set()
+    if args.multi:
+        doc["multi_gates"] = {}
+        for nm in names:
+            if nm in failed or not libs[nm].multi:
+                continue
+            g = multi_gate(libs[nm], [calls[x][nm] for x in linears], [base_outs[x] for x in linears])
+            doc["multi_gates"][nm] = g
+            print(json.dumps({"multi": nm, "gate": g}), flush=True)
+            if g["ok"]:
+                multi_ok.add(nm)
+            else:
+                failed.add(f"{nm}:multi")
     doc["gate_failed"] = sorted(failed)
     doc_path.write_text(json.dumps(doc, indent=1))
     if names[0] in failed:
@@ -257,6 +342,24 @@ def main() -> int:
                         c = calls[name][nm]
                         c.run_units(b=c.b if layer % 2 == 0 else bcopy[name])
             arms[(nm, "step")] = step
+        keep = []
+        for nm in timed:
+            if nm not in multi_ok:
+                continue
+            outs = [torch.empty_like(calls[name][nm].out) for _ in range(args.layers) for name in ORDER]
+            mu = Multi(libs[nm], [(calls[name][nm], calls[name][nm].b if layer % 2 == 0 else bcopy[name],
+                                   outs[ORDER.index(name) + len(ORDER) * layer])
+                                  for layer in range(args.layers) for name in ORDER])
+            keep.append((mu, outs))
+            arms[(nm, "step_multi")] = (lambda mu: lambda i: mu.run())(mu)
+        if args.multi:
+            def step_nu(i, nm=names[0]):
+                for layer in range(args.layers):
+                    for name in ORDER:
+                        c = calls[name][nm]
+                        c.noise()
+                        c.run_units(b=c.b if layer % 2 == 0 else bcopy[name])
+            arms[(names[0], "step_noise_units")] = step_nu
     graphs, per_graph = {}, {}
     for key, fn in arms.items():
         t = one_call_ms(fn)
@@ -286,8 +389,9 @@ def main() -> int:
         if len(lay) == len(ORDER):
             r["layer_units_us"] = round(sum(lay), 3)
             r["step_units_ms_from_calls"] = round(sum(lay) * args.layers / 1e3, 3)
-        if "step" in r:
-            r["step_ms"] = round(r["step"]["median_us"] / 1e3, 3)
+        for arm in ("step", "step_multi", "step_noise_units"):
+            if arm in r:
+                r[f"{arm}_ms"] = round(r[arm]["median_us"] / 1e3, 3)
     b0 = res[names[0]]
     for nm in timed[1:]:
         r = res[nm]
