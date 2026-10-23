@@ -9,6 +9,7 @@ from fractions import Fraction
 import pytest
 
 from verity.core.protocols.certifier import served as SV
+from verity.core.protocols.certifier.active import Bucketer
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
@@ -114,15 +115,20 @@ def test_a_late_block_an_extra_frame_or_a_dropped_frame_is_refused(tmp_path, kin
 
 def test_a_request_that_straddles_the_windows_end_is_refused_and_a_held_one_accepted(tmp_path):
     """A request in window 0's bucket 6 is answered in buckets 7 to 9 under δ = 1, ρ = 1: window 0 doesn't end idle
-    and window 1's counts carry frames its ingress counts don't derive, so both are refused. The proxy's admission hold
-    (`active.Bucketer`) admits it at window 1's start instead, and every window is accepted."""
-    straddle = ([1, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0])
-    held = ([1, 0, 0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0])
-    (tmp_path / "s").mkdir()
-    (tmp_path / "h").mkdir()
-    for arrivals, want in ((straddle, [False, False, True]), (held, [True, True, True])):
-        run = Run(tmp_path / ("s" if arrivals is straddle else "h"))
-        egress, ingress = egress_records(frames_of(arrivals)), ingress_records(arrivals)
+    and window 1's counts carry frames its ingress counts don't derive, so both are refused. Behind the proxy's
+    admission hold (`active.Bucketer`, Δ = δ + G + ⌈F/R⌉ = 5) the same arrivals are admitted at window 1's start
+    instead, and every window is accepted."""
+    arrivals = ([1, 0, 0, 0, 0, 0, 1, 0], [0] * 8, [0] * 8)
+    bucketer = Bucketer(Certifier(LINK, P), hold=5, request_frames=FIN)
+    for t, n in enumerate(c for counts in arrivals for c in counts):
+        for _ in range(n):
+            bucketer.arrive(b"q", t)
+    held = [r for r in (bucketer.tick()[1] for _ in range(WINDOWS * P.buckets)) if r is not None]
+    assert [occupancy(r.grid) for r in held[:2]] == [(1,) + (0,) * 7] * 2
+    for ingress, want in ((ingress_records(arrivals), [False, False, True]), (held, [True] * WINDOWS)):
+        (tmp_path / str(all(want))).mkdir()
+        run = Run(tmp_path / str(all(want)))
+        egress = egress_records(frames_of([occupancy(r.grid) for r in ingress]))
         assert [run.round(w, egress[w], ingress[w]).accepted for w in range(WINDOWS)] == want
         assert run.lw.network_verdict(run.stream)["accepted"] is all(want)
 

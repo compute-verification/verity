@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import signers
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active, online
+from verity.core.protocols.certifier import active, online, served
 from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
 from verity.core.protocols.certifier.active import (
     DATA,
@@ -289,6 +289,40 @@ def test_the_bucketer_enqueues_its_own_frame_first_in_each_window():
         out.append((g.tick()[0], dict(g.own)))
     assert [row for row, _ in out] == [(None,), (None,), (b"x",), (b"y",), (None,), (None,), (b"f",), (b"e",), (None,)]
     assert [own for _, own in out] == [{}, {}, {}, {}, {}, {}, {0: 2}, {}, {}]
+
+
+def test_the_bucketers_admission_hold_admits_whole_requests_released_before_the_windows_last_buckets():
+    """With a hold of Δ = 1 on requests of two frames: c and d complete a request at bucket 2, whose last frame would
+    be released at bucket 3, inside the hold, so they wait for window 1; e waits for f, and they for window 2. Over
+    random arrivals every window's released frames are whole requests, each anchored by bucket T − Δ − 1, in arrival
+    order. A hold takes no own frame."""
+    P = GridParams(buckets=4, allocation=1, frame_bytes=1)
+    b = Bucketer(Certifier("requests", P), hold=1, request_frames=2)
+    for frame, bucket in ((b"a", 0), (b"b", 0), (b"c", 1), (b"d", 2), (b"e", 5), (b"f", 6)):
+        b.arrive(frame, bucket)
+    rows = [b.tick()[0] for _ in range(12)]
+    assert rows == [(b"a",), (b"b",), (None,), (None,), (b"c",), (b"d",), (None,), (None,), (b"e",), (b"f",), (None,),
+                    (None,)]
+    with pytest.raises(ValueError, match="admission hold"):
+        Bucketer(Certifier("requests", P), first=lambda w: b"s", hold=1)
+    with pytest.raises(ValueError, match="admission hold"):
+        Bucketer(Certifier("requests", P), hold=4)
+
+    rng = random.Random(54)
+    for _ in range(200):
+        P = GridParams(buckets=rng.randint(3, 8), allocation=rng.randint(1, 3), frame_bytes=1)
+        n, hold = rng.choice((1, 2, 4)), rng.randrange(P.buckets)
+        if (n - 1) // P.allocation >= P.buckets - hold:
+            continue
+        b = Bucketer(Certifier("requests", P), hold=hold, request_frames=n)
+        sent = [bytes([k]) for k in range(n * rng.randint(0, 6))]
+        for frame, bucket in zip(sent, sorted(rng.randrange(3 * P.buckets) for _ in sent)):
+            b.arrive(frame, bucket)
+        records = [r for r in (b.tick()[1] for _ in range(12 * P.buckets)) if r is not None]
+        assert [f for r in records for row in r.grid for f in row if f is not None] == sent
+        for r in records:
+            counts = [row_count(row) for row in r.grid]
+            assert sum(counts) % n == 0 and all(a < P.buckets - hold for a in served.anchors(counts, n))
 
 
 def test_a_shaper_and_a_bucketer_back_from_maintenance_publish_the_full_runs_later_windows():

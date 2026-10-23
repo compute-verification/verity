@@ -507,12 +507,24 @@ class Bucketer:
     With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
     that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
     of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
-    begins at window `start`'s first bucket, its certifier at that window."""
+    begins at window `start`'s first bucket, its certifier at that window.
+
+    With `hold` (Δ, off by default), the admission hold of a served link (`served`): arrived frames are enqueued only
+    as whole requests of `request_frames` frames, and only while the request's last frame would be released before the
+    window's last Δ buckets; the rest wait, in order, for the next window. So every request completes, and is anchored,
+    by bucket T − Δ − 1 of its window, and with Δ at least δ + G + the buckets the egress queue takes to drain, its
+    response is released in that window. It takes no own frame: a served link's ingress frames are all requests'."""
 
     def __init__(self, certifier: Certifier, first: Callable[[int], bytes | None] | None = None,
-                 start: int = 0) -> None:
+                 start: int = 0, *, hold: int | None = None, request_frames: int = 1) -> None:
+        T = certifier.params.buckets
+        if hold is not None and not (type(hold) is int and 0 <= hold < T and type(request_frames) is int and
+                                     request_frames >= 1 and first is None):
+            raise ValueError(f"an admission hold is 0 … {T - 1} buckets, of requests of one or more frames, with no "
+                             "own frame")
         self.certifier = certifier
         self.first = first
+        self.hold, self.request_frames = hold, request_frames
         if start:
             certifier.window = start
         self.waiting: deque[tuple[int, bytes]] = deque()
@@ -528,8 +540,15 @@ class Bucketer:
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
             self._own.append((c.queued, self.t // T))
             c.enqueue(frame)
-        while self.waiting and self.waiting[0][0] <= self.t:
-            c.enqueue(self.waiting.popleft()[1])
+        if self.hold is None:
+            while self.waiting and self.waiting[0][0] <= self.t:
+                c.enqueue(self.waiting.popleft()[1])
+        else:
+            n, last = self.request_frames, T - self.hold - self.t % T
+            while len(self.waiting) >= n and self.waiting[n - 1][0] <= self.t and \
+                    (c.queued + n - 1) // c.params.allocation < last:
+                for _ in range(n):
+                    c.enqueue(self.waiting.popleft()[1])
         row = c.tick()
         if self._own:
             n = row_count(row)
@@ -700,6 +719,8 @@ class Proxy:
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
       egress frame the Program's at `position`;
+    - with `hold`, a served link's admission hold of `hold` buckets on requests of `request_frames` frames
+      (`Bucketer`), so that each window ends idle, which N2's served counts check (`served`); not with `salt`;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -713,7 +734,8 @@ class Proxy:
                  registered: Callable[[Registration], int | None] = served_window, start: int = 0,
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
-                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+                 signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
+                 hold: int | None = None, request_frames: int = 1) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
@@ -758,7 +780,8 @@ class Proxy:
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start)
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+                                 hold=hold, request_frames=request_frames)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}

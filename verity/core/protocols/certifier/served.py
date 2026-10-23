@@ -49,6 +49,10 @@ and CP(d) = ⌈(d + 1)·p/q⌉ the frames of one response handed d buckets after
 R(t) = min(R(t − 1) + R, A(t)), and the check is that the egress counts' prefix sums are R(t), and that R(T − 1) is
 F·N(T − 1). In the circuit S = δ + G is clamped to T, which changes nothing in the window; the vectors N and
 next-anchor are shifted by T − S with a barrel shifter, and CP is a division by q in each bucket.
+
+**Cost** (`size`): 678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1, of which the release check is 794 a
+bucket (476,400), the shift 147,273, the arrivals 48 a bucket and the next anchors 20 a step; 688,210 at F_in = 2,
+R = 16, R_in = 4.
 """
 from __future__ import annotations
 
