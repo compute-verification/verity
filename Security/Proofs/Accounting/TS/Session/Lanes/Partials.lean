@@ -5,14 +5,15 @@ import PouwWindow.OwnPorts
 # Lane `l`'s partials row is the combine's `p<l>`
 
 Lane `l`'s statement reads its partials row at its port `partials`, and the combine reads it at `p<l>`: two ports of two
-circuits, of one registered value. Where each session's `--registered` file holds `PouwWindow.Lanes.ownOf` (one tree
-per value, `roots v`, each port read at its layout row) and flock-verify's known-read check holds each port the file
+circuits, of one registered value. Where each session's `--registered` file holds `PouwWindow.Lanes.ownOf` (one table
+per value at the unit's placement, `place v`, registered at `roots (place v).1`, each port read at its layout row from
+the table's base row) and flock-verify's known-read check holds each port the file
 marks `read_in_full` (`PouwWindow.Lanes.readFull`) to one row of its registered words whose every bit the unit reads
 (`Flock.KnownRead.fullRows`), the two statements decode one row:
 
 * `regPort`, `mem_ownOf`, `partials_lane`, `partials_comb`, `full_of`, `mem_fullRows`: the two ports are `ownOf`'s, both
-  of `roots "partials"` at row `l`, and both read in full (`full_of`: a read of an A, B or partials row), so the check
-  holds each to one row of `regWords (roots "partials")` words;
+  of the partials' table at the base row plus `l`, and both read in full (`full_of`: a read of an A, B or partials
+  row), so the check holds each to one row of that table's `regWords` words;
 * `ReadsOwnRow`: every unit's registrant reads a port that `own` reads at one row (`reads = #[some r]`) at that row,
   which acceptance gives (`RowsSession.readsOwnRow_of`);
 * `portBit_none`: no bit at or past a port's row width is read;
@@ -29,15 +30,19 @@ namespace Accounting.TS.Lanes
 open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (portRowW)
 
-/-- `ownOf`'s port `nm`: row `row` of the value `v`, registered at `roots v`. -/
-def regPort (roots : String → _root_.Flock.Registered.Port) (nm v : String) (row : ℕ) : _root_.Flock.Registered.Port :=
-  { roots v with name := nm, value := v, readsRel := #[some row], readsFrom := 0 }
+/-- `ownOf`'s port `nm`: the leaf's row `row` of the value `v`, row `(place v).2 + row` of the table `(place v).1`,
+registered at `roots (place v).1`. -/
+def regPort (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) (nm v : String) (row : ℕ) :
+    _root_.Flock.Registered.Port :=
+  { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0 }
 
-theorem regWords_regPort (roots : String → _root_.Flock.Registered.Port) (nm v : String) (row : ℕ) :
-    _root_.Flock.KnownRead.regWords (regPort roots nm v row) = _root_.Flock.KnownRead.regWords (roots v) := rfl
+theorem regWords_regPort (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) (nm v : String)
+    (row : ℕ) : _root_.Flock.KnownRead.regWords (regPort roots place nm v row) =
+      _root_.Flock.KnownRead.regWords (roots (place v).1) := rfl
 
-theorem mem_ownOf (roots : String → _root_.Flock.Registered.Port) {T : Tile} {k : Option ℕ} {nm v : String} {row : ℕ}
-    (h : (nm, v, row) ∈ regReads T k) : regPort roots nm v row ∈ ownOf roots T k :=
+theorem mem_ownOf (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) {T : Tile}
+    {k : Option ℕ} {nm v : String} {row : ℕ} (h : (nm, v, row) ∈ regReads T k) :
+    regPort roots place nm v row ∈ ownOf roots place T k :=
   List.mem_map.2 ⟨_, h, rfl⟩
 
 /-- Lane `l` reads row `l` of `partials` at its port `partials`. -/
@@ -99,16 +104,17 @@ def ReadsOwnRow (s : RowsSession) : Prop :=
     (s.ownPort q).reads = #[some r] → (s.rdU u).readAt (.inl (u, q)) = r
 
 /-- **Two statements' reads of one registered row in full read its bits alike**: at sessions `sL` and `sC` (statements
-`kL` and `kC`, the same or not) whose registered files hold `ownOf roots T` and pass the complete check, and the
-known-read check at each port `readFull` names, whose registrants' rows agree at one tree and position, and whose
-units read their one-row ports at their rows, `portBit` at two ports that read row `row` of one value `v`, each read
-in full, is one function: below their common width the opened row's bits (`portBit_opened`), one row's bytes so one
+`kL` and `kC`, the same or not) whose registered files hold `ownOf roots place T` (one placement for both) and pass
+the complete check, and the known-read check at each port `readFull` names, whose registrants' rows agree at one tree
+and position, and whose units read their one-row ports at their rows, `portBit` at two ports that read the leaf's row
+`row` of one value `v` (row `(place v).2 + row` of its table), each read in full, is one function: below their common width the opened row's bits (`portBit_opened`), one row's bytes so one
 row's bits (`FlockVBridge.Family.bits_of_encPortH`); at and past it none. -/
-theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {sL sC : RowsSession} {kL kC : Option ℕ}
+theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {place : String → String × ℕ}
+    {sL sC : RowsSession} {kL kC : Option ℕ}
     {nmL nmC v : String} {row : ℕ} (hmL : (nmL, v, row) ∈ regReads T kL) (hmC : (nmC, v, row) ∈ regReads T kC)
     (hFL : nmL ∈ readFull T kL) (hFC : nmC ∈ readFull T kC)
-    (hOL : ∀ p ∈ ownOf roots T kL, sL.own.toList.find? (·.name == p.name) = some p)
-    (hOC : ∀ p ∈ ownOf roots T kC, sC.own.toList.find? (·.name == p.name) = some p)
+    (hOL : ∀ p ∈ ownOf roots place T kL, sL.own.toList.find? (·.name == p.name) = some p)
+    (hOC : ∀ p ∈ ownOf roots place T kC, sC.own.toList.find? (·.name == p.name) = some p)
     (hcL : _root_.Flock.Registered.checkComplete sL.c sL.own = .ok ())
     (hcC : _root_.Flock.Registered.checkComplete sC.c sC.own = .ok ()) {knL knC : Known}
     (hkL : _root_.Flock.KnownRead.check sL.c (knL ++ _root_.Flock.KnownRead.fullRows sL.own (readFull T kL)) = .ok ())
@@ -120,14 +126,16 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
       SameTree ((sL.rdU uL).port p) ((sC.rdU uC).port p') → (sL.rdU uL).readAt p = (sC.rdU uC).readAt p' →
       (rsOf sL).enc p ((sL.rdU uL).wv p) = (rsOf sC).enc p' ((sC.rdU uC).wv p'))
     (b : ℕ) : portBit sL (openedReg sL) nmL b = portBit sC (openedReg sC) nmC b := by
-  have hfL : sL.own.toList.find? (·.name == nmL) = some (regPort roots nmL v row) := hOL _ (mem_ownOf roots hmL)
-  have hfC : sC.own.toList.find? (·.name == nmC) = some (regPort roots nmC v row) := hOC _ (mem_ownOf roots hmC)
-  have hrL : (nmL, #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots v)) 0,
+  have hfL : sL.own.toList.find? (·.name == nmL) = some (regPort roots place nmL v row) :=
+    hOL _ (mem_ownOf roots place hmL)
+  have hfC : sC.own.toList.find? (·.name == nmC) = some (regPort roots place nmC v row) :=
+    hOC _ (mem_ownOf roots place hmC)
+  have hrL : (nmL, #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots (place v).1)) 0,
       ByteArray.empty)]) ∈ knL ++ _root_.Flock.KnownRead.fullRows sL.own (readFull T kL) := by
     have h := mem_fullRows hFL hfL
     rw [regWords_regPort] at h
     exact Array.mem_append.2 (Or.inr h)
-  have hrC : (nmC, #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots v)) 0,
+  have hrC : (nmC, #[(Array.replicate (_root_.Flock.KnownRead.regWords (roots (place v).1)) 0,
       ByteArray.empty)]) ∈ knC ++ _root_.Flock.KnownRead.fullRows sC.own (readFull T kC) := by
     have h := mem_fullRows hFC hfC
     rw [regWords_regPort] at h
@@ -138,24 +146,24 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
   obtain ⟨qC, hqC⟩ := hexC _ _ hrC
   obtain ⟨hPL, hwL⟩ := knownPort_of_check (s := sL) hkL hrL hqL
   obtain ⟨hPC, hwC⟩ := knownPort_of_check (s := sC) hkC hrC hqC
-  have hWL : portRowW sL.c qL = 16 * _root_.Flock.KnownRead.regWords (roots v) := by
+  have hWL : portRowW sL.c qL = 16 * _root_.Flock.KnownRead.regWords (roots (place v).1) := by
     rw [← hwL 0 (by simp)]
-    show 16 * (Array.replicate (_root_.Flock.KnownRead.regWords (roots v)) 0).size = _
+    show 16 * (Array.replicate (_root_.Flock.KnownRead.regWords (roots (place v).1)) 0).size = _
     simp
-  have hWC : portRowW sC.c qC = 16 * _root_.Flock.KnownRead.regWords (roots v) := by
+  have hWC : portRowW sC.c qC = 16 * _root_.Flock.KnownRead.regWords (roots (place v).1) := by
     rw [← hwC 0 (by simp)]
-    show 16 * (Array.replicate (_root_.Flock.KnownRead.regWords (roots v)) 0).size = _
+    show 16 * (Array.replicate (_root_.Flock.KnownRead.regWords (roots (place v).1)) 0).size = _
     simp
-  by_cases hb : b < 16 * _root_.Flock.KnownRead.regWords (roots v)
+  by_cases hb : b < 16 * _root_.Flock.KnownRead.regWords (roots (place v).1)
   · have hnL : ∃ pt ∈ sL.own, pt.name = sL.c.ports[qL].name :=
       _root_.Flock.Registered.checkComplete_ok hcL _ (Array.getElem_mem qL.isLt)
     have hnC : ∃ pt ∈ sC.own, pt.name = sC.c.ports[qC].name :=
       _root_.Flock.Registered.checkComplete_ok hcC _ (Array.getElem_mem qC.isLt)
-    have hoL : sL.ownPort qL = regPort roots nmL v row := by
+    have hoL : sL.ownPort qL = regPort roots place nmL v row := by
       show (sL.own.toList.find? (·.name == sL.c.ports[qL].name)).getD default = _
       rw [hqL, hfL]
       rfl
-    have hoC : sC.ownPort qC = regPort roots nmC v row := by
+    have hoC : sC.ownPort qC = regPort roots place nmC v row := by
       show (sC.own.toList.find? (·.name == sC.c.ports[qC].name)).getD default = _
       rw [hqC, hfC]
       rfl
@@ -163,10 +171,12 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
     have hpC := (hSC.2 qC hnC).1
     have hiL : (sL.rdU uL).isRead (.inl (uL, qL)) := (hSL.1 _).2 ⟨qL, rfl, hnL⟩
     have hiC : (sC.rdU uC).isRead (.inl (uC, qC)) := (hSC.1 _).2 ⟨qC, rfl, hnC⟩
-    have haL : (sL.rdU uL).readAt (.inl (uL, qL)) = row :=
-      hRL uL qL hnL row ((congrArg _root_.Flock.Registered.Port.reads hoL).trans (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
-    have haC : (sC.rdU uC).readAt (.inl (uC, qC)) = row :=
-      hRC uC qC hnC row ((congrArg _root_.Flock.Registered.Port.reads hoC).trans (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
+    have haL : (sL.rdU uL).readAt (.inl (uL, qL)) = (place v).2 + row :=
+      hRL uL qL hnL _ ((congrArg _root_.Flock.Registered.Port.reads hoL).trans
+        (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
+    have haC : (sC.rdU uC).readAt (.inl (uC, qC)) = (place v).2 + row :=
+      hRC uC qC hnC _ ((congrArg _root_.Flock.Registered.Port.reads hoC).trans
+        (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
     have htree : SameTree ((sL.rdU uL).port (.inl (uL, qL))) ((sC.rdU uC).port (.inl (uC, qC))) := by
       rw [hpL, hoL, hpC, hoC]
       exact ⟨rfl, rfl, rfl, rfl⟩
@@ -184,7 +194,7 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
     unfold Layout.BitVal.get
     rw [dif_pos (rowW_lt qL hbL), dif_pos (rowW_lt qC hbC)]
     exact FlockVBridge.Family.bits_of_encPortH hPL.1 hPC.1 he b _ _
-  · have hge : 16 * _root_.Flock.KnownRead.regWords (roots v) ≤ b := Nat.le_of_not_lt hb
+  · have hge : 16 * _root_.Flock.KnownRead.regWords (roots (place v).1) ≤ b := Nat.le_of_not_lt hb
     have nL : portBit sL (openedReg sL) nmL b = none := portBit_none _ fun q hq => by
       rw [hNL q qL (hq.trans hqL.symm), hWL]
       exact hge
@@ -195,10 +205,10 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
 
 /-- **Lane `l`'s `partials` and the combine's `p<l>` read one row's bits**: `read_bits` at their reads of row `l` of
 `partials`. -/
-theorem partials_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {sL sC : RowsSession} {l : ℕ}
-    (hl : l < T.lanes)
-    (hOL : ∀ p ∈ ownOf roots T (some l), sL.own.toList.find? (·.name == p.name) = some p)
-    (hOC : ∀ p ∈ ownOf roots T none, sC.own.toList.find? (·.name == p.name) = some p)
+theorem partials_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {place : String → String × ℕ}
+    {sL sC : RowsSession} {l : ℕ} (hl : l < T.lanes)
+    (hOL : ∀ p ∈ ownOf roots place T (some l), sL.own.toList.find? (·.name == p.name) = some p)
+    (hOC : ∀ p ∈ ownOf roots place T none, sC.own.toList.find? (·.name == p.name) = some p)
     (hcL : _root_.Flock.Registered.checkComplete sL.c sL.own = .ok ())
     (hcC : _root_.Flock.Registered.checkComplete sC.c sC.own = .ok ()) {kL kC : Known}
     (hkL : _root_.Flock.KnownRead.check sL.c

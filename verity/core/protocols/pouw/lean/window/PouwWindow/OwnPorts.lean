@@ -6,16 +6,20 @@ import Flock.Registered
 
 The ports of the verifier's own `--registered` file (`Flock.Registered.Port`) that a drawn leaf's statement reads at a
 registered value's row (`Source.read`): `leaf_lanes.registered_file` at `leaf_lanes.reads`, whose rows
-`tests/test_lanes.py` holds `lanePorts`' and `combinePorts`' sources to. Each value has one tree, the same in all 33
-statements (`roots v`: its registered root, leaf count, row width, domain and schema), read at the layout's row:
+`tests/test_lanes.py` holds `lanePorts`' and `combinePorts`' sources to. Each value is placed in one registered table,
+the same in all 33 statements (`place v`, the table and its base row; `roots` of the table: its registered root, leaf
+count, row width, domain and schema), read at the layout's row from that base:
 
-* `ownOf roots T k`: statement `k`'s data ports (lane `l`'s at `some l`, the combine's at `none`), port `name` reading
-  row `row` of `roots v` (`readsRel := #[some row]` from unit 0, the statement's one unit);
+* `ownOf roots place T k`: statement `k`'s data ports (lane `l`'s at `some l`, the combine's at `none`), port `name`
+  reading the leaf's row `row` of the value `v` at the unit's placement `place v` (a registered table and its base
+  row): row `(place v).2 + row` of `roots (place v).1` (`readsRel := #[some ((place v).2 + row)]` from unit 0, the
+  statement's one unit). `selfPlace` (`(v, 0)`) reads each value as its own table;
 * `readFull T k`: the ports statement `k` marks `read_in_full` (`Flock.KnownRead.READ_KEY`), its reads of an A row, a B
   row or a partials row (`fullValue`: lane `l`'s `a<s>`, `b<t>` and `partials`, the combine's `p<x>`), each row read by
   several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
-  `want` (`ownOf` at the roots it takes from the accepted registration and produced record, `PouwWindow.Lanes.rootsOf?`),
+  `want` (`ownOf` at the roots it takes from the accepted registration, round log and produced record and the
+  placement it takes from the window descriptor, `PouwWindow.Lanes.want?`),
   each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file;
 * `checkOneRead own`: the leaf verifier's check that every port of the file, data or known, has one read
   (`checkOneRead_ok`), a statement being one unit, which `pouw-leaf-own` runs too.
@@ -35,10 +39,17 @@ def regReads (T : Tile) (k : Option Nat) : List (String × String × Nat) :=
     | .read v row => some (p.name, v, row)
     | .known _ => none
 
-/-- **Statement `k`'s registered data ports** (`leaf_lanes.registered_file`'s ports of `reads`): port `name` reads row
-`row` of the value `v`, registered once at `roots v` for all 33 statements. -/
-def ownOf (roots : String → Flock.Registered.Port) (T : Tile) (k : Option Nat) : List Flock.Registered.Port :=
-  (regReads T k).map fun (nm, v, row) => { roots v with name := nm, value := v, readsRel := #[some row], readsFrom := 0 }
+/-- **Statement `k`'s registered data ports** (`leaf_lanes.registered_file`'s ports of `reads`): port `name` reads the
+leaf's row `row` of the value `v`, which the unit's placement puts at row `(place v).2 + row` of the registered table
+`(place v).1`, registered once at `roots (place v).1` for all 33 statements. The placement `(v, 0)` reads each value as
+its own table. -/
+def ownOf (roots : String → Flock.Registered.Port) (place : String → String × Nat) (T : Tile) (k : Option Nat) :
+    List Flock.Registered.Port :=
+  (regReads T k).map fun (nm, v, row) =>
+    { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0 }
+
+/-- The placement that reads each value as its own table, from row 0. -/
+def selfPlace (v : String) : String × Nat := (v, 0)
 
 /-- **The values a statement reads in full** (`leaf_lanes.FULL`): the A rows, the B rows and the partials, each row
 read by several statements. -/

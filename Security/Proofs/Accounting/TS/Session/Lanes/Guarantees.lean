@@ -36,9 +36,11 @@ records (`LeafColl`). The known content each session is handed is
 the path's public inputs' rows (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), so that check and the
 known-read check bind them, unasked: lane `l`'s `pub` row its salt, position, roots and index `l`, its `admit` row the
 admit bits, and every `o0` row `ok = 1`. That each session's registered file holds the layout's data ports
-(`PouwWindow.Lanes.ownOf` at one tree per value, `roots`) is not asked either: acceptance checks it, at any roots, and
-`pouw-leaf-own` takes them from the accepted registration and produced record alone (`PouwWindow.Lanes.roots?`), so no
-premise is left on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
+(`PouwWindow.Lanes.ownOf` at one table per value, `roots`, each value placed in its table from a base row, `place`) is
+not asked either: acceptance checks it, at any roots and any placement, and `pouw-leaf-own` takes the roots from the
+accepted registration and produced record alone (`PouwWindow.Lanes.roots?`) and, for a unit of a window Program, the
+placement from the window's committed descriptor and round log (`PouwCheck.LeafOwn.placeOf`), so no premise is left
+on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
 (`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
 of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values (RT4-LOGIC-30's
@@ -68,8 +70,9 @@ of `own`) and its known-read check (`Flock.KnownRead.check`: each known port, an
 a `sha512/row/v2` row of its known rows' or registered row's words, a computed row of the unit reads each bit of such
 an input row and a copy returns each bit of such an output row) included, and the leaf verifier's check of the file
 (`PouwWindow.Lanes.checkOwn`: the file's first port of each name of `want x w i k = PouwWindow.Lanes.ownOf (roots x w i)
-(servedTile K) k`, the statement's data ports at the layout's rows of one tree per value, any roots `roots`, is that
-port), and the leaf verifier's check of the session's draw (`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs
+(place x w i) (servedTile K) k`, the statement's data ports at the layout's rows of one table per value, each value `v`
+placed in the table `(place x w i v).1` from the base row `(place x w i v).2` and the layout's row read from that base,
+any roots `roots` and any placement `place`, is that port), and the leaf verifier's check of the session's draw (`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs
 on the session's record: `subset` of every unit of a non-empty population), and of the file's reads
 (`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read), opening the
 leaf its lanes' committed rows
@@ -107,6 +110,7 @@ def LeafLanesSound : Prop :=
     (part : LanePub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (pub : Paths Ω S → Fin S → Fin nπ → LanePub)
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
+    (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
     (∀ x w i k, (sess x w i k).CR) →
     (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
@@ -115,7 +119,7 @@ def LeafLanesSound : Prop :=
       (decC nw (servedTile K))) →
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
       (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
-      (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (servedTile K) (k.map Fin.val)) dq part pub
+      (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val)) dq part pub
       (fun x w i => receiptOf nw (servedTile K) (sess x w i)) (fun x w i => leafOf K (servedTile K) (sess x w i))
       right).SoundAt
       (33 * δ)

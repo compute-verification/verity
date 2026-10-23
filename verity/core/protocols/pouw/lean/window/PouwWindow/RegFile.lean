@@ -15,13 +15,15 @@ accepted produced record alone:
   partials' is the verifier's own entry (`produced.entry`: `lanes` rows of `words` 16-bit words, under the domain
   `SampledProofs.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
   `partials`. Every value's rows are `schema`'s.
-* `want?`: statement `k`'s data ports at those roots (`ownOf`), where the verifier holds every value they read.
-* `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each read of a
-  `fullValue` (A, B and partials rows) marked `read_in_full`, then the known ports, and `complete`.
+* `want?`: statement `k`'s data ports at those roots and the unit's placement `place` (`ownOf`: each value's table and
+  base row), where the verifier holds every table they read.
+* `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each port
+  `readFull` names (A, B and partials rows, by layout value) marked `read_in_full`, then the known ports, and `complete`.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
-  ports (`checkOwn`). `leafOwnCmd` runs it on
-  files, then holds each of the statement's session records to the full draw (`checkFull`).
+  ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
+  statement's session records to the full draw (`checkFull`); `PouwCheck.LeafOwn` runs it at a window unit's placement,
+  from the window's descriptor and round log.
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
@@ -77,12 +79,14 @@ def roots? (registration produced : Json) (lanes words : Nat) (schema : String) 
 /-- The roots as a function: each value's first port, the default where none is held. -/
 def rootsFn (rs : List (String × Flock.Registered.Port)) (v : String) : Flock.Registered.Port := (rs.lookup v).getD default
 
-/-- **Statement `k`'s data ports at the verifier's roots** (`ownOf`), where the verifier holds every value they read. -/
-def want? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option Nat) :
+/-- **Statement `k`'s data ports at the verifier's roots** (`ownOf`, at the unit's placement `place`), where the
+verifier holds every table they read. -/
+def want? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat) :
     Except String (List Flock.Registered.Port) := do
   for (nm, v, _) in regReads T k do
-    if (rs.lookup v).isNone then throw s!"port {nm} reads {v}, whose entry and root the verifier does not hold"
-  pure (ownOf (rootsFn rs) T k)
+    if (rs.lookup (place v).1).isNone then
+      throw s!"port {nm} reads {(place v).1}, whose entry and root the verifier does not hold"
+  pure (ownOf (rootsFn rs) place T k)
 
 /-- A registered port's `--registered` entry (`produced.port`): its value, root, leaves, row words and leaf width,
 domain, schema (named where it is not `hm96-sha512/row/v1`) and reads, and `read_in_full` where `full`. -/
@@ -95,55 +99,53 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
     (if full then [(Flock.KnownRead.READ_KEY, Json.bool true)] else []))
 
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
-verifier's roots (`want?`), each read of a `fullValue` marked `read_in_full`, then the known ports `known`, and
-`complete` where it is set. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
+verifier's roots and the unit's placement (`want?`), each port `readFull` names (a read of a `fullValue`, by its
+layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`, and `complete` where
+it is set. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
 `leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
-def fileOf? (rs : List (String × Flock.Registered.Port)) (T : Tile) (k : Option Nat) (known : List (String × Json))
-    (complete : Bool) : Except String Json := do
-  let ps ← want? rs T k
+def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat)
+    (known : List (String × Json)) (complete : Bool) : Except String Json := do
+  let ps ← want? rs place T k
   if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
     throw s!"port {nm} is both a read and known"
+  let full := readFull T k
   pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT_V0),
-    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (fullValue p.value))) ++ known))] ++
+    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))] ++
     (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
 the tile's statement exists (`lane?`, `combine?`), and the file, parsed as flock-verify parses it, has one read at each
-port (`checkOneRead`) and holds the statement's data ports at the records' roots (`checkOwn`). -/
-def leafOwn? (registration produced file : Json) (T : Tile) (k : Option Nat) (schema : String) : Except String Unit := do
+port (`checkOneRead`) and holds the statement's data ports at the records' roots and the unit's placement `place`
+(`checkOwn`). -/
+def leafOwn? (registration produced file : Json) (place : String → String × Nat) (T : Tile) (k : Option Nat)
+    (schema : String) : Except String Unit := do
   match k with
   | some l => discard (lane? T l)
   | none => discard (combine? T)
   let rs ← roots? registration produced T.lanes (2 * T.nw) schema
   let own ← Flock.Registered.ofJson file
   checkOneRead own
-  checkOwn (← want? rs T k) own
+  checkOwn (← want? rs place T k) own
 
-private def readJson (path : String) : IO Json := do
+def readJson (path : String) : IO Json := do
   match Json.parse (← IO.FS.readFile path) with
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: {e}")
 
-private def usage (why : String) : IO UInt32 := do
+def usage (why : String) : IO UInt32 := do
   IO.eprintln why
   pure 2
 
-/-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION...`**: `leafOwn?` on the three
-files at the `R × C` tile of contraction `K`, every value's rows `hm96-sha512/row/v2`, then `checkFull` on each session
-directory's record (`SESSION/session.json`, at least one). It prints `OWN {"accepted", "why"?}` and exits 0 where it
-accepts, 1 where it refuses and 2 on a usage error. -/
-def leafOwnCmd (args : List String) : IO UInt32 := do
-  let reg :: prod :: file :: r :: c :: k :: stmt :: sess@(_ :: _) := args
-    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION..."
-  let (some r, some c, some k) := (r.toNat?, c.toNat?, k.toNat?)
-    | usage "R, C and K are natural numbers"
-  let some lane := (if stmt == "combine" then some none else stmt.toNat?.map some : Option (Option Nat))
-    | usage s!"the statement is a lane's index or combine, not {stmt}"
-  let (reg, prod, file) := (← readJson reg, ← readJson prod, ← readJson file)
-  let records ← sess.mapM fun (d : String) => IO.FS.readFile (System.FilePath.mk d / "session.json")
-  let verdict : Except String Unit := do
-    leafOwn? reg prod file ⟨r, c, k⟩ lane Flock.HmRow.ROW_SCHEMA_V2
-    records.forM checkFull
+/-- A statement named on the command line: a lane's index, or `combine`. -/
+def stmtArg? (stmt : String) : Option (Option Nat) :=
+  if stmt == "combine" then some none else stmt.toNat?.map some
+
+/-- Each session directory's record, `SESSION/session.json`. -/
+def sessionRecords (sess : List String) : IO (List String) :=
+  sess.mapM fun (d : String) => IO.FS.readFile (System.FilePath.mk d / "session.json")
+
+/-- `pouw-leaf-own`'s verdict, printed as `OWN {"accepted", "why"?}`: exit 0 where it accepts and 1 where it refuses. -/
+def printOwn (verdict : Except String Unit) : IO UInt32 := do
   match verdict with
   | .ok () =>
     IO.println s!"OWN {(Json.mkObj [("accepted", Json.bool true)]).compress}"
@@ -151,5 +153,23 @@ def leafOwnCmd (args : List String) : IO UInt32 := do
   | .error e =>
     IO.println s!"OWN {(Json.mkObj [("accepted", Json.bool false), ("why", Json.str e)]).compress}"
     return 1
+
+/-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION...`**: `leafOwn?` on the three
+files at the `R × C` tile of contraction `K`, each value its own table (`selfPlace`), every value's rows
+`hm96-sha512/row/v2`, then `checkFull` on each session directory's record (`SESSION/session.json`, at least one). It
+prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it refuses and 2 on a usage error. A unit of a
+window Program, its tables placed by the window's descriptor, is `pouw-leaf-own-window`'s (`PouwCheck.LeafOwn`). -/
+def leafOwnCmd (args : List String) : IO UInt32 := do
+  let reg :: prod :: file :: r :: c :: k :: stmt :: sess@(_ :: _) := args
+    | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION..."
+  let (some r, some c, some k) := (r.toNat?, c.toNat?, k.toNat?)
+    | usage "R, C and K are natural numbers"
+  let some lane := stmtArg? stmt
+    | usage s!"the statement is a lane's index or combine, not {stmt}"
+  let (reg, prod, file) := (← readJson reg, ← readJson prod, ← readJson file)
+  let records ← sessionRecords sess
+  printOwn do
+    leafOwn? reg prod file selfPlace ⟨r, c, k⟩ lane Flock.HmRow.ROW_SCHEMA_V2
+    records.forM checkFull
 
 end PouwWindow.Lanes
