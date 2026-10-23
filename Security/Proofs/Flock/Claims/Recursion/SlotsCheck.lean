@@ -215,8 +215,8 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   rw [ite_eq_left hm]
   by_cases hlt : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) <
       2 ^ st.c.kLog
-  · rw [dif_pos hlt, ← FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hlt, hsrc]
-  · rw [dif_neg hlt, FlockSoundness.Discharge.Aliased.zeroPos_block L regs F hs₀ hz o]
+  · rw [dite_eq_left hlt, ← FlockSoundness.Discharge.Hm.blockBit_of_lt (L.model regs) z o hlt, hsrc]
+  · rw [dite_eq_right hlt, FlockSoundness.Discharge.Aliased.zeroPos_block L regs F hs₀ hz o]
     rw [hsrc] at hlt
     unfold FlockSoundness.Discharge.Hm.blockBit
     split
@@ -225,5 +225,174 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
     · rfl
 
 end copy
+
+/-! ## A table's rows at the outer relation -/
+
+/-- **What a table the verifier sets up gives at a satisfying witness of its model**, in either of `setupOne`'s
+branches (the hidden statement's through its flat twin, `Hidden.sat_flat`): its row ranges, a template instance, its
+blocks, each row's `b ‖ c` as the commit string of its message and salt (`Hm.row_bc_flat`), and each row bit's input
+column its message bit (`leaf_copy`). -/
+theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
+    (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
+    (hupv : 0 < st.c.upv) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (L : FlockSoundness.Layout st) (regs : List (FlockSoundness.Model.Region st.c.kLog (st.m - st.c.kLog)))
+    {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) :
+    FlockSoundness.Discharge.Hm.RowRanges st.c ∧ 0 < st.c.g ∧
+      st.nbl = max 3 (Flock.log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) ∧
+      (∀ (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ}, g < st.c.g → p < st.c.ports.size →
+        FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o) 128
+          (FlockSoundness.Discharge.Hm.bcCol st.c g p) = FlockSoundness.Binding.commitString
+          ((Flock.HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
+            FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o)
+              (2 * st.c.ports[p]!.words) (FlockSoundness.Typed.msgCol st.c g p))
+          (FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o) 192
+            (FlockSoundness.Discharge.Hm.saltCol st.c g p))) ∧
+      ∀ (o : Fin (2 ^ (L.model regs).nbl)) {N g q i : ℕ},
+        st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat → g < st.c.g → ∀ hq : q < st.c.ports.size,
+        st.c.ports[q].bits = 16 * st.c.ports[q].words →
+        16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + st.c.ports[q].bits ≤ 16 * N →
+        i < st.c.ports[q].bits →
+        st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
+          16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i) < 2 ^ st.c.kLog ∧
+        FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o (st.c.unitRange.slot (g * st.c.upv) +
+          ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
+            16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i)) =
+          FlockSoundness.Discharge.Hm.blockBit (L.model regs) z o
+            (FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8)) := by
+  unfold FlockSoundness.Discharge.HiddenExec.setupOne at hd
+  cases hh : tags.hiddenOutputs
+  · rw [hh] at hd
+    simp only [Bool.false_eq_true, ↓reduceIte] at hd
+    have F := FlockSoundness.Discharge.Aliased.setupH_unitFacts ht hd
+    obtain ⟨-, -, hda, -⟩ := FlockSoundness.setupH_spec ht hd
+    obtain ⟨ls, hcheck⟩ := F.parse.check
+    exact ⟨FlockSoundness.Discharge.Hm.RowRanges.ofL L F.parse F.check,
+      (FlockSoundness.Discharge.Layout.check_cuts F.parse.typed hcheck).2,
+      (FlockSoundness.Discharge.Integrate.setupH_n hd).2,
+      fun o g p hg hp => FlockSoundness.Discharge.Hm.row_bc_flat L F hda hupv hv1 hz o hg hp,
+      fun o N g q i hl hg hq hbw hN hi => leaf_copy L regs F hl hupv hg hq hbw hN hi hz o⟩
+  · rw [hh] at hd
+    simp only [↓reduceIte] at hd
+    have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd
+    obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
+    have P := FlockSoundness.parse_facts hp
+    have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) :=
+      FlockSoundness.layout_of (st := FlockSoundness.Discharge.Hidden.flatTwin st) P s.pin rfl rfl s.m s.kLog
+    have F0 : FlockSoundness.Discharge.Aliased.UnitFacts tags (FlockSoundness.Discharge.Hidden.flatTwin st) :=
+      FlockSoundness.Discharge.Hidden.unitFacts_of_parse (st := FlockSoundness.Discharge.Hidden.flatTwin st) hp rfl
+    have hda : st.da = (Flock.HmRow.delta st.c st.pin).1 ++
+        (FlockSoundness.Discharge.Hidden.outPairs st.c).toArray := by
+      rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta']
+    have hrows := FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
+    have hz0 := FlockSoundness.Discharge.Hidden.sat_flat L L0 F0 hv1 hda hrows hz
+    obtain ⟨ls, hcheck⟩ := P.check
+    refine ⟨FlockSoundness.Discharge.Hm.RowRanges.ofL (st := FlockSoundness.Discharge.Hidden.flatTwin st) L0 F0.parse
+      F0.check, (FlockSoundness.Discharge.Layout.check_cuts P.typed hcheck).2,
+      (FlockSoundness.Discharge.HiddenExec.setupHidden_n hd).2, fun o g p hg hp => ?_,
+      fun o N g q i hl hg hq hbw hN hi => ?_⟩
+    · exact FlockSoundness.Discharge.Hm.row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hp
+    · exact leaf_copy L0 regs F0 hl hupv hg hq hbw hN hi hz0 o
+
+theorem mapM_eq_some_map {α β : Type} {f : α → Option β} {g : α → β} :
+    ∀ {l : List α}, (∀ a ∈ l, f a = some (g a)) → l.mapM f = some (l.map g)
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.mapM_cons, h a (by simp), mapM_eq_some_map fun a' ha' => h a' (List.mem_cons_of_mem _ ha')]
+    rfl
+
+/-- With unit `0`'s input leaves its `N` input words in order, row bit `i` of port `q` has its input column wherever
+its word is one of them. -/
+theorem portCol_eq {c : Flock.Circuit} {N q i : ℕ} (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
+    (hw : (c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16 < N) :
+    portCol c 0 q i = some ((c.unit.inGroups.getD 0 default).col * Flock.WORD +
+      16 * ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) + i % 16) := by
+  have hf : ((Array.range N).map Int.ofNat).findIdx?
+      (· == (((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16 : ℕ) : Int)) =
+      some ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) :=
+    Array.findIdx?_eq_some_iff_getElem.2 ⟨by simpa using hw, by simp, fun j hj => by simp; omega⟩
+  unfold portCol
+  rw [hl]
+  dsimp only
+  rw [hf]
+  rfl
+
+/-- **Port `nm`'s row's hidden values at instance `n`**, wherever its words are among unit `0`'s input leaves. -/
+theorem rowHidden_eq {c : Flock.Circuit} {N q : ℕ} {nm : String} (n : ℕ)
+    (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (hq : c.ports.findIdx? (·.name == nm) = some q)
+    (hqs : q < c.ports.size) (hN : 16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + c.ports[q].bits ≤ 16 * N) :
+    rowHidden c nm n = some ((List.range c.ports[q].bits).map fun i => n / c.g * 2 ^ c.kLog +
+      (c.unitRange.slot (n % c.g * c.upv) + ((c.unit.inGroups.getD 0 default).col * Flock.WORD +
+        16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i))) := by
+  unfold rowHidden
+  refine Option.bind_eq_some_iff.2 ⟨q, hq,
+    Option.bind_eq_some_iff.2 ⟨c.ports[q], Array.getElem?_eq_getElem hqs, ?_⟩⟩
+  dsimp only
+  refine mapM_eq_some_map fun i hi => ?_
+  have hi' := List.mem_range.1 hi
+  rw [portCol_eq hl (by omega), Option.map_some,
+    show 16 * ((c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16) + i % 16 =
+      16 * (c.ports.extract 0 q).foldl (· + ·.words) 0 + i by omega, Nat.add_assoc]
+
+/-- **Port `q`'s hm96 slot at instance `n` outputs its commit string**, at a table the verifier sets up whose model
+the witness's one-table share satisfies: its out columns are the model's `b ‖ c` (`bc_bit`), the commit string of the
+row's message and salt (`table_rows`), the message at the row's input columns (`rowHidden`, `leaf_copy`) and the
+salt at its salt columns (`salt_bit`). -/
+theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
+    (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
+    (hupv : 0 < st.c.upv) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    {N : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
+    (L : FlockSoundness.Layout st) (regs : List (FlockSoundness.Model.Region st.c.kLog (st.m - st.c.kLog)))
+    {w : Claims.Flock.Wit} (hz : (L.model regs).Satisfies (Flock.Readable.zOf 1 w 0 st.m)) {nm : String} {q n : ℕ}
+    (hq : st.c.ports.findIdx? (·.name == nm) = some q)
+    (hN : 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + st.c.ports[q]!.bits ≤ 16 * N)
+    (hb : n / st.c.g < 2 ^ st.nbl) :
+    SlotCommits st.c nm q n w := by
+  obtain ⟨R, hg0, -, hbc, hleaf⟩ := table_rows ht hd hupv hv1 L regs hz
+  have hqs : q < st.c.ports.size := (Array.findIdx?_eq_some_iff_getElem.1 hq).1
+  have hgn : n % st.c.g < st.c.g := Nat.mod_lt _ hg0
+  have hbw : st.c.ports[q].bits = 16 * st.c.ports[q].words := (hv1 _ (Array.getElem_mem_toList hqs)).2.1
+  have hq! : st.c.ports[q]! = st.c.ports[q] := getElem!_pos st.c.ports q hqs
+  rw [hq!] at hN
+  let o : Fin (2 ^ (L.model regs).nbl) := ⟨n / st.c.g, hb⟩
+  have hpfx : rowPfx st.c q = (Flock.HmRow.rowPrefix st.c.ports[q]!.words).data.toList := by
+    unfold rowPfx
+    rw [Array.getElem?_eq_getElem hqs, hq!]
+    rfl
+  have hrow : Claims.Recursion.VStarB.readForms w (((rowHidden st.c nm n).getD []).map Flock.HmNets.Lin.var) =
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+        (Flock.Readable.zOf 1 w 0 st.m) o) (2 * st.c.ports[q]!.words)
+        (FlockSoundness.Typed.msgCol st.c (n % st.c.g) q) := by
+    rw [rowHidden_eq n hl hq hqs hN, Option.getD_some]
+    refine readForms_eq_of_bits (by simp [FlockSoundness.Discharge.Hm.length_bytesOf, hq!, hbw]; omega)
+      fun i hi => ?_
+    simp only [List.length_map, List.length_range] at hi
+    simp only [List.getElem_map, List.getElem_range, formBit_var]
+    obtain ⟨hy, he⟩ := hleaf o hl hgn hqs hbw hN hi
+    rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by rw [hq!]; omega), ← he]
+    exact (blockBit_zOf_one (L.model regs) w o hy).symm
+  have hsalt : Claims.Recursion.VStarB.readForms w (hmSalt st.c q n) =
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+        (Flock.Readable.zOf 1 w 0 st.m) o) 192 (FlockSoundness.Discharge.Hm.saltCol st.c (n % st.c.g) q) := by
+    refine readForms_eq_of_bits (by simp [hmSalt, FlockSoundness.Discharge.Hm.length_bytesOf]) fun j hj => ?_
+    have hj' : j < 1536 := by simpa [hmSalt] using hj
+    have hy : hmBase st.c q n + (hmIn st.c 2 + j) < 2 ^ st.c.kLog := by
+      have := FlockSoundness.Discharge.Hm.saltCol_lt R hgn hqs (j := j / 8) (t := j % 8) (by omega) (by omega)
+      unfold FlockSoundness.Discharge.Hm.saltCol at this
+      rw [hmIn_eq] at this
+      unfold hmBase
+      omega
+    simp only [hmSalt, List.getElem_map, List.getElem_range, formBit_var]
+    exact (salt_bit (L.model regs) w st.c rfl hb hy hj').symm
+  refine slotCommits_of_bits fun t ht => ?_
+  have hy : hmBase st.c q n + (hmOutCol st.c + t) < 2 ^ st.c.kLog := by
+    have := FlockSoundness.Discharge.Hm.bcCol_lt R hgn hqs (j := t / 8) (t := t % 8) (by omega) (by omega)
+    unfold FlockSoundness.Discharge.Hm.bcCol at this
+    rw [hmOut_eq] at this
+    unfold hmBase
+    omega
+  rw [hpfx, hrow, hsalt, ← hbc o hgn hqs]
+  exact (bc_bit (L.model regs) w st.c rfl hb hy ht).symm
 
 end RecDeploy
