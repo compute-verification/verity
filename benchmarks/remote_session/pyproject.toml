@@ -7,7 +7,9 @@
 # reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
 # reads a gate run's memory line on the auditor's clock: each group's coin and last root from the challenger's signed
 # release log, read through the auditor's ledger, the verifier's stamps only a cross-check; it credits a session only when
-# its period committed the verifier that ran it, it and its period closed complete, and the Lean accepted it.
+# its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
+# log records its pin as main's, and the verifier bound the store to the pinned model. `store_layout.py` is that store:
+# what a pinned checkpoint alone fixes, the root the verifier recomputes (`verifier.py --model`) and the prover registers.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

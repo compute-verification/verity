@@ -9,8 +9,8 @@ import Proofs.Flock.VBridge.Family.Registrants
 `decLane` and `decComb` read their ports' row bits through `portBit` at the opened rows (`openedReg`). This file says
 what those bits are, so `LaneHolds` and `CombHolds` become statements of the rows' bytes:
 
-* `RowBitRead s u q k`: bit `k` of unit `u`'s row of port `q` is on an input gate of the key program that `u` reads
-  (`keyRowOf`, `P.io`), a fact of the circuit;
+* `RowBitRead s u q k`: bit `k` of unit `u`'s row of port `q` is on a gate of the key program that is a wire of `u`
+  (`HiddenExec.rowOfH`, `P.io`): an input gate `u` reads, or a gate `u` returns. A fact of the circuit;
 * `vb_pos_row`, `vb_bit_row`: the value binding puts such a gate in its row's commit string, at bit `k`
   (`Readers.ofRows`);
 * `openedReg_row`: under flock-verify's complete check (`Flock.Registered.checkComplete`) and a registrant that reads
@@ -35,11 +35,13 @@ noncomputable abbrev rowVal (u : Fin s.n) (q : Fin s.c.ports.size) :
     Layout.BitVal (Finset.univ.sup (portRowW s.c) + 1) :=
   (s.rdU u).wv (Sum.inl (u, q))
 
-/-- **Bit `k` of unit `u`'s row of port `q` is read**: an input gate of the key program carries it (`keyRowOf` at the
-session's row widths) and is a wire of `u` (`P.io`), which some gate of `u` reads. -/
+/-- **Bit `k` of unit `u`'s row of port `q` is on a wire of `u`**: a gate of the key program carries it (the
+hidden-output layout `HiddenExec.rowOfH` at the session's row widths) and is a wire of `u` (`P.io`): an input gate some
+gate of `u` reads, at an input row, or a gate `u` returns, at an output row. -/
 def RowBitRead (u : Fin s.n) (q : Fin s.c.ports.size) (k : ℕ) : Prop :=
   ∃ (g : Fin (keyN s.c s.hU s.n)) (hk : k < portRowW s.c q),
-    keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, ⟨k, hk⟩⟩) ∧ (g : Fin s.Circ.N) ∈ s.P.io u
+    HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, ⟨k, hk⟩⟩) ∧
+      (g : Fin s.Circ.N) ∈ s.P.io u
 
 variable {s}
 
@@ -71,17 +73,15 @@ theorem vb_bit_row (v : Layout.BitVal (Finset.univ.sup (portRowW s.c) + 1)) {g :
 
 /-- **The opened rows at a read row bit**: where unit `u`'s registrant reads its served roots' rows
 (`ServedRegistered`) and every port of the circuit is a port of `own` (`Flock.Registered.checkComplete`), the opened
-rows at an input gate that carries bit `k` of `u`'s row of port `q` and is a wire of `u` are that bit of the value
-`u`'s registrant opened there. -/
+rows at a gate that carries bit `k` of `u`'s row of port `q` and is a wire of `u` are that bit of the value `u`'s
+registrant opened there. -/
 theorem openedReg_row {u : Fin s.n} (hS : s.ServedRegistered u)
     (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {g : Fin s.Circ.N}
     {q : Fin s.c.ports.size} {k : Fin (portRowW s.c q)}
-    (hk : keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, k⟩)) (hg : g ∈ s.P.io u)
+    (hr : HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, k⟩)) (hg : g ∈ s.P.io u)
     {a : ℕ} (ha : u.val = a) :
     openedReg s a g.val = some ((rowVal s u q).get k.val) := by
   subst ha
-  have hr : HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u, ⟨q, k⟩) :=
-    HiddenExec.rowOfH_of_key _ hk
   have hpos := vb_pos_row hr
   have hread : (s.rdU u).isRead (s.vb.pos g) :=
     (hS.1 _).2 ⟨q, hpos, _root_.Flock.Registered.checkComplete_ok hcomp _ (Array.getElem_mem q.isLt)⟩
@@ -103,7 +103,8 @@ theorem portBit_opened (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = 
   obtain ⟨g₀, hk, hk₀, hg₀⟩ := hread
   have hex : ∃ (g : Fin (keyN s.c s.hU s.n)) (u' : Fin s.n) (q' : Fin s.c.ports.size) (b : Fin (portRowW s.c q')),
       u'.val = 0 ∧ s.c.ports[q'].name = s.c.ports[q].name ∧ b.val = k ∧
-        keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u', ⟨q', b⟩) ∧ (g : Fin s.Circ.N) ∈ s.P.io u' :=
+        HiddenExec.rowOfH s.c s.hU s.n (Layout.outsOf s.c s.hU s.n) g = some (u', ⟨q', b⟩) ∧
+        (g : Fin s.Circ.N) ∈ s.P.io u' :=
     ⟨g₀, u, q, ⟨k, hk⟩, hu, rfl, rfl, hk₀, hg₀⟩
   unfold portBit
   rw [dite_eq_left hex]

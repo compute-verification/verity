@@ -17,8 +17,9 @@ and its served C2 replay challenge after each run's root of record.
   and its coins credit nothing, as H1's in-process coins (`pouw_h1_challenger.session_reason`). ``--replay-challenge``
   still names the C2 replay's challenge there (``source`` ``flag``).
 * **Checking** (`reason`): the verifier reads the auditor's signed ledger as infra published it (every head,
-  `challenger.ledger_head`), the one session it opens for the Commit's root (`challenger.audited_session`), and that
-  session's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
+  `challenger.ledger_head`), the one session it opens for the Commit's root, run from a tree the host's pins log records
+  as main's (`challenger.pinned_session`, the log's heads read by `pouw_h1_challenger.pins_head`), and that session's
+  files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
   (`remote.trusted_session`): the coin commitment the challenger signed and the roots its signed release log shows it
   received. The Commit's session must be that session, its coins that commitment's, and the log must show each run's
   coin of each family released after that run's root of record: coins held in the Commit's process, a session opened on
@@ -232,11 +233,12 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
-           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify) -> str | None:
+           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
     challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
     session is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head infra
-    published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins. Fails closed."""
+    published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, and the host's pins log
+    from `pins` (every head infra published, each a ``pins.jsonl``). Fails closed."""
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
@@ -247,7 +249,8 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
         return f"a run's root of record is not {ROOT_BYTES} bytes (rows-sha512 or the TP run root v2)"
     window = {"root": roots[0].hex()}
     try:
-        audited = Ch.audited_session(Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify), window, key, verify)
+        lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+        audited = Ch.pinned_session(lines, window, key, PHC.pins_head(pins), verify)
         trusted, received = remote.trusted_session(directory, heads, window, key, verify)
     except CoinError as e:
         return f"the Commit's challenger session is not trusted: {e}"
