@@ -192,15 +192,29 @@ theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
 theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
   rw [parMap, parGen_eq, range_map_getElem!]
 
-/-- `mulMap` in tasks. -/
+/-- `parGen f` with each task building its own `ctx ()` first, which `f` reads. What a task builds is its own, so
+reading it touches no reference count other tasks touch: entries of one table shared by every task are counted
+atomically by all of them at once. -/
+@[specialize] def parGenWith {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  ((Array.range a).map fun i => Task.spawn fun _ =>
+      let c := ctx (); (Array.range 4096).map fun j => f c (i * 4096 + j)).foldl (fun acc t => acc ++ t.get) #[] ++
+    (let c := ctx (); (Array.range (n - a * 4096)).map fun j => f c (a * 4096 + j))
+
+theorem parGenWith_eq {β : Type} (ctx : Unit → β) (f : β → Nat → F128) (n : Nat) :
+    parGenWith ctx f n = parGen (f (ctx ())) n := rfl
+
+/-- `mulMap` in tasks, each with its own table of `r`. -/
 def mulMapPar (t : Array F128) (r : F128) : Array F128 :=
-  if t.size < 2048 then parMap (· * r) t else let tb := F128.mulTable r; parMap (F128.mulBy tb ·) t
+  if t.size < 2048 then parMap (· * r) t else parGenWith (fun _ => F128.mulTable r) (fun tb i => F128.mulBy tb t[i]!) t.size
 
 theorem mulMapPar_eq (t : Array F128) (r : F128) : mulMapPar t r = t.map (· * r) := by
   unfold mulMapPar
   split
   · exact parMap_eq _ t
-  · rw [parMap_eq]
+  · rw [parGenWith_eq]
+    show parMap (F128.mulBy (F128.mulTable r)) t = _
+    rw [parMap_eq]
     exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
 
 /-- `eqTable` with each step in tasks: bit 1's half by `mulMapPar`, then bit 0's as bit 1's plus the table
