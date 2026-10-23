@@ -10,18 +10,28 @@ derive rule and fold scope bind, since a pair's expert is data (the router's out
     MoeExpertFp8CoordinateW{E,K,G,KB,SWAP,DOT}   (xq, sx, e, g, slab, sw) -> bf16: `MoeExpertFp8BlockCoordinateW_v3` over slab[e]
     MoeExpertFp8Gemm{E,K,N,G,KB,SWAP,DOT}        (xq, sx, e, w: [E][N][K] e4m3, ws: [E][cdiv(N, G)][K/G] f32) -> [N] bf16
     MoeExpertFp8GemmW{E,K,N,G,KB,SWAP,DOT}       (xq, sx, e, g, w, ws) -> [N] bf16
+    MoeExpertFp8CoordinateChunk{E,K,G,KB,SWAP,DOT,FIRST,LAST}
+                                                 (xq, sx, e, acc, slab: [E][K] e4m3, ws: [E][K/G] f32) -> f32, or bf16 when LAST:
+                                                 K consecutive weights of a longer w13 coordinate, its tiles continuing `acc`
+                                                 (no `acc` and +0 when FIRST), the expert's weight and scale rows gathered inside
 
 `MoeExpertFp8Gemm(W)_v1` at expert e is `MoeExpertFp8BlockGemm(W)_v3` over (w[e], ws[e]): `w` / `ws` are a layer's `w13` / `w13_ws` or
 `w2` / `w2_ws` (`w13_weight` / `w13_weight_scale_inv`, the latter on the rank's refined G-block grid), `xq` / `sx` the pair's quantised
 activation and its group scales, `g` its f32 routed weight.  Each weight block's scale row is gathered once and read by the block's
 coordinates.  The gathers are total: a routed id is always in range, and an id outside it selects NaN words.
+
+`MoeExpertFp8CoordinateChunk_v1` cuts a coordinate along K at a multiple of G: chunk c reads xq and sx from c*K and c*K/G, the
+slab and scale columns of its K weights, and chunk c - 1's accumulator, so the chunks of one coordinate in order, the first FIRST
+and the last LAST, are its `MoeExpertFp8Coordinate_v1` word (`fp8_moe.triton_block_acc`, each tile one FFMA into the accumulator).
 """
 from __future__ import annotations
 
 from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array
+from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fp8_moe as FM
+from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry.fp8 import E4M3, E4M3_NAN, weight_blocks
 from verity_vllm.program.registry.prims import BF16, F32, I32
@@ -151,3 +161,30 @@ def MoeExpertFp8GemmW(B, S, xq, sx, e, g, w, ws):
     """The block-FP8 w2 launch (MUL_ROUTED_WEIGHT True) on one pair: `MoeExpertFp8BlockGemmW_v3`(xq, sx, g, w[e], ws[e])."""
     coord = bind(MoeExpertFp8CoordinateW, E=S.E, **block(S))
     return pair_rows(B, S, coord, bind(MoeExpertFp8ScaleRow, E=S.E, K=S.K // S.G), (xq, sx, e, g), e, w, ws)
+
+
+CHUNK_STATICS = STATICS + ["FIRST", "LAST"]
+
+
+def chunk_sig(e4m3=E4M3, f32=F32, i32=I32, bf16=BF16):
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32)), ("e", i32)) + ((() if S.FIRST else (("acc", f32),)))
+                      + (("slab", Array(S.E, Array(S.K, e4m3))), ("ws", Array(S.E, Array(S.K // S.G, f32)))), bf16 if S.LAST else f32)
+
+
+def chunk(B, S, xq, sx, e, rest: tuple, row, srow, zero, fmul, ffma, cast):
+    """A chunk's body: `row` and `srow` gather the expert's weights and scales, `triton_block_acc` continues `acc`, `cast` at LAST."""
+    if not (isinstance(S.FIRST, bool) and isinstance(S.LAST, bool)):
+        raise ValueError(f"FIRST and LAST are booleans, not {S.FIRST!r} and {S.LAST!r} (an id's static is a Python literal: FIRST=False)")
+    slab, ws = rest[-2:]
+    acc = FM.triton_block_acc(B, S.K, S.G, S.KB, S.SWAP, xq, sx, B.call(row, e, slab), B.call(srow, e, ws), zero, S.DOT, fmul,
+                              ffma, None if S.FIRST else rest[0])
+    return B.call(cast, acc) if S.LAST else acc
+
+
+@composite("MoeExpertFp8CoordinateChunk", 1, CHUNK_STATICS, chunk_sig(), conformance=FM.DOT_CONF)
+def MoeExpertFp8CoordinateChunk(B, S, xq, sx, e, *rest):
+    """K consecutive weights of a w13 coordinate of pair (t, k), a unit M0's block holds where the whole coordinate's [E][K] slab
+    column is too many rows: the K/KB tiles of `MoeExpertFp8BlockCoordinate_v3` over slab[e] and ws[e], into `acc` (+0 when FIRST),
+    then `cvt.rn.bf16.f32` when LAST, else the f32 accumulator itself, the next chunk's `acc`."""
+    return chunk(B, S, xq, sx, e, rest, bind(MoeExpertFp8Row, E=S.E, K=S.K), bind(MoeExpertFp8ScaleRow, E=S.E, K=S.K // S.G),
+                 lambda: B.call(b1.ZERO32), P.F32Mul, P.F32Fma, P.F2fpBf16)

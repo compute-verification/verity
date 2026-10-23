@@ -6,7 +6,9 @@ parameter of a bf16 family; a stand-in for the served values, which only the win
 (`a0.session`: serve and prove, the verifier's subset draw of all of them) and verified by the Lean verifier of record
 (`a0.lean_verify`).  A coordinate template (`serving_rows.COORDS`, the expert-indexed pair GEMMs at N = 1) with ``--call-n N``
 stages instead the ``--units`` of a synthetic Call at N read through the serving rows' split (`split_call`), each held to the
-Call's output word by the numpy twin before and after staging.
+Call's output word by the numpy twin before and after staging.  A K-chunk of a w13 coordinate
+(`MoeExpertFp8CoordinateChunk`) with ``--chunk-k K`` stages instead the ``--units`` chunks of a synthetic coordinate at K, each
+chunk's ``acc`` the last one's output by the word Definition, the last chunk's word held to the twin of the whole coordinate.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
@@ -104,6 +106,48 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
             "nonfinite": int(nonfin.sum()), "reference": ref, "entries": entries, "expert": e}
 
 
+def _packed(a: np.ndarray, bits: int) -> np.ndarray:
+    """A port's elements as its row holds them: their little-endian bytes in u16 words (`serving_rows`' packed ports)."""
+    return np.ascontiguousarray(np.asarray(a).reshape(-1).astype(np.dtype(f"<u{bits // 8}"))).view("<u2")
+
+
+def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
+    """A synthetic w13 coordinate at K = ``k_call`` (finite e4m3 codes, positive f32 scales, a routed id in [0, E)) cut into
+    `MoeExpertFp8CoordinateChunk_v1` chunks of the unit's K, chunk c reading the coordinate's columns of its weights and chunk c - 1's
+    output as its ``acc``: every chunk's rows and output word by the word Definition in order, and the last one's word against the
+    numpy twin of the whole coordinate (`fp8_moe_rows.moe_expert_fp8_block_row`) and `MoeExpertFp8Gemm_v1{N=1}` at K = ``k_call``."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.program.kernels import fp8_moe_rows as FR
+    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity_vllm.query.program_view import spec_statics
+
+    S = spec_statics(tp.word)
+    E, KC, G, KB, swap = int(S["E"]), int(S["K"]), int(S["G"]), int(S["KB"]), S["SWAP"] in (True, "true")
+    if k_call % KC or KC % G:
+        raise ValueError(f"a coordinate of K = {k_call} is no whole number of chunks of {KC} whole scale blocks of {G}")
+    C = k_call // KC
+    codes = lambda n: (lambda c: np.where((c & 0x7F) == 0x7F, c ^ 1, c).astype(np.uint8))(rng.integers(0, 256, n, dtype=np.uint8))  # noqa: E731
+    scales = lambda n, lo, hi: ((2.0 ** rng.integers(lo, hi, n)) * rng.uniform(1, 2, n)).astype(np.float32).view(np.uint32)  # noqa: E731
+    xq, sx, e = codes(k_call), scales(k_call // G, -6, 0), int(rng.integers(0, E))
+    slab, ws = codes(E * k_call).reshape(E, k_call), scales(E * k_call // G, -12, -6).reshape(E, k_call // G)
+    y, nonfin = FR.moe_expert_fp8_block_row(xq, sx, slab[e][None], ws[e][None], G=G, KB=KB, swap=swap, dot=FR.TWIN_DOT_OF[S["DOT"]])
+    chunks, acc = [], None
+    for c in range(C):
+        a, b = c * KC, (c + 1) * KC
+        word = SRW._bind(tp.word, FIRST=c == 0, LAST=c == C - 1)
+        vals = [xq[a:b], sx[a // G:b // G], np.array([e], np.uint32)] + ([] if acc is None else [np.array([acc], np.uint32)]) \
+            + [slab[:, a:b], ws[:, a // G:b // G]]
+        out = int(np.asarray(evaluate_batch(word, *(v.reshape(1, -1).astype(np.uint64) for v in vals))).reshape(-1)[0])
+        chunks.append({"vals": vals, "out": out, "last": c == C - 1})
+        acc = out
+    whole = bind(X.MoeExpertFp8Gemm, E=E, K=k_call, N=1, G=G, KB=KB, SWAP=swap, DOT=SRW._bind(tp.word).bindings["DOT"])
+    ref = int(np.asarray(evaluate_batch(whole, *(v.reshape(1, -1).astype(np.uint64) for v in (xq, sx, np.array([e], np.uint32), slab, ws))))
+              .reshape(-1)[0])
+    return {"chunks": chunks, "twin": int(y[0]), "nonfinite": int(nonfin.sum()), "reference": ref, "expert": e, "C": C}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--spec", required=True)
@@ -116,7 +160,10 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--call-n", type=int, default=None, metavar="N",
                     help="a coordinate template (serving_rows.COORDS): stage units of a synthetic Call at this N, read through the split")
-    ap.add_argument("--units", default=None, help="with --call-n: the coordinates staged (comma-separated), else the first --n")
+    ap.add_argument("--chunk-k", type=int, default=None, metavar="K",
+                    help="a MoeExpertFp8CoordinateChunk unit: stage chunks of a synthetic coordinate at this K, cut at the unit's K")
+    ap.add_argument("--units", default=None,
+                    help="with --call-n: the coordinates staged; with --chunk-k: the chunks (comma-separated); else the first --n")
     a = ap.parse_args()
 
     import a0
@@ -160,6 +207,22 @@ def main() -> int:
         if not ((sc["outs"] == sc["twin"]).all() and (sc["reference"] == sc["twin"]).all()):
             return 1
         vals = {nm: sc["rows"][f"in{g}"][units] for g, (nm, _s, _b, _p) in enumerate(rows)}
+    elif a.chunk_k:
+        t = time.time()
+        tp = SRW.template(a.spec)
+        sc = chunk_call(tp, a.chunk_k, rng)
+        units = [int(u) for u in a.units.split(",")] if a.units else [sc["C"] // 2]
+        a.n = len(units)
+        place = {c: (c == 0, c == sc["C"] - 1) for c in units}
+        S = tp.fn.bindings
+        last = sc["chunks"][-1]["out"]
+        say("chunks", seconds=round(time.time() - t, 1), chunks=sc["C"], expert=sc["expert"], staged=units, twin_nonfinite=sc["nonfinite"],
+            last_is_twin=last == sc["twin"], reference_is_twin=sc["reference"] == sc["twin"])
+        if not (last == sc["twin"] and sc["reference"] == sc["twin"]) or any(p != (S["FIRST"], S["LAST"]) for p in place.values()):
+            return 1
+        vals = {nm: np.stack([_packed(sc["chunks"][c]["vals"][g], b) for c in units])
+                for g, ((nm, _s, _b, _p), b) in enumerate(zip(rows, tp.packed))}
+        want = np.stack([_packed(np.array([sc["chunks"][c]["out"]]), 16 if S["LAST"] else 32) for c in units])
     else:
         vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
@@ -169,7 +232,10 @@ def main() -> int:
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
     calls = bool((got["outs"]["o0"].reshape(-1) == sc["twin"][units]).all()) if a.call_n else None
-    say("staged", seconds=round(time.time() - t, 1), n=a.n, ands=got["ands"], **({"outs_are_calls": calls} if a.call_n else {}))
+    if a.chunk_k:
+        calls = bool(np.array_equal(np.asarray(got["outs"]["o0"]).reshape(a.n, -1), want))
+    say("staged", seconds=round(time.time() - t, 1), n=a.n, ands=got["ands"],
+        **({"outs_are_calls": calls} if a.call_n or a.chunk_k else {}))
     if calls is False:
         return 1
 
