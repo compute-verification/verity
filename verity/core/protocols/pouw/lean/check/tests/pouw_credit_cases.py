@@ -189,7 +189,9 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
             return
         first = Cr.ids_step(v) == 0
         dom = G.domain(prog, v, words, leaves, window=None if first else own, session=session if first else None)
-        rows = [rng.randbytes(64) for _ in range(leaves)]
+        # rows from one short draw: 64 drawn bytes a row made a window's smallest example too large for Hypothesis
+        seed = rng.randbytes(8) + v.encode()
+        rows = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest() for i in range(leaves)]
         true[v] = {"value": v, "root": tree_levels(dom, rows)[-1][0].hex(), "leaves": leaves, "words": words,
                    "domain": dom.domain_id.hex()}
         if v == target and off == "a-zero":
