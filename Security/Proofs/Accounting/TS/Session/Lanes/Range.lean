@@ -14,9 +14,9 @@ A field's decode (`Accounting.TS.Lanes.decLane`, `decComb`) reads its bits throu
 * `bitsN_cast`: an unsigned word `0 ≤ v < 2^n` decodes to `v` (a scale's f32 or a y's bf16 encoding);
 * `ofNat_bitsN`: a u32 word's bits decode to it (partials and receipt words).
 
-So the decodes give the leaf back from rows that hold its words' encodings; that the data ports' rows do is
-`Accounting.Assumptions.TS.LeafReads` (registration), and that the known ports' rows hold their content is
-flock-verify's known-read check (`Lanes.KnownRead`).
+So the decodes give a leaf back from rows that hold its words' encodings; that the known ports' rows hold their
+content is flock-verify's known-read check (`Lanes.KnownRead`). The leaf `LeafLanesSound` opens is the one the data
+ports' rows decode to (`Lanes.Committed`), so nothing is asked of those rows.
 -/
 
 namespace Accounting.TS.Lanes

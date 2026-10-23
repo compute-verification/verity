@@ -122,10 +122,6 @@
    "owner": "@compute-accounting",
    "digest": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
   },
-  "Accounting.Assumptions.TS.LeafReads": {
-   "owner": "@proofs",
-   "digest": "8b6a16a015d13807d7aa925c6e5ad60fc8cc41aa3e6ac28c2135a46a94221feb"
-  },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
    "digest": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e"
@@ -1536,6 +1532,8 @@
   "Proofs.Pouw.PearlC.FlockTile",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
+  "PouwWindow.OwnPorts",
+  "PouwWindow.FullDraw",
   "Definitions.Accounting",
   "Models.Accounting.Assumptions",
   "Models.Accounting.Guarantees",
@@ -10170,7 +10168,7 @@
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (Security/Models/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premises LeafChecks (the circuits at their port rows, registered or not) and LeafReads (Proofs.Accounting.TS.Session.Lanes.Assumptions) are not on it either. Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
+   "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premise LeafChecks (the circuits at their port rows, registered or not; Proofs.Accounting.TS.Session.Lanes.Assumptions) is not on it either. The leaf it opens and the receipt it checks are the ones the sessions' committed rows decode to (leafOf, receiptOf), so nothing is assumed of the rows; the lanes that read one A or B row read it in full at one registered tree (readFull, read_bits). Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
    "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Models/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it takes the loop's two obligations (Flock.Guarantees.LoopTabsReal, LoopInnerRound0), the transport's round trusts (LeanRelease.LinkRoundEq, FinalRoundEq, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves)."
@@ -21612,18 +21610,20 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Flock.KnownRead": {
-   "digest": "9c7a489887a38054163ee647485819fa2ae4d064816801c3bc1c53be98e668ba",
+   "digest": "780ddc3e8a76a201d7c956b5b43753e491f74c44ae604eac7058e63bd30d9182",
    "definitions": {
     "Flock.KnownRead.bitOut": "032569a2097fc3e13f59f7cf19016ee8a3f2fd05044aeb53f6841474b674a09a",
     "Flock.KnownRead.bitRead": "9803f78ce07286e8197a07e89e4dd6d351d983ab3df4dee49cb8acd13d8489e3",
     "Flock.KnownRead.cands": "d5aa97544eb2f6d8c639670ecbefa9ab8d3b323ad3efe1caf290debc7ddfb48c",
     "Flock.KnownRead.check": "8d2c65f428e95b5b6b6f54f433369c9caa53043415fdb7cd7c766c8890cea5a8",
     "Flock.KnownRead.dupName": "7282923b11c658d4d8934fb1e15f795b2fbb32dd867ca90069d32cc4b572aec7",
+    "Flock.KnownRead.fullRows": "9e85eaa494b316f93d7d5953e0937a612f8fec639b1ce7f8e44294902cc424d4",
     "Flock.KnownRead.namesOk": "f440946553e3603bc582d8f76f2854e0700e483a56e5ee6ba23791a7ed0324c9",
     "Flock.KnownRead.outAt": "ccf9e97c15e78f2f9b34465f1de3d2499ac3de7cde7feeab00cef283b4ba4df0",
     "Flock.KnownRead.outCands": "5416b17a3eabaaa0e88219e69335cdeff60e606cfe8a6e4846acf8f93ea8b842",
     "Flock.KnownRead.portOf": "5f1bfb7105c5bf412df017987eb03fd66ab9e1947edbf2cefa8a3275c11a5ba2",
     "Flock.KnownRead.readsOk": "f424340dc6a9b786bd6c2d34eb030e7a0d02a528cabbab699d3d6d7c39447adf",
+    "Flock.KnownRead.regWords": "d4dca35636a1d4ab160059122b24c94aaa19b56fc09b0a6f195a6d6ce1c4710f",
     "Flock.KnownRead.shapeOk": "f854d9c3ad0c90bce8c1fdcc6c04e0b59d01379044c647cdb34165ef90b5eeac",
     "Flock.KnownRead.srcAtMsg": "5e52fc3200b07e58c8035f20c196bf2a69d707ce96b57545b8ccd9960e400ad3",
     "Flock.KnownRead.srcMsg": "81f230c8cc5db4bebdaf576f262fb768f548ce41f6a28b062c61bea633550285",
@@ -28726,6 +28726,16 @@
     "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged"
    ]
   },
+  "PouwWindow.FullDraw": {
+   "digest": "7a6c89099e353f0bbb80b8b9988a88a55884b921cc40abf3ff4759fc944a5f7b",
+   "definitions": {
+    "PouwWindow.Lanes.checkFull": "cbe1fe724d1240ba3b1b6c1d1088c53103945b38cc5ee53cf27c57532521c6d6",
+    "PouwWindow.Lanes.checkFull._sparseCasesOn_1": "c96bb9215c553e996d7b5b634b8c5f44c718fad9199ebce2e7ef431f80b7a84d",
+    "PouwWindow.Lanes.recordDraw": "685db409c6658cbe46f6a2f771ca3fde29fc983695b254482a8f5063fbe5ce9e",
+    "PouwWindow.Lanes.recordDraw._sparseCasesOn_1": "0a239fdcd9afd02b48767284eaa03c1fc2a3e0f574b7aa1f866d1fa352c31c46"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
   "PouwWindow.KnownRows": {
    "digest": "6e09af9ee9d5df9c59cfcc8ba8b24189e064b7939114302165f511b58996b02f",
    "definitions": {
@@ -28741,16 +28751,20 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.Lanes": {
-   "digest": "272af0c882fee2e05cd2dba88ef8a17a487605221f6c91336d36e86da044ca82",
+   "digest": "2904aacb78321722d3808a624d3b7c5a906ee50ac9651ec9ed3f840a49618b6b",
    "definitions": {
     "PouwWindow.Lanes.Field": "9da971ff481bbbf6fc77df3f9c1cecdcdd3bf42f8072eff4968da930ddbf2ccc",
     "PouwWindow.Lanes.Field.bit": "17c1af01610f085f560a3a781a0a38dfa9bd38fce7ffab0a12ba1ac4b4a1af64",
     "PouwWindow.Lanes.Field.path": "1ef969d7a4389299767d61782fc487d3ce663439bc8ddfe577d58c7f2cc1f059",
     "PouwWindow.Lanes.Port": "404ce397751a7ad34a847ce137547cb3de510be01d4b0b9c6fe4338fe9a9f68f",
     "PouwWindow.Lanes.Port.fields": "07b440f859fa07689f41839e06acd9ef6b0114a8a426a1af4a2d79eebc9bed05",
+    "PouwWindow.Lanes.Port.name": "36cd0d1aa15c395f39442cdaccc78ff025e9dfc0221a143c0a0c73e23c2f08d6",
+    "PouwWindow.Lanes.Port.source": "354576cff151ab353cffbb4710a0908641d06a67df757dab4495c0c76c7f6010",
     "PouwWindow.Lanes.Source": "739e015aa6527ac2fa3590ef6d347ef0a59d62891967e5e2c51380cb65c654f4",
+    "PouwWindow.Lanes.Source.casesOn": "d48aec372bb05baa8291a04c3259c9f24e0d1abeeb48ab829d067cccf7ad8707",
     "PouwWindow.Lanes.Source.known": "ff14a9aa5525f290b9dc645aea4c4dd1ffd18b6ac53aca8cd9961760be7ad996",
     "PouwWindow.Lanes.Source.read": "707f94eb092526b671cfbbbb9a2c1c86e6cef6f99c199a6822e6726430022737",
+    "PouwWindow.Lanes.Source.rec": "17b48fa8bdc61862ce506cf1126b2e65ad821d67374d0ef5beb1db30f8feb2bd",
     "PouwWindow.Lanes.Tile": "adf2b3dd9ba9b942012c32ede4c4811ce95509ae5f14e6a17eeb6f3a6dc79a2b",
     "PouwWindow.Lanes.Tile.c": "a320e35ec972eadc0e3b305b31d788f8b2a1013d934f9aad3eb9e9137e2c9cf1",
     "PouwWindow.Lanes.Tile.colOf": "ea58e20cadfa0d01fb73c286f4ec6208ff36a44cafd0ed10cecac92baf2d6940",
@@ -28775,6 +28789,21 @@
     "PouwWindow.Lanes.okPort": "49699673d316a7dd774a3fcf6bd58768752cd3fc5ba1a113c605e6ad8192dc08",
     "PouwWindow.Lanes.positionBits": "af8cfbd1a9d625fff2754f0a5a9f5212afdc545144a977ee84103e0b23b9cca4",
     "PouwWindow.Lanes.rowFields": "0ead156ceaa1b9ac3781fccbc0b557cf7c6db6b2bd95343ba5f851acb553c66f"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "PouwWindow.OwnPorts": {
+   "digest": "14abde97e64282479ed4c59d15456c335f1d3dace16c5c291783b619932c26d0",
+   "definitions": {
+    "PouwWindow.Lanes.checkOneRead": "3b95a186e57f3a94840b8155da0a12547b896e7e43cde0b4130c5a3a20f69430",
+    "PouwWindow.Lanes.checkOwn": "be30093a4cd40449bb6323c165f52af98b8ce879c6e74ce58854fe25a44ce51d",
+    "PouwWindow.Lanes.fullValue": "398b05a09962e48f984185b8cdd8466f934a78cc64e3b4acae746e055807e8f3",
+    "PouwWindow.Lanes.holds": "c84d7f11af9647f07fe46506ba83779fecb09a8b8aa6ab654240e1ed0c2cc6c6",
+    "PouwWindow.Lanes.ownOf": "a3c92729aad24bee951542ef60822a70fc8811e2d137b6313f50690dbe91dacd",
+    "PouwWindow.Lanes.portEq": "c9bdef61d2cfafddfb2a308b8973a9b60247dd48c72a02d82b7045d900f1adde",
+    "PouwWindow.Lanes.portsOf": "27d88f69ce81a5e4ea515b923dd534d05a2538e3b5079b4dc41a427153f6ddd8",
+    "PouwWindow.Lanes.readFull": "91d1a6e6e8ff0fe624514df1d0b81b8308653a05bad80270f506b5bd5c072851",
+    "PouwWindow.Lanes.regReads": "0445d880288a47d9f9f1b34f12a35656acf63a7abbe1fc7d81d91210e30d8324"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28868,10 +28897,41 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Lanes.Assumptions": {
-   "digest": "02a66fcca276ac0ab144f1da82ee2d8987e86a57c88965074da4c8fa105a384e",
+   "digest": "6a41059cbaf0c8f686ba73344e0d34df73ade17906562b37e558b493dd61d56c",
    "definitions": {
-    "Accounting.Assumptions.TS.LeafChecks": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4",
-    "Accounting.Assumptions.TS.LeafReads": "8b6a16a015d13807d7aa925c6e5ad60fc8cc41aa3e6ac28c2135a46a94221feb"
+    "Accounting.Assumptions.TS.LeafChecks": "e931c54bbb67fe69554c0d3766f291c33e445d885dd3fdfbbaca8ed1666b0ef4"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Canon": {
+   "digest": "bc8dfc036a99851f128f3532be383a9b591ba1bec98050d7c06019109439559b",
+   "definitions": {
+    "Flock.SoundAtBridge.RowsSession.CanonRead": "d35b2607024201eac0aeb7559a41cefd6a8ca852bc2000135e3d0c8ac20c5505",
+    "Flock.SoundAtBridge.RowsSession.Openings": "fa4ea6212b134008f6a0747d88e240746066ff0a553e78e6719a56e35a860ff4",
+    "Flock.SoundAtBridge.RowsSession.Openings.wpath": "08c3c962ac776e020accd66daecf951afebc879d2621e62d6f43139d7e08b8fd",
+    "Flock.SoundAtBridge.RowsSession.Openings.ws": "fd5dd55d4316031df40ccb183604881048c6abaa7632521a0e917e9e47979419",
+    "Flock.SoundAtBridge.RowsSession.Openings.wv": "68f362ccb2bf2697c71225afbc546c58badfdf8cc8e1928bfe55ec8307ff8cad",
+    "Flock.SoundAtBridge.RowsSession.canon": "2ab9567ef843f30110288e987ce7bb569d813bb44d9402bb67950dd9f181e290",
+    "Flock.SoundAtBridge.RowsSession.canonAt": "a0b744a5b328b847e5f18177af8c5439b584b2f2ffc07b8c71eee0c3fd32fd77",
+    "Flock.SoundAtBridge.RowsSession.canonLay": "a2cfe2228b29a9ca813fe625c1955a9d650987ea3bfc7fa176be89059b95f321",
+    "Flock.SoundAtBridge.RowsSession.canonPort": "38b1bc403757673c42849d40f104c8f8c2c0eae95ba9950c0f7a76cae64c894a",
+    "Flock.SoundAtBridge.RowsSession.canonReads": "a875d40983e24f18a808c9ff452f11fe2c49e3506e3ceb3a6189a8e179376919",
+    "Flock.SoundAtBridge.RowsSession.canonRs": "84c784507c80f1e8b3c286081ab17137309c836fac57028485031b9d44d32da5",
+    "Flock.SoundAtBridge.RowsSession.oneRead": "9abe33232cdef83f72291f821167a7317e6d687ac663466c6655d16aad41cf04",
+    "Flock.SoundAtBridge.RowsSession.oneRead._sparseCasesOn_1": "bad9b2615e8be974a48295f404514b3824e16ccf9a38cbcae1102a88e55f0e84"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.TS.Session.Lanes.Committed": {
+   "digest": "907c9a313c820000f3da73f962db9ddfae9bfefaec936efbb9fa79c69a96ea25",
+   "definitions": {
+    "Accounting.TS.Lanes.aLane": "c3379082a3647ce82040e4a414471c2e29d455c5201f4cfbfa76a21f4d4f5739",
+    "Accounting.TS.Lanes.aSlot": "342fd2e6ca21c1981e02b0b744e852e50dd638cd7b3a9431bf0b7c95af7347e8",
+    "Accounting.TS.Lanes.bLane": "b05ea04f314814f6b32959cf34d7ec1554de79c1dd04ae5318cf32fe6e3e4eb2",
+    "Accounting.TS.Lanes.bSlot": "0117d91baf6209ba4d1271296a45a9c6b212ba3ba53ac58280a800174c6b700e",
+    "Accounting.TS.Lanes.cellLane": "39ed09fea452607c9027b1e791fde399dbd5553c62b0da0cf673d27dd4b3a515",
+    "Accounting.TS.Lanes.leafOf": "6d858ac4bcef8a2410de91c96b551b9731c599d4600e2ecf6bbd53a0942b2ad8",
+    "Accounting.TS.Lanes.receiptOf": "46e900c096d527f8e4595e314ed4f80cde1ea77f799f5d8d0b17bbfeee260f63"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28895,19 +28955,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "861c8397195130e332fe4d99bbd4d948296284f99b13e8749206d3e943649114",
+   "digest": "e23b567f85236ee20910b183899b298e547a02f972cd94ed9a96d642b8a760bb",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "747ef04f378a49be26ceb883200fa08d450a21a3c6d11254d09502a8ea90f48c"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
-  },
-  "Proofs.Accounting.TS.Session.Lanes.Holds": {
-   "digest": "09d71eb1feaa2038ee4a735b6c08d5137824d3f4204c4720ea97395bba41ef99",
-   "definitions": {
-    "Accounting.TS.Lanes.CombDataHolds": "b5375c8249e05043cc182a5ef3790ee87a81733252055da25a1e122cead96a6a",
-    "Accounting.TS.Lanes.LaneDataHolds": "7db68970c953416aaac7e6694bb9eea8ceb14b4f3e0427a7a363106627759f37",
-    "Accounting.TS.Lanes.LeafInRange": "db062c16e2e707e0acf029bcf47f74ff46f93a19b7000a4690d9408d24a957a1",
-    "Accounting.TS.Lanes.RowInRange": "cefa92af0efaac9a771b34bbff00b43476a72ec6595a51f6f64e372120a7520b"
+    "Accounting.Guarantees.TS.LeafLanesSound": "fd422cd133986f68d3ab073b6f8f313e96731a264fbd79b291e0a5290986c8db"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -28919,7 +28969,7 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Layer": {
-   "digest": "2409e040729ba1e459d1270fb8cd53fb684c1ad86f21ff6f143f733f36d4e8cf",
+   "digest": "2f4bfb93caf342c57dfe1c84d3ad7d37fcd2225efd06c91d3f6293c462d1735d",
    "definitions": {
     "Accounting.TS.Lanes.CellOk": "158b8dab81bba8cd07bc1fc200152ff9a2d64856cb4a63c4af4c737fda12ceb5",
     "Accounting.TS.Lanes.CombineOk": "31155e11f6af7c7913bb7102f4a6a6b6c2f754e7ab1270e9b615b553d30e7fd9",
@@ -28928,7 +28978,6 @@
     "Accounting.TS.Lanes.CombineView.parts": "6ab02fe4e95d2d7039a85b877b001fa514e9e0db4368ff7a24a8830cece6ec2d",
     "Accounting.TS.Lanes.CombineView.receipt": "a4d003105eeb8917e41473007a61d1b320909b127d5cbb6fff968a01d88aab11",
     "Accounting.TS.Lanes.Known": "9b74cbff5ba713b3865903c462558c861198be5dd8e61a9967900dad294be149",
-    "Accounting.TS.Lanes.KnownHeld": "58bcd39bbaeab648448a6ca51648990a20fabcf5d5d2ac730ec0b8267ac34b52",
     "Accounting.TS.Lanes.LaneOk": "5808b5b735e582fa459f6fe616f70525528e86262a901548187b5ff0e1644680",
     "Accounting.TS.Lanes.LaneView": "4758e78b52cfa9eee788e3c200c66e08313eb0bd92c1bb5cc8db4325acb4b54e",
     "Accounting.TS.Lanes.LaneView.a": "77d70d58469a226fcd5d4202c4a2a6375ec30a23d85894ddc105fc3d5ef97770",
@@ -28950,15 +28999,13 @@
     "Accounting.TS.Lanes.Row": "08a18686602fb48225cadf84a1cf8263f339176dfc7652182a73c7b9c98cf6d7",
     "Accounting.TS.Lanes.Row.codes": "bf093c07eb6704a76bcee5e4e7840cd58a07e9d2e2c7a96d38f8ec0a296bc6db",
     "Accounting.TS.Lanes.Row.scale": "7dad5dfc6e38ae7fcf1adb72dd9df1aeb448ffb7825eb0e19fb249b4b6e2a717",
-    "Accounting.TS.Lanes.RowsAgree": "46956b947b275cae6eb606882b9f5a8147b8ecdf7219b99745d662b66a461203",
     "Accounting.TS.Lanes.UnitServed": "b258fa0633246c97ca45d21dc2d740fc0ce162a7391b6668b9e89367ca56cefd",
     "Accounting.TS.Lanes.colOf": "4fc95a8f39ff64d2cbabaad7ef2aa27a7eb3fba31730f80ca8b9e087c27daa85",
     "Accounting.TS.Lanes.laneA": "f90091cef30bfe153f1affe904dc4cf6c83e394afb90b42d1ce00fbf8f70acab",
     "Accounting.TS.Lanes.laneB": "78ea246554a75626cddf43754006b7be81fe29d16e445cc14e168b3d0f195751",
-    "Accounting.TS.Lanes.leafLayer": "f3aca971f8edf525a5acd1f4170842ff6fbc24d8e26eee5c7c463f1d79994c4e",
+    "Accounting.TS.Lanes.leafLayer": "98465bf1facaf9814518b3003ea0a12364949f71b0f7b0fe0fd30af3e704734e",
     "Accounting.TS.Lanes.portRead": "2951e1c544fb590546a1f5ec7c7c1b429a97af7912a7e2e1971c31243a57093c",
     "Accounting.TS.Lanes.rowOf": "c65381251429b4c6004d6e09e903c7686bc7e9b37a3917c16fcb48db98f83269",
-    "Accounting.TS.Lanes.rsOf": "e68b11949253774a8e49eea6b8665d1c1d1af54554dcc74669df304c3a314291",
     "Accounting.TS.Lanes.xorAll": "a96359ab1436113e227f53947be6c561c42fe7dba8207ab4d0908ce76934c193"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
@@ -28967,14 +29014,6 @@
    "digest": "6937e94880b98975190c2456899924fab4e698d83b7d0d26bfef54161f025d6e",
    "definitions": {
     "Accounting.TS.Lanes.servedTile": "0471e9a784b7eb199b36507e7df57e577502360f180e1f82c587ec632a413c7e"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
-  },
-  "Proofs.Accounting.TS.Session.Lanes.Range": {
-   "digest": "f65fd2393986071410d0f11db8ef2c881b93fdeb2931e887d83f417e57ac141d",
-   "definitions": {
-    "Accounting.TS.Lanes.Holds": "942287646fd77cccd874a9a581599a651b4ae30f416c33bcba37cfd6ff04d5de",
-    "Accounting.TS.Lanes.encS": "b4e4ca62189a8c30b874818ec9fcedaff6e1e5590546fccc9200419de1c9e205"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },

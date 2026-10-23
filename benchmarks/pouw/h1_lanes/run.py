@@ -23,7 +23,13 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   (lane l's ``a0..a3``, ``b0..b7``, ``zy`` and ``partials`` (row l); the combine's ``p0..p31`` and ``receipt``) and its
   known ports (`leaf_lanes.known_rows`, `produced.known_port`): lane l's ``admit`` and ``pub`` (salt, position, roots and the
   lane index l as a u16 word, `h1zy.LANE`, under `h1unit.pub_salt`), and every statement's output ``o0``, the row 1 under
-  `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s, the public file `h1unit.verifier_pub`'s.
+  `h1unit.ok_salt`. The ``--registered`` file is `leaf_lanes.registered_file`'s at the entries and roots of the world's
+  registration record and produced record alone (`leaf_lanes.verifier_entries`), at the leaf's placement in the window's
+  tables (`h1window.place`: unit 0 of the one-call window, one round), the public file `h1unit.verifier_pub`'s.
+  Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
+  window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
+  the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
+  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -42,6 +48,15 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   states, checked against a verifier's file that leaves ``pub`` out and says it is complete: refused by the verifier's
   `Registered.checkComplete` by name (REJECT, ``WHY``); ``lane3-index-from-public-open``, the same session against that
   file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
+  ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
+  honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
+  the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
+  `KnownRead.fullRows` refuses the circuit by name (REJECT, ``WHY``); ``combine-skips-p5-bit-unmarked``, the same session
+  against that file with ``p5``'s mark removed, which nothing else refuses (ACCEPT, by design: the control).
+  ``other-registration-file``: lane 0 of the other leaf, its file and session that leaf's own and consistent, so
+  flock-verify accepts it, checked with the verifier holding this leaf's records: `pouw-leaf-own` refuses the file by name
+  (REJECT, ``WHY``); ``other-registration-file-held``, the same check holding the other leaf's records (ACCEPT, by
+  design: the control).
   Every check registers ok = 1 (``o0``'s known row), so a statement whose ok is 0 is refused at its session's parameters
   (S2/R7: its instance's output commitment is not the verifier's).
 * **The shared openings** (``shared_codes``, `produced.shared`): every row the honest sessions report opening (their
@@ -50,7 +65,8 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   SHA-512's collision resistance.
 
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
-WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect`` a Lean check), WORK/plan.json
+WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced r c k
+descriptor rounds unit statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
 and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
@@ -76,6 +92,7 @@ import h1unit as U  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
+from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
@@ -92,15 +109,29 @@ ROOTS_TAG = b"verity/pouw/h1-lanes/roots/v0\0"
 DRAW_TAG = b"verity/pouw/h1-lanes/stand-in-draw/v0\0"
 SALT_TAG = b"verity/pouw/h1-lanes/stand-in-salt/v0\0"
 REGISTERED = (LL.A, LL.B, LL.ZY, LL.RECEIPT)
+#: the one-call window's rounds (STAND-IN for the window's round log: one round, its call the leaf's)
+STEPS = 1
 #: every negative check's expected verdict
 EXPECT = {"swap-lane3": "REJECT", "swap-lane4": "REJECT", "swap-combine": "ACCEPT", "lane3-reads-row4": "REJECT",
           "other-leaf": "REJECT", "other-leaf-in-tree-lane5": "REJECT", "other-leaf-in-tree": "REJECT",
           "lane5-partial-off-tree": "REJECT", "receipt-mismatch": "REJECT", "lane3-index4": "REJECT",
-          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT", "lane3-index-from-public-open": "ACCEPT"}
+          "ok-from-public": "REJECT", "lane3-index-from-public": "REJECT", "lane3-index-from-public-open": "ACCEPT",
+          "combine-skips-p5-bit": "REJECT", "combine-skips-p5-bit-unmarked": "ACCEPT", "other-registration-file": "REJECT",
+          "other-registration-file-held": "ACCEPT"}
 #: the refusal a negative's verdict names
-WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's"}
+WHY = {"lane3-index-from-public": "registered reads (complete): the statement's port pub is no port of the verifier's",
+       "combine-skips-p5-bit": "registered reads: known port p5: no computed row of the circuit reads bit",
+       "other-registration-file": "registered reads: port a0 is not the layout's read of "}
 #: a check of another check's statement against its registered file without ``complete``
 OPEN = {"lane3-index-from-public-open": "lane3-index-from-public"}
+#: a check of another check's statement against its registered file with one port's ``read_in_full`` mark removed
+UNMARKED = {"combine-skips-p5-bit-unmarked": ("combine-skips-p5-bit", "p5")}
+#: the world whose records the verifier holds at a check, where it is not the statement's own
+HOLDS = {"other-registration-file": "honest"}
+#: a check of another check's statement, the verifier holding that statement's own world's records
+HELD = {"other-registration-file-held": "other-registration-file"}
+#: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
+LAZY_ROW = 5
 
 
 def tile(k: int):
@@ -131,6 +162,24 @@ def _template(name: str, d):
     decl = getattr(d.defn, "ports", None)
     ports = {} if decl is None else {"ports": (lambda S: decl(d.S())) if callable(decl) else (lambda S: decl)}
     return bind(CompositeDefinition(name, 1, (), lambda S: d.signature(), lambda B, S, *args: B.call(d, *args),
+                                    conformance="protocol-defined", register=False, **ports))
+
+
+def lazy_combine(d, x: int, j: int, i: int):
+    """The combine ``d`` reading bit ``i`` of its partials row ``x`` in place of bit ``j``, so that no wire reads bit
+    ``j``: a circuit that leaves a ``read_in_full`` row's bit unread (``combine-skips-p5-bit``)."""
+    params, ret = d.signature()
+    per = sum(params[0][1].elem.leaf_widths())
+
+    def body(B, S, partials, receipt):
+        r = partials.refs
+        lo = x * per
+        moved = concat([r.slice(0, lo + j), r.slice(lo + i, lo + i + 1), r.slice(lo + j + 1, len(r))])
+        return B.call(d, Coll(params[0][1], moved), receipt)
+
+    decl = getattr(d.defn, "ports", None)
+    ports = {} if decl is None else {"ports": (lambda S: decl(d.S())) if callable(decl) else (lambda S: decl)}
+    return bind(CompositeDefinition("H1LanesLazyCombine", 1, (), lambda S: (params, ret), body,
                                     conformance="protocol-defined", register=False, **ports))
 
 
@@ -208,26 +257,30 @@ class World:
     draw: str
     tree: G.Registered
     record: dict
+    reg_record: dict
 
 
-def register(prog: str, leaf: Leaf) -> tuple[dict, tuple, list[int]]:
-    """The leaf's registered values under ``prog``, the roots its seeds read and its receipt."""
-    regs = {LL.A: G.Registered.commit(prog, LL.A, code_words(leaf.a, leaf.sa).tolist(), None, G.WORD_BITS, V2),
-            LL.B: G.Registered.commit(prog, LL.B, code_words(leaf.b, leaf.sw).tolist(), None, G.WORD_BITS, V2),
-            LL.ZY: G.Registered.commit(prog, LL.ZY, [U.record_words(*leaf.zy).tolist()], None, G.WORD_BITS, V2)}
+def register(prog: str, leaf: Leaf, place: dict) -> tuple[dict, tuple, list[int]]:
+    """The leaf's registered values under ``prog``, each in its window table (``place``, the leaf's from its row 0), the
+    roots its seeds read and its receipt."""
+    def commit(v, rows):
+        return G.Registered.commit(prog, place[v][0], rows, None, G.WORD_BITS, V2)
+
+    regs = {LL.A: commit(LL.A, code_words(leaf.a, leaf.sa).tolist()), LL.B: commit(LL.B, code_words(leaf.b, leaf.sw).tolist()),
+            LL.ZY: commit(LL.ZY, [U.record_words(*leaf.zy).tolist()])}
     roots = (hashlib.sha512(ROOTS_TAG + regs[LL.A].root).digest(), regs[LL.B].root)
     z, receipt = H.reference(leaf.a, leaf.b, leaf.salt, leaf.position, roots, stream=U.tile() == "v3")
     assert [v & 0xFFFFFFFF for v in z] == [v & 0xFFFFFFFF for v in leaf.zy[0]], "the record's z is the tile's"
-    regs[LL.RECEIPT] = receipt_reg(prog, receipt)
+    regs[LL.RECEIPT] = receipt_reg(prog, receipt, place)
     return regs, roots, list(receipt)
 
 
-def receipt_reg(prog: str, receipt: list[int], flip: int | None = None) -> G.Registered:
-    """The registered receipt, with bit ``flip`` of it flipped when given."""
+def receipt_reg(prog: str, receipt: list[int], place: dict, flip: int | None = None) -> G.Registered:
+    """The registered receipt in its window table (``place``), with bit ``flip`` of it flipped when given."""
     rc = list(receipt)
     if flip is not None:
         rc[flip // 32] ^= 1 << (flip % 32)
-    return G.Registered.commit(prog, LL.RECEIPT, [U.receipt_words(rc).tolist()], None, G.WORD_BITS, V2)
+    return G.Registered.commit(prog, place[LL.RECEIPT][0], [U.receipt_words(rc).tolist()], None, G.WORD_BITS, V2)
 
 
 def lane_rows(leaf: Leaf, ln: int) -> tuple[list, list, list, list]:
@@ -251,16 +304,13 @@ def world(name: str, ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> W
     draw = draw_digest(d, 1)
     tree = PR.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree), **{v: PR.rows_of(regs[v]) for v in REGISTERED}}
-    return World(name, leaf, roots, regs, d, draw, tree, PR.record(d, draw, [tree.entry()], ops))
+    return World(name, leaf, roots, regs, d, draw, tree, PR.record(d, draw, [tree.entry()], ops), rec)
 
 
 def entries(ctx, w: World) -> tuple[dict, dict]:
-    """The verifier's entries and roots of ``w``: its registration's values and the partials (`produced.entry`)."""
-    ent = {v: w.regs[v].entry() for v in REGISTERED}
-    ent[LL.PARTIALS] = PR.entry(ctx.prog, LL.PARTIALS, LL.lanes(*RC), ctx.wp, w.registration)
-    roots = {v: w.regs[v].root.hex() for v in REGISTERED}
-    roots[LL.PARTIALS] = w.record["produced"][0]["root"]
-    return ent, roots
+    """The verifier's entries and roots of ``w``, from its registration record and produced record alone
+    (`leaf_lanes.verifier_entries`, Lean's `PouwWindow.Lanes.roots?`, which `pouw-leaf-own` holds each file to)."""
+    return LL.verifier_entries(w.reg_record, w.record, LL.lanes(*RC), ctx.wp)
 
 
 # -- a statement ------------------------------------------------------------------------------------------------------------
@@ -296,11 +346,12 @@ def known_opening(ctx, w: World, value: str, row: list[int], salt: bytes) -> dic
     return opening(PR.commit(ctx.prog, value, [row], w.registration, [salt], schema=V2), 0)
 
 
-def stager(ctx, kind: str):
+def stager(ctx, kind: str, variant: str | None = None):
+    """``kind``'s stager, or with ``variant`` ``lazy`` the combine over `lazy_combine` (``ctx.lazy``)."""
     from verity_flock import class_statement as CS
 
-    b = ctx.lane if kind == LL.LANE else ctx.combine
-    circuit = ctx.work / "circuits" / kind / "circuit.txt"
+    b = ctx.lazy if variant == "lazy" else ctx.lane if kind == LL.LANE else ctx.combine
+    circuit = ctx.work / "circuits" / (variant or kind) / "circuit.txt"
     if kind == LL.LANE:
         ab = 16 * (ctx.k // 2 + 2)
         rows = ([(f"a{s}", V2, ab, [f"a[{s}]"]) for s in range(LL.LANE_ROWS)]
@@ -326,21 +377,21 @@ def expected(kind: str, ln: int | None, w: World, ins: dict, index: int | None =
 
 
 def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, index: int, free: tuple = (),
-              lane_index: int | None = None, dropped: tuple = ()) -> dict:
+              lane_index: int | None = None, dropped: tuple = (), variant: str | None = None) -> dict:
     """Stage one statement and write the verifier's files: ``ins`` each input port's opening (`opening`,
     `known_opening`); the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows and registers
     its known ports (`known_rows`, `produced.known_port`), ``o0`` among them. ``free``: output ports the prover commits
     afresh, which the public file states (``o0`` in ``ok-from-public``). ``dropped``: known input ports committed afresh
     and left out of the verifier's file too, which still says it is complete (``pub`` in ``lane3-index-from-public``),
     written beside it without ``complete`` as well. ``lane_index``: the index the lane's ``pub`` row holds, when not
-    ``ln``. The lowered ok is held to the word reference (`expected`) in place of
-    `UnitStager.reference_check`, as h1_prove's stage does."""
-    st = ctx.stagers[kind]
+    ``ln``. ``variant``: the stager and Program of ``combine-skips-p5-bit`` (``lazy``), when not ``kind``'s. The lowered
+    ok is held to the word reference (`expected`) in place of `UnitStager.reference_check`, as h1_prove's stage does."""
+    st = ctx.stagers[variant or kind]
     ent, roots = entries(ctx, w)
     kr = known_rows(ctx, w, kind, ln, index)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, w.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = LL.registered_file(LL.reads(*RC, kind, ln), ent, roots, {v: V2 for v in ent},
-                               {p: kp for p, (kp, _) in vk.items() if p not in dropped})
+                               {p: kp for p, (kp, _) in vk.items() if p not in dropped}, place=ctx.place)
     want = expected(kind, ln, w, ins, lane_index)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: known(row_ok, salt_ok) if LL.OK in free else known_opening(ctx, w, v_ok, row_ok, salt_ok)}
@@ -374,9 +425,10 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
     (vd / f"{tag}.registered.json").write_text(json.dumps(reads))
     if dropped:
         (vd / f"{tag}.open.registered.json").write_text(json.dumps({x: v for x, v in reads.items() if x != LL.COMPLETE}))
-    return {"tag": tag, "kind": kind, "lane": ln, "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
-            "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{kind}.program.json"),
-            "partition": str(vd / f"{kind}.partition.json"), "ands": got["ands"], "circuit_sha512": got["circuit_sha512"],
+    return {"tag": tag, "kind": kind, "lane": ln, "world": w.name, "stmt": "combine" if ln is None else str(ln),
+            "dir": str(d), "pub": str(vd / f"{tag}.pub.bin"),
+            "registered": str(vd / f"{tag}.registered.json"), "program": str(vd / f"{variant or kind}.program.json"),
+            "partition": str(vd / f"{variant or kind}.partition.json"), "ands": got["ands"], "circuit_sha512": got["circuit_sha512"],
             "ok": np.asarray(got["outs"]["o0"][0]).tolist(), "want": want,
             "known": {kr[p][0]: [list(op)] for p, (_, op) in vk.items()},
             "binding": {p: committed[p] == mine[p] for p in ins}, "seconds": round(time.time() - t0, 1)}
@@ -420,7 +472,9 @@ def jobs(ctx) -> list[tuple]:
                      ("lane5-partial-off-tree", LL.LANE, 5, "mixed", "off-tree"),
                      ("receipt-mismatch", LL.COMBINE, None, "receipt", None),
                      ("lane3-index4", LL.LANE, 3, "honest", "index4"), ("ok-from-public", LL.COMBINE, None, "honest", "ok-free"),
-                     ("lane3-index-from-public", LL.LANE, 3, "honest", "pub-free")]
+                     ("lane3-index-from-public", LL.LANE, 3, "honest", "pub-free"),
+                     ("combine-skips-p5-bit", LL.COMBINE, None, "honest", "lazy"),
+                     ("other-registration-file", LL.LANE, 0, "other", None)]
 
 
 def run_job(job: tuple) -> dict:
@@ -436,7 +490,8 @@ def run_job(job: tuple) -> dict:
         return statement(ctx, kind, ln, tag, w, lane_ins(ctx, w, ln, partial, pub_index, pub_free), index,
                          lane_index=pub_index, free=(LL.PUB,) if pub_free else (), dropped=(LL.PUB,) if pub_free else ())
     ins = combine_ins(ctx, w, opening(ctx.worlds["other"].tree, 5) if neg == "p5" else None)
-    return statement(ctx, kind, ln, tag, w, ins, index, free=(LL.OK,) if neg == "ok-free" else ())
+    return statement(ctx, kind, ln, tag, w, ins, index, free=(LL.OK,) if neg == "ok-free" else (),
+                     variant="lazy" if neg == "lazy" else None)
 
 
 @dataclass
@@ -448,10 +503,12 @@ class Ctx:
     wp: int = 0
     lane: Bound | None = None
     combine: Bound | None = None
+    lazy: Bound | None = None
     reg: Bound | None = None
     prog: str = ""
     stagers: dict | None = None
     worlds: dict | None = None
+    place: dict | None = None
 
 
 def prepare(args) -> None:
@@ -466,6 +523,11 @@ def prepare(args) -> None:
     win = window(t, args.k)
     ctx.lane, ctx.combine = derived(win, args.k, LL.LANE), derived(win, args.k, LL.COMBINE)
     ctx.reg = ctx.lane
+    ctx.place = HW.place(win, 0, STEPS)
+    if any(base for _t, base in ctx.place.values()):
+        raise AssertionError(f"the one-call window's unit 0 reads its values from row 0, not {ctx.place}")
+    (work / "verifier" / "window.json").write_bytes(canonical_json(encode_program(win)))
+    (work / "verifier" / "rounds.json").write_text(json.dumps([{"round": s} for s in range(STEPS)]))
     ctx.prog = P.program_digest(ctx.reg.program)
     for kind, b in ((LL.LANE, ctx.lane), (LL.COMBINE, ctx.combine)):
         (work / "verifier" / f"{kind}.program.json").write_bytes(canonical_json(encode_program(b.program)))
@@ -475,28 +537,41 @@ def prepare(args) -> None:
 
     salt = hashlib.sha512(SALT_TAG + args.name.encode()).digest()
     la, lb = leaf_data(args.seed, args.k, salt, args.position), leaf_data(args.seed + 1, args.k, salt, args.position + 1)
-    regs, roots, receipt = register(ctx.prog, la)
+    regs, roots, receipt = register(ctx.prog, la, ctx.place)
     pa = partials(la, roots)
     xor = [0] * (ctx.wp // 2)
     for p in pa:
         xor = [x ^ v for x, v in zip(xor, u32_words(p))]
     assert xor == [v & 0xFFFFFFFF for v in receipt], "the honest partials XOR to the receipt"
     A = world("honest", ctx, la, regs, roots, pa)
-    regs_b, roots_b, _ = register(ctx.prog, lb)
+    regs_b, roots_b, _ = register(ctx.prog, lb, ctx.place)
     B = world("other", ctx, lb, regs_b, roots_b, partials(lb, roots_b))
     swapped, mixed = list(pa), list(pa)
     swapped[3], swapped[4] = pa[4], pa[3]
     mixed[5] = list(B.tree.rows[5])
-    regs_r = {**regs, LL.RECEIPT: receipt_reg(ctx.prog, receipt, flip=3 * 32 + 17)}
+    regs_r = {**regs, LL.RECEIPT: receipt_reg(ctx.prog, receipt, ctx.place, flip=3 * 32 + 17)}
     ctx.worlds = {"honest": A, "other": B, "swap": world("swap", ctx, la, regs, roots, swapped),
                   "mixed": world("mixed", ctx, la, regs, roots, mixed), "receipt": world("receipt", ctx, la, regs_r, roots, pa)}
     for nm in ("swap", "mixed"):
         assert ctx.worlds[nm].registration == A.registration, "only the partials differ"
+    assert A.reg_record["program"] == ctx.prog, "the registration's program is the one the partials' entry binds"
+    for nm, w in ctx.worlds.items():
+        (work / "verifier" / f"{nm}.registration.json").write_text(json.dumps(w.reg_record))
+        (work / "verifier" / f"{nm}.produced.json").write_text(json.dumps(w.record))
     mine = {LL.PARTIALS: PR.entry(ctx.prog, LL.PARTIALS, LL.lanes(*RC), ctx.wp, A.registration)}
     produced_check = {nm: list(PR.check(w.record, A.registration, A.draw, mine)) for nm, w in ctx.worlds.items()}
     print(f"registered and produced: {time.time() - t0:.0f} s; produced records' codes against the honest registration: "
           f"{produced_check}", flush=True)
+    row = A.tree.rows[LAZY_ROW]
+    bit = [(int(row[q // 16]) >> (q % 16)) & 1 for q in range(16 * ctx.wp)]
+    j = len(bit) - 1
+    i = next(q for q in range(j) if bit[q] == bit[j])
+    ctx.lazy = bound("H1LanesLazyCombineStatement", lazy_combine(Z.combine(t), LAZY_ROW, j, i))
+    (work / "verifier" / "lazy.program.json").write_bytes(canonical_json(encode_program(ctx.lazy.program)))
+    (work / "verifier" / "lazy.partition.json").write_text(json.dumps(ctx.lazy.part))
+    print(f"combine-skips-p5-bit: bit {j} of p{LAZY_ROW} unread, bit {i} read in its place", flush=True)
     ctx.stagers = {kind: stager(ctx, kind) for kind in (LL.LANE, LL.COMBINE)}
+    ctx.stagers["lazy"] = stager(ctx, LL.COMBINE, "lazy")
     for st in ctx.stagers.values():
         st.pin, st.class_sha512  # noqa: B018
     print(f"circuits: lane {ctx.stagers[LL.LANE].low.layout.counts['ands']} ANDs, combine "
@@ -509,21 +584,35 @@ def prepare(args) -> None:
     by = {r["tag"]: r for r in recs}
     for tg, of in OPEN.items():
         by[tg] = {**by[of], "tag": tg, "registered": by[of]["registered"].replace(".registered.json", ".open.registered.json")}
-    honest = [j[0] for j in js if j[0] not in EXPECT]
-    proved = [j[0] for j in js]
-    checks = proved + list(OPEN)
+    for tg, (of, port) in UNMARKED.items():
+        reads = json.loads(Path(by[of]["registered"]).read_text())
+        if reads["ports"][port].pop(LL.READ_IN_FULL, None) is not True:
+            raise AssertionError(f"{of}: the verifier's file does not mark {port} {LL.READ_IN_FULL}")
+        path = work / "verifier" / f"{tg}.registered.json"
+        path.write_text(json.dumps(reads))
+        by[tg] = {**by[of], "tag": tg, "registered": str(path)}
+    for tg, of in HELD.items():
+        by[tg] = {**by[of], "tag": tg}
+    for tg, r in by.items():
+        r["holds"] = HOLDS.get(tg, r["world"])
+    honest = [jb[0] for jb in js if jb[0] not in EXPECT]
+    proved = [jb[0] for jb in js]
+    checks = proved + list(OPEN) + list(UNMARKED) + list(HELD)
+    vd = work / "verifier"
     with open(work / "plan.tsv", "w") as f:
         for tg in proved:
             f.write(f"S\t{tg}\t{by[tg]['dir']}\n")
         for tg in checks:
             r = by[tg]
             f.write(f"C\t{tg}\t{r['dir']}\t{r['pub']}\t{r['registered']}\t{r['program']}\t{r['partition']}\t"
-                    f"{EXPECT.get(tg, 'ACCEPT')}\n")
+                    f"{EXPECT.get(tg, 'ACCEPT')}\t{vd / (r['holds'] + '.registration.json')}\t"
+                    f"{vd / (r['holds'] + '.produced.json')}\t{vd / 'window.json'}\t{vd / 'rounds.json'}\t0\t{r['stmt']}\n")
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg in checks}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     summary = {"k": args.k, "tile": U.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
-               "programs": {kind: P.program_digest(b.program) for kind, b in (("lane", ctx.lane), ("combine", ctx.combine))},
-               "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
+               "programs": {kind: P.program_digest(b.program)
+                            for kind, b in (("lane", ctx.lane), ("combine", ctx.combine), ("lazy", ctx.lazy))},
+               "place": ctx.place, "registration": A.registration, "draw": A.draw, "produced": A.record, "produced_check": produced_check,
                "forged_partial": ctx.worlds["mixed"].tree.bcs[5].hex(),
                "ands": {"lane": by["lane0"]["ands"], "combine": by["combine"]["ands"]},
                "ok": {tg: by[tg]["ok"] for tg in checks}, "binding": {tg: by[tg]["binding"] for tg in checks},
@@ -543,6 +632,14 @@ def _verdict(p: Path) -> dict | None:
             "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")}
 
 
+def _own(p: Path) -> dict | None:
+    """`pouw-leaf-own`'s verdict on a check's registered file."""
+    if not p.exists():
+        return None
+    v = [json.loads(x[4:]) for x in p.read_text(errors="replace").splitlines() if x.startswith("OWN ")]
+    return v[0] if v else None
+
+
 def _time(p: Path) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
@@ -553,14 +650,18 @@ def summarize(args) -> int:
     rows, opened, verdicts, known = {}, {}, {}, {}
     for tag, c in plan["checks"].items():
         v = _verdict(out / "lean" / f"{tag}.out")
+        own = _own(out / "lean" / f"{tag}.own")
         err = out / "lean" / f"{tag}.err"
-        word = "NONE" if v is None else ("ACCEPT" if v["accepted"] else "REJECT")
+        flock = "NONE" if v is None else ("ACCEPT" if v["accepted"] else "REJECT")
+        word = "NONE" if v is None or own is None else ("ACCEPT" if v["accepted"] and own["accepted"] else "REJECT")
         why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
+        if own is not None and not own["accepted"]:
+            why = own.get("why", "")
         rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
-                     "why": why,
+                     "why": why, "flock_verify": flock, "leaf_own": own, "holds": c["holds"],
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
-        if tag in plan["honest"] and v and v["accepted"]:
+        if tag in plan["honest"] and word == "ACCEPT":
             verdicts[tag] = {**v, "of_record": True}
             known.update(c["known"])
             for e in (v.get("registered") or {}).values():

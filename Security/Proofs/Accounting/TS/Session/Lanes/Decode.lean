@@ -27,9 +27,8 @@ A field's place in its port's row is the same in every lane (`lanePorts`' fields
 reads them at lane 0's ports.
 
 `decL_congr` and `decC_congr`: a decode reads only the ports' row bits, so two sessions or layer values that agree on
-them decode alike. What `Accounting.Assumptions.TS.LeafReads` asks is of the rows: that the bits each data port's row
-holds at the registered reads are the leaf's committed values' encodings (registration); the known values' content is
-flock-verify's to check (`Lanes.KnownRead`).
+them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
+known values' content is flock-verify's to check (`Lanes.KnownRead`).
 -/
 
 namespace Accounting.TS.Lanes
