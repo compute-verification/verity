@@ -1,11 +1,11 @@
 """Pearl-C on the RTX PRO 6000 (sm_120) at the linears' ``quant_method.apply``: every call computed and committed on the device
 by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
 
-The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, whose ``run.py`` has the
-`Pipeline` (its kernels in order, each a named step of a phase, over buffers the caller may own) and whose ``fixture.py`` has
-the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``, default the directory's
-cubin).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
-device's primary context:
+The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, or ``pearl_c_sm90`` for the
+``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
+phase, over buffers the caller may own) and whose ``fixture.py`` has the keys (`keys_of`, `unit_block`).  The cubin is
+build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
+torch's current stream, in the device's primary context:
 
 * **The trees** are -h3's (`SCHEMES`): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest, salted by the prover's hm96 salt key (the install's, `weight_roots`' and the run's
@@ -46,22 +46,20 @@ the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), their upload th
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
-call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile hashing (`SIDE_IO`: the
-tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
+The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
+bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
+hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
 on the main lane: forming reads each row's digest and seed (``row_seeds``), and under -h3 as implemented the filler rows'
 lines read ``line_a`` from A's root, so ``deferred-a`` (A's tree beside the tile hashing) is refused until the filler keying
-changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
-(`rotated`), and a call reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin,
-wait for the side lane.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A
-schedule changes only between passes (`begin`), and one whose placement this path or the scheme's format can't run is refused
-(`schedule_of`).
+changes (card 448a9d2d).  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches (`rotated`), and a call
+reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin, wait for the side lane.
+The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A schedule changes only between
+passes (`begin`), and one whose placement this path or the scheme's format can't run is refused (`schedule_of`).
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
-is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
-passes, never within one.
+is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between passes, never within.
 """
 from __future__ import annotations
 
@@ -76,7 +74,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
     SCHEDULES,
     SERIAL,
@@ -120,11 +118,13 @@ from .pouw_pearl_c_screen import (
 
 #: the Pearl-C schemes this device path runs, by name (`verity.core.protocols.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
-#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is
-#: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
-#: from its own seed (the work law capping each credited row too); its tree hash comes from
-#: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED))
+#: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
+#: GLM-5.3's FP8 form on the H200, Daniel 22 Oct) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
+#: tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line from its own seed (the work law capping each
+#: credited row too); its tree hash comes from `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
+#: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
+KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -189,11 +189,12 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
-    """Every linear outside the scheme's domain or the kernels' (k a multiple of 1,024, n of 128), by weight id."""
+    """Every linear outside the scheme's domain or its kernels' (`KERNEL_GRAIN`), by weight id."""
     s, out = scheme_of(name), []
+    gk, gn = KERNEL_GRAIN[s.device.name]
     for w, (n, k) in sorted(shapes.items()):
-        if k % 1024 or n % 128:
-            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of 1,024 and n of 128")
+        if k % gk or n % gn:
+            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of {gk:,} and n of {gn}")
             continue
         try:
             s.check(Matmul(0, Shape(ROW_ALIGN, k, n), w))
