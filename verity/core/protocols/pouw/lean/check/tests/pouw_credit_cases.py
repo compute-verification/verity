@@ -26,8 +26,9 @@ coin the prover chose (``chosen``), and break the forms.
 A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
 as `credit.layout_of` reads it, each call's tiles a call node each or one batch, under a ``PREFIX``), its weights (each
 K's ``<PREFIX>b/<K>``, its linears' B rows under the registered domain of its name and the circuit, binding no window,
-`weights_of`), its open root `salt.window_open_root` of their `credit.weights_root`, round 0's ``requests`` and its
-session, the auditor's ledger opening it inside a period whose open signs that weights' root (`credit.WEIGHTS_FIELD`),
+`weights_of`), its open root `salt.window_open_root` of their `weights.weights_root`, round 0's ``requests`` and its
+session, the auditor's ledger opening it inside a period whose open signs that weights' root (`credit.WEIGHTS_FIELD`)
+and names a model credit pins (`credit.MODEL_FIELD`, `MODEL`),
 a committed K, one call per manifest row, and an accepted proof of each unit its draw coin draws at K under the served window's arguments, as the verifier of
 record gives it for the unit's session (`_window_proofs`: verified against the descriptor, its registered finding its
 tile's A and B ports at its K's values and their registered roots); its mutations add
@@ -48,12 +49,12 @@ and break an opened A entry's form. A window may instead register main's per-cal
 weights' binding the window's open root, each drawn unit's proof opening its own call's table. Its mutations register a
 call's A table with no window root (``a-call-unbound``) and point a proof at another call's table (``proof-other-call``).
 Its mutations of the weights (`WINDOW_WEIGHTS_NAMES`) sign another weights' root in the period's open, none or a
-malformed one, open the window in no period, change or break round 0's ``requests``, and give a ``b/<K>`` other rows
+malformed one, name no model credit pins in it (``weights-model``), open the window in no period, change or break round 0's ``requests``, and give a ``b/<K>`` other rows
 under the domain of those rows (so `credit._registration` accepts it).
 
 A `period` case is one to three such windows of one circuit in one period of the auditor's ledger (`period-open`
 committing the SHA-512 of the circuit's descriptor, the K every window is drawn at, `credit.K_FIELD`, and the weights'
-root every window opens, `credit.WEIGHTS_FIELD`, each window's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
+root every window opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each window's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
 descriptor, a window of no period beside it in the ledger. Its mutations (RT4-INT-42) leave the period unclosed or a
 window incomplete, drop, reorder or add a window, present the window of no period among the period's, name a period
 never opened or no period, forge the ledger, refuse one window, make one window wholly another circuit's (its
@@ -61,7 +62,8 @@ descriptor, registration and proofs, ``other-circuit``, so `credit.window` alone
 of another layout (``alt-layout``), open the period committing no circuit or one that is no H1 window's (``bad-circuit``), open it committing no K or a malformed one, commit a K past a window's
 units, prove one window's draw at another K (``other-k``), present one window's round log the challenger never received
 (``never-received``), give one window's proof another registration's root (``proof-other-registration``), open the
-period signing no weights' root or a malformed one, give one of two or three windows a ``b/<K>`` with one row's s_w
+period signing no weights' root or a malformed one, or naming no model credit pins (`MODEL_NAMES`: none, as a bare
+weights' root, a malformed one, another checkpoint, an unpinned role), give one of two or three windows a ``b/<K>`` with one row's s_w
 changed (``other-sw``) or every code zero (``zero-codes``), each registered as the served path registers it
 (`registered_b`) and that window's open root over its own weights' root, and break the forms. Every window of a period
 shares the weights its open signs; the window of another circuit registers them under its own.
@@ -78,7 +80,7 @@ rounds' equal blocks); its mutations list one in another round (``call-other-rou
 A `weights` case is a window's layout, its circuit (its descriptor's SHA-512 and PREFIX), its registered entries (each
 K's ``<PREFIX>b/<K>`` under its registered domain, among its A values, z tables and names that are no weights: a
 non-canonical K, ``b/032`` or one past Python's ``int`` digit limit), its round-0 request table's root and its session,
-and the window's open root over `credit.weights_root` of the ``…/b/<K>`` roots, that root and the session
+and the window's open root over `weights.weights_root` of the ``…/b/<K>`` roots, that root and the session
 (`salt.window_open_root`). Its mutations register a B value other than the one the open root binds (another code or
 s_w), open the window on another request table's root or session or another root, register a K's B value twice, never,
 of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, a
@@ -99,6 +101,7 @@ import struct
 import pouw_rounds_cases as rc
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -709,8 +712,41 @@ def weights_of(rng: random.Random, lay: dict, program: str, prefix: str) -> list
 
 
 def fold(weights: list[dict]) -> str:
-    """`credit.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
-    return Cr.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
+    """`weights.weights_root` of `weights`' roots, in hex: the root a period's open signs."""
+    return Wt.weights_root({int(e["value"].rsplit("/", 1)[1]): bytes.fromhex(e["root"]) for e in weights}).hex()
+
+
+#: the model a period's open names (`credit.MODEL_FIELD`): a role credit pins, at its pinned checkpoint
+MODEL = {"name": min(Cr.PINNED_MODELS), "checkpoint_sha512": Cr.PINNED_MODELS[min(Cr.PINNED_MODELS)]}
+#: each way a period's open names no model credit pins
+MODEL_NAMES = ["no-model", "model-form", "other-checkpoint", "other-model"]
+
+
+def signs(weights: list[dict]) -> dict:
+    """What a period's open signs of its weights: their `fold` and the model they are of (`MODEL`)."""
+    return {Cr.WEIGHTS_FIELD: fold(weights), Cr.MODEL_FIELD: dict(MODEL)}
+
+
+def _unmodel(rng: random.Random, opened: dict, kind: str) -> None:
+    """A period-open's fields `opened` with its model broken as `kind`: none (a bare weights' root, as the gate signed
+    before its model registry), malformed, another checkpoint than the pinned one, or a role credit doesn't pin."""
+    match kind:
+        case "no-model":
+            del opened[Cr.MODEL_FIELD]
+        case "model-form":
+            opened[Cr.MODEL_FIELD] = rng.choice([
+                None, 5, MODEL["name"], opened[Cr.WEIGHTS_FIELD], [dict(MODEL)], {"name": MODEL["name"]},
+                {**MODEL, "extra": 1}, {**MODEL, "name": 5}, {**MODEL, "name": None},
+                {"name": MODEL["name"], "checkpoint": MODEL["checkpoint_sha512"]}])
+        case "other-checkpoint":
+            c = MODEL["checkpoint_sha512"]
+            opened[Cr.MODEL_FIELD] = {**MODEL, "checkpoint_sha512": rng.choice([_hex(rng), c.upper(), c[:-2], None, 5])}
+        case "other-model":
+            opened[Cr.MODEL_FIELD] = {**MODEL, "name": rng.choice([n for n in (
+                "LLAMA31_70B_INT8", "QWEN3_06B_INT8", MODEL["name"].lower(), "", MODEL["name"] + " ")
+                if n not in Cr.PINNED_MODELS])}
+        case _:
+            raise ValueError(kind)
 
 
 def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
@@ -718,10 +754,16 @@ def b_rows(rng: random.Random, k: int, n: int) -> list[tuple[bytes, float]]:
     return [(rng.randbytes(k), rng.choice([2.0 ** -9, 0.0123, 3.5])) for _ in range(n)]
 
 
+def b_row_words(codes: bytes, sw: float) -> list[int]:
+    """A B row's u16 words as the prover and the auditor's registry commit them (`weights.row_words` of
+    `weights.row_bytes`): its K int8 codes then its f32 s_w (`h1zy.ROW`), little-endian in pairs."""
+    return Wt.row_words(Wt.row_bytes(bytes(codes), struct.pack("<f", sw)))
+
+
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    its codes then its s_w, `h1zy.ROW`, salts drawn once, binding no window)."""
-    words = [G.bytes_leaves(codes + struct.pack("<f", sw), 16) for codes, sw in rows]
+    `b_row_words`, salts drawn once, binding no window)."""
+    words = [b_row_words(codes, sw) for codes, sw in rows]
     return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(rows)), schema=G.SCHEMA_V2).entry()
 
 
@@ -845,10 +887,14 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
             e[k] = bad
         case "weights-period":
             e = rng.choice(d["weights"])
-            signed = {Cr.WEIGHTS_FIELD: fold([{**x, "root": _hex(rng)} if x is e else x for x in d["weights"]])}
+            signed = signs([{**x, "root": _hex(rng)} if x is e else x for x in d["weights"]])
         case "weights-unsigned":
             w = fold(d["weights"])
-            signed = rng.choice([{"cap": 4}, {Cr.WEIGHTS_FIELD: rng.choice([None, 5, w.upper(), w[:-2], [w]])}])
+            signed = rng.choice([{"cap": 4}, {**signs(d["weights"]),
+                                              Cr.WEIGHTS_FIELD: rng.choice([None, 5, w.upper(), w[:-2], [w]])}])
+        case "weights-model":
+            signed = signs(d["weights"])
+            _unmodel(rng, signed, rng.choice(MODEL_NAMES))
         case "weights-no-period":
             signed = None
         case "weights-requests":
@@ -868,7 +914,7 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
             raise ValueError(name)
     if "ledger" not in d:
         if signed == {}:
-            signed = {Cr.WEIGHTS_FIELD: fold(d["weights"])}
+            signed = signs(d["weights"])
         events = rc.ledger_events(rng, d["window"], s, period=signed or {})
         if signed is None:
             events = [x for x in events if not x[0].startswith("period-")]
@@ -877,7 +923,7 @@ def window_instance(rng: random.Random, name: str = "honest", per_call: bool | N
 
 
 #: each way a window's registered weights are not the ones its period's open signed and its open root binds
-WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-no-period", "weights-requests",
+WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "weights-no-period", "weights-requests",
                         "weights-no-requests", "weights-leaves"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
@@ -943,16 +989,17 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     ends = [{} for _ in wins]
     if name == "incomplete":
         ends[rng.randrange(n)] = {"complete": False}
-    committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, Cr.WEIGHTS_FIELD: fold(weights),
-                 **(committed_too or {})}
+    committed = {"cap": 4, "circuit": program, Cr.K_FIELD: big_k, **signs(weights), **(committed_too or {})}
     match name:
         case "no-circuit":
-            committed = {Cr.K_FIELD: big_k, Cr.WEIGHTS_FIELD: fold(weights)}
+            committed = {Cr.K_FIELD: big_k, **signs(weights)}
         case "no-weights":
             del committed[Cr.WEIGHTS_FIELD]
         case "weights-form":
             w = committed[Cr.WEIGHTS_FIELD]
             committed[Cr.WEIGHTS_FIELD] = rng.choice([None, 5, w.upper(), w[:-2], [w]])
+        case _ if name in MODEL_NAMES:
+            _unmodel(rng, committed, name)
         case "no-k":
             del committed[Cr.K_FIELD]
         case "k-form":
@@ -983,6 +1030,8 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
         case ("honest" | "incomplete" | "no-close" | "forged-ledger" | "no-circuit" | "no-k" | "k-form" | "k-past-units"
               | "bad-circuit" | "never-received" | "other-circuit" | "no-weights" | "weights-form" | "other-sw"
               | "zero-codes"):
+            pass
+        case _ if name in MODEL_NAMES:
             pass
         case "other-k":
             d = wins[i][0]
@@ -1031,7 +1080,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
 PERIOD_NAMES = ["no-close", "incomplete", "missing", "order", "extra", "foreign", "unopened", "name", "window-refused",
                 "windows-form", "forged-ledger", "key-form", "other-circuit", "no-circuit", "descriptor-form", "no-k",
                 "k-form", "k-past-units", "other-k", "alt-layout", "bad-circuit", "never-received",
-                "proof-other-registration", "no-weights", "weights-form", "other-sw", "zero-codes"]
+                "proof-other-registration", "no-weights", "weights-form", *MODEL_NAMES, "other-sw", "zero-codes"]
 PERIOD_KEYS = ("key", "ledger", "name", "windows")
 
 
@@ -1206,8 +1255,8 @@ A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra"
 
 
 def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
-    return {"value": v, "root": _hex(rng), "leaves": n, "words": Cr.b_words(k),
-            "domain": G.domain(program, v, Cr.b_words(k), n).domain_id.hex()}
+    return {"value": v, "root": _hex(rng), "leaves": n, "words": Wt.b_words(k),
+            "domain": G.domain(program, v, Wt.b_words(k), n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1225,7 +1274,7 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     rng.shuffle(entries)
     requests, session = _hex(rng), rng.choice(["s-1", "a.b_c:d-9", "7"])
     roots = {k: bytes.fromhex(e["root"]) for k, e in zip(sorted(rows), b)}
-    window = {"root": PS.window_open_root(Cr.weights_root(roots), bytes.fromhex(requests), session).hex()}
+    window = {"root": PS.window_open_root(Wt.weights_root(roots), bytes.fromhex(requests), session).hex()}
     e = rng.choice(b)
     k = next(kk for kk in rows if e["value"] == f"{prefix}b/{kk}")
     match name:
