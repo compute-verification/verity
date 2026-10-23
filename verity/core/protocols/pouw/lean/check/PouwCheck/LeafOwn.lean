@@ -26,7 +26,6 @@ placement, which `pouw-leaf-own-window` runs (`leafOwnCmd`). Its cost is the des
 namespace PouwCheck.LeafOwn
 
 open Lean (Json)
-open PouwWindow.Lanes (Tile)
 
 /-- **Unit `u`'s call and tile** in the window `layout` (`Credit.callWork`'s units, call after call): `(c, t)`. -/
 def unitAt (layout : Json) (u : Nat) : Except String (Nat × Nat) := do
@@ -39,7 +38,8 @@ def unitAt (layout : Json) (u : Nat) : Except String (Nat × Nat) := do
 
 /-- **Call `call`'s tile and unit `t`'s placement** in the window `layout` of prefix `pre` over `steps` rounds: the
 call's K's leaf tile (`⟨R, C, K⟩`) and each value's table and base row (the module's list). -/
-def placeOf (pre : String) (layout : Json) (steps call t : Nat) : Except String (Tile × (String → String × Nat)) := do
+def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
+    Except String (PouwWindow.Lanes.Tile × (String → String × Nat)) := do
   let num := fun j => (nat? j).getD 0
   let (r, c) := (match get layout "tile" with
     | .arr a => (num (a.getD 0 .null), num (a.getD 1 .null))
@@ -75,7 +75,7 @@ def placeOf (pre : String) (layout : Json) (steps call t : Nat) : Except String 
     else if v == "zy" then (s!"{pre}zy@{call}", t)
     else if v == "receipt" then (s!"{pre}receipt@{call}", t)
     else PouwWindow.Lanes.selfPlace v
-  pure (⟨r, c, k⟩, place)
+  pure (PouwWindow.Lanes.Tile.mk r c k, place)
 
 /-- **The leaf verifier's check of unit `u`'s statement `k`'s file** in the window whose committed descriptor is
 `descriptor` and whose round log is `rounds`: `PouwWindow.Lanes.leafOwn?` at the unit's tile and placement
