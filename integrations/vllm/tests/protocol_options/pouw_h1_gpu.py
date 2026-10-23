@@ -379,7 +379,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         served = SV.Served(prover=a.prover_dir, weights_key=wkey)
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
                          settings=h1_settings(eng, decl.rows, decl.steps, admission="round-0", served=served))
-        PO.install(eng.model, ctx).close()
+        # install registers the weights; closing would commit every step of an empty window (2304 calls' tables)
+        PO.install(eng.model, ctx)
         weights = {"weights_root": served.weights.root().hex(), "circuit": served.weights.circuit,
                    "entries": served.weights.entries()}
         Path(a.weights_only).write_text(json.dumps(weights, indent=1) + "\n")
