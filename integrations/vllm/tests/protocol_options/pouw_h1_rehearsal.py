@@ -222,7 +222,7 @@ def weights(a: argparse.Namespace, out: Path, circuit: str) -> dict[str, Any]:
         # an earlier period's registration of the same model and Program, its key kept for this period: the serve's
         # install registers the same b/<K> under it, so the root the period-open names is the one it serves under
         src = Path(a.weights_from)
-        key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", PV.key_of(src / "key"))
+        key = PV.keep_key(Path(a.prover_root) / f"period-{a.period}", PV.key_of(src))
         out.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src / "weights.json", wfile)
         w = json.loads(wfile.read_text())
