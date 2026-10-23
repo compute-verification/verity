@@ -152,7 +152,7 @@ def test_moe_experts_count_as_linears_and_their_routers_do_not():
 class _Named(_Model):
     """A model with module names, its HF config's ``quantization_config`` and a ``packed_modules_mapping``."""
 
-    packed_modules_mapping = {"wk_weights_proj": ["wk", "weights_proj"]}
+    packed_modules_mapping = {"fused_qkv_a_proj": ["q_a_proj", "kv_a_proj_with_mqa"]}   # vLLM's: no wk_weights_proj
 
     def __init__(self, kept_names, **named):
         super().__init__(*named.values())
