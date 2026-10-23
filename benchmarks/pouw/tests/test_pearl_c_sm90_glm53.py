@@ -1,15 +1,20 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
-checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, and the H200
-session's shapes the table's."""
+checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
+session's shapes the table's, and glm53_timing's --whole over a stand-in card."""
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import importlib.util
 import re
 import sys
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53", HERE / "glm53.py")
@@ -102,8 +107,205 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
 
 
 def test_h200_session_runs_the_tables_shapes():
-    """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192."""
+    """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192; it times decode's
+    forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one."""
     sh = (HERE / "h200.sh").read_text()
     listed = re.search(r"for nk in ([\dx ]+); do", sh).group(1).split()
     assert {tuple(map(int, x.split("x"))) for x in listed} == set(G.in_domain())
     assert 'SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
+    assert '"$D/glm53_timing.py" --whole --out "$O/whole"' in sh
+    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --out "$O/timing-h3" --m 2048 8192' in sh
+
+
+def _timing():
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_timing", HERE / "glm53_timing.py")
+    T = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(T)
+    return T
+
+
+class Card:
+    """A stand-in GPU: a clock in ms that the work run on it advances, and the graph torch is capturing into, if any."""
+
+    def __init__(self):
+        self.t, self.capturing = 0.0, None
+
+    def launch(self, work):
+        if self.capturing is not None:
+            self.capturing.work.append(work)
+        else:
+            work()
+
+
+def _card(monkeypatch, torch) -> Card:
+    """torch.cuda's events, graphs and streams over a `Card`."""
+    card = Card()
+
+    class Event:
+        def __init__(self, enable_timing=False):
+            self.at = None
+
+        def record(self, stream=None):
+            self.at = card.t
+
+        def synchronize(self):
+            pass
+
+        def elapsed_time(self, end):
+            return end.at - self.at
+
+    class Graph:
+        def __init__(self):
+            self.work = []
+
+        def replay(self):
+            for f in self.work:
+                f()
+
+    @contextlib.contextmanager
+    def graph(g, stream=None):
+        card.capturing = g
+        try:
+            yield
+        finally:
+            card.capturing = None
+    stream = SimpleNamespace(wait_stream=lambda other: None)
+    monkeypatch.setattr(torch.cuda, "Event", Event)
+    monkeypatch.setattr(torch.cuda, "CUDAGraph", Graph)
+    monkeypatch.setattr(torch.cuda, "graph", graph)
+    monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: stream)
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: stream)
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda device=None: None)
+    return card
+
+
+class Run:
+    """`PearlCDeviceRun`'s whole-capture surface over a `Card`: a call is 1 ms of GEMM and, with hashing, 0.5 ms of tile
+    hashing, which a deferred capture runs beside the next call, and 0.25 ms more when made alone (its own graph's slot and
+    launch).  A pass commits the calls its GPU work ran, in order; `leak` makes the deferred work leave a call's leaves
+    unwritten ("deferred"), or the poison in them ("poison")."""
+
+    def __init__(self, card: Card, order: dict):
+        self.card, self.order, self.device = card, order, "cuda"
+        self.graphs, self.hashing, self.whole_defer, self.leak = True, True, False, None
+        self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
+
+    def whole_key(self):
+        return (self.hashing, self.whole_defer and self.hashing) if self.graphs else None
+
+    def whole_capture_begin(self, key):
+        self.log.append(("begin", key, self.hashing, self.whole_defer))
+        self._whole = []
+
+    def whole_capture_end(self):
+        calls, self._whole = tuple(self._whole), None
+        self.log.append(("end", calls))
+        return calls
+
+    def gemm(self, w, x, W, bias):
+        m, captured = x.shape[0], self.card.capturing is not None
+        deferred = captured and self.whole_defer and self.hashing
+        if captured:
+            self._whole.append((w, m))
+        else:
+            self.log.append(("call", w, m, self._whole is not None))
+            self.units += 1
+        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured)
+        hashing = self.hashing
+
+        def work():
+            self.card.t += cost
+            leaked = deferred and (self.leak == "deferred" or (self.leak == "poison" and self.poisoned))
+            self.ran.append((w, m, hashing, leaked))
+        self.card.launch(work)
+        return x
+
+    def whole_replay(self, calls):
+        self.log.append(("replay", calls))
+        return False
+
+    def whole_replayed(self, calls):
+        self.units += len(calls)
+
+    def poison(self):
+        self.log.append(("poison",))
+        self.poisoned = True
+
+    def end_pass(self):
+        out = {"units": self.units, "hashing": self.hashing}
+        if self.hashing and self.units:
+            self.card.t += 0.125
+            out.update(transcript_root=hashlib.sha512(repr(self.ran).encode()).hexdigest(), tiles=4 * len(self.ran),
+                       activation_roots=hashlib.sha512(repr([r[:2] for r in self.ran]).encode()).hexdigest(),
+                       screened_rows=sum(r[1] for r in self.ran), failing_rows=0, unsure_rows=0)
+        self.log.append(("end_pass", self.units, self.hashing))
+        self.units, self.ran, self.poisoned = 0, [], False
+        return out
+
+
+def _whole_setup(monkeypatch):
+    torch = pytest.importorskip("torch")
+    T, card = _timing(), _card(monkeypatch, torch)
+    run = Run(card, {7: 0, 5: 1, 6: 2})
+    weights = {w: torch.zeros(8 * (w - 4), 4) for w in (5, 6, 7)}
+    xs = {w: torch.zeros(16, 4) for w in weights}
+
+    def stock(cost, refuse=False, fail=False):
+        def f(x):
+            if fail or (refuse and card.capturing is not None):
+                raise RuntimeError("operation not permitted when stream is capturing")
+            card.launch(lambda: setattr(card, "t", card.t + cost))
+        return {w: f for w in weights}
+    return T, run, weights, xs, {"cutlass": stock(0.25), "triton": stock(0.5, refuse=True), "deepgemm": stock(0.25, fail=True)}
+
+
+def test_whole_times_decodes_forward_captured_serial_and_deferred_beside_the_calls_one_at_a_time(monkeypatch):
+    """--whole's row: each capture sets its pass's hashing and deferral before `whole_capture_begin`, warms up outside the
+    capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays (slots, graph,
+    records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the hashing arms'
+    passes, and one of each from poisoned outputs, commit alike."""
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    row = T.whole(run, weights, xs, stock, reps=3)
+    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0, "pearlc-whole-nohash": 3.0,
+                         "cutlass": 0.75, "triton": 1.5}
+    assert row["ms_per_call"]["pearlc-deferred"] == 1.0 and row["calls"] == 3 and row["m"] == 16
+    assert row["shapes"] == [[24, 4], [8, 4], [16, 4]]
+    assert row["deferred_saving"] == {"vs_calls": 1 - 3 / 5.25, "vs_whole": 1 - 3 / 4.5}
+    assert row["fastest_stock"] == "cutlass" and row["slowdown"]["pearlc-deferred"] == 4.0
+    assert row["stock_graphed"] == {"cutlass": True, "triton": False, "deepgemm": False}
+    assert set(row["stock_errors"]) == {"triton", "deepgemm"} and len(row["runs"]["triton"]) == 3
+    assert row["pass_end_ms"] == {"pearlc-calls": 0.125, "pearlc-whole": 0.125, "pearlc-deferred": 0.125, "pearlc-whole-nohash": 0}
+    assert row["commitments_equal"] and row["poisoned_equal"] and "commitments" not in row
+    assert row["commitment"]["units"] == 3 * T.INNER and row["commitment"]["screened_rows"] == 16 * 3 * T.INNER
+    begins = [e for e in run.log if e[0] == "begin"]
+    assert begins == [("begin", (True, False), True, False), ("begin", (True, True), True, True),
+                      ("begin", (False, False), False, False)]
+    at = run.log.index(begins[1])
+    assert run.log[at - 1][0] == "end_pass" and run.log[at + 1:at + 4] == [("call", w, 16, True) for w in (7, 5, 6)]
+    assert run.log[at + 4] == ("end", ((7, 16), (5, 16), (6, 16))) and run.log[at + 5][0] == "end_pass"
+    poisons = [i for i, e in enumerate(run.log) if e == ("poison",)]
+    assert len(poisons) == 3 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
+    assert run.log[poisons[1] + 1:poisons[1] + 1 + T.INNER] == [("replay", ((7, 16), (5, 16), (6, 16)))] * T.INNER
+    assert (run.hashing, run.whole_defer) == (True, False)
+
+
+@pytest.mark.parametrize("leak", ["deferred", "poison"])
+def test_whole_names_a_deferred_capture_that_commits_otherwise(monkeypatch, leak):
+    """A deferred capture whose passes commit other bytes than the calls one at a time, always or only from poisoned outputs,
+    is flagged, with every arm's commitments in the row."""
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    run.leak = leak
+    row = T.whole(run, weights, xs, stock, reps=2)
+    assert row["commitments_equal"] is (leak == "poison") and row["poisoned_equal"] is False
+    assert row["commitments"]["pearlc-deferred"][0] != row["commitment"] or leak == "poison"
+    assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"]["pearlc-deferred"]
+
+
+@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"]])
+def test_whole_refuses_what_it_cant_capture(tmp_path, args):
+    """--whole runs the serial schedule at M up to GRAPH_ROWS over distinct shapes (a deferred call joins at once after its
+    own shape's), and refuses anything else before it touches a card."""
+    pytest.importorskip("torch")
+    with pytest.raises(SystemExit) as e:
+        _timing().main(["--whole", "--out", str(tmp_path / "out"), *args])
+    assert e.value.code == 2 and not (tmp_path / "out").exists()

@@ -3,6 +3,7 @@ in-domain linears (`glm53.in_domain`, one TP8 rank, the routed experts sharded o
 prefill's M (`glm53.DECODE_M`, `glm53.PREFILL_M`).  An expert's shape is timed as one dense call, not the grouped launch.
 
   python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S] [--graphs]
+  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...]
 
 Arms, each one linear's call on a BF16 x of M rows:
 
@@ -19,6 +20,15 @@ A stock arm that can't be built (not importable, refused, or outside 0.08 rel RM
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
 events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
 median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`).  Writes ``timing.json`` in DIR, one row a point.
+
+``--whole`` times decode's forward instead, at each M up to `GRAPH_ROWS` (default decode's): every shape's weight called once
+on its own x of M rows, in the run's slot order (`forward_of`), under the arms of `WHOLE`: the calls one at a time, each its
+own graph (``--graphs``'s ``pearlc``), and the forward captured whole as vLLM captures decode (`capture_whole`), serial,
+deferred (``whole_defer``: each call's tile hashing on a side stream beside the next call's A tree) and with hashing off;
+beside each stock arm that builds at every shape, its forward captured as one CUDA graph (`capture_stock`; run eagerly, and
+said so, when torch can't capture it).  Every hashing arm's passes must commit alike (`COMMITMENT`), and so must a pass of
+each from poisoned outputs: the deferred capture writes the bytes the calls one at a time write.  Writes ``whole.json`` in
+DIR, one row an M; exits non-zero when any commitment differs.
 """
 
 from __future__ import annotations
@@ -38,6 +48,11 @@ INNER = 8
 ERR = 0.08
 EPOCH = 20261023
 STOCK = ("deepgemm", "cutlass", "triton")
+#: --whole's pearlc arms, (hashing, whole_defer): None for the calls made one at a time, each its own graph
+WHOLE = {"pearlc-calls": (True, None), "pearlc-whole": (True, False), "pearlc-deferred": (True, True),
+         "pearlc-whole-nohash": (False, False)}
+#: what a pass's end commits (`PearlCDeviceRun.end`), on which every hashing arm's passes must agree
+COMMITMENT = ("units", "tiles", "transcript_root", "activation_roots", "screened_rows", "failing_rows", "unsure_rows")
 
 
 def _quant_weight(W, ue8m0: bool):
@@ -159,6 +174,147 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     return run, weights, kernel, gen
 
 
+def forward_of(run, weights: dict, xs: dict):
+    """Decode's forward: every weight the run holds called once on its x, in the run's slot order (`run.order`), returning
+    the ys.  A deferred capture's last call joins the side stream only once every weight is called."""
+    order = sorted(weights, key=run.order.__getitem__)
+
+    def forward():
+        return [run.gemm(w, xs[w], weights[w], None) for w in order]
+    return forward
+
+
+def capture_whole(run, forward, hashing: bool, defer: bool):
+    """`forward` captured whole as vLLM captures decode (`pouw_pearl_c_whole`), in a fresh pass under `hashing` and `defer`
+    (``whole_defer``, set before `whole_capture_begin` makes the side stream): the pass's key, a warm-up forward outside the
+    capture, which makes each call's graph, then the capture on a stream of its own.  The pass is ended after it, its
+    calls records with no work behind them.  Returns (the graph, its calls)."""
+    import torch
+    run.end_pass()
+    run.hashing, run.whole_defer = hashing, defer
+    key = run.whole_key()
+    if key is None:
+        raise RuntimeError("the run replays no forward whole: graphs off, or a schedule the graph path doesn't run")
+    graph, stream = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=run.device)
+    run.whole_capture_begin(key)
+    try:
+        forward()
+        stream.wait_stream(torch.cuda.current_stream(run.device))
+        with torch.cuda.graph(graph, stream=stream):
+            forward()
+    finally:
+        calls = run.whole_capture_end()
+    torch.cuda.synchronize()
+    run.end_pass()
+    return graph, calls
+
+
+def replay_whole(run, graph, calls):
+    """A forward captured whole, replayed as vLLM's runner replays it: the calls' slots uploaded, the graph, the pass's
+    records."""
+    def f():
+        run.whole_replay(calls)
+        graph.replay()
+        run.whole_replayed(calls)
+    return f
+
+
+def capture_stock(forward):
+    """A stock arm's forward as vLLM's decode graphs run the stock GEMMs: after a warm-up (autotuning, JIT), one CUDA graph's
+    replay, or the forward itself when torch can't capture it.  Returns (f, whether captured, the error); f is None when the
+    warm-up fails."""
+    import torch
+    try:
+        forward()
+        torch.cuda.synchronize()
+    except Exception as e:  # noqa: BLE001 - recorded, the arm left out
+        return None, False, f"{type(e).__name__}: {e}"[:400]
+    try:
+        graph, stream = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.graph(graph, stream=stream):
+            forward()
+        torch.cuda.synchronize()
+        return graph.replay, True, None
+    except Exception as e:  # noqa: BLE001 - recorded, the arm run eagerly
+        torch.cuda.synchronize()
+        return forward, False, f"{type(e).__name__}: {e}"[:400]
+
+
+def commitment(out: dict) -> dict:
+    return {k: out.get(k) for k in COMMITMENT}
+
+
+def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
+    """One --whole row (the module's docstring) at xs' M.  `stock` maps each stock arm that builds at every shape to its
+    call a weight ({w: f}).  Each pearlc sample is a fresh pass of `INNER` forwards, whose end is timed apart and, with
+    hashing, committed; then each hashing arm makes one more pass from outputs poisoned 0xA5."""
+    import torch
+    order = sorted(weights, key=run.order.__getitem__)
+    forward = forward_of(run, weights, xs)
+    arms = {nm: (hashing, bool(defer), forward if defer is None else replay_whole(run, *capture_whole(run, forward, hashing, defer)))
+            for nm, (hashing, defer) in WHOLE.items()}
+    stocks, graphed, errors = {}, {}, {}
+    for nm, fs in stock.items():
+        f, graphed[nm], err = capture_stock(lambda fs=fs: [fs[w](xs[w]) for w in order])
+        if f is not None:
+            stocks[nm] = f
+        if err:
+            errors[nm] = err
+    names = [*arms, *stocks]
+
+    def fresh(nm):
+        run.end_pass()
+        run.hashing, run.whole_defer = arms[nm][0], arms[nm][1]
+
+    def sample(nm):
+        if nm not in arms:
+            return timed(stocks[nm]), None, None
+        fresh(nm)
+        ms = timed(arms[nm][2])
+        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        s.record()
+        out = run.end_pass()
+        e.record()
+        e.synchronize()
+        return ms, s.elapsed_time(e), commitment(out) if arms[nm][0] else None
+
+    for nm in names:
+        sample(nm)
+    samples, pass_end = {nm: [] for nm in names}, {nm: [] for nm in arms}
+    ends = {nm: [] for nm, (hashing, _, _) in arms.items() if hashing}
+    for rep in range(reps):
+        for nm in names[rep % len(names):] + names[:rep % len(names)]:
+            ms, end_ms, c = sample(nm)
+            samples[nm].append(ms)
+            if nm in arms:
+                pass_end[nm].append(end_ms)
+            if c is not None:
+                ends[nm].append(c)
+    poisoned = {}
+    for nm in ends:
+        fresh(nm)
+        run.poison()
+        for _ in range(INNER):
+            arms[nm][2]()
+        poisoned[nm] = commitment(run.end_pass())
+    run.hashing, run.whole_defer = True, False
+    med = {nm: statistics.median(v) for nm, v in samples.items()}
+    want = ends["pearlc-calls"][0]
+    equal = all(c == want for v in ends.values() for c in v)
+    poisoned_equal = all(c == want for c in poisoned.values())
+    best = min(stocks, key=med.get) if stocks else None
+    return {"m": next(iter(xs.values())).shape[0], "shapes": [list(weights[w].shape) for w in order], "calls": len(order),
+            "ms": med, "ms_per_call": {nm: v / len(order) for nm, v in med.items()}, "runs": samples,
+            "pass_end_ms": {nm: statistics.median(v) for nm, v in pass_end.items()},
+            "stock_graphed": graphed, "stock_errors": errors, "fastest_stock": best,
+            "slowdown": {nm: med[nm] / med[best] for nm in arms} if best else None,
+            "deferred_saving": {"vs_calls": 1 - med["pearlc-deferred"] / med["pearlc-calls"],
+                                "vs_whole": 1 - med["pearlc-deferred"] / med["pearlc-whole"]},
+            "commitment": want, "commitments_equal": equal, "poisoned_equal": poisoned_equal,
+            **({} if equal and poisoned_equal else {"commitments": ends, "poisoned": poisoned})}
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--out", required=True)
@@ -166,21 +322,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cubin")
     p.add_argument("--reps", type=int, default=15)
     p.add_argument("--shapes", nargs="*", help="N:K (default every in-domain linear)")
-    p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's)")
+    p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's; --whole: decode's)")
     p.add_argument("--schedule", default="serial", help="pearlc's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
     p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (serial only)")
+    p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
+    from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
 
     out, dev = Path(a.out), torch.device("cuda")
-    out.mkdir(parents=True, exist_ok=True)
     table = glm53.in_domain(a.scheme)
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
-    ms = a.m or [*glm53.DECODE_M, *glm53.PREFILL_M]
-    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule, a.graphs)
+    ms = a.m or ([*glm53.DECODE_M] if a.whole else [*glm53.DECODE_M, *glm53.PREFILL_M])
+    if a.whole and (a.schedule != "serial" or max(ms) > GRAPH_ROWS or len(set(shapes)) != len(shapes)):
+        p.error(f"--whole: the serial schedule, M up to {GRAPH_ROWS} and distinct shapes (a deferred call joins at once after "
+                f"its own shape's)")
+    out.mkdir(parents=True, exist_ok=True)
+    run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule, a.graphs or a.whole)
     side = run.side.stream if run.side is not None and run.side.stream is not None else None
     join = (lambda: torch.cuda.current_stream().wait_stream(side)) if side is not None else None
-    head = {"scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs, "epoch": EPOCH,
+    head = {"scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs or a.whole, "whole": a.whole, "epoch": EPOCH,
             "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,
             "fadd_readings": {k: str(v) for k, v in glm53.FADD_READINGS.items()}}
@@ -190,6 +351,24 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001 - recorded
         head["vllm"] = f"{type(e).__name__}: {e}"
     rows = []
+    if a.whole:
+        built = {w: stock_arms(W) for w, W in weights.items()}
+        stock = {nm: {w: built[w][0][nm] for w in weights} for nm in STOCK if all(nm in built[w][0] for w in weights)}
+        head["stock_build_errors"] = {nm: {str(w): built[w][1][nm] for w in weights if nm in built[w][1]}
+                                      for nm in STOCK if nm not in stock}
+        for m in ms:
+            xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
+            r = whole(run, weights, xs, stock, a.reps)
+            rows.append(r)
+            print(f"m {m}, a forward of {r['calls']} calls: " + ", ".join(f"{nm} {v:.4f} ms" for nm, v in r["ms"].items())
+                  + f"; deferred saves {r['deferred_saving']['vs_calls']:.1%} over the calls one at a time, "
+                  f"{r['deferred_saving']['vs_whole']:.1%} over the serial capture"
+                  + (f"; slowdown deferred {r['slowdown']['pearlc-deferred']:.3f}x over {r['fastest_stock']}"
+                     + ("" if r["stock_graphed"][r["fastest_stock"]] else " (eager)") if r["fastest_stock"] else "; no stock arm")
+                  + f"; commitments {'equal' if r['commitments_equal'] else 'DIFFER'}, poisoned "
+                  f"{'equal' if r['poisoned_equal'] else 'DIFFER'}", flush=True)
+            (out / "whole.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")
+        return 0 if all(r["commitments_equal"] and r["poisoned_equal"] for r in rows) else 1
     for w, W in weights.items():
         n, k = W.shape
         arms, errors = stock_arms(W)
