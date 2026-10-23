@@ -150,12 +150,8 @@ def executor_of(llm: Any) -> Any:
 
 
 def _runner(decode_query_len: int) -> Any:
-    """What `pouw_h1_requests.batch_order` reads of the ranks' Model Runner V2: its module's batch order and its
-    decode_query_len."""
-    try:
-        importlib.import_module(MRV2)
-    except ImportError:
-        pass
+    """What `pouw_h1_requests.batch_order` reads of the ranks' Model Runner V2: its module's batch order (once `install`
+    has imported it; `pouw_h1_requests.sort_batch_req_ids` until then) and its decode_query_len."""
     return type("GPUModelRunner", (), {"__module__": MRV2, "decode_query_len": int(decode_query_len)})()
 
 
@@ -243,6 +239,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``)."""
     if (coins is None) == (opener is None):
         raise ValueError(f"{entry}: the window's salt is from coins or opened by its opener, one of the two")
+    if llm is not None:
+        importlib.import_module(MRV2)
     executor = executor if executor is not None else executor_of(llm)
     layout = sorted(executor.collective_rpc("h1rank_layout"), key=lambda o: (o["pp"], o["tp"]))
     if len({o["decode_query_len"] for o in layout}) != 1:
