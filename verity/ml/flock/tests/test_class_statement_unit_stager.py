@@ -248,3 +248,16 @@ def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):
     assert low.text == plain.text and low.domain == "total"
     for n, want in ((0, "total"), (2, "finite-only")):
         assert IL.Lowering.domain.fget(SimpleNamespace(circuit=None, layout=SimpleNamespace(counts={"asserts": n}))) == want
+
+
+@pytest.mark.parametrize("chunk", [1, 5, 1 << 24])
+def test_a_lowerings_sha256_is_its_texts_in_pieces(chunk, monkeypatch):
+    """`Lowering.sha256_of` (``unit_sha256``) is SHA-256 of `Lowering.text`, its netlist encoded :data:`ir_lower.HASH_CHUNK`
+    characters at a time."""
+    class Whole(str):
+        def encode(self, *a):
+            raise AssertionError("encoded whole")
+
+    low, _words = CS.unit_lowering(TOY, "unit/stager-toy", [(r, ps) for r, _s, _b, ps in TOY_ROWS])
+    monkeypatch.setattr(IL, "HASH_CHUNK", chunk)
+    assert low.sha256_of(Whole(IL.netlist(low.layout, low.name))) == hashlib.sha256(low.text.encode()).hexdigest() == low.sha256

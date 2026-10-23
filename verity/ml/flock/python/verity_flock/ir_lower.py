@@ -32,6 +32,9 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
+#: the netlist's rows per joined piece, and the characters a digest encodes at a time
+NETLIST_ROWS = 1 << 16
+HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
 
@@ -873,10 +876,13 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
         head.append(len(groups))
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
-    lines = [" ".join(map(str, head))]
-    for a, b in zip(lay.rows_a, lay.rows_b):
-        lines.append(" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)])))
-    return "\n".join(lines) + "\n" + netlist_pins(cut, leaves)
+    # rows go in pieces of NETLIST_ROWS lines, and the text is joined once: a GLM-5.3 norm unit's is 8.6 GB
+    out = [" ".join(map(str, head)) + "\n"]
+    for k in range(0, lay.useful, NETLIST_ROWS):
+        out.append("\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
+                              for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n")
+    out.append(netlist_pins(cut, leaves))
+    return "".join(out)
 
 
 def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
@@ -890,8 +896,16 @@ def _cols_of(r) -> list:
     return r.tolist() if isinstance(r, np.ndarray) else r
 
 
+def _sha256(text: str) -> hashlib._Hash:
+    """SHA-256 of ``text``'s UTF-8, encoded :data:`HASH_CHUNK` characters at a time."""
+    h = hashlib.sha256()
+    for k in range(0, len(text), HASH_CHUNK):
+        h.update(text[k:k + HASH_CHUNK].encode())
+    return h
+
+
 def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+    return _sha256(text).hexdigest()
 
 
 def _flat_ports(t) -> list[list[int]]:
@@ -1020,7 +1034,7 @@ class Lowering:
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
-        h = hashlib.sha256(expanded.encode())
+        h = _sha256(expanded)
         h.update(netlist_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 

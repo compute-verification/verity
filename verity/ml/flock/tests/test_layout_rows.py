@@ -178,3 +178,38 @@ def test_layout_is_the_reference_layout(seed, read, cls, table, monkeypatch):
         assert r.const_bits == {3: 1, 5: 0}
         wired = {v for v in range(len(P.kind)) if P.kind[v] == "lookup" and P.data[v][1] in (3, 5)}
         assert any(wired & P.data[v][0].s or wired & P.data[v][1].s for v in ands)
+
+
+def _reference_netlist(lay, name, cut=None, leaves=None) -> str:
+    head = [IL.FORMAT, name, lay.useful, lay.const]
+    for groups in (lay.in_groups, lay.out_groups):
+        head.append(len(groups))
+        for c, words, bits in groups:
+            head += [c, words, len(bits), *bits]
+    lines = [" ".join(map(str, head))]
+    for a, b in zip(lay.rows_a, lay.rows_b):
+        lines.append(" ".join(map(str, [len(a), *IL._cols_of(a), len(b), *IL._cols_of(b)])))
+    return "\n".join(lines) + "\n" + IL.netlist_pins(cut, leaves)
+
+
+class _Whole(str):
+    """A text that refuses to be encoded whole."""
+
+    def encode(self, *a):
+        raise AssertionError("encoded whole")
+
+
+@pytest.mark.parametrize("rows", [1, 3, 64, 1 << 16])
+def test_the_netlist_and_its_digest_go_in_pieces(rows, table, monkeypatch):
+    """`netlist` joins its rows :data:`ir_lower.NETLIST_ROWS` at a time (with an inline read's array rows and the pins) into
+    the text the one-piece netlist wrote, and `digest` encodes it :data:`ir_lower.HASH_CHUNK` characters at a time."""
+    import hashlib
+
+    monkeypatch.setattr(IL, "NETLIST_ROWS", rows)
+    monkeypatch.setattr(IL, "HASH_CHUNK", 7 * rows)
+    lay = IL.layout(_circuit(rows, True), ["in0", "in1", "in2"], ["out0", "out1", "out2"])
+    assert any(isinstance(r, np.ndarray) for r in lay.rows_a)
+    for pins in ((None, None), ({"words": 2}, None), (None, {"in": [[0, 1]]}), ({"words": 1}, {"in": []})):
+        text = IL.netlist(lay, "t", *pins)
+        assert text == _reference_netlist(lay, "t", *pins)
+        assert IL.digest(_Whole(text)) == hashlib.sha256(text.encode()).hexdigest()
