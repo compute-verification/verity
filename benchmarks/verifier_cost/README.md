@@ -28,6 +28,28 @@ verity bench verifier_cost store RUN                     # its results.json or p
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
+`nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
+Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
+digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
+check on it is that one IU; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
+(`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives the Programs the other divisions need,
+with the same computed gates and wires: rank 0's request inlined at the root as `Program` lowers a function, its
+weights bound at registration (θ), divided per session, per engine step, per layer of a step and per Call; and the
+eight ranks joined into the node's Program, each collective reading the other ranks' partials where it read its
+`peers_*` inputs. The node's session is checked at the demo's policy, Γ = 2^43 gates and α = 2^-26 bits per gate
+(`GAMMA`, `ALPHA`), and at its four neighbours. Three of rank 0's Definitions (the router, the fused all-reduce and
+norm, an FP8 linear layer) also go gate by gate through `--policy --unrolled` and the Python reference, which must
+agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and
+gates, the division, the verdict summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's IUs.
+
+~~~sh
+research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
+  --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
+research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 400 \
+  --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
+  -- bash benchmarks/verifier_cost/nci_glm.sh [--case registered|rank|slice|node ...]
+~~~
+
 `flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
@@ -64,5 +86,5 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing outside this directory
-reads it.
+Apart from `nci_glm`'s inputs, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
+this benchmark's constructions, and nothing outside this directory reads them.
