@@ -236,7 +236,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
                            max_num_seqs=len(PROMPTS), engine_args={"max_num_batched_tokens": a.rows,
-                                                                   "enable_chunked_prefill": True, "enable_prefix_caching": False})
+                                                                   "enable_chunked_prefill": True, "enable_prefix_caching": False,
+                                                                   **a.engine_arg})
     steps_public = a.steps or 2 * (a.max_tokens + 2)
     doc["public"] = {"slots": len(PROMPTS), "rows": a.rows, "steps": steps_public, "max_tokens": a.max_tokens}
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager")}
@@ -394,11 +395,11 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as scratch:
         entry, how = pin(a)
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
-        args = decl.engine_args()
+        args = {**decl.engine_args(), **a.engine_arg}
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target,
                            max_num_seqs=args.pop("max_num_seqs"), engine_args=args)
     doc["engine"] = {"int8_exact": int8_exact_of(eng.model), "enforce_eager": eng.kwargs.get("enforce_eager"),
-                     "effective": eng.effective, "args": decl.engine_args()}
+                     "effective": eng.effective, "args": {**decl.engine_args(), **a.engine_arg}}
     entry_name = f"pouw:{PH.SCHEME}"
     registry = model_key_of(a.gate, a.model, a.circuit) if a.model else None
     if registry is not None:
@@ -996,6 +997,9 @@ def main(argv: list[str] | None = None) -> int:
                                                          "batch and the one alone)")
     ap.add_argument("--int8-exact", default="all", choices=["linears", "all"],
                     help="TargetProfile.int8_exact: linears alone for a model with no int8 K scales (a MoE: OLMoE)")
+    ap.add_argument("--engine-arg", metavar="KEY=VALUE", action="append", default=[],
+                    help="an LLM() keyword over the workload's (repeatable, the value JSON when it parses): "
+                         "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
@@ -1060,6 +1064,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
+    from verity_vllm.engine.build import parse_engine_args
+    a.engine_arg = parse_engine_args(a.engine_arg)
     if a.core_from:
         return 0 if core_from(a.core_from, a.out)["ok"] else 1
     if a.commit and not (a.served and a.workload == "fill" and not a.handoff and not a.challenger):
