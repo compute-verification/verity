@@ -73,6 +73,11 @@ def test_a_run_that_cannot_bind_runs_unbound_and_says_why(tmp_path, case, reason
     assert numabind.line(rec).startswith(f"numa: unbound ({reason}")
 
 
+def test_an_unbound_line_names_the_node_it_would_have_bound_to(tmp_path):
+    assert numabind.line(plan(tmp_path, numactl=None)[1]) == ("numa: unbound (no numactl on PATH; GPU GPU-4 at 0000:ef:00.0, "
+                                                              "which is on node 1)")
+
+
 def test_cpu_lists_and_bus_ids_read_as_the_kernel_writes_them():
     assert numabind.cpus_of("0-3,8,10-11\n") == {0, 1, 2, 3, 8, 10, 11}
     assert numabind.cpu_list({11, 0, 1, 2, 3, 8, 10}) == "0-3,8,10-11"
@@ -85,5 +90,5 @@ def test_the_command_runs_with_the_record_in_its_environment_and_its_exit_code(t
     r = subprocess.run([sys.executable, str(DITHER / "numabind.py"), str(rec), sys.executable, "-c", show],
                        env={**os.environ, "DITHER_NUMA": "0"}, capture_output=True, text=True)
     assert r.returncode == 7
-    assert r.stdout.splitlines() == ["numa: unbound (DITHER_NUMA=0; no GPU)", "DITHER_NUMA=0"]
+    assert r.stdout.splitlines() == ["numa: unbound (DITHER_NUMA=0)", "DITHER_NUMA=0"]
     assert json.loads(rec.read_text())["bound"] is False

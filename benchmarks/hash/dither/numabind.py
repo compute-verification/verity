@@ -96,12 +96,12 @@ def plan(env, affinity: set[int], *, bus_id=smi_bus_id, sys_root: Path = Path("/
 
 
 def line(rec: dict) -> str:
-    where = "no GPU" if "gpu" not in rec else f"GPU {rec['gpu']}" + (f" at {rec['pci']}" if "pci" in rec else "")
+    gpu = f"GPU {rec['gpu']}" + (f" at {rec['pci']}" if "pci" in rec else "") if "gpu" in rec else ""
     if rec["bound"]:
-        return (f"numa: bound to node {rec['node']} ({where}): CPUs {rec['cpus']} of this run's {rec['affinity']}, "
+        return (f"numa: bound to node {rec['node']} ({gpu}): CPUs {rec['cpus']} of this run's {rec['affinity']}, "
                 f"memory node {rec['membind']}")
     on = f", which is on node {rec['node']}" if rec["node"] is not None else ""
-    return f"numa: unbound ({rec['reason']}; {where}{on})"
+    return f"numa: unbound ({rec['reason']}{'; ' + gpu if gpu else ''}{on})"
 
 
 def main(argv: list[str]) -> int:
