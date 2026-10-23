@@ -1499,7 +1499,7 @@ class Stream:
 
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
-                session_roots: Mapping[str, str] | None = None) -> Outcome:
+                session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None) -> Outcome:
         """The draw's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by its verifier of
@@ -1509,12 +1509,19 @@ class Stream:
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the
-        registration on): where they differ the outcome is a reject, its audit record failing `run`. Raises `Refused` for
-        a second outcome, a verdict of record about other sessions, or public outputs the verdicts of record don't report
-        alike."""
+        registration on): where they differ the outcome is a reject, its audit record failing `run`. A draw from the
+        auditor's challenger (`coins.ChallengerCoins`) passes its coins' evidence as `coins` (`coins.coins_reason`'s
+        `{key, ledger, segment, session, window}`), and the Lean's run refuses it unless the bytes the draw read are
+        exactly the coins the challenger released after the registration's digest, each checked against its commitment
+        and every one read: a reject failing `run` too. Raises `Refused` for a second outcome, a verdict of record about
+        other sessions, public outputs the verdicts of record don't report alike, or `coins` for a draw that read no
+        coins."""
         op: dict[str, Any] = {"op": "outcome", "order": _order(draw.registration),
                               "registration": _registration_token(draw.registration), "draw": _draw_token(draw)}
         got: dict[str, Any] = {}
+        o = op["order"]
+        if coins is not None and o is not None and o < len(self._entries) and self._entries[o].read is None:
+            raise Refused("coin evidence is for a draw read from the challenger's coins, and this draw read none")
 
         def held() -> list[str] | None:
             e = self._entries[draw.registration.order]
@@ -1525,7 +1532,7 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
-                                                            session_roots)))
+                                                            session_roots, coins)))
             op["accepted"] = got["audit"]["accepted"]
             return None
         d = self._held(self._decide(op, {"now": lambda: float(self._clock()), "verdicts": held}), got.get("verdicts"))
@@ -1549,7 +1556,8 @@ class Stream:
 
     def _audit(self, e: _Entry, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
-               session_roots: Mapping[str, str] | None) -> tuple[dict[str, Any], dict[str, Any]]:
+               session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None
+               ) -> tuple[dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier of
         record's), and the public outputs."""
         assert e.sessions is not None
@@ -1574,7 +1582,7 @@ class Stream:
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
-                      binding=self.binding, schemas=schemas, window_root=window_root, held=held)
+                      binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins)
             if not v.ok:
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}

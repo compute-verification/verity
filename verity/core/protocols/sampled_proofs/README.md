@@ -173,7 +173,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
-  challenger, and `challenger_stream` and `read_reason`, the verifier's replay of them from the record.
+  challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
@@ -447,9 +447,12 @@ ceil(missing / 64) more of the family's coins after it in one round trip, checks
 commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
 drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
-are exactly those released after the commitment, every one read. The Lean verifier of record replays the draw from the
-bytes (`Run.run`, `Select.select` on `source`) but does not yet check them against the segment. Pinned by
-`tests/test_challenger_coins.py`.
+are exactly those released after the commitment, every one read. `Stream.outcome(coins=...)` hands the evidence
+(`coins_reason`'s `{key, ledger, segment, session, window}`) to the Lean verifier of record, whose run
+(`Run.run`, `SampledProofs.ChallengerCoins`) takes the commitment and the roots from the session the auditor's ledger
+opens for the window and refuses the select step (code `coins`) unless the bytes the draw read are those coins, after
+the registration's digest: the outcome is then a reject failing `run`. Pinned by `tests/test_challenger_coins.py` and
+the difftest's `challenger_read` and `challenger_draw_coins`.
 
 ### Verification plans
 

@@ -3,7 +3,8 @@ the prover's commitment, concatenated in order, extended with the family's next 
 challenger's commitment before its bytes are used; the verifier replays it from the record (`challenger_stream`,
 `read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment drawn twice, coins the
 log doesn't show released after the commitment, coins of another commitment and a coin opened but not read are refused,
-in process, over a served challenger, and through the proof service's `Stream.select`."""
+in process, over a served challenger, and through the proof service's `Stream.select`; and the Lean verifier of
+record's run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import itertools
 
 import pytest
 
-from verity.core.protocols.sampled_proofs import challenger as C, coins as T, remote as R
+from verity.core.protocols.sampled_proofs import challenger as C, coins as T, remote as R, service as S
 
 from test_challenger import entropy
 from test_remote import Host, signer  # noqa: F401  (the challenger key's signer fixture)
@@ -177,3 +178,52 @@ def test_the_proof_service_draws_from_the_challengers_coins_after_the_receipt():
     read = stream._entries[reg.order].read
     assert len(draw.units) == 2 and read
     assert T.read_reason(ch.commitment, segment.to_json(), bytes.fromhex(reg.digest), read, coins.record.roots) is None
+
+
+def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
+        tmp_path, signer, monkeypatch):  # noqa: F811
+    """`Stream.outcome` with the coins' evidence (`coins_reason`'s: the challenger key, the auditor's ledger, the
+    segment, the session's files and the window): the verifier of record's run (`Run.run`) checks the bytes the draw
+    read against the session the ledger opens for the window and accepts the honest draw. A segment that skips a coin
+    opened after the registration's digest, one with a wrong opening, or one that adds the coins opened after an
+    earlier registration fails its select step (code `coins`), so the outcome is a reject failing `run`. Evidence for a
+    draw that read no coins is refused."""
+    import test_remote
+    from test_service import SESSION, _lean, _ports, _record, _stream
+
+    monkeypatch.setattr(test_remote, "FAMILIES", [("positions", 12), ("replay", 2)])
+    host = Host(tmp_path, signer)
+    client = R.RemoteChallenger.connect(host.address)
+    coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
+    draws = []
+    for n in range(6, 10):
+        stream = _stream(coins=coins)
+        reg = stream.register(_record(n), _ports(n))
+        segment = coins.commit(bytes.fromhex(reg.digest))
+        draws.append((stream, stream.select(reg), segment.to_json()))
+    client.close()
+    assert host.ended() is None
+    ledger, session = R.ledger_lines(host.ledger.path), R.session_files(host.directory)
+    _, _, first = draws[0]
+    honest, skipped, wrong, before = (d[2] for d in draws)
+    skipped = {**skipped, "openings": skipped["openings"][1:], "start": skipped["start"] + 1}
+    wrong = {**wrong, "openings": [{**wrong["openings"][0], "coin": "00" * 64}, *wrong["openings"][1:]]}
+    earlier = [{**o, "after": before["after"]} for o in draws[2][2]["openings"]]
+    before = {**before, "openings": earlier + before["openings"], "start": before["start"] - len(earlier)}
+    for (stream, draw, _), segment in zip(draws, (honest, skipped, wrong, before)):
+        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "segment": segment, "session": session,
+                    "window": test_remote.WINDOW}
+        assert stream.deliver(draw, [SESSION]) is None
+        out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
+        audit = stream.records[-1]["audit"]
+        if segment is honest:
+            assert out.accepted and "run" not in audit["checks"], audit["checks"].get("run")
+        else:
+            assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"]
+            lean = audit["checks"]["run"]["detail"]["disagree"]["lean"]
+            assert (lean["step"], lean["codes"]) == ("select", ["coins"]), lean
+    sampled = _stream(sampler=lambda law, n: [0, 1])
+    draw = sampled.select(sampled.register(_record(), _ports(6)))
+    assert sampled.deliver(draw, [SESSION]) is None
+    with pytest.raises(S.Refused, match="read none"):
+        sampled.outcome(draw, _lean(), {"statement": "stub"}, coins={"segment": first})

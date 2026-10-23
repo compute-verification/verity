@@ -24,7 +24,8 @@ from typing import Any
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import COIN_BYTES, CoinError, LiveCommitment, LiveOpening, LiveRecord, live_reason, record_many
+from .challenger import (COIN_BYTES, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
+                         live_reason, record_many, trusted_session_of)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -155,7 +156,8 @@ class ChallengerCoins:
     ceil(missing / 64) more coins of the family after `after` in one round trip (`record_many`, at most `MAX_BATCH` a
     batch), each checked against the challenger's commitment (`live_reason`) before its bytes are used, so a rerun's
     extension reads only coins not opened before. Its `segments` are the record (`Segment.to_json`: the family, the first
-    index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`). It
+    index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
+    and `coins_reason`, which the Lean verifier of record's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
     fails: a retry never redraws."""
 
@@ -266,6 +268,27 @@ def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: by
     return None
 
 
+COINS_FORM = ("a draw's coin evidence is {key, ledger, segment, session, window}: the verifier's challenger key, the "
+              "auditor's ledger, the draw's coins (Segment.to_json), the challenger session's files and the window")
+
+
+def coins_reason(coins: Any, after: bytes, read: bytes, verify: Verify) -> str | None:
+    """`read_reason` on the evidence of a draw's coins, `{key, ledger, segment, session, window}`: the commitment and
+    the family's roots are those of the one session the auditor's ledger opens for the window under the verifier's
+    challenger key (`trusted_session_of`), never the record's. `service.Stream.outcome` hands the evidence to the Lean
+    verifier of record, whose run refuses a draw it gives a reason for (`Run.run`'s `select`, code `coins`)."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "segment", "session", "window"]:
+        return COINS_FORM
+    try:
+        commitment, roots = trusted_session_of(coins["ledger"], coins["window"], ChallengerKey.from_json(coins["key"]),
+                                               coins["session"], verify)
+    except CoinError as e:
+        return str(e)
+    segment = coins["segment"]
+    label = segment.get("label") if isinstance(segment, Mapping) else None
+    return read_reason(commitment, segment, after, read, roots.get(label, ()) if type(label) is str else ())
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every unit in a drawn unit's
     closure that is not itself drawn, ascending."""
@@ -322,5 +345,5 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["ChallengerCoins", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "draw_first",
-           "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream",
+           "closure_of", "coins_reason", "draw_first", "read_reason"]
