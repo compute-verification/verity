@@ -643,11 +643,19 @@ noncomputable def δcRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claim
 
 /-! ## The record -/
 
+/-- **The inputs of the SHA-512 evaluations the plain inner verifier's setup makes at the inner statement `xI`**: the
+calls its run logs at SHA-512, at the statement's own setup (`FlockDeploy.setupOf`), and none where it sets up none.
+A function of the statement alone, which no deployment choice moves. -/
+noncomputable def innerSetupIns (xI : Claims.Msg) : List Claims.Msg :=
+  match FlockDeploy.setupOf false xI with
+  | some (s, _, _) => ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval FlockDeploy.sha512).2.map Prod.fst
+  | none => []
+
 /-- **The compiled verifier**, as the record the recursion's claims read: the inner verifier `IV` and its scope
 check, and what the deployment brings (`b`). The inner view runs `IV` at the claim's oracle; the hm96 key is the pinned
 one (`Hm96.Default512`: its salt prefix, and its salt mask `Φ` as 64 bytes). Its completeness error is `δcRec`, which
 reads the inner session as the deployed plain verifier's (`FlockComplete.δc`), the one the claims instantiate `IV`
-with. -/
+with, and its inner setup's calls are the plain setup's at SHA-512 (`innerSetupIns`). -/
 noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.Deploy Coin where
   V := V IV b.st
@@ -669,6 +677,7 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
   P := refP IV b
   δc := δcRec b.st
   setup := b.setup
+  innerSetup := innerSetupIns
 
 theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg) :
     Claims.Recursion.xI (deployRec IV ivScope b) x = xIOf x := rfl

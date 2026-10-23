@@ -72,7 +72,7 @@ eight items:
    `2^-128` target under every weight (ASK-73): its KS is stated and proved at that level, not at the floor. Route 2C's
    bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from
-   premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and `ReadersLogColl`
+   premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and `ReadersLogCollS`
    (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces at the
    parts that commit the earlier rounds). Holo statements are candidate 3's own model, and
    `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
@@ -411,7 +411,8 @@ pinned hm96 key's salts (`saltLen` bytes), its salt prefix `p_salt` and its GF(2
 type); its completeness error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that
 error and no other; and the inputs of the SHA-512 evaluations the V* setup makes outside the oracle at a V* statement
 (`setup`: its registered reads' leaves and climbs, and the roots it recomputes from public data, a function of the
-statement's bytes), none by default. -/
+statement's bytes), none by default; and the inputs of the SHA-512 evaluations the inner verifier's setup makes at an
+inner statement (`innerSetup`, reading no message and no coin: the inner statement's own), none by default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -433,6 +434,7 @@ structure Deploy (Coin : Type) where
   P : Flock.Wit → Prover Tape
   δc : (Msg → Msg) → Msg → ℝ
   setup : Msg → List Msg := fun _ => []
+  innerSetup : Msg → List Msg := fun _ => []
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
@@ -661,7 +663,7 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 `coverW`, ASK-72; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
 under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and `ReadersLogColl`
+`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB`, `DecompB` and `ReadersLogCollS`
 (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces
 at the parts that commit the earlier rounds). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). -/
