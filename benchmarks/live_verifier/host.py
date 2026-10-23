@@ -26,7 +26,10 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
   `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
-  host's key and this host's name there, under the lane's `--period` and `--pin`), writes every session's transcript
+  host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
+  challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
+  `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
+  there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
   (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
   never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
@@ -135,6 +138,7 @@ class Host:
     root: Path = Path("/var/lib/vy-verifier")
     config: Path = Path("/etc/vy/verifier.json")
     pins: Path = Path("/opt/vy-verifier/pins.jsonl")
+    main: Path = Path("/opt/vy-verifier/main-first-parent.txt")
 
     @property
     def runs(self) -> Path:
@@ -326,16 +330,20 @@ def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tup
 
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
-    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger and
-    the peer's capacities; a bound run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused
-    when either is missing."""
+    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
+    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
+    if not host.main.is_file():
+        raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
+                      "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
+                      "challenger pin it can't find on it, so no run starts without it")
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--verdict", req["verdict"],
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"]]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:

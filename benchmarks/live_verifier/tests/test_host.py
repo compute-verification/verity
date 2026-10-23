@@ -2,9 +2,10 @@
 `verifier.json` with a dummy challenger ssh: a run is held to the whitelist, written as its request and started as its
 one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
 any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
-stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved doesn't
-run. The slow test runs a run through the stub verifier (`stub_verifier.py`, a real paced session): its out/ is
-verifier.py's, which `auditor_line.py` reads, `fetch` ships it and `replay` replays it through both verifiers."""
+stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
+host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
+(`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
+and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
@@ -57,8 +58,10 @@ def svc(tmp_path) -> H.Host:
     settings["challenger"]["ssh"] = SSH
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
-    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl")
+    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
+                  main=tmp_path / "main-first-parent.txt")
     H.record_pin(host.pins, PIN, T0, seal=lambda p: None)
+    host.main.write_text(f"{PIN}\n{'e' * 40}\n")
     return host
 
 
@@ -126,10 +129,23 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--verdict": "lean", "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "vy-auditor-1", "--challenger-pin": KEY,
-        "--challenger-period": "memory-line-1", "--host-bytes": "1843153879040", "--ingress-bytes-per-s": "4400000000.0"}
+        "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--host-bytes": "1843153879040",
+        "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
     assert "run" in refused(call(svc, PACED, units, token="cd34")) and units.started == [f"vy-verifier@{RUN}.service"]
     assert [p.name for p in svc.runs.iterdir()] == [RUN]
+
+
+def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_parent_list_of_main(svc):
+    """The verifier refuses every gate session whose challenger pin isn't on main's first-parent line, read from the
+    list infra writes at `Host.main`; without that list no run starts, so none ends with every session refused."""
+    units = Units()
+    svc.main.unlink()
+    assert refused(call(svc, PACED, units)) == (
+        f"this host has no {svc.main}, main's first-parent history (infra writes `git rev-list --first-parent "
+        "origin/main` there, root's, 0644): the verifier refuses every gate session whose challenger pin it can't find "
+        "on it, so no run starts without it")
+    assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
 def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
@@ -172,8 +188,8 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     assert {k: getattr(a, k) for k in want} == want
     assert (a.model, a.checkpoint, a.pin, a.arena_blocks) == (None, None, None, None)
     assert (a.out, a.registry, a.transcript) == (svc.runs / RUN / "out", svc.registry, svc.scratch / RUN / "transcripts")
-    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period) == (
-        "gate", SSH, "vy-auditor-1", KEY, "memory-line-1")
+    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
+            a.challenger_main) == ("gate", SSH, "vy-auditor-1", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
         1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
     for spec in a.paced or []:
@@ -270,6 +286,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
         ("--host-bytes", "1"), ("--ingress-bytes-per-s", "1"), ("--hbm-bytes", "1"), ("--disk-bytes-per-s", "1"),
         ("--link-bytes-per-s", "1"), ("--challenger", "serve"), ("--challenger-ssh", "research@198.51.100.1"),
         ("--challenger-peer", "vy-nebius-2"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
+        ("--challenger-main", "/tmp/main"),
         ("--out", "/tmp/out"), ("--registry", "/tmp/r.json"), ("--transcript", "/tmp/t"), ("--lean-exe", "/bin/sh"),
         ("--host", "0.0.0.0"), ("--check-workers", "1"), ("--delta-log2", "-1"), ("--pings", "1"),
         ("--appends", "9"), ("--memory-of", "/tmp/v.json"), ("--close", "ab"), ("--disk-burst-bytes", "1"),

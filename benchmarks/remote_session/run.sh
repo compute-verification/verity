@@ -49,7 +49,8 @@
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
+# from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
 # python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
