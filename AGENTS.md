@@ -283,7 +283,7 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
     the Lean's) and the algebraic phase's scheduled rounds. Its own checks can only refuse more, and it relays the
     rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
     released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
-    `FinishIs`, `FrameUnrefused`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
+    `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
