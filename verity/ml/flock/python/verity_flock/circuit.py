@@ -652,7 +652,6 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         if not order["ok"]:
             raise ValueError(f"{low.name}: the unit's template is not in the order Tmpl.parse checks: {order}")
         useful = TM.layout(template, layout)[template.root].size
-        tmpl_text = TM.write(template)
     ul = _slot_log(useful)
     if useful == 1 << ul:
         raise ValueError(f"{low.name}: a unit fills its slot; a zero leaf needs a forced-zero row")
@@ -684,6 +683,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ranges, k_log = fits(G)
     if k_log > K_MAX:
         raise ValueError(f"{low.name}: an instance needs a block of 2^{k_log} bits (at most 2^{K_MAX})")
+    tmpl_text = TM.write(template) if template is not None else None
     per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": tail.stages[i].count for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []
