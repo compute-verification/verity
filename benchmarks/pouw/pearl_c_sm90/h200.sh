@@ -3,7 +3,7 @@
 # the pin rewrites sass_pins.json):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --timeout 120m \
+#   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --timeout 180m \
 #     --env GPU_LEASE_WHO=kernels-pc90 --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
 # Outside any lease: the ship (build.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
@@ -13,7 +13,9 @@
 # in-domain linear at decode's and prefill's M, prefill's again under run.py's h3 chain (PEARLC_CHAIN=h3, into
 # $OUT/timing-h3), and decode's forward captured whole, serial and deferred (--whole, into $OUT/whole).  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease, and
-# (VERIFY=1, the default) glm53_passes.py verify replays the passes on this machine's CPUs, after every lease is released.
+# (VERIFY=1, the default) glm53_passes.py verify replays the passes on this machine's CPUs, after every lease is released, and
+# (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
+# leaf, every real row's served y; prefill's 7,184 tiles take about 4.5 CPU-hours).
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit (default
 # /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
@@ -61,8 +63,12 @@ if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then
   "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --jobs "$(nproc)" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
 fi
+if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
+  "$PY" "$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)" > "$O/full.log" 2>&1
+  echo "full rc $?" >> "$O/rc.txt"
+fi
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-tail -4 "$O/capture.log" "$O/verify.log" "$O/pin.log" 2>/dev/null
+tail -4 "$O/capture.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" "$O/timing-h3.log" "$O/whole.log" 2>/dev/null | head -80
 ! grep -qv " rc 0$" "$O/rc.txt"

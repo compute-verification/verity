@@ -1,12 +1,13 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
 checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
-session's shapes the table's, and glm53_timing's --whole over a stand-in card."""
+session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
 
 from __future__ import annotations
 
 import contextlib
 import hashlib
 import importlib.util
+import json
 import re
 import sys
 from dataclasses import replace
@@ -108,13 +109,15 @@ def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
 
 def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192; it times decode's
-    forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one."""
+    forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one, and checks the
+    captured passes' outputs in full after every lease."""
     sh = (HERE / "h200.sh").read_text()
     listed = re.search(r"for nk in ([\dx ]+); do", sh).group(1).split()
     assert {tuple(map(int, x.split("x"))) for x in listed} == set(G.in_domain())
     assert 'SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
     assert '"$D/glm53_timing.py" --whole --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --out "$O/timing-h3" --m 2048 8192' in sh
+    assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
 
 
 def _timing():
@@ -309,3 +312,171 @@ def test_whole_refuses_what_it_cant_capture(tmp_path, args):
     with pytest.raises(SystemExit) as e:
         _timing().main(["--whole", "--out", str(tmp_path / "out"), *args])
     assert e.value.code == 2 and not (tmp_path / "out").exists()
+
+
+def _passes_module():
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_glm53_passes", HERE / "glm53_passes.py")
+    if spec.name not in sys.modules:
+        mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[spec.name]
+
+
+@pytest.fixture(scope="module")
+def retained(tmp_path_factory):
+    """A retained pass in glm53_passes' layout, as `prefill` and as `decode` (the same pass): two calls of a test instance of
+    pearl-c-h100-v1-h3 (k = 128, 16 x 16 tiles), one with 12 filler rows, proved by the scheme's reference prover and written
+    as the device run writes them, and each call's served y from the scheme over the whole call as one tile (U and α), its
+    two FP32 products numpy's and its BF16 rounding torch's."""
+    import random
+    import shutil
+
+    np = pytest.importorskip("numpy")
+    torch = pytest.importorskip("torch")
+    GP = _passes_module()
+    sys.path.insert(0, str(HERE.parent / "clear"))
+    import clear_work as CW
+    from clear_audit import Prover
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+    from verity.core.protocols.pouw.audit import (
+        HM96_TRANSCRIPT,
+        HM96_WEIGHTS,
+        ROW_SCHEMA,
+        TILE_SCHEMA,
+        Epoch,
+        Workload,
+        activation_binding,
+        hm96_salt,
+        rows_domain,
+        transcript_domain,
+        weight_binding,
+        weights_root,
+    )
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
+    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.ml.commitments.merkle import tree_levels
+
+    scheme = "pearl-c-h100-v1-h3"
+    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
+    rng, k = np.random.default_rng(11), 128
+    words = lambda r: (rng.standard_normal((r, k)).astype(np.float32)).view(np.uint32) & 0xFFFF0000
+    rows = lambda x: [r.tobytes() for r in x]
+    bf16 = lambda x: b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows(x))
+    laid = lambda d, leaves: b"".join(b"".join(level) for level in tree_levels(d, leaves))
+    wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
+    acts[0][20:] = 0
+    work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
+    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
+    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)
+    ch = Challenger(0, random.Random(7).randbytes)
+    coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
+    epoch = Epoch.start(work, prover.weight_roots, *coins)
+    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    splits = {w: PW.Split(k) for w in wrows}
+    records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
+                         real_rows={0: 20})
+    base = tmp_path_factory.mktemp("retained")
+    d = base / "pass"
+    for sub in ("calls", "weights", "y"):
+        (d / sub).mkdir(parents=True)
+    weights = {}
+    for w, x in wrows.items():
+        dom = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
+        weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[w].excluded_b),
+                           "rows": PPD._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
+                           "tree": PPD._write(d / "weights" / f"{w}.tree",
+                                              laid(dom, [dom.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
+                                                         for j, r in enumerate(rows(x))]))}
+    matmuls, y_words = [], 0
+    for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
+        x, m, n = rows(acts[u.index]), u.shape.m, u.shape.n
+        dom = rows_domain(activation_binding(epoch.salt, u.index), u.index, m, s.commitment_hash)
+        matmuls.append({"index": u.index, "m": m, "k": k, "n": n, "weight": u.weight, "real_rows": rec.real_rows,
+                        "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
+                        "rows": PPD._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
+                        "tree": PPD._write(d / "calls" / f"{u.index}.tree",
+                                           laid(dom, [dom.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
+        ctx = Context(epoch.salt, u, root, epoch.weight_roots[u.weight])
+        noise = s.noise(ctx)
+        ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
+        uu = np.array(s.checked(ctx, ops).u, np.uint32)[:rec.real_rows].view(np.float32)
+        inv = lambda alpha: np.float32(1) / np.array(alpha, np.uint32).view(np.float32)
+        y = torch.from_numpy((uu * inv(ops.a.alpha)[:rec.real_rows, None]) * inv(ops.b.alpha)[None, :]).to(torch.bfloat16)
+        (d / "y" / f"{u.index}.bf16").write_bytes(y.view(torch.int16).numpy().tobytes())
+        y_words += y.numel()
+    count = tr.commitment.count
+    leaves = [prover.digest(t) for t in range(count)]
+    dt = transcript_domain(epoch, count, s.commitment_hash)
+    head = {"schema": PPD.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
+            "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
+            "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
+            "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPD._write(d / "leaves", b"".join(leaves)),
+            "tree_t": PPD._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
+                                                       for i, v in enumerate(leaves)])),
+            "hm96_salt_key": prover.salt_key.hex()}
+    PPD.write_manifest(d, head, weights, matmuls)
+    (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
+    for name in GP.FULL:
+        shutil.copytree(d, base / name)
+    shutil.rmtree(d)
+    return SimpleNamespace(base=base, count=count, y_words=y_words, GP=GP)
+
+
+def _copy(retained, tmp_path) -> Path:
+    import shutil
+
+    shutil.copytree(retained.base, tmp_path / "passes")
+    return tmp_path / "passes"
+
+
+def test_full_checks_every_tile_and_every_served_y_word(retained, tmp_path):
+    """`full` takes every tile of prefill and decode through the verifier's check_tile (openings, then C~ and U against the
+    leaf) and every real row's served y against y_unit, on the batch forms with the scalar reference on every 2nd tile too."""
+    out = _copy(retained, tmp_path)
+    assert retained.GP.main(["full", "--out", str(out), "--jobs", "2", "--cross-check", "2"]) == 0
+    res = json.loads((out / "full.json").read_text())
+    for name in retained.GP.FULL:
+        r = res[name]
+        assert r["ok"] and r["tiles"] == retained.count and r["failed"] == 0, r["line"]
+        assert r["shapes"] == {"16x128": 2, "32x128": 2} and r["words"] == 32 * 16 + 16 * 32
+        assert r["y_words"] == retained.y_words == 20 * 16 + 16 * 32
+        assert r["replay"] == "batch" and r["cross_checked"] == (retained.count + 1) // 2 and r["cross_check_failed"] == []
+    assert res["ok"]
+
+
+def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(retained, tmp_path):
+    """One served y word off (decode's call 1, row 3, column 17) fails that tile alone, naming the word; one byte of an
+    activation row off (prefill's call 0, row 4) fails that row's tiles at their openings."""
+    np = pytest.importorskip("numpy")
+    out = _copy(retained, tmp_path)
+    y = out / "decode" / "y" / "1.bf16"
+    words = np.fromfile(y, "<u2").reshape(16, 32)
+    words[3, 17] ^= 1
+    words.tofile(y)
+    a = out / "prefill" / "calls" / "0.rows.bf16"
+    raw = bytearray(a.read_bytes())
+    raw[2 * 128 * 4] ^= 0x40
+    a.write_bytes(bytes(raw))
+    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--cross-check", "0"]) == 1
+    res = json.loads((out / "full.json").read_text())
+    dec, pre = res["decode"], res["prefill"]
+    assert dec["failed"] == 1 and "served y differs at 1 of 256 words, first row 3 column 17" in dec["failures"][0]["reason"]
+    assert pre["failed"] == 1 and pre["failures"] == [{"tile": 0, "reason": "activation opening"}]
+    assert not res["ok"]
+
+
+def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_path):
+    """A pass without its served y fails `full`, which checks C~ and U alone only under --without-y."""
+    import shutil
+
+    out = _copy(retained, tmp_path)
+    for name in retained.GP.FULL:
+        shutil.rmtree(out / name / "y")
+    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1"]) == 1
+    res = json.loads((out / "full.json").read_text())
+    assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.FULL) and not res["ok"]
+    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--without-y"]) == 0
+    res = json.loads((out / "full.json").read_text())
+    assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.FULL)
