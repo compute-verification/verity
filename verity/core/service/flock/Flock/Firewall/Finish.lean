@@ -168,32 +168,48 @@ closure or touches the reference count of anything the tasks share. -/
 theorem parRangeS_eq {α : Type} (f : Nat → α) (a b : Nat) : parRangeS f a b = (Array.range (a * b)).map f :=
   Link.parRange_eq f a b
 
-/-- `t.map f` in tasks of `2^12` entries. -/
-@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 :=
-  let a := t.size / 4096
-  parRangeS (fun i => f t[i]!) a 4096 ++ (Array.range (t.size - a * 4096)).map fun j => f t[a * 4096 + j]!
+/-- `(Array.range n).map f` in tasks of `2^12` entries. -/
+@[specialize] def parGen (f : Nat → F128) (n : Nat) : Array F128 :=
+  let a := n / 4096
+  parRangeS f a 4096 ++ (Array.range (n - a * 4096)).map fun j => f (a * 4096 + j)
 
-theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
-  have hm : t.map f = (Array.range (t.size / 4096 * 4096 + (t.size - t.size / 4096 * 4096))).map fun i => f t[i]! := by
-    rw [Nat.add_sub_cancel' (Nat.div_mul_le_self _ _)]
-    apply Array.ext
-    · simp
-    · intro i h1 h2
-      simp only [Array.getElem_map, Array.getElem_range]
-      rw [getElem!_eq t (by simpa using h1)]
-  rw [hm, Array.range_add, Array.map_append, Array.map_map, parMap, parRangeS_eq]
+theorem parGen_eq (f : Nat → F128) (n : Nat) : parGen f n = (Array.range n).map f := by
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 4096)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parGen, parRangeS_eq]
   rfl
 
-/-- `eqTable` with each step's two halves in tasks (`parMap`). Not a `@[csimp]` of `eqTable`, which the verifier's
-compiled path reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
+theorem range_map_getElem! (f : F128 → F128) (t : Array F128) :
+    (Array.range t.size).map (fun i => f t[i]!) = t.map f := by
+  apply Array.ext
+  · simp
+  · intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [getElem!_eq t (by simpa using h1)]
+
+/-- `t.map f` in tasks of `2^12` entries. -/
+@[specialize] def parMap (f : F128 → F128) (t : Array F128) : Array F128 := parGen (fun i => f t[i]!) t.size
+
+theorem parMap_eq (f : F128 → F128) (t : Array F128) : parMap f t = t.map f := by
+  rw [parMap, parGen_eq, range_map_getElem!]
+
+/-- `eqTable` with each step in tasks: bit 1's half by `parMap`, then bit 0's as bit 1's plus the table
+(`F128.mul_add_one`), as `eqStepFast` computes it. Not a `@[csimp]` of `eqTable`, which the verifier's compiled path
+reaches (`verifier` in `lean-audit.json`): only the fast paths below call it. -/
 def eqTablePar (r : Array F128) : Array F128 :=
-  r.foldl (fun t rj => parMap (· * (rj + 1)) t ++ parMap (· * rj) t) #[1]
+  r.foldl (fun t rj => let hi := parMap (· * rj) t; parGen (fun i => hi[i]! + t[i]!) t.size ++ hi) #[1]
 
 theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
   unfold eqTablePar eqTable
   congr
   funext t rj
-  rw [parMap_eq, parMap_eq, eqStep]
+  rw [parMap_eq]
+  dsimp only
+  rw [parGen_eq, eqStep, ← range_map_getElem! (· * (rj + 1))]
+  congr 1
+  apply Array.map_congr_left
+  intro i hi
+  have hi := Array.mem_range.1 hi
+  rw [getElem!_eq _ (by simpa using hi), Array.getElem_map, F128.mul_add_one, getElem!_eq t hi]
 
 /-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
 `s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/

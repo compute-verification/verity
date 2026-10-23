@@ -215,6 +215,121 @@ protected theorem add_zero (a : F128) : a + 0 = a := by
 protected theorem zero_add (a : F128) : 0 + a = a := by
   rw [F128.add_comm, F128.add_zero]
 
+theorem and_one_xor (b c : UInt64) : ((b ^^^ c) &&& 1 = 1) ↔ ((b &&& 1 = 1) ↔ ¬(c &&& 1 = 1)) := by
+  have h : ∀ x : UInt64, (x &&& 1 = 1) ↔ x.toNat.testBit 0 = true := fun x => by
+    rw [Nat.testBit_zero, decide_eq_true_iff, ← Nat.and_one_is_mod, ← show (1 : UInt64).toNat = 1 from rfl,
+      ← UInt64.toNat_and]
+    exact ⟨fun e => by rw [e], fun e => UInt64.toNat_inj.mp e⟩
+  rw [h, h, h, UInt64.toNat_xor, Nat.testBit_xor]
+  cases b.toNat.testBit 0 <;> cases c.toNat.testBit 0 <;> simp
+
+theorem xor_cancel (x y t : UInt64) : x ^^^ y = (x ^^^ t) ^^^ (y ^^^ t) := by
+  rw [show (x ^^^ t) ^^^ (y ^^^ t) = (x ^^^ y) ^^^ (t ^^^ t) by ac_rfl, UInt64.xor_self, UInt64.xor_zero]
+
+/-- `clmulGo` is additive in the multiplier and the accumulator together. -/
+theorem clmulGo_xor (a : UInt64) : ∀ (n i : Nat) (b c l1 h1 l2 h2 : UInt64),
+    clmulGo a n i (b ^^^ c) (l1 ^^^ l2) (h1 ^^^ h2) =
+      ((clmulGo a n i b l1 h1).1 ^^^ (clmulGo a n i c l2 h2).1, (clmulGo a n i b l1 h1).2 ^^^ (clmulGo a n i c l2 h2).2)
+  | 0, _, _, _, _, _, _, _ => rfl
+  | n + 1, i, b, c, l1, h1, l2, h2 => by
+    simp only [clmulGo, UInt64.shiftRight_xor]
+    have hx := and_one_xor b c
+    by_cases hb : b &&& 1 = 1 <;> by_cases hc : c &&& 1 = 1
+    · rw [if_neg (fun h => (hx.mp h).mp hb hc), if_pos hb, if_pos hc, ← clmulGo_xor a n (i + 1)]
+      congr 1
+      · exact xor_cancel _ _ _
+      · split
+        · rfl
+        · exact xor_cancel _ _ _
+    · rw [if_pos (hx.mpr ⟨fun _ => hc, fun _ => hb⟩), if_pos hb, if_neg hc, ← clmulGo_xor a n (i + 1)]
+      congr 1
+      · ac_rfl
+      · split
+        · rfl
+        · ac_rfl
+    · rw [if_pos (hx.mpr ⟨fun h => absurd h hb, fun h => absurd hc h⟩), if_neg hb, if_pos hc,
+        ← clmulGo_xor a n (i + 1)]
+      congr 1
+      · ac_rfl
+      · split
+        · rfl
+        · ac_rfl
+    · rw [if_neg (fun h => hb ((hx.mp h).mpr hc)), if_neg hb, if_neg hc, ← clmulGo_xor a n (i + 1)]
+
+theorem clmul_xor (a b c : UInt64) :
+    clmul a (b ^^^ c) = ((clmul a b).1 ^^^ (clmul a c).1, (clmul a b).2 ^^^ (clmul a c).2) := by
+  unfold clmul
+  rw [← clmulGo_xor, show (0 : UInt64) ^^^ 0 = 0 from rfl]
+
+theorem clmul_one (x : UInt64) : clmul x 1 = (x, 0) := by
+  unfold clmul
+  rw [clmulGo, if_pos (by decide : (1 : UInt64) &&& 1 = 1), if_pos (rfl : (0 : Nat) = 0),
+    show (1 : UInt64) >>> 1 = 0 from rfl, clmulGo_zero, show (0 : Nat).toUInt64 = 0 from rfl, UInt64.shiftLeft_zero,
+    UInt64.zero_xor]
+
+theorem clmul_zero (x : UInt64) : clmul x 0 = (0, 0) := clmulGo_zero x 64 0 0 0
+
+/-- The two shifted words `reduce` joins with `|||` share no bit, so `|||` there is `^^^`. -/
+theorem shift_or_eq_xor (x y : UInt64) (k : Nat) (hk : 0 < k ∧ k < 64) :
+    (x <<< k.toUInt64) ||| (y >>> (64 - k).toUInt64) = (x <<< k.toUInt64) ^^^ (y >>> (64 - k).toUInt64) := by
+  apply UInt64.toBitVec_inj.mp
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [UInt64.toBitVec_or, UInt64.toBitVec_xor, BitVec.getLsbD_or, BitVec.getLsbD_xor]
+  simp [BitVec.getLsbD_shiftLeft, BitVec.getLsbD_ushiftRight, Nat.toUInt64]
+  rw [Nat.mod_eq_of_lt hk.2, Nat.mod_eq_of_lt (show 64 - k < 64 by omega)]
+  by_cases hik : i < k
+  · simp [hik]
+  · rw [BitVec.getLsbD_of_ge y.toBitVec (64 - k + i) (by omega)]
+    simp
+
+theorem reduce_xor (r0 r1 r2 r3 s0 s1 s2 s3 : UInt64) :
+    reduce (r0 ^^^ s0) (r1 ^^^ s1) (r2 ^^^ s2) (r3 ^^^ s3) = reduce r0 r1 r2 r3 + reduce s0 s1 s2 s3 := by
+  have h1 : ∀ x y : UInt64, (x <<< 1 ||| y >>> 63) = x <<< 1 ^^^ y >>> 63 := fun x y =>
+    shift_or_eq_xor x y 1 (by omega)
+  have h2 : ∀ x y : UInt64, (x <<< 2 ||| y >>> 62) = x <<< 2 ^^^ y >>> 62 := fun x y =>
+    shift_or_eq_xor x y 2 (by omega)
+  have h7 : ∀ x y : UInt64, (x <<< 7 ||| y >>> 57) = x <<< 7 ^^^ y >>> 57 := fun x y =>
+    shift_or_eq_xor x y 7 (by omega)
+  simp only [reduce, HAdd.hAdd, Add.add, add, h1, h2, h7]
+  simp only [UInt64.shiftLeft_xor, UInt64.shiftRight_xor]
+  congr 1 <;> ac_rfl
+
+protected theorem mul_add (a b c : F128) : a * (b + c) = a * b + a * c := by
+  show mul a ⟨b.lo ^^^ c.lo, b.hi ^^^ c.hi⟩ = mul a b + mul a c
+  have hm : clmul (a.lo ^^^ a.hi) (b.lo ^^^ c.lo ^^^ (b.hi ^^^ c.hi)) =
+      ((clmul (a.lo ^^^ a.hi) (b.lo ^^^ b.hi)).1 ^^^ (clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi)).1,
+        (clmul (a.lo ^^^ a.hi) (b.lo ^^^ b.hi)).2 ^^^ (clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi)).2) := by
+    rw [← clmul_xor, show b.lo ^^^ c.lo ^^^ (b.hi ^^^ c.hi) = b.lo ^^^ b.hi ^^^ (c.lo ^^^ c.hi) by ac_rfl]
+  simp only [mul, clmul_xor a.lo b.lo c.lo, clmul_xor a.hi b.hi c.hi, hm]
+  generalize clmul a.lo b.lo = p0 at *
+  generalize clmul a.lo c.lo = q0 at *
+  generalize clmul a.hi b.hi = p2 at *
+  generalize clmul a.hi c.hi = q2 at *
+  generalize clmul (a.lo ^^^ a.hi) (b.lo ^^^ b.hi) = pm at *
+  generalize clmul (a.lo ^^^ a.hi) (c.lo ^^^ c.hi) = qm at *
+  obtain ⟨_, _⟩ := p0
+  obtain ⟨_, _⟩ := q0
+  obtain ⟨_, _⟩ := p2
+  obtain ⟨_, _⟩ := q2
+  obtain ⟨_, _⟩ := pm
+  obtain ⟨_, _⟩ := qm
+  simp only
+  rw [← reduce_xor]
+  congr 1 <;> ac_rfl
+
+protected theorem mul_one (a : F128) : a * 1 = a := by
+  show mul a ⟨1, 0⟩ = a
+  simp only [mul, UInt64.xor_zero, clmul_one, clmul_zero]
+  show F128.mk _ _ = a
+  rw [show a.lo ^^^ a.hi ^^^ a.lo = a.hi by
+    rw [show a.lo ^^^ a.hi ^^^ a.lo = a.hi ^^^ (a.lo ^^^ a.lo) by ac_rfl, UInt64.xor_self, UInt64.xor_zero]]
+  simp only [UInt64.zero_xor, UInt64.xor_zero, UInt64.zero_shiftLeft, UInt64.zero_shiftRight, UInt64.zero_or]
+
+/-- `x · (r + 1) = x · r + x`: one product where `eqStep` reads two. -/
+theorem mul_add_one (x r : F128) : x * (r + 1) = x * r + x := by
+  rw [F128.mul_add, F128.mul_one]
+
 theorem bitU64 (x : UInt64) (s : Nat) (hs : s < 64) : ((x >>> s.toUInt64) &&& 1 == 1) = x.toNat.testBit s := by
   have hn : ((x >>> s.toUInt64) &&& 1).toNat = x.toNat / 2 ^ s % 2 := by
     rw [UInt64.toNat_and, UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega),
