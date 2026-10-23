@@ -24,6 +24,7 @@ section Transfer
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {H : Msg → Msg} {D : Deploy Coin}
   {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem withSetup_calls (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (ws : List Flock.Wit) :
     (D.withSetup H).calls x ws = D.calls x ws ++ (D.innerSetup (xI D x)).map fun u => (u, H u) := rfl
 
@@ -32,6 +33,7 @@ theorem setup_true (H : Msg → Msg) (us : List Msg) : ∀ e ∈ us.map (fun u =
   obtain ⟨u, -, rfl⟩ := List.mem_map.1 he
   rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem withSetup_true {x : Msg} {ws : List Flock.Wit} (h : ∀ e ∈ D.calls x ws, H e.1 = e.2) :
     ∀ e ∈ (D.withSetup H).calls x ws, H e.1 = e.2 := fun e he =>
   (List.mem_append.1 he).elim (h e) (setup_true H _ e)
