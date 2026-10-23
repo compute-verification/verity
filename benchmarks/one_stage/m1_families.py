@@ -3,9 +3,13 @@ loads them), every Program row of the given request steps by its Definition (the
 rows' partition makes of it: its unit templates (`serving_rows.unit_templates`: the row itself, and a ``CUT`` family's
 batched members), whether it is a template the rows commit (`serving_rows.template`: u16 ports, else the reason), the rows
 `describe` cannot address, its port words (`serving_rows.members`' rule) and its Definition's word gates. No value is read.
+``--estimate`` adds each family's C-Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
+Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
+times the Definition holds it. Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound.
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload integrations/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
+    PYTHONPATH=...:<tree>/verity/ml/flock/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json
 """
 from __future__ import annotations
 
@@ -18,16 +22,99 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
+#: C-Flock's largest block (`circuit.K_MAX`) and the statement limit the brief measures against
+K_MAX, LIMIT_LOG = 27, 26
+
+
+def _leaf_cost(fn, IL) -> dict:
+    from verity.ml.circuits.boolean.forms import Circuit
+
+    C = Circuit()
+    params, _ret = fn.signature()
+    ins = [C.input(f"a{i}.{j}", w) for i, (_n, t) in enumerate(params) for j, w in enumerate(t.leaf_widths())]
+    outs = IL.lower(C, fn, ins)
+    C.output("o", [b for w in outs for b in w])
+    c = C.counts()
+    return {"ands": c["ands"], "reads": c["lookups"], "asserts": c["asserts"]}
+
+
+def estimate(fn, memo: dict, leaves: dict) -> dict:
+    """fn's ANDs, table reads and assertions as the sum of its leaves' (a primitive or a Boolean Definition, each lowered once
+    by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves C-Flock has no piece for."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.program import is_input
+    from verity_flock import ir_lower as IL
+
+    if fn.id in memo:
+        return memo[fn.id]
+    boolean = callable(getattr(getattr(fn, "defn", fn), "build", None))
+    if isinstance(fn, PrimitiveDefinition) or boolean:
+        fam = getattr(fn, "family", None)
+        if is_input(fn) or fam in ("Input", "Const"):
+            r = {"ands": 0, "reads": 0, "asserts": 0, "unpieced": []}
+        else:
+            try:
+                r = {**_leaf_cost(fn, IL), "unpieced": []}
+            except IL.NoPiece:
+                r = {"ands": 0, "reads": 0, "asserts": 0, "unpieced": [fn.id]}
+        leaves[fn.id] = {k: v for k, v in r.items() if k != "unpieced"}
+    else:
+        r = {"ands": 0, "reads": 0, "asserts": 0, "unpieced": []}
+        for nd in fn.body.nodes:
+            if is_input(nd.fn):
+                continue
+            n = nd.n if nd.form in ("batch", "scan") else 1
+            s = estimate(nd.fn, memo, leaves)
+            for k in ("ands", "reads", "asserts"):
+                r[k] += n * s[k]
+            r["unpieced"] = sorted(set(r["unpieced"]) | set(s["unpieced"]))
+    memo[fn.id] = r
+    return r
+
+
+def sizes(census: str, out: str) -> int:
+    import math
+    import sys
+
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    sys.setrecursionlimit(100000)
+    doc = json.loads(Path(census).read_text())
+    memo: dict = {}
+    for rid, req in doc["requests"].items():
+        for spec, f in req["families"].items():
+            t = time.time()
+            try:
+                sp = SRW._bind(spec)
+                e = estimate(sp, memo, {}) if sp is not None else {"error": "does not bind"}
+            except Exception as ex:  # noqa: BLE001 -- reported, not fatal
+                e = {"error": f"{type(ex).__name__}: {ex}"[:300]}
+            if "ands" in e:
+                e["log2_ands"] = round(math.log2(e["ands"]), 2) if e["ands"] else None
+                e["under_2^26"] = e["ands"] < 2**LIMIT_LOG
+                e["under_K_MAX"] = e["ands"] < 2**K_MAX
+            e["seconds"] = round(time.time() - t, 1)
+            f["estimate"] = e
+            print(f"M1S {rid} {f['rows']:5d} {spec[:90]:90s} ands={e.get('ands')} log2={e.get('log2_ands')} reads={e.get('reads')} "
+                  f"asserts={e.get('asserts')} unpieced={e.get('unpieced')} {e.get('error', '')}", flush=True)
+    Path(out).write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return 0
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--commit", required=True, help="the deferred TP Commit's --out (runs.jsonl, versions.json)")
-    ap.add_argument("--build-root", required=True, help="each rank's Programs of record in rank<r>/")
-    ap.add_argument("--workload", required=True)
+    ap.add_argument("--estimate", default=None, metavar="CENSUS", help="add each family's estimated size to this census's output")
+    ap.add_argument("--commit", help="the deferred TP Commit's --out (runs.jsonl, versions.json)")
+    ap.add_argument("--build-root", help="each rank's Programs of record in rank<r>/")
+    ap.add_argument("--workload")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--steps", default="16", help="comma-separated request steps described per family")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if a.estimate:
+        return sizes(a.estimate, a.out)
+    if not (a.commit and a.build_root and a.workload):
+        ap.error("--commit, --build-root and --workload, or --estimate")
 
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
