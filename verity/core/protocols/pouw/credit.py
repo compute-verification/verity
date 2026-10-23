@@ -69,7 +69,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   challenger received for round s is `round_root` of the serving process's own round root (``inner``) and those
   segments. The verifier recomputes each value's root from the segments and its domain's pads. So the rows a unit reads
   are the ones fixed before its round's coin. Round s's input-ids table ``…/ids@<s>`` (slot i's input token id) is
-  committed whole by round s, as its A tables are. The z and y records are not yet bound to the round roots.
+  committed whole by round s, as its A tables are, and so is each of its calls' receipt table ``…/receipt@<c>`` (one
+  row a unit of the call, its receipt, which a call's statement then reads as its output row o0, `registered_file`).
+  The z and y records are not yet bound to the round roots.
 * **The A rows and input ids are the served Commit's** (`_arow`, ROOTS1): the window's evidence carries the record of the
   Commit that ran in the window's engine (``commit``, one-stage's `verity/registration/v2` record, its canonical JSON in
   hex), whose digest `calls_root` binds before the draw coin, so it is fixed before any coin that selects a unit. Round
@@ -256,6 +258,10 @@ COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of 
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
 _IDS = re.compile(r"ids@(0|[1-9][0-9]*)")
+_RECEIPT = re.compile(r"receipt@(0|[1-9][0-9]*)")
+#: a tile unit's receipt, its return's field (`h1window.OUTPUTS`), and the statement's output row of it
+#: (`h1window.STATEMENT_OUT_ROWS`), which reads call c's receipt table when the window registers one
+RECEIPT_FIELD, RECEIPT_PORT = "receipt", "o0"
 #: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
 #: input-ids table's root inside (`requests_root`)
 REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
@@ -690,14 +696,26 @@ def shape_of(descriptor: bytes) -> dict:
     """What a statement over the window's units reads of the descriptor `descriptor`, one `layout_of` accepted: its
     parameters' ``prefix`` (its record's ``PREFIX``) and, for each K, its template's id (``TILES``) and the 16-bit words
     of its A row, its B row and its z/y record (``a_k<K>``'s element, ``b_k<K>``'s and ``zy``, h1window's widths:
-    `h1window.table_reads_file`'s). Its cost is the descriptor's bytes."""
+    `h1window.table_reads_file`'s), and of its unit's receipt (the ``receipt`` field of its return, the statement's
+    output row o0; 0 when it returns none of whole 16-bit words). Its cost is the descriptor's bytes."""
     d = json.loads(descriptor.decode())
     vals = {k: json.loads(v) for k, v in _record(d["program_fn"])}
     tiles = {}
     for k, t in vals["TILES"]:
-        a, b, zy = (p[1] for p in d["definitions"][t["fn"]]["body"]["params"][:3])
-        tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16}
+        body = d["definitions"][t["fn"]]["body"]
+        a, b, zy = (p[1] for p in body["params"][:3])
+        tiles[k] = {"fn": t["fn"], "a": _leaves(a[2]) // 16, "b": _leaves(b[2]) // 16, "zy": _leaves(zy) // 16,
+                    "receipt": _receipt_words(body.get("ret_type"))}
     return {"prefix": vals["PREFIX"], "tiles": tiles}
+
+
+def _receipt_words(ret: Any) -> int:
+    """The 16-bit words of a template return's ``receipt`` field (``["Record", [["receipt", t], ...]]``); 0 for another
+    form or a width of no whole words."""
+    fields = ret[1] if type(ret) is list and len(ret) == 2 and ret[0] == "Record" and type(ret[1]) is list else []
+    t = next((x[1] for x in fields if type(x) is list and len(x) == 2 and x[0] == RECEIPT_FIELD), None)
+    n = _leaves(t)
+    return n // 16 if n % 16 == 0 else 0
 
 
 #: the partition object a window's statements are verified under: every instance of each K's template one unit
@@ -723,7 +741,10 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     K ``<prefix>a/<K>@<s>`` (M rows for each of the round's calls of K, o the call's first, `step_row`), its B row j
     (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
-    (a row a unit of the call); every other unit reads none of them. Each value is a row/v2 value of 16-bit leaves
+    (a row a unit of the call); and, when the window registers the call's receipt table ``<prefix>receipt@<call>``,
+    the statement's output row o0 (`RECEIPT_PORT`, the unit's receipt, `shape_of`'s width) at its row t, so the
+    receipts the round roots commit are the ones the units return; every other unit reads none of them. Each value is a
+    row/v2 value of 16-bit leaves
     under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
     gives it. Its cost is the window's units, once a port: the reads file's form."""
@@ -743,6 +764,12 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     a, zy, b = f"{prefix}a/{k}@{s}", f"{prefix}zy@{call}", f"{prefix}b/{k}"
     rows_of = {a: (m * calls_k, tile["a"]), zy: (size, tile["zy"]),
                b: (sum(nn for _name, kk, nn in layout["linears"] if kk == k), tile["b"])}
+    rc = f"{prefix}receipt@{call}"
+    if rc in roots:
+        if not tile["receipt"]:
+            return None, ("registration", f"the window registers {rc}, and K = {k}'s template returns no receipt of "
+                                          "whole 16-bit words for its statement's output row o0 to read")
+        rows_of[rc] = (size, tile["receipt"])
     for v in rows_of:
         if len(roots.get(v, ())) != 1:
             return None, ("registration", f"call {call}'s statement reads {v}, which the window registers "
@@ -751,7 +778,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     ports: list[tuple[str, str, Any]] = (
         [(f"a_k{k}_{i}", a, lambda t, i=i: at + r * (t // per) + i) for i in range(r)]
         + [(f"b_k{k}_{j}", b, lambda t, j=j: b0 + c * (t % per) + j) for j in range(c)]
-        + [("zy", zy, lambda t: t)])
+        + [("zy", zy, lambda t: t)] + ([(RECEIPT_PORT, rc, lambda t: t)] if rc in rows_of else []))
     out = {}
     for port, v, row in ports:
         reads: list[int | None] = [None] * sum(sizes)
@@ -1131,7 +1158,7 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     why = CC.rounds(key, ledger, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds], verify)
     if why is not None:
         return None, why
-    why = _a_link(rounds, entries)
+    why = _a_link(rounds, entries, len(calls))
     if why is not None:
         return None, why
     if not (type(descriptor) is str and _HEX.fullmatch(descriptor)):
@@ -1528,13 +1555,21 @@ def ids_step(value: Any) -> int | None:
     return None if m is None else int(m[1])
 
 
+def receipt_call(value: Any) -> int | None:
+    """A receipt table's call: a name whose last part is ``receipt@<c>`` (``<prefix>receipt@<c>``, `h1window.table`'s:
+    row t call c's t-th unit's receipt, c a canonical decimal); None for any other name."""
+    m = _RECEIPT.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
+    return None if m is None else int(m[1])
+
+
 def is_tied(value: Any) -> bool:
-    """A value the round roots commit (`_a_link`): an A value (`is_a`) or an input-ids table (`ids_step`)."""
-    return is_a(value) or ids_step(value) is not None
+    """A value the round roots commit (`_a_link`): an A value (`is_a`), an input-ids table (`ids_step`) or a receipt
+    table (`receipt_call`)."""
+    return is_a(value) or ids_step(value) is not None or receipt_call(value) is not None
 
 
 def _what(value: str) -> str:
-    return "A value" if is_a(value) else "input-ids table"
+    return "A value" if is_a(value) else "input-ids table" if ids_step(value) is not None else "receipt table"
 
 
 def is_held(value: Any) -> bool:
@@ -1545,14 +1580,15 @@ def is_held(value: Any) -> bool:
     return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
 
 
-def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
+def _a_link(rounds: Any, entries: Any, calls: int = 0) -> tuple[str, str] | None:
     """None when every registered A value among `entries` (the window's registered entries, ``{value, root, leaves,
     domain, …}``) is the tree over the segments the round log `rounds` commits (each round's ``root``, the one the
     challenger received, over its ``inner`` root and its segments ``a``, `round_root`); else the refusal (``a-link``,
     and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
     ``[s·L/S, (s+1)·L/S)``; round s's A table of K ``…/a/<K>@<s>`` is committed whole by round s, whose segments tile
     all its rows, and no other round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole
-    by round s alike. A step of
+    by round s alike, and so is call c's receipt table ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's
+    `calls` calls (its manifest's rows; 0, the default, admits no receipt table) the rounds' equal blocks. A step of
     `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
     if not (isinstance(rounds, list) and rounds):
         return "a-link", LOG_FORM
@@ -1583,17 +1619,23 @@ def _a_link(rounds: Any, entries: Any) -> tuple[str, str] | None:
     for r, p in enumerate(segs):
         for v in sorted(p):
             if v not in names:
-                return "a-link", (f"round {r} lists segments of {v}, which is no registered A value or input-ids table "
-                                  "of the window")
+                return "a-link", (f"round {r} lists segments of {v}, which is no registered A value, input-ids table "
+                                  "or receipt table of the window")
     steps = len(rounds)
     for e in a:
         v, root, domain, count = e["value"], _digest(e.get("root")), _digest(e.get("domain")), e.get("leaves")
         if root is None or domain is None or not _nat(count) or not 1 <= count <= MAX_ROWS:
             return "a-link", (f"registered {_what(v)} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} "
                               "(the verifier hashes its pads)")
-        step = ids_step(v)
-        at = None if step is not None else a_value(v)[1]
-        if step is not None:
+        step, call = ids_step(v), receipt_call(v)
+        at = None if step is not None or call is not None else a_value(v)[1]
+        if call is not None:
+            if not (calls % steps == 0 and call < calls):
+                return "a-link", (f"registered receipt table {v} is call {call}'s, and the window's {calls} calls are "
+                                  f"not its {steps} rounds' equal blocks with a call {call}")
+            own = call // (calls // steps)
+            per, whose = count, f"call {call}'s receipt table, its round {own}'s"
+        elif step is not None:
             if step >= steps:
                 return "a-link", f"registered input-ids table {v} is round {step}'s, and the window has {steps} rounds"
             per, own, whose = count, step, f"round {step}'s input-ids table"

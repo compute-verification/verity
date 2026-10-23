@@ -45,7 +45,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
   unit's A rows open at its step's A table of its K and its record at its call's z table (`table_reads`), its B rows at
   the weights' ``b/<K>``, so a statement holds one call's units, one root a port (`table_reads_file`). The window-wide
   ``a/<K>`` and ``zy`` are the Program's parameters: trees of them registered at the window's close would be committed
-  after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit) follow its round's coin.
+  after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
+  hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
+  statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
 * **A drawn leaf's statements** (option A, PRF-134; `pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
   combine, derived from the window's own template at its K (`leaf_unit`: `h1zy.lane` and `h1zy.combine` over the tile
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
@@ -140,6 +142,8 @@ def template(k: int, unit: Any) -> Any:
 PUBLIC = ("salt", "position", "roots")
 #: K's statement's output rows ``(schema, outputs)``: the receipt (o0) and ok (o1), one ``row/v2`` row each
 STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)), (G.SCHEMA_V2, (1,)))
+#: the statement's output row of its units' receipts, which reads its call's receipt table when the window registers one
+RECEIPT_PORT = "o0"
 
 
 def statement_rows(template: Any, ports: dict[str, str] | None = None) -> list[tuple[str, str, int, list[str]]]:
@@ -373,8 +377,9 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
 #: the tables a call's rows are committed in under its round's root before the round's coin (#3053's ``tables``): ``a``,
 #: its step's A table of its K, and ``zy``, its z table
 TABLES = ("a", "zy")
-#: the table a call's receipts are committed in after its round's coin and before the draw: one receipt a unit of the call,
-#: in its tile order, each 2 (KS + m) u32 (`leaf_lanes.words`), which a drawn leaf's combine reads
+#: the table a call's receipts are committed in under its round's root before the round's coin: one receipt a unit of the
+#: call, in its tile order, each 2 (KS + m) u32 (`leaf_lanes.words`), which its statement's output row o0 and a drawn
+#: leaf's combine read
 RECEIPTS = "receipt"
 
 
@@ -447,14 +452,15 @@ def table_reads(program: Program, tp: Any, u: int, steps: int) -> dict[str, tupl
 
 def _shapes(program: Program, call: int, steps: int) -> dict[str, tuple[int, int]]:
     """Call ``call``'s tables and the weights' it reads, each ``(rows, words)``, a row's 16-bit words: its step's A table of
-    its K (M rows for each of the step's calls of K), its z table and receipts (one row a unit of the call) and ``b/<K>``."""
+    its K (M rows for each of the step's calls of K), its z table and receipts (one row a unit of the call; 0 words when
+    the unit's receipt is no whole 16-bit words, `credit.shape_of`'s rule) and ``b/<K>``."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
     k, n = _k(S)[S.CALLS[call][0]], call_units(program)[call][1]
     b = f"{S.PREFIX}b/{k}"
-    receipt = dict(dict(S.TILES)[k].signature()[1].fields)[OUTPUTS[0]]
+    receipt = dict(dict(S.TILES)[k].signature()[1].fields)[OUTPUTS[0]].leaves
     return {table(program, "a", call, steps): (S.M * step_of(program, call, steps)[1], sig[f"{S.PREFIX}a/{k}"].elem.leaves // 16),
             table(program, "zy", call): (n, sig[f"{S.PREFIX}zy"].elem.leaves // 16),
-            table(program, RECEIPTS, call): (n, receipt.leaves // 16),
+            table(program, RECEIPTS, call): (n, receipt // 16 if receipt % 16 == 0 else 0),
             b: (sig[b].n, sig[b].elem.leaves // 16)}
 
 
@@ -468,13 +474,17 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     leaves under `registered.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
     each of its step's calls of K, a z table one record a unit of the call. ``window``, a served window's open root,
     binds the two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and never the weights', which are
-    held across windows. A unit of another call reads none of them (None), so the file holds a statement to one call's
-    units."""
+    held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
+    row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
+    of them (None), so the file holds a statement to one call's units."""
     S = program.fn.S()
     u0, n = call_units(program)[call]
-    b = f"{S.PREFIX}b/{_k(S)[S.CALLS[call][0]]}"
+    b, rc = f"{S.PREFIX}b/{_k(S)[S.CALLS[call][0]]}", table(program, RECEIPTS, call)
     shape = _shapes(program, call, steps)
-    del shape[table(program, RECEIPTS, call)]
+    if rc not in roots:
+        del shape[rc]
+    elif not shape[rc][1]:
+        raise ValueError(f"call {call}'s units return no receipt of whole 16-bit words for {rc} to hold")
     if missing := sorted(set(shape) - set(roots)):
         raise ValueError(f"call {call}'s statement reads {missing}, whose roots the verifier does not hold")
     reads: dict[str, dict[str, Any]] = {}
@@ -482,11 +492,13 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         for key, (value, row) in table_reads(program, tp, u, steps).items():
             if value in shape:
                 reads.setdefault(key, {"value": value, "rows": [None] * tp.population})["rows"][u] = row
+        if rc in shape:
+            reads.setdefault(OUTPUTS[0], {"value": rc, "rows": [None] * tp.population})["rows"][u] = u - u0
     prog = prog or P.program_digest(program)
     out = {}
     for key, r in reads.items():
         leaves, words = shape[r["value"]]
-        out[(ports or {}).get(key, key)] = {
+        out[{OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)] = {
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
             "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
             **G.schema_entry(G.SCHEMA_V2),
