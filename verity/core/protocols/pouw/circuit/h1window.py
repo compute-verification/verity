@@ -16,6 +16,9 @@ derives the window's units from its own copy of the Program under the `Q_templat
   window registers in one read, A row i of K's units under ``a_k<K>[i]`` (a lone row, R or C = 1, under the parameter's
   name, `row_key`), each port with its own width and domain, and that row's circuit port is ``a_k<K>_<i>``
   (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
+* **K's circuit file** is C-Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
+  record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and C-Flock's
+  Python alone (numpy, no torch): flat, or templated (``flock-circuit/tmpl``) under a layout mode.
 * **Linears and calls.** ``linears`` are the window's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
 * **Fixed slots.** The layout is protocol structure, so no token count becomes public. For each K the window's A rows are
@@ -122,6 +125,33 @@ PouwH1WindowTile = CompositeDefinition(
 def template(k: int, unit: Any) -> Any:
     """K's template over the tile unit ``unit`` (`tile_unit`'s at K, or another of its parameters)."""
     return bind(PouwH1WindowTile, UNIT=unit, K=int(k))
+
+
+#: K's statement's public row: the unit's salt, position and roots, in that order
+PUBLIC = ("salt", "position", "roots")
+#: K's statement's output rows ``(schema, outputs)``: the receipt (o0) and ok (o1), one ``row/v2`` row each
+STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)), (G.SCHEMA_V2, (1,)))
+
+
+def statement_rows(template: Any, ports: dict[str, str] | None = None) -> list[tuple[str, str, int, list[str]]]:
+    """The input rows of K's statement (``template`` `template`'s at K), each ``(port, schema, bits, params)`` as C-Flock's
+    unit stager takes them (``a_k<K>[0]`` row 0 of ``a_k<K>``, `row_key`), in order: each A row and B row its own row, then the record
+    ``zy`` and the public row ``pub`` (`PUBLIC`), every one a ``row/v2`` row of its leaves' bits (an A or B row 8 K + 32,
+    `h1zy.ROW`; the record 48 R C, `h1zy.RECORD`; ``pub`` 1600). ``ports`` names each A and B row's port by its `row_key`;
+    by default `window_ports`' (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports credit's registered file reads. Its outputs are
+    `STATEMENT_OUT_ROWS`."""
+    params, _ret = template.signature()
+    ty = dict(params)
+    if [n for n, _t in params[2:]] != list(SHARED) or not all(n.startswith(("a_k", "b_k")[x]) for x, (n, _t) in enumerate(params[:2])):
+        raise ValueError(f"{template.id}: K's template's parameters are a_k<K>, b_k<K>, then {', '.join(SHARED)}")
+
+    def bits(p: str) -> int:
+        name, _, row = p.partition("[")
+        return sum((ty[name].elem if row else ty[name]).leaf_widths())
+
+    keys = [(row_key(n, t.n, i), f"{n}_{i}") for n, t in params[:2] for i in range(t.n)]
+    rows = [((ports or {}).get(key, port), [key]) for key, port in keys] + [("zy", ["zy"]), ("pub", list(PUBLIC))]
+    return [(port, G.SCHEMA_V2, sum(bits(p) for p in ps), ps) for port, ps in rows]
 
 
 def _rc(S: Any) -> tuple[int, int]:

@@ -2,8 +2,9 @@
 under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
-    python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pubkey,
-                                           # fetch, period-open, period-close (`auditor.gate(["--ssh", WORDS, "--key", LANE])`)
+    python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pins,
+                                           # pubkey, fetch, period-open, period-close
+                                           # (`auditor.gate(["--ssh", WORDS, "--key", LANE])`)
     python -I local_gate.py DIR wait SESSION   # blocks until the session's unit has exited; its `run` answer
 
 ``init`` unpacks infra's tree (``git archive SHA verity benchmarks/live_challenger``) as ``DIR/tree/SHA``, so

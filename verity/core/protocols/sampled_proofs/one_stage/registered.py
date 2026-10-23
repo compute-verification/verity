@@ -81,6 +81,10 @@ from . import partition as P
 
 REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
 READS = "verity/registered-reads/v0"
+#: the format whose port may carry `READS_FROM`: unit `reads_from + i` reads `reads[i]`, every other unit nothing; each
+#: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
+READS_V1 = "verity/registered-reads/v1"
+READS_FROM = "reads_from"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG

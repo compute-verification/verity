@@ -21,9 +21,16 @@ path = "../../../interface"
 name = "pouw_window"
 path = "../window"
 
+# `PouwCheck.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
+[[input_file]]
+name = "models"
+path = "models.json"
+text = true
+
 [[lean_lib]]
 name = "PouwCheck"
 roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest"]
+needs = ["models"]
 
 [[lean_exe]]
 name = "pouw-check"

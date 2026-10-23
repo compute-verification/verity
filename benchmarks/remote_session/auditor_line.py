@@ -23,7 +23,7 @@ the pin at epoch k, opened at its window root R_k, ended closed with no refused 
 after R_k, and each coin released after its root's receipt. A session served by `--challenger serve` (the verifier's
 machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not the auditor's.
 
-**Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
+**Credit.** The line of record (`line`) counts a session only when all five hold, each reported per session
 (`credit`), and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` with the descriptor of the verifier that ran it,
@@ -36,14 +36,20 @@ machine) has no ledger: its log is read under the key its run wrote (`session_of
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
   lines as the gate served them): its open sealed the log as it stood, and one of the sealed lines records the open's
-  `pinned` as a commit of main's history (RT4-INT-40). With no log, no session is pinned.
+  `pinned` as a commit of main's history (RT4-INT-40). With no log, no session is pinned;
+- *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
+  (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
+  pinned checkpoint lays out (`store_layout`), the binding's root is the registration's, and its model, name and
+  checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
+  With neither, no session is bound.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
-reasons. What every accepted paced session measured, credited or not, is `measured`. `--table` writes each session's
-four checks and the line as Markdown.
+reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
+tier, `verifier.paced_line`'s `filler`), which the line doesn't count as weights. What every accepted paced session
+measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG]] [--ledger HEAD ...]
-        [--ingress B/S ...] [--table FILE]
+        [--model-pin FILE] [--ingress B/S ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -60,6 +66,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
+import store_layout  # noqa: E402
 import verifier as V  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
@@ -71,8 +78,11 @@ INGRESS = (4.4e9, 54.4e9)
 LANE, PEER = "memory-accounting", "vy-nebius-1"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
-CHECKS = ("credited", "complete", "accepted", "pinned")
+CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""
+SHARES = ("time", "snapshot", "filler_time", "filler_snapshot")
+"""A session's shares of the node at an ingress charge (`shares`): weights held, time-held and snapshot, and filler
+held in the same two forms."""
 
 
 def descriptor(tree: str) -> bytes:
@@ -148,9 +158,35 @@ def shares(session: dict, registration: dict, host_bytes: int, ingress: tuple[fl
         p = V.recorded_paced(session, registration, host_bytes=host_bytes, ingress_bytes_per_s=b)
         worst = p["stretches"][p["time"]["stretch"]]
         row[f"{b:.1e}"] = {"time": p["time"]["share"], "snapshot": p["snapshot"]["share"],
+                           "filler_time": p["time"]["filler_share"], "filler_snapshot": p["snapshot"]["filler_share"],
                            "worst_stretch": p["time"]["stretch"], "worst_l_max_ms": worst["l_max_ns"] / 1e6,
                            "worst_span_s": worst["span_ns"] / 1e9}
     return row
+
+
+def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
+    """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
+    binding (verifier.json's `binding`, `store_layout.Binding.record`) held the hello's payload root to the root of the
+    store the pinned checkpoint lays out under the verifier's payload key, that root is the registration's, and the
+    binding's model is `model`."""
+    b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
+    out = {"model": model, "source": source, "binding": None if b is None else {
+        k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound")}}
+    if model is None:
+        why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
+    elif b is None:
+        why = ("the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin FILE), so its "
+               "payload root is the prover's choice")
+    elif b.get("bound") is not True:
+        why = f"the verifier didn't hold the hello's payload root to {b.get('name')}'s store"
+    elif b.get("expected_root") != root or b.get("payload_root") != root:
+        why = "the binding's payload root is not the registration's"
+    elif (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
+        why = (f"the verifier bound the store to {b.get('name')} ({str(b.get('checkpoint_sha512'))[:16]}...), not "
+               f"{model['name']} ({model['checkpoint_sha512'][:16]}...)")
+    else:
+        why = None
+    return {**out, "ok": why is None, "reason": why}
 
 
 def cross_check(verifier_seen: list[dict], auditor: list[dict]) -> dict:
@@ -203,11 +239,12 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
-                 period: str, desc: bytes, pins: list[str] | None) -> dict:
+                 period: str, desc: bytes, pins: list[str] | None, bound: dict) -> dict:
     """Whether session `s`, whose window root is R, earns credit: its window credited toward the audit's period for
     the verifier `desc` describes (`credited_session`), its window and its period closed complete, its verdict the
-    Lean's acceptance, and its open's pin one the host's pins log `pins` records as main's (`pinned_session`; None: no
-    log); each check with its reason, and `zero` the reasons it earns none."""
+    Lean's acceptance, its open's pin one the host's pins log `pins` records as main's (`pinned_session`; None: no
+    log), and the run's store bound to the model (`bound`, `bound_check`'s); each check with its reason, and `zero` the
+    reasons it earns none."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
     try:
@@ -255,7 +292,7 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
-    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned}
+    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned, "bound": bound}
     zero = [f"not {name}: {c['reason']}" for name, c in checks.items() if not c["ok"]]
     return {**checks, "ok": not zero, "zero": zero}
 
@@ -311,9 +348,10 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS, desc: bytes | None = None,
-            commit: str | None = None, pins: list[str] | None = None) -> dict:
-    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), and
-    `pins` the challenger host's pins log, its lines (None: the gate served none)."""
+            commit: str | None = None, pins: list[str] | None = None, model: dict | None = None) -> dict:
+    """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
+    the challenger host's pins log, its lines (None: the gate served none), and `model` the model the store must be
+    bound to ({name, checkpoint_sha512}, `--model-pin`'s) when the audit's period signs none."""
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
@@ -337,6 +375,12 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             raise SystemExit(f"auditor_line: no session's key.json under {ch_dir} is the pinned key {pin[:16]}…")
         lines, windows, periods, doc["ledger"] = ledger_check(heads, key, period, lane)
         doc["ledger"]["heads_read"] = [str(p) for p in heads]
+    signed = ((((periods or {}).get(period) or {}).get("open") or {}).get("body") or {}).get("model")
+    if isinstance(signed, dict):
+        bound = bound_check(v, signed, f"period {period}'s open")
+    else:
+        bound = bound_check(v, model, None if model is None else "--model-pin")
+    doc["bound"] = bound
     rows, measured = [], {}
     for s in v["sessions"]:
         k, c = s["k"], s.get("challenger") or {}
@@ -347,14 +391,15 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         rows.append(row)
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
-            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins)
+            row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins,
+                                         bound=bound)
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
             row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
-                                      "period credits its window")
+                                      "period credits its window", bound)
             d = Path(c["dir"]) if Path(c["dir"]).is_dir() else ch_dir / c["session"]
         else:
-            row["credit"] = no_credit("its coins were drawn in the verifier's process: no challenger, no ledger")
+            row["credit"] = no_credit("its coins were drawn in the verifier's process: no challenger, no ledger", bound)
             row["skipped"] = "no challenger log: coins drawn in the verifier's process"
             continue
         try:
@@ -388,36 +433,39 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             for b, x in row[f"shares_{clock}_clock"].items():
                 cur = measured.setdefault(t, {}).setdefault(clock, {}).get(b)
                 if cur is None or x["time"] < cur["time"]:
-                    measured[t][clock][b] = {"k": k, "time": x["time"], "snapshot": x["snapshot"],
+                    measured[t][clock][b] = {"k": k, **{f: x[f] for f in SHARES},
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows, ingress)
     return doc
 
 
-def no_credit(why: str) -> dict:
-    return {**{c: {"ok": False, "reason": why} for c in CHECKS}, "ok": False, "zero": [f"not credited: {why}"]}
+def no_credit(why: str, bound: dict | None = None) -> dict:
+    out = {c: {"ok": False, "reason": why} for c in CHECKS}
+    if bound is not None:
+        out["bound"] = bound
+    return {**out, "ok": False, "zero": [f"not credited: {why}"]}
 
 
 def credited_line(rows: list[dict], ingress: tuple[float, ...]) -> tuple[dict, dict]:
-    """The line of record, on the auditor's clock: at each T the least share among the credited sessions there, or zero
-    with every session's reasons; and who earned credit, who didn't and why, in a sentence."""
+    """The line of record, on the auditor's clock: at each T the least share of weights held among the credited
+    sessions there, with that session's filler held beside it, or zero with every session's reasons; and who earned
+    credit, who didn't and why, in a sentence."""
     line: dict = {}
     for t in sorted({r["T"] for r in rows if r.get("T")}):
         at = [r for r in rows if r.get("T") == t]
         ok = [r for r in at if r["credit"]["ok"]]
         if ok:
-            line[t] = {b: min(({"k": r["k"], "time": r["shares_auditor_clock"][b]["time"],
-                                "snapshot": r["shares_auditor_clock"][b]["snapshot"]} for r in ok),
+            line[t] = {b: min(({"k": r["k"], **{f: r["shares_auditor_clock"][b][f] for f in SHARES}} for r in ok),
                               key=lambda x: x["time"]) for b in (f"{b:.1e}" for b in ingress)}
             line[t]["credited_sessions"] = [r["k"] for r in ok]
         else:
-            line[t] = {**{f"{b:.1e}": {"time": 0.0, "snapshot": 0.0} for b in ingress}, "credited_sessions": [],
+            line[t] = {**{f"{b:.1e}": dict.fromkeys(SHARES, 0.0) for b in ingress}, "credited_sessions": [],
                        "zero": {r["k"]: r["credit"]["zero"] for r in at}}
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
-        said = "the line credits zero: no session is credited, complete, accepted and pinned"
+        said = "the line credits zero: no session is credited, complete, accepted, pinned and bound"
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
@@ -426,22 +474,26 @@ def credited_line(rows: list[dict], ingress: tuple[float, ...]) -> tuple[dict, d
 
 
 def table(doc: dict) -> str:
-    """`analyse`'s doc as Markdown: each session's four checks (`CHECKS`), with the reason of each that failed, and
-    its credit; then the line at each T, time-held / link-charged with the snapshot forms."""
+    """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
+    its credit, weights held then filler held; then the line at each T, time-held / link-charged with the snapshot
+    forms, weights and filler apart."""
     b = [f"{x:.1e}" for x in doc["ingress"]]
     out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
         c = s["credit"]
         cells = ["yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in CHECKS]
         mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
-        credit = ("credited: " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) if c["ok"] and all(mine.values())
+        credit = ("credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
+                  + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
                   else "zero")
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
     out.append("")
     for t, row in doc["line"].items():
-        out.append(f"line {t}: credited {row['credited_sessions']}, time-held / link-charged "
-                   + " / ".join(f"{row[x]['time']:.4%}" for x in b) + " (snapshot "
-                   + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ")")
+        out.append(f"line {t}: credited {row['credited_sessions']}, time-held / link-charged weights "
+                   + " / ".join(f"{row[x]['time']:.4%}" for x in b) + ", filler "
+                   + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
+                   + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
+                   + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")")
     out.append(doc["credit"]["summary"])
     return "\n".join(out) + "\n"
 
@@ -461,6 +513,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
     ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
                     "pin: without it no session is pinned (RT4-INT-40)")
+    ap.add_argument("--model-pin", type=Path, metavar="FILE",
+                    help="the model the store must be bound to when the audit's period signs none: a pin in the "
+                         "auditor's model registry's shape (`store_layout.read_pin`); without either no session is "
+                         "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", default=PEER)
@@ -468,12 +524,22 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
+    model = None
+    if a.model_pin is not None:
+        try:
+            p = store_layout.read_pin(a.model_pin)
+        except store_layout.Refused as e:
+            raise SystemExit(f"auditor_line: {e}") from None
+        model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins)
+                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins, model=model)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))
     print(f"auditor_line: {doc['credit']['summary']}", file=sys.stderr)
+    bound = doc["bound"]
+    print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
+          file=sys.stderr)
     return 0
 
 

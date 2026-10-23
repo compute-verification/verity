@@ -136,7 +136,7 @@ def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArr
   (·.1) <$> coinVersionAt c o label after false
 
 /-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
-(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`credit.weights_root`, the
+(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 window's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
   let sorted := roots.mergeSort fun a b => a.1 ≤ b.1

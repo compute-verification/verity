@@ -137,7 +137,7 @@ class TickingBackend(prover.CpuBackend):
         self.clock, self.tiers, self._layout = clock, tiers, layout
 
     def layout(self) -> list | None:
-        return self._layout
+        return self._layout if self._layout is not None else super().layout()
 
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
@@ -151,14 +151,17 @@ class TickingBackend(prover.CpuBackend):
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
-        then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, **kv):
+        then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
+        binding=None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
-    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end."""
+    (by default as the prover's hello says, `Verifier.appends_of`); `then(v)` once they end. With `store` (a
+    `store_layout.Store`) the prover's blocks are that store's, and with `binding` the verifier binds the registration
+    to its pinned model."""
     clock = PassClock()
     vconn, pconn = clock.conns()
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
-                             layout=layout)
+    backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
+                             read_bytes_per_s=read_bytes_per_s, tiers=tiers, layout=layout, store=store)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
@@ -173,7 +176,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
-                          transcript=transcript, challenger=challenger, appends=appends)
+                          transcript=transcript, challenger=challenger, appends=appends, binding=binding)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))

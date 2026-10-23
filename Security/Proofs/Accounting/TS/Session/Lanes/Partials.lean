@@ -34,7 +34,7 @@ open FlockSoundness.Discharge.Layout (portRowW)
 registered at `roots (place v).1`. -/
 def regPort (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) (nm v : String) (row : ℕ) :
     _root_.Flock.Registered.Port :=
-  { roots (place v).1 with name := nm, value := (place v).1, reads := #[some ((place v).2 + row)] }
+  { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0 }
 
 theorem regWords_regPort (roots : String → _root_.Flock.Registered.Port) (place : String → String × ℕ) (nm v : String)
     (row : ℕ) : _root_.Flock.KnownRead.regWords (regPort roots place nm v row) =
@@ -172,9 +172,11 @@ theorem read_bits {T : Tile} {roots : String → _root_.Flock.Registered.Port} {
     have hiL : (sL.rdU uL).isRead (.inl (uL, qL)) := (hSL.1 _).2 ⟨qL, rfl, hnL⟩
     have hiC : (sC.rdU uC).isRead (.inl (uC, qC)) := (hSC.1 _).2 ⟨qC, rfl, hnC⟩
     have haL : (sL.rdU uL).readAt (.inl (uL, qL)) = (place v).2 + row :=
-      hRL uL qL hnL _ ((congrArg _root_.Flock.Registered.Port.reads hoL).trans rfl)
+      hRL uL qL hnL _ ((congrArg _root_.Flock.Registered.Port.reads hoL).trans
+        (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
     have haC : (sC.rdU uC).readAt (.inl (uC, qC)) = (place v).2 + row :=
-      hRC uC qC hnC _ ((congrArg _root_.Flock.Registered.Port.reads hoC).trans rfl)
+      hRC uC qC hnC _ ((congrArg _root_.Flock.Registered.Port.reads hoC).trans
+        (_root_.Flock.Registered.Port.reads_of_readsFrom rfl))
     have htree : SameTree ((sL.rdU uL).port (.inl (uL, qL))) ((sC.rdU uC).port (.inl (uC, qC))) := by
       rw [hpL, hoL, hpC, hoC]
       exact ⟨rfl, rfl, rfl, rfl⟩

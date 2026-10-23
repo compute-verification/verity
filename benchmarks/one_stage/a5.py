@@ -1,4 +1,4 @@
-"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served`. The
+"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served` or a stand-in. The
 registration is over serving rows of the Commit's own values, and the drawn units go to M0's prover and the Lean verifier of record.
 
 A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its
@@ -13,7 +13,10 @@ own commitment, made before any draw, is what the audit holds; that those rows a
 the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`). A5 takes a TP window as served only
 under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's ranks commit under rows-sha512 and its TP run root is
 SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the draw
-(`source`: `sha512`).
+(`source`: `sha512`). A TP Commit that wrote no window and deferred its ranks' replay to sealed bundles has each rank's window
+from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from_bundle`), under the same run and `tp`: a
+`stand-in`, its `of` the rank's rows-sha512 root under the TP run root and the bundle's manifest digest, made after the Commit and
+before the draw (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
@@ -44,8 +47,9 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
   stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
   manifest it opened, or a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root
-  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served` under a SHA-512 TP run root, its run, `tp` and
-  served Programs the record's.
+  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose `of` and `link` are
+  `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
+  Programs the record's.
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier

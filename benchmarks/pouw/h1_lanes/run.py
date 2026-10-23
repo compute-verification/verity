@@ -7,7 +7,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
   statement is unit 0 of its own Program, a one-call template over the Definition (STAND-IN for the window Program whose
   units the 33 statements realize, BRIDGE2's), and the Lean verifier derives its unit from its own copy of that Program
-  (``--program``, ``--partition``).
+  (``--program``, ``--partition``). Flat, or templated under ``H1_TMPL`` (`h1unit.layout`).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -352,10 +352,10 @@ def stager(ctx, kind: str, variant: str | None = None):
                 + [(f"b{t}", V2, ab, [f"b[{t}]"]) for t in range(LL.LANE_COLS)]
                 + [(LL.ADMIT, V2, RC[0], [LL.ADMIT]), (LL.ZY, V2, 48 * RC[0] * RC[1], [LL.ZY]),
                    (LL.PARTIALS, V2, 16 * ctx.wp, [LL.PARTIALS]), ("pub", V2, U.PUB_BITS + 16, list(LL.PUBLIC))])
-        return CS.UnitStager(b.defn, "unit/pouw-h1-lane", rows, [(V2, (0,))], circuit=circuit, bind=b.bind)
+        return CS.UnitStager(b.defn, "unit/pouw-h1-lane", rows, [(V2, (0,))], circuit=circuit, bind=b.bind, layout=U.layout())
     rows = ([(f"p{x}", V2, 16 * ctx.wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(*RC))]
             + [(LL.RECEIPT, V2, 16 * ctx.wp, [LL.RECEIPT])])
-    return CS.UnitStager(b.defn, "unit/pouw-h1-combine", rows, [(V2, (0,))], circuit=circuit, bind=b.bind)
+    return CS.UnitStager(b.defn, "unit/pouw-h1-combine", rows, [(V2, (0,))], circuit=circuit, bind=b.bind, layout=U.layout())
 
 
 def expected(kind: str, ln: int | None, w: World, ins: dict, index: int | None = None) -> list[int]:

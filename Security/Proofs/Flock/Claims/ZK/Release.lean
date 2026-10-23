@@ -298,9 +298,10 @@ structure LeanRelease (W R : Type) where
   device : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- the firewall's transcript after the rounds of `h`, whose own values the device round reads -/
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.Transcript
-  /-- Rust's own checks on a worker's device round (`firewall::Checker` against the algebraic phase's skeleton,
-  `ShadowLink::check` against the Lean finish's opening), which run before the Lean frame's pass decision (`pass`) and can only
-  fail a round more: any decision at all -/
+  /-- Rust's own checks on a worker's rep beside the Lean frame's pass decision (`pass`): the worker failing, the
+  device's level-0 root, the constraints on the pads, the end check on the returned proof and Rust's masking
+  cross-checks. Each can only fail a round more, the failed rep's rounds reaching the loop as no device round, which
+  the frame fails: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
   values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds, which the firewall

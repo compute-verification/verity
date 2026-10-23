@@ -14,6 +14,7 @@
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  HZ_CACHE: hidden_zk's
 set -uo pipefail
+[ -z "${H1_TMPL:-}" ] || { echo "H1_TMPL: the prover proves only the flat statement; run.py's stager alone writes the templated one" >&2; exit 2; }
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh

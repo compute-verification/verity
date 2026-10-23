@@ -921,7 +921,7 @@ def coin_reason(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after:
 
 def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
     """`audit.weights_root`, an epoch's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
-    window's open root binds `credit.weights_root` instead (`salt`)."""
+    window's open root binds `weights.weights_root` instead (`salt`)."""
     n, tag = COIN_VERSIONS[scheme]
     return tagged(tag, *(p for w in sorted(roots) for p in (w, roots[w])))[:n]
 

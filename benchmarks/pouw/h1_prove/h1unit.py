@@ -83,7 +83,7 @@ HM96 = hm96.SHA512
 SALT_BYTES = 192
 M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
-PUBLIC = ("salt", "position", "roots")
+PUBLIC = HW.PUBLIC
 PUB_BITS = 512 + 64 + 1024
 #: STAND-INS for what the network certifier and the window's registration give a certified window, which this harness
 #: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
@@ -109,6 +109,19 @@ def tile() -> str:
     if t not in ("v1", "v3"):
         raise ValueError(f"H1_TILE={t!r}: v1 or v3")
     return t
+
+
+def layout() -> str | None:
+    """The statement's form: ``H1_TMPL`` unset or empty, the flat statement (``flock-circuit``, the unit's netlist in the
+    file); else a layout mode (`verity_flock.tmpl.mode_of`, TMPL1's ``iv/hybrid/4``), the templated statement
+    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as its template, which the Lean verifier refuses
+    until the templated statement's proof lands."""
+    import os
+    from verity_flock import tmpl as TM
+    m = os.environ.get("H1_TMPL") or None
+    if m is not None:
+        TM.mode_of(m)
+    return m
 
 
 def stand_in_reveal(coin: bytes) -> bytes:
@@ -446,14 +459,13 @@ class Shape:
         return program, HW.query(program)
 
     def stager(self, name: str, circuit=None, bind: dict | None = None):
-        """The unit's `UnitStager`: its circuit, built once (the long step at K = 4096) and written to ``circuit``, bound to
-        ``bind`` (``{"partition", "program"}``: the window's partition and Program, `Shape.window`)."""
+        """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
+        built once (the long step at K = 4096) and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``:
+        the window's partition and Program, `Shape.window`), flat or templated as `layout` says."""
         from verity_flock import class_statement as CS
         template = self.definition()
-        reads = {port: key for key, port in ports(template).items()}
-        bits = {p.name: p.bits for p in self.ports()}
-        in_rows = [(p, V2, bits[p], [reads[p]]) for p in self.in_rows] + [("pub", V2, PUB_BITS, list(PUBLIC))]
-        return CS.UnitStager(template, name, in_rows, [(V2, (0,)), (V2, (1,))], circuit=circuit, bind=bind)
+        return CS.UnitStager(template, name, HW.statement_rows(template, ports(template)), HW.STATEMENT_OUT_ROWS,
+                             circuit=circuit, bind=bind, layout=layout())
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------

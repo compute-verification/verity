@@ -1,12 +1,13 @@
 """The Commit's coins from the auditor host's challenger (`verity_vllm.pipeline.commit_coins`, VLLM-17 under CIR-72): one
 session a Commit, reserved through infra's gate before any root, opened on its first run's root of record, and each
 run's coins opened after that run's root; the verifier holds them to the one session the auditor's signed ledger opened
-for the Commit's root (`challenger.ledger_head`, `challenger.audited_session`), ended closed, and to the roots the
-challenger's signed release log shows it received.
+for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a tree the host's pins log
+records as main's, ended closed, and to the roots the challenger's signed release log shows it received.
 
 A Commit whose openings come from the session opened on its own root passes. Refused: openings drawn before their run's
 root, a session opened on another Commit's root, a second session for the Commit's root, coins held in the Commit's
-process, and a ledger cut before the session's end."""
+process, a ledger cut before the session's end, and a session read with no pins log or one that doesn't record its
+tree."""
 from __future__ import annotations
 
 import hashlib
@@ -131,8 +132,9 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     return records, roots, sid
 
 
-def _reason(auditor, records, roots, sid, heads=None):
-    return CC.reason(records, roots, heads or auditor.heads(), auditor.sessions[sid]["directory"], KEY)
+def _reason(auditor, records, roots, sid, heads=None, pins=CH.PINS):
+    published = None if pins is None else [CH.write_pins(auditor.tmp / "pins.jsonl", pins)]
+    return CC.reason(records, roots, heads or auditor.heads(), auditor.sessions[sid]["directory"], KEY, pins=published)
 
 
 def test_a_commit_whose_openings_come_from_a_session_opened_on_its_own_root_passes(tmp_path, monkeypatch):
@@ -141,6 +143,12 @@ def test_a_commit_whose_openings_come_from_a_session_opened_on_its_own_root_pass
     auditor = _Auditor(tmp_path, monkeypatch)
     records, roots, sid = _commit(auditor, ["run 0", "run 1"])
     assert _reason(auditor, records, roots, sid) is None
+    assert _reason(auditor, records, roots, sid, pins=None) == (
+        f"the Commit's challenger session is not trusted: {LC.NO_PINS}")
+    other = LC.pin_line("ab" * 20, "ab" * 20, "2026-10-20T10:00:00Z")
+    assert _reason(auditor, records, roots, sid, pins=[other]).startswith(
+        "the Commit's challenger session is not trusted: the host's pins log is not the one the open of session "
+        f"{sid} sealed")
     verbs = [shlex.split(a[-1])[0] for a in auditor.argv]
     assert verbs == ["reserve", "open", "status"] and all(a[:-1] == shlex.split(GATE) for a in auditor.argv)
     assert json.loads(shlex.split(auditor.argv[0][-1])[6]) == CC.families(2)
