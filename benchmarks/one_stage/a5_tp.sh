@@ -16,6 +16,11 @@
 #   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, m*-private.bin: the rows and their salts) nor a circuit (its pin is).
+# A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
+#   challenger's coins, one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
+#   machine; gate:USER@HOST, vy-challenger-1 through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
+#   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
+#   session, so A5_JOBS covers every audited rank. The session's files and the ledger are kept in $OUT/<name>/challenger/.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
@@ -50,6 +55,7 @@ audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 --workload $4 --windows $5 --partition $6 \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$1 \
+    ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?
   grep '^A5' $O/$1/a5.log | cut -c1-4000; tail -25 $O/$1/a5.err
