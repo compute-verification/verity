@@ -3,6 +3,9 @@
   "AllGather_v2{WORLD=2,N=2}": {
    "and": 0
   },
+  "AllReduceResidualMnnvl_v2{WORLD=2,N=2,SHOT=1}": {
+   "and": 2966
+  },
   "EmbeddingShard_v2{VS=16,H=2,START=16}": {
    "and": 1519
   },
