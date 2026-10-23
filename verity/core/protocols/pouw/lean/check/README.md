@@ -93,10 +93,12 @@ received, `core_check.rounds`), `aLink` over the window's registered entries, `l
 stream its root, the registration its draw root and the receipt `{"receipts": …}`, then `registration`. `period`: the windows
 presented are exactly those the auditor's ledger lists in the period's close, in its order, and the close is complete,
 so a period with no close or with a window missing, out of order or not its own earns nothing; `periodCredit` also
-requires each of them to prove the circuit the period's open committed (its descriptor's SHA-512,
-`SampledProofs.Challenger.creditedSession`, the same bytes `layoutOf` reads) and credits it (`window`) drawn at the
-period's K, a refused one refusing
-the period. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
+requires each of them to have run from a commit the host's pins log records on the auditor's first-parent list of main
+and to prove the circuit the period's open committed (its descriptor's SHA-512,
+`SampledProofs.Challenger.creditedSession` over `pinnedSession`, the same bytes `layoutOf` reads) and credits it
+(`window`) drawn at the period's K, a refused one refusing
+the period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
+`pinnedSession`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
 (`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
 of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
