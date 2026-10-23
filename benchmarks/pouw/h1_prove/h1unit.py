@@ -72,6 +72,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.circuit import h1window as HW
@@ -91,12 +92,12 @@ STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
 STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
 PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
 PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
-OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
+OK_SALT_TAG = CC.OK_SALT_TAG
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 A_TABLES_TAG = b"verity/pouw/h1-prove/a-tables/v0\0"
 STAND_IN_REQUESTS_TAG = b"verity/pouw/h1-prove/stand-in-requests/v0\0"
 #: the ok row the verifier accepts: the unit's one output bit, 1, in its one word
-OK = np.ones(1, np.uint16)
+OK = np.array(CC.OK_ROW, np.uint16)
 #: the value the verifier registers its ok rows as: the window Program's output ``ok`` (`h1window.unit_reads`), row u unit u's
 OK_VALUE = "ok"
 
@@ -145,8 +146,9 @@ def pub_salt(window: str, position: int) -> bytes:
 
 def ok_salt(window: str, position: int) -> bytes:
     """The ok row's hm96 salt, which anyone derives from the window and the unit's position: the row's content is the one
-    the verifier accepts (`OK`), so the salt hides nothing."""
-    return hashlib.shake_256(OK_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+    the verifier accepts (`OK`), so the salt hides nothing: `core_check.ok_salt`, which credit registers served ok rows
+    under."""
+    return CC.ok_salt(window, position)
 
 
 #: the smoke's R × C tile (the served path's is 32 × 32, `pouw_h1.TILE`)

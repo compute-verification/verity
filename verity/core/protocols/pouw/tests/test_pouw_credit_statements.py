@@ -327,6 +327,78 @@ def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_pa
         "and its call's roots, as credit builds them"))
 
 
+def _ok_rows(d: dict, s: dict, rows: list[list[int]]) -> dict:
+    """Statement ``s``'s ``--registered`` file with the window's ok rows the prover's `rows` (row u unit u's one word),
+    under their public salts, in place of credit's: every other port credit's."""
+    program, _lay, _shape, reg = _files(d, s)
+    ok, w = reg["ports"][Cr.OK_PORT], d["window"]["root"]
+    salts = [Cr.CC.ok_salt(w, u) for u in range(ok["leaves"])]
+    got = Cr.G.Registered.commit(program, ok["value"], rows, salts, Cr.G.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    return {**reg, "ports": {**reg["ports"], Cr.OK_PORT: {**ok, "root": got.root.hex(), "known": {
+        "rows": rows, "salts": [x.hex() for x in salts]}}}}
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
+    """OKROW in credit: a statement's output row ``ok`` (o1) reads row u of the window's ok rows ``<prefix>ok``, the one
+    word 1 under the public `core_check.ok_salt` of the window's open root and u, at that known content, one row a unit
+    of the window (h1_prove's `register_ok`). A statement whose unit computed 0, or whose units all did, was proved
+    against another file, so its session is rejected and the window refused whole."""
+    d, statements = window(seed, tmp_path)
+    w, population = d["window"]["root"], sum(n for n, _w in Cr.call_work(_layout(d)))
+    for s in statements:
+        program, lay, shape, reg = _files(d, s)
+        c, ok = s["call"], reg["ports"][Cr.OK_PORT]
+        u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
+        assert ok["value"] == f"{shape['prefix']}ok" and ok["leaves"] == population and ok["words"] == 1
+        assert ok["reads"] == [None] * u0 + list(range(u0, u0 + size))
+        assert ok["known"] == {"rows": [[1]] * population, "salts": [Cr.CC.ok_salt(w, u).hex() for u in range(population)]}
+        assert ok["domain"] == Cr.G.domain(program, ok["value"], 1, population, window=w).domain_id.hex()
+    assert credit(d, statements) == (_credited(d), None)
+    rng = random.Random(seed)
+    s = rng.choice(statements)
+    sizes = [n for n, _w in Cr.call_work(_layout(d))]
+    u = sum(sizes[:s["call"]]) + rng.randrange(sizes[s["call"]])
+    zero = [[1]] * population
+    zero[u] = [0]
+    for rows in (zero, [[0]] * population):
+        _rebind(d, s, _ok_rows(d, s, rows))
+        got, refused = credit(d, statements)
+        assert got is None and refused[0] == "failed" and refused[1].startswith(f"call {s['call']}'s session "), refused
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("opened", ["another root", "another value", "none"])
+def test_a_session_that_opened_another_ok_root_is_refused(seed, opened, tmp_path, verifier):
+    """A verifier finding that a session opened the window's ok rows at another root than the rows credit registered,
+    at another value, or not at all refuses the window (``registration``): no entry registers them, so `_registration`
+    holds them only through `_verified`."""
+    d, statements = window(seed, tmp_path)
+    s = random.Random(seed).choice(statements)
+    _program, _lay, _shape, reg = _files(d, s)
+    ok = reg["ports"][Cr.OK_PORT]
+
+    def found(f):
+        got = {p: e for p, e in f.registered.items() if p != Cr.OK_PORT}
+        if opened == "another root":
+            got[Cr.OK_PORT] = {"value": ok["value"], "root": "ab" * 64}
+        elif opened == "another value":
+            got[Cr.OK_PORT] = {"value": ok["value"] + "@0", "root": ok["root"]}
+        return got
+
+    def run(proof, **kw):
+        got, why = PF.verify(proof, **kw)
+        return [PF.Finding(f.session, f.accepted, f.why, f.program, found(f) if kw["registered"] == reg else f.registered,
+                           f.units) for f in got or []], why
+
+    got, refused = Cr.window(*(d[x] for x in cases.WINDOW_ARGS[:-2]), statements, files_of(_layout(d)), d["k"],
+                             rc.lms_verify, run=run)
+    assert got is None and refused == ("registration", (
+        f"call {s['call']}'s session {s['sessions'][0]} opened the ok rows at another port, value or root than the "
+        f"verifier's own {ok['value']} at port {Cr.OK_PORT}, or not at all: a unit's ok row is the one word 1 under its "
+        "public ok salt, as credit registers it, so a unit that computed 0 opens none of it"))
+
+
 def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypatch):
     d, statements = window(0, tmp_path)
 

@@ -54,6 +54,7 @@ derives the window's units from its own copy of the Program under the `Q_templat
 from __future__ import annotations
 
 import bisect
+import functools
 import weakref
 from typing import Any, Callable, Iterable, Sequence
 
@@ -380,6 +381,8 @@ RECEIPTS = "receipt"
 PUBS = "pub"
 #: the statement's public row's port (`statement_rows`' ``pub``)
 PUB_PORT = "pub"
+#: the statement's output row of its unit's ok (`STATEMENT_OUT_ROWS`), which reads the window's ok rows, the verifier's own
+OK_PORT = "o1"
 
 
 def call_units(program: Program) -> list[tuple[int, int]]:
@@ -479,11 +482,13 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
     of them (None, and no entry past a port's last read: the verifier reads none at a unit past ``reads``,
-    `Flock.Registered.badInstance`), so the file holds a statement to one call's units. With ``salt``, the window's
-    Program salt (hex), the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`,
-    `public_table`) at its rows, one a unit, at its known content (``known``): the salt, the unit's position and its
-    call's roots, root(a/<K>@<s>) and root(b/<K>) as ``roots`` holds them, so a unit seeded under another salt, position
-    or roots opens no row of it."""
+    `Flock.Registered.badInstance`), so the file holds a statement to one call's units. With ``salt``, the window's Program salt (hex),
+    the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`, `public_table`) at its rows, one
+    a unit, at its known content (``known``): the salt, the unit's position and its call's roots, root(a/<K>@<s>) and
+    root(b/<K>) as ``roots`` holds them, so a unit seeded under another salt, position or roots opens no row of it; and
+    the statement's output row ``ok`` (`OK_PORT`, o1) is the window's ok rows ``<prefix>ok`` (`ok_table`, row u unit
+    u's) at its known content, the one word 1 under `core_check.ok_salt` of ``window`` and u, so a unit that computed 0
+    opens no row of it."""
     S = program.fn.S()
     u0, n = call_units(program)[call]
     b, rc = f"{S.PREFIX}b/{_k(S)[S.CALLS[call][0]]}", table(program, RECEIPTS, call)
@@ -521,6 +526,12 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": G.WORD_BITS,
                          "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
                          "reads": [None] * u0 + list(range(n)), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
+        ov = f"{S.PREFIX}{OUTPUTS[1]}"
+        rows, salts, reg = ok_table(prog, ov, window, tp.population)
+        out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
+                        "word_bits": G.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                        "reads": [None] * u0 + list(range(u0, u0 + n)),
+                        "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
     return {"format": G.READS, "ports": out}
 
 
@@ -533,4 +544,15 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u, rs) for u in range(u0, u0 + n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
+    return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
+
+
+@functools.lru_cache(maxsize=8)
+def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+    """The window's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
+    registration (h1_prove's `register_ok`, #3124): row u the one word 1 (`core_check.OK_ROW`) under
+    `core_check.ok_salt` of the window's open root ``window`` and u, registered under the window Program's digest
+    ``prog`` binding ``window``."""
+    rows = [list(CC.OK_ROW) for _u in range(population)]
+    salts = [CC.ok_salt(window, u) for u in range(population)]
     return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
