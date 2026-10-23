@@ -215,9 +215,10 @@ def ReadersTrue (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO :
       Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws → ∀ e ∈ callsOf b.rd x ws, H e.1 = e.2
 
 /-- **The readers record the inner verifier's calls, off a collision** (a code fact about V*'s circuits and the
-readers): at outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, whose recorded calls
-are true evaluations, the inner verifier's calls in its run of the readers' messages at the inner coins `cs` are among
-the recorded calls, or two recorded calls collide. Where two parts hold different messages at one round, the run's
+readers): at outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, each part's staged as
+V\* stages it (`StagedPart`, as in `ReadersTrue`), whose recorded calls are true evaluations, the inner verifier's
+calls in its run of the readers' messages at the inner coins `cs` are among the recorded calls, or two recorded calls
+collide. Where two parts hold different messages at one round, the run's
 calls on the message the readers take aren't the other part's, so V*'s parts give this only off a collision. -/
 def ReadersLogColl (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Prop :=
@@ -229,10 +230,10 @@ def ReadersLogColl (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (D
           ∃ u v, Claims.findColl (callsOf b.rd x ws) = some (u, v) ∧ Claims.Collision H u v
 
 /-- **The readers record each played inner message's opening** (a code fact about V*'s circuits and the readers): at
-outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, at each round `j` the inner
-verifier's run of the readers' messages plays, some recorded calls open the commit string `as[j]` to the readers'
-message `j` under `opening`. A run that rejects early has message `[]` at the rounds it doesn't play, which no part
-opens. -/
+outer witnesses in the outer relation at the V* statements staged at `as` and `cs`, each part's staged as V\* stages it
+(`StagedPart`), at each round `j` the inner verifier's run of the readers' messages plays, some recorded calls open
+the commit string `as[j]` to the readers' message `j` under `opening`. A run that rejects early has message `[]` at
+the rounds it doesn't play, which no part opens. -/
 def ReadersOpenPlayed (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (opening : Claims.Recursion.Opening) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
@@ -243,8 +244,9 @@ def ReadersOpenPlayed (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
 
 /-- **V\*'s circuits compute the inner verifier at the shape `shape`, off a collision** (a code fact about V*'s circuits
 and the readers): at a statement whose form has the shape, outer witnesses in the outer relation at the V* statements
-staged at `as` and `cs`, whose recorded calls are true evaluations, give the inner verifier's acceptance of the readers'
-messages at the inner coins `cs`, or two of their recorded calls collide. -/
+staged at `as` and `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true
+evaluations, give the inner verifier's acceptance of the readers' messages at the inner coins `cs`, or two of their
+recorded calls collide. -/
 def ReadersAccept (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →

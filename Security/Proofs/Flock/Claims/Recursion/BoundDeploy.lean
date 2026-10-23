@@ -193,10 +193,11 @@ theorem plainKSAbort_bd (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
 
 /-- **The readers' rounds before the last are the run's** (a code fact about V*'s circuits and the readers, option (d)'s
 `ReadersOpenPlayed`): at outer witnesses in the outer relation at the V* statements staged at inner and staging messages
-`as` and coins `cs`, whose recorded calls are true evaluations, at each round before `IV`'s last that `IV`'s run of the
-readers' messages plays, the readers' message is the run's (`as[j]`, the coin server's commit strings), or two recorded
-calls collide. `ReadersOpenPlayed` can't hold at `IVStar`'s last round: its message, the openings, is never sent in the
-run, and `IVStar` checks the openings itself (`Bound.opens`). -/
+`as` and coins `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true evaluations, at
+each round before `IV`'s last that `IV`'s run of the readers' messages plays, the readers' message is the run's
+(`as[j]`, the coin server's commit strings), or two recorded calls collide. `ReadersOpenPlayed` can't hold at
+`IVStar`'s last round: its message, the openings, is never sent in the run, and `IVStar` checks the openings itself
+(`Bound.opens`). -/
 def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
