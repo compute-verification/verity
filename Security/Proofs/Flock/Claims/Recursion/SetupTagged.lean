@@ -67,6 +67,14 @@ theorem ebind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β}
   | error e => rw [hx] at h; cases h
   | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
+theorem ite_ok {α : Type} {c : Prop} [Decidable c] {a b : Flock.V α} {v : α} (h : (if c then a else b) = .ok v) :
+    a = .ok v ∨ b = .ok v := by
+  by_cases hc : c
+  · simp only [hc, ↓reduceIte] at h
+    exact Or.inl h
+  · simp only [hc, ↓reduceIte] at h
+    exact Or.inr h
+
 instance : DecidablePred HmTagged := fun m => by unfold HmTagged; infer_instance
 
 /-- Not one of hm96's prefixes at byte 7. -/
@@ -95,6 +103,7 @@ theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
        try (simp only [poison, htag, hp, cond_true] at hx; cases hx; done))
+    | (rcases ite_ok hs with hs | hs)
     | (split at hs))
 
 theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V α} (hf : ∀ a, f 0 ≠ .ok a) {r : Array α}
@@ -126,6 +135,7 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
             simp only [hhid, ↓reduceIte] at ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
+    | (rcases ite_ok hs with hs | hs)
     | (split at hs))
 
 /-- **The setup's calls include one that is not `HmTagged`**, wherever it is `.ok` at `H` on hidden outputs at a `σ`
