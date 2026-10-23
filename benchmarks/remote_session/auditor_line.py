@@ -26,20 +26,23 @@ machine) has no ledger: its log is read under the key its run wrote (`session_of
 **Credit.** The line of record (`line`) counts a session only when all five hold, each reported per session
 (`credit`), and gives any other session zero credit with the reasons:
 
-- *credited*: its window reads through `challenger.credited_session` with the descriptor of the verifier that ran it,
-  `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being `git rev-parse COMMIT:verity/core/protocols/
-  remote_bandwidth` of the run's recorded commit (`--commit`), so it counts only toward a period that committed that
-  verifier (PRF-126);
+- *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
+  descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
+  `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
+  only toward a period that committed that verifier (PRF-126);
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
   to, in every window of the period (PRF-132);
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
-  lines as the gate served them): its open sealed the log as it stood, and one of the sealed lines records the open's
-  `pinned` as a commit of main's history (RT4-INT-40). With no log, no session is pinned;
+  lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
+  --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
+  `pinned`, and that commit is on main's first-parent line, a tree main's check ran on (RT4-INT-40, CMP-74). With no
+  log or no copy of main, no session is pinned or credited;
 - *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
   (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
-  pinned checkpoint lays out (`store_layout`), the binding's root is the registration's, and its model, name and
+  pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
+  the code that decided it), the binding's root is the registration's, and its model, name and
   checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
   With neither, no session is bound.
 
@@ -48,8 +51,8 @@ reasons; beside each share of weights held is the same session's share of filler
 tier, `verifier.paced_line`'s `filler`), which the line doesn't count as weights. What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 
-    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG]] [--ledger HEAD ...]
-        [--model-pin FILE] [--ingress B/S ...] [--table FILE]
+    python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
+        [--ledger HEAD ...] [--model-pin FILE] [--ingress B/S ...] [--table FILE]
 """
 from __future__ import annotations
 
@@ -66,9 +69,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import challengers as CH  # noqa: E402
-import store_layout  # noqa: E402
 import verifier as V  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 
@@ -166,7 +169,7 @@ def shares(session: dict, registration: dict, host_bytes: int, ingress: tuple[fl
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
-    binding (verifier.json's `binding`, `store_layout.Binding.record`) held the hello's payload root to the root of the
+    binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
     store the pinned checkpoint lays out under the verifier's payload key, that root is the registration's, and the
     binding's model is `model`."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
@@ -239,16 +242,17 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
-                 period: str, desc: bytes, pins: list[str] | None, bound: dict) -> dict:
+                 period: str, desc: bytes, pins: list[str] | None, main: list[str] | None, bound: dict) -> dict:
     """Whether session `s`, whose window root is R, earns credit: its window credited toward the audit's period for
     the verifier `desc` describes (`credited_session`), its window and its period closed complete, its verdict the
-    Lean's acceptance, its open's pin one the host's pins log `pins` records as main's (`pinned_session`; None: no
-    log), and the run's store bound to the model (`bound`, `bound_check`'s); each check with its reason, and `zero` the
+    Lean's acceptance, its open's pin one the host's pins log `pins` records on the auditor's first-parent list of
+    main `main` (`pinned_session`; None: no log, or no copy of main), and the run's store bound to the model (`bound`,
+    `bound_check`'s); each check with its reason, and `zero` the
     reasons it earns none."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
     try:
-        got = Ch.credited_session(lines, {"root": R}, key, desc, CH.lms_verify)
+        got = Ch.credited_session(lines, {"root": R}, key, pins, main, desc, CH.lms_verify)
         credited.update(period=got.period, ok=got.period == period, reason=None if got.period == period else (
             f"its window counts toward period {got.period}, not the audit's period {period}"))
     except Ch.CoinError as e:
@@ -288,7 +292,7 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     opened = (((windows.get(R) or {}).get("open") or {}).get("body")) or {}
     pinned: dict = {"commit": opened.get("pinned"), "seal": opened.get("pins")}
     try:
-        Ch.pinned_session(lines, {"root": R}, key, pins, CH.lms_verify)
+        Ch.pinned_session(lines, {"root": R}, key, pins, main, CH.lms_verify)
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
@@ -348,10 +352,12 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
             lane: str = LANE, peer: str = PEER, ingress: tuple[float, ...] = INGRESS, desc: bytes | None = None,
-            commit: str | None = None, pins: list[str] | None = None, model: dict | None = None) -> dict:
+            commit: str | None = None, pins: list[str] | None = None, main: list[str] | None = None,
+            model: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree), `pins`
-    the challenger host's pins log, its lines (None: the gate served none), and `model` the model the store must be
-    bound to ({name, checkpoint_sha512}, `--model-pin`'s) when the audit's period signs none."""
+    the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
+    main (None: none given), and `model` the model the store must be bound to ({name, checkpoint_sha512},
+    `--model-pin`'s) when the audit's period signs none."""
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
     D = bytes.fromhex(reg["digest"])
@@ -392,7 +398,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         if c.get("challenger") == "gate":
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
             row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc, pins=pins,
-                                         bound=bound)
+                                         main=main, bound=bound)
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
             row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
@@ -513,9 +519,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", type=Path, default=HERE.parents[1], help="a git checkout holding --commit")
     ap.add_argument("--pins", type=Path, help="the challenger host's pins log as the gate served it (`pins`), a line a "
                     "pin: without it no session is pinned (RT4-INT-40)")
+    ap.add_argument("--main", type=Path, metavar="FILE", help="the auditor's own first-parent list of main, a commit a "
+                    "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned "
+                    "(CMP-74)")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`store_layout.read_pin`); without either no session is "
+                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
                          "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
@@ -524,15 +533,16 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     desc = None if a.commit is None else descriptor(verifier_tree(a.commit, a.repo))
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
+    first_parent = None if a.main is None else remote.main_lines(a.main)
     model = None
     if a.model_pin is not None:
         try:
-            p = store_layout.read_pin(a.model_pin)
-        except store_layout.Refused as e:
+            p = rstore.read_pin(a.model_pin)
+        except rstore.Refused as e:
             raise SystemExit(f"auditor_line: {e}") from None
         model = {"name": p["name"], "checkpoint_sha512": p["checkpoint_sha512"]}
     doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane, peer=a.peer,
-                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins, model=model)
+                  ingress=tuple(a.ingress), desc=desc, commit=a.commit, pins=pins, main=first_parent, model=model)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))

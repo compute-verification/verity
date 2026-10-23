@@ -7,8 +7,8 @@ for the same window and a challenger whose commitment isn't the open's are each 
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
 its verifier, it and its period closed complete, the Lean accepted it, the host's pins log its open sealed records
-its pin as a commit of main's (RT4-INT-40), and the verifier bound the store to the model, reporting filler held beside
-weights held."""
+its pin, a commit on the auditor's first-parent list of main (RT4-INT-40, CMP-74), and the verifier bound the store to
+the model, reporting filler held beside weights held."""
 from __future__ import annotations
 
 import hashlib
@@ -37,7 +37,7 @@ import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -48,7 +48,9 @@ SECRET = bytes(range(32))
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 #: the host's pins log: an earlier pin, then the tree it runs (`PIN`), each a commit of main's
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
-#: the model the store is bound to (`store_layout`'s pin)
+#: the auditor's first-parent list of main, newest first: both pins on it
+MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
+#: the model the store is bound to (`remote_bandwidth.store`'s pin)
 MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
 
 
@@ -268,7 +270,8 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool) -> tuple[li
 
 
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
-             pins: list[str] | None = PINS, bound: dict | None = MODEL, model: dict | None = MODEL) -> dict:
+             pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
+             model: dict | None = MODEL) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None) and the line held to `model` (`--model-pin`'s)."""
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
@@ -276,7 +279,7 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=pins, model=model)
+                      pins=pins, main=main, model=model)
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
@@ -288,8 +291,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     dropper's are all asked, so both windows and the period close complete: the honest session, once its verdict is
     the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none.
     When it doesn't, the dropper's window and so the period close incomplete, and the line credits zero. A python
-    verdict, a period not yet closed, a verifier the period didn't commit, no pins log, a store bound to no model or
-    to another, and no model to bind it to each credit nothing, with the reason."""
+    verdict, a period not yet closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
+    `credited_session` reads the pin first, and *pinned*), a store bound to no model or to another, and no model to
+    bind it to each credit nothing, with the reason."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.0625", defer_openings)
@@ -340,7 +344,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert doc["measured"][t]["auditor"]["4.4e+09"]["k"] == 0
     unlogged = line("lean", pins=None)
     assert unlogged["sessions"][0]["credit"]["pinned"]["reason"] == NO_PINS and unlogged["pins"] is None
-    assert zero(unlogged)[0][-1] == "not pinned" and not unlogged["credit"]["credited_sessions"]
+    assert unlogged["sessions"][0]["credit"]["credited"]["reason"] == NO_PINS
+    assert zero(unlogged)[0][0] == "not credited" and zero(unlogged)[0][-1] == "not pinned"
+    assert not unlogged["credit"]["credited_sessions"]
     assert zero(line("python"))[0][-1] == "not accepted"
     other = line("lean", al.descriptor("cd" * 20))
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
@@ -358,33 +364,48 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
 
-@pytest.mark.parametrize("sealed", [PINS[:1], None], ids=["unpinned", "unsealed"])
-def test_a_session_whose_pin_the_hosts_pins_log_doesnt_record_as_mains_earns_no_credit(host, tmp_path, monkeypatch,
-                                                                                        sealed):
-    """An honest session, credited, complete and accepted by the Lean, on a host whose tree (`PIN`) its pins log
-    doesn't record as main's when the session opens: the log the open sealed holds only an earlier pin, and the pin
-    appended after the open doesn't count; or, as on every gate up to now, the open seals no log at all. The line
-    credits zero, and the session's `pinned` check names the fix."""
+@pytest.mark.parametrize("sealed, main", [(PINS[:1], MAIN), (None, MAIN), (PINS, MAIN[2:]), (PINS, None)],
+                         ids=["unpinned", "unsealed", "branch", "no-main"])
+def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_earns_no_credit(host, tmp_path,
+                                                                                              monkeypatch, sealed,
+                                                                                              main):
+    """An honest session, complete and accepted by the Lean in a period that committed its verifier, on a host whose
+    tree (`PIN`) isn't a logged commit on main's first-parent line when the session opens: the log the open sealed
+    holds only an earlier pin, and the pin appended after the open doesn't count; or, as on every gate before
+    RT4-INT-40, the open seals no log at all; or the log records the pin but the auditor's first-parent list of main
+    doesn't hold it, as it doesn't a branch commit merged into main; or the auditor gives no copy of main. The line
+    credits zero, and the session's `credited` check (`credited_session` reads the pin first) and its `pinned` check
+    each name the fix."""
     host.seal(monkeypatch, sealed)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
     rc, closed = host.call(["period-close", "--name", "p-1"])
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
     later = PINS[:1] + [pin_line(PIN, "f" * 40, "2026-10-21T02:00:00Z")]
-    doc = analysed(out, host, sessions, reg, desc, pins=later)
+    doc = analysed(out, host, sessions, reg, desc, pins=PINS if sealed == PINS else later, main=main)
     (s,) = doc["sessions"]
     sid = s["challenger_session"]
-    why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's history: "
-           "repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window there"
-           if sealed is not None else
-           f"the auditor's ledger's open of session {sid} seals no pins log (pins: {{lines, sha512}}): open the window "
-           "on a host whose gate seals its pins log in each open")
-    assert all(s["credit"][c]["ok"] for c in ("credited", "complete", "accepted")) and s["of_record"]
+    if sealed is None:
+        why = (f"the auditor's ledger's open of session {sid} seals no pins log (pins: {{lines, sha512}}): open the "
+               "window on a host whose gate seals its pins log in each open")
+    elif sealed != PINS:
+        why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
+               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
+               "window there")
+    elif main is None:
+        why = NO_MAIN
+    else:
+        why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
+               "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
+               "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
+               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+    assert all(s["credit"][c]["ok"] for c in ("complete", "accepted")) and s["of_record"]
+    assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
                                      "reason": why}
-    assert s["credit"]["zero"] == [f"not pinned: {why}"] and not s["credit"]["ok"]
+    assert s["credit"]["zero"] == [f"not credited: {why}", f"not pinned: {why}"] and not s["credit"]["ok"]
     t = s["T"]
     assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
     assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
-                                        f"and bound; session 0: not pinned: {why}")
-    assert f"| 0 | {t} | yes | yes | yes | no: {why} | yes | zero |" in al.table(doc).splitlines()
+                                        f"and bound; session 0: not credited: {why}; not pinned: {why}")
+    assert f"| 0 | {t} | no: {why} | yes | yes | no: {why} | yes | zero |" in al.table(doc).splitlines()

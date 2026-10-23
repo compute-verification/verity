@@ -185,18 +185,19 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
         tmp_path, signer, monkeypatch):  # noqa: F811
     """On a stream drawing from the challenger (`coin_source` `challenger`, which its digest names), every outcome's run
     by the verifier of record (`Run.run`) checks the draw's coins: with their evidence (`coins_reason`'s: the challenger
-    key, the auditor's ledger, the segment and the session's files) for the registration's window (`window_root`) it
-    accepts the honest draw. It rejects, failing `run` with the select step's `coins`: a segment that skips a coin
-    opened after the registration's digest, one with a wrong opening, one that adds an earlier registration's coins, a
-    draw with no evidence or empty evidence, a registration without its window root, and coins a session of another
-    window released after the same digest (a prover picking the window). A sampler beside the challenger's coins, and
-    evidence for a draw that read none, are refused."""
+    key, the auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and
+    the session's files) for the registration's window (`window_root`) it accepts the honest draw. It rejects, failing
+    `run` with the select step's `coins`: a segment that skips a coin opened after the registration's digest, one with a
+    wrong opening, one that adds an earlier registration's coins, a draw with no evidence or empty evidence, a
+    registration without its window root, a session whose pin isn't on the verifier's copy of main (`pinned_session`),
+    and coins a session of another window released after the same digest (a prover picking the window). A sampler
+    beside the challenger's coins, and evidence for a draw that read none, are refused."""
     import test_remote
     from test_service import SESSION, _lean, _ports, _record, _stream
 
     monkeypatch.setattr(test_remote, "FAMILIES", [("positions", 16), ("replay", 2)])
     window, other = test_remote.WINDOW, {"root": "22" * 64}
-    names = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "other-window"]
+    names = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
     draws = {}
 
     def serve(host: Host, served: list[str]) -> None:
@@ -229,8 +230,9 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     earlier = [{**o, "after": s["after"]} for o in draws["wrong"][2]["openings"]]
     segments["before"] = {**s, "openings": earlier + s["openings"], "start": s["start"] - len(earlier)}
     for name, (stream, draw, _) in draws.items():
-        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "segment": segments[name],
-                    "session": files[name]}
+        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger,
+                    "main": [] if name == "off-main" else test_remote.MAIN, "pins": test_remote.HOST_PINS,
+                    "segment": segments[name], "session": files[name]}
         evidence = {"missing": None, "empty": {}}.get(name, evidence)
         assert stream.deliver(draw, [SESSION]) is None
         out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)

@@ -783,7 +783,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps,
                    retain=settings.retain_steps, transcript_dir=settings.transcript_dir,
                    commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served)
+                   admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served,
+                   session=session.reserved["session"] if session is not None else None)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())

@@ -592,6 +592,20 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
         assert R.check({**recs[1], "registered": entries}, prog, Q, **kw, **win).codes == ("R7-registered",)
 
 
+def test_a_session_bound_domain_binds_the_session_alone():
+    """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
+    the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
+    domain binds at most one of a window, a registration and a session."""
+    prog = P.program_digest(_program())
+    rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
+    doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
+            ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
+    assert len(doms) == 4 and rec.domain.domain_id == G.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
+    for kw in ({"window": WINDOWS[0], "session": "s-1"}, {"produced": "0" * 128, "session": "s-1"}, {"session": ""}):
+        with pytest.raises(ValueError):
+            G.domain(prog, "x", 2, len(X_ROWS), **kw)
+
+
 def _prefixed(prefix: str) -> Program:
     """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
     carries its window's prefix."""
