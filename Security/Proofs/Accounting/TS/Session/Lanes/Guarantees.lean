@@ -37,8 +37,9 @@ open scoped ENNReal
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
 (`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
-of `own`) and its known-read check (`Flock.KnownRead.check`: a computed row of the unit reads each bit of each known
-input port's row) included, opening the leaf's values `leaf`, its relation the unit's served checks at the path's public inputs
+of `own`) and its known-read check (`Flock.KnownRead.check`: each known port is a `sha512/row/v2` row of its known rows'
+words, a computed row of the unit reads each bit of a known input row and a copy returns each bit of a known output row)
+included, opening the leaf's values `leaf`, its relation the unit's served checks at the path's public inputs
 `pub` and receipt `receipt`, or a clash of two of the sessions' registrants' records, `LeafColl`, or a collision of a
 session's known-content tie, `LeafKnownColl`): given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
 window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, a circuit that names each port once, every

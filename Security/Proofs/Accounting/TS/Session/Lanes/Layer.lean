@@ -44,8 +44,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
 * `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
   known-content check (`known x w i k`, the session's registered file's known content), its complete check (the
-  file sets `complete`, `Registered.checkComplete`) and its check that the circuit reads every bit of each known input
-  port (`KnownRead.check`) included, opens the leaf's
+  file sets `complete`, `Registered.checkComplete`) and its check that each known port is a known value's row whose
+  every bit the circuit reads or returns (`KnownRead.check`) included, opens the leaf's
   values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
@@ -193,8 +193,9 @@ def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 
 combine's), its known-content check at the session's known content `known x w i k` included
 (`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), its complete check
 (`Registered.checkComplete`, which it runs where `F` sets `complete`: every port of the circuit is a port of `own`) and
-its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content: a computed row of the
-unit reads each bit of each known input port's row),
+its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content: each known port is a
+`sha512/row/v2` row of its known rows' words, and a computed row of the unit reads each bit of a known input row, a copy
+returns each bit of a known output row),
 opens the leaf's values committed before σ_w (`leaf`), and its relation is the unit's served checks (`UnitServed`) at
 the path's public inputs and receipt, or
 two of its sessions' registrants' records clash (`LeafColl`), or a session's known-content tie collides

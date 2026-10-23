@@ -35,6 +35,8 @@ HOST = "vy-challenger-1"
 PINNED = "0" * 40
 PINS = (LC.pin_line(PINNED, PINNED, "2026-10-20T10:00:00Z"),)
 MAIN = ("e1" * 20, PINNED)
+#: the int8 checkpoint role a period's open names with its weights' root (``--model``), one core's credit pins
+MODEL = "LLAMA31_8B_INT8"
 
 
 def write_pins(path: Path, pins=PINS) -> Path:
@@ -242,12 +244,15 @@ class Ledger:
     def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None,
                     weights_root: str | None = None, circuit_files: dict | None = None, leaf: int | None = None) -> None:
         """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
-        with ``draw_k`` (`credit.K_FIELD`), ``weights_root`` (the gate's ``--weights-root``) and ``circuit_files``
-        (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) when given."""
+        with ``draw_k`` (`credit.K_FIELD`), ``weights_root`` (the gate's ``--model``: the registry entry's root, signed
+        with its ``model``, `MODEL` at core's pin) and ``circuit_files`` (each K's circuit file's SHA-512,
+        ``{k<K>: SHA-512}``) when given."""
         self._period, self._windows = name, []
+        model = {"name": MODEL, "checkpoint_sha512": CR.PINNED_MODELS[MODEL]}
         self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
                                           **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
-                                          **({"weights_root": weights_root} if weights_root is not None else {}),
+                                          **({"weights_root": weights_root, CR.MODEL_FIELD: model}
+                                             if weights_root is not None else {}),
                                           **({"circuit_files": circuit_files} if circuit_files is not None else {}),
                                           "key_sha512": self.key_sha512}, leaf)
 
