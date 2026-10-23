@@ -1314,7 +1314,8 @@ class SlackClock(VirtualClock):
         self.waits: list[float] = []
 
     async def sleep(self, delay: float) -> None:
-        self.waits.append(delay)
+        if delay > 0:
+            self.waits.append(delay)
         await super().sleep(delay + min(delay / 200, 0.1) if delay > 0 else delay)
 
 
@@ -1329,7 +1330,7 @@ def test_a_first_tick_10_s_after_the_proxy_is_up_is_on_time_in_a_niced_process()
                       clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(proxy.run(EmptyReader(), NullWriter()))
         while not running.done():
-            await asyncio.sleep(0)
+            await clock.sleep(0)
             clock.advance(clock.now + 1e-3)
         await running
         return proxy, clock
