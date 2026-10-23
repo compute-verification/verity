@@ -140,8 +140,8 @@ FUSED_ENV = "DITHER_SO_FUSED"
 # A, admit and z tables are launched (the host polls between them), so the GPU builds them while the coin is out
 COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 FUSED_CTAS_ENV = "DITHER_SO_FUSED_CTAS"  # N > 0: that launch on N CTAs an SM, each warp looping over its units
-# q in 1..7: that launch on the SMs whose id % 8 < q alone (kh_units_multi_sm), each warp taking the next unit in turn, so
-# the rest of the SMs stay whole to the next forward's kernels; the same receipts
+# "q" or "q/den" (den 8 without it): that launch on the SMs whose id % den < q alone (kh_units_multi_sm), each warp taking
+# the next unit in turn, so the rest of the SMs stay whole to the next forward's kernels; the same receipts
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 # "1": under piecewise graphs a piece's A tables launched at the next piece's first call and joined at its end, the last
 # piece's at the last call (`SoSide.call`): the same tables from the same slots, off the piece's end
@@ -898,15 +898,17 @@ class SoSide(DA.Side):
         self.noise_j = int(os.environ.get(NOISE_J_ENV) or 0)
         self.fused = os.environ.get(FUSED_ENV) == "1"
         self.fused_ctas = int(os.environ.get(FUSED_CTAS_ENV) or 0)
-        self.units_smq = int(os.environ.get(UNITS_SMQ_ENV) or 0)
-        if self.units_smq and not (self.fused and 1 <= self.units_smq <= 8 and hasattr(self.h, "kh_units_multi_sm")):
-            raise ValueError(f"${UNITS_SMQ_ENV}={self.units_smq}: needs ${FUSED_ENV}=1, q in 1..8 and an h1u build "
-                             "with kh_units_multi_sm")
+        q, _, den = (os.environ.get(UNITS_SMQ_ENV) or "0").partition("/")
+        self.units_smq, self.units_smd = int(q), int(den or 8)
+        if self.units_smq and not (self.fused and 1 <= self.units_smq <= self.units_smd <= 64
+                                   and hasattr(self.h, "kh_units_multi_sm")):
+            raise ValueError(f"${UNITS_SMQ_ENV}={self.units_smq}/{self.units_smd}: needs ${FUSED_ENV}=1, "
+                             "1 <= q <= den <= 64 and an h1u build with kh_units_multi_sm")
         if self.fused:
             self.mtab, self.m_units = self._multi_tables()
         if self.units_smq:
             self.h.kh_units_multi_sm.argtypes = [C.c_void_p, C.c_uint, C.c_uint, C.c_uint, C.c_void_p, C.c_uint,
-                                                 C.c_void_p, C.c_void_p]
+                                                 C.c_uint, C.c_void_p, C.c_void_p]
             self.unit_next = torch.zeros(1, dtype=torch.int32, device=dev)
         self.alag = os.environ.get(ALAG_ENV) == "1"
         self.a_prev: list[int] = []
@@ -1067,8 +1069,8 @@ class SoSide(DA.Side):
             self.seeded.record(st)
         if self.fused and self.units_smq:
             rc = rc or self.h.kh_units_multi_sm(self.mtab[p].data_ptr(), L, self.m_units, win.t,
-                                                self.ring_live[p].data_ptr(), self.units_smq, self.unit_next.data_ptr(),
-                                                st.cuda_stream)
+                                                self.ring_live[p].data_ptr(), self.units_smq, self.units_smd,
+                                                self.unit_next.data_ptr(), st.cuda_stream)
         elif self.fused:
             rc = rc or self.h.kh_units_multi(self.mtab[p].data_ptr(), L, self.m_units, win.t, self.ring_live[p].data_ptr(),
                                              self.fused_ctas, st.cuda_stream)
@@ -1146,7 +1148,7 @@ class SoSide(DA.Side):
                 "z_tables": {"in_forward": self.zt, "between_steps": self.z_rest.n if self.zt else None},
                 "noise_j_min": self.noise_j,
                 "units_fused": {"one_launch": self.fused, "units": self.m_units if self.fused else None,
-                                "ctas_an_sm": self.fused_ctas or None, "sm_eighths": self.units_smq or None},
+                                "ctas_an_sm": self.fused_ctas or None, "sm_share": f"{self.units_smq}/{self.units_smd}" if self.units_smq else None},
                 "a_tables_lag_a_piece": self.alag, "receipt_dead_rows_x_once": self.rdead,
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
