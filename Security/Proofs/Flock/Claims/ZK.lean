@@ -118,6 +118,7 @@ import Proofs.Flock.Claims.ZK.LinkFft
 import Proofs.Flock.Claims.ZK.LinkRecheck
 import Proofs.Flock.Claims.ZK.FinishRound
 import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.Claims.ZK.FrameRank
 import Proofs.Flock.Claims.ZK.FinishCommit
 import Proofs.Flock.Claims.ZK.FinishLevel0
 import Proofs.Flock.Claims.ZK.FinishPiop
@@ -531,6 +532,11 @@ import Proofs.Flock.Claims.ZK.SessionLean
   the rep that released the prefix's last round, at its state and configuration, answered its coins without refusal
   (**`LeanRelease.coins_taken_of_live`**, from `refusesCoins_of_live` at the prefixes, `live_take`). `Hello`'s and the
   `Commit`'s coins go to the session (`takeAt`), so it says nothing of them.
+* `FrameRank`: the frame's rank check is the prover's. Where the frame's reduction over the mask slot's words fills all
+  `128 k` columns (`Flock.Firewall.Frame.maskRank`), the weight rows' GF(2)-span is all of `GF(2^128)^k`
+  (**`Rank.maskRankOk_of_maskRank`**: `MaskRank.maskRankOk`, by an invariant of both loops and a downward induction over
+  the pivots, `lowBit_spec`, `span_of_pivots`), and the statement's slot (`Drive.maskSlot`) enumerates its mask words
+  (`Rank.words_maskSlot`, `Composed.maskWordsOf`).
 * `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
   `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
