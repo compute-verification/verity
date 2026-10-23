@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Flock.TmplOrder
@@ -54,7 +54,7 @@ theorem portReadsB_unrollAt {t : Tmpl} {lays : Array Lay} {net : Net} (ho : t.or
   have hn1 : n ≤ t.inCols := hN ▸ Nat.min_le_left _ _
   have hn2 : n ≤ pos.getD t.constPos 0 := hN ▸ Nat.min_le_right _ _
   have hn3 : n = t.inCols ∨ n = pos.getD t.constPos 0 := by omega
-  rw [SparseRows.ofRows_row ha hw, SparseRows.ofRows_row hb hw] at hx
+  rw [ofRows_row ha hw, ofRows_row hb hw] at hx
   by_cases hy : ∃ y < cols, pos.getD y 0 = n + i
   · obtain ⟨y, hyc, hyp⟩ := hy
     have hcols : 0 < cols := by omega
