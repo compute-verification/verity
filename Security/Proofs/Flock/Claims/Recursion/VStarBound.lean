@@ -212,13 +212,17 @@ round before the last whole only as the commit string `b ‖ c` its gadgets comp
 where `PartOpens` opens the string the statement shows, here the held message is that string. At a V* statement `xO`
 of a compiled statement `x` of the shape that shows coins for part `s`, wherever the part's outer relation holds and its
 recorded calls are true evaluations, each round before the last that the part holds whole is the commit string `xO`
-shows for it (`cmt x i xO`). Or two of its recorded calls collide. -/
+shows for it (`cmt x i xO`), and each piece it holds of a round before the last sits in that commit string at the
+piece's offset: a piece is a commit string the part's gadgets compute, one of those the round's message lists. Or two
+of its recorded calls collide. -/
 def PartOpensB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
   ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
-    (∀ (c : ℕ → Coin), shows s x xO c → ∀ i, i + 1 < L.rounds x → ∀ m, L.held x s w i = some m →
-      m = cmt x i xO) ∨
+    (∀ (c : ℕ → Coin), shows s x xO c → ∀ i, i + 1 < L.rounds x →
+      (∀ m, L.held x s w i = some m → m = cmt x i xO) ∧
+        ∀ pre p post, L.pieceAt x i = pre ++ p :: post → p.1 = s →
+          ((cmt x i xO).drop (pre.map fun q => pieceLen q.2).sum).take (pieceLen p.2) = readSegs w p.2) ∨
       (findColl (L.calls x s w)).isSome
 
 /-- **The V\* statements show what they are staged at** (restating `VstarShows` for option (d)): a code fact about the
