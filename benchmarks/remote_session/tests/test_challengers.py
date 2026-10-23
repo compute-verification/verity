@@ -8,7 +8,7 @@ verifier's own paced sessions, through the gate or serve.py, reserve only the co
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
 its verifier, it and its period closed complete, the Lean accepted it, the host's pins log its open sealed records
 its pin as a commit of main's (RT4-INT-40), and the verifier bound the store to the model, reporting filler held beside
-weights held."""
+weights held. The peer a gate session's ledger entries must carry is the one the run's record names."""
 from __future__ import annotations
 
 import hashlib
@@ -58,7 +58,8 @@ class Host:
 
     def __init__(self, root: Path) -> None:
         (root / "var" / "sessions").mkdir(parents=True)
-        (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+        (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n"
+                                    "vy-auditor-1 challenger@10.0.0.3\n")
         (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
         self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
@@ -105,8 +106,9 @@ class Host:
         for t in self.runs.values():
             t.join()
 
-    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", call=None) -> challengers.Gate:
-        return challengers.Gate(out, call or self.call, "vy-nebius-1", pin or self.pin, period, address=self.address,
+    def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", call=None,
+             peer: str = "vy-nebius-1") -> challengers.Gate:
+        return challengers.Gate(out, call or self.call, peer, pin or self.pin, period, address=self.address,
                                 pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
@@ -254,29 +256,32 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         assert [x["complete"] for x in close["windows"]] == [True, False] and close["complete"] is False
 
 
-def gate_run(host: Host, out: Path, plan: str, defer_openings: bool) -> tuple[list[dict], dict, bytes]:
-    """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them: the
-    sessions, their registration and that descriptor."""
+def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
+             peer: str = "vy-nebius-1") -> tuple[list[dict], dict, bytes]:
+    """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
+    verifier at the challenger host as `peer`: the sessions, their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
-    sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")), challenger=host.gate(out / "challenger"),
-                               verdict="python", defer_openings=defer_openings,
+    sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
+                               challenger=host.gate(out / "challenger", peer=peer), verdict="python",
+                               defer_openings=defer_openings,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 
 
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
-             pins: list[str] | None = PINS, bound: dict | None = MODEL, model: dict | None = MODEL) -> dict:
+             pins: list[str] | None = PINS, bound: dict | None = MODEL, model: dict | None = MODEL,
+             peer: str | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
-    None) and the line held to `model` (`--model-pin`'s)."""
+    None) and the line held to `model` (`--model-pin`'s), and `peer` its --peer (None: the record's)."""
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=pins, model=model)
+                      pins=pins, model=model, peer=peer)
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
@@ -388,3 +393,45 @@ def test_a_session_whose_pin_the_hosts_pins_log_doesnt_record_as_mains_earns_no_
     assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
                                         f"and bound; session 0: not pinned: {why}")
     assert f"| 0 | {t} | yes | yes | yes | no: {why} | yes | zero |" in al.table(doc).splitlines()
+
+
+@pytest.mark.parametrize("peer", ["vy-nebius-1", "vy-auditor-1"], ids=["n1", "host-run"])
+def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_naming_none_is_refused(host, tmp_path,
+                                                                                                    peer):
+    """The peer each gate session's reserve and open must carry on the ledger is the one the run's record names, with
+    no --peer: verifier.json's gate sessions (`challengers.Gate.finish`) for a verifier on vy-nebius-1, or a host
+    run's request.json beside out/ for one on vy-auditor-1 whose verifier.json predates that field (gate run 7's),
+    the request's own `peer` being the audited node. Either way its session is of record. --peer overrides the record,
+    and a session reserved for another peer is then not of record; a record naming two peers, or none, is refused with
+    the flag."""
+    out, other = tmp_path / "run", {"vy-nebius-1": "vy-auditor-1", "vy-auditor-1": "vy-nebius-1"}[peer]
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True, peer=peer)
+    assert [s["challenger"]["peer"] for s in sessions] == [peer]
+    bare = [{**s, "challenger": {k: x for k, x in s["challenger"].items() if k != "peer"}} for s in sessions]
+    request = tmp_path / "request.json"
+
+    def requested(name: str) -> None:
+        request.write_text(json.dumps({"peer": "vy-nebius-2", "argv": [
+            "/usr/bin/python3", "-I", "verifier.py", "--challenger", "gate", "--challenger-peer", name,
+            "--challenger-pin", host.pin]}))
+
+    if peer == "vy-auditor-1":
+        requested(peer)
+    doc = analysed(out, host, sessions if peer == "vy-nebius-1" else bare, reg, desc)
+    (s,) = doc["sessions"]
+    assert doc["peer"] == {"name": peer, "from": "record"}
+    assert s["ledger"]["ok"] and s["ledger"]["peer"] == s["ledger"]["open_peer"] == peer and s["of_record"]
+    over = analysed(out, host, sessions, reg, desc, peer=other)
+    (s,) = over["sessions"]
+    assert over["peer"] == {"name": other, "from": "--peer"}
+    assert not s["ledger"]["ok"] and not s["of_record"] and s["credit"]["zero"][-1].startswith("not of record")
+    requested(other)
+    with pytest.raises(SystemExit) as two:
+        analysed(out, host, sessions, reg, desc)
+    request.unlink()
+    with pytest.raises(SystemExit) as none:
+        analysed(out, host, bare, reg, desc)
+    for e, named in ((two, "challenger peers vy-auditor-1, vy-nebius-1"), (none, "no challenger peer")):
+        assert str(e.value) == (f"auditor_line: the run's record names {named} (verifier.json's gate sessions, "
+                                f"{request}'s --challenger-peer): pass --peer NAME, the verifier machine's name in the "
+                                "challenger host's /etc/vy/peers")
