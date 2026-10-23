@@ -28,10 +28,13 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   option records it there as a `Call`: its engine step (counted at linear 0), its layer (the linear's ordinal), its served
   rows and its position. Then each listener (`H1Run.listen`) gets the call with the served tensors, on the device: A (the s8
   rows, as the Commit taps ``Int8RowQuant_v1/0``), s_a (``/1``), the int8 weight and its scales; `H1Run.close` hands it the
-  empty steps' calls too, with no rows. A's slot i is leaf i of the Commit's row table of (step, layer) (circuits' AROW), so
-  a tile's rows are 32 consecutive leaves. What a listener returns (its roots and receipt root, as hex) is recorded with
-  the call (``bound``). `Call.inputs` is `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the
-  table's, and root(B) is the weight's, which compute accounting commits. This module commits neither.
+  empty steps' calls too, with no rows. A's slot i is the call's row i, so a tile's rows are 32 consecutive slots. What a
+  listener returns (its roots and receipt root, as hex) is recorded with the call (``bound``). `Call.inputs` is
+  `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
+  which compute accounting commits. This module commits neither.
+* **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap): each round's input-ids table ``ids@<s>`` and each call's A
+  table are the Commit's values, its record bound into `calls_root` before the draw root and held to them by core's
+  credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a unit, its exact z (`Call.z`'s cells) then y = dq(z). With none,
   none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
@@ -56,8 +59,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.salt_of` over the weights' root, `weight_root`,
   from the challenger's salt coin) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG` (`program_salt`)
   until the challenger opens a 64-byte one. A challenger's window opens its salt coin after its own open root
-  (`salt.window_open_root` of the weights' root, round 0's request table's root and its session), once round 0 is
-  admitted and before step 0's forward (`H1Run.open_window`).
+  (`salt.window_open_root` of the weights' root, round 0's request root and its session), once round 0 is admitted
+  and before step 0's forward (`H1Run.open_window`); with the Commit, that request root takes in round 0's ids table.
 """
 from __future__ import annotations
 
@@ -75,6 +78,7 @@ import numpy as np
 from verity.core.protocols.pouw.audit import commit_rows, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -86,6 +90,7 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocol_options import credit_gate as CG
+from verity_vllm.protocol_options import pouw_h1_commit as CT
 from verity_vllm.protocol_options import pouw_h1_prover as PV
 from verity_vllm.protocol_options import pouw_h1_records as ZR
 from verity_vllm.protocol_options import pouw_h1_requests as RQ
@@ -226,8 +231,8 @@ def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
 @dataclass(frozen=True)
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
-    served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table is
-    the Commit's row table of (step, layer): leaf i is slot i, served for i < m and empty after."""
+    served rows m (0 for a step past the last served one), its `rows` slots (T), k, n and its first position. Its A table
+    holds slot i at leaf i, served for i < m and empty after (with the Commit, its AROW of (step, layer))."""
 
     index: int
     step: int
@@ -314,7 +319,7 @@ class H1Run:
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
                  coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
-                 prover: str | None = None) -> None:
+                 prover: str | None = None, session: str | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
             raise ValueError(f"{entry}: an admission is one of {RQ.ADMISSIONS}, not {admission!r}")
         if (salt is None) == (opener is None):
@@ -337,6 +342,10 @@ class H1Run:
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
         self.draw, self.admission, self.coin_source = draw, admission, coin_source
+        #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
+        self.session = session
+        #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
+        self._ids0: bytes | None = None
         self.prover = prover if prover is not None else getattr(served, "prover", None)
         if self.prover is not None and commit:
             PV.keep_key(self.prover, self._key)
@@ -376,25 +385,33 @@ class H1Run:
     def salt(self) -> bytes:
         return self._salt if self._salt is not None else self.open_window()
 
-    def open_window(self) -> bytes:
-        """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and its root
-        handed to ``opener``, which opens the window's session and its salt coin after the window's open root over it
-        (`pouw_h1_window.Window.open`); the commitment records the root (``requests_root``) and what ``opener``
-        returns of the opening."""
+    def open_window(self, ids: bytes | None = None) -> bytes:
+        """The Program's salt, opened once: round 0's request table is committed (its binding reads no salt) and round 0's
+        request root (`_requests0`, over ``ids``, round 0's input-ids table's root, with the Commit, so the prompt tokens
+        are fixed before the salt) handed to ``opener``, which opens the window's session and its salt coin after the
+        window's open root over it (`pouw_h1_window.Window.open`); the commitment records what ``opener`` returns."""
+        if ids is not None:
+            self._ids0 = ids
         if self._salt is None:
             if self._unopened is not None:
                 raise RuntimeError(f"{self.entry}: the window's salt was refused ({self._unopened}), and a "
                                    "window opens it once")
             table = self._tables[0] = RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key)
-            self.commits["requests_root"] = table.commitment.root.hex()
+            requests = self._requests0(table.commitment.root)
             try:
-                salt, self.rounds, self.draw, commits = self._opener(table.commitment.root)
+                salt, self.rounds, self.draw, commits = self._opener(requests)
             except Exception as e:
                 self._unopened = self.details["unopened"] = str(e)
                 raise
             self.commits.update(commits)
             self._salt = salt
         return self._salt
+
+    def _requests0(self, table: bytes) -> bytes:
+        """Round 0's request root: `credit.requests_root` of `table` and round 0's ids table's root, else `table`."""
+        requests = table if self._ids0 is None else CR.requests_root(table, self._ids0)
+        self.commits["requests_root"], self.commits["request_table"] = requests.hex(), table.hex()
+        return requests
 
     def _table(self, call: Call, name: str, leaves: list[bytes]) -> str:
         return RQ.hiding_rows(tagged(TABLE_TAGS[name], self.salt, call.index), call.index, leaves, self._key,
@@ -488,7 +505,8 @@ class H1Run:
             owners += [index] * int(rows)
         self.owners[r] = owners
         if r == 0:
-            self.open_window()
+            self.open_window(None if self.served is None else self.served.open_ids(
+                self, RQ.first_ids({q: self.requests[i].prompt for q, i in self._ids.items()}, order)))
         return out
 
     def _close_rounds(self, through: int) -> None:
@@ -508,8 +526,13 @@ class H1Run:
             slots = self._slot_tables[r] = RQ.slot_table(self.salt, r, self.rows, owners, self._key)
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
-            row = RQ.round_row(self.salt, r, calls, table.commitment.root, slots.commitment.root, receipts,
+            if self.served is not None:
+                self.served.close_round(self, r)
+            requests = self._requests0(table.commitment.root) if r == 0 else table.commitment.root
+            row = RQ.round_row(self.salt, r, calls, requests, slots.commitment.root, receipts,
                                self.served.segments(self, r) if self.served is not None else {})
+            if r == 0:
+                row["request_table"] = table.commitment.root.hex()
             coin = self.rounds.record(bytes.fromhex(row["root"])) if self.rounds is not None else None
             self.round_log.append({**row, "coin": coin.to_json() if coin else None})
 
@@ -610,6 +633,8 @@ class H1Run:
         self._close_rounds(self.steps - 1)
         if self.served is not None:
             self.served.close(self)
+            if self.served.tap is not None:
+                self.details["roots1"] = CT.roots1(self)
         unbound = RQ.tables_reason(self.salt, self.round_log, self.manifest())
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
@@ -645,9 +670,12 @@ class H1Run:
 
     def gated(self) -> dict[int, dict[str, Any]]:
         """Each served call's verdict: the credit gate's, refused in a window that served a row it can't name an entry for
-        (`request_gaps`) or whose coins aren't the challenger's (`IN_PROCESS`)."""
+        (`request_gaps`), whose coins aren't the challenger's (`IN_PROCESS`) or, with the Commit, whose A tables or input
+        ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
-        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER)):
+        untied = bool((self.details.get("roots1") or {}).get("reason"))
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
+                        (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
         return out
 
@@ -708,8 +736,9 @@ class H1Run:
 
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
-        ``served`` its registered trees' entries."""
-        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest())
+        ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
+                          CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -717,6 +746,9 @@ class H1Run:
         self.close()
         if not self.commit or self._unopened is not None:
             return
+        commit = CT.record_of(self)
+        if commit is not None:
+            self.commits["commit"] = commit
         calls_root = self.calls_root()
         self.commits.update(calls_root=calls_root.hex(), static=self.details["static"])
         if self.served is not None:
@@ -741,12 +773,12 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None) -> bytes:
-    """`H1Run.calls_root` over the manifest rows `manifest`, and the served trees' digest `served` when the window has them."""
-    h = hashlib.sha512(b"verity/pouw/h1/calls/v2\0" + salt)
-    for row in manifest:
-        h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-    return h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None,
+               commit: str | None = None) -> bytes:
+    """`H1Run.calls_root` over the manifest rows `manifest`, the served trees' digest `served` when the window has them,
+    and the digest of its Commit record `commit` (hex, `pouw_h1_commit.digest`) when it has one: core's
+    `credit.calls_root`, the one place the record is bound. ValueError on a record `credit.commit_of` refuses."""
+    return CR.calls_root(salt, manifest, served, None if commit is None else CT.digest(commit))
 
 
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
