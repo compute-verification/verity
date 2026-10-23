@@ -28912,9 +28912,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "dc55939b6a82b05826a2574f4410c4f57651dbc0e5c1ad2e12ca8792206e7029",
+   "digest": "cfea0dc5f4c9fb0b72cab8a1faeebf1eb3860f451d15642254eb1aab833dd2c4",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "9c2dbc643e03fe1168d3834496bae80b42c8c174825c080cd754f27739764b2e"
+    "Accounting.Guarantees.TS.LeafLanesSound": "909b6c024fca00ef8922808f14f2e1c54f61bf6a440da2f4e87ed32ec7204a87"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },

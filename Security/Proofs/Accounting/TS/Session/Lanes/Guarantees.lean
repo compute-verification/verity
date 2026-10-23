@@ -12,7 +12,9 @@ committed rows and one post-draw partials record. Accepted together, they realiz
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
 sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
 (`LeafKnownColl`). Its acceptance includes flock-verify's known-content, complete and known-read checks at each of
-the 33 sessions, and it takes `CheckedSessionSound`'s hypotheses at each of them and two named premises: the circuits compute
+the 33 sessions, and it takes `CheckedSessionSound`'s hypotheses at each of them, but port uniqueness and the `ok` port,
+which that acceptance gives (the known-read check's names, at known content naming `o0`), and two named premises: the
+circuits compute
 their Definitions at their port rows, read through the layout's decodes (`Accounting.Assumptions.TS.LeafChecks` at
 `Lanes.decL`, `Lanes.decC`; the complete check makes those rows the registered reads) and, where the sessions'
 registrants' rows agree, their data ports' rows hold one leaf and the receipt
@@ -49,8 +51,8 @@ a `sha512/row/v2` row of its known rows' or registered row's words, a computed r
 an input row and a copy returns each bit of such an output row) included, opening the leaf's values `leaf`, its
 relation the unit's served checks at the path's public inputs `pub` and receipt `receipt`, or a clash of two of the sessions' registrants' records, `LeafColl`, or a collision of a
 session's known-content tie, `LeafKnownColl`): given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
-window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, a circuit that names each port once, every
-unit's served roots registered, at least one unit, a port named `ok` in the circuit and in `own`, and
+window's law `Accounting.Assumptions.TS.WindowLaw`, full checking `kd = n`, every unit's served roots registered, at
+least one unit, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
 `δ ≥ 0`), each session's registered file `own` holding the statement's data ports at the layout's rows of one tree per
 value (`PouwWindow.Lanes.ownOf (roots x w i) (servedTile K)`, the first port of each name), the 33 circuits computing
@@ -61,12 +63,14 @@ registrants' rows agree at one tree and position and the known rows hold, their 
 holding one in-range leaf and the receipt (`Accounting.Assumptions.TS.LeafReads`), each
 proof is accepted with a leaf that
 fails the unit's served checks on the path, and no clash of its sessions' registrants' records or of their
-known-content ties, with probability at most `33 δ`. -/
+known-content ties, with probability at most `33 δ`. That each circuit names each port once and has a port `o0` that
+`own` registers is not asked: an accepted proof's known-read check names every port of its known content, `o0`
+among them, and its known-content check registers it (`Flock.KnownRead.namesOk`, `Flock.Registered.checkKnownAll`). -/
 def LeafLanesSound : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ}
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
     (out : ∀ x w i k, (sess x w i k).Out) (salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray)
-    (ok : String) (dq : List ℤ → ℤ)
+    (dq : List ℤ → ℤ)
     (part : LanePub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (pub : Paths Ω S → Fin S → Fin nπ → LanePub)
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
@@ -75,11 +79,7 @@ def LeafLanesSound : Prop :=
     (∀ x w i k, (sess x w i k).CR) →
     (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
     (∀ x w i k, (sess x w i k).kd = (sess x w i k).n) →
-    (∀ x w i k (q q' : Fin (sess x w i k).c.ports.size),
-      (sess x w i k).c.ports[q].name = (sess x w i k).c.ports[q'].name → q = q') →
     (∀ x w i k u, (sess x w i k).ServedRegistered u) → (∀ x w i k, 0 < (sess x w i k).n) →
-    (∀ x w i k, (∃ q : Fin (sess x w i k).c.ports.size, (sess x w i k).c.ports[q].name = ok) ∧
-      ∃ pt ∈ (sess x w i k).own, pt.name = ok) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i k, ∀ p ∈ PouwWindow.Lanes.ownOf (roots x w i) (servedTile K) (k.map Fin.val),
       (sess x w i k).own.toList.find? (·.name == p.name) = some p) →
