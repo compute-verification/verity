@@ -14,6 +14,8 @@ round.
   independent read the coins at their rounds (`coinReads_czExe`); no outer coin `1` reads them at the rep's outer round
   (`pointReads_czExe`); full rank of the table's four claim points is rep `1`'s rank check, after rep `0`'s points
   (`RankBad`), read as the plan's points (`pointsOf_reads`, `maskRankOk_compose`).
+* `slotsBelow_refK`: at a `Live` statement every refusal's round is a round of the session, each within its rep's
+  `repRounds`, so **`admits_of_not_refused_refK`** needs no refusal by `refK x` only.
 -/
 
 namespace Claims.ZKMal
@@ -72,6 +74,65 @@ theorem admits_of_not_refused (P : Composed.LigProver) {x : Msg} (hx : Live x) {
     · rw [getElem!_pos (stsOf x) j.val hj]
       exact he
     · exact ho.symm.trans (hey.trans h1)
+
+/-- **Every refusal's round is a round of the session**: each rep's outer coins, pair, `β` and rank check sit within
+its `repRounds`, and the reps' rounds end by `refK x`. -/
+theorem slotsBelow_refK {x : Msg} (hx : Live x) : SlotsBelow x (refK x) := by
+  intro j hj r hr
+  obtain ⟨s, spec, hsx⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  have hK := refK_eq hsx
+  obtain ⟨y⟩ := hx.2 j hj
+  have hst : (stsOf x)[(2 * j + r) / 2]! = (stsOf x)[j]! := by
+    rw [show (2 * j + r) / 2 = j by omega]
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    rw [hst, getElem!_pos (stsOf x) j hj]
+    exact y.hz
+  have hk6 : 6 ≤ (stsOf x)[(2 * j + r) / 2]!.c.kLog := by
+    rw [hst, getElem!_pos (stsOf x) j hj]
+    exact y.wf.1.hk6
+  have hend : FlockComplete.repStartZk spec (stsOf x) (2 * j + r) +
+      FlockDeploy.repRounds true spec (stsOf x)[(2 * j + r) / 2]! ≤ refK x := by
+    rw [← FlockComplete.ZkTables.repStart_succ, hK, ← FlockComplete.ZkTables.repStart_last]
+    exact FlockComplete.ZkTables.repStart_mono spec (stsOf x) (by omega)
+  have hrr : FlockDeploy.repRounds true spec (stsOf x)[(2 * j + r) / 2]! =
+      FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! +
+        (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) + 4 := by
+    unfold FlockDeploy.repRounds FlockComplete.piopRoundsZk
+    simp only [↓reduceIte, hz]
+    omega
+  have hp : FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! =
+      ((stsOf x)[j]!.m + (stsOf x)[j]!.c.kLog - 6) + (2 + spec.points * (stsOf x)[j]!.regions.size + 1) := by
+    rw [hst]
+    rfl
+  rw [hrr, hp] at hend
+  have hb0 : repBase x (2 * j + r) = FlockComplete.repStartZk spec (stsOf x) (2 * j + r) := repBase_eq hsx _
+  have hρ : rhoSlot x j r = FlockComplete.repStartZk spec (stsOf x) (2 * j + r) +
+      FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! + (y.sch.k0 + 2) := by
+    unfold rhoSlot
+    rw [repSlot_eq hsx hz]
+  have hβ : betaSlot x j r = FlockComplete.repStartZk spec (stsOf x) (2 * j + r) +
+      FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! +
+        (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1) + 2) := by
+    unfold betaSlot
+    rw [repSlot_eq hsx hz]
+  rw [hp] at hρ hβ
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [outerSlot_eq hsx, hb0]
+    omega
+  · rw [hρ]
+    omega
+  · rw [hβ]
+    omega
+  · unfold rankSlot
+    rw [hb0]
+    omega
+
+/-- **Where no refusal shows by the session's last coin, every table admits the opened coins**
+(`admits_of_not_refused` at `refK x`, `slotsBelow_refK`). -/
+theorem admits_of_not_refused_refK (P : Composed.LigProver) {x : Msg} (hx : Live x)
+    {c : Fin (refK x) → FlockDeploy.Coin} (hn : ¬ Refused x c (refK x)) (j : Fin (jOf x)) :
+    (tabC P x j).Admits (czExe P x c j) :=
+  admits_of_not_refused P hx (slotsBelow_refK hx) hn j
 
 end Masked
 
