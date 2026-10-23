@@ -948,18 +948,23 @@ def load_pins(path: Path = PINS) -> dict:
 
 
 def toolkit_of(notes: list[dict], pins: dict) -> tuple[str | None, str | None]:
-    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why)."""
+    """The pinned toolkit every ptxas (and nvlink) note of a cubin names, with pinned ptxas arguments; else (None, why).
+    One ptxas build may have an entry per target (13.0.1 for sm_120a, 13.0.1-sm_90a), each with its own arguments and run."""
     if not any(n["tool"] == "ptxas" for n in notes):
         return None, "no ptxas record (.note.nv.tkinfo)"
+    unpinned = None
     for tk, rec in pins["toolkits"].items():
         if all(n["version"] == rec["version"] and n["branch"] == rec["branch"] for n in notes):
             bad = [n["args"] for n in notes if n["tool"] == "ptxas"
                    and " ".join(a for a in n["args"].split() if a != "-v") not in rec["args"]]
             if bad:
-                return None, f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                unpinned = unpinned or f"ptxas {rec['version']} with unpinned arguments {bad[0]!r}"
+                continue
             if not rec.get("numeric"):
                 return None, f"ptxas {rec['version']} is pinned without a numeric run"
             return tk, None
+    if unpinned:
+        return None, unpinned
     tools = sorted({f"{n['tool']} {n['version']!r} ({n['branch']})" for n in notes})
     return None, f"no pinned toolkit built it: {'; '.join(tools)}"
 

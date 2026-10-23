@@ -146,6 +146,19 @@ def test_a_cubin_from_any_other_ptxas_exempts_nothing(notes, why):
     assert v["covered"] == {} and v["offending_n"] == v["flagged"] == sum(PLAIN_COVERED.values())
 
 
+def test_one_ptxas_build_may_have_an_entry_per_target():
+    """An entry for another target of the same ptxas (13.0.1-sm_90a beside 13.0.1) is found past the one whose arguments
+    don't match, and exempts only with its own numeric run."""
+    p = pins()
+    p["toolkits"]["12.9.1-sm_90a"] = {**p["toolkits"]["12.9.1"], "args": ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]}
+    sm90 = note(args="-arch sm_90a -m 64 -fmad false")
+    assert SG.toolkit_of(sm90, p) == ("12.9.1-sm_90a", None) and SG.toolkit_of(NOTES["plain"], p) == ("12.9.1", None)
+    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 "
+                                                                        "with unpinned arguments '-arch sm_100a -m 64'")
+    p["toolkits"]["12.9.1-sm_90a"]["numeric"] = None
+    assert SG.toolkit_of(sm90, p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned without a numeric run")
+
+
 def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
     assert verdict("plain", notes=note(args="-v -arch sm_120a -m 64"))["offending_n"] == 0
     assert verdict("plain", notes=note(args="-arch sm_120a -m 64 -fmad false"))["offending_n"] == 0
@@ -610,7 +623,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     """Compiles the probe as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
     /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
-    toolkit pinned with a numeric run; an sm_90a cubin never does (12.9 writes it no ptxas note, 13.0 unpinned arguments)."""
+    toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
+    note, 13.0 unpinned arguments)."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -619,8 +633,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     if not nvcc.exists():
         pytest.skip(f"no nvcc beside {tools['cuobjdump']['path']}")
     version = subprocess.run([str(nvcc), "--version"], capture_output=True, text=True, check=True).stdout
-    pinned = arch == "sm_120a" and any(t["version"] in version and t["branch"] in version and t["numeric"]
-                                       for t in SG.load_pins()["toolkits"].values())
+    pinned = any(t["version"] in version and t["branch"] in version and t["numeric"] and f"-arch {arch} -m 64" in t["args"]
+                 for t in SG.load_pins()["toolkits"].values())
     base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
     for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"])):
         subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / src)], check=True)
@@ -628,11 +642,11 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         code = [c for c in rec["cubins"] if c["functions"]]
         assert rec["cross_check"]["agree"] and len(code) == 1, (out, rec["cross_check"], len(code))
         assert (code[0]["toolkit"] is not None) is pinned, (out, code[0]["unpinned"])
-        if arch == "sm_90a":
+        if arch == "sm_90a" and not pinned:
             assert code[0]["unpinned"] == "no ptxas record (.note.nv.tkinfo)" \
                 or "with unpinned arguments '-arch sm_90a -m 64" in code[0]["unpinned"], code[0]["unpinned"]
         assert rec["ok"] is (ok and pinned), (out, rec["offending"][:3])
-        if rec["ok"]:
+        if rec["ok"] and arch == "sm_120a":
             assert rec["covered"] == PLAIN_COVERED, (out, rec["covered"])
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}

@@ -65,10 +65,24 @@ def test_a_control_must_differ_somewhere():
 def test_every_shipped_toolkit_names_a_run_of_these_builds():
     """A repin that changes a body drops its toolkit's run (`sass_gate.update_pins`), and a toolkit without one exempts
     nothing; a change to the pinned builds needs a new run too."""
-    want = [" ".join(["nvcc", *IP.NVCC_ARGS, *flags]) for flags in IP.PINNED]
     for name, tk in SG.load_pins()["toolkits"].items():
+        want = [" ".join(["nvcc", *IP.nvcc_args(IP.arch_of(name)), *flags]) for flags in IP.PINNED]
         assert tk["numeric"] and re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", tk["numeric"]["run"]), name
         assert tk["numeric"]["builds"] == want, name
+
+
+def test_a_toolkit_names_its_target_and_a_run_has_one():
+    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a") and IP.nvcc_args("sm_120a") == IP.NVCC_ARGS
+    assert "arch=compute_90a,code=sm_90a" in IP.nvcc_args("sm_90a")
+    with pytest.raises(IP.PinFailed, match="no target sm_100a"):
+        IP.arch_of("13.0.1-sm_100a")
+    pins = {"toolkits": {"13.0.1": {}, "13.0.1-sm_90a": {}}}
+    with pytest.raises(IP.PinFailed, match="more than one target"):
+        IP.homes(["13.0.1=/a", "13.0.1-sm_90a=/b"], pins)
+    assert IP.homes(["13.0.1-sm_90a=/b"], pins) == {"13.0.1-sm_90a": "/b"}
+    h200 = {**good_run(), "lines": [{**good_run()["lines"][0], "sm": 90}] + good_run()["lines"][1:]}
+    assert IP.judge_run(h200, control=False, sm=90) == []
+    assert any("not sm_90" in p for p in IP.judge_run(good_run(), control=False, sm=90))
 
 
 @pytest.mark.slow
