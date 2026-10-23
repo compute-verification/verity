@@ -198,16 +198,17 @@ class Union:
     build of the union writes what the sets' own builds write.  No table's root may go into a union table's levels
     (h1c_build hashes a set's leaves before any root is written)."""
 
-    def __init__(self, sets: list[Set], dev):
-        self.sets, self.tabs = sets, [t for st in sets for t in st.tabs]
-        self.n = sum(st.n for st in sets)
+    def __init__(self, sets: list[Set], dev, rows: range | None = None):
+        # rows: only those tables of each set (a part of the sets' union, built apart from the rest)
+        pick = [(st, i) for st in sets for i in (range(st.n) if rows is None else rows)]
+        self.sets, self.tabs = sets, [st.tabs[i] for st, i in pick]
+        self.n = len(pick)
         levels = [(st.level.data_ptr(), st.level.data_ptr() + 8 * st.level.numel()) for st in sets]
-        for st in sets:
-            for i in range(st.n):
-                r = st.host[i].root or 0
-                if any(lo <= r < hi for lo, hi in levels):
-                    raise ValueError(f"a table's root goes into a union table's levels ({r:#x}): build those sets apart")
-        self.host = (_Tab * self.n)(*[st.host[i] for st in sets for i in range(st.n)])
+        for st, i in pick:
+            r = st.host[i].root or 0
+            if any(lo <= r < hi for lo, hi in levels):
+                raise ValueError(f"a table's root goes into a union table's levels ({r:#x}): build those sets apart")
+        self.host = (_Tab * self.n)(*[st.host[i] for st, i in pick])
         self.dev = torch.frombuffer(bytearray(bytes(self.host)), dtype=torch.uint8).to(dev)
 
 
@@ -256,8 +257,8 @@ class H1C:
     def set(self, tabs: list[Tab]) -> Set:
         return Set(tabs, self.dev)
 
-    def union(self, sets: list[Set]) -> Union:
-        return Union(sets, self.dev)
+    def union(self, sets: list[Set], rows: range | None = None) -> Union:
+        return Union(sets, self.dev, rows)
 
     def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True) -> None:
         rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),

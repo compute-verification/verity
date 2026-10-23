@@ -125,6 +125,7 @@ END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
+ZT_ENV = "DITHER_SO_ZT"                 # "1": each piece's z/y tables built in the forward (`SoSide.__init__`)
 ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
 # -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
@@ -508,7 +509,7 @@ class SoWindow(DO.Window):
         else:
             self.c.build(pre["admit"], self.stepv[0:1])
         self.phase("z_tables")
-        self.c.build(pre["z"], self.stepv[0:1])
+        self.c.build(sd.z_rest if sd.zt else pre["z"], self.stepv[0:1])
         for f in self.before_mid:
             f()
         self.phase("receipt_leaf")
@@ -773,6 +774,18 @@ class SoSide(DA.Side):
         self.capture_ms: list[float] = []
         if CONF.get("serve_prio") and pt and not win.overlap:
             win.tree_streams = tuple(torch.cuda.Stream(device=dev, priority=-1) for _ in range(2))
+        # $DITHER_SO_ZT=1 (with DITHER_ZY1, without -ov): at each piece's first call (w = 1 mod 4) the z/y tables of the
+        # calls since the last such call, on a stream of their own joined with the A tables at the piece's end; between
+        # steps only the last piece's. The parts are fixed at the build: a replayed piece runs no Python.
+        self.zt = os.environ.get(ZT_ENV) == "1" and self.zy1 and not win.overlap
+        if self.zt:
+            starts = [w for w in range(1, L) if w % 4 == 1]
+            sets = [self.zyset, self.ysset, self.yuset]
+            self.z_parts = {w: win.c.union(sets, range(a, w)) for a, w in zip([0] + starts, starts)}
+            self.z_rest = win.c.union(sets, range(starts[-1] if starts else 0, L))
+            self.zstream = torch.cuda.Stream(device=dev, priority=-1)
+            self.z_fork, self.z_join = torch.cuda.Event(), torch.cuda.Event()
+            self.z_used = False
         self.ov = Ov(win, self, win.overlap) if win.overlap else None
         self.spill = Spill(win, self, win.spill_mode) if win.window_end and win.spill_mode else None
 
@@ -780,6 +793,12 @@ class SoSide(DA.Side):
         win = self.win
         M, k = x.shape
         main = torch.cuda.current_stream()
+        if self.zt and w in self.z_parts:
+            self.z_fork.record(main)
+            self.zstream.wait_event(self.z_fork)
+            with torch.cuda.stream(self.zstream):
+                win.c.build(self.z_parts[w], win.stepv[0:1])
+            self.z_used = True
         xq = torch.empty((M, k), dtype=torch.int8, device=x.device)
         s_a = torch.empty(M, dtype=torch.float32, device=x.device)
         DA.exactlin_quant_rows_dithera[(M,)](x, xq, s_a, win.slot[w], win.scale[w], win.S, k, x.stride(0), xq.stride(0),
@@ -797,12 +816,17 @@ class SoSide(DA.Side):
         self.ycommit(w, y, s_w)
         if rc:
             raise RuntimeError(f"dither-a-so call {w} (M={M}): its A table's launch returned {rc}")
-        if not self.a_once and self.a_used and (w == win.L - 1 or (w % 4 == 0 and DA._piecewise())):
+        end = w == win.L - 1 or (w % 4 == 0 and DA._piecewise())
+        if not self.a_once and self.a_used and end:
             for i in sorted(self.a_used):
                 self.a_join[i].record(self.astreams[i])
                 main.wait_event(self.a_join[i])
             self.a_used.clear()
             self.joins += 1
+        if self.zt and self.z_used and end:
+            self.z_join.record(self.zstream)
+            main.wait_event(self.z_join)
+            self.z_used = False
         self.calls += 1
 
     def stash(self, s: int) -> None:
@@ -916,6 +940,7 @@ class SoSide(DA.Side):
         return {**super().info(), "order": ORDER, "depth": self.win.depth, "a_tables": AO[self.so_ao],
                 "a_overlap": self.so_ao, "unit_steps": self.unit_steps,
                 "units_dispatch": {"graph": self.graph, "graphs": sorted(self.graphs), "capture_ms": self.capture_ms},
+                "z_tables": {"in_forward": self.zt, "between_steps": self.z_rest.n if self.zt else None},
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
