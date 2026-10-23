@@ -259,6 +259,16 @@ def test_vectors_are_pinned(case):
     assert CV.case_vector(*spec) == next(c for c in PINNED["cases"] if c["case"] == case)
 
 
+def test_the_h100_h3_vectors_are_the_registered_schemes():
+    """`pearl-c-h100-v1-h3` (GLM-5.3's FP8 form on the H200) is the scheme its pinned production case was made under, and
+    the case is in its domain."""
+    s, case = get("pearl-c-h100-v1-h3"), next(c for c in PINNED["cases"] if c["case"] == "decode-32-v1-h3")
+    v = CV.scheme(case["test_instance"], "v1", "h3")
+    assert s.name == case["scheme"] == v.name and s.commitment_hash == "hm96-sha512" and s.device is C.H100
+    assert (s.k_min, s.tile, s.forming, s.hashing, s.prices) == (v.k_min, v.tile, v.forming, v.hashing, v.prices)
+    s.check(Matmul(case["index"], Shape(*case["shape"]), case["weight"]))
+
+
 def test_lifecycle_on_a_test_instance():
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Sampled, Verifier

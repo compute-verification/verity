@@ -1,5 +1,5 @@
-"""``pearl-c-h100-v0``, ``pearl-c-h100-v1``, ``pearl-c-sm120-v1`` and ``pearl-c-sm120-v1-h3``: Pearl-C, Pearl's FP8
-product with its noisy clean-up checked, on the H100 and on the RTX PRO 6000 Blackwell.
+"""``pearl-c-h100-v0``, ``pearl-c-h100-v1``, ``pearl-c-h100-v1-h3``, ``pearl-c-sm120-v1`` and ``pearl-c-sm120-v1-h3``:
+Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
 The design is the cheap-binding lane's: Pearl's H100 product and its output tickets, plus #311's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
