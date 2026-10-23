@@ -22,9 +22,10 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
-(``model.layers.0.``, or a MoE layer's ``moe/L40``), ``scope.steps`` (``[lo, hi)``) to those steps of each request.  A chunked
-template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES``
-slice or a ``KCHUNKS`` K-chunk) are split
+(``model.layers.0.``, or a MoE layer's ``moe/L40``), or to the rows under any of a list of them, ``scope.steps`` (``[lo, hi)``)
+to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
+a ``COLS`` column block, a ``SLICES`` slice or a ``KCHUNKS`` K-chunk; and a row template the file's ``chunk_cap`` names, its
+rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
@@ -82,7 +83,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
-                                   committed member (``vu_export._decompose_row``'s port rule)
+                                   committed member (``vu_export._decompose_row``'s port rule); chunked when the file's
+                                   ``chunk_cap`` names it, v2 bit rows (`chunk_rows.unit_rows`) -> ``o<j>`` per member
 
 so ``RoPEHead_v2{D=..}`` and ``GemmCoordinate_v4{K=..}``, the Boolean versions, are a RoPE head's and a GEMM coordinate's.
 
@@ -148,18 +150,19 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
 Row = tuple[str, Any, dict, dict]
 
 
-def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
+def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | Sequence[str] | None = None,
                 program_dirs: dict[str, str] | None = None,
                 index: Mapping[str, Any] | None = None,
                 steps: Sequence[int] | None = None,
                 reuse: Sequence[ProgramIndex] = ()) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
-    prefix) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition; and its instance count.  Rows are
-    matched by the template's word (:func:`template`), so two templates that compute one word Definition are refused.  Fixed by
-    the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
+    prefix, or a list of them: a row under any) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition;
+    and its instance count.  Rows are matched by the template's word (:func:`template`), so two templates that compute one word
+    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
     (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
     arguments (`index_of`)."""
     ts = [template(t) for t in tmpls]
+    prefixes = (scope,) if isinstance(scope, str) else tuple(scope or ())
     want: dict[str, int] = {}
     for k, t in enumerate(ts):
         if want.setdefault(t.word, k) != k:
@@ -180,7 +183,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if d is not None:
                 for k, _n in hits:
                     seen[k] = seen[k] or d
-            if d is None or (scope and not d["op_path"].startswith(scope)):
+            if d is None or (prefixes and not d["op_path"].startswith(prefixes)):
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
@@ -194,10 +197,10 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 counts[k] += n
     for t, rows, d in zip(tmpls, out, seen, strict=True):
         if not rows:
-            raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else "")
+            raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {' or '.join(prefixes)}" if prefixes else "")
                               + (f" at steps {list(steps)}" if steps is not None else "")
                               + (f"; its rows exist outside the scope, e.g. op_path {d['op_path']} at step {d['step']} (scope.op_path_prefix "
-                                 "is the op_path's prefix, the wrapper's module prefix stripped)" if d is not None else ""))
+                                 "is the op_path's prefix, or a list of them, the wrapper's module prefix stripped)" if d is not None else ""))
     return out, [t.fn for t in ts], counts
 
 
@@ -206,12 +209,20 @@ def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
     return {t: CR.chunk_cap(template(t)) for t in tmpls if template(t).layout in CHUNKED}
 
 
+def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
+    """Whether template ``t``'s units are chunks on bit rows (`chunk_rows.unit_rows`): a ``CHUNKED`` layout's (a window names the
+    caps), or a row template's when ``caps`` names it, its rows staged as the Definition's own ports (no input set read)."""
+    layout = template(t).layout
+    return (layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None)) or (layout == "row" and t in (caps or {}))
+
+
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
-    chunked template's units (``CHUNKED``) are consecutive chunks of at most its ``caps`` entry, one member each, on its
-    `chunk_rows.unit_rows`; a window always names the caps (`population`).  With no ``caps`` at all (a tool reading one Call's
-    units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS`` template is one member of word rows."""
+    chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
+    at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
+    With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
+    template is one member of word rows."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     out, base = [], 0
@@ -227,7 +238,9 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             n = sum(KC.units(template(t), x[3]["statics"]) for x in rs)
         elif layout in CHUNKED:
             n = sum(int(x[3]["statics"]["N"]) for x in rs)
-        if layout in CHUNKED and (layout in ("s8", "kchunk") or caps is not None):
+        elif layout == "row":
+            n = len(rs)
+        if chunked(t, caps):
             cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
                 raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
@@ -235,8 +248,9 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
             in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1 if layout == "s8" else sum(template(t).fn.signature()[1].leaf_widths()) // 16),)
-            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + (("o0", CS.SCHEMA_HM96_SHA512_ROW_V2),)
+            outs = (("o0", 1),) if layout == "s8" else tuple((f"o{j}", -(-sum(f.leaf_widths()) // 16))
+                                                             for j, f in enumerate(CR.fields(template(t))))
+            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
                               schemas=schemas)
                     for j, lo in enumerate(range(0, n, cap))]
@@ -627,7 +641,7 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
         layout = template(t).layout
         if layout == "s8":
             out += _read_s8(mine, rs, store, weights, arrivals)
-        elif layout in CHUNKED and mine[0].name:
+        elif mine[0].name:
             out += CR.split(mine, *read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
         else:
             out.append(read(mine[0], rs, store, weights, arrivals))
