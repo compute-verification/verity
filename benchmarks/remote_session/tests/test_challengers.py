@@ -6,8 +6,9 @@ held to the ledger; a challenger key other than the pinned one, a reserve outsid
 for the same window and a challenger whose commitment isn't the open's are each refused before a coin leaves. The
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
-its verifier, it and its period closed complete, the Lean accepted it, and the host's pins log its open sealed records
-its pin, a commit on the auditor's first-parent list of main (RT4-INT-40, CMP-74)."""
+its verifier, it and its period closed complete, the Lean accepted it, the host's pins log its open sealed records
+its pin, a commit on the auditor's first-parent list of main (RT4-INT-40, CMP-74), and the verifier bound the store to
+the model, reporting filler held beside weights held."""
 from __future__ import annotations
 
 import hashlib
@@ -49,6 +50,8 @@ CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 #: the auditor's first-parent list of main, newest first: both pins on it
 MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
+#: the model the store is bound to (`store_layout`'s pin)
+MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
 
 
 class Host:
@@ -267,25 +270,30 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool) -> tuple[li
 
 
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
-             pins: list[str] | None = PINS, main: list[str] | None = MAIN) -> dict:
+             pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
+             model: dict | None = MODEL) -> dict:
+    """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
+    None) and the line held to `model` (`--model-pin`'s)."""
+    binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
+                                                    "expected_root": reg["payload_root"], "bound": True}}
     (out / "verifier.json").write_text(json.dumps(
-        {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]}))
+        {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      pins=pins, main=main)
+                      pins=pins, main=main, model=model)
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
-def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_and_pinned(host, tmp_path,
-                                                                                                 monkeypatch,
-                                                                                                 defer_openings):
+def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_pinned_and_bound(
+        host, tmp_path, monkeypatch, defer_openings):
     """`auditor_line`'s line of record over a gate run of an honest session and a 1/16 dropper, in a period that
     committed the descriptor of the verifier that ran them, on a host whose opens seal its pins log, which records the
-    host's tree as a commit of main's. When the prover defers each window's openings, the dropper's are all asked, so
-    both windows and the period close complete: the honest session, once its verdict is the Lean's, is the line, and
-    the dropper, which the Lean refused, earns none. When it doesn't, the dropper's window and so the period close
-    incomplete, and the line credits zero. A python verdict, a period not yet closed, a verifier the period didn't
-    commit and no pins log each credit nothing, with the reason (no pins log under both *credited*, whose
-    `credited_session` reads the pin first, and *pinned*)."""
+    host's tree as a commit of main's, its store bound to the model. When the prover defers each window's openings, the
+    dropper's are all asked, so both windows and the period close complete: the honest session, once its verdict is
+    the Lean's, is the line, its weights and filler held apart, and the dropper, which the Lean refused, earns none.
+    When it doesn't, the dropper's window and so the period close incomplete, and the line credits zero. A python
+    verdict, a period not yet closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
+    `credited_session` reads the pin first, and *pinned*), a store bound to no model or to another, and no model to
+    bind it to each credit nothing, with the reason."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.0625", defer_openings)
@@ -311,22 +319,28 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert s["credit"]["pinned"] == {"commit": PIN, "seal": pins_seal(PINS), "ok": True, "reason": None}
     assert doc["pins"] == pins_seal(PINS)
     t = honest["T"]
+    assert doc["bound"]["ok"] and doc["bound"]["source"] == "--model-pin"
+    assert all(s["credit"]["bound"]["ok"] for s in (honest, dropper))
     if defer_openings:
         assert honest["credit"]["ok"] and zero(doc) == {1: ["not accepted"]}
         assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t]["4.4e+09"] == {
-            "k": 0, **{x: honest["shares_auditor_clock"]["4.4e+09"][x] for x in ("time", "snapshot")}}
+            "k": 0, **{x: honest["shares_auditor_clock"]["4.4e+09"][x] for x in al.SHARES}}
         assert doc["credit"]["summary"].startswith("the line credits session(s) 0; session(s) 1 earn none")
-        shares = " / ".join(f"{honest['shares_auditor_clock'][b]['time']:.4%}" for b in ("4.4e+09", "5.4e+10"))
-        assert f"| 0 | {t} | yes | yes | yes | yes | credited: {shares} |" in al.table(doc).splitlines()
+        shares, filler = (" / ".join(f"{honest['shares_auditor_clock'][b][x]:.4%}" for b in ("4.4e+09", "5.4e+10"))
+                          for x in ("time", "filler_time"))
+        assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
+                in al.table(doc).splitlines())
     else:
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
         assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
                             r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
-        assert doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0} and doc["line"][t]["credited_sessions"] == []
-        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted "
-                                                   "and pinned; session 0: not complete: period p-1 closed incomplete")
+        assert doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
+        assert doc["line"][t]["credited_sessions"] == []
+        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted, "
+                                                   "pinned and bound; session 0: not complete: period p-1 closed "
+                                                   "incomplete")
     assert doc["measured"][t]["auditor"]["4.4e+09"]["k"] == 0
     unlogged = line("lean", pins=None)
     assert unlogged["sessions"][0]["credit"]["pinned"]["reason"] == NO_PINS and unlogged["pins"] is None
@@ -337,6 +351,15 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     other = line("lean", al.descriptor("cd" * 20))
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
     assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
+    for bound, model, why in (
+            (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
+                          "FILE), so its payload root is the prover's choice"),
+            ({**MODEL, "name": "llama31-8b"}, MODEL, f"the verifier bound the store to llama31-8b ({'ab' * 8}...), not "
+                                                     f"synthetic-bf16 ({'ab' * 8}...)"),
+            (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
+        unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
+        assert not unbound["credit"]["credited_sessions"] and unbound["bound"]["reason"] == why
+        assert zero(unbound)[0][-1] == "not bound" and unbound["sessions"][0]["credit"]["bound"]["reason"] == why
     with pytest.raises(SystemExit, match="--commit"):
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
@@ -382,7 +405,7 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                                      "reason": why}
     assert s["credit"]["zero"] == [f"not credited: {why}", f"not pinned: {why}"] and not s["credit"]["ok"]
     t = s["T"]
-    assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == {"time": 0.0, "snapshot": 0.0}
-    assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted and "
-                                        f"pinned; session 0: not credited: {why}; not pinned: {why}")
-    assert f"| 0 | {t} | no: {why} | yes | yes | no: {why} | zero |" in al.table(doc).splitlines()
+    assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["4.4e+09"] == dict.fromkeys(al.SHARES, 0.0)
+    assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
+                                        f"and bound; session 0: not credited: {why}; not pinned: {why}")
+    assert f"| 0 | {t} | no: {why} | yes | yes | no: {why} | yes | zero |" in al.table(doc).splitlines()

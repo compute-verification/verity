@@ -43,6 +43,15 @@ registration after its last session, counting each session (a failed one by its 
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
 
+The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
+payload tree's leaves under it (`store_layout.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store_layout.Binding`): at startup
+every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
+then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
+store's under the key sent, recomputed in `--layout-workers` processes, else the hello is refused with the reason
+before the registry draws anything. The regions are then the binding's, and verifier.json keeps the binding (`binding`:
+the pin's name and checkpoint_sha512, the store's shape, both roots and `bound`), which `auditor_line.py` credits on.
+
 The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
 `--verdict lean` (the default, `VERDICT`) or `both`: it holds the registry and every session, and each registration,
 session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). An accepted
@@ -85,6 +94,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                         --challenger-period P [--challenger-minutes M]]
+                       [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -111,6 +121,7 @@ from verity.core.protocols.remote_bandwidth import audit, coins, ledger, timing 
 
 import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
+import store_layout  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
 
@@ -458,14 +469,17 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
                           "ingress_blocks": ingress_per_ns * (span + 2 * l_max),
                           "rebuild_absent_blocks": 2 * l_max * rebuilds / span, "wrong_absent_blocks": fill / span,
                           "held": mean, **{form: {"lost_blocks": x, "credited": {
-                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")}} for form, x in lost.items()}})
+                              k: max(0.0, mean[k] - x * b) for k in ("weights", "hbm")} | {
+                              "filler": max(0.0, mean["hbm"] - mean["weights"] + mean["host"] - x * b)}}
+                              for form, x in lost.items()}})
 
     def line(form: str) -> dict:
         worst = min(stretches, key=lambda x: x[form]["credited"]["weights"])
-        w = worst[form]["credited"]["weights"]
+        w, filler = worst[form]["credited"]["weights"], worst[form]["credited"]["filler"]
         return {"form": form, "stretch": worst["stretch"], "lost_blocks": worst[form]["lost_blocks"],
                 "weights_bytes": w, "share": w / node_bytes, "hbm_bytes": worst[form]["credited"]["hbm"],
-                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes}
+                "hbm_share": worst[form]["credited"]["hbm"] / node_bytes, "filler_bytes": filler,
+                "filler_share": filler / node_bytes}
 
     return {"groups": groups, "wrong": wrong, "chip_blocks": chip, "node_bytes": node_bytes, "stretches": stretches,
             "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
@@ -766,10 +780,13 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
-                 appends: int | None = None) -> None:
+                 appends: int | None = None, payload_key: bytes | None = None,
+                 binding: store_layout.Binding | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
+        self.payload_key = secrets.token_bytes(store_layout.KEY_BYTES) if payload_key is None else payload_key
+        self.binding = binding
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
@@ -858,12 +875,15 @@ class Verifier:
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
-        """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
-        live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError),
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError), or asking for receipts that
-        bind PoUW's tile outputs (`bind`, which the Lean covers none of: ValueError). Both registries draw it
+        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
+        the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
+        raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
+        window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
+        covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
+        (`store_layout.Binding.hold`'s Refused), all before the registry draws anything. Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
+        self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
         hello, _, _ = self.expect("hello")
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
@@ -871,6 +891,9 @@ class Verifier:
             if type(hello.get("appends", True)) is not bool:
                 raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
             self.appending = hello.get("appends", True)
+            if self.binding is not None:
+                self.regions = self.binding.hold(bytes.fromhex(hello["node"]), hello["blocks"],
+                                                 bytes.fromhex(hello["payload_root"]), self.payload_key, self.regions)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -1469,6 +1492,23 @@ def main() -> int:
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
+    ap.add_argument("--model", metavar="ROLE",
+                    help="bind the registered store to this pinned model (`store_layout.Binding`): a hello whose "
+                         "payload root isn't the root of the store the pinned checkpoint lays out, under the payload "
+                         "key this verifier sends, is refused before the registry draws anything")
+    ap.add_argument("--checkpoint", type=Path, metavar="DIR",
+                    help="--model's checkpoint on this machine, every file the pin names held to its SHA-512 first")
+    ap.add_argument("--pin", type=Path, metavar="FILE",
+                    help="--model's pin: a local JSON in the auditor's model registry's shape ({name, checkpoint: "
+                         "{file: SHA-512 hex}, checkpoint_sha512}), or the registry's models.jsonl and its lines "
+                         "of ROLE")
+    ap.add_argument("--engines", type=int, default=timing.GPUS,
+                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
+    ap.add_argument("--arena-blocks", type=int, metavar="A",
+                    help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
+                         "past the arenas are host filler")
+    ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
+                    help="processes hashing the pinned files and recomputing the expected payload root")
     a = ap.parse_args()
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
@@ -1509,6 +1549,22 @@ def main() -> int:
                                     period=a.challenger_period, minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
+    binding = None
+    if a.model is not None:
+        if a.checkpoint is None or a.pin is None or a.arena_blocks is None:
+            ap.error("--model needs --checkpoint DIR, --pin FILE and --arena-blocks A")
+        try:
+            binding = store_layout.Binding(a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks,
+                                           workers=a.layout_workers, log=lambda m: print(m, flush=True))
+        except store_layout.Refused as e:
+            print(f"verifier: refused the pinned model: {e}", flush=True)
+            (a.out / "verifier.json").write_text(json.dumps(
+                {"schema": "verity/remote-session/verifier/v0", "verdict": a.verdict, "refused": str(e),
+                 "binding": {"name": a.model, "pin": str(a.pin), "checkpoint": str(a.checkpoint), "bound": False}},
+                indent=1))
+            return 3
+    elif a.checkpoint is not None or a.pin is not None or a.arena_blocks is not None:
+        ap.error("--checkpoint, --pin and --arena-blocks bind the store to --model ROLE")
     save_registry(a.registry, registry)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
@@ -1527,7 +1583,7 @@ def main() -> int:
                  verdict=a.verdict, lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
                  link_burst_bytes=a.link_burst_bytes,
-                 challenger=challenger, appends=a.appends)
+                 challenger=challenger, appends=a.appends, binding=binding)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1537,7 +1593,7 @@ def main() -> int:
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": a.verdict,
-             "refused": str(e), "registry": kept}, indent=1))
+             "refused": str(e), "registry": kept} | ({"binding": binding.record()} if binding else {}), indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1555,7 +1611,8 @@ def main() -> int:
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": a.verdict, "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}
+            | ({"binding": binding.record()} if binding else {}), indent=1))
         save_registry(a.registry, kept)
 
     record()
