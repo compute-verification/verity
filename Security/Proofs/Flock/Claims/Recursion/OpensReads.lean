@@ -22,7 +22,7 @@ This is the transcript's half of `PartOpensB`. The other half is that a part's h
 its statement pins, and those rows are the JSON's (`RecVStar.checkPubRows`, `RecVStar.checkTopRows`). Its first steps
 are here: the setup checks every table's rows and registered reads (`RecIns.setup_pubRows`,
 `RecIns.setup_registered`), which give each registered port's rows as `fixedRow`'s at the positions its instances read
-(`rowsAt`), and a drawn table's slot holds its instance's public `b ‖ c` (`bc_setupOne`), a table row
+(`rowsAt`), and a table's slot holds its instance's public `b ‖ c`, drawn or not (`bc_setupOneAny`), a table row
 (`digest_tables`). So port `q`'s hm96 slot at instance `n`, read off the witness (`hmCommit`), is that instance's row
 digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the JSON is at the commit round `k` its
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
@@ -506,14 +506,88 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
     exact Layout.vu_lt_pow2_of (FlockSoundness.check_facts P.typed hls) hg
   · exact Layout.vu_lt_pow2_of (Aliased.setupH_unitFacts ht h).check hg
 
+open FlockSoundness.Refine in
+set_option maxHeartbeats 2000000 in
+/-- **An undrawn statement's public file is its population's**: `setupH` loads it and keeps it whole. -/
+theorem setupH_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {partition : Option Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags cf pf coins tables none partition program = .ok st) :
+    HmRow.loadPublic tags st.c pf = .ok st.pub := by
+  unfold Stmt.setupH at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    assumption
+
+/-- Region "digest p"'s chunk at an instance of the population is that instance's `b ‖ c`. -/
+theorem bcChunk_in {c : Circuit} {pub : Public} {o g p : ℕ} (hr : o * c.g + g < pub.n) :
+    FlockSoundness.Discharge.Layout.bcChunk c pub o g p = pub.digest (o * c.g + g) p c.ports.size := by
+  unfold FlockSoundness.Discharge.Layout.bcChunk Circuit.instOf
+  simp only [hr, ↓reduceIte]
+
 open FlockSoundness.Discharge in
-/-- **Port `q`'s hm96 slot at a drawn table's instance `n` holds that instance's public `b ‖ c`**: at a table
-`setupOne` sets up at a draw, with the witness's one-table share satisfying its model, the slot's out columns
-(`hmCommit`) read as the model's `b ‖ c` bytes (`bc_bit`, `Hidden.bytesAt_bc`), which are the statement's digest of
-instance `n`'s row `q` (`bc_setupOne`). -/
+/-- **An undrawn table's hm96 slot holds its instance's public `b ‖ c`**: `bc_setupOne` at a statement without a draw,
+which proves its whole population, its public file the population's (`setupH_full`, `Spec.pub`), whose `b ‖ c` region
+"digest p" pins (`Layout.bc_pinned`, `Hidden.bc_pinned'`). -/
+theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {partition : Option Json} {program : Option ByteArray} {st : Stmt}
+    (h : HiddenExec.setupOne tags cf pf coins tables none partition program = .ok st)
+    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.Witness (L.model (FlockSoundness.Refine.regionsOf st)).m}
+    (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies z)
+    (o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size) (hr : o.val * st.c.g + g < st.pub.n) :
+    FlockSoundness.Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model (FlockSoundness.Refine.regionsOf st)).addr o
+          (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (st.pub.digest (o.val * st.c.g + g) p st.c.ports.size).data.toList := by
+  unfold HiddenExec.setupOne at h
+  split at h
+  · have s := Hidden.setupHidden_spec' h
+    obtain ⟨pop, hpop, hfull, -⟩ := s.pub
+    have he : st.pub = pop := hfull rfl
+    have hload := Hidden.loadPublic_nil hpop
+    have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
+      rw [bcChunk_in (by omega), he]
+      exact Hidden.pop_digest_sizeW hload (by rw [← he]; omega) hp
+    obtain ⟨hrsz, hall⟩ := Hidden.regions_get s.regions
+    have hpr : p < st.regions.size := hrsz ▸ hp
+    rw [← bcChunk_in hr]
+    exact Hidden.bc_pinned' L _ (regionsOf_mem st) hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
+  · have hload := setupH_full h
+    have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
+      rw [bcChunk_in (by omega)]
+      exact Hidden.pop_digest_sizeW hload (by omega) hp
+    rw [← bcChunk_in hr]
+    exact Layout.bc_pinned L _ (regionsOf_mem st) (Layout.setupH_regions h) hz o hg hg2 hp hsz128
+
+open FlockSoundness.Discharge in
+/-- **A table's hm96 slot holds its instance's public `b ‖ c`**, drawn (`bc_setupOne`) or not (`bc_setupOne_full`). -/
+theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
+    (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
+    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.Witness (L.model (FlockSoundness.Refine.regionsOf st)).m}
+    (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies z)
+    (o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl)) {g p : ℕ} (hg : g < st.c.g)
+    (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size) (hr : o.val * st.c.g + g < st.pub.n) :
+    FlockSoundness.Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model (FlockSoundness.Refine.regionsOf st)).addr o
+          (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (st.pub.digest (o.val * st.c.g + g) p st.c.ports.size).data.toList := by
+  cases draw with
+  | none => exact bc_setupOne_full h L hz o hg hg2 hp hr
+  | some d => exact bc_setupOne h L hz o hg hg2 hp hr
+
+open FlockSoundness.Discharge in
+/-- **Port `q`'s hm96 slot at a table's instance `n` holds that instance's public `b ‖ c`**: at a table `setupOne`
+sets up, drawn or not, with the witness's one-table share satisfying its model, the slot's out columns (`hmCommit`)
+read as the model's `b ‖ c` bytes (`bc_bit`, `Hidden.bytesAt_bc`), which are the statement's digest of instance `n`'s
+row `q` (`bc_setupOneAny`). -/
 theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {d : Json} {partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (hd : HiddenExec.setupOne tags cf pf coins tables (some d) partition program = .ok st)
+    {draw partition : Option Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
+    (hd : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
     (hupv : 0 < st.c.upv) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (L : FlockSoundness.Layout st) {w : Claims.Flock.Wit}
     (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies (Flock.Readable.zOf 1 w 0 st.m)) {q n : ℕ}
@@ -527,7 +601,7 @@ theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     exact hb
   let o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl) := ⟨n / st.c.g, hb⟩
   have e : o.val * st.c.g + n % st.c.g = n := Nat.div_add_mod' n st.c.g
-  have hpub := bc_setupOne hd L hz o hgn (vu_lt_pow2_setupOne ht hd hgn) hq (by rw [e]; exact hn)
+  have hpub := bc_setupOneAny hd L hz o hgn (vu_lt_pow2_setupOne ht hd hgn) hq (by rw [e]; exact hn)
   rw [Hidden.bytesAt_bc L R _ _ o hgn hq, e] at hpub
   rw [← hpub]
   refine readForms_eq_of_bits (by simp [hmCommit, Hm.length_bytesOf]) fun t ht' => ?_
