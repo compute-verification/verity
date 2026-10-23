@@ -1,8 +1,8 @@
-"""The HTTP side (`api/index.py`): Slack's Events and Interactivity requests, the health route and the two crons.
+"""The HTTP side (`api/index.py`): Slack's Events and Interactivity requests, the health route and the three crons.
 
 Slack's requests are checked (HMAC SHA-256 of `v0:{timestamp}:{raw body}` with SLACK_SIGNING_SECRET, at most MAX_SKEW_S
 old), published to the queue synchronously, keyed on Slack's id, and answered 200; a publish that fails answers 503, so
-Slack retries.  Nothing runs after the answer: the queue's consumer does the work."""
+Slack retries.  Nothing runs after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import crons
+from . import crons, subscriber
 from .deps import DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
 
 MAX_SKEW_S = 300
@@ -141,4 +141,15 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
 
     cron("watchdog", crons.watchdog)
     cron("reconcile", crons.reconcile)
+
+    @app.get("/api/cron/drain")
+    async def drain(request: Request):
+        d = deps()
+        if not bearer(request, d.env.get("CRON_SECRET")):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        try:
+            return JSONResponse(await subscriber.drain(d))
+        except Exception as e:  # noqa: BLE001 - the next minute's run polls again
+            d.log("drain-failed", error=error(e))
+            return JSONResponse({"error": error(e)}, status_code=500)
     return app

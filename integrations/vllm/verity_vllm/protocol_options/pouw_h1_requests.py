@@ -42,10 +42,13 @@ an `act` value, a run input under the root of the round that admits it, committe
   step s, whole, as the aligned subtrees of its registered tree (`round_row`, `pouw_h1_served.Served.segments`),
   registered as the run records the call. So each call's A rows, the ones its units read, are fixed under its own
   round's root before that round's coin, and no other round lists them.
-* **Not yet.** ROOTS1: nothing ties a call's A table to the Commit's AROW root of its linear's input, or layer 0's A
-  rows to the request table's prompt tokens, so the A rows are the prover's own until it lands; only the serving
-  process holds them to both (it holds the call's codes). The round root has no admit root (H1 has no admit unit yet),
-  no producer hands the run a receipt root yet, and no unit reads the round coins yet.
+  Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
+  admission, before the window opens: its prompts' tokens in step 0's batch order (`first_ids`), each request's first
+  rows at the first slot its entry names. Its root is inside round 0's request root (`credit.requests_root` of the
+  request table's root and it; round 0's row keeps the table's as ``request_table``), so the window's open root fixes
+  the prompt tokens before the salt; its domain binds the window's session in place of that root.
+* **Not yet.** The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root
+  yet, and no unit reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -148,6 +151,16 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
         raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
     values = [e.row() for e in entries] + [EMPTY_REQUEST] * (rows - len(entries))
     return hiding_rows(requests_binding(salt, r), r, values, key, REQUESTS_NONCE + r)
+
+
+def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, int]]) -> list[int | None]:
+    """Step 0's input token ids in its batch order (`batch_order`): each request's first rows are its first prompt tokens
+    (a window opens on new requests, with no prefix cached), None for a row past its prompt or of a request with none."""
+    out: list[int | None] = []
+    for req_id, rows in order:
+        p = prompts.get(req_id) or ()
+        out += [int(p[i]) if i < len(p) else None for i in range(int(rows))]
+    return out
 
 
 def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key: bytes) -> Any:
@@ -332,7 +345,9 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
     row, why = _round(log, commitment, salt, r)
     if why is not None:
         return f"request {i}: {why}"
-    if not _leaf(requests_binding(salt, r), r, row["requests"], rows, opening):
+    # round 0's request root folds its input-ids table's root into the table's (credit.requests_root, held by credit._arow)
+    table = row.get("request_table", row["requests"]) if r == 0 else row["requests"]
+    if not _leaf(requests_binding(salt, r), r, table, rows, opening):
         return f"request {i}'s entry doesn't open under round {r}'s request table"
     if (first.round, first.position) != (r, entry.slot):
         return f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} " \
@@ -425,7 +440,7 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
 
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
            "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
-           "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "hiding_rows", "late_admission", "new_requests",
-           "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
+           "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
+           "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
            "sort_batch_req_ids", "step_digest", "table_leaves", "tables_reason"]

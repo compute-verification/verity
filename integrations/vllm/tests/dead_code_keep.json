@@ -2,6 +2,7 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
+  "verity_vllm.acquire.h1_commit": "the Commit's install in H1's serving engine (ROOTS1, VLLM-73), run by the GPU harness tests/protocol_options/pouw_h1_gpu.py --commit and checked by tests/protocol_options/test_pouw_h1_commit.py ahead of a production caller",
   "verity_vllm.program.frontend.serve_families": "which Serve family and attention geometry an instance pins, read by tests/program/test_composition.py ahead of a production caller (LIVE registry.b1)",
   "verity_vllm.program.kernels.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
@@ -24,8 +25,6 @@
   "verity_vllm.program.registry.quarantine.act": "re-exports registry.act's SiluMul_v2 (promoted) for the properties-admission adapter",
   "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
-  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
-  "verity_vllm.pipeline.registration_log": "the registration log nci-check's full check reads, held to nci_reference.check_baseline by tests/pipeline/test_registration_log.py ahead of its CLI, which lands with the served weights' value source",
-  "verity_vllm.commit.registered_rows": "R7's rows committed from an array, held to Registered.commit by tests/commit/test_registered_rows.py; registration_log's (kept above)"
+  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
  }
 }

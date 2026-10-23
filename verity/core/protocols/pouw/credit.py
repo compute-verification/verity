@@ -6,7 +6,7 @@ which the Lean takes as given until it runs that verifier in-process.
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
-`_weights`, the draw, `_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window
+`_weights`, `_arow`, the draw, `_verified`, `_outcome`'s rule and `_registration`. `period_credit` runs `window` on each window
 of a closed, complete period. The steps are internal, so no caller credits a window with a step skipped: `_credited`
 returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the round log's roots, which only
 `core_check.rounds` holds to the ones the challenger received before each coin.
@@ -24,10 +24,12 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
   call rows, in order, ``index`` 0, 1, …) carries its call's verdict as ``credit`` (true or false), and a credited row
   carries its z table's root (``tables.z``). `calls_root` hashes the rows (and the served trees' digest when the window
-  has them), and `draw_root` hashes that, the last round's receipts and every round's root and coin. The challenger's
-  draw coin must have followed that one root, as its signed log shows, read through the session the auditor's ledger
-  opens for the window (`challenger.trusted_session_of`), never a commitment the prover hands in. So a credit bit
-  changed after the draw coin changes the draw root and is refused, and the credited set is the rows whose bit is true.
+  has them) and the window's Commit record's digest (`commit_of`), and `draw_root` hashes that, the last round's
+  receipts and every round's root and coin. The challenger's draw coin must have followed that one root, as its signed
+  log shows, read through the session the auditor's ledger opens for the window, run from a commit the host's pins log
+  records on main's first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a
+  commitment the prover hands in. So a credit bit changed after the draw coin changes the draw root and is refused, and
+  the credited set is the rows whose bit is true.
 * **The drawn units are the draw coin's** (`drawn`): `core_check.draw`'s rule under the law ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
@@ -56,9 +58,12 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
-  `period_credit` each window must also prove the circuit the period's open committed (`challenger.credited_session`:
-  the SHA-512 of the descriptor its proofs were verified against, the same bytes `layout_of` reads its layout from)
-  and is drawn at the period's K, and a refused window refuses its period.
+  `period_credit` each window's session must have run main's code and the window must prove the circuit the period's
+  open committed (`challenger.credited_session`, the pin first, then the circuit: the SHA-512 of the descriptor its
+  proofs were verified against, the same bytes `layout_of` reads its layout from) and is drawn at the period's K, and
+  a refused window refuses its period. Every path here that credits reads its session through
+  `challenger.pinned_session`, against the host's pins log (``pins``, its lines) and the verifier's own copy of main's
+  first-parent history (``main``, its ``git rev-list --first-parent origin/main``).
 * **The A rows are the round roots'** (`_a_link`): each registered A value of the window, among its registered
   ``entries``, is a tree whose rows the round roots commit as aligned subtrees. A window's ``…/a/<K>``
   (`h1window.roles`) over L rows and S steps has rows ``[s·L/S, (s+1)·L/S)`` under round s's root. A call's A table
@@ -67,14 +72,29 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   round's ``a`` lists, for every A value it commits, its ``[level, index, root]`` subtrees in row order, and the root the
   challenger received for round s is `round_root` of the serving process's own round root (``inner``) and those
   segments. The verifier recomputes each value's root from the segments and its domain's pads. So the rows a unit reads
-  are the ones fixed before its round's coin. The z and y records are not yet bound to the round roots.
+  are the ones fixed before its round's coin. Round s's input-ids table ``…/ids@<s>`` (slot i's input token id) is
+  committed whole by round s, as a call's A table is by its call's. The z and y records are not yet bound to the round
+  roots.
+* **The A rows and input ids are the served Commit's** (`_arow`, ROOTS1): the window's evidence carries the record of the
+  Commit that ran in the window's engine (``commit``, one-stage's `verity/registration/v2` record, its canonical JSON in
+  hex), whose digest `calls_root` binds before the draw coin, so it is fixed before any coin that selects a unit. Each
+  call's A table ``…/a/<K>@<c>`` must have the root, domain and leaf count of the Commit's `commit_rows` value of its
+  round and linear, and round s's ``…/ids@<s>`` those of its `commit_ids` value: the Commit registers the window's own
+  tables, so one tree is both. So the A rows a call's units read are its linear's input as the Commit commits it, and
+  the input token ids under each round's root are its step's. Round 0's ``…/ids@0`` is also inside round 0's request
+  table: the round-0 request root the window's open root binds is `requests_root` of the table's root and ids@0's, so
+  the prompt tokens are fixed before the salt coin. Its domain binds the window's session in place of the open root,
+  which contains it (`domain_of`). That the Commit's values are the model's computation is the Commit's draw's, not
+  credit's.
 * **The proofs are the window's registration's** (`_registration`): each drawn unit's proof outcome is the verifier of
   record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
   (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
-  ``…/b/<K>`` (held across windows, `is_held`), the window's open root (``window.root``, the root the auditor's ledger
-  opens its session for, which a per-window value's domain binds since PRF-127). Each proof was verified against that
+  ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids table, the window's open root (``window.root``,
+  the root the auditor's ledger opens its session for, which a per-window value's domain binds since PRF-127); round
+  0's input-ids table, whose root that open root contains, binds the window's session instead. Each proof was
+  verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
   value, the window's ``…/a/<K>`` or its own call's ``…/a/<K>@<call>``. So the A rows `_a_link` ties to the round roots
   are the ones each drawn unit's proof opened, under this window's registration: entries of another window or circuit,
@@ -143,12 +163,13 @@ SERVED_FORM = "the served trees' digest is neither null nor a SHA-512 digest (12
 DRAW_FORM = "the window's draw is not an object whose receipts are a SHA-512 digest"
 NO_DRAW = ("the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its "
            "draw root")
-DRAW_ROOT = ("the window's draw root is not over its manifest (each call's credit bit among it), its last round's "
-             "receipts and every round's root and coin")
-CHANGED = ("the draw root over the manifest (each call's credit bit among it), its last round's receipts and every round's "
-           "root and coin is not the one root the challenger's log shows its draw coin followed: a credit bit or a call "
-           "changed after the draw coin, or the draw opened after another root. Commit every call's credit bit in its "
-           "manifest row before the draw root, and never change it after the draw coin")
+DRAW_ROOT = ("the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its "
+             "last round's receipts and every round's root and coin")
+CHANGED = ("the draw root over the manifest (each call's credit bit among it), its Commit record, its last round's "
+           "receipts and every round's root and coin is not the one root the challenger's log shows its draw coin "
+           "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after "
+           "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw "
+           "root, and never change them after the draw coin")
 #: the period-open's field holding the draw's K, the proof service's selection, committed before any draw
 K_FIELD = "draw_k"
 #: the most a committed K may be
@@ -181,13 +202,15 @@ DRAW_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 
              "printable ASCII strings")
 #: a window's evidence, as `window` reads it, its descriptor the circuit's its proofs were verified against, its
 #: entries the values it registered and its statements each call's proof files
-WINDOW_KEYS = ("calls", "descriptor", "draw", "entries", "rounds", "salt", "served", "session", "statements", "window")
+WINDOW_KEYS = ("calls", "commit", "descriptor", "draw", "entries", "rounds", "salt", "served", "session", "statements",
+               "window")
 #: a window's evidence in a period
 PERIOD_KEYS = WINDOW_KEYS
 PERIOD_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PERIOD_KEYS) + "}, "
                "in its close's order: each window carries its statements' proof files, never verdicts")
 #: a window's evidence with each drawn unit's proof outcome in place of its statements (`_window_outcomes`), the Lean's
-PROVED_KEYS = ("calls", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session", "window")
+PROVED_KEYS = ("calls", "commit", "descriptor", "draw", "entries", "proofs", "rounds", "salt", "served", "session",
+               "window")
 WINDOWS_FORM = ("the period's windows are not a list of each window's evidence {" + ", ".join(PROVED_KEYS) + "}, "
                 "in its close's order")
 #: a call's statement: its index, the paths of its circuit file and public file, and its sessions' directories
@@ -230,6 +253,39 @@ LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>, or a call's …/a/<K>@<call>), so nothing ties its units' A rows to "
         "the round roots: register the window's A values")
+COMMIT_TAG = b"verity/pouw/h1/commit/v1\0"
+#: the served Commit's record: one-stage's registration record with registered values
+COMMIT_FORMAT = "verity/registration/v2"
+COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in "
+               "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
+               "engine, and its record is bound under the window's calls_root before the draw coin")
+_IDS = re.compile(r"ids@(0|[1-9][0-9]*)")
+#: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
+#: input-ids table's root inside (`requests_root`)
+REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
+IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root binds) is not requests_root of its "
+               "request table's root (request_table) and its input-ids table's root, so round 0's input ids are not "
+               "fixed before the salt: commit round 0's input-ids table inside round 0's request table, under the "
+               "window's open root")
+
+
+def commit_rows(s: int, linear: str) -> str:
+    """The Commit's name for the A rows (its AROW) of linear `linear` at the window's round `s`: what it registers as
+    that round's call of `linear`'s A table ``<prefix>a/<K>@<c>``."""
+    return f"row-table/{s}/{linear}"
+
+
+def requests_root(table: bytes, ids: bytes) -> bytes:
+    """Round 0's request root, the one the window's open root binds (`salt.window_open_root`): `tagged` of
+    `REQUESTS_IDS_TAG`, the root of round 0's request table `table` and the root of its input-ids table ``…/ids@0``
+    `ids`. So the window's open root contains ids@0's root, and its rows are fixed before the salt coin."""
+    return tagged(REQUESTS_IDS_TAG, table, ids)
+
+
+def commit_ids(s: int) -> str:
+    """The Commit's name for its step's input token ids at the window's round `s`: what it registers as round s's
+    input-ids table ``<prefix>ids@<s>``."""
+    return f"input-ids/{s}"
 
 
 def _digest(x: Any) -> bytes | None:
@@ -257,13 +313,31 @@ def _plain(x: Any, depth: int = DEPTH) -> bool:
     return type(x) is dict and all(type(k) is str and _plain(v, depth - 1) for k, v in x.items())
 
 
-def calls_root(salt: bytes, rows: Any, served: bytes | None = None) -> bytes:
+def calls_root(salt: bytes, rows: Any, served: bytes | None = None, commit: bytes | None = None) -> bytes:
     """SHA-512 over the manifest rows `rows` in order, each as ``json.dumps(row, sort_keys=True)`` and a newline, under
-    `CALLS_TAG` and the window's Program salt; with `served`, SHA-512 of that and the served trees' digest."""
+    `CALLS_TAG` and the window's Program salt; with `served`, SHA-512 of that and the served trees' digest; with
+    `commit`, SHA-512 under `COMMIT_TAG` of that and the Commit record's digest."""
     h = hashlib.sha512(CALLS_TAG + salt)
     for row in rows:
         h.update(json.dumps(row, sort_keys=True).encode() + b"\n")
-    return h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+    d = h.digest() if served is None else hashlib.sha512(h.digest() + served).digest()
+    return d if commit is None else hashlib.sha512(COMMIT_TAG + d + commit).digest()
+
+
+def commit_of(commit: Any) -> tuple[tuple[bytes, list[dict]] | None, tuple[str, str] | None]:
+    """The digest of the window's Commit record `commit` (the bytes in lowercase hex of its canonical JSON, the bytes
+    `registration.digest` hashes under its format) and its registered values, and None; or None and the refusal
+    (``commit``)."""
+    try:
+        ok, rec = (_loads(bytes.fromhex(commit).decode()) if type(commit) is str and _HEX.fullmatch(commit)
+                   else (False, None))
+    except UnicodeDecodeError:
+        ok, rec = False, None
+    if not (ok and isinstance(rec, dict) and rec.get("format") == COMMIT_FORMAT and type(rec.get("registered")) is list
+            and all(isinstance(e, dict) for e in rec["registered"])):
+        return None, ("commit", COMMIT_FORM)
+    d = hashlib.sha512(COMMIT_FORMAT.encode() + b"\0" + bytes.fromhex(commit)).digest()
+    return (d, rec["registered"]), None
 
 
 def draw_root(calls: bytes, receipts: bytes, rounds: Any) -> bytes:
@@ -283,23 +357,25 @@ def no_z(i: int) -> str:
             f"(`tables.z`), or its credit bit is false")
 
 
-def _credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-             verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+def _credited(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+              commit: Any, rounds: Any, draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The credited calls (their indices) of a window whose manifest `calls` (its rows, `served` the served trees'
-    digest or None, under the window's Program salt `salt`) fixed every call's credit bit before the draw coin, and None;
-    or None and the refusal (``coin``, ``manifest``, ``credit``, ``rounds`` or ``draw``, and why). The draw coin is read
-    through the session the auditor's signed ledger `ledger` opens for `window` under the pinned challenger key `key`,
-    from that session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log
-    must show `draw_root` over the manifest, ``draw``'s ``receipts`` and the round log `rounds` (each round's ``root``
-    and ``coin``) as the one root the draw coin followed, ``draw``'s ``root`` must be it, and ``draw``'s ``coin`` must be
-    the challenger's draw coin 0 opened after it. A step of `window`: its indices are no credit until every other step
-    accepts."""
+    digest or None, under the window's Program salt `salt`, and its Commit record `commit`, `commit_of`'s) fixed every
+    call's credit bit and the Commit record before the draw coin, and None; or None and the refusal (``coin``,
+    ``manifest``, ``credit``, ``commit``, ``rounds`` or ``draw``, and why). The draw coin is read through the session the
+    auditor's signed ledger `ledger` opens for `window` under the pinned challenger key `key`, run from a commit the
+    host's pins log `pins` records and the verifier's copy of main's first-parent history `main` holds, from that
+    session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log must show
+    `draw_root` over the manifest and the Commit record's digest (`calls_root`), ``draw``'s ``receipts`` and the round
+    log `rounds` (each round's ``root`` and ``coin``) as the one root the draw coin followed, ``draw``'s ``root`` must be
+    it, and ``draw``'s ``coin`` must be the challenger's draw coin 0 opened after it. A step of `window`: its indices are
+    no credit until every other step accepts."""
     try:
         k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
         return None, ("coin", f"the verifier's challenger key is malformed: {e}")
     try:
-        c, received = Ch.trusted_session_of(ledger, window, k, session, verify)
+        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
     except Ch.CoinError as e:
         return None, ("coin", f"the challenger's session is not trusted: {e}")
     s = _digest(salt)
@@ -325,6 +401,9 @@ def _credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls
             out.append(i)
     if served is not None and _digest(served) is None:
         return None, ("manifest", SERVED_FORM)
+    got, why = commit_of(commit)
+    if why is not None:
+        return None, why
     if not isinstance(rounds, list):
         return None, ("rounds", "the round log is not a list")
     parts = []
@@ -339,7 +418,7 @@ def _credited(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls
     receipts = _digest(draw.get("receipts")) if isinstance(draw, dict) else None
     if receipts is None:
         return None, ("draw", DRAW_FORM)
-    root = tagged(DRAW_TAG, calls_root(s, calls, _digest(served)), receipts, *parts)
+    root = tagged(DRAW_TAG, calls_root(s, calls, _digest(served), got[0]), receipts, *parts)
     if draw.get("root") != root.hex():
         return None, ("draw", DRAW_ROOT)
     got = tuple(received.get(Wd.DRAW, ()))
@@ -622,10 +701,11 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     its A row i (port ``a_k<K>_<i>``) at row R·ti + i of the call's A table ``<prefix>a/<K>@<call>`` (M rows), its B row
     j (``b_k<K>_<j>``) at row b0 + C·tj + j of the weights' ``<prefix>b/<K>`` (b0 the call's linear's first row in it,
     its rows each of K's linears' n in turn), and its record (``zy``) at row t of the call's z table ``<prefix>zy@<call>``
-    (a row a unit of the call); every other unit reads none of them. Each value is a row/v2 value of 16-bit leaves
+    (a row a unit of the call); every other unit reads none of them, and the file lists no unit past the call's last
+    (the verifier reads none past ``reads``). Each value is a row/v2 value of 16-bit leaves
     under `registered.domain` of its name, rows and words, binding the window's open root `window` but for the weights',
     held across windows (`domain_of`), at the root `roots` (``{value: [root, ...]}``, each value's registered roots)
-    gives it. Its cost is the window's units, once a port: the reads file's form."""
+    gives it. Its cost is the window's units up to the call's last, once a port: the reads file's form."""
     (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
     lin = layout["calls"][call][0]
     ks = {name: (k, n) for name, k, n in layout["linears"]}
@@ -652,7 +732,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         + [("zy", zy, lambda t: t)])
     out = {}
     for port, v, row in ports:
-        reads: list[int | None] = [None] * sum(sizes)
+        reads: list[int | None] = [None] * (u0 + size)
         for t in range(size):
             reads[u0 + t] = row(t)
         leaves, words = rows_of[v]
@@ -792,29 +872,34 @@ def _entry(e: Any) -> bool:
             and type(bits) is int and bits in G.WIDTHS and e.get(G.WIDTH_KEY) != G.WORD_BITS)
 
 
-def domain_of(program: str, window: str, e: dict) -> str:
+def domain_of(program: str, window: str, e: dict, session: str | None = None) -> str:
     """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
     open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): the
-    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; every other value's rows are the window's
-    own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the window's open
-    root (PRF-127)."""
-    return G.domain(program, e["value"], e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
-                    None if is_held(e["value"]) else window).domain_id.hex()
+    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; round 0's input-ids table (``…/ids@0``,
+    `ids_step` 0), whose root the window's open root contains (`requests_root`, `_arow`), binds the window's session
+    `session` in that root's place; every other value's rows are the window's own, its A rows and its calls' A and z
+    tables (`h1window.table`) among them, and its domain binds the window's open root (PRF-127)."""
+    v, first = e["value"], ids_step(e["value"]) == 0
+    return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
+                    None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
 
 
 def other_registration(v: str) -> str:
     return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
             f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a "
-            "value other than the weights' …/b/<K>, the window's open root, the root the auditor's ledger opened its "
-            "session for): the entry is another registration's, another window's or another circuit's")
+            "value other than the weights' …/b/<K> and round 0's …/ids@0, the window's open root, the root the "
+            "auditor's ledger opened its session for, for …/ids@0 that session): the entry is another registration's, "
+            "another window's or another circuit's")
 
 
-def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list
-                  ) -> tuple[str, str] | None:
+def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, proofs: list,
+                  session: str | None = None) -> tuple[str, str] | None:
     """None when the window's registered `entries` are its own registration's and each drawn unit's proof (`proofs`, one
     accepted outcome a unit, as `_proved` holds them) is a session verified against it, else the refusal
-    (``registration``, and why). Each A value's domain, and each other value's a proof opened, is `domain_of` the window's
-    open root `window` and the descriptor's SHA-512 `program`; each proof was verified against `program`; every
+    (``registration``, and why). Each A value's and input-ids table's domain, and each other value's a proof opened, is
+    `domain_of` the window's
+    open root `window`, its session `session` and the descriptor's SHA-512 `program`; each proof was verified against
+    `program`; every
     registered port its session opened (its ``registered`` finding) is of a value the window registers once, at that
     value's registered root; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
     or its own call's A table ``…/a/<K>@<call>`` (the call `layout`'s units place it in), and its K's B rows, the
@@ -825,10 +910,10 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
                     f"word_bits only when it is not 16), its rows and words from 1 to {MAX_ROWS}")
-        return None if e["domain"] == domain_of(program, window, e) else other_registration(v)
+        return None if e["domain"] == domain_of(program, window, e, session) else other_registration(v)
 
     for e in entries:
-        if is_a(e.get("value")):
+        if is_tied(e.get("value")):
             why = held(e["value"], e)
             if why is not None:
                 return "registration", why
@@ -854,7 +939,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
                                         f"registers {'twice' if v in names else 'not'}: its session was verified against "
                                         "another registration than the window's")
             e = entries[names.index(v)]
-            if v not in checked and not is_a(v):
+            if v not in checked and not is_tied(v):
                 why = held(v, e)
                 if why is not None:
                     return "registration", why
@@ -874,6 +959,72 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
             return "registration", (f"drawn unit {u}'s proof opened no weights {prefix}b/{k} of the window, so nothing "
                                     "ties the B rows it proved to the ones its period registered: verify each drawn "
                                     "unit's session with the window's weights registered")
+    return None
+
+
+def _same(e: dict, c: dict) -> bool:
+    """`c` has the root, domain and leaf count of `e`, an entry `_a_link` accepted (both strings, and a natural)."""
+    return (c.get("root") == e["root"] and c.get("domain") == e["domain"] and _nat(c.get("leaves"))
+            and c["leaves"] == e["leaves"])
+
+
+def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: str) -> tuple[str, str] | None:
+    """None when each call's A table and each round's input-ids table among the window's registered `entries` is the
+    Commit's value of the same rows among its record's `registered` (`commit_of`'s): same root, domain and leaf count;
+    else the refusal (``arow``, and why). Call c of the window's `layout` (`strata`'s) is its linear's call at round
+    ``c // (C/S)`` of its round log `rounds`' S rounds, and its ``<prefix>a/<K>@<c>`` (K its linear's, `prefix` the
+    descriptor's ``PREFIX``) is the Commit's `commit_rows` of that round and linear; round s's ``<prefix>ids@<s>`` is
+    the Commit's
+    `commit_ids` of s. A round calls each linear once, and the Commit registers each of those values once. So the A rows
+    a call's units read are its linear's input as the served Commit commits it, and the input token ids under each
+    round's root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root
+    (``requests``, the one its open root binds) is `requests_root` of its request table's root (``request_table``) and
+    ``<prefix>ids@0``'s, so round 0's input ids are fixed before the salt coin. A step of `window`, after `_a_link` has
+    held each to the segments the round roots commit, `_period_weights` round 0's request root to the open root, and
+    the manifest to the layout's calls. Its cost is the calls and the records' entries."""
+    steps, calls = len(rounds), layout["calls"]
+    if len(calls) % steps:
+        return "arow", (f"the window's {len(calls)} calls are not its {steps} rounds' equal blocks, so no call's round, "
+                        "and no Commit value of its rows, is fixed")
+    ours = {e["value"]: e for e in entries if is_tied(e.get("value"))}
+    theirs: dict[str, list[dict]] = {}
+    for e in registered:
+        if type(e.get("value")) is str:
+            theirs.setdefault(e["value"], []).append(e)
+    ks = {name: k for name, k, _n in layout["linears"]}
+    per = len(calls) // steps
+    pairs = [(f"{prefix}a/{ks[lin]}@{c}", commit_rows(c // per, lin), f"call {c}'s A table")
+             for c, (lin, _blk) in enumerate(calls)]
+    seen: set[str] = set()
+    for c, (_v, name, _whose) in enumerate(pairs):
+        if name in seen:
+            return "arow", (f"round {c // per} calls linear {calls[c][0]} twice, so the Commit's {name} is no one "
+                            "call's A rows: each round of a served window is one engine step, which calls each linear "
+                            "once")
+        seen.add(name)
+    pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table") for s in range(steps)]
+    for v, name, whose in pairs:
+        if v not in ours:
+            return "arow", (f"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the "
+                            "served window registers each call's A table and each round's input-ids table")
+        got = theirs.get(name, [])
+        if len(got) != 1:
+            return "arow", (f"the Commit record registers {name} {'twice' if got else 'not'}: the served Commit "
+                            "registers each call's A table as its linear's row-table/<round>/<linear> and each round's "
+                            "input-ids table as input-ids/<round>, once")
+        if not _same(ours[v], got[0]):
+            return "arow", (f"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its "
+                            "rows are not the ones the served Commit commits (ROOTS1). The Commit registers the "
+                            "window's own table as its value, with no tree of its own")
+    want = {v for v, _name, _whose in pairs}
+    for v in ours:
+        if ids_step(v) is not None and v not in want:
+            return "arow", (f"the window registers input-ids table {v}, which is not {prefix}ids@<s> of any of its "
+                            f"{steps} rounds: it registers each round's input-ids table once, under its descriptor's "
+                            "PREFIX")
+    table, ids = _digest(rounds[0].get("request_table")), _digest(ours[f"{prefix}ids@0"].get("root"))
+    if table is None or ids is None or rounds[0].get("requests") != requests_root(table, ids).hex():
+        return "arow", IDS_OUTSIDE
     return None
 
 
@@ -953,13 +1104,14 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
 Proved = Callable[[dict, bytes, list[int]], tuple[Any, tuple[str, str] | None]]
 
 
-def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any,
-            draw: Any, descriptor: Any, entries: Any, proved: Proved, k: Any, verify: Ch.Verify
-            ) -> tuple[tuple[list[int], dict] | None, tuple[str, str] | None]:
-    got, why = _credited(key, ledger, window, session, salt, calls, served, rounds, draw, verify)
+def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+            commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, k: Any,
+            verify: Ch.Verify) -> tuple[tuple[list[int], dict] | None, tuple[str, str] | None]:
+    got, why = _credited(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, verify)
     if why is not None:
         return None, why
-    why = CC.rounds(key, ledger, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds], verify)
+    why = CC.rounds(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
+                    verify)
     if why is not None:
         return None, why
     why = _a_link(rounds, entries, len(calls))
@@ -971,13 +1123,16 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     if why is not None:
         return None, why
     program, prefix = hashlib.sha512(bytes.fromhex(descriptor)).hexdigest(), _prefix(bytes.fromhex(descriptor))
-    why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
+    sid, why = _period_weights(key, ledger, window, rounds, layout, entries, program, prefix, verify)
     if why is not None:
         return None, why
     ss, _ = strata(layout)
     if len(calls) != len(layout["calls"]):
         return None, ("manifest", f"the manifest's {len(calls)} rows are not the circuit's {len(layout['calls'])} "
                                   "calls: each call of the window's Program is one manifest row, in order")
+    why = _arow(rounds, entries, commit_of(commit)[0][1], layout, prefix)
+    if why is not None:
+        return None, why
     units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
                         {"receipts": draw["receipts"]}, ss, k)
     proofs = None
@@ -986,7 +1141,7 @@ def _window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: 
     if why is None:
         why = _proved(units, proofs)
     if why is None:
-        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs)
+        why = _registration(window["root"], program, prefix, entries, ss, layout, proofs, sid)
     return (None, why) if why is not None else ((got, layout), None)
 
 
@@ -1015,35 +1170,37 @@ def other_checkpoint(name: str, model: str) -> str:
 
 
 def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: dict, entries: Any, program: str,
-                    prefix: str, verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when the window's registered weights (`_weights`, over round 0's ``requests`` in its round log and the
-    session the auditor's ledger opened for it) fold to the weights' root its period's open signed (`committed_weights`);
-    else the refusal (``weights``, ``layout`` or ``coin``). A step of `window`, after `_credited` trusted the ledger."""
+                    prefix: str, verify: Ch.Verify) -> tuple[str | None, tuple[str, str] | None]:
+    """The session the auditor's ledger opened for the window and None when the window's registered weights
+    (`_weights`, over round 0's ``requests`` in its round log and that session) fold to the weights' root its period's
+    open signed (`committed_weights`); else None and the refusal (``weights``, ``layout`` or ``coin``). A step of
+    `window`, after `_credited` trusted the ledger."""
     try:
         audited = Ch.audited_session(ledger, window, Ch.ChallengerKey.from_json(key), verify)
     except Ch.CoinError as e:
-        return "coin", f"the challenger's session is not trusted: {e}"
+        return None, ("coin", f"the challenger's session is not trusted: {e}")
     if audited.period is None:
-        return "weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the weights' "
-                           f"root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose open signs it")
+        return None, ("weights", (f"the window is in no period of the auditor's ledger, so no period-open signed the "
+                                  f"weights' root it opens ({WEIGHTS_FIELD}): reserve its session inside a period whose "
+                                  "open signs it"))
     signed, why = committed_weights(ledger, audited.period)
     if why is not None:
-        return why
+        return None, why
     requests = rounds[0].get("requests") if rounds else None
     w, why = _weights(window, layout, entries, requests, audited.session, program, prefix)
     if why is not None:
-        return why
+        return None, why
     if w.hex() != signed:
-        return "weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., the one "
-                           f"period {audited.period}'s open signed: a B row's codes or s_w differ from the ones the "
-                           "period registered before its first window's salt. Open every window of a period on its "
-                           "registered B rows")
-    return None
+        return None, ("weights", (f"the window's registered weights' root {w.hex()[:16]}... is not {signed[:16]}..., "
+                                  f"the one period {audited.period}'s open signed: a B row's codes or s_w differ from "
+                                  "the ones the period registered before its first window's salt. Open every window of "
+                                  "a period on its registered B rows"))
+    return audited.session, None
 
 
-def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any, draw: Any,
-           descriptor: Any, entries: Any, statements: Any, circuit_files: Any, k: Any, verify: Ch.Verify,
-           run: Run = PF.verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
+           commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, statements: Any, circuit_files: Any,
+           k: Any, verify: Ch.Verify, run: Run = PF.verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`: `_window_outcomes`' steps, each drawn unit's proof outcome
     the verifier of record's own run over the window's `statements` (`_verified`: each call's proof files, on the
@@ -1052,8 +1209,8 @@ def window(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: A
     files, never verdicts. `run` is the verifier of record (`proofs.verify`), the verifier's own, never the evidence's.
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
-    got, why = _window(key, ledger, window, session, salt, calls, served, rounds, draw, descriptor, entries,
-                       _runner(statements, circuit_files, entries, window, run), k, verify)
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
+                       entries, _runner(statements, circuit_files, entries, window, run), k, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -1061,15 +1218,17 @@ def _runner(statements: Any, files: Any, entries: Any, window: Any, run: Run) ->
     return lambda layout, raw, units: _verified(statements, files, raw, layout, entries, window["root"], units, run)
 
 
-def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any, rounds: Any,
-                     draw: Any, descriptor: Any, entries: Any, proofs: Any, k: Any, verify: Ch.Verify
-                     ) -> tuple[list[int] | None, tuple[str, str] | None]:
+def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any,
+                     served: Any, commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any,
+                     k: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """`window` on each drawn unit's proof outcome `proofs` in place of its statements: the form the Lean
     `PouwCheck.Credit.window` reads until it runs the verifier of record itself, which the difftest holds it to. A
     served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`:
 
-    1. `_credited`: the credit bits fixed before the draw coin, read through the challenger's session;
+    1. `_credited`: the credit bits fixed before the draw coin, read through the challenger's session, one the host's
+       pins log `pins` records as run from a commit the verifier's copy of main's first-parent history `main` holds
+       (`challenger.pinned_session`);
     2. `core_check.rounds`: the round log's roots are the ones the challenger's log shows it received, in order, each
        round's coin (its ``coin``) opened once after its root;
     3. `_a_link`: each A value among the window's registered `entries` is the tree over the segments those round roots
@@ -1082,7 +1241,9 @@ def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any
        opened for the window it is the window's open root (`salt.window_open_root`). So every window of a period opens
        the B rows, codes and s_w, the period registered before its first window's salt, and a window of no period, or
        of one whose open signs no weights' root, is refused before any of its proofs is read;
-    6. the manifest one row per call of the layout (``manifest``), and `_outcome`'s rule on the draw coin `_credited` read, at its period's committed K `k`, under the served window's
+    6. the manifest one row per call of the layout (``manifest``), `_arow` (each call's A table and each round's
+       input-ids table the Commit record `commit`'s value of the same rows), and `_outcome`'s rule on the draw coin
+       `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
        for), the registration its draw root (``draw.root``, the one root the draw coin followed) and the receipt
        ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier of record's verdict
@@ -1091,8 +1252,8 @@ def _window_outcomes(key: Any, ledger: Any, window: Any, session: Any, salt: Any
        (``window.root``) and the descriptor's SHA-512 give them, and each drawn unit's session was verified against
        that descriptor and opened its registered values at their registered roots, its K's A value and its K's
        ``<PREFIX>b/<K>`` among them."""
-    got, why = _window(key, ledger, window, session, salt, calls, served, rounds, draw, descriptor, entries,
-                       lambda *_: (proofs, None), k, verify)
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
+                       entries, lambda *_: (proofs, None), k, verify)
     return (None, why) if got is None else (got[0], None)
 
 
@@ -1195,15 +1356,15 @@ def committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[str, st
     return files, None
 
 
-def period_credit(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify, run: Run = PF.verify
-                  ) -> tuple[dict | None, tuple[str, str] | None]:
+def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
+                  run: Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
     (`PERIOD_KEYS`) carrying its statements' proof files, which `window` verifies on the circuit files the period's
     open committed (`committed_files`, else ``circuit``) with the verifier of record `run`."""
-    return _period_of(key, ledger, name, windows, verify, run)
+    return _period_of(key, ledger, pins, main, name, windows, verify, run)
 
 
-def _period_outcomes(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
+def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
                      ) -> tuple[dict | None, tuple[str, str] | None]:
     """`period_credit` on each window's drawn units' proof outcomes (`PROVED_KEYS`) in place of its statements, by
     `_window_outcomes`: the form the Lean `PouwCheck.Credit.periodCredit` reads until it runs the verifier of record
@@ -1212,17 +1373,18 @@ def _period_outcomes(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.
     reported at (`DELTA`), and each window's ε, what its draw of K established over its credited work (`established`;
     null when it establishes no ε <= 1). The period's windows are exactly its close's (`period`), its open committed K
     (``budget``) and signed the weights' root (`committed_weights`, ``weights``) every window's registered B rows fold
-    to, each window proves the circuit the period's open committed (``circuit``: its ``descriptor``, the bytes in hex of
-    the circuit its proofs were verified against, hashes to it, `challenger.credited_session`), and each window's
-    evidence (``{window, session, salt, calls, descriptor, entries, served, rounds, draw, proofs}``, as
-    `_window_outcomes` reads it, under the same ledger) is credited by it, every step of it, drawn at K over the layout
-    of that same descriptor. A refused window refuses the whole period (``circuit`` or ``window``), so a period earns
-    only when every window in it does."""
-    return _period_of(key, ledger, name, windows, verify, None)
+    to, each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's
+    first-parent history `main` and the window proves the circuit the period's open committed (``circuit``: the pin
+    first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
+    `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, commit, descriptor,
+    entries, served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
+    every step of it, drawn at K over the layout of that same descriptor. A refused window refuses the whole period
+    (``circuit`` or ``window``), so a period earns only when every window in it does."""
+    return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
-def _period_of(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify, run: Run | None
-               ) -> tuple[dict | None, tuple[str, str] | None]:
+def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
+               run: Run | None) -> tuple[dict | None, tuple[str, str] | None]:
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(keys) for w in windows)):
         return None, ("period", form)
@@ -1246,14 +1408,14 @@ def _period_of(key: Any, ledger: Any, name: Any, windows: Any, verify: Ch.Verify
         if not (type(w["descriptor"]) is str and _HEX.fullmatch(w["descriptor"])):
             return None, ("circuit", f"window {i} of period {name}: {DESCRIPTOR_HEX}")
         try:
-            Ch.credited_session(ledger, w["window"], k, bytes.fromhex(w["descriptor"]), verify)
+            Ch.credited_session(ledger, w["window"], k, pins, main, bytes.fromhex(w["descriptor"]), verify)
         except Ch.CoinError as e:
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
                   else _runner(w["statements"], files, w["entries"], w["window"], run))
-        got, why = _window(key, ledger, w["window"], w["session"], w["salt"], w["calls"], w["served"], w["rounds"],
-                           w["draw"], w["descriptor"], w["entries"], proved, big_k, verify)
+        got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
+                           w["commit"], w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, big_k, verify)
         if why is not None:
             return None, ("window", f"window {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                     f"{why[1]}")
@@ -1344,6 +1506,22 @@ def is_a(value: Any) -> bool:
     return a_value(value) is not None
 
 
+def ids_step(value: Any) -> int | None:
+    """An input-ids table's round: a name whose last part is ``ids@<s>`` (``<prefix>ids@<s>``, slot i's input token id
+    at round s, s a canonical decimal); None for any other name."""
+    m = _IDS.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
+    return None if m is None else int(m[1])
+
+
+def is_tied(value: Any) -> bool:
+    """A value the round roots commit (`_a_link`): an A value (`is_a`) or an input-ids table (`ids_step`)."""
+    return is_a(value) or ids_step(value) is not None
+
+
+def _what(value: str) -> str:
+    return "A value" if is_a(value) else "input-ids table"
+
+
 def is_held(value: Any) -> bool:
     """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
     (``…/b/<K>``, K a canonical decimal, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
@@ -1359,8 +1537,8 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
     and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
     ``[s·L/S, (s+1)·L/S)``; a call's A table ``…/a/<K>@<c>`` is committed whole by its call's round, the window's
     `calls` calls being the rounds' equal blocks, so round ``c // (calls/S)``'s segments tile all its rows and no other
-    round lists it. A step of `window`, which first holds the round roots to the ones the challenger received
-    (`core_check.rounds`)."""
+    round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole by round s alike. A step of
+    `window`, which first holds the round roots to the ones the challenger received (`core_check.rounds`)."""
     if not (isinstance(rounds, list) and rounds):
         return "a-link", LOG_FORM
     segs = []
@@ -1379,29 +1557,35 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
         segs.append(p)
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return "a-link", ENTRIES_FORM
-    a = [e for e in entries if is_a(e.get("value"))]
-    if not a:
+    a = [e for e in entries if is_tied(e.get("value"))]
+    if not any(is_a(e["value"]) for e in a):
         return "a-link", NO_A
     names: list[str] = []
     for e in a:
         if e["value"] in names:
-            return "a-link", f"the window registers A value {e['value']} twice"
+            return "a-link", f"the window registers {_what(e['value'])} {e['value']} twice"
         names.append(e["value"])
     for r, p in enumerate(segs):
         for v in sorted(p):
             if v not in names:
-                return "a-link", f"round {r} lists segments of {v}, which is no registered A value of the window"
+                return "a-link", (f"round {r} lists segments of {v}, which is no registered A value or input-ids table "
+                                  "of the window")
     steps = len(rounds)
     for e in a:
         v, root, domain, count = e["value"], _digest(e.get("root")), _digest(e.get("domain")), e.get("leaves")
         if root is None or domain is None or not _nat(count) or not 1 <= count <= MAX_ROWS:
-            return "a-link", (f"registered A value {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} (the "
-                              "verifier hashes its pads)")
-        call = a_value(v)[1]
-        if call is None:
+            return "a-link", (f"registered {_what(v)} {v}'s entry has no root, domain or leaf count from 1 to {MAX_ROWS} "
+                              "(the verifier hashes its pads)")
+        step = ids_step(v)
+        call = None if step is not None else a_value(v)[1]
+        if step is not None:
+            if step >= steps:
+                return "a-link", f"registered input-ids table {v} is round {step}'s, and the window has {steps} rounds"
+            per, own, whose = count, step, f"round {step}'s input-ids table"
+        elif call is None:
             if count % steps:
                 return "a-link", f"registered A value {v}'s {count} rows are not the window's {steps} rounds' equal blocks"
-            per, own = count // steps, None
+            per, own, whose = count // steps, None, ""
         else:
             if int(call) >= calls:
                 return "a-link", (f"registered A value {v} is call {int(call)}'s A table, and the window has {calls} "
@@ -1409,13 +1593,12 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
             if calls % steps:
                 return "a-link", (f"the window's {calls} calls are not its {steps} rounds' equal blocks, so the round "
                                   f"whose root commits call {int(call)}'s A table {v} is not fixed")
-            per, own = count, int(call) // (calls // steps)
+            per, own, whose = count, int(call) // (calls // steps), f"call {int(call)}'s A table"
         have = {}
         for r, p in enumerate(segs):
             if own is not None and r != own:
                 if p.get(v):
-                    return "a-link", (f"round {r} lists segments of {v}, call {int(call)}'s A table, which only its "
-                                      f"call's round {own} commits")
+                    return "a-link", f"round {r} lists segments of {v}, {whose}, which only round {own} commits"
                 continue
             at, end = (r * per, (r + 1) * per) if own is None else (0, count)
             untiled = (f"round {r}'s segments of {v} don't tile its rows [{at}, {end}) in order, each an aligned subtree: "
@@ -1428,9 +1611,9 @@ def _a_link(rounds: Any, entries: Any, calls: int) -> tuple[str, str] | None:
             if at != end:
                 return "a-link", untiled
         if tree_root(domain, count, have) != root:
-            return "a-link", (f"registered A value {v}'s root is not the tree over the segments the round roots commit: "
-                              "its rows are not the ones fixed under each round's root before that round's coin. Register "
-                              "the A value whose rows each round's root committed")
+            return "a-link", (f"registered {_what(v)} {v}'s root is not the tree over the segments the round roots "
+                              "commit: its rows are not the ones fixed under each round's root before that round's coin. "
+                              f"Register the {_what(v)} whose rows each round's root committed")
     return None
 
 
@@ -1517,10 +1700,10 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
-           "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "ROUND_TAG",
+__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LEVELS",
+           "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REQUESTS_IDS_TAG", "ROUND_TAG",
            "SCHEMA", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "committed_files", "committed_k", "committed_weights", "cover",
-           "domain_of", "draw_root", "drawn", "established", "a_value", "is_a", "is_held", "law", "layout_of",
-           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "round_root", "shape_of",
+           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_weights", "cover",
+           "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_tied", "law", "layout_of",
+           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "strata", "tree_root", "window"]

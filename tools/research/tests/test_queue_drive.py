@@ -86,7 +86,23 @@ def test_a_tick_launches_its_trains_at_once_each_with_its_rank_for_the_slot_queu
         world.gh.put(n, world.change({f"{f}.txt": f"{n}\n"}))
     assert h.tick().count("launched") == 3
     assert (3, 4) in pools and "CHECK_SLOT_RANK" not in os.environ
-    assert ranks == {m.commit: str(k) for k, m in enumerate(h.q.chain(), 1)}
+    chain = h.q.chain()
+    assert ranks == {m.commit: str(k) for k, m in enumerate(chain[:-1], 1)} | {chain[-1].commit: "1"}, "the top tip ranks first"
+
+
+def test_the_top_tip_keeps_a_check_of_its_own_while_the_trains_below_it_wait(world, monkeypatch):
+    """23 Oct 19:20Z: the five checks were nested prefixes of the bottom 15 of 50 PRs (cold-circuit-check boundaries at 2, 4,
+    10 and 13), and nothing checked the 35 above them; a pass at the top lands all of `next` in one check."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 3
+    for n in range(1, 7):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    said = h.tick()
+    chain = h.q.chain()
+    assert [c for c, _, _ in h.launched] == [chain[0].commit, chain[1].commit, chain[-1].commit], said
+    assert "one is kept for the top" in said
+    h.tick()
+    assert len(h.launched) == 3, "the top's check runs; nothing more launches while three run"
 
 
 def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
@@ -283,6 +299,25 @@ def test_a_failure_only_one_trains_change_reaches_ejects_that_pr_and_tells_ci_an
     assert "pkg/tests/test_x.py" in h.posts[0] and "@old-circuits-and-proofs" not in h.posts[0]
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1] and len(h.posts) == 1
+
+
+def test_a_failure_only_a_lower_running_trains_change_reaches_ejects_it_without_waiting_on_that_check(world, monkeypatch,
+                                                                                                      tmp_path):
+    """23 Oct 12:05Z: a5ded716d48d failed on files only #3266, in the lower train still checking, changed; drive waited on that
+    check and held every train above it until #3266 was ejected by hand at 12:48Z."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    _once()\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.tick()
+    lower, upper = (m.commit for m in h.q.chain())
+    assert {lower, upper} <= set(h.d.q.load_state()["drive"]["launched"])
+    _check(world, monkeypatch, upper, ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2]
 
 
 def test_a_failure_two_changes_reach_ejects_both(world, monkeypatch, tmp_path):
@@ -957,6 +992,24 @@ def test_a_train_that_lands_a_pr_at_an_older_head_than_its_current_one_tells_its
     assert f"#1 landed at {old[:12]}" in post and f"not at {new[:12]}" in post, post
     h.tick()
     assert len([p for p in h.posts if "#1 landed at" in p]) == 1
+
+
+def test_a_running_trains_old_head_whose_mark_is_withdrawn_comes_off_next_at_once(world, monkeypatch):
+    """23 Oct: #3261's 73f5eb82 lost its mark at 14:56Z for failing two lints, but the running trains kept it until the lowest's
+    check failed on it at 16:14Z; all five were then rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 2, 1
+    old = world.change({"a.txt": "1\n"})
+    world.gh.put(1, old)
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    running = h.q.chain()[1].commit
+    new = world.change({"a.txt": "1 fixed\n"}, base=old)
+    world.gh.put(1, new)
+    world.gh.ready.discard((1, old))
+    h.tick()
+    chain = h.q.chain()
+    assert [(m.pr, m.head) for m in chain[:1]] == [(1, new)] and running not in [m.commit for m in chain] and h.cancelled
 
 
 def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):

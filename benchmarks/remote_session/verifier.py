@@ -44,8 +44,9 @@ process that ended early stays live, refusing the node, until `--close NODE` clo
 the one in flight unended.
 
 The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
-payload tree's leaves under it (`store_layout.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
---arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store_layout.Binding`): at startup
+payload tree's leaves under it (`remote_bandwidth.store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`remote_bandwidth.store.Binding`, the
+remote audit's own code, so the circuit a period commits to names it): at startup
 every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
 store's under the key sent, recomputed in `--layout-workers` processes, else the hello is refused with the reason
@@ -79,11 +80,12 @@ machine and reached through `sampled_proofs.remote`'s client (`--challenger serv
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
 it with the event that released it, and once the session ends what the challenger signed holds the session's coins
-(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`): a session whose coins
-fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W openings coins
-and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the prover's hello says
-its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of
-such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
+(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
+session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, W
+openings coins and `--appends` append coins, `coins.APPENDS` by default, or none, and no append family, when the
+prover's hello says its sessions append nothing (a plan of honest and skip sessions, `Verifier.appends_of`), so the
+challenger's close of such a session that ran to its end is complete. An append past them refuses the session: `coin` on the books, and
 under the Lean, whose session holds only the append coins released, `disagreement`.
 
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
@@ -93,7 +95,7 @@ Openings are checked in the clear: zero-knowledge proof units are not in this ha
                        [--paced K:T_MS:DRAWS:WINDOWS ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
                        [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-                        --challenger-period P [--challenger-minutes M]]
+                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
                        [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
     python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict lean|both|python]
     python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
@@ -118,10 +120,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 
 import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
-import store_layout  # noqa: E402
 import wire  # noqa: E402
 from checks import Checks, check  # noqa: E402
 
@@ -525,7 +527,11 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     """The Lean verifier's process, with the verifier's secret and `registry` (which it must read back as
     `audit.Registry` writes it), `done` called with each window's check as it ends."""
     lean = lv.Lean(exe or lv.build(), done)
-    read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    try:
+        read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    except BaseException:
+        lean.close()
+        raise
     if read["registry"] != registry.to_json():
         lean.close()
         raise ValueError(f"the Lean verifier reads the registry as {read['registry']}, not as audit.Registry does: "
@@ -781,11 +787,11 @@ class Verifier:
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
-                 binding: store_layout.Binding | None = None) -> None:
+                 binding: rstore.Binding | None = None) -> None:
         if verdict not in VERDICTS:
             raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
-        self.payload_key = secrets.token_bytes(store_layout.KEY_BYTES) if payload_key is None else payload_key
+        self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
         self.binding = binding
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
@@ -880,7 +886,7 @@ class Verifier:
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
         covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
-        (`store_layout.Binding.hold`'s Refused), all before the registry draws anything. Both registries draw it
+        (`remote_bandwidth.store.Binding.hold`'s Refused), all before the registry draws anything. Both registries draw it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
@@ -1483,6 +1489,10 @@ def main() -> int:
     ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")
     ap.add_argument("--challenger-period", metavar="P",
                     help="gate: the audit's period, open on the ledger (period-open) before the first session")
+    ap.add_argument("--challenger-main", type=Path, metavar="FILE",
+                    help="gate: the auditor's own first-parent list of main, a commit a line (`git rev-list "
+                         "--first-parent origin/main`): a session whose host ran a tree its pins log doesn't record on "
+                         "it is refused as coins")
     ap.add_argument("--challenger-minutes", type=int, default=120, metavar="M",
                     help="gate: each session's reserve, the most it serves")
     ap.add_argument("--appends", type=int, metavar="A",
@@ -1493,7 +1503,7 @@ def main() -> int:
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     ap.add_argument("--model", metavar="ROLE",
-                    help="bind the registered store to this pinned model (`store_layout.Binding`): a hello whose "
+                    help="bind the registered store to this pinned model (`remote_bandwidth.store.Binding`): a hello whose "
                          "payload root isn't the root of the store the pinned checkpoint lays out, under the payload "
                          "key this verifier sends, is refused before the registry draws anything")
     ap.add_argument("--checkpoint", type=Path, metavar="DIR",
@@ -1547,7 +1557,7 @@ def main() -> int:
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
-                                    period=a.challenger_period, minutes=a.challenger_minutes)
+                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     binding = None
@@ -1555,9 +1565,9 @@ def main() -> int:
         if a.checkpoint is None or a.pin is None or a.arena_blocks is None:
             ap.error("--model needs --checkpoint DIR, --pin FILE and --arena-blocks A")
         try:
-            binding = store_layout.Binding(a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks,
-                                           workers=a.layout_workers, log=lambda m: print(m, flush=True))
-        except store_layout.Refused as e:
+            binding = rstore.Binding(a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks,
+                                     workers=a.layout_workers, log=lambda m: print(m, flush=True))
+        except rstore.Refused as e:
             print(f"verifier: refused the pinned model: {e}", flush=True)
             (a.out / "verifier.json").write_text(json.dumps(
                 {"schema": "verity/remote-session/verifier/v0", "verdict": a.verdict, "refused": str(e),

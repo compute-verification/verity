@@ -37,6 +37,12 @@ The driver's scheduling (when a boundary leaves, `Session.next_boundary_ns`), th
 reads, and the window and draw counts `verifier.json` keeps are still read from the books. The Lean checks the same
 plans event by event.
 
+The store binding (`store.py`) has no Lean yet, so its Python is its only definition, and its Lean port is open. It
+decides whether a registered store is the one a pinned model fixes (`verifier.py --model`, and the gate line's `bound`
+check, `auditor_line.py`). It lives in this tree because a period's circuit is this tree's git hash (`verity/remote-
+bandwidth/v0 verifier tree <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits
+to the code that decided `bound`. A change to it, like any change here, gives later periods a new circuit.
+
 ## Replay
 
 `lean/tests/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons: a
@@ -62,11 +68,16 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   (`Node`).
 - `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
-  opens for the session's window inside the audit's period (`trusted`).
+  opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
+  log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
   releases and plan changes.
+- `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `check`), lays out
+  the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler (`arena`,
+  `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`). `Binding.hold`
+  decides a hello against it. `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and
