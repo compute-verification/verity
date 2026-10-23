@@ -69,6 +69,7 @@ input to give it. `reference` is the unit on words (``stream=True``: v3's; with 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
@@ -594,7 +595,7 @@ def unit_compressions(k: int, tile: tuple[int, int] = (32, 32)) -> int:
     return lay.blocks + lay.lanes + 4
 
 
-def j10r_compressions(m: int, n: int, k: int, tile: tuple[int, int] = (32, 32)) -> float:
+def j10r_compressions(m: int, n: int, k: int, tile: tuple[int, int] = (32, 32)) -> Fraction:
     """SHA-512 compressions a unit under J10-R when a call of ``m`` rows and ``n`` columns derives each block once: the
     distinct counters of seed_c its units read (`j10r_unit_blocks` at `j10r_blocks`, counted, not computed), seed_c's two
     compressions once a call, and each unit's own σ_R (two) and its lanes' key blocks, over the call's units."""
@@ -606,7 +607,7 @@ def j10r_compressions(m: int, n: int, k: int, tile: tuple[int, int] = (32, 32)) 
         for J in range(n // c):
             read.update(j10r_unit_blocks(lay, j10r_blocks(m, k, tile, I, J)))
     units = (m // r) * (n // c)
-    return (len(read) + 2) / units + 2 + lay.lanes
+    return Fraction(len(read) + 2, units) + 2 + lay.lanes
 
 
 # -- the unit ----------------------------------------------------------------------------------------------------------------
