@@ -1450,10 +1450,12 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   refuses (`Registered.checkComplete`, `checkComplete_ok`), so no output's cone reads a row the public file states
   (PoUW's leaf lanes, the lane index among them). It reads the circuit's ports, never its gates. A port `F` names at
   known content (`known`: each row's u16 words and its salt) refuses unless its root is the frame-v3-sha512 root of
-  those rows (`Registered.checkKnownAll`), and, where it is an input row of the statement, unless a computed row of the
-  unit reads each bit of its row at some copy (`KnownRead.check`: the copy is below `upv`, `readIns` marks the column,
-  and Δ copies that bit into it), so the known content binds every bit the statement could depend on. It costs the
-  known bits times the unit's input ports. A recursive statement reads the inner session's round commitments
+  those rows (`Registered.checkKnownAll`), and, in the statement (`KnownRead.check`), unless its row is a
+  `sha512/row/v2` row without segments of the known rows' words and each bit of its row is on a wire of the unit: at an
+  input row, a computed row of the unit reads the bit at some copy (the copy is below `upv`, `readIns` marks the column,
+  and Δ copies that bit into it); at an output row, some copy below `upv` returns the bit's output word at a computed
+  column of the unit's output group. So the known content binds every bit the statement could depend on. It costs the
+  known bits times the unit's ports. A recursive statement reads the inner session's round commitments
   as registered values, round `i`'s as `rec-c<i>` and level `l`'s committed tops as `rec-top-L<l>`; a drawn statement
   must draw in full every unit the verifier's reads of such a value name (U4, `Registered.checkFull`, D14), so that no
   stage's message is read off a sample. The registered opening (`RecOpening`) reads its rounds as registered values too:
