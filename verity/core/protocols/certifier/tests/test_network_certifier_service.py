@@ -4,6 +4,7 @@ profile, and each way a link-window fails closed, on injected coins and an injec
 held to the in-the-clear oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
 except where only the frames differ from the Program's, which N2 leaves to N3."""
 
+import itertools
 import json
 from dataclasses import replace
 
@@ -57,11 +58,13 @@ def honest_occupancy():
 
 class Run:
     """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's
-    stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says."""
+    stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says. The
+    certifier's coins give each record a fresh salt, the same in every run."""
 
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=None) -> None:
         self.signer = signers.signer(tmp_path)
-        self.issuer = Issuer(self.signer, signers.SESSION)
+        drawn = itertools.count(0xc0)
+        self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(drawn) % 256]) * n)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
                               proof_deadline=proof_deadline,
                               occupancy=occupancy or (honest_occupancy()[0], None))
@@ -285,8 +288,8 @@ def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
 
 def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
     """N2's unit holds the certificates' check and each end's head check, at the link's size class: L the name's bytes,
-    T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition. A
-    profile changes the unit, and so the spec's Program."""
+    T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition and
+    reads the unit's signed digest for its end. A profile changes the unit, and so the spec's Program."""
     lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
     assert lw.unit.id == "NetworkLinkWindow_v3{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
@@ -299,8 +302,9 @@ def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
     params, _ = declared.unit.signature()
     gate = HC.gate(9, 4, True)
     assert gate.params == HC.unit(9, 4, True).signature()[0]
-    assert [n for n, _ in params] == ["egress", "ingress", *(f"egress_{n}" for n, _ in gate.params),
-                                      *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params)]
+    assert [n for n, _ in params] == ["egress", "ingress",
+                                      *(f"egress_{n}" for n, _ in gate.params if n != "signed"),
+                                      *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params if n != "signed")]
     wide = replace(lw, ingress=GridParams(8, 2, 1))
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
 

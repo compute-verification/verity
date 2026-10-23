@@ -6,12 +6,12 @@ import CertifierDevice.Difftest
 
 `scripts/issuer_vectors.py` writes instances (an LMS key from a seed, a certifier session's id, 32 bytes or another
 length, and calls to one issuer in that session: a record, its direction, grid parameters, Σ_sync, parameters digest
-and deadline bit, the leaf the host reserves for it or a refusal, and a tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
+and deadline bit, the salt the issuer's coins give it, the leaf the host reserves for it or a refusal, and a tamper) and what the checkout's real `certificate.Issuer` does with each, its signer signing at the call's leaf.
 `CertifierDevice/IssuerDifftestMain.lean` reads both files and fails unless `evaluate`, which makes the key with
 `Lms.keygen` and threads one `Issuer` through the calls, gives every result exactly: each call's parameters digest
 (`parameters`), and `null` where `Issuer.certify` refuses the record, or the certified record (`null` when the
-reservation is refused) with its head's encoding and digest, its certificate's fields, `CertifiedRecord.verify` under
-the key and after the tamper; and at the end the issuer's `refused`. The Lean audit runs it (`runs` in
+reservation is refused) with its head's encoding and digest, its salt, its certificate's fields,
+`CertifiedRecord.verify` under the key and after the tamper; and at the end the issuer's `refused`. The Lean audit runs it (`runs` in
 `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
@@ -49,8 +49,8 @@ def flip (b : ByteArray) (pos : Nat) : ByteArray :=
     b.set! i (b.get! i ^^^ 1)
 
 /-- `verify` after the tamper: the certificate's signature (a byte, or its last byte dropped), link, direction, window or
-digest changed, the head's deadline bit flipped, the public key's identifier or root changed, or the certificate checked
-in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
+digest changed, the head's deadline bit flipped, the record's salt or the public key's identifier or root changed, or
+the certificate checked in another session; or the certificate's link, direction, window or key identifier changed and signed again by `k` at
 leaf `q`. -/
 def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session : ByteArray) :
     String × Nat → Except String Bool
@@ -72,6 +72,7 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
       | "window" => pure ({ c with certificate := { x with window := x.window ^^^ 1 } }, pub, session)
       | "digest" => pure ({ c with certificate := { x with digest := flip x.digest pos } }, pub, session)
       | "deadline" => pure ({ c with head := { h with deadline := !h.deadline } }, pub, session)
+      | "salt" => pure ({ c with salt := flip c.salt pos }, pub, session)
       | "public-id" => pure (c, flip id pos ++ root, session)
       | "public-root" => pure (c, id ++ flip root pos, session)
       | "session" => pure (c, pub, flip session pos)
@@ -85,7 +86,7 @@ def tampered (c : CertifiedRecord) (k : Lms.PrivateKey) (q : Nat) (pub session :
 def certifiedJson (c : CertifiedRecord) (verified : Bool) (tampered : Json) : Except String Json := do
   let x := c.certificate
   pure <| Json.mkObj [
-    ("head", .arr #[hexJson (← c.head.encode), hexJson (← c.head.digest)]),
+    ("head", .arr #[hexJson (← c.head.encode), hexJson (← c.head.digest)]), ("salt", hexJson c.salt),
     ("certificate", .arr #[hexJson x.keyId, .str x.link, .str x.direction.value, toJson x.window, hexJson x.digest,
                            hexJson x.signature]),
     ("verify", toJson verified), ("tampered", tampered)]
@@ -120,8 +121,9 @@ def evaluate (j : Json) : Except String (Json × List String) := do
     let record ← recordOf (← c.getObjVal? "record")
     let direction ← Direction.ofValue (← c.getObjValAs? String "direction")
     let deadline ← c.getObjValAs? Bool "deadline"
+    let salt ← bytesOf (← c.getObjVal? "salt")
     let mut certify := Json.null
-    match issuer.certify leaf record direction params digest deadline with
+    match issuer.certify salt leaf record direction params digest deadline with
     | .error _ => outcomes := "refused record" :: outcomes
     | .ok (i, none) =>
       issuer := i
