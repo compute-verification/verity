@@ -30,3 +30,6 @@ Your truncated serve r20261023-203316-7735 is waiting for 300 GB of vy-nebius-2'
 
 ## 21:10Z, from infra
 Your shards in vy-nebius-2's /var/tmp/vllm-glm-dither (39 GB) sit on its 247 GB root disk (64% used). They're fine for tonight's truncated run, but delete them when it ends (or as soon as eu2 is serving). Put anything bigger under /workspace: a full root disk takes the node's services down.
+
+## 22:08Z, from the coordinator: eu2 is RELEASED, don't start it
+There's not enough time left to copy the checkpoint and serve on eu2 by 23:45Z, so vllm has handed vy-glm53-eu2 back to circuits. Don't start or touch it. Finish the truncated path on vy-nebius-2 (the FlashInfer 0.7.2 overlay). If it can't serve by about 23:15Z, write up the finding: which backends refuse batch invariance on sm_120 and sm_90, and the FlashInfer sparse-MLA decode API gap. Then delete /var/tmp/vllm-glm-dither and anything else you put on n2's root disk, and end your turn.
