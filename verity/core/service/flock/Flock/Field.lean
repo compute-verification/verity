@@ -503,6 +503,35 @@ theorem mulBy_mulTable (r v : F128) : mulBy (mulTable r) v = v * r := by
   conv => rhs; rw [bytes_sum v]
   simp only [F128.add_mul]
 
+/-- `r · byteMono (k / 256) (k mod 256)` at `k < 4096`: `mulBy`'s table of products by `r` on the left. -/
+def mulTableL (r : F128) : Array F128 :=
+  Array.ofFn (n := 4096) fun k => r * byteMono (k.val / 256) (k.val % 256).toUInt64
+
+theorem mulTableL_get (r v : F128) (j : Nat) (hj : j < 16) :
+    (mulTableL r)[256 * j + v.byte j]! = r * byteMono j (byteW v j) := by
+  have hb := v.byte_lt j
+  rw [getElem!_pos (mulTableL r) (256 * j + v.byte j) (by simp [mulTableL]; omega)]
+  simp only [mulTableL, Array.getElem_ofFn]
+  rw [show (256 * j + v.byte j) / 256 = j by omega, show (256 * j + v.byte j) % 256 = v.byte j by omega, byte_eq,
+    show Nat.toUInt64 (byteW v j).toNat = byteW v j from UInt64.toNat_inj.mp (by
+      rw [Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (UInt64.toNat_lt _)])]
+
+theorem mulBy_mulTableL (r v : F128) : mulBy (mulTableL r) v = r * v := by
+  have h := fun j hj => mulTableL_get r v j hj
+  rw [mulBy, show v.byte 0 = 256 * 0 + v.byte 0 by omega, show 256 + v.byte 1 = 256 * 1 + v.byte 1 by omega,
+    show 512 + v.byte 2 = 256 * 2 + v.byte 2 by omega, show 768 + v.byte 3 = 256 * 3 + v.byte 3 by omega,
+    show 1024 + v.byte 4 = 256 * 4 + v.byte 4 by omega, show 1280 + v.byte 5 = 256 * 5 + v.byte 5 by omega,
+    show 1536 + v.byte 6 = 256 * 6 + v.byte 6 by omega, show 1792 + v.byte 7 = 256 * 7 + v.byte 7 by omega,
+    show 2048 + v.byte 8 = 256 * 8 + v.byte 8 by omega, show 2304 + v.byte 9 = 256 * 9 + v.byte 9 by omega,
+    show 2560 + v.byte 10 = 256 * 10 + v.byte 10 by omega, show 2816 + v.byte 11 = 256 * 11 + v.byte 11 by omega,
+    show 3072 + v.byte 12 = 256 * 12 + v.byte 12 by omega, show 3328 + v.byte 13 = 256 * 13 + v.byte 13 by omega,
+    show 3584 + v.byte 14 = 256 * 14 + v.byte 14 by omega, show 3840 + v.byte 15 = 256 * 15 + v.byte 15 by omega]
+  rw [h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega), h 5 (by omega), h 6 (by omega),
+    h 7 (by omega), h 8 (by omega), h 9 (by omega), h 10 (by omega), h 11 (by omega), h 12 (by omega),
+    h 13 (by omega), h 14 (by omega), h 15 (by omega)]
+  conv => rhs; rw [bytes_sum v]
+  simp only [F128.mul_add]
+
 /-- `x^i` for `i < 128`. -/
 def monomial (i : Nat) : F128 :=
   if i < 64 then ⟨(1 : UInt64) <<< i.toUInt64, 0⟩ else ⟨0, (1 : UInt64) <<< (i - 64).toUInt64⟩
