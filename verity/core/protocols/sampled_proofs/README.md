@@ -139,7 +139,10 @@ from verity.core.protocols.sampled_proofs.costfit import fit
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it.
+    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
+    is one template, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
+    and the window is drawn once by `stratified:K`, a stratum per template.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the

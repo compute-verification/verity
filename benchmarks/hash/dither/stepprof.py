@@ -43,7 +43,7 @@ PARTS = [
     ("A step (h1c_a_step) and the step's inputs", re.compile(r"h1c_domains|h1c_a_pre_k|h1c_a_init_k")),
     ("units: seeds", re.compile(r"h1r_seeds|h1_seeds")),
     ("units: noise (separate launch)", re.compile(r"h1s_noise")),
-    ("units (noise, MMAs, receipts, peel, z, y)", re.compile(r"h1o_units|h1r_units|\bh1[ukp]\b|kh_")),
+    ("units (noise, MMAs, receipts, peel, z, y)", re.compile(r"h1o_units|h1r_units|\bh1[ukp]\b|\bh1um\b|kh_")),
     ("tree levels (h1c)", re.compile(r"h1c_leaves|h1c_segs|h1c_level")),
     ("quantizer (exactlin)", re.compile(r"exactlin_quant_rows")),
     ("GEMM (exactlin)", re.compile(r"exactlin_scaled_mm")),

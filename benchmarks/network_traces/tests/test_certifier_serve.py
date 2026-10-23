@@ -7,11 +7,14 @@ and each window's salt is revealed once."""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import importlib.util
+import itertools
 import json
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -45,6 +48,47 @@ async def _endpoint(reader, writer):
                  + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in events) + b"0\r\n\r\n")
     await writer.drain()
     writer.close()
+
+
+class _SideBySide:
+    """An OpenAI endpoint that serves `group` streaming completions side by side, as vLLM serves requests in flight:
+    each group's responses wait for the whole group, then write their chunks in turn, one each, so the shim reads them
+    interleaved (`writes`: (request, chunk) in write order). `/v1/models` lists one model and `/tokenize` makes 200
+    tokens of any prompt."""
+
+    def __init__(self, group: int) -> None:
+        self.group, self.arrived, self.writes, self.bodies = group, 0, [], []
+        self.turns: dict = defaultdict(asyncio.Event)
+
+    async def __call__(self, reader, writer):
+        head = await reader.readuntil(b"\r\n\r\n")
+        n = re.search(rb"content-length: (\d+)", head, re.I)
+        body = json.loads(await reader.readexactly(int(n.group(1)))) if n else None
+        if not head.startswith(b"POST /v1/completions "):
+            doc = ({"data": [{"id": "stub-model"}]} if head.startswith(b"GET /v1/models ")
+                   else {"tokens": list(range(200)), "count": 200, "prompt": body["prompt"], "model": body["model"]})
+            data = json.dumps(doc).encode()
+            writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: %d\r\n\r\n%s"
+                         % (len(data), data))
+            await writer.drain()
+            writer.close()
+            return
+        self.bodies.append(body)
+        me, self.arrived = self.arrived, self.arrived + 1
+        g, i = divmod(me, self.group)
+        if i == self.group - 1:
+            self.turns[(g, 0, 0)].set()
+        writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
+        for k in range(body["max_tokens"]):
+            await self.turns[(g, k, i)].wait()
+            p = b'data: {"choices":[{"text":" t%d"}]}\n\n' % k
+            writer.write(b"%x\r\n%s\r\n" % (len(p), p))
+            await writer.drain()
+            self.writes.append((me, k))
+            self.turns[(g, k, i + 1) if i + 1 < self.group else (g, k + 1, 0)].set()
+        writer.write(b"%x\r\n%s\r\n0\r\n\r\n" % (len(b"data: [DONE]\n\n"), b"data: [DONE]\n\n"))
+        await writer.drain()
+        writer.close()
 
 
 def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifier, challenger, strategy: str) -> dict:
@@ -152,6 +196,52 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     faulted = [r for r in audit["rows"] if r["raw"]]
     assert {(r["direction"], r["window"]) for r in faulted} == {("egress", 0), ("ingress", 0)}
     assert all(r["raw"] == r["committed"] == "status:delivery-refused" for r in faulted)
+
+
+def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
+    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
+    `max_tokens`, `ignore_eos`, greedy, streamed) four at a time, the ingress releasing them two a bucket, and the
+    endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
+    response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
+    traffic is accepted on every link-window."""
+    endpoint = _SideBySide(2)
+    args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, probes=4, in_flight=4,
+                              requests=REQUESTS, delta_buckets=None)
+
+    async def go():
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
+        url = "http://%s:%d" % upstream
+        probed, report, plan = await asyncio.to_thread(cs.plan_of, args, url, lambda: 0.0)
+        release = [plan["model_release"][str(q["stream"])] for q in plan["requests"]]
+        assert release == [2, 2, 3, 3, 8, 8, 9, 9]
+        endpoint.writes.clear()
+        challenger, certifier = cs.signer(tmp_path / "keys" / "challenger", 6), cs.signer(tmp_path / "keys" / "c", 6)
+        try:
+            out = await asyncio.to_thread(_run, tmp_path / "run", plan, report, url, upstream, certifier, challenger,
+                                          "honest")
+        finally:
+            certifier.close()
+            challenger.close()
+        server.close()
+        return probed, plan, out
+
+    probed, plan, out = asyncio.run(go())
+    assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
+                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0}
+    assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
+    assert plan["served"]["in_flight"] == 4 and plan["request_major"]
+    sends = [q["send_ms"] for q in plan["requests"]]
+    assert sends[:4] == [sends[0]] * 4 and sends[4:] == [sends[4]] * 4 and sends[4] > sends[0]
+    assert endpoint.writes[:4] == [(8, 0), (9, 0), (8, 1), (9, 1)]
+    written = [name for _, name, *_ in sorted(ar.read_events(tmp_path / "run" / "server.events.gz"))]
+    whole = [name for name, _ in itertools.groupby(written)]
+    names = [s for s, *_ in plan["sessions"]]
+    assert len(written) == REQUESTS * TOKENS and len(whole) == REQUESTS
+    assert all(set(whole[j:j + 2]) == set(names[j:j + 2]) for j in range(0, REQUESTS, 2))
+    check = out["check"]
+    assert check["verdict"] == "accepted", cs.table(check)
+    assert all(r["n2"]["accepted"] for r in check["rows"]) and check["profile"] == "planned"
 
 
 def test_honest_served_traffic_is_accepted_on_every_link_window(served):
