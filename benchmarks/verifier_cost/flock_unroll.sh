@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # What the templated statement's read costs against the flat one's (PRF-133): per K, the H1 tile unit's statement circuit
 # and its templated form as flock_tmpl.sh builds them, then flock-tmpl's `unrollat` (`Tmpl.unrollAt` at MODE, whole and a
-# stage at a time), `unroll` (the logical `Tmpl.unroll`) and `flat` (`Net.parse` on the circuit's flat unit, which the flat
+# stage at a time), `checks` (the description checks, then the unrolled input-row checks they stand for), `unroll` (the
+# logical `Tmpl.unroll`) and `flat` (`Net.parse` on the circuit's flat unit, which the flat
 # statement reads in its place). Run from a clone (the build writes the verifier's .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-3 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/flock_unroll.sh 448
@@ -48,6 +49,7 @@ for k in "$@"; do
   name=$(head -1 "$O/unit-$k.tmpl" | cut -d' ' -f2)
   step unrollat "$k" unrollat "$O/unit-$k.tmpl" --mode "$MODE"
   step phases "$k" unrollat "$O/unit-$k.tmpl" --mode "$MODE" --phases
+  step checks "$k" checks "$O/unit-$k.tmpl"
   step unroll "$k" unroll "$O/unit-$k.tmpl"
   step flat "$k" flat "$w/circuit.txt" "$name"
   cat "$O/build-$k.json" "$O/unroll-$k.jsonl"
