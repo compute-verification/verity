@@ -217,9 +217,9 @@ def test_b_is_each_linears_weight_once_a_window(steps):
 def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     """A MoE layer's expert GEMMs (`engine.int8_experts`), wired as the option wires every recorded layer
     (`pouw_h1_hooks.wire`: z/y records over T, observe, apply), hand H1 each call's A rows, s_a and `scaled_mm_zy`'s z/y
-    records as a dense linear's call does: each (step, expert, projection) registers ``a/<K>@<c>`` and ``zy@<c>`` whose
-    roots recompute from that expert's own served rows (an idle expert's zero-row call from zeros), and its manifest row
-    carries its served rows m."""
+    records as a dense linear's call does: each (step, expert, projection) registers ``zy@<c>`` and puts its rows in its
+    step's ``a/<K>@<s>``, whose roots recompute from each expert's own served rows (an idle expert's zero-row call from
+    zeros), and its manifest row carries its served rows m."""
     from verity_vllm.engine import hooks
     from verity_vllm.engine import int8_experts as X
     from verity_vllm.protocol_options import pouw_h1_hooks as PHK
@@ -252,11 +252,16 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     assert [c.module for c in run.calls[:4]] == ["moe.0.gate_up", "moe.0.down", "moe.1.gate_up", "moe.1.down"]
     for c in run.calls:
         n, k = run.shapes_[c.layer]
-        a, s_a, z, y = got[c.index]
-        ra, rz = served.registered[HW.table(prog, "a", c.index)], served.registered[HW.table(prog, "zy", c.index)]
-        assert ra.root.hex() == _tree(ra, _a_rows(a, s_a, T, k), run._key, SV.nonce(c.index, "a"))
+        _a, _s_a, z, y = got[c.index]
+        rz = served.registered[HW.table(prog, "zy", c.index)]
         assert rz.root.hex() == _tree(rz, _records(z, y, T, n), run._key, SV.nonce(c.index, "zy"))
-        assert {ra.value: ra.root.hex(), rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
+        assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
+        cs = served.step_calls(c.index)
+        if c.index == cs[-1]:
+            ra = served.registered[HW.table(prog, "a", c.index, STEPS)]
+            rows = [row for d in cs for row in _a_rows(*got[d][:2], T, k)]
+            assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
+            assert run.tables[c.index]["registered"][ra.value] == ra.root.hex()
 
 
 def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_another_row():
