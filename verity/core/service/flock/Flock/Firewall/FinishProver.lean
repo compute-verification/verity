@@ -154,6 +154,17 @@ theorem getElem!_range_map {α : Type} [Inhabited α] (f : Nat → α) {n i : Na
   rw [getElem!_eq _ (by simpa using h)]
   simp
 
+theorem mul_sumF (g : F128) (n : Nat) (f : Nat → F128) : g * sumF n f = sumF n fun i => g * f i := by
+  induction n with
+  | zero => exact F128.mul_zero g
+  | succ n ih => rw [sumF_succ, sumF_succ, F128.mul_add, ih]
+
+theorem getElem!_map_mul (g : F128) (xs : Array F128) (i : Nat) : (xs.map (g * ·))[i]! = g * xs[i]! := by
+  by_cases h : i < xs.size
+  · rw [getElem!_eq _ (by simpa using h), getElem!_eq xs h, Array.getElem_map]
+  · rw [getElem!_neg _ i (by simpa using h), getElem!_neg xs i h]
+    exact (F128.mul_zero g).symm
+
 /-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). The term comes
 first for the reason `sumFFast`'s does: sixteen tasks read `e`. -/
 def byteBuckets (g e : Array F128) (j : Nat) : Array F128 :=

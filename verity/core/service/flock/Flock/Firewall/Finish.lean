@@ -241,21 +241,29 @@ theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchV
   rw [show 8 * (v / 8) + v % 8 = v by omega] at h
   exact h.symm
 
-/-- `basisVals` as compiled code computes it: each claim's `Φ_k(eq(z_k, y))` from its byte tables (`byteTable_sum`), in
-tasks of `2^12` points. -/
+/-- `basisVals` as compiled code computes it: each claim's `γ_k·Φ_k(eq(z_k, y))` from the byte tables of
+`γ_k·eq(rpp_k, ·)` (`mul_sumF`, `byteTable_sum`), in tasks of `2^12` points. -/
 def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
-  let tabs := sws.map fun sw => (sw.gamma, eqTablePar sw.z, byteTable (eqTable sw.rpp))
+  let tabs := sws.map fun sw => (eqTablePar sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))
   let k := min l 12
-  parRangeS (fun y => tabs.foldl (fun acc (g, ez, tb) =>
+  parRangeS (fun y => tabs.foldl (fun acc (ez, tb) =>
       let v := ez[y]!
-      acc + g * sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
+      acc + sumF 16 fun j => tb[256 * j + v.byte j]!) 0) (2 ^ (l - k)) (2 ^ k)
 
 theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
   unfold basisVals basisValsFast
   rw [parRangeS_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
   apply Array.map_congr_left
   intro y _
-  simp only [Array.foldl_map, byteTable_sum, eqTablePar_eq]
+  simp only [Array.foldl_map, eqTablePar_eq]
+  congr 1
+  funext acc sw
+  rw [← byteTable_sum, mul_sumF]
+  refine congrArg (acc + ·) (sumF_congr fun u _ => ?_)
+  rw [getElem!_map_mul]
+  split
+  · rfl
+  · exact F128.mul_zero _
 
 end Fast
 

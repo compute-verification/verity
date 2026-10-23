@@ -326,6 +326,11 @@ protected theorem mul_one (a : F128) : a * 1 = a := by
     rw [show a.lo ^^^ a.hi ^^^ a.lo = a.hi ^^^ (a.lo ^^^ a.lo) by ac_rfl, UInt64.xor_self, UInt64.xor_zero]]
   simp only [UInt64.zero_xor, UInt64.xor_zero, UInt64.zero_shiftLeft, UInt64.zero_shiftRight, UInt64.zero_or]
 
+protected theorem mul_zero (a : F128) : a * 0 = 0 := by
+  show mul a ⟨0, 0⟩ = ⟨0, 0⟩
+  simp only [mul, UInt64.xor_zero, clmul_zero]
+  rfl
+
 /-- `x · (r + 1) = x · r + x`: one product where `eqStep` reads two. -/
 theorem mul_add_one (x r : F128) : x * (r + 1) = x * r + x := by
   rw [F128.mul_add, F128.mul_one]
