@@ -1,4 +1,4 @@
-import Proofs.Accounting.TS.Session.Lanes.Layer
+import Proofs.Accounting.TS.Session.Lanes.Holds
 
 /-!
 # The named premises a leaf's 33 linked sessions take
@@ -13,10 +13,12 @@ the combine's):
   (`portRead`), registered or not, so it is a fact of the circuits alone; that every port they read is registered and
   opens at its registered root is proved from flock-verify's complete check, part of `leafLayer`'s acceptance
   (`RowsSession.rowsReg_eq_portRead`, `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed;
-* `LeafReads` (the decodes and the verifier's registrations; owner @proofs): where the 33 sessions' registrants'
-  rows agree at every root and position two of them read (`Accounting.TS.Lanes.RowsAgree`), their committed rows,
-  read through the decodes, are one leaf, one partials record and one receipt, with lane `l`'s index `l` and every
-  `ok` word `1`.
+* `LeafReads` (the verifier's registrations; owner @proofs): where the 33 sessions' registrants' rows agree at every
+  root and position two of them read (`Accounting.TS.Lanes.RowsAgree`), their committed rows at the data ports hold
+  one in-range leaf, one partials record and one receipt, each word's encoding at its place in the layout. The known
+  ports' rows (the admit bits, the public inputs, lane `l`'s index and every `ok` word `1`) are not asked: flock-verify's
+  known-content and known-read checks, part of `leafLayer`'s acceptance, give them
+  (`Accounting.TS.Lanes.laneKnownHolds_of_check`, `combKnownOk_of_check`).
 
 That the registrants' rows agree is not a premise: each registrant's opening opens its root at its position, so two
 of them at one root and position are one row's bytes or an explicit SHA-512 collision
@@ -28,7 +30,7 @@ here until C-Flock's spec is extracted.
 
 namespace Accounting.Assumptions.TS
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge
+open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 open Pouw.RelativeSecurity (Paths)
 
 /-- `accounting-ts-leaf-checks` (a fact of `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`'s circuits at their tile's
@@ -68,50 +70,41 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
       (decC (sess none) (portRead (sess none) vals)).ok = true →
       CombineOk (decC (sess none) (portRead (sess none) vals))
 
-/-- `accounting-ts-leaf-reads` (the decodes and the verifier's registrations; owner @proofs). **Where a leaf's 33
-sessions' registrants' rows agree, the decodes read one leaf, one partials record and one receipt**: on every path, at
-proof `i` of round `w`, if the registrants' rows of the 33 sessions agree wherever two of them read one root at one
-position (`RowsAgree`), and at each session the registrants' rows at the ports its known content `known x w i k`
-names are the known rows (`KnownHeld`), then lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's
-commit-time openings `RowsSession.wo`), read through `decL`, are `laneView`: the leaf's A rows at its row slots and B
-rows at its column slots, the leaf's record, row `l` of the partials, the path's public inputs (admit, salt, position,
-roots), the index `l` and `ok = 1`; and the combine's, read through `decC`, are the 32 partials rows, the receipt and
-`ok = 1`.
+/-- `accounting-ts-leaf-reads` (the verifier's registrations; owner @proofs). **Where a leaf's 33 sessions' registrants'
+rows agree, their data ports hold one leaf, one partials record and one receipt**: on every path, at proof `i` of
+round `w`, if the registrants' rows of the 33 sessions agree wherever two of them read one root at one position
+(`RowsAgree`), and at each session the registrants' rows at the ports its known content `known x w i k` names are the
+known rows (`KnownHeld`), then the leaf is in range (`LeafInRange`: s8 codes, u32 scale encodings, s32 z, u16 y
+encodings), lane `l`'s committed rows at its registered reads (`openedReg`, the registrant's commit-time openings
+`RowsSession.wo`), read bit by bit (`portBit`), hold at the layout's places at tile `T` (`PouwWindow.Lanes.lanePorts`) the
+leaf's A rows at its row slots and B rows at its column slots, the leaf's record and row `l` of the partials
+(`LaneDataHolds`), and the combine's hold the 32 partials rows and the receipt (`CombDataHolds`).
 
 It asks nothing of the openings the sessions register: one row read by several sessions at one root and position is
 one row's bytes in all of them by `RowsAgree`, which holds up to an explicit SHA-512 collision
 (`Accounting.TS.Lanes.rowsAgree_or_leafColl`). (#3131's `SampledProofs.Produced.shared`, `P-shared`, checks the same of
-the openings the verifiers of record report, with no collision escape; the proof doesn't read it.) What it does ask is of
-the decodes and of the registered files the verifier hands the 33 sessions:
+the openings the verifiers of record report, with no collision escape; the proof doesn't read it.) Nor does it ask of
+the known ports (admit, pub, `ok`): their rows' bits are their known content by flock-verify's checks. What it does ask
+is of the registered files the verifier hands the 33 sessions:
 * every session registers each shared value at one port, the same in all 33 (one root, domain, leaf count and schema):
   the leaf's A, B and z/y tables at the registration's roots (`ServedRegistered`), and the partials at the post-draw
   record's root, the one each session opened them against (#3131's `SampledProofs.Produced.opened`, `P-opened`). That
   every port of each circuit is registered is no longer asked: `leafLayer`'s acceptance includes flock-verify's
   complete check (#3131's `Flock.Registered.checkComplete`);
-* `decL` and `decC` read each value's rows by that port and the row's position, lane `l`'s A row at row slot `s` at
-  row `rowOf l s`, its B row at column slot `t` at row `colOf l t` and its partials row at row `l`, so rows that agree
-  decode to one leaf and one partials record;
-* the known content the verifier hands each session (`known x w i k`) is each lane's salt, position, roots, admit bits
-  and index `l` (distinct `l = 0..31`), and every statement's `ok` row, at the ports the decodes read them from
-  (#3131's `SampledProofs.Produced.known`). `LeafLanesSound` fixes it to those rows of the path's public inputs
-  (`Accounting.TS.Lanes.knownOf`, `PouwWindow.Lanes.knownRows`), where they fix the decodes' admit, salt, position,
-  roots, index and `ok` fields (`Accounting.TS.Lanes.laneKnownHolds`, `combKnownOk`; their ports, names, rows and bits
-  from flock-verify's known-read check, part of `leafLayer`'s acceptance: `laneKnownHolds_of_check`, `combKnownOk_of_check`).
-  That the registrants' rows at
-  those ports are that content is no longer asked: `KnownHeld` is a hypothesis here, and `LeafLanesSound` proves it
-  from flock-verify's known-content check (`Flock.Registered.checkKnownAll`) unless the known-content tie collides
-  (`LeafKnownColl`). -/
-def LeafReads {Ω : Type} {S nπ K nw : ℕ} {Pub : Type}
+* each value's rows are registered at the layout's positions, lane `l`'s A row at row slot `s` at row `rowOf l s`, its
+  B row at column slot `t` at row `colOf l t` and its partials row at row `l`, the combine's `p<x>` at row `x`, so rows
+  that agree are one leaf and one partials record, and the committed rows at those roots are the leaf's and the
+  partials' encodings. -/
+def LeafReads {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
     (sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
     (known : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
-    (decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub)
-    (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw)
-    (pub : Paths Ω S → Fin S → Fin nπ → Pub) (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
+    (parts : Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
     (receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32) (leaf : Paths Ω S → Fin S → Fin nπ → Leaf K) :
     Prop :=
   ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
-    (∀ l, decL (sess x w i (some l)) (openedReg (sess x w i (some l))) =
-      laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
-    decC (sess x w i none) (openedReg (sess x w i none)) = ⟨parts x w i, receipt x w i, true⟩
+    LeafInRange (leaf x w i) ∧
+    (∀ l, LaneDataHolds K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) (leaf x w i)
+      (parts x w i l) l) ∧
+    CombDataHolds nw T (portBit (sess x w i none) (openedReg (sess x w i none))) (parts x w i) (receipt x w i)
 
 end Accounting.Assumptions.TS
