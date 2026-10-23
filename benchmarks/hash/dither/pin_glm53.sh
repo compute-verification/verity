@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The int8 GLM-5.3 pin (checkpoints-int8.json's GLM53_INT8_V3, recipe verity-int8-channel127/v3) in a CPU node's HF cache: the
+# The int8 GLM-5.3 pin (checkpoints-int8.json's GLM53_INT8, recipe verity-int8-channel127/v3) in a CPU node's HF cache: the
 # FP8-block base pin (GLM53, zai-org/GLM-5.3) downloaded into $HF_HOME/hub if missing, then `verity-vllm int8-checkpoint`:
 #
 #   pin   make the checkpoint from the base and write its new entry to $OUT/entry.json, then the per-tensor error report against
@@ -12,7 +12,7 @@
 #     --timeout 8h -- bash benchmarks/hash/dither/pin_glm53.sh pin|make
 set -euo pipefail
 MODE=${1:?usage: pin_glm53.sh pin|make}
-ROLE=GLM53_INT8_V3 REPO=verity-int8/GLM-5.3-INT8-V3 RECIPE=verity-int8-channel127/v3 JOBS=${JOBS:-10}
+ROLE=GLM53_INT8 REPO=verity-int8/GLM-5.3-INT8-V3 RECIPE=verity-int8-channel127/v3 JOBS=${JOBS:-10}
 export HF_HOME=${HF_HOME_PIN:-/workspace/hf}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT" "$HF_HOME/hub"
@@ -33,7 +33,7 @@ EOF
 )
 research keep "$HF_HOME/hub/models--zai-org--GLM-5.3" --owner @vllm --expires 2026-11-06T00:00:00Z --priority low \
   --regenerate "huggingface_hub snapshot_download zai-org/GLM-5.3 at checkpoints.json's GLM53 revision" \
-  --why "the FP8-block base of GLM53_INT8_V3 (VLLM-74), read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "the FP8-block base of GLM53_INT8 (VLLM-74), read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 stamp "base at $base_dir"
 
 pin_dir="$HF_HOME/hub/models--${REPO/\//--}"
