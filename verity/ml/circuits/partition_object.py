@@ -55,8 +55,8 @@ import hashlib
 import re
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from .codec import canonical_json, descriptor_id, encode_program, program_digest
-from .codec import SCHEMA_V1
+from .codec import canonical_json, descriptor_id, program_digest
+from .codec import SCHEMA, SCHEMA_V1
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
                   check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
 from .layout import resolve
@@ -102,11 +102,11 @@ QueryRefused = QueryInapplicable
 
 
 def _program(program_or_desc: Any) -> str:
-    """The `program` field: `codec.program_digest` of a v1 descriptor."""
-    desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
-    if desc.get("schema") != SCHEMA_V1:
-        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {desc.get('schema')!r}")
-    return program_digest(desc)
+    """The `program` field: `codec.program_digest` of a v1 descriptor (a program's, streamed, is `codec.SCHEMA`'s)."""
+    schema = program_or_desc.get("schema") if isinstance(program_or_desc, dict) else SCHEMA
+    if schema != SCHEMA_V1:
+        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {schema!r}")
+    return program_digest(program_or_desc)
 
 
 #: the program field under the name META's `program_sha512` and its callers use; equal to `codec.program_digest`

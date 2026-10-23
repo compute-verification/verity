@@ -18,6 +18,7 @@ import pytest
 from test_running_example import Add16, Mul16
 
 from verity.ml.circuits import codec as C
+from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import (
     MAX_SAFE_INT,
     SCHEMA_V0,
@@ -259,11 +260,12 @@ RANDOM = 300
 def test_random_programs_have_the_old_codecs_bytes():
     """`_Gen`'s Programs: the streamed descriptor, `encode_program`'s, `program_digest` and `descriptor_size` are the old codec's
     under both schemas, at node batches of 1 and 3 (a batch boundary inside a body, where an alias reaches back across it) and
-    the default; and the alias rule fires (a v1 body writes `alias`)."""
+    the default, as is the partition object's `program`; and the alias rule fires (a v1 body writes `alias`)."""
     aliased = 0
     for seed in range(RANDOM):
         prog = _Gen(seed).program()
         assert assert_same(prog) == len(SCHEMAS)
+        assert PO.program_sha512(prog) == hashlib.sha512(old_bytes(prog)).hexdigest()
         aliased += b'"alias"' in old_bytes(prog)
     assert aliased > RANDOM // 10
 
@@ -384,7 +386,7 @@ def test_a_domain_error_names_the_old_path():
 # -- what the digest holds ----------------------------------------------------------------------------------------------
 
 def test_the_digest_streams_a_batch_of_nodes_at_a_time(monkeypatch):
-    """`program_digest` of a Program builds no descriptor: `encode_program` is never called, and no piece it hashes holds more than
+    """`program_digest` of a Program, and so a partition object's `program`, builds no descriptor: `encode_program` is never called, and no piece it hashes holds more than
     one batch of a body's nodes (here 8 of a root's 2000), so what it holds is one definition's head and one batch."""
     n = 2000
 
@@ -399,6 +401,6 @@ def test_the_digest_streams_a_batch_of_nodes_at_a_time(monkeypatch):
     monkeypatch.setattr(C, "_NODE_BATCH", 8)
     monkeypatch.setattr(C, "encode_program", lambda *a, **k: pytest.fail("program_digest encoded the whole descriptor"))
     pieces = list(C.descriptor_chunks(prog))
-    assert b"".join(pieces) == want and C.program_digest(prog) == hashlib.sha512(want).hexdigest()
+    assert b"".join(pieces) == want and C.program_digest(prog) == hashlib.sha512(want).hexdigest() == PO.build(prog)["program"]
     node = len(want) // n
     assert max(map(len, pieces)) < 16 * node < len(want) // 100
