@@ -7,8 +7,9 @@
 #   2. the drawn units (h1_prove/served.py: core's draw on the window's signed coin) and served.py extract: the drawn unit's
 #      openings from the prover's saved window, into the job's scratch (private), never out/
 #   3. served.py prepare: the lane statements and the negatives staged (WORK/plan.tsv)
-#   4. one loopback --zk session per statement, H1L_PAR at a time, each prover under the firewall (FC_FIREWALL=1: the Lean
-#      session loop, its level-0 draw and Lean finish) unless H1S_FIREWALL=0
+#   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the firewall (FC_FIREWALL=1:
+#      the Lean session loop, its level-0 draw and Lean finish) unless H1S_FIREWALL=0; the negatives first, without it
+#      (H1S_UNFIREWALLED: what they check is the verifier's refusal)
 #   5. the plan's Lean checks, each with the lane Program, its partition, its public file and registered reads
 #   6. served.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)
@@ -17,7 +18,7 @@
 #      (the prover's h1-window.pkl)  H1S_PY (the H1 venv's python, which unpickles it)
 #      or H1S_SMOKE=K: a stand-in window at K (served.py smoke), the harness's own check
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
-#      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
+#      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy")
 set -uo pipefail
 export HZ_CONFIGS=h1-served HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -78,14 +79,18 @@ if [ "$FW" = 1 ]; then
 fi
 N=1
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
+UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
 while IFS=$'\t' read -r kind tag D; do
   [ "$kind" = S ] || continue
   mkdir -p "$OUT/$tag"
   while [ "$(jobs -rp | wc -l)" -ge "$PAR" ]; do wait -n; done
-  log "prove $tag"
-  ( session "$D" "$OUT/$tag" && log "proved $tag: $(cat "$OUT/$tag/prove.time")" \
+  if [[ $UNFW == *" $tag "* ]]; then fw=0; else fw=$FW; fi
+  log "prove $tag (firewall $fw)"
+  ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+    session "$D" "$OUT/$tag" && log "proved $tag: $(cat "$OUT/$tag/prove.time")" \
       || log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")" ) &
-done < "$WK/plan.tsv"
+done < <(awk -F'\t' -v u="$UNFW" '$1 == "S" && index(u, " " $2 " ")' "$WK/plan.tsv"
+         awk -F'\t' -v u="$UNFW" '$1 == "S" && !index(u, " " $2 " ")' "$WK/plan.tsv")
 wait
 unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
 eval "$VLIMIT"
