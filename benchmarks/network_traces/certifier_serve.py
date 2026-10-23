@@ -26,14 +26,19 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. Each
-response's canonical events, as the shim cuts them, and its seconds to the last are kept; the responses must all be F
-events long. D, the latency budget in buckets, is four times the slowest response plus half a second
-(`--delta-buckets` sets it), as `lab_run.py` sets it. The plan sends `--requests` requests `--in-flight` at a time, the
-groups D + 1 buckets apart in the middle of a bucket, each request padded to the same number of link frames. The
-endpoint serves a group side by side, and the shim writes the group's responses one after another in the order their
-requests reached it (`request_major`), so the canonical order is request-major and the egress counts don't depend on
-how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that run: every
+and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), temperature 0. F, the
+frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
+server hasn't read yet into one chunk, so with several in flight a response's last two tokens sometimes share one
+event and sometimes don't, though the tokens are the same. An event is a chunk of at least one token, so a response
+is at most F canonical events, and the shim pads one that ends short with empty canonical events (`active.event(b"")`,
+what a chunk of no text gives) up to F, after its last (`pad_to`, `active_replay.LiveServer`). Each probed response's
+raw count, which must be 1 … F, and its seconds to the last are kept; a response of more than F (a chunk of more than
+`active.TOKEN_BYTES` bytes of text) isn't cut, and N2's counts refuse its window. D, the latency budget in buckets, is
+four times the slowest response plus half a second (`--delta-buckets` sets it), as `lab_run.py` sets it. The plan
+sends `--requests` requests `--in-flight` at a time, the groups D + 1 buckets apart in the middle of a bucket, each
+request padded to the same number of link frames. The endpoint serves a group side by side, and the shim writes the
+group's responses one after another in the order their requests reached it (`request_major`), so the canonical order
+is request-major and the egress counts don't depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that run: every
 frame of a response ready D buckets after its request's release. Every window declares the calibration's envelope,
 refused when its δ is below D. Every window ends idle: no request is released in a window's first bucket (the salt
 frame's), and a group whose responses the Program's grid wouldn't release by the window's last bucket goes to the next
@@ -42,8 +47,8 @@ requires. The run lasts one idle window past the last request's.
 
 **N2's profile.** N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has no occupancy profile fixed
 before the run. The plan's `occupancy` is the planned one: the Program's egress counts (`schedule.expected_grids`) under
-the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and fixed-length
-responses fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
+the declared syncs, on the model's releases and F frames per response, which the rehearsal's own client and the shim's
+padding fix before the run. The ingress end has none (the Program reads requests from outside). A served deployment
 with outside traffic has no such schedule: it needs the served profile (NET-54), whose counts follow from the ingress
 head's. As NET-54 stands (7a7197b880) that profile counts every ingress frame as a request's, the certifier's own salt
 frame too, so it refuses every window of a run with the salt on.
@@ -68,8 +73,8 @@ frame too, so it refuses every window of a run with the salt on.
   writes the logs and prints `{"served": ...}`, then serves reveals until every window's salt is revealed or the last
   window's reveal deadline has passed. `--tamper` makes the shim an adversary of `active_replay.adversary_plan`: `late`
   holds one session of window 0 past every sync, which the certifier's own audit faults; `extra` writes one event more
-  than the endpoint sent at the end of the first session's response, on time and logged, so the records are complete
-  and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
+  at the end of the first session's response, after its padding (F + 1 in all), on time and logged, so the records are
+  complete and only N2's counts against the profile refuse it. The key's directory may not be inside `--out`.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`).
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
@@ -306,8 +311,8 @@ def upstream_params(url: str, api_key_env: str | None = None) -> dict:
 def probe(url: str, body: dict, n: int = 3, api_key_env: str | None = None, clock=time.monotonic,
           in_flight: int = 1, warmup: int = 0) -> dict:
     """`n` requests of `body` straight to the endpoint at `url`, `in_flight` at a time, after `warmup` that aren't
-    counted: each response's canonical events, as the shim cuts them (`active_replay.canonical_events`), and its
-    seconds to the first and to the last."""
+    counted: each response's raw count of canonical events, as the shim cuts them (`active_replay.canonical_events`)
+    before it pads (`events`), and its seconds to the first and to the last."""
     headers = {"content-type": "application/json"}
     if api_key_env:
         headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
@@ -334,11 +339,15 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     """The calibration report and the plan of a served run of `requests` requests of the probed body, sent `in_flight`
     at a time (the module docstring's "The served plan"), with its planned occupancy profile (`occupancy`, "N2's
     profile")."""
+    body = probed["body"]
+    F = body["max_tokens"]
+    if body.get("min_tokens") != F or not body.get("ignore_eos"):
+        raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
+                         f"not {body}")
     lengths = sorted({r["events"] for r in probed["responses"]})
-    if len(lengths) != 1 or lengths[0] < 1:
-        raise ValueError(f"the endpoint's responses to one body are {lengths} events long: a profile fixed before the "
-                         "run needs responses of one length")
-    F, body = lengths[0], probed["body"]
+    if not lengths or lengths[0] < 1 or lengths[-1] > F:
+        raise ValueError(f"the endpoint's responses to one body of {F} tokens are {lengths} events long: each is 1 … "
+                         f"{F}, an event a chunk of at least one token and at most {ar.TOKEN_BYTES} bytes of text")
     slowest = max(r["last_s"] for r in probed["responses"])
     D = delta_buckets or math.ceil((4 * slowest * 1000 + 500) / BUCKET_MS)
     names = [f"{name}.{j}" for j in range(requests)]
@@ -387,7 +396,8 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
             "seed": 0, "occupancy": {"kind": "planned", "egress": profile, "ingress": None}, "request_major": True,
-            "served": {"tokens": F, "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span,
+            "pad_to": F,
+            "served": {"tokens": F, "probe_events": lengths, "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span,
                        "slowest_s": slowest, "request_frames": frames_in, "in_flight": in_flight,
                        "requests": requests}}
     return report, plan
