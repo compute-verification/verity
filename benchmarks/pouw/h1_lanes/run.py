@@ -46,7 +46,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   file without ``complete``, which nothing else refuses (ACCEPT, by design: the control).
   ``combine-skips-p5-bit``: the combine over a circuit that reads bit i of ``p5`` in place of its last bit j, two bits the
   honest row holds equal (`lazy_combine`, its own Program), so its ok is 1 on the honest rows and it depends on no bit j:
-  the verifier's file marks every partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
+  the verifier's file marks every A, B and partials port ``read_in_full`` (`leaf_lanes.registered_file`), and Flock's
   `KnownRead.fullRows` refuses the circuit by name (REJECT, ``WHY``); ``combine-skips-p5-bit-unmarked``, the same session
   against that file with ``p5``'s mark removed, which nothing else refuses (ACCEPT, by design: the control).
   ``other-registration-file``: lane 0 of the other leaf, its file and session that leaf's own and consistent, so

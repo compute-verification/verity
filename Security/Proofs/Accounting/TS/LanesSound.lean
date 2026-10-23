@@ -1,6 +1,7 @@
 import Proofs.Accounting.TS.Session.Lanes.Guarantees
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Partials
+import Proofs.Accounting.TS.Session.Lanes.Committed
 import Proofs.Flock.C3.RegLevels.TopLeaf
 import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.HeldSound
@@ -12,17 +13,21 @@ import Proofs.Flock.VBridge.Family.Registrants
 
 `Accounting.SecurityProofs.TS.LeafLanesSound`. The lanes cover the leaf (`Accounting.TS.Lanes.cover`: cell `(i, j)` is
 lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and column slot `2⌊j/8⌋ + (j mod 2)`), so a leaf whose 33
-statements each hold at their committed rows is served right (`unitServed_of`): `LeafChecks` and `LeafReads` give each
-lane's `LaneOk` and the combine's `CombineOk` at the one leaf and partials record, wherever the sessions' registrants'
-rows agree. They agree unless two registrants' records clash (`rowsAgree_or_leafColl`, from
-`FlockSoundness.Registered.enc_eq_of_not_clash`: two openings of one tree at one position are one row's bytes or a
-SHA-512 collision), and a clash meets the relation (`LeafColl`). `LeafReads` gives the data ports' rows and may take
-the known rows as holding: they do unless a session's known-content tie collides (`knownHeld_or_coll`, from
-flock-verify's known-content check), which meets the relation too (`LeafKnownColl`); the known ports' fields then
-follow from the known-read check (`decodes_of_reads`, through `laneKnownHolds_of_check` and `combKnownOk_of_check`).
-The partials record is the combine's decoded one: lane `l`'s `partials` and the combine's `p<l>` are `ownOf`'s ports of
-one tree at row `l`, read in full (`partials_bits`), where every unit reads its one-row ports at their rows
-(`RowsSession.readsOwnRow_of`, at a written outcome that draws every unit). `LeafChecks` reads every port row; under flock-verify's complete check
+statements each hold at their committed rows is served right (`unitServed_of`): `LeafChecks` gives each lane's
+`LaneOk` and the combine's `CombineOk`, and each lane's view agrees with the leaf on what `LaneOk` reads
+(`LaneAgrees`). The leaf is the one the lanes' committed rows decode to and the receipt the combine's
+(`Accounting.TS.Lanes.leafOf`, `receiptOf`): each A row as lane `4 (r mod 8)` decodes it, each B row as lane
+`⌊(j mod 8)/2⌋` does, each cell of the record as the one lane whose cell it is. The four lanes that read one A row (or
+one B row) read one registered tree at one row in full, so wherever the sessions' registrants' rows agree they decode
+it alike (`read_bits`, `decodes_of_checks`). They agree unless two registrants' records clash
+(`rowsAgree_or_leafColl`, from `FlockSoundness.Registered.enc_eq_of_not_clash`: two openings of one tree at one
+position are one row's bytes or a SHA-512 collision), and a clash meets the relation (`LeafColl`). The known rows hold
+unless a session's known-content tie collides (`knownHeld_or_coll`, from flock-verify's known-content check), which
+meets the relation too (`LeafKnownColl`); the known ports' fields then follow from the known-read check
+(`laneKnownHolds_of_check`, `combKnownOk_of_check`). The partials record is the combine's decoded one: lane `l`'s
+`partials` and the combine's `p<l>` are `ownOf`'s ports of one tree at row `l`, read in full (`partials_bits`), where
+every unit reads its one-row ports at their rows (`RowsSession.readsOwnRow_of`, at a written outcome that draws every
+unit). `LeafChecks` reads every port row; under flock-verify's complete check
 (`Flock.Registered.checkComplete`, part of the leaf layer's acceptance) the registered reads the checked layer opens
 are exactly those (`RowsSession.rowsReg_eq_portRead`), and each of them opens at its registered root
 (`RowsSession.portRow_opens`; `Flock.Registered.complete_opens` at the verifier). An unsound proof of the leaf layer is
@@ -215,16 +220,16 @@ theorem knownHeld_or_coll (sess : Option (Fin 32) → RowsSession) (known : Opti
       tie_known (sess k) (hk k) hm (hS k) (fun hc => h ⟨k, nm, ks, hm, hc⟩) hr hn
 
 /-- **A leaf whose 33 statements hold at their committed rows is served right**: where each session's committed rows
-are the port rows of a wire assignment its evaluation agrees with at every unit, `LeafChecks` and the sessions'
-decodes (`LeafReads` at one path where the rows agree) give every lane's `LaneOk` and the combine's `CombineOk` at the
-one leaf `L` and partials record `parts`, and the lanes cover the leaf. -/
+are the port rows of a wire assignment its evaluation agrees with at every unit, each lane's decode agrees with the
+leaf `L` on what `LaneOk` reads (`LaneAgrees`) and the combine's decode is the partials record `parts`, the receipt
+and `ok = 1`, `LeafChecks` gives every lane's `LaneOk` and the combine's `CombineOk`, and the lanes cover the leaf. -/
 theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32}
     {sess : Option (Fin 32) → RowsSession} {decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
     {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} {pub : Pub}
     {parts : Fin 32 → Fin nw → BitVec 32} {receipt : Fin nw → BitVec 32} {L : Leaf K}
     (hC : Accounting.Assumptions.TS.LeafChecks dq part sess decL decC)
-    (hL : ∀ l, decL (sess (some l)) (openedReg (sess (some l))) = laneView L pub (parts l) l)
+    (hL : ∀ l, LaneAgrees (decL (sess (some l)) (openedReg (sess (some l)))) L pub (parts l) l)
     (hCb : decC (sess none) (openedReg (sess none)) = ⟨parts, receipt, true⟩)
     (hV : ∀ k, ∃ vals : Fin (sess k).Circ.N → Bool,
       openedReg (sess k) = portRead (sess k) vals ∧ ∀ u, ∀ g ∈ (sess k).P.io u, (sess k).Circ.eval vals g = vals g) :
@@ -232,11 +237,9 @@ theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
   have hlane : ∀ l, LaneOk dq part (laneView L pub (parts l) l) := by
     intro l
     obtain ⟨vals, hv, he⟩ := hV (some l)
-    have hd : decL (sess (some l)) (portRead (sess (some l)) vals) = laneView L pub (parts l) l := by
+    have hd : LaneAgrees (decL (sess (some l)) (portRead (sess (some l)) vals)) L pub (parts l) l := by
       rw [← hv]; exact hL l
-    have h := hC.1 l vals he ((congrArg LaneView.ok hd).trans rfl)
-    rw [hd] at h
-    exact h
+    exact hd.laneOk (hC.1 l vals he hd.ok)
   have hcomb : CombineOk (⟨parts, receipt, true⟩ : CombineView nw) := by
     obtain ⟨vals, hv, he⟩ := hV none
     have hd : decC (sess none) (portRead (sess none) vals) = ⟨parts, receipt, true⟩ := by
@@ -284,7 +287,7 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
       (∀ k, ReadsOwnRow (sess x w i k)) →
       RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
       ∃ parts : Fin 32 → Fin nw → BitVec 32,
-        (∀ l, decL (sess x w i (some l)) (openedReg (sess x w i (some l))) = laneView (leaf x w i) (pub x w i)
+        (∀ l, LaneAgrees (decL (sess x w i (some l)) (openedReg (sess x w i (some l)))) (leaf x w i) (pub x w i)
           (parts l) l) ∧
         decC (sess x w i none) (openedReg (sess x w i none)) = ⟨parts, receipt x w i, true⟩) :
     (leafLayer sess out known full want dq part pub receipt leaf right).SoundAt (33 * δ) := by
@@ -352,23 +355,22 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
 
 open Accounting.TS Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 open Pouw.RelativeSecurity (Paths) in
-/-- **The decodes read the leaf, from `LeafReads` and acceptance**: where the sessions' data ports hold the leaf and
-the receipt (`LeafReads`) and each session has a unit, its
-served roots registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), at every proof whose
-sessions pass flock-verify's complete and known-read checks at the known content of the path's public inputs
-(`knownOf`) and the ports read in full (`readFull`), and the leaf verifier's check of their files at `ownOf`
-(`roots`, `checkOwn`), the lanes' decodes are `laneView` at the combine's decoded
-partials and the combine's those partials, the receipt and `ok = 1`: the known fields from the checks
-(`laneKnownHolds_of_check`, `combKnownOk_of_check`), each lane's partials the combine's row (`partials_bits`,
-`part_eq`), the rest from `LeafReads` (`LaneKnownHolds.laneHolds`, `decLane_eq`, `decComb_eq`). -/
-theorem Accounting.TS.Lanes.decodes_of_reads {Ω : Type} {S nπ K nw : ℕ}
+/-- **The decodes read the committed leaf, from acceptance**: where each session has a unit, its served roots
+registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), whose registrants' rows agree at one
+tree and position (`RowsAgree`) and whose known rows hold, at every proof whose sessions pass flock-verify's complete
+and known-read checks at the known content of the path's public inputs (`knownOf`) and the ports read in full
+(`readFull`), and the leaf verifier's check of their files at `ownOf` (`roots`, `checkOwn`), each lane's decode agrees
+with the leaf the lanes' committed rows decode to (`leafOf`) at the combine's decoded partials, and the combine's
+decode is those partials, its decoded receipt (`receiptOf`) and `ok = 1`. Lane `l`'s A row at slot `s` is lane
+`4⌊l/4⌋`'s at that slot and its B row at slot `t` lane `l mod 4`'s, one row of one tree each lane reads in full
+(`read_bits`); its cells are its own (`cellLane_rowOf_colOf`, `laneAgrees_of`); its partials row is the combine's
+(`partials_bits`, `part_eq`); its known fields are the checks' (`laneKnownHolds_of_check`, `combKnownOk_of_check`). -/
+theorem Accounting.TS.Lanes.decodes_of_checks {Ω : Type} {S nπ K nw : ℕ}
     {sess : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession}
     {salts : Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → String → ByteArray} {pub : Paths Ω S → Fin S → Fin nπ → LanePub}
     {roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port}
-    {receipt : Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32} {leaf : Paths Ω S → Fin S → Fin nπ → Leaf K}
     (hS : ∀ x w i k u, (sess x w i k).ServedRegistered u) (hn : ∀ x w i k, 0 < (sess x w i k).n)
-    (hR : Accounting.Assumptions.TS.LeafReads (servedTile K) sess (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
-      receipt leaf) (x : Paths Ω S) (w : Fin S) (i : Fin nπ)
+    (x : Paths Ω S) (w : Fin S) (i : Fin nπ)
     (hc : ∀ k, Flock.Registered.checkComplete (sess x w i k).c (sess x w i k).own = .ok () ∧
       Flock.KnownRead.check (sess x w i k).c (knownOf (pub x w i) (salts x w i k) k ++
         Flock.KnownRead.fullRows (sess x w i k).own (readFull (servedTile K) (k.map Fin.val))) = .ok () ∧
@@ -376,10 +378,10 @@ theorem Accounting.TS.Lanes.decodes_of_reads {Ω : Type} {S nπ K nw : ℕ}
     (hRo : ∀ k, ReadsOwnRow (sess x w i k))
     (hA : RowsAgree (sess x w i)) (hK : ∀ k, KnownHeld (sess x w i k) (knownOf (pub x w i) (salts x w i k) k)) :
     ∃ parts : Fin 32 → Fin nw → BitVec 32,
-      (∀ l, decL K nw (servedTile K) (sess x w i (some l)) (openedReg (sess x w i (some l))) =
-        laneView (leaf x w i) (pub x w i) (parts l) l) ∧
-      decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none)) = ⟨parts, receipt x w i, true⟩ := by
-  obtain ⟨hr, hd, hcb⟩ := hR x w i hA hK
+      (∀ l, LaneAgrees (decL K nw (servedTile K) (sess x w i (some l)) (openedReg (sess x w i (some l))))
+        (leafOf K (servedTile K) (sess x w i)) (pub x w i) (parts l) l) ∧
+      decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none)) =
+        ⟨parts, receiptOf nw (servedTile K) (sess x w i), true⟩ := by
   have hP : ∀ l : Fin 32, (decL K nw (servedTile K) (sess x w i (some l)) (openedReg (sess x w i (some l)))).part =
       (decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts l := fun l =>
     part_eq (partials_bits (T := servedTile K) (roots := roots x w i) (l := l.val)
@@ -387,27 +389,46 @@ theorem Accounting.TS.Lanes.decodes_of_reads {Ω : Type} {S nπ K nw : ℕ}
       (hc (some l)).1 (hc none).1 (hc (some l)).2.1 (hc none).2.1 (uL := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _)
       (uC := ⟨0, hn x w i none⟩) rfl (hS x w i none _) (hRo (some l)) (hRo none)
       (hA (some l) none ⟨0, hn x w i (some l)⟩ ⟨0, hn x w i none⟩))
+  have hbits : ∀ (l l' : Fin 32) (nm nm' v : String) (row : ℕ), (nm, v, row) ∈ regReads (servedTile K) (some l.val) →
+      (nm', v, row) ∈ regReads (servedTile K) (some l'.val) → fullValue v = true →
+      portBit (sess x w i (some l)) (openedReg (sess x w i (some l))) nm =
+        portBit (sess x w i (some l')) (openedReg (sess x w i (some l'))) nm' :=
+    fun l l' _ _ _ _ hm hm' hv => funext fun b =>
+      read_bits (roots := roots x w i) hm hm' (full_of hm hv) (full_of hm' hv) (checkOwn_ok (hc (some l)).2.2)
+        (checkOwn_ok (hc (some l')).2.2) (hc (some l)).1 (hc (some l')).1 (hc (some l)).2.1 (hc (some l')).2.1
+        (uL := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (uC := ⟨0, hn x w i (some l')⟩) rfl
+        (hS x w i (some l') _) (hRo (some l)) (hRo (some l'))
+        (hA (some l) (some l') ⟨0, hn x w i (some l)⟩ ⟨0, hn x w i (some l')⟩) b
   refine ⟨(decC nw (servedTile K) (sess x w i none) (openedReg (sess x w i none))).parts, fun l => ?_, ?_⟩
-  · have hk := laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
-      (u := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2.1
-    exact (decLane_eq (nw := nw) hr (hk.laneHolds (hd l).a (hd l).aS (hd l).b (hd l).bS (hd l).z (hd l).y)).trans
-      (congrArg (fun q => laneView (leaf x w i) (pub x w i) q l) (hP l))
+  · refine laneAgrees_of (sess x w i) l (fun s => ?_) (fun t => ?_) (hP l)
+      (laneKnownHolds_of_check (s := sess x w i (some l)) (servedTile K) (hK (some l))
+        (u := ⟨0, hn x w i (some l)⟩) rfl (hS x w i (some l) _) (hc (some l)).1 (hc (some l)).2.1)
+    · have hm' := a_read K (aHome l) s
+      rw [rowOf_aHome] at hm'
+      exact hbits l (aHome l) _ _ _ _ (a_read K l s) hm' fullValue_a
+    · have hm' := b_read K (bHome l) t
+      rw [colOf_bHome] at hm'
+      exact hbits l (bHome l) _ _ _ _ (b_read K l t) hm' fullValue_b
   · have ho := combKnownOk_of_check (s := sess x w i none) (hK none) (u := ⟨0, hn x w i none⟩) rfl
       (hS x w i none _) (hc none).1 (hc none).2.1
-    exact decComb_eq (T := servedTile K) (rd := portBit (sess x w i none) (openedReg (sess x w i none)))
-      ⟨hcb.receipt, ho⟩
+    refine CombineView.eta_ok _ ?_
+    unfold decC
+    rw [decComb_ok, ho]
+    rfl
 
 open Accounting.TS.Lanes in
 /-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
 `leafLanes_soundAt` at the known content of the path's public inputs (`knownOf`), the ports read in full at the layout
-(`PouwWindow.Lanes.readFull`) and the layout's decodes at the served tile, whose views `decodes_of_reads` gives from
-`LeafReads` and acceptance, the leaf verifier's check of each file at `ownOf` (`roots`) included. -/
+(`PouwWindow.Lanes.readFull`), the leaf verifier's check of each file at `ownOf` (`roots`), the layout's decodes at the
+served tile, and the leaf and receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the
+decodes `decodes_of_checks` gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess out salts dq part pub roots receipt leaf right δ hCR hLaw hk hS hn hδ hδ0 hC hR
+  intro Ω _ S nπ K nw sess out salts dq part pub roots right δ hCR hLaw hk hS hn hδ hδ0 hC
   exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (servedTile K) (k.map Fin.val)) "o0" dq part
-    (decL K nw (servedTile K)) (decC nw (servedTile K)) pub receipt leaf right δ hCR hLaw hk hS
+    (decL K nw (servedTile K)) (decC nw (servedTile K)) pub (fun x w i => receiptOf nw (servedTile K) (sess x w i))
+    (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw hk hS
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0 hC
-    (decodes_of_reads (roots := roots) hS hn hR)
+    (decodes_of_checks (roots := roots) hS hn)
