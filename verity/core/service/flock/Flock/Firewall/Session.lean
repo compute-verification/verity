@@ -300,8 +300,9 @@ def State.sendHello (S : State) (s : V (SessionSpec × Array Stmt)) (nonce : Byt
         let tables := spec.tables.zip (sts.map (·.m))
         let reps := spec.repStreams.map fun (i, r, s) => (s, i, r)
         let labels := spec.repStreams.map fun (i, r, s) => (s, spec.domain spec.tables[i]! r)
-        .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains, reps, labels,
-               tables, sigma := spec.sigma, points := spec.points }, ⟨m.toArray⟩)
+        .ok ({ S with sent := true, hello := helloOf spec sts nonce, plan := planOf spec sts, domains := domains,
+               reps := reps, labels := labels, tables := tables, sigma := spec.sigma, points := spec.points },
+             ⟨m.toArray⟩)
 
 /-- **What leaves for a request of kind `k`** that carries no coin, the loop's own frame (`Register`, `Ping`, `Link` and
 `Open`); else why it is refused: a `Link` before the session's `Hello`, an `Open` of a stream that is none of its rep
@@ -493,7 +494,6 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
           | .ok () => pure none
           | .error e => pure (some (stopOf e))
       let held ← if stopped.isNone then ownProofs reg l0s sid st.tables else pure #[]
-      let f := FINISH
       match hold with
       | some h =>
         phase.set .done
@@ -505,7 +505,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
             sendFrame a pf
             let some r ← recvFrame a | throw (IO.userError "the auditor ended the session before its verdict")
             unless byte? r 0 == some 1 do throw (IO.userError "the auditor did not take a proof")
-          sendFrame a f
+          sendFrame a FINISH
           let some r ← recvFrame a | throw (IO.userError "the auditor ended the session before its verdict")
           phase.set .done
           h.sent (.ok (accepts r))
@@ -517,7 +517,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
           let (st', out) := st.refuse why
           st := st'
           if complete then
-            sendFrame a f
+            sendFrame a FINISH
             let some _ ← recvFrame a | ended.set "the auditor ended the session"; break
           sendFrame p out
         | none =>
@@ -525,7 +525,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Registry)
             sendFrame a pf
             let some r ← recvFrame a | throw (IO.userError "the auditor ended the session before its verdict")
             unless byte? r 0 == some 1 do throw (IO.userError "the auditor did not take a proof")
-          sendFrame a f
+          sendFrame a FINISH
           let some r ← recvFrame a | ended.set "the auditor ended the session"; break
           sendFrame p r
         continue
