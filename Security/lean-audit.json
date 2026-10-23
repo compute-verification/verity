@@ -28050,13 +28050,13 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "PouwWindow.OwnPorts": {
-   "digest": "50df0fe148cb0d545bad3bb64916a720c4530daf46dbde52bd2fb40b6e7e0dc3",
+   "digest": "14abde97e64282479ed4c59d15456c335f1d3dace16c5c291783b619932c26d0",
    "definitions": {
     "PouwWindow.Lanes.checkOneRead": "3b95a186e57f3a94840b8155da0a12547b896e7e43cde0b4130c5a3a20f69430",
     "PouwWindow.Lanes.checkOwn": "be30093a4cd40449bb6323c165f52af98b8ce879c6e74ce58854fe25a44ce51d",
     "PouwWindow.Lanes.fullValue": "398b05a09962e48f984185b8cdd8466f934a78cc64e3b4acae746e055807e8f3",
     "PouwWindow.Lanes.holds": "c84d7f11af9647f07fe46506ba83779fecb09a8b8aa6ab654240e1ed0c2cc6c6",
-    "PouwWindow.Lanes.ownOf": "c21b81dc22391e61c59c0a702da3e61d7bda87a9b6642e0c0edec61093d3bc38",
+    "PouwWindow.Lanes.ownOf": "a3c92729aad24bee951542ef60822a70fc8811e2d137b6313f50690dbe91dacd",
     "PouwWindow.Lanes.portEq": "c9bdef61d2cfafddfb2a308b8973a9b60247dd48c72a02d82b7045d900f1adde",
     "PouwWindow.Lanes.portsOf": "27d88f69ce81a5e4ea515b923dd534d05a2538e3b5079b4dc41a427153f6ddd8",
     "PouwWindow.Lanes.readFull": "91d1a6e6e8ff0fe624514df1d0b81b8308653a05bad80270f506b5bd5c072851",
@@ -28212,9 +28212,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.TS.Session.Lanes.Guarantees": {
-   "digest": "9d52f654fa6ebf3387aefc4645afe4d22159862101954df86ff5eccdfb3235dc",
+   "digest": "e23b567f85236ee20910b183899b298e547a02f972cd94ed9a96d642b8a760bb",
    "definitions": {
-    "Accounting.Guarantees.TS.LeafLanesSound": "bf8debb83f43600be0cd07dd99c291f53f554b344e27db1c2357ab3ae9b1396a"
+    "Accounting.Guarantees.TS.LeafLanesSound": "fd422cd133986f68d3ab073b6f8f313e96731a264fbd79b291e0a5290986c8db"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
