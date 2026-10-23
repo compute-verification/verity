@@ -38,15 +38,16 @@ four times the slowest response plus half a second, as `lab_run.py` sets it, or,
 don't fit in the window they're sent in (below), the most that does, down to twice the slowest plus half a second
 (`DoesntFit` below that); `--delta-buckets` sets it. Window 0's first group is released in its bucket 2, a bucket
 later than any other window's, and a D whose group fits only from bucket 1 doesn't fit: it would leave window 0
-without a request, and `late` without a window-0 session to hold. The plan sends `--requests` requests `--in-flight` at a time, the groups D + 1 buckets apart in the middle of a bucket, each
-request padded to the same number of link frames. The endpoint serves a group side by side, and the shim writes the
-group's responses one after another in the order their requests reached it (`request_major`), so the canonical order
-is request-major and the egress counts don't depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that run: every
-frame of a response ready D buckets after its request's release. Every window declares the calibration's envelope,
-refused when its δ is below D. Every window ends idle: no request is released in a window's first bucket (the salt
-frame's), and a group whose responses the Program's grid wouldn't release by the window's last bucket goes to the next
-window's second, so each window's egress counts follow from its own requests, as N2's served profile (NET-54)
-requires. The run lasts one idle window past the last request's.
+without a request, and `late` without a window-0 session to hold. The plan sends `--requests` requests `--in-flight`
+at a time, the groups D + 1 buckets apart in the middle of a bucket, each request padded to the same number of link
+frames. The endpoint serves a group side by side, and the shim writes the group's responses one after another in the
+order their requests reached it (`request_major`), so the canonical order is request-major and the egress counts don't
+depend on how the endpoint interleaves them. The plan is calibrated (`calibration.calibrate`) on the model of that
+run: every frame of a response ready D buckets after its request's release. Every window declares the calibration's
+envelope, refused when its δ is below D. Every window ends idle: no request is released in a window's first bucket
+(the salt frame's), and a group whose responses the Program's grid wouldn't release by the window's last bucket goes
+to the next window's second, so each window's egress counts follow from its own requests, as N2's served profile
+(NET-54) requires. The run lasts one idle window past the last request's.
 
 **N2's profile.** N2 (`service.LinkWindows`) gives no verdict on a link whose egress end has no occupancy profile fixed
 before the run. The plan's `occupancy` is the planned one: the Program's egress counts (`schedule.expected_grids`) under
